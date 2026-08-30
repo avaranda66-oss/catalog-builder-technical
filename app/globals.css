@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+:root {
+  /* Surface & Background */
+  --bg-main: #FFFFFF;
+  --bg-surface: #FAFAFA;
+  --bg-subtle: #F5F5F5;
+  --bg-header: #1A1A2E;
+  --bg-header-hover: #2D2D44;
+  --bg-presys: #003366;
+  --bg-presys-dark: #001A33;
+
+  /* Typography */
+  --text-main: #171717;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+  --text-light: #A3A3A3;
+  --text-inverse: #FFFFFF;
+
+  /* Technical Borders */
+  --border-light: #E5E5E5;
+  --border-main: #D4D4D4;
+  --border-dark: #374151;
+  --border-focus: #2563EB;
+
+  /* Status Tokens */
+  --status-draft-bg: #F5F5F5;
+  --status-draft-text: #737373;
+  --status-review-bg: #FFFBEB;
+  --status-review-text: #D97706;
+  --status-approved-bg: #ECFDF5;
+  --status-approved-text: #059669;
+  --status-published-bg: #EFF6FF;
+  --status-published-text: #2563EB;
+  --status-error-bg: #FEF2F2;
+  --status-error-border: #DC2626;
+  --status-error-text: #DC2626;
+
+  /* Interactive States */
+  --cell-edit-bg: #FFFEF0;
+  --cell-unsaved-bg: #FEF3C7;
+  --row-hover: #F5F5F5;
+  --row-selected: #EFF6FF;
+}
+
+body {
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "tnum" on, "cv02" on;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Monospace font utility for numbers and specs */
+.font-mono-data {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, Menlo, Monaco, "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Technical Precision Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F1F1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C1C1C1;
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #999999;
+}
+
+/* CSS Page & Print Rules for Editorial Datasheet Generation */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+    bleed: 6mm;
+    marks: crop;
+
+    @top-center {
+      content: "PRESYS — INSTRUMENTOS E CALIBRAÇÃO";
+      font-size: 8pt;
+      color: #737373;
+      font-family: sans-serif;
+    }
+
+    @bottom-center {
+      content: "Página " counter(page) " de " counter(pages);
+      font-size: 8pt;
+      color: #737373;
+      font-family: sans-serif;
+    }
+  }
+
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .a4-page-sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    break-before: page;
+  }
+
+  table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr, .avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
