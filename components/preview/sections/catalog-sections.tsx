@@ -284,9 +284,22 @@ export const FeaturesListSection: React.FC<SectionProps> = ({ section, product, 
 // ============================================================================
 
 export const TextBlockSection: React.FC<SectionProps> = ({ section, product, tokens }) => {
-  const { isVisualEditMode, updateProductData, updateSectionContent } = useEditorStore()
-  const text = section.content?.text || product?.data?.marketing?.overview || ''
+  const { isVisualEditMode, pages, updateProductData, updateSectionContent } = useEditorStore()
+  const text = section.content?.text ?? product?.data?.marketing?.overview ?? ''
   const style = section.style || {}
+
+  const handleTextChange = (newText: string) => {
+    if (product) {
+      updateProductData(product.id, 'marketing.overview', newText)
+    }
+    const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
+    if (parentPage) {
+      updateSectionContent(parentPage.id, section.id, {
+        ...(section.content || {}),
+        text: newText,
+      })
+    }
+  }
 
   return (
     <div
@@ -306,9 +319,7 @@ export const TextBlockSection: React.FC<SectionProps> = ({ section, product, tok
         <textarea
           rows={3}
           value={text}
-          onChange={(e) => {
-            if (product) updateProductData(product.id, 'marketing.overview', e.target.value)
-          }}
+          onChange={(e) => handleTextChange(e.target.value)}
           placeholder="Digite o texto deste bloco diretamente aqui..."
           className="w-full p-2 bg-transparent border border-dashed border-blue-400 focus:outline-none text-xs"
         />

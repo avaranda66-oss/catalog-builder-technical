@@ -12,6 +12,7 @@ import {
   SectionType,
 } from '../../lib/types/catalog-builder'
 import { PRESYS_DESIGN_TOKENS, PRESYS_CONTACT, DEFAULT_PAGES, SYSTEM_PRESETS } from '../../lib/data/initial-data'
+import { validateCatalogPage, validatePageSection } from '../../lib/validators/catalog-schemas'
 
 export type EditorMode = 'form' | 'grid'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error'
@@ -34,6 +35,73 @@ export type NewProductPayload = Omit<
   'id' | 'created_at' | 'updated_at' | 'version' | 'updated_by'
 > & {
   updated_by?: string | null
+}
+
+export interface EditorSnapshot {
+  products: Product[]
+  pages: CatalogPage[]
+  designTokens: DesignTokens
+  contact: ContactInfo
+  selectedProductId: string | null
+  selectedPageId: string | null
+}
+
+const MAX_HISTORY = 50
+
+/**
+ * Utilitário seguro para navegação e escrita de caminhos aninhados,
+ * com suporte a arrays numéricos (ex: "specs.0.value") e preservação de tipos.
+ */
+function setNestedPath(root: any, path: string, value: any) {
+  const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.')
+  let current = root
+
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i]
+    const nextKey = keys[i + 1]
+    const isNextNumeric = /^\d+$/.test(nextKey)
+
+    if (current[k] === undefined || current[k] === null || typeof current[k] !== 'object') {
+      current[k] = isNextNumeric ? [] : {}
+    }
+    current = current[k]
+  }
+
+  const lastKey = keys[keys.length - 1]
+  const isNumericIndex = /^\d+$/.test(lastKey)
+
+  // Preservar tipo numérico se o campo original era número e o valor é numérico válido
+  let formattedValue = value
+  if (typeof current[lastKey] === 'number' && typeof value === 'string' && !isNaN(Number(value)) && value.trim() !== '') {
+    formattedValue = Number(value)
+  }
+
+  if (isNumericIndex && Array.isArray(current)) {
+    current[parseInt(lastKey, 10)] = formattedValue
+  } else {
+    current[lastKey] = formattedValue
+  }
+}
+
+/**
+ * Cria um snapshot completo e desacoplado do estado do editor
+ */
+function createSnapshot(state: {
+  products: Product[]
+  pages: CatalogPage[]
+  designTokens: DesignTokens
+  contact: ContactInfo
+  selectedProductId: string | null
+  selectedPageId: string | null
+}): EditorSnapshot {
+  return {
+    products: JSON.parse(JSON.stringify(state.products)),
+    pages: JSON.parse(JSON.stringify(state.pages)),
+    designTokens: JSON.parse(JSON.stringify(state.designTokens)),
+    contact: JSON.parse(JSON.stringify(state.contact)),
+    selectedProductId: state.selectedProductId,
+    selectedPageId: state.selectedPageId,
+  }
 }
 
 interface EditorState {
@@ -60,8 +128,8 @@ interface EditorState {
   lastSavedAt: Date | null
   dirtyProductIds: string[]
   
-  // History for Undo/Redo
-  history: Product[][]
+  // History for Undo/Redo (Atomic full snapshot)
+  history: EditorSnapshot[]
   historyIndex: number
 
   // AI Staged Changes
@@ -126,6 +194,16 @@ interface EditorState {
   toggleChangeAccepted: (index: number) => void
 }
 
+function pushHistorySnapshot(state: any) {
+  const snapshot = createSnapshot(state)
+  state.history = state.history.slice(0, state.historyIndex + 1)
+  state.history.push(snapshot)
+  if (state.history.length > MAX_HISTORY) {
+    state.history.shift()
+  }
+  state.historyIndex = state.history.length - 1
+}
+
 export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
     catalog: null,
@@ -160,14 +238,16 @@ export const useEditorStore = create<EditorState>()(
     // =====================================================================
 
     setCatalog: (catalog) => set((state) => { state.catalog = catalog }),
+    
     setProducts: (products) => set((state) => {
       state.products = products
       if (!state.selectedProductId && products.length > 0) {
         state.selectedProductId = products[0].id
       }
-      state.history = [JSON.parse(JSON.stringify(products))]
+      state.history = [createSnapshot(state)]
       state.historyIndex = 0
     }),
+
     setSelectedProductId: (id) => set((state) => { state.selectedProductId = id }),
     setMode: (mode) => set((state) => { state.mode = mode }),
     setFieldDefinitions: (defs) => set((state) => { state.fieldDefinitions = defs }),
@@ -176,21 +256,10 @@ export const useEditorStore = create<EditorState>()(
       const product = state.products.find((p) => p.id === productId)
       if (!product) return
 
-      const currentProducts = JSON.parse(JSON.stringify(state.products))
-      state.history = state.history.slice(0, state.historyIndex + 1)
-      state.history.push(currentProducts)
-      state.historyIndex++
+      pushHistorySnapshot(state)
 
-      const keys = path.split('.')
-      let target: any = product.data
-      for (let i = 0; i < keys.length - 1; i++) {
-        const k = keys[i]
-        if (!target[k] || typeof target[k] !== 'object') {
-          target[k] = {}
-        }
-        target = target[k]
-      }
-      target[keys[keys.length - 1]] = value
+      if (!product.data) product.data = {}
+      setNestedPath(product.data, path, value)
       product.updated_at = new Date().toISOString()
       state.saveStatus = 'unsaved'
       if (!state.dirtyProductIds.includes(productId)) {
@@ -202,10 +271,7 @@ export const useEditorStore = create<EditorState>()(
       const product = state.products.find((p) => p.id === productId)
       if (!product) return
 
-      const currentProducts = JSON.parse(JSON.stringify(state.products))
-      state.history = state.history.slice(0, state.historyIndex + 1)
-      state.history.push(currentProducts)
-      state.historyIndex++
+      pushHistorySnapshot(state)
 
       Object.assign(product, updates)
       product.updated_at = new Date().toISOString()
@@ -216,6 +282,8 @@ export const useEditorStore = create<EditorState>()(
     }),
 
     addProduct: (newProd) => set((state) => {
+      pushHistorySnapshot(state)
+
       const id = 'prod-' + Math.random().toString(36).substring(2, 9)
       const now = new Date().toISOString()
       const product: Product = {
@@ -235,6 +303,8 @@ export const useEditorStore = create<EditorState>()(
     }),
 
     deleteProduct: (productId) => set((state) => {
+      pushHistorySnapshot(state)
+
       const index = state.products.findIndex((p) => p.id === productId)
       if (index !== -1) {
         state.products.splice(index, 1)
@@ -250,6 +320,7 @@ export const useEditorStore = create<EditorState>()(
     // =====================================================================
 
     setPages: (pages) => set((state) => {
+      pushHistorySnapshot(state)
       state.pages = pages
       if (!state.selectedPageId && pages.length > 0) {
         state.selectedPageId = pages[0].id
@@ -259,6 +330,8 @@ export const useEditorStore = create<EditorState>()(
     setSelectedPageId: (id) => set((state) => { state.selectedPageId = id }),
 
     addPage: (title, sections) => set((state) => {
+      pushHistorySnapshot(state)
+
       const page = createPage(
         title || `Página ${state.pages.length + 1}`,
         sections || []
@@ -270,6 +343,8 @@ export const useEditorStore = create<EditorState>()(
     }),
 
     removePage: (pageId) => set((state) => {
+      pushHistorySnapshot(state)
+
       const index = state.pages.findIndex((p) => p.id === pageId)
       if (index !== -1) {
         state.pages.splice(index, 1)
@@ -283,6 +358,11 @@ export const useEditorStore = create<EditorState>()(
     }),
 
     reorderPages: (fromIndex, toIndex) => set((state) => {
+      if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= state.pages.length || toIndex >= state.pages.length) {
+        return
+      }
+      pushHistorySnapshot(state)
+
       const [moved] = state.pages.splice(fromIndex, 1)
       state.pages.splice(toIndex, 0, moved)
       state.pages.forEach((p, i) => { p.sort_order = i })
@@ -292,6 +372,7 @@ export const useEditorStore = create<EditorState>()(
     updatePage: (pageId, updates) => set((state) => {
       const page = state.pages.find((p) => p.id === pageId)
       if (page) {
+        pushHistorySnapshot(state)
         Object.assign(page, updates)
         state.saveStatus = 'unsaved'
       }
@@ -304,6 +385,8 @@ export const useEditorStore = create<EditorState>()(
     addSection: (pageId, type) => set((state) => {
       const page = state.pages.find((p) => p.id === pageId)
       if (!page) return
+      pushHistorySnapshot(state)
+
       const section = createSection(type)
       section.sort_order = page.sections.length
       page.sections.push(section)
@@ -313,6 +396,8 @@ export const useEditorStore = create<EditorState>()(
     removeSection: (pageId, sectionId) => set((state) => {
       const page = state.pages.find((p) => p.id === pageId)
       if (!page) return
+      pushHistorySnapshot(state)
+
       const sIdx = page.sections.findIndex((s) => s.id === sectionId)
       if (sIdx !== -1) {
         page.sections.splice(sIdx, 1)
@@ -323,7 +408,11 @@ export const useEditorStore = create<EditorState>()(
 
     reorderSections: (pageId, fromIndex, toIndex) => set((state) => {
       const page = state.pages.find((p) => p.id === pageId)
-      if (!page) return
+      if (!page || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= page.sections.length || toIndex >= page.sections.length) {
+        return
+      }
+      pushHistorySnapshot(state)
+
       const [moved] = page.sections.splice(fromIndex, 1)
       page.sections.splice(toIndex, 0, moved)
       page.sections.forEach((s, i) => { s.sort_order = i })
@@ -335,6 +424,7 @@ export const useEditorStore = create<EditorState>()(
       if (!page) return
       const section = page.sections.find((s) => s.id === sectionId)
       if (section) {
+        pushHistorySnapshot(state)
         Object.assign(section, updates)
         state.saveStatus = 'unsaved'
       }
@@ -355,11 +445,13 @@ export const useEditorStore = create<EditorState>()(
     // =====================================================================
 
     setDesignTokens: (tokens) => set((state) => {
+      pushHistorySnapshot(state)
       state.designTokens = tokens
       state.saveStatus = 'unsaved'
     }),
 
     setContact: (contact) => set((state) => {
+      pushHistorySnapshot(state)
       state.contact = contact
       state.saveStatus = 'unsaved'
     }),
@@ -373,6 +465,7 @@ export const useEditorStore = create<EditorState>()(
     // =====================================================================
 
     loadPreset: (preset) => set((state) => {
+      pushHistorySnapshot(state)
       state.pages = JSON.parse(JSON.stringify(preset.default_pages))
       state.designTokens = JSON.parse(JSON.stringify(preset.design_tokens))
       state.contact = JSON.parse(JSON.stringify(preset.contact))
@@ -397,22 +490,38 @@ export const useEditorStore = create<EditorState>()(
     }),
 
     // =====================================================================
-    // UNDO / REDO
+    // UNDO / REDO (Global Atomic Restore)
     // =====================================================================
 
     undo: () => set((state) => {
       if (state.historyIndex > 0) {
         state.historyIndex--
-        state.products = JSON.parse(JSON.stringify(state.history[state.historyIndex]))
-        state.saveStatus = 'unsaved'
+        const snap = state.history[state.historyIndex]
+        if (snap) {
+          state.products = JSON.parse(JSON.stringify(snap.products))
+          state.pages = JSON.parse(JSON.stringify(snap.pages))
+          state.designTokens = JSON.parse(JSON.stringify(snap.designTokens))
+          state.contact = JSON.parse(JSON.stringify(snap.contact))
+          state.selectedProductId = snap.selectedProductId
+          state.selectedPageId = snap.selectedPageId
+          state.saveStatus = 'unsaved'
+        }
       }
     }),
 
     redo: () => set((state) => {
       if (state.historyIndex < state.history.length - 1) {
         state.historyIndex++
-        state.products = JSON.parse(JSON.stringify(state.history[state.historyIndex]))
-        state.saveStatus = 'unsaved'
+        const snap = state.history[state.historyIndex]
+        if (snap) {
+          state.products = JSON.parse(JSON.stringify(snap.products))
+          state.pages = JSON.parse(JSON.stringify(snap.pages))
+          state.designTokens = JSON.parse(JSON.stringify(snap.designTokens))
+          state.contact = JSON.parse(JSON.stringify(snap.contact))
+          state.selectedProductId = snap.selectedProductId
+          state.selectedPageId = snap.selectedPageId
+          state.saveStatus = 'unsaved'
+        }
       }
     }),
 
@@ -455,23 +564,13 @@ export const useEditorStore = create<EditorState>()(
       const product = state.products.find((p) => p.id === state.selectedProductId)
       if (!product) return
 
-      const currentProducts = JSON.parse(JSON.stringify(state.products))
-      state.history = state.history.slice(0, state.historyIndex + 1)
-      state.history.push(currentProducts)
-      state.historyIndex++
+      pushHistorySnapshot(state)
+
+      if (!product.data) product.data = {}
 
       state.stagedPatch.changes.forEach((change) => {
         if (change.accepted !== false) {
-          const keys = change.path.split('.')
-          let target: any = product.data
-          for (let i = 0; i < keys.length - 1; i++) {
-            const k = keys[i]
-            if (!target[k] || typeof target[k] !== 'object') {
-              target[k] = {}
-            }
-            target = target[k]
-          }
-          target[keys[keys.length - 1]] = change.newValue
+          setNestedPath(product.data, change.path, change.newValue)
         }
       })
 

@@ -111,14 +111,38 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onCl
           )}
 
           {parsedResult && (
-            <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] text-xs text-[#065F46] space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-[#059669]" />
-                {parsedResult.products.length} produtos identificados na planilha!
+            <div className="space-y-2">
+              <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] text-xs text-[#065F46] space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-[#059669]" />
+                  {parsedResult.products.length} produtos mapeados com sucesso!
+                </div>
+                <div className="text-[11px] text-[#047857]">
+                  Abas processadas: {parsedResult.sheetNames.join(', ')}
+                </div>
               </div>
-              <div className="text-[11px] text-[#047857]">
-                Abas encontradas: {parsedResult.sheetNames.join(', ')}
-              </div>
+
+              {parsedResult.warnings.length > 0 && (
+                <div className="p-2.5 bg-[#FFFBEB] border border-[#FDE68A] text-xs text-[#92400E] space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-[#D97706]" />
+                    Avisos de Importação Metrológica:
+                  </div>
+                  {parsedResult.warnings.map((w, i) => (
+                    <div key={i} className="text-[10.5px] text-[#B45309]">
+                      • {w}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {parsedResult.errors.length > 0 && (
+                <div className="p-2.5 bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#991B1B]">
+                  {parsedResult.errors.map((err, i) => (
+                    <div key={i}>⚠️ {err}</div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
