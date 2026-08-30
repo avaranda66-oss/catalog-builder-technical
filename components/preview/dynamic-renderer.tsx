@@ -5,6 +5,7 @@ import { CatalogPage, PageSection, DesignTokens, ContactInfo, SectionType } from
 import { Product } from '@/lib/types/database'
 import { useEditorStore } from '@/features/editor/editor-store'
 import { BlockInspector } from './block-inspector'
+import { BlockErrorBoundary } from './block-error-boundary'
 import {
   HeroBannerSection,
   FeaturesListSection,
@@ -135,69 +136,72 @@ export const DynamicCatalogRenderer: React.FC<DynamicRendererProps> = ({
                   }
 
                   return (
-                    <div
-                      key={section.id}
-                      className={`relative group/visual ${
-                        isVisualEditMode
-                          ? 'p-2 border border-dashed border-[#93C5FD] hover:border-[#2563EB] hover:bg-[#F8FAFC] transition-all rounded-xs'
-                          : ''
-                      }`}
-                    >
-                      {/* Visual Edit Toolbar overlay for this section */}
-                      {isVisualEditMode && (
-                        <div className="absolute -top-3.5 right-2 bg-[#1A1A2E] text-white px-2 py-0.5 text-[10px] flex items-center gap-1.5 shadow-md z-30 opacity-90 group-hover/visual:opacity-100">
-                          <button
-                            type="button"
-                            onClick={() => setInspectingSection({ pageId: page.id, section })}
-                            className="flex items-center gap-1 font-bold text-[10px] text-[#93C5FD] hover:text-white"
-                            title="Personalizar Cores, Fontes e Layout deste Bloco"
-                          >
-                            <Palette className="w-3 h-3 text-[#60A5FA]" />
-                            <span>{section.title}</span>
-                          </button>
-
-                          <div className="flex items-center gap-1 border-l border-[#374151] pl-1.5">
-                            {secIndex > 0 && (
-                              <button
-                                type="button"
-                                title="Subir bloco"
-                                onClick={() => reorderSections(page.id, secIndex, secIndex - 1)}
-                                className="p-0.5 hover:text-[#93C5FD]"
-                              >
-                                <ChevronUp className="w-3 h-3" />
-                              </button>
-                            )}
-                            {secIndex < sections.length - 1 && (
-                              <button
-                                type="button"
-                                title="Descer bloco"
-                                onClick={() => reorderSections(page.id, secIndex, secIndex + 1)}
-                                className="p-0.5 hover:text-[#93C5FD]"
-                              >
-                                <ChevronDown className="w-3 h-3" />
-                              </button>
-                            )}
+                    <BlockErrorBoundary key={section.id} blockTitle={section.title}>
+                      <div
+                        role="region"
+                        aria-label={section.title}
+                        className={`relative group/visual ${
+                          isVisualEditMode
+                            ? 'p-2 border border-dashed border-[#93C5FD] hover:border-[#2563EB] hover:bg-[#F8FAFC] transition-all rounded-xs'
+                            : ''
+                        }`}
+                      >
+                        {/* Visual Edit Toolbar overlay for this section */}
+                        {isVisualEditMode && (
+                          <div className="absolute -top-3.5 right-2 bg-[#1A1A2E] text-white px-2 py-0.5 text-[10px] flex items-center gap-1.5 shadow-md z-30 opacity-90 group-hover/visual:opacity-100">
                             <button
                               type="button"
-                              title="Excluir este bloco"
-                              onClick={() => removeSection(page.id, section.id)}
-                              className="p-0.5 text-[#F87171] hover:text-[#EF4444]"
+                              onClick={() => setInspectingSection({ pageId: page.id, section })}
+                              className="flex items-center gap-1 font-bold text-[10px] text-[#93C5FD] hover:text-white"
+                              title="Personalizar Cores, Fontes e Layout deste Bloco"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Palette className="w-3 h-3 text-[#60A5FA]" />
+                              <span>{section.title}</span>
                             </button>
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Section Rendered Content */}
-                      <Component
-                        section={section}
-                        product={product}
-                        tokens={tokens}
-                        contact={contact}
-                        allProducts={allProducts}
-                      />
-                    </div>
+                            <div className="flex items-center gap-1 border-l border-[#374151] pl-1.5">
+                              {secIndex > 0 && (
+                                <button
+                                  type="button"
+                                  title="Subir bloco"
+                                  onClick={() => reorderSections(page.id, secIndex, secIndex - 1)}
+                                  className="p-0.5 hover:text-[#93C5FD]"
+                                >
+                                  <ChevronUp className="w-3 h-3" />
+                                </button>
+                              )}
+                              {secIndex < sections.length - 1 && (
+                                <button
+                                  type="button"
+                                  title="Descer bloco"
+                                  onClick={() => reorderSections(page.id, secIndex, secIndex + 1)}
+                                  className="p-0.5 hover:text-[#93C5FD]"
+                                >
+                                  <ChevronDown className="w-3 h-3" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title="Excluir este bloco"
+                                onClick={() => removeSection(page.id, section.id)}
+                                className="p-0.5 text-[#F87171] hover:text-[#EF4444]"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Section Rendered Content */}
+                        <Component
+                          section={section}
+                          product={product}
+                          tokens={tokens}
+                          contact={contact}
+                          allProducts={allProducts}
+                        />
+                      </div>
+                    </BlockErrorBoundary>
                   )
                 })}
 

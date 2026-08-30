@@ -120,10 +120,16 @@ body {
   .a4-page-sheet {
     box-shadow: none !important;
     margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    break-before: page;
+    padding: 15mm !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  .a4-page-sheet:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
   }
 
   table {
@@ -140,7 +146,7 @@ body {
     display: table-footer-group;
   }
 
-  tr, .avoid-break {
+  tr, .avoid-break, [role="region"] {
     break-inside: avoid;
     page-break-inside: avoid;
   }
