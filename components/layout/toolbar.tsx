@@ -26,6 +26,9 @@ interface ToolbarProps {
   onImportClick: () => void
   onOpenPdfImport: () => void
   onExportPdfClick: () => void
+  onOpenAuditModal?: () => void
+  onSyncCloud?: () => void
+  onLogout?: () => void
   onToggleSidebarMobile?: () => void
   mobileView?: 'editor' | 'preview'
   onChangeMobileView?: (view: 'editor' | 'preview') => void
@@ -36,6 +39,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onImportClick,
   onOpenPdfImport,
   onExportPdfClick,
+  onOpenAuditModal,
+  onSyncCloud,
+  onLogout,
   onToggleSidebarMobile,
   mobileView = 'editor',
   onChangeMobileView,
@@ -56,26 +62,53 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     pages,
     designTokens,
     contact,
+    presets,
+    currentUser,
+    auditLogs,
+    addAuditLog,
+    setLastCloudSync,
   } = useEditorStore()
 
   const handleSave = useCallback(async () => {
     if (!catalog) return
     setSaveStatus('saving')
     try {
-      await saveAll({
-        catalog,
-        products,
-        fieldDefinitions,
-        pages,
-        designTokens,
-        contact,
-      })
+      await saveAll(
+        {
+          catalog,
+          products,
+          fieldDefinitions,
+          pages,
+          designTokens,
+          contact,
+          presets,
+          auditLogs,
+        },
+        currentUser,
+        `Salvação manual de catálogo (${products.length} produtos)`
+      )
+      addAuditLog(`Salvou catálogo e produtos na nuvem`, 'general', catalog.name)
+      setLastCloudSync(new Date().toISOString())
       markSaved()
     } catch (err) {
       console.error('[Save] Failed:', err)
       setSaveStatus('unsaved')
     }
-  }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
+  }, [
+    catalog,
+    products,
+    fieldDefinitions,
+    pages,
+    designTokens,
+    contact,
+    presets,
+    auditLogs,
+    currentUser,
+    setSaveStatus,
+    markSaved,
+    addAuditLog,
+    setLastCloudSync,
+  ])
 
   return (
     <header className="border-b border-[#D4D4D4] bg-[#FFFFFF] flex flex-col select-none shrink-0 z-20">
@@ -112,7 +145,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </div>
         </div>
 
-        {/* Desktop: Mode Switcher Tabs (Form vs Grid) */}
+        {/* Center: Mode Switcher Tabs (Form vs Grid) */}
         <div className="hidden md:flex items-center bg-[#F5F5F5] p-1 border border-[#D4D4D4]">
           <button
             type="button"
@@ -142,6 +175,58 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Active User Badge & Profile */}
+          {currentUser && (
+            <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 bg-[#F1F5F9] border border-[#CBD5E1] rounded-xs text-xs text-[#334155]">
+              <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" title="Conectado na nuvem" />
+              <span className="font-bold text-[#0F172A] truncate max-w-[100px]">{currentUser.name}</span>
+              <span className="text-[10px] text-[#64748B] border-l border-[#CBD5E1] pl-1.5 truncate max-w-[90px]">
+                {currentUser.area}
+              </span>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="text-[10px] text-[#94A3B8] hover:text-[#EF4444] ml-1 font-semibold"
+                  title="Trocar de Usuário / Sair"
+                >
+                  Sair
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Audit History Modal Button */}
+          {onOpenAuditModal && (
+            <button
+              type="button"
+              onClick={onOpenAuditModal}
+              className="flex items-center gap-1 px-2 py-1.5 border border-[#CBD5E1] bg-[#FFFFFF] hover:bg-[#F8FAFC] text-xs font-semibold text-[#475569] rounded-xs shadow-2xs"
+              title="Ver histórico de edições da equipe"
+            >
+              <History className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span className="hidden sm:inline">Histórico</span>
+              {auditLogs.length > 0 && (
+                <span className="w-4 h-4 bg-[#2563EB] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {auditLogs.length > 9 ? '9+' : auditLogs.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Cloud Sync Button */}
+          {onSyncCloud && (
+            <button
+              type="button"
+              onClick={onSyncCloud}
+              className="hidden sm:flex items-center gap-1 px-2 py-1.5 border border-[#CBD5E1] bg-[#FFFFFF] hover:bg-[#F8FAFC] text-xs font-semibold text-[#475569] rounded-xs shadow-2xs"
+              title="Sincronizar dados mais recentes da nuvem"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#059669]" />
+              <span className="hidden md:inline">Nuvem</span>
+            </button>
+          )}
+
           {/* Undo / Redo (Desktop only) */}
           <div className="hidden lg:flex items-center border border-[#D4D4D4] mr-1">
             <button

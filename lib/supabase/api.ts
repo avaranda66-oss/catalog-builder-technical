@@ -276,36 +276,180 @@ export async function deleteImage(path: string): Promise<boolean> {
   }
 }
 
+import { TeamUser, AuditLogItem } from '../types/auth-user'
+import { CatalogPreset } from '../types/catalog-builder'
+
 // ---------------------------------------------------------------------------
-// FULL SAVE — Save everything: catalog + products + localStorage
+// FULL SAVE — Save everything: catalog + products + pages + themes + cloud audit
 // ---------------------------------------------------------------------------
 
-export async function saveAll(state: {
-  catalog: Catalog | null
-  products: Product[]
-  fieldDefinitions: FieldDefinition[]
-  pages: CatalogPage[]
-  designTokens: DesignTokens
-  contact: ContactInfo
-}): Promise<{ supabase: boolean; localStorage: boolean }> {
+export async function saveAll(
+  state: {
+    catalog: Catalog | null
+    products: Product[]
+    fieldDefinitions: FieldDefinition[]
+    pages: CatalogPage[]
+    designTokens: DesignTokens
+    contact: ContactInfo
+    presets?: CatalogPreset[]
+    auditLogs?: AuditLogItem[]
+  },
+  user?: TeamUser | null,
+  actionDescription: string = 'Salvação manual de catálogo e produtos'
+): Promise<{ supabase: boolean; localStorage: boolean }> {
   const result = { supabase: false, localStorage: false }
+  const now = new Date().toISOString()
 
-  // 1. Always save to localStorage
-  saveToLocalStorage(state)
+  // 1. Prepare Audit Item
+  const newAuditItem: AuditLogItem = {
+    id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    user_name: user?.name || 'Colaborador Presys',
+    user_area: user?.area || 'Engenharia',
+    action: actionDescription,
+    entity_type: 'general',
+    timestamp: now,
+    details: `${state.products.length} produtos • ${state.pages.length} páginas salvas na nuvem`,
+  }
+
+  const updatedAuditLogs = [newAuditItem, ...(state.auditLogs || [])].slice(0, 50)
+
+  // 2. Always save to localStorage
+  saveToLocalStorage({
+    catalog: state.catalog,
+    products: state.products,
+    fieldDefinitions: state.fieldDefinitions,
+    pages: state.pages,
+    designTokens: state.designTokens,
+    contact: state.contact,
+  })
   result.localStorage = true
 
-  // 2. Try Supabase if configured
+  // 3. Save to Supabase Cloud if configured
   if (isSupabaseConfigured() && state.catalog) {
-    const catalogOk = await saveCatalog(state.catalog)
-    const productsOk = await saveAllProducts(state.products)
-    result.supabase = catalogOk && productsOk
+    try {
+      // Pack full visual bundle into brand JSONB column for multi-device sync
+      const brandPayload = {
+        ...(typeof state.catalog.brand === 'object' ? state.catalog.brand : {}),
+        companyName: state.contact.companyName,
+        website: state.contact.website,
+        phone: state.contact.phone,
+        email: state.contact.email,
+        primaryColor: state.designTokens.colors.primary,
+        darkColor: state.designTokens.colors.dark,
+        accentColor: state.designTokens.colors.accent,
+        headerBg: state.designTokens.colors.headerBg,
+        pages: state.pages,
+        designTokens: state.designTokens,
+        contact: state.contact,
+        presets: state.presets || [],
+        audit_trail: updatedAuditLogs,
+        last_updated_by: {
+          name: user?.name || 'Colaborador Presys',
+          area: user?.area || 'Engenharia',
+          timestamp: now,
+        },
+      }
+
+      const { error: catErr } = await supabase.from('catalogs').upsert({
+        id: state.catalog.id,
+        name: state.catalog.name,
+        locale: state.catalog.locale || 'pt-BR',
+        status: state.catalog.status || 'published',
+        template_key: state.catalog.template_key || 'presys-premium',
+        brand: brandPayload,
+        version: (state.catalog.version || 1) + 1,
+        updated_at: now,
+      })
+
+      if (catErr) {
+        console.error('[Supabase] Catalog save error:', catErr)
+      } else {
+        const prodOk = await saveAllProducts(state.products)
+        result.supabase = prodOk
+        console.log('[Supabase Cloud Sync] Successfully saved catalog bundle to cloud for team!')
+      }
+    } catch (err) {
+      console.error('[Supabase Cloud Sync] Failed:', err)
+    }
   }
 
   return result
 }
 
 // ---------------------------------------------------------------------------
-// FULL LOAD — Load from localStorage (working session) → Supabase → INITIAL_DATA
+// SYNC FROM CLOUD — Pull latest cloud state for multi-device collaboration
+// ---------------------------------------------------------------------------
+
+export async function syncFromCloud(initialData: {
+  catalog: Catalog
+  products: Product[]
+  fieldDefinitions: FieldDefinition[]
+  pages: CatalogPage[]
+  designTokens: DesignTokens
+  contact: ContactInfo
+}): Promise<{
+  catalog: Catalog
+  products: Product[]
+  fieldDefinitions: FieldDefinition[]
+  pages: CatalogPage[]
+  designTokens: DesignTokens
+  contact: ContactInfo
+  presets?: CatalogPreset[]
+  auditLogs?: AuditLogItem[]
+  lastUpdatedBy?: { name: string; area: string; timestamp: string }
+  source: 'supabase' | 'localStorage' | 'initial'
+}> {
+  if (isSupabaseConfigured()) {
+    try {
+      const catalog = await fetchFirstCatalog()
+      if (catalog) {
+        const products = await fetchProducts(catalog.id)
+        const fieldDefs = await fetchFieldDefinitions(catalog.id)
+
+        const brandData = (typeof catalog.brand === 'object' && catalog.brand !== null ? catalog.brand : {}) as any
+
+        const cloudPages = Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages
+        const cloudTokens = brandData.designTokens || initialData.designTokens
+        const cloudContact = brandData.contact || initialData.contact
+        const cloudPresets = Array.isArray(brandData.presets) ? brandData.presets : []
+        const cloudAudit = Array.isArray(brandData.audit_trail) ? brandData.audit_trail : []
+        const lastUpdatedBy = brandData.last_updated_by || null
+
+        console.log('[Supabase Cloud Sync] Pulled active cloud state:', catalog.name, 'Products:', products.length)
+
+        return {
+          catalog,
+          products: products.length > 0 ? products : initialData.products,
+          fieldDefinitions: fieldDefs.length > 0 ? fieldDefs : initialData.fieldDefinitions,
+          pages: cloudPages,
+          designTokens: cloudTokens,
+          contact: cloudContact,
+          presets: cloudPresets,
+          auditLogs: cloudAudit,
+          lastUpdatedBy,
+          source: 'supabase',
+        }
+      }
+    } catch (err) {
+      console.warn('[Supabase Cloud Sync] Fetch failed:', err)
+    }
+  }
+
+  // Fallback to localStorage or initial
+  const loaded = await loadAll(initialData)
+  return {
+    catalog: loaded.catalog || initialData.catalog,
+    products: loaded.products.length > 0 ? loaded.products : initialData.products,
+    fieldDefinitions: loaded.fieldDefinitions,
+    pages: loaded.pages,
+    designTokens: loaded.designTokens,
+    contact: loaded.contact,
+    source: loaded.source,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FULL LOAD — Load from Supabase Cloud (team-first) → localStorage → INITIAL_DATA
 // ---------------------------------------------------------------------------
 
 export async function loadAll(initialData: {
@@ -316,30 +460,28 @@ export async function loadAll(initialData: {
   designTokens: DesignTokens
   contact: ContactInfo
 }): Promise<PersistedState & { source: 'supabase' | 'localStorage' | 'initial' }> {
-  // 1. Try localStorage FIRST — user's local edits and working session must never be lost
-  const cached = loadFromLocalStorage()
-  if (cached && cached.catalog && cached.products && cached.products.length > 0) {
-    console.log('[Persistence] Loaded active working session from localStorage, savedAt:', cached.savedAt)
-    return { ...cached, source: 'localStorage' }
-  }
-
-  // 2. If localStorage is empty, try loading initial dataset from Supabase
+  // 1. Try Supabase Cloud first so team edits are always synchronized across devices
   if (isSupabaseConfigured()) {
     try {
       const catalog = await fetchFirstCatalog()
       if (catalog) {
         const products = await fetchProducts(catalog.id)
         const fieldDefs = await fetchFieldDefinitions(catalog.id)
+        const brandData = (typeof catalog.brand === 'object' && catalog.brand !== null ? catalog.brand : {}) as any
+
+        const cloudPages = Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages
+        const cloudTokens = brandData.designTokens || initialData.designTokens
+        const cloudContact = brandData.contact || initialData.contact
 
         if (products.length > 0) {
-          console.log('[Persistence] Loaded initial data from Supabase:', catalog.name)
+          console.log('[Persistence] Loaded synchronized team dataset from Supabase Cloud')
           const supabaseState = {
             catalog,
             products,
             fieldDefinitions: fieldDefs.length > 0 ? fieldDefs : initialData.fieldDefinitions,
-            pages: initialData.pages,
-            designTokens: initialData.designTokens,
-            contact: initialData.contact,
+            pages: cloudPages,
+            designTokens: cloudTokens,
+            contact: cloudContact,
           }
           saveToLocalStorage(supabaseState)
 
@@ -352,8 +494,15 @@ export async function loadAll(initialData: {
         }
       }
     } catch (err) {
-      console.warn('[Persistence] Supabase load failed, falling back to seed:', err)
+      console.warn('[Persistence] Supabase load failed, trying local cache:', err)
     }
+  }
+
+  // 2. Try localStorage if offline or Supabase not reachable
+  const cached = loadFromLocalStorage()
+  if (cached && cached.catalog && cached.products && cached.products.length > 0) {
+    console.log('[Persistence] Loaded offline working session from localStorage, savedAt:', cached.savedAt)
+    return { ...cached, source: 'localStorage' }
   }
 
   // 3. Fallback to initial seed data

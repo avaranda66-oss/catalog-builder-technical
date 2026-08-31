@@ -33,6 +33,7 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
     saveCurrentAsPreset,
     setSelectedProductId,
     setSelectedPageId,
+    addAuditLog,
   } = useEditorStore()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -163,6 +164,13 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
         `Layout predefinido estruturado a partir do catálogo PDF ${file?.name || newSku}.`
       )
     }
+
+    addAuditLog(
+      `Importou e clonou catálogo PDF: ${file?.name || newSku}`,
+      'pdf_import',
+      newSku,
+      `Estruturou ${extractedPages?.length || 1} página(s) e especificações metrológicas`
+    )
 
     handleClose()
   }

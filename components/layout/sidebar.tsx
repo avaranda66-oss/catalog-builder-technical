@@ -21,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpenMobile, onCloseMobile })
     addProduct,
     deleteProduct,
     catalog,
+    currentUser,
   } = useEditorStore()
 
   const [activeTab, setActiveTab] = useState<SidebarTab>('products')
@@ -220,10 +221,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpenMobile, onCloseMobile })
         <PresetManager />
       )}
 
-      {/* Footer info */}
+      {/* Footer info with Active User */}
       <div className="p-2.5 bg-[#FAFAFA] border-t border-[#E5E5E5] text-[11px] text-[#737373] flex items-center justify-between">
-        <span>Catalog Builder</span>
-        <span className="font-mono-data">v2.0</span>
+        {currentUser ? (
+          <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+            <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" title="Online na nuvem" />
+            <span className="font-semibold text-[#0F172A] truncate">{currentUser.name}</span>
+            <span className="text-[10px] text-[#64748B] truncate">({currentUser.area})</span>
+          </div>
+        ) : (
+          <span>Catalog Builder</span>
+        )}
+        <span className="font-mono-data text-[10px] text-[#94A3B8]">Cloud Sync</span>
       </div>
     </aside>
     </>

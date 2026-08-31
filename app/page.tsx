@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { useEditorStore } from '../features/editor/editor-store'
-import { saveAll } from '../lib/supabase/api'
+import { saveAll, syncFromCloud } from '../lib/supabase/api'
 import { Toolbar } from '../components/layout/toolbar'
 import { Sidebar } from '../components/layout/sidebar'
 import { StatusBar } from '../components/layout/status-bar'
@@ -13,6 +13,16 @@ import { AiPanel } from '../components/ai/ai-panel'
 import { StagedChangesModal } from '../components/ai/staged-changes'
 import { ExcelImportModal } from '../components/forms/excel-import-modal'
 import { PdfImporterModal } from '../components/ai/pdf-importer-modal'
+import { UserGateModal, getStoredUser, clearStoredUser } from '../components/auth/user-gate-modal'
+import { AuditLogModal } from '../components/audit/audit-log-modal'
+import {
+  INITIAL_CATALOG,
+  INITIAL_PRODUCTS,
+  INITIAL_FIELD_DEFINITIONS,
+  DEFAULT_PAGES,
+  PRESYS_DESIGN_TOKENS,
+  PRESYS_CONTACT,
+} from '../lib/data/initial-data'
 import {
   Loader2,
   FormInput,
@@ -32,41 +42,146 @@ export default function CatalogBuilderApp() {
     pages,
     designTokens,
     contact,
+    presets,
     saveStatus,
     setSaveStatus,
     markSaved,
+    currentUser,
+    setCurrentUser,
+    auditLogs,
+    setAuditLogs,
+    addAuditLog,
+    setProducts,
+    setPages,
+    setDesignTokens,
+    setContact,
+    setLastCloudSync,
+    setLastUpdatedBy,
   } = useEditorStore()
 
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false)
   const [mobileView, setMobileView] = useState<'editor' | 'preview'>('editor')
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false)
 
-  // Wait for client-side Zustand hydration from localStorage
+  // Cloud sync handler
+  const handleCloudSync = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent) setIsSyncingCloud(true)
+      const cloudData = await syncFromCloud({
+        catalog: catalog || INITIAL_CATALOG,
+        products: products.length > 0 ? products : INITIAL_PRODUCTS,
+        fieldDefinitions: fieldDefinitions.length > 0 ? fieldDefinitions : INITIAL_FIELD_DEFINITIONS,
+        pages: pages.length > 0 ? pages : DEFAULT_PAGES,
+        designTokens: designTokens || PRESYS_DESIGN_TOKENS,
+        contact: contact || PRESYS_CONTACT,
+      })
+
+      if (cloudData && cloudData.products && cloudData.products.length > 0) {
+        setProducts(cloudData.products)
+        if (cloudData.pages) setPages(cloudData.pages)
+        if (cloudData.designTokens) setDesignTokens(cloudData.designTokens)
+        if (cloudData.contact) setContact(cloudData.contact)
+        if (cloudData.auditLogs) setAuditLogs(cloudData.auditLogs)
+        if (cloudData.lastUpdatedBy) setLastUpdatedBy(cloudData.lastUpdatedBy)
+        setLastCloudSync(new Date().toISOString())
+      }
+    } catch (err) {
+      console.warn('[Cloud Sync] Failed to sync:', err)
+    } finally {
+      if (!isSilent) setIsSyncingCloud(false)
+    }
+  }, [
+    catalog,
+    products,
+    fieldDefinitions,
+    pages,
+    designTokens,
+    contact,
+    setProducts,
+    setPages,
+    setDesignTokens,
+    setContact,
+    setAuditLogs,
+    setLastCloudSync,
+    setLastUpdatedBy,
+  ])
+
+  // Hydration & Initial Cloud Sync
   useEffect(() => {
     setIsHydrated(true)
-  }, [])
+    const storedUser = getStoredUser()
+    if (storedUser) {
+      setCurrentUser(storedUser)
+    }
+    // Pull fresh data from Supabase Cloud on mount
+    handleCloudSync(true)
+  }, [setCurrentUser, handleCloudSync])
+
+  // Periodic Auto-Sync (Every 45 seconds & on window focus for real-time team collaboration)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleCloudSync(true)
+    }, 45000)
+
+    const onFocus = () => handleCloudSync(true)
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [handleCloudSync])
+
+  const handleLogout = useCallback(() => {
+    clearStoredUser()
+    setCurrentUser(null)
+  }, [setCurrentUser])
 
   const handleManualSave = useCallback(async () => {
     if (!catalog) return
     setSaveStatus('saving')
     try {
-      await saveAll({
-        catalog,
-        products,
-        fieldDefinitions,
-        pages,
-        designTokens,
-        contact,
-      })
+      await saveAll(
+        {
+          catalog,
+          products,
+          fieldDefinitions,
+          pages,
+          designTokens,
+          contact,
+          presets,
+          auditLogs,
+        },
+        currentUser,
+        `Salvação de ${products.length} produtos e ${pages.length} páginas`
+      )
+      addAuditLog(`Salvou catálogo e produtos na nuvem`, 'general', catalog.name)
+      setLastCloudSync(new Date().toISOString())
       markSaved()
     } catch (err) {
       console.error('[Save] Failed:', err)
       setSaveStatus('unsaved')
     }
-  }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
+  }, [
+    catalog,
+    products,
+    fieldDefinitions,
+    pages,
+    designTokens,
+    contact,
+    presets,
+    auditLogs,
+    currentUser,
+    setSaveStatus,
+    markSaved,
+    addAuditLog,
+    setLastCloudSync,
+  ])
 
   if (!isHydrated) {
     return (
@@ -87,6 +202,9 @@ export default function CatalogBuilderApp() {
         onImportClick={() => setIsImportModalOpen(true)}
         onOpenPdfImport={() => setIsPdfModalOpen(true)}
         onExportPdfClick={() => window.print()}
+        onOpenAuditModal={() => setIsAuditModalOpen(true)}
+        onSyncCloud={() => handleCloudSync(false)}
+        onLogout={handleLogout}
         onToggleSidebarMobile={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)}
         mobileView={mobileView}
         onChangeMobileView={(v) => setMobileView(v)}
@@ -214,6 +332,18 @@ export default function CatalogBuilderApp() {
       </nav>
 
       {/* 5. Drawers & Modals (Responsive on all screen sizes) */}
+      <UserGateModal
+        currentUser={currentUser}
+        onLogin={(user) => {
+          setCurrentUser(user)
+          handleCloudSync(true)
+        }}
+      />
+      <AuditLogModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        logs={auditLogs}
+      />
       <AiPanel
         isOpen={isAiPanelOpen}
         onClose={() => setIsAiPanelOpen(false)}

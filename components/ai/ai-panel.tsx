@@ -31,6 +31,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
     setStagedPatch,
     isAiLoading,
     setIsAiLoading,
+    addAuditLog,
   } = useEditorStore()
 
   const [inputPrompt, setInputPrompt] = useState('')

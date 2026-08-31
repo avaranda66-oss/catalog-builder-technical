@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { persist } from 'zustand/middleware'
 import { Product, Catalog, FieldDefinition, AiRun, AuditLog } from '../../lib/types/database'
+import { TeamUser, AuditLogItem } from '../../lib/types/auth-user'
 import {
   CatalogPage,
   PageSection,
@@ -146,10 +147,19 @@ interface EditorState {
   isAiLoading: boolean
   aiLogs: AiRun[]
 
-  // Audit Logs
-  auditLogs: AuditLog[]
+  // Collaborative Team & Audit Logs
+  currentUser: TeamUser | null
+  auditLogs: AuditLogItem[]
+  lastCloudSync: string | null
+  lastUpdatedBy: { name: string; area: string; timestamp: string } | null
 
   // ---- Core Actions ----
+  setCurrentUser: (user: TeamUser | null) => void
+  setAuditLogs: (logs: AuditLogItem[]) => void
+  addAuditLog: (action: string, entity_type?: any, entity_name?: string, details?: string) => void
+  setLastCloudSync: (time: string) => void
+  setLastUpdatedBy: (info: { name: string; area: string; timestamp: string } | null) => void
+
   setCatalog: (catalog: Catalog) => void
   setProducts: (products: Product[]) => void
   setSelectedProductId: (id: string | null) => void
@@ -235,13 +245,36 @@ export const useEditorStore = create<EditorState>()(
       lastSavedAt: new Date(),
       dirtyProductIds: [],
 
-    history: [],
-    historyIndex: -1,
+      history: [],
+      historyIndex: -1,
 
-    stagedPatch: null,
-    isAiLoading: false,
-    aiLogs: [],
-    auditLogs: [],
+      stagedPatch: null,
+      isAiLoading: false,
+      aiLogs: [],
+
+      // Team Auth & Cloud Audit State
+      currentUser: null,
+      auditLogs: [],
+      lastCloudSync: null,
+      lastUpdatedBy: null,
+
+      setCurrentUser: (user) => set((state) => { state.currentUser = user }),
+      setAuditLogs: (logs) => set((state) => { state.auditLogs = logs }),
+      addAuditLog: (action, entity_type = 'general', entity_name, details) => set((state) => {
+        const item: AuditLogItem = {
+          id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          user_name: state.currentUser?.name || 'Colaborador Presys',
+          user_area: state.currentUser?.area || 'Engenharia',
+          action,
+          entity_type,
+          entity_name,
+          timestamp: new Date().toISOString(),
+          details,
+        }
+        state.auditLogs = [item, ...state.auditLogs].slice(0, 50)
+      }),
+      setLastCloudSync: (time) => set((state) => { state.lastCloudSync = time }),
+      setLastUpdatedBy: (info) => set((state) => { state.lastUpdatedBy = info }),
 
     // =====================================================================
     // CORE ACTIONS
@@ -608,6 +641,10 @@ export const useEditorStore = create<EditorState>()(
       contact: state.contact,
       fieldDefinitions: state.fieldDefinitions,
       presets: state.presets,
+      currentUser: state.currentUser,
+      auditLogs: state.auditLogs,
+      lastCloudSync: state.lastCloudSync,
+      lastUpdatedBy: state.lastUpdatedBy,
     }),
   }
 )
