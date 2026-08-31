@@ -70,45 +70,38 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   } = useEditorStore()
 
   const handleSave = useCallback(async () => {
-    if (!catalog) return
-    setSaveStatus('saving')
+    const store = useEditorStore.getState()
+    if (!store.catalog) return
+    store.setSaveStatus('saving')
     try {
+      const skus = store.products.map((p) => p.sku).join(', ')
+      const saveAction = `Salvou e sincronizou catálogo na nuvem`
+      const saveDetails = `Produtos (${store.products.length}): ${skus} • ${store.pages.length} página(s) A4 • Cor primária: ${store.designTokens.colors.primary}`
+
+      store.addAuditLog(saveAction, 'general', store.catalog.name, saveDetails)
+
+      const updatedStore = useEditorStore.getState()
       await saveAll(
         {
-          catalog,
-          products,
-          fieldDefinitions,
-          pages,
-          designTokens,
-          contact,
-          presets,
-          auditLogs,
+          catalog: updatedStore.catalog,
+          products: updatedStore.products,
+          fieldDefinitions: updatedStore.fieldDefinitions,
+          pages: updatedStore.pages,
+          designTokens: updatedStore.designTokens,
+          contact: updatedStore.contact,
+          presets: updatedStore.presets,
+          auditLogs: updatedStore.auditLogs,
         },
-        currentUser,
-        `Salvação manual de catálogo (${products.length} produtos)`
+        updatedStore.currentUser,
+        saveDetails
       )
-      addAuditLog(`Salvou catálogo e produtos na nuvem`, 'general', catalog.name)
-      setLastCloudSync(new Date().toISOString())
-      markSaved()
+      store.setLastCloudSync(new Date().toISOString())
+      store.markSaved()
     } catch (err) {
       console.error('[Save] Failed:', err)
-      setSaveStatus('unsaved')
+      store.setSaveStatus('unsaved')
     }
-  }, [
-    catalog,
-    products,
-    fieldDefinitions,
-    pages,
-    designTokens,
-    contact,
-    presets,
-    auditLogs,
-    currentUser,
-    setSaveStatus,
-    markSaved,
-    addAuditLog,
-    setLastCloudSync,
-  ])
+  }, [])
 
   return (
     <header className="border-b border-[#D4D4D4] bg-[#FFFFFF] flex flex-col select-none shrink-0 z-20">

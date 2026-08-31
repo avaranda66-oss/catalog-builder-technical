@@ -338,6 +338,7 @@ export async function saveAll(
         darkColor: state.designTokens.colors.dark,
         accentColor: state.designTokens.colors.accent,
         headerBg: state.designTokens.colors.headerBg,
+        products: state.products,
         pages: state.pages,
         designTokens: state.designTokens,
         contact: state.contact,
@@ -364,8 +365,7 @@ export async function saveAll(
       if (catErr) {
         console.error('[Supabase] Catalog save error:', catErr)
       } else {
-        const prodOk = await saveAllProducts(state.products)
-        result.supabase = prodOk
+        result.supabase = true
         console.log('[Supabase Cloud Sync] Successfully saved catalog bundle to cloud for team!')
       }
     } catch (err) {
@@ -403,11 +403,14 @@ export async function syncFromCloud(initialData: {
     try {
       const catalog = await fetchFirstCatalog()
       if (catalog) {
-        const products = await fetchProducts(catalog.id)
-        const fieldDefs = await fetchFieldDefinitions(catalog.id)
-
         const brandData = (typeof catalog.brand === 'object' && catalog.brand !== null ? catalog.brand : {}) as any
 
+        // Pull full state from cloud bundle
+        const cloudProducts = Array.isArray(brandData.products) && brandData.products.length > 0
+          ? brandData.products
+          : initialData.products
+
+        const fieldDefs = await fetchFieldDefinitions(catalog.id)
         const cloudPages = Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages
         const cloudTokens = brandData.designTokens || initialData.designTokens
         const cloudContact = brandData.contact || initialData.contact
@@ -415,11 +418,11 @@ export async function syncFromCloud(initialData: {
         const cloudAudit = Array.isArray(brandData.audit_trail) ? brandData.audit_trail : []
         const lastUpdatedBy = brandData.last_updated_by || null
 
-        console.log('[Supabase Cloud Sync] Pulled active cloud state:', catalog.name, 'Products:', products.length)
+        console.log('[Supabase Cloud Sync] Pulled active cloud state:', catalog.name, 'Products:', cloudProducts.length)
 
         return {
           catalog,
-          products: products.length > 0 ? products : initialData.products,
+          products: cloudProducts,
           fieldDefinitions: fieldDefs.length > 0 ? fieldDefs : initialData.fieldDefinitions,
           pages: cloudPages,
           designTokens: cloudTokens,

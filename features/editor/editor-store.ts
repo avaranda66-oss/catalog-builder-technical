@@ -308,6 +308,35 @@ export const useEditorStore = create<EditorState>()(
       if (!state.dirtyProductIds.includes(productId)) {
         state.dirtyProductIds.push(productId)
       }
+
+      // Auto-register detailed audit log entry
+      const readableField =
+        path.startsWith('marketing.title') ? 'Título Comercial' :
+        path.startsWith('marketing.subtitle') ? 'Subtítulo Técnico' :
+        path.startsWith('marketing.overview') ? 'Descrição / Visão Geral' :
+        path.startsWith('marketing.heroImages') ? 'Fotos do Produto (Banner)' :
+        path.startsWith('marketing.features') ? 'Recursos & Destaques' :
+        path.startsWith('specs') ? 'Tabela de Especificações' :
+        path.startsWith('electrical') ? 'Tabela de Sinais Elétricos' :
+        path.startsWith('general') ? 'Especificações Gerais' :
+        path.startsWith('accessories') ? 'Tabela de Acessórios' :
+        path.startsWith('ordering') ? 'Código de Encomenda' : path
+
+      const item: AuditLogItem = {
+        id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_name: state.currentUser?.name || 'Colaborador Presys',
+        user_area: state.currentUser?.area || 'Engenharia',
+        action: `Alterou ${readableField} (${product.sku})`,
+        entity_type: 'product',
+        entity_name: product.sku,
+        timestamp: new Date().toISOString(),
+        details: typeof value === 'string' && value.length < 80
+          ? `Definiu como: "${value}"`
+          : Array.isArray(value)
+          ? `Atualizou lista com ${value.length} item(ns)`
+          : `Modificou o campo ${path}`,
+      }
+      state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
     }),
 
     updateProductField: (productId, updates) => set((state) => {
@@ -322,6 +351,18 @@ export const useEditorStore = create<EditorState>()(
       if (!state.dirtyProductIds.includes(productId)) {
         state.dirtyProductIds.push(productId)
       }
+
+      const item: AuditLogItem = {
+        id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_name: state.currentUser?.name || 'Colaborador Presys',
+        user_area: state.currentUser?.area || 'Engenharia',
+        action: `Atualizou dados cadastrais de ${product.sku}`,
+        entity_type: 'product',
+        entity_name: product.sku,
+        timestamp: new Date().toISOString(),
+        details: `Campos modificados: ${Object.keys(updates).join(', ')}`,
+      }
+      state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
     }),
 
     addProduct: (newProd) => set((state) => {
@@ -343,12 +384,25 @@ export const useEditorStore = create<EditorState>()(
       if (!state.dirtyProductIds.includes(id)) {
         state.dirtyProductIds.push(id)
       }
+
+      const item: AuditLogItem = {
+        id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_name: state.currentUser?.name || 'Colaborador Presys',
+        user_area: state.currentUser?.area || 'Engenharia',
+        action: `Criou novo produto: ${newProd.sku}`,
+        entity_type: 'product',
+        entity_name: newProd.sku,
+        timestamp: now,
+        details: `Cadastrado na família ${newProd.family || 'PCON'}: "${newProd.name}"`,
+      }
+      state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
     }),
 
     deleteProduct: (productId) => set((state) => {
       pushHistorySnapshot(state)
 
       const index = state.products.findIndex((p) => p.id === productId)
+      const deletedProd = state.products[index]
       if (index !== -1) {
         state.products.splice(index, 1)
       }
@@ -356,6 +410,20 @@ export const useEditorStore = create<EditorState>()(
         state.selectedProductId = state.products[0]?.id || null
       }
       state.saveStatus = 'unsaved'
+
+      if (deletedProd) {
+        const item: AuditLogItem = {
+          id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          user_name: state.currentUser?.name || 'Colaborador Presys',
+          user_area: state.currentUser?.area || 'Engenharia',
+          action: `Excluiu produto: ${deletedProd.sku}`,
+          entity_type: 'product',
+          entity_name: deletedProd.sku,
+          timestamp: new Date().toISOString(),
+          details: `Removido do catálogo: "${deletedProd.name}"`,
+        }
+        state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
+      }
     }),
 
     // =====================================================================
@@ -375,20 +443,31 @@ export const useEditorStore = create<EditorState>()(
     addPage: (title, sections) => set((state) => {
       pushHistorySnapshot(state)
 
-      const page = createPage(
-        title || `Página ${state.pages.length + 1}`,
-        sections || []
-      )
+      const pageTitle = title || `Página ${state.pages.length + 1}`
+      const page = createPage(pageTitle, sections || [])
       page.sort_order = state.pages.length
       state.pages.push(page)
       state.selectedPageId = page.id
       state.saveStatus = 'unsaved'
+
+      const item: AuditLogItem = {
+        id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_name: state.currentUser?.name || 'Colaborador Presys',
+        user_area: state.currentUser?.area || 'Engenharia',
+        action: `Adicionou página A4: "${pageTitle}"`,
+        entity_type: 'page',
+        entity_name: pageTitle,
+        timestamp: new Date().toISOString(),
+        details: `Criada com ${sections?.length || 0} seção(ões) e ordem ${page.sort_order + 1}`,
+      }
+      state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
     }),
 
     removePage: (pageId) => set((state) => {
       pushHistorySnapshot(state)
 
       const index = state.pages.findIndex((p) => p.id === pageId)
+      const removedPage = state.pages[index]
       if (index !== -1) {
         state.pages.splice(index, 1)
       }
@@ -398,6 +477,20 @@ export const useEditorStore = create<EditorState>()(
       // Renumber sort_order
       state.pages.forEach((p, i) => { p.sort_order = i })
       state.saveStatus = 'unsaved'
+
+      if (removedPage) {
+        const item: AuditLogItem = {
+          id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          user_name: state.currentUser?.name || 'Colaborador Presys',
+          user_area: state.currentUser?.area || 'Engenharia',
+          action: `Excluiu página A4: "${removedPage.title}"`,
+          entity_type: 'page',
+          entity_name: removedPage.title,
+          timestamp: new Date().toISOString(),
+          details: `Removida da paginação do catálogo`,
+        }
+        state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
+      }
     }),
 
     reorderPages: (fromIndex, toIndex) => set((state) => {
@@ -410,6 +503,18 @@ export const useEditorStore = create<EditorState>()(
       state.pages.splice(toIndex, 0, moved)
       state.pages.forEach((p, i) => { p.sort_order = i })
       state.saveStatus = 'unsaved'
+
+      const item: AuditLogItem = {
+        id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user_name: state.currentUser?.name || 'Colaborador Presys',
+        user_area: state.currentUser?.area || 'Engenharia',
+        action: `Reordenou páginas A4: "${moved.title}"`,
+        entity_type: 'page',
+        entity_name: moved.title,
+        timestamp: new Date().toISOString(),
+        details: `Movida da posição ${fromIndex + 1} para a posição ${toIndex + 1}`,
+      }
+      state.auditLogs = [item, ...state.auditLogs].slice(0, 60)
     }),
 
     updatePage: (pageId, updates) => set((state) => {
