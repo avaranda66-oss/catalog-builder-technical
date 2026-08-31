@@ -1,7 +1,7 @@
 project: catalog-builder
 branch: codex/catalogbuilder-rebuild
 phase: implementation
-currentStory: docs/stories/2.4-master-library-use-cases.story.md
+currentStory: docs/stories/2.5-normalized-cloud-sync.story.md
 status: story-done
 baseline: HEAD-1e93d6d
 visualBaseline: github-catalog-builder-technical

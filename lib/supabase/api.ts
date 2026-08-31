@@ -5,6 +5,7 @@
 import { supabase, isSupabaseConfigured } from './client'
 import { Catalog, Product, FieldDefinition } from '../types/database'
 import { CatalogPage, DesignTokens, ContactInfo } from '../types/catalog-builder'
+import { validateCatalogPage } from '../validators/catalog-schemas'
 
 // ---------------------------------------------------------------------------
 // Local Storage Keys
@@ -233,6 +234,133 @@ export async function fetchFieldDefinitions(catalogId: string): Promise<FieldDef
 }
 
 // ---------------------------------------------------------------------------
+// SUPABASE — Normalized A4 pages and sections (migration 00004)
+// ---------------------------------------------------------------------------
+
+interface NormalizedPageRow {
+  id: string
+  catalog_id: string
+  title: string
+  sort_order: number
+  visible: boolean
+}
+
+interface NormalizedSectionRow {
+  id: string
+  page_id: string
+  type: string
+  title: string
+  config: Record<string, unknown> | null
+  content: unknown
+  style: Record<string, unknown> | null
+  sort_order: number
+  visible: boolean
+}
+
+/**
+ * Lê o modelo normalizado quando a migration 00004 está disponível.
+ * `null` significa indisponibilidade/erro e permite o fallback legado em brand.pages;
+ * um array vazio é uma resposta válida de catálogo sem páginas persistidas.
+ */
+export async function fetchNormalizedPages(catalogId: string): Promise<CatalogPage[] | null> {
+  if (!isSupabaseConfigured()) return null
+  try {
+    const { data: pageRows, error: pageError } = await supabase
+      .from('catalog_pages')
+      .select('id,catalog_id,title,sort_order,visible')
+      .eq('catalog_id', catalogId)
+      .order('sort_order', { ascending: true })
+    if (pageError) throw pageError
+
+    const rows = (pageRows || []) as NormalizedPageRow[]
+    if (rows.length === 0) return []
+    const { data: sectionRows, error: sectionError } = await supabase
+      .from('page_sections')
+      .select('id,page_id,type,title,config,content,style,sort_order,visible')
+      .in('page_id', rows.map((page) => page.id))
+      .order('sort_order', { ascending: true })
+    if (sectionError) throw sectionError
+
+    const sectionsByPage = new Map<string, NormalizedSectionRow[]>()
+    for (const section of ((sectionRows || []) as NormalizedSectionRow[])) {
+      const current = sectionsByPage.get(section.page_id) || []
+      current.push(section)
+      sectionsByPage.set(section.page_id, current)
+    }
+
+    return rows.map((page) => {
+      const candidate = {
+        id: page.id,
+        title: page.title,
+        sort_order: page.sort_order,
+        visible: page.visible,
+        sections: (sectionsByPage.get(page.id) || []).map((section) => ({
+          id: section.id,
+          type: section.type,
+          title: section.title,
+          config: section.config || {},
+          content: section.content ?? null,
+          style: section.style || undefined,
+          sort_order: section.sort_order,
+          visible: section.visible,
+        })),
+      }
+      const validation = validateCatalogPage(candidate)
+      if (!validation.success || !validation.data) {
+        throw new Error(`Página inválida no Supabase (${page.id}): ${(validation.errors || []).join('; ')}`)
+      }
+      return validation.data as CatalogPage
+    })
+  } catch (err) {
+    console.warn('[Supabase] Normalized pages unavailable, using legacy bundle:', err)
+    return null
+  }
+}
+
+/** Substitui a composição normalizada de páginas em uma operação idempotente. */
+export async function saveNormalizedPages(catalogId: string, pages: CatalogPage[]): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false
+  try {
+    const { error: deleteError } = await supabase
+      .from('catalog_pages')
+      .delete()
+      .eq('catalog_id', catalogId)
+    if (deleteError) throw deleteError
+
+    if (pages.length === 0) return true
+    const pageRows = pages.map((page) => ({
+      id: page.id,
+      catalog_id: catalogId,
+      title: page.title,
+      sort_order: page.sort_order,
+      visible: page.visible,
+    }))
+    const { error: pageError } = await supabase.from('catalog_pages').upsert(pageRows)
+    if (pageError) throw pageError
+
+    const sectionRows = pages.flatMap((page) => page.sections.map((section) => ({
+      id: section.id,
+      page_id: page.id,
+      type: section.type,
+      title: section.title,
+      config: section.config,
+      content: section.content,
+      style: section.style || {},
+      sort_order: section.sort_order,
+      visible: section.visible,
+    })))
+    if (sectionRows.length > 0) {
+      const { error: sectionError } = await supabase.from('page_sections').upsert(sectionRows)
+      if (sectionError) throw sectionError
+    }
+    return true
+  } catch (err) {
+    console.warn('[Supabase] Normalized pages save unavailable; legacy bundle remains source of truth:', err)
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SUPABASE — Image Storage
 // ---------------------------------------------------------------------------
 
@@ -366,6 +494,10 @@ export async function saveAll(
         console.error('[Supabase] Catalog save error:', catErr)
       } else {
         result.supabase = true
+        const normalizedPagesSaved = await saveNormalizedPages(state.catalog.id, state.pages)
+        if (!normalizedPagesSaved) {
+          console.warn('[Supabase Cloud Sync] Normalized pages were not saved; brand bundle remains available as fallback')
+        }
         console.log('[Supabase Cloud Sync] Successfully saved catalog bundle to cloud for team!')
       }
     } catch (err) {
@@ -411,7 +543,10 @@ export async function syncFromCloud(initialData: {
           : initialData.products
 
         const fieldDefs = await fetchFieldDefinitions(catalog.id)
-        const cloudPages = Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages
+        const normalizedPages = await fetchNormalizedPages(catalog.id)
+        const cloudPages = normalizedPages && normalizedPages.length > 0
+          ? normalizedPages
+          : (Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages)
         const cloudTokens = brandData.designTokens || initialData.designTokens
         const cloudContact = brandData.contact || initialData.contact
         const cloudPresets = Array.isArray(brandData.presets) ? brandData.presets : []
@@ -472,7 +607,10 @@ export async function loadAll(initialData: {
         const fieldDefs = await fetchFieldDefinitions(catalog.id)
         const brandData = (typeof catalog.brand === 'object' && catalog.brand !== null ? catalog.brand : {}) as any
 
-        const cloudPages = Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages
+        const normalizedPages = await fetchNormalizedPages(catalog.id)
+        const cloudPages = normalizedPages && normalizedPages.length > 0
+          ? normalizedPages
+          : (Array.isArray(brandData.pages) && brandData.pages.length > 0 ? brandData.pages : initialData.pages)
         const cloudTokens = brandData.designTokens || initialData.designTokens
         const cloudContact = brandData.contact || initialData.contact
 
