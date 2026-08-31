@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import { persist } from 'zustand/middleware'
 import { Product, Catalog, FieldDefinition, AiRun, AuditLog } from '../../lib/types/database'
 import {
   CatalogPage,
@@ -11,7 +12,15 @@ import {
   createPage,
   SectionType,
 } from '../../lib/types/catalog-builder'
-import { PRESYS_DESIGN_TOKENS, PRESYS_CONTACT, DEFAULT_PAGES, SYSTEM_PRESETS } from '../../lib/data/initial-data'
+import {
+  PRESYS_DESIGN_TOKENS,
+  PRESYS_CONTACT,
+  DEFAULT_PAGES,
+  SYSTEM_PRESETS,
+  INITIAL_CATALOG,
+  INITIAL_PRODUCTS,
+  INITIAL_FIELD_DEFINITIONS,
+} from '../../lib/data/initial-data'
 import { validateCatalogPage, validatePageSection } from '../../lib/validators/catalog-schemas'
 
 export type EditorMode = 'form' | 'grid'
@@ -205,25 +214,26 @@ function pushHistorySnapshot(state: any) {
 }
 
 export const useEditorStore = create<EditorState>()(
-  immer((set, get) => ({
-    catalog: null,
-    products: [],
-    selectedProductId: null,
-    mode: 'form',
-    fieldDefinitions: [],
-    
-    pages: DEFAULT_PAGES,
-    selectedPageId: DEFAULT_PAGES[0]?.id || null,
-    designTokens: PRESYS_DESIGN_TOKENS,
-    contact: PRESYS_CONTACT,
+  persist(
+    immer((set, get) => ({
+      catalog: INITIAL_CATALOG,
+      products: INITIAL_PRODUCTS,
+      selectedProductId: INITIAL_PRODUCTS[0]?.id || null,
+      mode: 'form',
+      fieldDefinitions: INITIAL_FIELD_DEFINITIONS,
+      
+      pages: DEFAULT_PAGES,
+      selectedPageId: DEFAULT_PAGES[0]?.id || null,
+      designTokens: PRESYS_DESIGN_TOKENS,
+      contact: PRESYS_CONTACT,
 
-    isVisualEditMode: false,
+      isVisualEditMode: false,
 
-    presets: SYSTEM_PRESETS,
+      presets: SYSTEM_PRESETS,
 
-    saveStatus: 'saved',
-    lastSavedAt: new Date(),
-    dirtyProductIds: [],
+      saveStatus: 'saved',
+      lastSavedAt: new Date(),
+      dirtyProductIds: [],
 
     history: [],
     historyIndex: -1,
@@ -585,5 +595,20 @@ export const useEditorStore = create<EditorState>()(
     rejectStagedPatch: () => set((state) => {
       state.stagedPatch = null
     }),
-  }))
+  })),
+  {
+    name: 'pcon-catalog-builder-v3',
+    partialize: (state) => ({
+      catalog: state.catalog,
+      products: state.products,
+      selectedProductId: state.selectedProductId,
+      pages: state.pages,
+      selectedPageId: state.selectedPageId,
+      designTokens: state.designTokens,
+      contact: state.contact,
+      fieldDefinitions: state.fieldDefinitions,
+      presets: state.presets,
+    }),
+  }
+)
 )

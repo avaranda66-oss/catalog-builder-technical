@@ -305,7 +305,7 @@ export async function saveAll(state: {
 }
 
 // ---------------------------------------------------------------------------
-// FULL LOAD — Load from Supabase → localStorage → INITIAL_DATA
+// FULL LOAD — Load from localStorage (working session) → Supabase → INITIAL_DATA
 // ---------------------------------------------------------------------------
 
 export async function loadAll(initialData: {
@@ -316,7 +316,14 @@ export async function loadAll(initialData: {
   designTokens: DesignTokens
   contact: ContactInfo
 }): Promise<PersistedState & { source: 'supabase' | 'localStorage' | 'initial' }> {
-  // 1. Try Supabase first
+  // 1. Try localStorage FIRST — user's local edits and working session must never be lost
+  const cached = loadFromLocalStorage()
+  if (cached && cached.catalog && cached.products && cached.products.length > 0) {
+    console.log('[Persistence] Loaded active working session from localStorage, savedAt:', cached.savedAt)
+    return { ...cached, source: 'localStorage' }
+  }
+
+  // 2. If localStorage is empty, try loading initial dataset from Supabase
   if (isSupabaseConfigured()) {
     try {
       const catalog = await fetchFirstCatalog()
@@ -325,14 +332,12 @@ export async function loadAll(initialData: {
         const fieldDefs = await fetchFieldDefinitions(catalog.id)
 
         if (products.length > 0) {
-          console.log('[Persistence] Loaded from Supabase:', catalog.name)
-          
-          // Also cache to localStorage
+          console.log('[Persistence] Loaded initial data from Supabase:', catalog.name)
           const supabaseState = {
             catalog,
             products,
             fieldDefinitions: fieldDefs.length > 0 ? fieldDefs : initialData.fieldDefinitions,
-            pages: initialData.pages, // Pages are client-side templates for now
+            pages: initialData.pages,
             designTokens: initialData.designTokens,
             contact: initialData.contact,
           }
@@ -347,24 +352,20 @@ export async function loadAll(initialData: {
         }
       }
     } catch (err) {
-      console.warn('[Persistence] Supabase load failed, falling back:', err)
+      console.warn('[Persistence] Supabase load failed, falling back to seed:', err)
     }
   }
 
-  // 2. Try localStorage
-  const cached = loadFromLocalStorage()
-  if (cached && cached.catalog && cached.products.length > 0) {
-    return { ...cached, source: 'localStorage' }
-  }
-
-  // 3. Fallback to initial data
+  // 3. Fallback to initial seed data
   console.log('[Persistence] Using initial seed data')
-  return {
+  const defaultState = {
     ...initialData,
     version: LS_VERSION,
     savedAt: new Date().toISOString(),
-    source: 'initial',
+    source: 'initial' as const,
   }
+  saveToLocalStorage(defaultState)
+  return defaultState
 }
 
 // ---------------------------------------------------------------------------
