@@ -83,6 +83,11 @@ export const StagedChangesModal: React.FC = () => {
                     </td>
                     <td className="p-2 border-r border-[#E5E5E5] font-sans font-semibold text-[#171717]">
                       {change.fieldLabel || change.path}
+                      {change.reason && (
+                        <div className="mt-1 text-[10px] font-normal leading-tight text-[#92400E]">
+                          {change.reason}
+                        </div>
+                      )}
                     </td>
                     <td className="p-2 border-r border-[#E5E5E5] text-[#DC2626] bg-[#FEF2F2]">
                       {typeof change.oldValue === 'object'

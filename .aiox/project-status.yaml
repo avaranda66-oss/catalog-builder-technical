@@ -1,7 +1,7 @@
 project: catalog-builder
 branch: codex/catalogbuilder-rebuild
 phase: discovery-complete
-currentStory: docs/stories/2.2-supabase-adapter.story.md
+currentStory: docs/stories/3.1-safe-proposal-ui.story.md
 status: story-done
 baseline: HEAD-1e93d6d
 visualBaseline: github-catalog-builder-technical

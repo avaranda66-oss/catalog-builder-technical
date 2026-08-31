@@ -23,6 +23,7 @@ import {
   INITIAL_FIELD_DEFINITIONS,
 } from '../../lib/data/initial-data'
 import { validateCatalogPage, validatePageSection } from '../../lib/validators/catalog-schemas'
+import { applyAcceptedChanges } from '../../lib/domain/proposal-application'
 
 export type EditorMode = 'form' | 'grid'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error'
@@ -712,21 +713,45 @@ export const useEditorStore = create<EditorState>()(
       const product = state.products.find((p) => p.id === state.selectedProductId)
       if (!product) return
 
-      pushHistorySnapshot(state)
-
       if (!product.data) product.data = {}
 
-      state.stagedPatch.changes.forEach((change) => {
-        if (change.accepted !== false) {
-          setNestedPath(product.data, change.path, change.newValue)
-        }
-      })
+      const proposal = state.stagedPatch
+      const application = applyAcceptedChanges(
+        product.data,
+        proposal.changes.map((change) => ({ ...change, accepted: change.accepted !== false })),
+      )
 
-      product.updated_at = new Date().toISOString()
-      state.saveStatus = 'unsaved'
-      if (!state.dirtyProductIds.includes(product.id)) {
-        state.dirtyProductIds.push(product.id)
+      if (application.applied.length > 0) {
+        pushHistorySnapshot(state)
+        product.data = application.next
+        product.updated_at = new Date().toISOString()
+        state.saveStatus = 'unsaved'
+        if (!state.dirtyProductIds.includes(product.id)) {
+          state.dirtyProductIds.push(product.id)
+        }
       }
+
+      if (application.conflicts.length > 0) {
+        const conflictPaths = new Set(application.conflicts.map((change) => change.path))
+        state.stagedPatch = {
+          ...proposal,
+          summary: `${proposal.summary} — ${application.conflicts.length} conflito(s) precisam de revisão.`,
+          changes: proposal.changes
+            .filter((change) => conflictPaths.has(change.path))
+            .map((change) => {
+              const conflict = application.conflicts.find((item) => item.path === change.path)
+              return {
+                ...change,
+                oldValue: conflict?.currentValue,
+                accepted: false,
+                reason: 'O valor foi alterado desde a criação da proposta. Revise o valor atual antes de aceitar novamente.',
+              }
+            }),
+        }
+        if (application.applied.length === 0) state.saveStatus = 'error'
+        return
+      }
+
       state.stagedPatch = null
     }),
 
