@@ -67,45 +67,45 @@ export const ProductForm: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#FFFFFF] overflow-hidden">
       {/* 1. Header: Product Info & Quick Stats */}
-      <div className="border-b border-[#D4D4D4] bg-[#FAFAFA] px-6 pt-4 pb-3 shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <span className="font-mono-data font-bold text-sm bg-[#1A1A2E] text-white px-2 py-0.5">
+      <div className="border-b border-[#D4D4D4] bg-[#FAFAFA] px-4 sm:px-6 pt-3 sm:pt-4 pb-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <span className="font-mono-data font-bold text-xs sm:text-sm bg-[#1A1A2E] text-white px-2 py-0.5 shrink-0 rounded-xs">
               {product.sku}
             </span>
             <input
               type="text"
               value={product.name}
               onChange={(e) => updateProductField(product.id, { name: e.target.value })}
-              className="font-bold text-base text-[#171717] bg-transparent border-b border-transparent hover:border-[#D4D4D4] focus:border-[#2563EB] focus:bg-[#FFFFFF] px-1 py-0.5 focus:outline-none min-w-[280px]"
+              className="font-bold text-sm sm:text-base text-[#171717] bg-transparent border-b border-transparent hover:border-[#D4D4D4] focus:border-[#2563EB] focus:bg-[#FFFFFF] px-1 py-0.5 focus:outline-none w-full max-w-xs sm:max-w-sm"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setIsVisualEditMode(!isVisualEditMode)}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 border transition-colors ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 border transition-colors rounded-xs ${
                 isVisualEditMode
                   ? 'bg-[#2563EB] text-white border-[#1D4ED8]'
                   : 'bg-[#FFFFFF] text-[#2563EB] border-[#BFDBFE] hover:bg-[#EFF6FF]'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              {isVisualEditMode ? 'Modo Visual Ativo' : 'Ativar Edição Visual'}
+              <span className="hidden xs:inline">{isVisualEditMode ? 'Modo Visual Ativo' : 'Edição Visual'}</span>
             </button>
           </div>
         </div>
 
         {/* Product SKU, Family, Status */}
-        <div className="flex items-center gap-4 text-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] font-bold uppercase text-[#737373]">SKU:</label>
             <input
               type="text"
               value={product.sku}
               onChange={(e) => updateProductField(product.id, { sku: e.target.value })}
-              className="w-28 h-7 px-2 font-mono-data bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+              className="w-24 sm:w-28 h-7 px-2 font-mono-data bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
             />
           </div>
 
@@ -115,7 +115,7 @@ export const ProductForm: React.FC = () => {
               type="text"
               value={product.family}
               onChange={(e) => updateProductField(product.id, { family: e.target.value })}
-              className="w-24 h-7 px-2 bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+              className="w-20 sm:w-24 h-7 px-2 bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
             />
           </div>
 

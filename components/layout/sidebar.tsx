@@ -4,11 +4,16 @@ import React, { useState } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { PageManager } from '../pages/page-manager'
 import { PresetManager } from '../presets/preset-manager'
-import { Plus, Search, Trash2, Layers, FileText, Palette } from 'lucide-react'
+import { Plus, Search, Trash2, Layers, FileText, Palette, X } from 'lucide-react'
 
 type SidebarTab = 'products' | 'pages' | 'themes'
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpenMobile?: boolean
+  onCloseMobile?: () => void
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpenMobile, onCloseMobile }) => {
   const {
     products,
     selectedProductId,
@@ -52,7 +57,31 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="w-68 border-r border-[#D4D4D4] bg-[#FAFAFA] flex flex-col h-full select-none shrink-0">
+    <>
+      {/* Mobile Backdrop */}
+      {isOpenMobile && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-2xs transition-opacity"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] bg-[#FAFAFA] flex flex-col h-full border-r border-[#D4D4D4] shadow-2xl lg:shadow-none lg:static lg:w-68 lg:z-auto transition-transform duration-200 select-none shrink-0 ${
+          isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex lg:hidden items-center justify-between px-4 h-12 bg-[#1A1A2E] text-white shrink-0">
+          <span className="font-bold text-xs uppercase tracking-wider">Menu de Navegação</span>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="p-1 hover:bg-[#2D2D44] text-white rounded-xs"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       {/* Tab Switcher */}
       <div className="flex border-b border-[#D4D4D4] bg-[#FFFFFF]">
         <button
@@ -197,5 +226,6 @@ export const Sidebar: React.FC = () => {
         <span className="font-mono-data">v2.0</span>
       </div>
     </aside>
+    </>
   )
 }

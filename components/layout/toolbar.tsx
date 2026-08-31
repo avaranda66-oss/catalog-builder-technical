@@ -15,6 +15,10 @@ import {
   Layers,
   History,
   Download,
+  Menu,
+  Eye,
+  FileText,
+  Sparkles,
 } from 'lucide-react'
 
 interface ToolbarProps {
@@ -22,6 +26,9 @@ interface ToolbarProps {
   onImportClick: () => void
   onOpenPdfImport: () => void
   onExportPdfClick: () => void
+  onToggleSidebarMobile?: () => void
+  mobileView?: 'editor' | 'preview'
+  onChangeMobileView?: (view: 'editor' | 'preview') => void
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -29,6 +36,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onImportClick,
   onOpenPdfImport,
   onExportPdfClick,
+  onToggleSidebarMobile,
+  mobileView = 'editor',
+  onChangeMobileView,
 }) => {
   const {
     catalog,
@@ -68,137 +78,183 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
 
   return (
-    <header className="h-14 border-b border-[#D4D4D4] bg-[#FFFFFF] px-4 flex items-center justify-between select-none shrink-0 z-20">
-      {/* Brand & Catalog Title */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 pr-4 border-r border-[#E5E5E5]">
-          <div className="w-7 h-7 bg-[#003366] flex items-center justify-center text-white font-bold text-xs tracking-wider">
-            PCON
+    <header className="border-b border-[#D4D4D4] bg-[#FFFFFF] flex flex-col select-none shrink-0 z-20">
+      {/* Main Bar */}
+      <div className="h-14 px-3 sm:px-4 flex items-center justify-between gap-2">
+        {/* Left: Mobile Menu Button + Brand Logo & Title */}
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          {/* Hamburger Menu on Mobile */}
+          <button
+            type="button"
+            onClick={onToggleSidebarMobile}
+            className="p-1.5 hover:bg-[#F5F5F5] text-[#171717] border border-[#D4D4D4] lg:hidden shrink-0 rounded-xs"
+            title="Abrir Menu de Produtos e Temas"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+
+          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-[#E5E5E5] shrink-0">
+            <div className="w-7 h-7 bg-[#003366] flex items-center justify-center text-white font-bold text-xs tracking-wider rounded-xs">
+              PCON
+            </div>
+            <span className="font-semibold text-xs sm:text-sm text-[#171717] tracking-tight hidden xs:inline">
+              Catalog Builder
+            </span>
           </div>
-          <span className="font-semibold text-sm text-[#171717] tracking-tight">
-            Catalog Builder
-          </span>
+
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-[#171717] truncate max-w-[120px] sm:max-w-xs">
+              {catalog?.name || 'Catálogo PCON'}
+            </span>
+            <span className="text-[10px] text-[#737373] truncate hidden sm:inline">
+              {products.length} produto(s) • v{catalog?.version || 1}.0
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold text-[#171717] truncate max-w-xs">
-            {catalog?.name || 'Catálogo PCON'}
-          </span>
-          <span className="text-[11px] text-[#737373]">
-            {products.length} produtos cadastrados • v{catalog?.version || 1}.0
-          </span>
+        {/* Desktop: Mode Switcher Tabs (Form vs Grid) */}
+        <div className="hidden md:flex items-center bg-[#F5F5F5] p-1 border border-[#D4D4D4]">
+          <button
+            type="button"
+            onClick={() => setMode('form')}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors ${
+              mode === 'form'
+                ? 'bg-[#1A1A2E] text-white shadow-xs'
+                : 'text-[#525252] hover:text-[#171717]'
+            }`}
+          >
+            <FormInput className="w-3.5 h-3.5" />
+            Formulário Assistido
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors ${
+              mode === 'grid'
+                ? 'bg-[#1A1A2E] text-white shadow-xs'
+                : 'text-[#525252] hover:text-[#171717]'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Planilha Técnica
+          </button>
+        </div>
+
+        {/* Right Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Undo / Redo (Desktop only) */}
+          <div className="hidden lg:flex items-center border border-[#D4D4D4] mr-1">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo()}
+              title="Desfazer alteração"
+              className="p-1.5 hover:bg-[#F5F5F5] disabled:opacity-30 border-r border-[#E5E5E5] text-[#525252]"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo()}
+              title="Refazer alteração"
+              className="p-1.5 hover:bg-[#F5F5F5] disabled:opacity-30 text-[#525252]"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Import PDF via AI */}
+          <button
+            type="button"
+            onClick={onOpenPdfImport}
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 border border-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] text-xs font-semibold text-[#1E40AF] transition-colors rounded-xs shadow-2xs"
+            title="Importar catálogo em PDF e clonar para sua marca com IA"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span className="hidden sm:inline">Importar PDF</span>
+          </button>
+
+          {/* Import Excel (Desktop only) */}
+          <button
+            type="button"
+            onClick={onImportClick}
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717] rounded-xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#525252]" />
+            <span>Excel</span>
+          </button>
+
+          {/* AI Assistant */}
+          <button
+            type="button"
+            onClick={onOpenAiPanel}
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 border border-[#1A1A2E] bg-[#FAFAFA] hover:bg-[#F5F5F5] text-xs font-medium text-[#1A1A2E] rounded-xs"
+            title="Assistente Técnico com IA e Reconhecimento de Voz"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span className="hidden sm:inline">Jarvis IA</span>
+          </button>
+
+          {/* Print / PDF (Desktop only) */}
+          <button
+            type="button"
+            onClick={onExportPdfClick}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717] rounded-xs"
+            title="Imprimir ou Exportar PDF"
+          >
+            <Printer className="w-3.5 h-3.5 text-[#525252]" />
+            <span className="hidden md:inline">PDF</span>
+          </button>
+
+          {/* Save Button */}
+          <button
+            type="button"
+            onClick={handleSave}
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-white transition-colors rounded-xs shadow-2xs ${
+              saveStatus === 'unsaved'
+                ? 'bg-[#059669] hover:bg-[#047857]'
+                : 'bg-[#1A1A2E] hover:bg-[#2D2D44]'
+            }`}
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>
+              {saveStatus === 'saving'
+                ? '...'
+                : saveStatus === 'unsaved'
+                ? 'Salvar'
+                : 'Salvo'}
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Mode Switcher Tabs (Form vs Grid) */}
-      <div className="flex items-center bg-[#F5F5F5] p-1 border border-[#D4D4D4]">
+      {/* Mobile Segmented View Switcher Control */}
+      <div className="flex lg:hidden border-t border-[#E5E5E5] bg-[#F8FAFC]">
         <button
           type="button"
-          onClick={() => setMode('form')}
-          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors ${
-            mode === 'form'
-              ? 'bg-[#1A1A2E] text-white shadow-xs'
-              : 'text-[#525252] hover:text-[#171717]'
+          onClick={() => onChangeMobileView && onChangeMobileView('editor')}
+          className={`flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+            mobileView === 'editor'
+              ? 'border-[#2563EB] text-[#2563EB] bg-[#EFF6FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
           }`}
         >
           <FormInput className="w-3.5 h-3.5" />
-          Formulário Assistido
+          <span>Formulário / Editor</span>
         </button>
+
         <button
           type="button"
-          onClick={() => setMode('grid')}
-          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors ${
-            mode === 'grid'
-              ? 'bg-[#1A1A2E] text-white shadow-xs'
-              : 'text-[#525252] hover:text-[#171717]'
+          onClick={() => onChangeMobileView && onChangeMobileView('preview')}
+          className={`flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+            mobileView === 'preview'
+              ? 'border-[#2563EB] text-[#2563EB] bg-[#EFF6FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1E293B]'
           }`}
         >
-          <FileSpreadsheet className="w-3.5 h-3.5" />
-          Planilha Técnica
-        </button>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center gap-2">
-        {/* Undo / Redo */}
-        <div className="flex items-center border border-[#D4D4D4] mr-2">
-          <button
-            type="button"
-            onClick={undo}
-            disabled={!canUndo()}
-            title="Desfazer alteração"
-            className="p-1.5 hover:bg-[#F5F5F5] disabled:opacity-30 border-r border-[#E5E5E5] text-[#525252]"
-          >
-            <Undo2 className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={redo}
-            disabled={!canRedo()}
-            title="Refazer alteração"
-            className="p-1.5 hover:bg-[#F5F5F5] disabled:opacity-30 text-[#525252]"
-          >
-            <Redo2 className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Import PDF via AI */}
-        <button
-          type="button"
-          onClick={onOpenPdfImport}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] text-xs font-semibold text-[#1E40AF] transition-colors"
-          title="Importar catálogo em PDF e clonar para sua marca com IA"
-        >
-          <Upload className="w-3.5 h-3.5 text-[#2563EB]" />
-          Importar PDF
-        </button>
-
-        {/* Import Excel */}
-        <button
-          type="button"
-          onClick={onImportClick}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717]"
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-[#525252]" />
-          Importar Excel
-        </button>
-
-        {/* AI Assistant */}
-        <button
-          type="button"
-          onClick={onOpenAiPanel}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#1A1A2E] bg-[#FAFAFA] hover:bg-[#F5F5F5] text-xs font-medium text-[#1A1A2E]"
-        >
-          <Bot className="w-3.5 h-3.5 text-[#003366]" />
-          Assistente Técnico
-        </button>
-
-        {/* Print / PDF */}
-        <button
-          type="button"
-          onClick={onExportPdfClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717]"
-        >
-          <Printer className="w-3.5 h-3.5 text-[#525252]" />
-          Imprimir / PDF
-        </button>
-
-        {/* Save */}
-        <button
-          type="button"
-          onClick={handleSave}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors ${
-            saveStatus === 'unsaved'
-              ? 'bg-[#059669] hover:bg-[#047857]'
-              : 'bg-[#1A1A2E] hover:bg-[#2D2D44]'
-          }`}
-        >
-          <Save className="w-3.5 h-3.5" />
-          {saveStatus === 'saving'
-            ? 'Salvando...'
-            : saveStatus === 'unsaved'
-            ? 'Salvar Alterações'
-            : 'Salvo'}
+          <Eye className="w-3.5 h-3.5" />
+          <span>Visualizar A4 (Preview)</span>
         </button>
       </div>
     </header>

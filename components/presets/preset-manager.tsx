@@ -70,44 +70,44 @@ export const PresetManager: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-[#FFFFFF] overflow-hidden select-none">
       {/* Header Subtabs */}
-      <div className="flex border-b border-[#D4D4D4] bg-[#FAFAFA] text-xs font-semibold">
+      <div className="flex border-b border-[#D4D4D4] bg-[#FAFAFA] text-[10.5px] sm:text-xs font-semibold shrink-0">
         <button
           type="button"
           onClick={() => setActiveSubTab('themes')}
-          className={`flex-1 py-2.5 px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-1 sm:px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1 sm:gap-1.5 ${
             activeSubTab === 'themes'
               ? 'border-[#003366] text-[#003366] bg-[#FFFFFF]'
               : 'border-transparent text-[#737373] hover:text-[#171717]'
           }`}
         >
           <Palette className="w-3.5 h-3.5" />
-          <span>Temas Prontos</span>
+          <span>Temas</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveSubTab('custom')}
-          className={`flex-1 py-2.5 px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-1 sm:px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1 sm:gap-1.5 ${
             activeSubTab === 'custom'
               ? 'border-[#003366] text-[#003366] bg-[#FFFFFF]'
               : 'border-transparent text-[#737373] hover:text-[#171717]'
           }`}
         >
           <Sliders className="w-3.5 h-3.5" />
-          <span>Cores & Estilo</span>
+          <span>Cores</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveSubTab('contact')}
-          className={`flex-1 py-2.5 px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-1 sm:px-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1 sm:gap-1.5 ${
             activeSubTab === 'contact'
               ? 'border-[#003366] text-[#003366] bg-[#FFFFFF]'
               : 'border-transparent text-[#737373] hover:text-[#171717]'
           }`}
         >
           <Building className="w-3.5 h-3.5" />
-          <span>Marca & Contato</span>
+          <span>Marca</span>
         </button>
       </div>
 

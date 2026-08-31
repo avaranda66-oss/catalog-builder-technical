@@ -19,17 +19,17 @@ export const StagedChangesModal: React.FC = () => {
   const product = products.find((p) => p.id === selectedProductId)
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-      <div className="bg-[#FFFFFF] border-2 border-[#1A1A2E] shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-[#FFFFFF] border-2 border-[#1A1A2E] shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh] overflow-hidden rounded-xs">
         {/* Modal Header */}
-        <div className="bg-[#1A1A2E] text-white p-4 flex items-center justify-between">
+        <div className="bg-[#1A1A2E] text-white p-3 sm:p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-[#059669]" />
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider">
+              <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider">
                 Auditoria de Proposta Técnica
               </h2>
-              <span className="text-xs text-[#A3A3A3]">
+              <span className="text-[10px] sm:text-xs text-[#A3A3A3]">
                 Alvo: {product?.sku} — {product?.name}
               </span>
             </div>
@@ -37,14 +37,14 @@ export const StagedChangesModal: React.FC = () => {
           <button
             type="button"
             onClick={rejectStagedPatch}
-            className="p-1 hover:bg-[#2D2D44] text-white"
+            className="p-1 hover:bg-[#2D2D44] text-white rounded-xs"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Summary Banner */}
-        <div className="p-3 bg-[#FFFBEB] border-b border-[#FDE68A] text-xs text-[#92400E] flex items-start gap-2">
+        <div className="p-3 bg-[#FFFBEB] border-b border-[#FDE68A] text-xs text-[#92400E] flex items-start gap-2 shrink-0">
           <AlertTriangle className="w-4 h-4 text-[#D97706] shrink-0 mt-0.5" />
           <div>
             <span className="font-bold">Resumo da proposta: </span>
@@ -53,8 +53,8 @@ export const StagedChangesModal: React.FC = () => {
         </div>
 
         {/* Changes Diff Table */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <table className="w-full border-collapse border border-[#D4D4D4] text-xs text-left">
+        <div className="flex-1 overflow-x-auto overflow-y-auto p-2 sm:p-4">
+          <table className="min-w-[480px] w-full border-collapse border border-[#D4D4D4] text-xs text-left">
             <thead>
               <tr className="bg-[#FAFAFA] text-[#525252] font-semibold border-b border-[#D4D4D4]">
                 <th className="p-2.5 w-10 text-center">Sel</th>

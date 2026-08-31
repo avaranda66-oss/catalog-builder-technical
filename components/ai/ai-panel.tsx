@@ -158,7 +158,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-[#FFFFFF] border-l border-[#D4D4D4] shadow-2xl flex flex-col z-40 select-none animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 w-full sm:w-96 max-w-full bg-[#FFFFFF] border-l border-[#D4D4D4] shadow-2xl flex flex-col z-50 select-none animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="h-14 bg-[#1A1A2E] text-white px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
