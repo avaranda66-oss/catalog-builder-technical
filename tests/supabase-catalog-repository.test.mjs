@@ -14,14 +14,22 @@ class FakeQuery {
 
   select() { this.operation = this.operation === 'update' ? 'update-select' : 'select'; return this }
   eq(column, value) { this.filters.push([column, value]); return this }
+  in(column, values) { this.filters.push([column, values]); return this }
   order() { return this }
+  delete() { this.operation = 'delete'; return this }
   update(values) { this.operation = 'update'; this.values = values; return this }
   upsert(values) { this.operation = 'upsert'; this.values = values; return this }
 
   then(resolve, reject) {
     try {
       const rows = this.db[this.table]
-      const matches = (row) => this.filters.every(([column, value]) => row[column] === value)
+      const matches = (row) => this.filters.every(([column, value]) => Array.isArray(value) ? value.includes(row[column]) : row[column] === value)
+      if (this.operation === 'delete') {
+        for (let index = rows.length - 1; index >= 0; index--) {
+          if (matches(rows[index])) rows.splice(index, 1)
+        }
+        return Promise.resolve({ data: [], error: null }).then(resolve, reject)
+      }
       if (this.operation === 'update-select') {
         const selected = rows.filter(matches)
         selected.forEach((row) => Object.assign(row, this.values, { updated_at: '2026-08-31T13:00:00.000Z' }))
@@ -56,6 +64,8 @@ function database() {
       id: 'product-1', catalog_id: 'catalog-1', sku: 'PCON-Y17', name: 'Controlador', family: 'PCON', status: 'draft',
       sort_order: 0, data: {}, version: 1, updated_by: null, updated_at: '2026-08-31T12:00:00.000Z', created_at: '2026-08-31T12:00:00.000Z',
     }],
+    catalog_pages: [],
+    page_sections: [],
   }
 }
 
@@ -95,3 +105,30 @@ test('retorna conflito quando a versão esperada não corresponde', async () => 
   )
 })
 
+test('carrega e salva páginas e blocos normalizados', async () => {
+  const db = database()
+  db.catalog_pages.push({ id: 'page-1', catalog_id: 'catalog-1', title: 'Capa', sort_order: 0, visible: true })
+  db.page_sections.push({
+    id: 'section-1', page_id: 'page-1', type: 'hero_banner', title: 'Banner',
+    config: { showLogo: true }, content: null, style: {}, sort_order: 0, visible: true,
+  })
+  const repository = createSupabaseCatalogRepository(fakeClient(db))
+  const loaded = await repository.load('catalog-1')
+  assert.equal(loaded.catalog.pages[0].title, 'Capa')
+  assert.equal(loaded.catalog.pages[0].sections[0].type, 'hero_banner')
+
+  await repository.save({
+    ...loaded,
+    catalog: {
+      ...loaded.catalog,
+      version: 2,
+      pages: [{
+        ...loaded.catalog.pages[0],
+        title: 'Capa atualizada',
+        sections: [{ ...loaded.catalog.pages[0].sections[0], title: 'Banner atualizado' }],
+      }],
+    },
+  }, loaded.revision)
+  assert.equal(db.catalog_pages[0].title, 'Capa atualizada')
+  assert.equal(db.page_sections[0].title, 'Banner atualizado')
+})
