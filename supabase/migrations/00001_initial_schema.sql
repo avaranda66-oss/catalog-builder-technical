@@ -8,7 +8,7 @@ create extension if not exists "uuid-ossp";
 -- Enum types
 create type user_role as enum ('admin', 'editor', 'viewer');
 create type catalog_status as enum ('draft', 'review', 'approved', 'published');
-create type product_status as enum ('draft', 'review', 'approved', 'archived');
+create type product_status as enum ('draft', 'review', 'approved', 'published', 'archived');
 create type ai_run_status as enum ('proposed', 'approved', 'rejected', 'applied', 'failed');
 
 -- 1. Profiles table
