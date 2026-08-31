@@ -125,11 +125,9 @@ export type ChangeProposal = z.infer<typeof ChangeProposalSchema>
 export type Proposal = z.infer<typeof ProposalSchema>
 export type Review = z.infer<typeof ReviewSchema>
 
-export interface ContractValidation<T> {
-  success: boolean
-  data?: T
-  errors?: string[]
-}
+export type ContractValidation<T> =
+  | { success: true; data: T; errors?: never }
+  | { success: false; data?: never; errors: string[] }
 
 function formatIssues(error: z.ZodError): string[] {
   return error.issues.map((issue) => {
@@ -152,4 +150,3 @@ export function validateProposal(input: unknown): ContractValidation<Proposal> {
   const result = ProposalSchema.safeParse(input)
   return result.success ? { success: true, data: result.data } : { success: false, errors: formatIssues(result.error) }
 }
-

@@ -42,6 +42,8 @@ O sentido da dependência é de cima para baixo. Componentes não devem conhecer
 
 Supabase será o adaptador compartilhado para Auth, Postgres e Storage privado. O esquema deve manter chaves estáveis, foreign keys, constraints, índices de pesquisa e RLS por equipe/catálogo. Migrations são aditivas por padrão; qualquer remoção exige decisão registrada e backup verificado.
 
+O primeiro adaptador (`lib/adapters/supabase-catalog-repository.ts`) cobre as tabelas legadas `catalogs` e `products` por atualização otimista. Ele valida o retorno e deixa `pages` vazio de forma explícita até a migration de documentos; nenhuma UI deve tratar esse placeholder como publicação completa.
+
 ## Concorrência e persistência
 
 O editor mantém rascunho local e um `revision`/`updated_at` do servidor. Uma gravação envia a revisão observada; se ela mudou, o caso de uso retorna conflito e preserva o rascunho local para comparação. O autosave é um detalhe de UX, não substitui a operação explícita de salvar/publicar.
@@ -60,4 +62,3 @@ Importadores normalizam somente dados comprovados pelo arquivo. O serviço de IA
 - Definir estratégia de fila para arquivos grandes e chamadas de IA.
 - Confirmar matriz de papéis e se haverá múltiplas organizações.
 - Definir política de retenção e CDN para mídia privada.
-
