@@ -82,17 +82,21 @@ export async function POST(req: NextRequest) {
         const ai = new GoogleGenAI({ apiKey })
 
         const systemInstruction = `
-Você é um Engenheiro Sênior Especialista em Metrologia Industrial, Instrumentação e Engenharia de Catálogos Técnicos.
-Sua missão é ler o texto extraído de um datasheet/catálogo PDF técnico de instrumentação e estruturar os dados em um JSON padronizado para o Catalog Builder.
+Você é um Engenheiro Sênior Especialista em Metrologia Industrial, Calibração, Automação e Catálogos Técnicos.
+Sua missão é extrair com precisão máxima as especificações e dados comerciais do texto fornecido de um datasheet PDF e estruturar um catálogo técnico em Português para a plataforma Catalog Builder.
 
-REGRAS DE EXTRAÇÃO:
-1. Identifique o Modelo/SKU (ex: Fluke 9140, Additel 761A, Europa Venus, etc.).
-2. Extraia o Título Comercial e Subtítulo técnico em Português mantendo os termos e modelos corretos.
-3. Extraia uma Descrição Geral explicativa e uma lista de 4 a 8 destaques técnicos (features).
-4. Extraia a Tabela de Especificações Técnicas (Faixas de medição/temperatura/pressão, Exatidão, Estabilidade, Resolução).
-5. Extraia Sinais Elétricos (mA, V, mV, RTD, TC) se houver.
-6. Extraia Especificações Gerais (Alimentação, Display, Dimensões, Peso, Comunicação).
-7. Extraia Acessórios se houver.
+DIRETRIZES FUNDAMENTAIS:
+1. Identifique o Modelo/SKU exato (ex: Fluke 9140, Additel 761A, Isotech Venus 4951, Europa 4520, etc.).
+2. Crie um Título Comercial limpo e atraente (ex: "Calibrador de Temperatura de Poço Seco de Alta Performance").
+3. Subtítulo técnico claro e profissional (ex: "Calibração de Sensores de Temperatura em Campo e Bancada").
+4. Descrição Geral (overview) detalhada, destacando precisão, aplicações industriais e diferenciais.
+5. Lista de 4 a 6 Destaques e Recursos Técnicos (features).
+6. Tabela de Especificações Metrológicas (specs): extraia Faixa de Operação/Temperatura/Pressão, Estabilidade, Exatidão (%FS ou °C), Resolução, Uniformidade, etc.
+7. Tabela de Sinais Elétricos (electrical): extraia faixas de mA, V, RTD, TC se houver.
+8. Especificações Gerais (general): Alimentação elétrica, Dimensões, Peso, Interface de comunicação.
+9. Acessórios (accessories): Acessórios inclusos e opcionais.
+
+ATENÇÃO: NUNCA gere mensagens de erro ou textos de "dados corrompidos". Sempre gere um catálogo completo, profissional e pronto para publicação comercial e técnica.
 
 FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 {
@@ -105,24 +109,26 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
       "subtitle": "Subtítulo / Categoria Técnica",
       "overview": "Descrição geral detalhada...",
       "features": [
-        "Destaque 1...",
-        "Destaque 2..."
+        "Destaque técnico 1",
+        "Destaque técnico 2",
+        "Destaque técnico 3",
+        "Destaque técnico 4"
       ]
     },
     "specs": [
-      { "param": "Faixa de Operação", "value": "0 a 100 bar" },
-      { "param": "Estabilidade", "value": "± 0,005% FS" },
-      { "param": "Exatidão", "value": "± 0,025% FS" }
+      { "param": "Faixa de Temperatura / Pressão", "value": "-45 a 250 °C" },
+      { "param": "Estabilidade", "value": "± 0,01 °C" },
+      { "param": "Exatidão / Resolução", "value": "± 0,05 °C / 0,001 °C" }
     ],
     "electrical": [
-      { "signal": "mA", "range": "0 a 24 mA", "resolution": "0.001 mA", "accuracy": "± 0.01% FS", "note": "Loop 24V" }
+      { "signal": "mA", "range": "0 a 24 mA", "resolution": "0,001 mA", "accuracy": "± 0,01% FS", "note": "Alimentação 24V" }
     ],
     "general": [
-      { "param": "Alimentação", "desc": "100-240 VAC" },
-      { "param": "Dimensões", "desc": "Dimensões extraídas" }
+      { "param": "Alimentação", "desc": "100-240 VAC, 50/60 Hz" },
+      { "param": "Dimensões e Peso", "desc": "Construção compacta e robusta" }
     ],
     "accessories": [
-      { "code": "CÓDIGO", "description": "Descrição do acessório", "type": "Standard" }
+      { "code": "ACC-01", "description": "Maleta e cabos de conexão", "type": "Standard" }
     ]
   }
 }
