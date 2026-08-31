@@ -159,6 +159,8 @@ npm run build
 
 Crie `.env.local` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Apenas a chave pública deve chegar ao navegador; chaves `service_role`/`sb_secret` ficam no painel ou em ambiente de servidor. Para a instalação existente, aplique as migrations `00001`–`00004` em ordem seguindo [`supabase/README.md`](supabase/README.md). A primeira conta deve ser convidada pelo Auth e promovida por um administrador em uma sessão SQL confiável. O aplicativo não cria administradores automaticamente.
 
+No projeto Vercel, configure as variáveis `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` também no ambiente **Preview** (e `GEMINI_API_KEY` apenas se quiser habilitar a IA). Use `NEXT_PUBLIC_SITE_URL=https://catalog-builder-technical.vercel.app` em Production. O Supabase Auth remoto já aceita a Vercel, previews `*.vercel.app` e os endereços locais.
+
 O assistente de IA só executa quando o provedor e a chave estiverem configurados. Sem provedor, a interface informa indisponibilidade e nunca inventa especificações, certificações, unidades ou resultados de conformidade.
 
 ---

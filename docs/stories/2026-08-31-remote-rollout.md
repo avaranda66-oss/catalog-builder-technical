@@ -15,6 +15,7 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 - [x] O design do baseline antigo é preservado.
 - [x] Lint, typecheck, testes e build passam localmente.
 - [x] A branch de rollout é publicada no GitHub para Preview da Vercel.
+- [x] O Site URL e os redirects do Auth remoto apontam para a Vercel e preservam localhost.
 - [ ] Testar login, criação de senha, salvar, importar, revisar e exportar no Preview remoto.
 - [ ] Promover a branch para `main` somente após o teste remoto.
 
@@ -43,8 +44,8 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 
 ### Completion notes
 
-A branch separada reúne a implementação local corporativa e o framework AIOX. O Supabase foi consultado por Management API para confirmar o schema e a conta de teste; nenhuma alteração de dados foi feita nesta etapa.
+A branch separada reúne a implementação local corporativa e o framework AIOX. O Supabase foi consultado por Management API para confirmar o schema e a conta de teste; a URL do Auth foi ajustada para a Vercel e nenhum dado de catálogo foi alterado.
 
 ### Validation
 
-`npm test` passou com 47 casos; `npm run typecheck`, `npm run lint -- --quiet` e `npm run build` passaram. O build local usa um worker por limitação de subprocessos do ambiente; a configuração versionada continua sem esse override.
+`npm test` passou com 47 casos; `npm run typecheck`, `npm run lint -- --quiet` e `npm run build` passaram. O deploy Vercel do PR ficou pronto; o teste autenticado depende de configurar as variáveis públicas do Supabase no ambiente Preview do projeto Vercel.
