@@ -3,6 +3,7 @@
 import React from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { Check, X, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { readTextPath } from '../../lib/ai/contracts'
 
 export const StagedChangesModal: React.FC = () => {
   const {
@@ -10,13 +11,14 @@ export const StagedChangesModal: React.FC = () => {
     applyStagedPatch,
     rejectStagedPatch,
     toggleChangeAccepted,
-    selectedProductId,
     products,
+    lastError,
   } = useEditorStore()
 
   if (!stagedPatch) return null
 
-  const product = products.find((p) => p.id === selectedProductId)
+  const product = products.find((p) => p.id === stagedPatch.productId)
+  const stale = !product || product.version !== stagedPatch.baseVersion || stagedPatch.changes.some((change) => change.accepted === true && readTextPath(product.data, change.path) !== change.oldValue)
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
@@ -27,10 +29,10 @@ export const StagedChangesModal: React.FC = () => {
             <ShieldCheck className="w-5 h-5 text-[#059669]" />
             <div>
               <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider">
-                Auditoria de Proposta Técnica
+                Revisão de proposta de redação
               </h2>
               <span className="text-[10px] sm:text-xs text-[#A3A3A3]">
-                Alvo: {product?.sku} — {product?.name}
+                Alvo: {product?.sku} — {product?.name} · revisão {stagedPatch.baseVersion}
               </span>
             </div>
           </div>
@@ -49,6 +51,9 @@ export const StagedChangesModal: React.FC = () => {
           <div>
             <span className="font-bold">Resumo da proposta: </span>
             <span>{stagedPatch.summary}</span>
+            <p className="mt-1">Selecione explicitamente os campos revisados. A IA não certifica conformidade técnica.</p>
+            {stale && <p role="alert" className="mt-1 font-bold">O produto foi alterado ou removido. Descarte e gere uma nova proposta.</p>}
+            {lastError && <p role="alert" className="mt-1 font-bold">{lastError}</p>}
           </div>
         </div>
 
@@ -65,7 +70,7 @@ export const StagedChangesModal: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#E5E5E5] font-mono-data">
               {stagedPatch.changes.map((change, idx) => {
-                const isAccepted = change.accepted !== false
+                const isAccepted = change.accepted === true
                 return (
                   <tr
                     key={idx}
@@ -87,7 +92,7 @@ export const StagedChangesModal: React.FC = () => {
                     <td className="p-2 border-r border-[#E5E5E5] text-[#DC2626] bg-[#FEF2F2]">
                       {typeof change.oldValue === 'object'
                         ? JSON.stringify(change.oldValue)
-                        : String(change.oldValue || '(Vazio)')}
+                        : String(change.oldValue ?? '(Vazio)')}
                     </td>
                     <td className="p-2 text-[#059669] bg-[#ECFDF5] font-bold">
                       {typeof change.newValue === 'object'
@@ -104,7 +109,7 @@ export const StagedChangesModal: React.FC = () => {
         {/* Modal Actions */}
         <div className="p-3 bg-[#FAFAFA] border-t border-[#D4D4D4] flex items-center justify-between">
           <span className="text-xs text-[#737373]">
-            {stagedPatch.changes.filter((c) => c.accepted !== false).length} de{' '}
+            {stagedPatch.changes.filter((c) => c.accepted === true).length} de{' '}
             {stagedPatch.changes.length} campos selecionados para aplicação.
           </span>
 
@@ -119,10 +124,11 @@ export const StagedChangesModal: React.FC = () => {
             <button
               type="button"
               onClick={applyStagedPatch}
+              disabled={stale || !stagedPatch.changes.some((change) => change.accepted === true)}
               className="flex items-center gap-1.5 px-4 py-1.5 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold shadow-xs"
             >
               <Check className="w-4 h-4" />
-              Aprovar e Aplicar no Catálogo
+              Aplicar campos revisados
             </button>
           </div>
         </div>

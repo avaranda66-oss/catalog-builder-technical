@@ -15,21 +15,18 @@ import {
   Sparkles,
   Palette,
   Layers,
-  Trash2,
 } from 'lucide-react'
 
 interface AuditLogModalProps {
   isOpen: boolean
   onClose: () => void
   logs: AuditLogItem[]
-  onClearLogs?: () => void
 }
 
 export const AuditLogModal: React.FC<AuditLogModalProps> = ({
   isOpen,
   onClose,
   logs,
-  onClearLogs,
 }) => {
   const [search, setSearch] = useState('')
   const [selectedArea, setSelectedArea] = useState<string>('all')

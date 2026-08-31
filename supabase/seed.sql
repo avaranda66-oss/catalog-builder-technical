@@ -99,7 +99,7 @@ values (
     "primaryColor": "#003366",
     "darkColor": "#001A33",
     "accentColor": "#2563EB",
-    "logoUrl": "/img/logo-presys.png",
+    "logoUrl": "",
     "website": "www.presys.com.br",
     "phone": "+55 (11) 3038-1300",
     "email": "vendas@presys.com.br"

@@ -1,0 +1,8 @@
+project: catalog-builder
+branch: codex/remote-rollout
+phase: implementation
+currentStory: docs/stories/2026-08-31-remote-rollout.md
+status: story-done
+baseline: HEAD-1e93d6d
+visualBaseline: github-catalog-builder-technical
+lastUpdated: 2026-08-31

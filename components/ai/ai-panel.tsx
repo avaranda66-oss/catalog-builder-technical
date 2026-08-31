@@ -1,27 +1,30 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useEditorStore } from '../../features/editor/editor-store'
+import { useEditorStore, StagedPatch } from '../../features/editor/editor-store'
+import { authenticatedAiFetch } from '../../lib/ai/client'
+import { errorMessage } from '../../lib/import/schema'
 import {
-  Bot,
   Mic,
   MicOff,
   Send,
   X,
-  Shield,
-  Terminal,
-  ArrowRight,
   Upload,
-  Globe,
   CheckCircle2,
   Sparkles,
-  Sliders,
 } from 'lucide-react'
 
 interface AiPanelProps {
   isOpen: boolean
   onClose: () => void
   onOpenPdfImport?: () => void
+}
+
+interface VoiceRecognition {
+  lang: string; continuous: boolean; interimResults: boolean
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onerror: (() => void) | null; onend: (() => void) | null
+  start(): void; stop(): void
 }
 
 export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImport }) => {
@@ -31,7 +34,6 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
     setStagedPatch,
     isAiLoading,
     setIsAiLoading,
-    addAuditLog,
   } = useEditorStore()
 
   const [inputPrompt, setInputPrompt] = useState('')
@@ -41,7 +43,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
   >([
     {
       role: 'assistant',
-      text: 'Olá! Sou o Assistente Técnico Jarvis. Posso ajudar você a criar novos catálogos a partir de PDFs de referência (Fluke, Additel, etc.), ajustar especificações técnicas, traduzir conteúdos para inglês/espanhol ou verificar a consistência metrológica.',
+      text: 'Posso propor melhorias de redação a partir dos dados cadastrados. Valores, unidades e certificações não serão criados ou alterados. Cada proposta exige sua revisão. Para idiomas, use Traduções; para documentos, Importar PDF.',
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     },
   ])
@@ -54,14 +56,15 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
       return
     }
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const voiceWindow = window as unknown as { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition }
+    const SpeechRecognition = voiceWindow.SpeechRecognition || voiceWindow.webkitSpeechRecognition
+    if (!SpeechRecognition) return
     const recognition = new SpeechRecognition()
     recognition.lang = 'pt-BR'
     recognition.continuous = false
     recognition.interimResults = false
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript
       setInputPrompt((prev) => (prev ? `${prev} ${transcript}` : transcript))
       setIsListening(false)
@@ -97,7 +100,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
 
     try {
       // Call API Route proxy for Gemini Function Calling
-      const res = await fetch('/api/ai/chat', {
+      const res = await authenticatedAiFetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,15 +109,16 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json() as { proposedPatch?: StagedPatch; reply?: string }
 
       if (data.proposedPatch) {
-        setStagedPatch(data.proposedPatch)
+        const proposedPatch = data.proposedPatch
+        setStagedPatch(proposedPatch)
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            text: `Proposta gerada: "${data.proposedPatch.summary}". Abra a janela de auditoria para revisar e aplicar as mudanças.`,
+            text: `Proposta gerada: "${proposedPatch.summary}". Revise e selecione os campos que deseja aplicar.`,
             time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           },
         ])
@@ -128,26 +132,12 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
           },
         ])
       }
-    } catch (err: any) {
-      // Fallback proposal simulator if API key is not configured locally yet
-      const fallbackPatch = {
-        summary: `Ajuste solicitado para ${product.sku}: ${textToSend}`,
-        changes: [
-          {
-            path: 'marketing.subtitle',
-            fieldLabel: 'Subtítulo do Catálogo',
-            oldValue: product.data.marketing?.subtitle || '',
-            newValue: 'Controlador de Pressão com Protocolo HART® e Documentação Automática',
-            reason: 'Atualização solicitada pelo usuário',
-          },
-        ],
-      }
-      setStagedPatch(fallbackPatch)
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          text: `Proposta técnica estruturada para "${textToSend}". Revise o diff antes de aplicar.`,
+          text: `${errorMessage(err)} Nenhuma proposta foi criada.`,
           time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         },
       ])
@@ -198,10 +188,10 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
               <Upload className="w-4 h-4 text-[#2563EB]" />
               <div>
                 <span className="text-xs font-bold text-[#1E40AF] block">
-                  Clonar Catálogo por PDF
+                  Importar dados de PDF
                 </span>
                 <span className="text-[10px] text-[#3B82F6]">
-                  Fluke, Additel, Isotech, etc.
+                  Extração de texto para revisão
                 </span>
               </div>
             </div>
@@ -225,38 +215,29 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
           <button
             type="button"
             onClick={() =>
-              handleSendPrompt('Traduza o título, subtítulo e descrição deste produto para Inglês Técnico comercial mantendo todas as especificações e grandezas inalteradas.')
+              handleSendPrompt('Revise a clareza do título e subtítulo sem acrescentar fatos ou capacidades e preservando números e unidades.')
             }
             className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
           >
-            <Globe className="w-3 h-3 text-[#2563EB]" /> Traduzir p/ Inglês
+            <Sparkles className="w-3 h-3 text-[#2563EB]" /> Revisar título
           </button>
           <button
             type="button"
             onClick={() =>
-              handleSendPrompt('Audite a consistência das grandezas físicas e exatidões metrológicas deste produto. Verifique se as unidades (%FS, bar, psi, mA) estão coerentes.')
+              handleSendPrompt('Revise ortografia e legibilidade da descrição, sem alterar especificações nem afirmar conformidade técnica.')
             }
             className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
           >
-            <CheckCircle2 className="w-3 h-3 text-[#059669]" /> Auditar Metrologia
+            <CheckCircle2 className="w-3 h-3 text-[#059669]" /> Revisar descrição
           </button>
           <button
             type="button"
             onClick={() =>
-              handleSendPrompt('Enriqueça os destaques comerciais e técnicos adicionando compatibilidade com software de calibração ISOPLAN e protocolo HART.')
+              handleSendPrompt('Melhore a legibilidade dos destaques existentes, preservando todos os fatos, números e unidades.')
             }
             className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
           >
-            <Sparkles className="w-3 h-3 text-[#D97706]" /> Enriquecer Destaques
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              handleSendPrompt('Ajuste a estabilidade de controle para 0,002% do Fundo de Escala e adicione o tempo de resposta típico de 10 segundos.')
-            }
-            className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
-          >
-            <Sliders className="w-3 h-3 text-[#7C3AED]" /> Ajustar Estabilidade
+            <Sparkles className="w-3 h-3 text-[#D97706]" /> Revisar destaques
           </button>
         </div>
       </div>
@@ -285,7 +266,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImpo
         {isAiLoading && (
           <div className="p-3 text-xs bg-[#F5F5F5] border border-[#D4D4D4] text-[#525252] flex items-center gap-2">
             <span className="w-2 h-2 bg-[#003366] rounded-full animate-ping" />
-            <span>Jarvis analisando regras e gerando proposta técnica...</span>
+            <span>Gerando proposta de redação para revisão...</span>
           </div>
         )}
       </div>

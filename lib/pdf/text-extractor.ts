@@ -1,124 +1,90 @@
-import zlib from 'zlib'
+import { inflateSync } from 'node:zlib'
 
-// ============================================================================
-// Robust PDF Text Stream Decompressor & Extractor (Pure Node.js + zlib)
-// ============================================================================
+const MAX_PDF_BYTES = 5 * 1024 * 1024
+const MAX_STREAM_BYTES = 4 * 1024 * 1024
+const MAX_TOTAL_TEXT_BYTES = 12 * 1024 * 1024
 
-export function extractTextFromPdfBuffer(buffer: Buffer): string {
-  try {
-    const raw = buffer.toString('latin1')
-    const textPieces: string[] = []
+export interface PdfExtraction { text: string; warnings: string[]; pageCount: number | null }
 
-    // 1. Scan and decompress all PDF Flate streams
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
-    let match: RegExpExecArray | null
+function decodeLiteral(value: string): string {
+  return value.replace(/\\(?:\r\n|\n|\r)/g, '').replace(/\\([0-7]{1,3}|[nrtbf()\\])/g, (_, token: string) => {
+    if (/^[0-7]/.test(token)) return String.fromCharCode(parseInt(token, 8))
+    return ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f' } as Record<string, string>)[token] ?? token
+  })
+}
 
-    while ((match = streamRegex.exec(raw)) !== null) {
-      const streamRaw = match[1]
-      const streamBuf = Buffer.from(streamRaw, 'latin1')
-
-      let decompressed = ''
-      try {
-        decompressed = zlib.inflateSync(streamBuf).toString('latin1')
-      } catch {
-        try {
-          decompressed = zlib.inflateRawSync(streamBuf).toString('latin1')
-        } catch {
-          // Not a zlib compressed stream or raw image binary, skip
-          continue
-        }
-      }
-
-      if (!decompressed) continue
-
-      // Ignore XMP metadata packets, font files, and image data
-      if (
-        decompressed.includes('<x:xmpmeta') ||
-        decompressed.includes('<?xpacket') ||
-        decompressed.includes('/FontFile') ||
-        decompressed.includes('/CIDFont')
-      ) {
-        continue
-      }
-
-      // Check if it's a PDF content stream with Text blocks (BT ... ET)
-      if (decompressed.includes('BT') && decompressed.includes('ET')) {
-        const btMatches = decompressed.matchAll(/BT[\s\S]*?ET/g)
-        for (const bt of btMatches) {
-          const block = bt[0]
-
-          // A) Single string literals (Text) Tj, ', "
-          const tjMatches = block.matchAll(/\(([^)]+)\)\s*(?:Tj|'|")/g)
-          for (const m of tjMatches) {
-            const decoded = decodePdfString(m[1])
-            if (isMeaningfulText(decoded)) {
-              textPieces.push(decoded)
-            }
-          }
-
-          // B) Array text literals [(T) 20 (ext)] TJ
-          const arrayMatches = block.matchAll(/\[([\s\S]*?)\]\s*TJ/g)
-          for (const m of arrayMatches) {
-            const inners = m[1].matchAll(/\(([^)]+)\)/g)
-            const word: string[] = []
-            for (const inn of inners) {
-              const dec = decodePdfString(inn[1])
-              word.push(dec)
-            }
-            const joinedWord = word.join('')
-            if (isMeaningfulText(joinedWord)) {
-              textPieces.push(joinedWord)
-            }
-          }
-        }
-      } else {
-        // Fallback: If not explicitly inside BT...ET, look for (Text) Tj
-        const directTj = decompressed.matchAll(/\(([^)]{2,})\)\s*(?:Tj|TJ)/g)
-        for (const m of directTj) {
-          const decoded = decodePdfString(m[1])
-          if (isMeaningfulText(decoded)) {
-            textPieces.push(decoded)
-          }
-        }
-      }
-    }
-
-    // 2. Also check uncompressed text outside streams
-    const directMatches = raw.matchAll(/\(([^)]{3,})\)\s*Tj/g)
-    for (const m of directMatches) {
-      const decoded = decodePdfString(m[1])
-      if (isMeaningfulText(decoded)) {
-        textPieces.push(decoded)
-      }
-    }
-
-    const cleanText = textPieces
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // remove control chars
-
-    return cleanText
-  } catch (err) {
-    console.warn('[PDF Extractor] Error extracting text from PDF:', err)
-    return ''
+function readLiteral(source: string, start: number): { value: string; end: number } {
+  let depth = 1
+  let value = ''
+  let index = start + 1
+  for (; index < source.length; index++) {
+    const char = source[index]
+    if (char === '\\') { value += char + (source[++index] || ''); continue }
+    if (char === '(') depth++
+    if (char === ')') { depth--; if (depth === 0) return { value: decodeLiteral(value), end: index + 1 } }
+    value += char
   }
+  throw new Error('PDF contém uma sequência de texto incompleta.')
 }
 
-function decodePdfString(str: string): string {
-  return str
-    .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\b/g, '\b')
-    .replace(/\\f/g, '\f')
-    .replace(/\\([()\\\/])/g, '$1')
+function extractLiteralText(content: string): string[] {
+  const pieces: string[] = []
+  // Only literal strings in text objects are supported. Glyph/CMap based text
+  // must go through a full PDF engine/OCR instead of guessing character values.
+  for (const block of content.matchAll(/\bBT\b([\s\S]*?)\bET\b/g)) {
+    const source = block[1]
+    let index = 0
+    while (index < source.length) {
+      if (source[index] === '[') {
+        let text = ''
+        index++
+        while (index < source.length && source[index] !== ']') {
+          if (source[index] === '(') { const literal = readLiteral(source, index); text += literal.value; index = literal.end }
+          else index++
+        }
+        index++
+        if (/^\s*TJ\b/.test(source.slice(index)) && text.trim()) pieces.push(text)
+      } else if (source[index] === '(') {
+        const literal = readLiteral(source, index)
+        if (/^\s*(?:Tj\b|'|")/.test(source.slice(literal.end)) && literal.value.trim()) pieces.push(literal.value)
+        index = literal.end
+      } else index++
+    }
+  }
+  return pieces
 }
 
-function isMeaningfulText(str: string): boolean {
-  if (!str || str.length < 1) return false
-  // Check if string contains at least some alphanumeric or metrology characters
-  return /[A-Za-z0-9±°%.,/:\-()_]/.test(str)
+export function extractPdfDocument(buffer: Buffer): PdfExtraction {
+  if (!buffer.length || buffer.length > MAX_PDF_BYTES) throw new Error('O PDF deve ter no máximo 5 MB.')
+  const raw = buffer.toString('latin1')
+  if (!/^%PDF-(?:1\.[0-7]|2\.0)/.test(raw) || !/%%EOF\s*$/.test(raw) || !/\d+\s+\d+\s+obj\b/.test(raw)) throw new Error('Arquivo PDF inválido ou incompleto.')
+  if (/\/Encrypt\b/.test(raw)) throw new Error('PDF protegido por senha não é suportado. Exporte uma cópia sem proteção.')
+  if (/\/ToUnicode\b|\/Encoding\s*\/Identity-[HV]/.test(raw)) throw new Error('Este PDF usa fontes com mapeamento de glifos. Use uma planilha ou extração por OCR revisada; os dados não serão presumidos.')
+  const pieces: string[] = []
+  const warnings: string[] = []
+  let total = 0
+  let streams = 0
+  for (const match of raw.matchAll(/<<([\s\S]*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    if (++streams > 500) throw new Error('PDF excede o limite de 500 streams.')
+    const dictionary = match[1]
+    if (/\/Subtype\s*\/Image\b|\/Type\s*\/Metadata\b/.test(dictionary)) continue
+    let content: Buffer
+    if (/\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode\s*\])/.test(dictionary)) {
+      try { content = inflateSync(Buffer.from(match[2], 'latin1'), { maxOutputLength: MAX_STREAM_BYTES }) }
+      catch { throw new Error('Stream PDF inválido ou excede o limite de descompressão.') }
+    } else if (/\/Filter\b/.test(dictionary)) {
+      warnings.push('Um stream com compressão não suportada não foi extraído.')
+      continue
+    } else content = Buffer.from(match[2], 'latin1')
+    total += content.length
+    if (total > MAX_TOTAL_TEXT_BYTES || content.length > MAX_STREAM_BYTES) throw new Error('Conteúdo descomprimido excede o limite de segurança.')
+    pieces.push(...extractLiteralText(content.toString('latin1')))
+  }
+  const text = pieces.map((piece) => piece.trim()).filter(Boolean).join('\n')
+  if (!text.trim()) throw new Error('Nenhum texto legível foi extraído. PDF digitalizado ou codificação não suportada exige OCR e revisão humana.')
+  if (text.length > 100_000) throw new Error('Documento excede 100 mil caracteres. Importe um produto por vez.')
+  warnings.push('Extração parcial de texto: revise tabelas, relações entre colunas e campos ausentes. Imagens/layout original não são importados.')
+  return { text, warnings: [...new Set(warnings)], pageCount: (raw.match(/\/Type\s*\/Page\b/g) || []).length || null }
 }
+
+export function extractTextFromPdfBuffer(buffer: Buffer): string { return extractPdfDocument(buffer).text }

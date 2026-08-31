@@ -79,75 +79,25 @@ body {
   background: #999999;
 }
 
-/* CSS Page & Print Rules for Editorial Datasheet Generation */
+/* Shared A4 geometry: margins are document padding, never duplicated by @page. */
+.catalog-pages { width: 210mm; margin: 0 auto; }
+.a4-page-sheet { box-sizing: border-box; margin: 0 auto 24px; box-shadow: 0 2px 12px #0002; }
+.catalog-page-content { flex: 0 0 auto; }
+.catalog-page-footer { min-height: 8mm; }
+.catalog-table { table-layout: fixed; }
+.catalog-table th, .catalog-table td { overflow-wrap: anywhere; }
+
 @media print {
-  @page {
-    size: A4 portrait;
-    margin: 15mm;
-    bleed: 6mm;
-    marks: crop;
-
-    @top-center {
-      content: "PRESYS — INSTRUMENTOS E CALIBRAÇÃO";
-      font-size: 8pt;
-      color: #737373;
-      font-family: sans-serif;
-    }
-
-    @bottom-center {
-      content: "Página " counter(page) " de " counter(pages);
-      font-size: 8pt;
-      color: #737373;
-      font-family: sans-serif;
-    }
-  }
-
-  body {
-    background: #FFFFFF !important;
-    color: #000000 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-  }
-
-  .a4-page-sheet {
-    box-shadow: none !important;
-    margin: 0 !important;
-    padding: 15mm !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    break-after: page !important;
-    page-break-after: always !important;
-  }
-
-  .a4-page-sheet:last-child {
-    break-after: auto !important;
-    page-break-after: auto !important;
-  }
-
-  table {
-    display: table;
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  thead {
-    display: table-header-group;
-  }
-
-  tfoot {
-    display: table-footer-group;
-  }
-
-  tr, .avoid-break, [role="region"] {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
+  @page { size: A4 portrait; margin: 0; }
+  html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .print-workspace { padding: 0 !important; margin: 0 !important; min-height: 0 !important; background: white !important; }
+  .catalog-pages { width: 210mm !important; margin: 0 !important; }
+  .a4-page-sheet { box-shadow: none !important; margin: 0 !important; width: 210mm !important; height: 297mm !important; break-after: page; page-break-after: always; }
+  .a4-page-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .print-blocked { display: none !important; }
+  table { border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr, figure { break-inside: avoid; }
 }

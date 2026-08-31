@@ -2,7 +2,7 @@
 
 > **Plataforma de Construção, Gestão e Edição de Catálogos Técnicos e Industriais de Alta Precisão (210 × 297 mm A4 Editorial)**.
 
-Construída para atender aos padrões rigorosos de metrologia, calibração, instrumentação industrial e engenharia. Projetada para permitir a criação rápida, auditoria técnica e edição visual/manual livre de catálogos e datasheets de qualquer família de produtos.
+Construída para atender aos padrões rigorosos de metrologia, calibração, instrumentação industrial e engenharia. A aplicação combina editor visual, cadastro mestre de produtos, colaboração com autenticação individual, revisão antes da publicação e exportação A4 isolada. O modo local continua disponível para rascunhos sem conexão, com backup explícito no navegador.
 
 ---
 
@@ -32,6 +32,11 @@ Construída para atender aos padrões rigorosos de metrologia, calibração, ins
 6. **Assistente de IA & Auditoria**:
    - Interface com Gemini para processamento de comandos de voz/texto, com sistema de aprovação humana (*Staged Changes*) antes de aplicar qualquer alteração nos dados técnicos.
 
+7. **Workspace corporativo**:
+   - Dashboard com documentos, biblioteca mestre de produtos, mídia classificada, qualidade do cadastro, comentários e versões.
+   - Supabase Auth individual, papéis `admin`/`editor`/`viewer`, RLS restritiva, controle de concorrência por versão e fluxo `rascunho → revisão → aprovado → publicado`.
+   - Imagens em bucket privado com URLs assinadas; o banco guarda apenas referências permanentes.
+
 ---
 
 ## 🏗️ Arquitetura Técnica
@@ -52,7 +57,9 @@ catalog-builder/
 │   └── preview/              # Renderizador dinâmico de N páginas A4, seções individuais e BlockInspector
 ├── features/
 │   └── editor/
-│       └── editor-store.ts   # Zustand Store central com Immer, histórico Undo/Redo e ações dinâmicas
+│       ├── editor-store.ts   # Compatibilidade da store central
+│       ├── workspace-store.ts # Zustand + Immer, histórico, cache e permissões
+│       └── save-workspace.ts  # Salvamento transacional e conflitos
 ├── lib/
 │   ├── data/                 # Presets do sistema, tokens padrão e sementes de demonstração
 │   ├── types/
@@ -60,7 +67,8 @@ catalog-builder/
 │   │   └── database.ts       # Tipos do banco de dados (Catalog, Product, FieldDefinition, AuditLog, AiRun)
 │   └── validators/           # Regras de validação técnica e metrológica
 └── supabase/
-    └── schema.sql            # Schema PostgreSQL com triggers de auditoria automática e RLS
+    ├── migrations/           # Schema, auditoria, RLS, CAS e Storage privado
+    └── tests/                # Fixtures de segurança e concorrência com rollback
 ```
 
 ---
@@ -81,8 +89,8 @@ export interface PageSection {
   id: string
   type: SectionType // 'hero_banner' | 'specs_table' | 'features_list' | ...
   title: string
-  config: Record<string, any>
-  content: any
+  config: Record<string, unknown>
+  content: unknown
   style?: SectionStyle
   sort_order: number
   visible: boolean
@@ -132,11 +140,26 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
 
-### Verificação de Tipos
+### Convites e senha
+
+O convite do Supabase redireciona para o endereço configurado no projeto (no teste local, `http://localhost:3000`). Abra sempre o e-mail mais recente: links de convite são de uso único e expiram. Depois que o link for aceito, a aplicação exibe a tela **Finalize seu acesso** para criar a senha. Se o link tiver expirado, use **Esqueci ou ainda não defini minha senha** na tela de login para receber um link de redefinição. O remetente é o SMTP configurado no Supabase (ou o remetente padrão do projeto), enquanto `localhost:3000` é apenas o destino do link.
+
+O cache do editor trata esgotamento de cota do `localStorage` sem interromper a edição: ao tentar novamente, remove apenas caches duplicados de biblioteca e documentos arquivados. Exporte a cópia de segurança antes de limpar os dados do site ou trocar de computador.
+
+### Verificação de qualidade
 
 ```bash
-npx tsc --noEmit
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
+
+### Configuração corporativa
+
+Crie `.env.local` com `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Apenas a chave pública deve chegar ao navegador; chaves `service_role`/`sb_secret` ficam no painel ou em ambiente de servidor. Para a instalação existente, aplique as migrations `00001`–`00004` em ordem seguindo [`supabase/README.md`](supabase/README.md). A primeira conta deve ser convidada pelo Auth e promovida por um administrador em uma sessão SQL confiável. O aplicativo não cria administradores automaticamente.
+
+O assistente de IA só executa quando o provedor e a chave estiverem configurados. Sem provedor, a interface informa indisponibilidade e nunca inventa especificações, certificações, unidades ou resultados de conformidade.
 
 ---
 

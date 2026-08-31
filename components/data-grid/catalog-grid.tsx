@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { Plus, Search, Trash2 } from 'lucide-react'
+import type { ProductStatus } from '../../lib/types/database'
 
 export const CatalogGrid: React.FC = () => {
   const {
@@ -95,7 +96,7 @@ export const CatalogGrid: React.FC = () => {
           <tbody className="divide-y divide-[#E5E5E5] font-mono-data">
             {filteredProducts.map((p, idx) => {
               const isSelected = p.id === selectedProductId
-              const specsCount = (p.data?.specs as any[])?.length || 0
+              const specsCount = Array.isArray(p.data?.specs) ? p.data.specs.length : 0
 
               return (
                 <tr
@@ -163,7 +164,7 @@ export const CatalogGrid: React.FC = () => {
                   <td className="p-1.5 border-r border-[#E5E5E5] font-sans">
                     <select
                       value={p.status}
-                      onChange={(e) => updateProductField(p.id, { status: e.target.value as any })}
+                      onChange={(e) => updateProductField(p.id, { status: e.target.value as ProductStatus })}
                       className={`w-full px-1.5 py-0.5 text-[11px] font-semibold border border-transparent focus:border-[#2563EB] focus:outline-none ${
                         p.status === 'published'
                           ? 'bg-[#ECFDF5] text-[#059669]'

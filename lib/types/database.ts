@@ -19,6 +19,8 @@ export interface Profile {
 }
 
 export interface CatalogBrand {
+  workflow?: { assignee: string; comments: DocumentComment[] }
+  [key: string]: unknown
   companyName: string
   primaryColor: string
   darkColor: string
@@ -27,6 +29,32 @@ export interface CatalogBrand {
   website: string
   phone: string
   email: string
+}
+
+export interface DocumentComment {
+  id: string
+  body: string
+  authorId: string | null
+  authorName: string
+  createdAt: string
+  resolved: boolean
+  sectionId?: string
+}
+
+export interface ProductMedia {
+  id: string
+  url: string
+  kind: 'photo' | 'diagram' | 'drawing' | 'certificate'
+  title: string
+  locale: string
+  revision: string
+}
+
+export interface SpecificationRow {
+  param: string
+  value: string | number
+  unit?: string
+  source?: string
 }
 
 export interface Catalog {
@@ -109,6 +137,10 @@ export interface AccessoryItem {
 }
 
 export interface ProductData {
+  specs?: SpecificationRow[]
+  electrical?: ElectricalSpecItem[]
+  general?: GeneralSpecItem[]
+  media?: ProductMedia[]
   marketing?: {
     title?: string
     subtitle?: string
@@ -125,7 +157,7 @@ export interface ProductData {
     pressure_modules?: string
     media_compatibility?: string
     operating_temperature?: RangeValue | string
-    [key: string]: any
+    [key: string]: unknown
   }
   electrical_specs?: ElectricalSpecItem[]
   general_specs?: GeneralSpecItem[]
@@ -144,7 +176,7 @@ export interface ProductData {
     imageUrl?: string
     visible?: boolean
   }>
-  [sectionKey: string]: any
+  [sectionKey: string]: unknown
 }
 
 export interface Product {
@@ -169,8 +201,8 @@ export interface AuditLog {
   entity_type: string
   entity_id: string
   action: 'INSERT' | 'UPDATE' | 'DELETE'
-  before: any | null
-  after: any | null
+  before: unknown | null
+  after: unknown | null
   source: string
   created_at: string
 }
@@ -181,14 +213,14 @@ export interface AiRun {
   product_id: string | null
   prompt: string
   audio_transcript?: string | null
-  tool_calls?: any | null
+  tool_calls?: unknown | null
   proposed_patch: {
     summary: string
     changes: Array<{
       path: string
       fieldLabel: string
-      oldValue: any
-      newValue: any
+      oldValue: unknown
+      newValue: unknown
       reason?: string
     }>
   }

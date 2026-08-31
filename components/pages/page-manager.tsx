@@ -1,295 +1,33 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useEditorStore } from '../../features/editor/editor-store'
-import { SECTION_TYPE_CATALOG, SectionType } from '../../lib/types/catalog-builder'
-import {
-  Plus,
-  Trash2,
-  Eye,
-  EyeOff,
-  ChevronUp,
-  ChevronDown,
-  GripVertical,
-  FileText,
-  X,
-} from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Copy, X } from 'lucide-react'
+import { useEditorStore } from '@/features/editor/editor-store'
+import { SECTION_TYPE_CATALOG, createSectionId } from '@/lib/types/catalog-builder'
+import { moveSectionIndices } from '@/lib/catalog/section-data'
 
-// ============================================================================
-// SECTION PICKER MODAL
-// ============================================================================
-
-interface SectionPickerProps {
-  isOpen: boolean
-  onClose: () => void
-  onSelect: (type: SectionType) => void
-}
-
-const SectionPicker: React.FC<SectionPickerProps> = ({ isOpen, onClose, onSelect }) => {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white w-[480px] max-h-[80vh] border border-[#D4D4D4] shadow-lg flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#D4D4D4] bg-[#FAFAFA]">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#171717]">
-            Adicionar Bloco de Seção
-          </span>
-          <button type="button" onClick={onClose} className="p-1 hover:bg-[#E5E5E5] text-[#525252]">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Section Grid */}
-        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-2">
-          {SECTION_TYPE_CATALOG.map((info) => (
-            <button
-              key={info.type}
-              type="button"
-              onClick={() => {
-                onSelect(info.type)
-                onClose()
-              }}
-              className="flex items-start gap-3 p-3 border border-[#E5E5E5] bg-white hover:bg-[#F5F5F5] hover:border-[#2563EB] text-left transition-colors"
-            >
-              <div className="w-8 h-8 bg-[#1A1A2E] text-white flex items-center justify-center text-xs font-bold shrink-0">
-                {info.label.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="block text-xs font-bold text-[#171717] truncate">{info.label}</span>
-                <span className="block text-[10px] text-[#737373] mt-0.5 leading-tight">{info.description}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// PAGE MANAGER — controls pages and their sections
-// ============================================================================
-
-export const PageManager: React.FC = () => {
-  const {
-    pages,
-    selectedPageId,
-    setSelectedPageId,
-    addPage,
-    removePage,
-    reorderPages,
-    updatePage,
-    addSection,
-    removeSection,
-    reorderSections,
-    updateSection,
-  } = useEditorStore()
-
+export function PageManager() {
+  const { pages, selectedPageId, setSelectedPageId, addPage, removePage, reorderPages, updatePage, addSection, removeSection, reorderSections, updateSection } = useEditorStore()
   const [pickerPageId, setPickerPageId] = useState<string | null>(null)
-  const [expandedPageId, setExpandedPageId] = useState<string | null>(selectedPageId)
-
-  const handleAddPage = () => {
-    addPage()
-  }
-
-  return (
-    <div className="flex flex-col h-full select-none">
-      {/* Header */}
-      <div className="px-3 py-2.5 border-b border-[#E5E5E5] flex items-center justify-between bg-[#FAFAFA]">
-        <span className="text-xs font-bold uppercase tracking-wider text-[#525252]">
-          Páginas ({pages.length})
-        </span>
-        <button
-          type="button"
-          onClick={handleAddPage}
-          className="flex items-center gap-1 px-2 py-0.5 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white text-[11px] font-semibold"
-        >
-          <Plus className="w-3 h-3" />
-          Página
-        </button>
+  const [search, setSearch] = useState('')
+  return <div className="flex h-full flex-col overflow-hidden bg-white">
+    <header className="flex items-center justify-between border-b p-3"><h2 className="text-xs font-bold">Páginas ({pages.length})</h2><button type="button" onClick={() => addPage()} className="flex items-center gap-1 rounded bg-slate-900 px-2 py-1 text-xs text-white"><Plus size={12} />Página</button></header>
+    <div className="flex-1 divide-y overflow-auto">{pages.map((page,index) => <section key={page.id} className={`p-3 ${selectedPageId === page.id ? 'bg-blue-50' : ''}`}>
+      <button type="button" onClick={() => setSelectedPageId(page.id)} className="mb-2 text-left text-xs font-bold">{index+1}. {page.title}{!page.visible && ' (oculta)'}</button>
+      <input aria-label={`Título da página ${index+1}`} value={page.title} onChange={event => updatePage(page.id,{title:event.target.value})} className="mb-2 w-full rounded border border-gray-300 bg-white p-1 text-xs" />
+      <div className="mb-2 flex items-center gap-3 text-gray-600">
+        <button type="button" aria-label={page.visible ? 'Ocultar página' : 'Mostrar página'} onClick={() => updatePage(page.id,{visible:!page.visible})}>{page.visible ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+        <button type="button" disabled={!index} aria-label="Subir página" onClick={() => reorderPages(index,index-1)} className="disabled:opacity-25"><ChevronUp size={15} /></button>
+        <button type="button" disabled={index===pages.length-1} aria-label="Descer página" onClick={() => reorderPages(index,index+1)} className="disabled:opacity-25"><ChevronDown size={15} /></button>
+        <button type="button" aria-label="Duplicar página" onClick={() => addPage(`${page.title} (cópia)`,page.sections.map(section => ({...structuredClone(section),id:createSectionId()})))}><Copy size={13} /></button>
+        <button type="button" aria-label="Remover página" onClick={() => removePage(page.id)} className="text-red-700"><Trash2 size={13} /></button>
       </div>
-
-      {/* Pages List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-[#E5E5E5]">
-        {pages.map((page, pageIndex) => {
-          const isExpanded = expandedPageId === page.id
-          const isSelected = selectedPageId === page.id
-
-          return (
-            <div key={page.id} className="bg-white">
-              {/* Page Row */}
-              <div
-                className={`flex items-center gap-1 px-2 py-2 cursor-pointer transition-colors group ${
-                  isSelected ? 'bg-[#EFF6FF] border-l-4 border-l-[#2563EB]' : 'hover:bg-[#F5F5F5]'
-                }`}
-                onClick={() => {
-                  setSelectedPageId(page.id)
-                  setExpandedPageId(isExpanded ? null : page.id)
-                }}
-              >
-                <GripVertical className="w-3 h-3 text-[#A3A3A3] shrink-0 cursor-grab" />
-
-                <FileText className="w-3.5 h-3.5 text-[#525252] shrink-0" />
-
-                <div className="flex-1 min-w-0">
-                  <input
-                    type="text"
-                    value={page.title}
-                    onChange={(e) => {
-                      e.stopPropagation()
-                      updatePage(page.id, { title: e.target.value })
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full text-xs font-semibold text-[#171717] bg-transparent border-b border-transparent hover:border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none px-0.5 py-0 truncate"
-                  />
-                  <span className="text-[10px] text-[#A3A3A3] font-mono-data">
-                    {page.sections.length} seção(ões)
-                  </span>
-                </div>
-
-                {/* Page Controls */}
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    title={page.visible ? 'Ocultar' : 'Mostrar'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updatePage(page.id, { visible: !page.visible })
-                    }}
-                    className="p-0.5 text-[#737373] hover:text-[#171717]"
-                  >
-                    {page.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                  </button>
-                  {pageIndex > 0 && (
-                    <button
-                      type="button"
-                      title="Mover para cima"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        reorderPages(pageIndex, pageIndex - 1)
-                      }}
-                      className="p-0.5 text-[#737373] hover:text-[#171717]"
-                    >
-                      <ChevronUp className="w-3 h-3" />
-                    </button>
-                  )}
-                  {pageIndex < pages.length - 1 && (
-                    <button
-                      type="button"
-                      title="Mover para baixo"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        reorderPages(pageIndex, pageIndex + 1)
-                      }}
-                      className="p-0.5 text-[#737373] hover:text-[#171717]"
-                    >
-                      <ChevronDown className="w-3 h-3" />
-                    </button>
-                  )}
-                  {pages.length > 1 && (
-                    <button
-                      type="button"
-                      title="Excluir página"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removePage(page.id)
-                      }}
-                      className="p-0.5 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xs"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Sections (expanded) */}
-              {isExpanded && (
-                <div className="pl-6 pr-2 pb-2 bg-[#FAFAFA] border-t border-[#E5E5E5]">
-                  {page.sections
-                    .slice()
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map((section, secIndex) => (
-                      <div
-                        key={section.id}
-                        className="flex items-center gap-1.5 py-1 text-[11px] text-[#525252] group/sec"
-                      >
-                        <GripVertical className="w-2.5 h-2.5 text-[#A3A3A3] cursor-grab shrink-0" />
-                        <span className="w-5 h-5 bg-[#E5E5E5] text-[#737373] flex items-center justify-center text-[9px] font-bold shrink-0">
-                          {section.title.charAt(0)}
-                        </span>
-                        <span className="flex-1 truncate">{section.title}</span>
-
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover/sec:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            title={section.visible ? 'Ocultar seção' : 'Mostrar seção'}
-                            onClick={() =>
-                              updateSection(page.id, section.id, { visible: !section.visible })
-                            }
-                            className="p-0.5 text-[#737373] hover:text-[#171717]"
-                          >
-                            {section.visible ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
-                          </button>
-                          {secIndex > 0 && (
-                            <button
-                              type="button"
-                              title="Subir"
-                              onClick={() => reorderSections(page.id, secIndex, secIndex - 1)}
-                              className="p-0.5 text-[#737373] hover:text-[#171717]"
-                            >
-                              <ChevronUp className="w-2.5 h-2.5" />
-                            </button>
-                          )}
-                          {secIndex < page.sections.length - 1 && (
-                            <button
-                              type="button"
-                              title="Descer"
-                              onClick={() => reorderSections(page.id, secIndex, secIndex + 1)}
-                              className="p-0.5 text-[#737373] hover:text-[#171717]"
-                            >
-                              <ChevronDown className="w-2.5 h-2.5" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            title="Remover seção"
-                            onClick={() => removeSection(page.id, section.id)}
-                            className="p-0.5 text-[#DC2626] hover:bg-[#FEF2F2]"
-                          >
-                            <Trash2 className="w-2.5 h-2.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                  {/* Add Section Button */}
-                  <button
-                    type="button"
-                    onClick={() => setPickerPageId(page.id)}
-                    className="flex items-center gap-1 mt-1 px-2 py-1 text-[11px] text-[#2563EB] font-semibold hover:bg-[#EFF6FF] w-full"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Adicionar Seção
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Section Picker Modal */}
-      <SectionPicker
-        isOpen={!!pickerPageId}
-        onClose={() => setPickerPageId(null)}
-        onSelect={(type) => {
-          if (pickerPageId) {
-            addSection(pickerPageId, type)
-          }
-        }}
-      />
-    </div>
-  )
+      {selectedPageId === page.id && <div className="space-y-2 border-t pt-2">{page.sections.toSorted((a,b) => a.sort_order-b.sort_order).map((section,sectionIndex,ordered) => {
+        const move = (offset: number) => { const target=ordered[sectionIndex+offset]; if (!target) return; const indices=moveSectionIndices(page.sections,section.id,target.id); if(indices)reorderSections(page.id,...indices) }
+        return <div key={section.id} className="rounded border bg-white p-2 text-xs"><span className="block truncate font-medium">{section.title}</span><div className="mt-2 flex items-center gap-3 text-gray-500"><button type="button" aria-label={section.visible?'Ocultar bloco':'Mostrar bloco'} onClick={() => updateSection(page.id,section.id,{visible:!section.visible})}>{section.visible?<Eye size={12}/>:<EyeOff size={12}/>}</button><button type="button" disabled={!sectionIndex} aria-label="Subir bloco" onClick={() => move(-1)} className="disabled:opacity-25"><ChevronUp size={13}/></button><button type="button" disabled={sectionIndex===ordered.length-1} aria-label="Descer bloco" onClick={() => move(1)} className="disabled:opacity-25"><ChevronDown size={13}/></button><button type="button" aria-label="Duplicar bloco" onClick={() => updatePage(page.id,{sections:[...page.sections,{...structuredClone(section),id:createSectionId(),sort_order:page.sections.length}]})}><Copy size={12}/></button><button type="button" aria-label="Remover bloco" onClick={() => removeSection(page.id,section.id)} className="text-red-700"><Trash2 size={12}/></button></div></div>
+      })}<button type="button" onClick={() => {setSearch('');setPickerPageId(page.id)}} className="w-full rounded border border-blue-200 p-2 text-xs font-semibold text-blue-800">+ Adicionar bloco</button></div>}
+    </section>)}</div>
+    {pickerPageId && createPortal(<div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><section role="dialog" aria-modal="true" aria-label="Biblioteca de blocos" className="flex max-h-[85vh] w-full max-w-xl flex-col rounded bg-white shadow-xl"><header className="flex items-center justify-between border-b p-4"><h2 className="text-sm font-bold">Biblioteca de blocos</h2><button type="button" aria-label="Fechar biblioteca" onClick={() => setPickerPageId(null)}><X size={18}/></button></header><input autoFocus aria-label="Buscar bloco" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar bloco por nome ou finalidade" className="m-4 rounded border p-2 text-sm"/><div className="grid grid-cols-1 gap-2 overflow-y-auto p-4 sm:grid-cols-2">{SECTION_TYPE_CATALOG.filter(info => `${info.label} ${info.description}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(info => <button type="button" key={info.type} onClick={() => {addSection(pickerPageId,info.type);setPickerPageId(null)}} className="rounded border p-3 text-left hover:border-blue-400 hover:bg-blue-50"><strong className="text-xs">{info.label}</strong><p className="mt-1 text-[11px] text-gray-600">{info.description}</p></button>)}</div></section></div>,document.body)}
+  </div>
 }

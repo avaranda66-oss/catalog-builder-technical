@@ -1,223 +1,45 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useEditorStore } from '../../features/editor/editor-store'
-import { saveAll } from '../../lib/supabase/api'
+import { useState } from 'react'
+import { ZoomIn, ZoomOut, Printer, SlidersHorizontal, Save } from 'lucide-react'
+import { useEditorStore } from '@/features/editor/editor-store'
+import { saveWorkspace } from '@/features/editor/save-workspace'
+import { openPrintDocument } from '@/lib/pdf/print-document'
 import { DynamicCatalogRenderer } from './dynamic-renderer'
-import {
-  ZoomIn,
-  ZoomOut,
-  Printer,
-  SlidersHorizontal,
-  Save,
-  Check,
-  Eye,
-  Type,
-} from 'lucide-react'
 
-export const CatalogDocument: React.FC = () => {
-  const {
-    catalog,
-    products,
-    selectedProductId,
-    pages,
-    designTokens,
-    setDesignTokens,
-    contact,
-    isVisualEditMode,
-    setIsVisualEditMode,
-    fieldDefinitions,
-    setSaveStatus,
-    markSaved,
-    saveStatus,
-  } = useEditorStore()
-
-  const [zoom, setZoom] = useState<number>(0.65)
-  const [savedBadge, setSavedBadge] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // Auto-detect mobile screen and adjust default zoom
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (window.innerWidth < 640) {
-        setZoom(0.42)
-      } else if (window.innerWidth < 1024) {
-        setZoom(0.55)
-      }
-    }
-  }, [])
-
-  const product = products.find((p) => p.id === selectedProductId) || products[0] || null
-
-  const handlePrint = () => {
-    window.print()
+export function CatalogDocument() {
+  const { catalog, products, selectedProductId, pages, designTokens, contact, isVisualEditMode, setIsVisualEditMode, saveStatus } = useEditorStore()
+  const [zoom, setZoom] = useState(0.65)
+  const [error, setError] = useState('')
+  const selected = products.find(product => product.id === selectedProductId) ?? products[0] ?? null
+  const visible = pages.filter(page => page.visible).length
+  const save = async () => {
+    setError('')
+    try { await saveWorkspace() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao salvar.') }
   }
-
-  const handleManualSave = useCallback(async () => {
-    if (!catalog) return
-    setSaveStatus('saving')
-    try {
-      await saveAll({
-        catalog,
-        products,
-        fieldDefinitions,
-        pages,
-        designTokens,
-        contact,
-      })
-      markSaved()
-      setSavedBadge(true)
-      setTimeout(() => setSavedBadge(false), 2000)
-    } catch (err) {
-      console.error('[Save] Failed:', err)
-      setSaveStatus('unsaved')
-    }
-  }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
-
-  const visiblePages = pages.filter((p) => p.visible)
-
-  return (
-    <div className="flex-1 flex flex-col h-full bg-[#E5E5E5] overflow-hidden select-none">
-      {/* 1. Preview Control Bar */}
-      <div className="min-h-11 border-b border-[#D4D4D4] bg-[#FFFFFF] px-3 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0 z-10">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#525252]">
-            Visualização A4
-          </span>
-          <span className="text-[10px] sm:text-[11px] bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 border border-[#BFDBFE] font-mono-data font-semibold">
-            210 × 297 mm
-          </span>
-          <span className="text-[10px] sm:text-[11px] bg-[#F5F5F5] text-[#525252] px-1.5 py-0.5 border border-[#D4D4D4] font-mono-data">
-            {visiblePages.length} pág(s)
-          </span>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Visual Edit Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsVisualEditMode(!isVisualEditMode)}
-            className={`flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-semibold border transition-all rounded-xs ${
-              isVisualEditMode
-                ? 'bg-[#2563EB] text-white border-[#1D4ED8] shadow-xs'
-                : 'bg-[#FAFAFA] text-[#171717] border-[#D4D4D4] hover:bg-[#F0F0F0]'
-            }`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">
-              {isVisualEditMode ? 'Sair do Modo Edição' : 'Modo Edição Visual'}
-            </span>
-            <span className="sm:hidden">
-              {isVisualEditMode ? 'Sair' : 'Editar'}
-            </span>
-          </button>
-
-          {/* Manual Save Button */}
-          <button
-            type="button"
-            onClick={handleManualSave}
-            className={`flex items-center gap-1 px-2.5 sm:px-3 py-1 text-xs font-semibold border transition-colors rounded-xs ${
-              savedBadge
-                ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]'
-                : 'bg-[#059669] hover:bg-[#047857] text-white border-[#059669]'
-            }`}
-          >
-            {savedBadge ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>Salvo</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Salvar Alterações</span>
-                <span className="sm:hidden">Salvar</span>
-              </>
-            )}
-          </button>
-
-          {/* Zoom Controls */}
-          <div className="flex items-center border border-[#D4D4D4] bg-[#F5F5F5] rounded-xs">
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.max(0.3, Number((z - 0.05).toFixed(2))))}
-              title="Diminuir zoom"
-              className="p-1 hover:bg-[#E5E5E5] text-[#525252]"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-1.5 text-[11px] font-mono-data font-semibold text-[#171717]">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.min(1.2, Number((z + 0.05).toFixed(2))))}
-              title="Aumentar zoom"
-              className="p-1 hover:bg-[#E5E5E5] text-[#525252]"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Print / PDF button */}
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white text-xs font-semibold rounded-xs"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">PDF</span>
-          </button>
-        </div>
+  const print = async () => {
+    setError('')
+    try { await openPrintDocument({ catalog, products, selectedProductId, pages, designTokens, contact }) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao preparar o PDF.') }
+  }
+  return <div className="flex h-full flex-1 flex-col overflow-hidden bg-gray-200">
+    <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-white p-3 text-xs">
+      <span className="font-bold">A4 · {visible} página(s) · {catalog?.locale ?? 'pt-BR'}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setIsVisualEditMode(!isVisualEditMode)} className={`flex items-center gap-1 rounded border px-2 py-1 ${isVisualEditMode ? 'bg-blue-800 text-white' : ''}`}><SlidersHorizontal size={14} />{isVisualEditMode ? 'Concluir edição' : 'Editar blocos'}</button>
+        <button type="button" disabled={saveStatus === 'saving'} onClick={() => void save()} className="flex items-center gap-1 rounded border px-2 py-1"><Save size={14} />{saveStatus === 'saving' ? 'Salvando…' : 'Salvar'}</button>
+        <button type="button" aria-label="Diminuir zoom" onClick={() => setZoom(value => Math.max(.3, value-.05))}><ZoomOut size={15} /></button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Aumentar zoom" onClick={() => setZoom(value => Math.min(1.2,value+.05))}><ZoomIn size={15} /></button>
+        <button type="button" onClick={print} className="flex items-center gap-1 rounded bg-slate-900 px-3 py-1 text-white"><Printer size={14} />Preparar PDF</button>
       </div>
-
-      {/* 2. Visual Edit Banner (shown when active) */}
-      {isVisualEditMode && (
-        <div className="bg-[#EFF6FF] border-b border-[#BFDBFE] px-3 sm:px-4 py-1.5 flex items-center justify-between text-xs text-[#1E40AF]">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-pulse shrink-0" />
-            <span className="font-semibold shrink-0">Edição Visual:</span>
-            <span className="text-[11px] text-[#3B82F6] truncate">
-              Mova (↑/↓), adicione ou exclua blocos diretamente.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleManualSave}
-              className="flex items-center gap-1 bg-[#2563EB] text-white text-[11px] font-bold px-2.5 py-0.5 hover:bg-[#1D4ED8] rounded-xs"
-            >
-              <Save className="w-3 h-3" />
-              Salvar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Scaled Preview Sheet Viewport */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto p-2 sm:p-6 md:p-8 flex justify-center items-start bg-[#E5E5E5] touch-pan-x touch-pan-y"
-      >
-        <div
-          style={{
-            transform: `scale(${zoom})`,
-            transformOrigin: 'top center',
-            marginBottom: `${(1 - zoom) * -150}px`,
-          }}
-          className="transition-transform duration-100 ease-out shrink-0"
-        >
-          <DynamicCatalogRenderer
-            pages={pages}
-            product={product}
-            allProducts={products}
-            tokens={designTokens}
-            contact={contact}
-          />
+    </header>
+    {error && <p role="alert" className="no-print shrink-0 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
+    {isVisualEditMode && <p className="no-print bg-blue-50 px-3 py-2 text-[11px] text-blue-900">Edite os valores nos blocos e use a paleta para estilos. Cada bloco informa a origem dos dados no formulário.</p>}
+    <div className="flex-1 overflow-auto p-5">
+      <div className="mx-auto" style={{ width: `${210 * 96/25.4 * zoom}px`, height: `${Math.max(1, visible) * (297*96/25.4 + 24) * zoom}px` }}>
+        <div style={{ width: '210mm', transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
+          <DynamicCatalogRenderer pages={pages} product={selected} allProducts={products} tokens={designTokens} contact={contact} locale={catalog?.locale} />
         </div>
       </div>
     </div>
-  )
+  </div>
 }

@@ -1,6 +1,5 @@
 import {
   CatalogPage,
-  PageSection,
   CatalogPreset,
   DesignTokens,
   ContactInfo,
@@ -37,7 +36,7 @@ export const PRESYS_DESIGN_TOKENS: DesignTokens = {
 
 export const PRESYS_CONTACT: ContactInfo = {
   companyName: 'Presys Instrumentos',
-  logoUrl: '/img/logo-presys.png',
+  logoUrl: '',
   website: 'www.presys.com.br',
   phone: '+55 (11) 3038-1300',
   email: 'vendas@presys.com.br',

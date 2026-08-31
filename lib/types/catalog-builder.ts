@@ -30,7 +30,7 @@ export interface SectionTypeInfo {
   label: string
   description: string
   icon: string // Lucide icon name
-  defaultConfig: Record<string, any>
+  defaultConfig: Record<string, unknown>
 }
 
 export const SECTION_TYPE_CATALOG: SectionTypeInfo[] = [
@@ -159,9 +159,9 @@ export interface PageSection {
   id: string
   type: SectionType
   title: string
-  config: Record<string, any>
+  config: Record<string, unknown>
   /** Data specific to this section instance (rows, text, items, etc.) */
-  content: any
+  content: unknown
   style?: SectionStyle
   sort_order: number
   visible: boolean
@@ -242,14 +242,12 @@ export interface CatalogPreset {
 // Helpers
 // ---------------------------------------------------------------------------
 
-let _sectionCounter = 0
-
 export function createSectionId(): string {
-  return `sec-${Date.now()}-${++_sectionCounter}`
+  return `sec-${crypto.randomUUID()}`
 }
 
 export function createPageId(): string {
-  return `page-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  return `page-${crypto.randomUUID()}`
 }
 
 export function createSection(
@@ -261,11 +259,11 @@ export function createSection(
     id: createSectionId(),
     type,
     title: info?.label || type,
-    config: { ...(info?.defaultConfig || {}) },
     content: null,
     sort_order: 0,
     visible: true,
     ...overrides,
+    config: { ...structuredClone(info?.defaultConfig ?? {}), ...overrides?.config },
   }
 }
 

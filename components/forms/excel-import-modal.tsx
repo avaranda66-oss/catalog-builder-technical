@@ -1,170 +1,77 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
-import { parseExcelFile, ParsedExcelResult } from '../../features/import/excel-parser'
-import { Upload, FileSpreadsheet, X, Check, AlertCircle } from 'lucide-react'
+import { parseExcelFile, ParsedExcelResult, ImportField, IMPORT_FIELDS } from '../../features/import/excel-parser'
+import { ImportedProductSchema, errorMessage } from '../../lib/import/schema'
+import { Upload, X } from 'lucide-react'
 
-interface ExcelImportModalProps {
-  isOpen: boolean
-  onClose: () => void
-}
+interface ExcelImportModalProps { isOpen: boolean; onClose: () => void }
 
 export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose }) => {
-  const { catalog, products, setProducts, setSelectedProductId, markSaved } = useEditorStore()
   const [file, setFile] = useState<File | null>(null)
-  const [parsedResult, setParsedResult] = useState<ParsedExcelResult | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-
+  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null)
+  const [parsed, setParsed] = useState<ParsedExcelResult | null>(null)
+  const [processing, setProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reviewed, setReviewed] = useState(false)
+  const [skipInvalid, setSkipInvalid] = useState(false)
+  const requestId = useRef(0)
   if (!isOpen) return null
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0]
-    if (!selected) return
-
-    setFile(selected)
-    setIsProcessing(true)
-
+  const close = () => { requestId.current++; setFile(null); setBuffer(null); setParsed(null); setError(null); setReviewed(false); setSkipInvalid(false); setProcessing(false); onClose() }
+  const parse = async (data: ArrayBuffer, selectedFile: File, sheetName?: string, columnMapping?: Record<string, ImportField>) => {
+    const id = ++requestId.current
+    setProcessing(true); setError(null); setReviewed(false); setSkipInvalid(false)
     try {
-      const buffer = await selected.arrayBuffer()
-      const result = parseExcelFile(
-        buffer,
-        catalog?.id || 'a0000000-0000-0000-0000-000000000001'
-      )
-      setParsedResult(result)
-    } catch (err: any) {
-      alert(`Erro ao ler planilha: ${err.message}`)
-    } finally {
-      setIsProcessing(false)
+      const state = useEditorStore.getState()
+      if (!state.catalog) throw new Error('Abra um catálogo antes de importar.')
+      const result = await parseExcelFile(data, state.catalog.id, { fileName: selectedFile.name, sheetName, columnMapping, existingSkus: state.products.map((product) => product.sku) })
+      if (id === requestId.current) setParsed(result)
+    } catch (cause) { if (id === requestId.current) { setParsed(null); setError(errorMessage(cause)) } }
+    finally { if (id === requestId.current) setProcessing(false) }
+  }
+  const selectFile = async (selected?: File) => {
+    if (!selected) return
+    setParsed(null); setError(null); setFile(selected)
+    if (selected.size > 5 * 1024 * 1024 || !/\.(xlsx|csv)$/i.test(selected.name)) { setError('Selecione XLSX ou CSV de até 5 MB.'); return }
+    try { const data = await selected.arrayBuffer(); setBuffer(data); await parse(data, selected) }
+    catch (cause) { setError(errorMessage(cause)) }
+  }
+  const confirm = () => {
+    if (!parsed || !reviewed || processing || (parsed.errors.length && !skipInvalid)) return
+    const state = useEditorStore.getState()
+    if (!state.catalog) return
+    if (!state.localMode && (!state.currentUser || state.currentUser.role === 'viewer')) { setError('Entre com uma conta de edição ou habilite o modo local.'); return }
+    const products = parsed.products.map((product) => ImportedProductSchema.parse({ sku: product.sku, name: product.name, family: product.family, data: product.data }))
+    if (products.some((candidate) => state.products.some((product) => product.sku.trim().toUpperCase() === candidate.sku.toUpperCase()))) { setError('Um SKU foi cadastrado durante a revisão. Reprocesse a planilha.'); return }
+    for (const [index, product] of products.entries()) {
+      state.addProduct({ ...product, catalog_id: state.catalog.id, status: 'draft', sort_order: state.products.length + index })
+      if (useEditorStore.getState().lastError) { setError(useEditorStore.getState().lastError); return }
     }
+    state.addAuditLog(`Importou ${products.length} produtos da planilha`, 'product', file?.name || 'planilha', `${parsed.errors.length} linhas inválidas não importadas; fonte e metadados preservados.`)
+    close()
   }
-
-  const handleConfirmImport = () => {
-    if (!parsedResult || parsedResult.products.length === 0) return
-
-    const newProds = parsedResult.products.map((p, idx) => ({
-      id: `imported-${Date.now()}-${idx}`,
-      catalog_id: catalog?.id || 'a0000000-0000-0000-0000-000000000001',
-      sku: p.sku || `PCON-IMP-${idx + 1}`,
-      name: p.name || `Produto Importado #${idx + 1}`,
-      family: p.family || 'PCON',
-      status: 'draft' as const,
-      sort_order: products.length + idx + 1,
-      version: 1,
-      updated_by: null,
-      updated_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      data: p.data || {},
-    }))
-
-    setProducts([...products, ...newProds])
-    setSelectedProductId(newProds[0].id)
-    onClose()
-  }
-
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-      <div className="bg-[#FFFFFF] border-2 border-[#1A1A2E] shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-[#1A1A2E] text-white p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-[#2563EB]" />
-            <h2 className="text-sm font-bold uppercase tracking-wider">
-              Importar Planilha Excel Master
-            </h2>
-          </div>
-          <button type="button" onClick={onClose} className="p-1 hover:bg-[#2D2D44]">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="excel-title">
+      <div className="bg-white border-2 border-slate-900 w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="bg-slate-900 text-white p-4 flex justify-between"><h2 id="excel-title" className="font-bold text-sm">Importar planilha com mapeamento</h2><button onClick={close} aria-label="Fechar"><X className="w-5 h-5" /></button></div>
+        <div className="p-5 space-y-4 overflow-y-auto text-xs">
+          <p>XLSX ou CSV UTF-8, até 5 MB e 5.000 produtos por aba. Campos ausentes permanecem vazios. SKU e nome são obrigatórios; SKUs existentes não são substituídos.</p>
+          <label className="border-2 border-dashed p-5 flex gap-2 justify-center cursor-pointer"><Upload className="w-5 h-5" />{file?.name || 'Selecionar planilha'}<input type="file" accept=".xlsx,.csv" disabled={processing} className="hidden" onChange={(event) => { void selectFile(event.target.files?.[0]); event.target.value = '' }} /></label>
+          {processing && <p role="status">Validando arquivo e mapeando colunas…</p>}
+          {error && <p role="alert" className="p-3 bg-red-50 text-red-800">{error}</p>}
+          {parsed && <>
+            <label>Aba selecionada <select value={parsed.selectedSheet} disabled={processing} className="border p-2 ml-2" onChange={(event) => { if (buffer && file) void parse(buffer, file, event.target.value) }}>{parsed.sheetNames.map((name) => <option key={name}>{name}</option>)}</select></label>
+            <details open className="border p-3"><summary className="font-semibold cursor-pointer">Mapeamento das colunas</summary><div className="grid sm:grid-cols-2 gap-2 mt-3">{parsed.headers.filter(Boolean).map((header) => <label key={header} className="flex justify-between items-center gap-2">{header}<select disabled={processing} value={parsed.mapping[header] || 'metadata'} className="border p-1 max-w-40" onChange={(event) => { if (buffer && file) void parse(buffer, file, parsed.selectedSheet, { ...parsed.mapping, [header]: event.target.value as ImportField }) }}>{IMPORT_FIELDS.map((field) => <option key={field} value={field}>{field === 'metadata' ? 'Preservar em metadados' : field}</option>)}</select></label>)}</div></details>
+            {parsed.warnings.map((warning) => <p key={warning} className="bg-amber-50 p-2 text-amber-900">{warning}</p>)}
+            {!!parsed.errors.length && <div className="bg-red-50 p-3 text-red-900 space-y-1">{parsed.errors.slice(0, 50).map((message, index) => <p key={index}>{message}</p>)}{parsed.errors.length > 50 && <p>Mais {parsed.errors.length - 50} erros.</p>}<label className="flex gap-2 pt-2"><input type="checkbox" checked={skipInvalid} onChange={(event) => setSkipInvalid(event.target.checked)} />Entendi os erros e quero importar somente as {parsed.products.length} linhas válidas.</label></div>}
+            <p className="font-semibold">Prévia: {parsed.products.length} produtos válidos (primeiros 20 abaixo)</p>
+            <table className="w-full border-collapse"><thead><tr><th className="border p-2 text-left">SKU</th><th className="border p-2 text-left">Nome</th><th className="border p-2 text-left">Família</th></tr></thead><tbody>{parsed.products.slice(0, 20).map((product) => <tr key={product.sku}><td className="border p-2">{product.sku}</td><td className="border p-2">{product.name}</td><td className="border p-2">{product.family || 'Não informada'}</td></tr>)}</tbody></table>
+            <label className="flex gap-2 bg-slate-50 p-3"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />Revisei o mapeamento e autorizo criar os produtos como rascunhos técnicos.</label>
+          </>}
         </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-4">
-          <p className="text-xs text-[#525252] leading-relaxed">
-            Selecione uma planilha do Excel (<code className="font-mono-data bg-[#F5F5F5] px-1">.xlsx</code>)
-            ou arquivo <code className="font-mono-data bg-[#F5F5F5] px-1">.csv</code> com as
-            especificações dos instrumentos da família PCON.
-          </p>
-
-          {/* Upload Dropzone */}
-          <label className="border-2 border-dashed border-[#D4D4D4] hover:border-[#003366] bg-[#FAFAFA] hover:bg-[#F0F7FF] p-8 flex flex-col items-center justify-center cursor-pointer transition-colors">
-            <Upload className="w-8 h-8 text-[#003366] mb-2" />
-            <span className="text-xs font-semibold text-[#171717]">
-              {file ? file.name : 'Clique para selecionar o arquivo Excel'}
-            </span>
-            <span className="text-[11px] text-[#737373] mt-1">
-              Suporta planilhas master com abas de produtos e listas de preços
-            </span>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-
-          {/* Processing status or summary */}
-          {isProcessing && (
-            <div className="text-xs text-[#003366] font-semibold text-center animate-pulse">
-              Processando e mapeando colunas do Excel...
-            </div>
-          )}
-
-          {parsedResult && (
-            <div className="space-y-2">
-              <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] text-xs text-[#065F46] space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-[#059669]" />
-                  {parsedResult.products.length} produtos mapeados com sucesso!
-                </div>
-                <div className="text-[11px] text-[#047857]">
-                  Abas processadas: {parsedResult.sheetNames.join(', ')}
-                </div>
-              </div>
-
-              {parsedResult.warnings.length > 0 && (
-                <div className="p-2.5 bg-[#FFFBEB] border border-[#FDE68A] text-xs text-[#92400E] space-y-1">
-                  <div className="font-bold flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 text-[#D97706]" />
-                    Avisos de Importação Metrológica:
-                  </div>
-                  {parsedResult.warnings.map((w, i) => (
-                    <div key={i} className="text-[10.5px] text-[#B45309]">
-                      • {w}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {parsedResult.errors.length > 0 && (
-                <div className="p-2.5 bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#991B1B]">
-                  {parsedResult.errors.map((err, i) => (
-                    <div key={i}>⚠️ {err}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-3 bg-[#FAFAFA] border-t border-[#D4D4D4] flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-semibold text-[#171717]"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirmImport}
-            disabled={!parsedResult || parsedResult.products.length === 0}
-            className="px-4 py-1.5 bg-[#1A1A2E] hover:bg-[#2D2D44] disabled:opacity-40 text-white text-xs font-bold"
-          >
-            Confirmar Importação
-          </button>
-        </div>
+        <div className="p-4 border-t flex justify-end gap-2"><button onClick={close} className="border px-3 py-2 text-xs">Cancelar</button><button onClick={confirm} disabled={!parsed?.products.length || !reviewed || processing || (!!parsed?.errors.length && !skipInvalid)} className="bg-blue-700 text-white text-xs px-4 py-2 disabled:opacity-40">Importar {parsed?.products.length || 0} rascunhos</button></div>
       </div>
     </div>
   )

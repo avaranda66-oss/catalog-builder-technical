@@ -1,72 +1,10 @@
 'use client'
-
-import React, { useState, useEffect } from 'react'
-import { useEditorStore } from '../../features/editor/editor-store'
-import { CheckCircle, AlertTriangle, Clock, Database, ShieldCheck } from 'lucide-react'
-
-export const StatusBar: React.FC = () => {
-  const { saveStatus, lastSavedAt, products, selectedProductId } = useEditorStore()
-  const selectedProduct = products.find((p) => p.id === selectedProductId)
-
-  const [formattedTime, setFormattedTime] = useState('--:--:--')
-
-  useEffect(() => {
-    if (lastSavedAt) {
-      setFormattedTime(
-        new Intl.DateTimeFormat('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }).format(lastSavedAt)
-      )
-    }
-  }, [lastSavedAt])
-
-  return (
-    <footer className="h-8 border-t border-[#D4D4D4] bg-[#FFFFFF] px-4 flex items-center justify-between text-xs text-[#525252] select-none shrink-0 z-20">
-      {/* Left: Product & Validation Status */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 font-medium text-[#171717]">
-          <Database className="w-3.5 h-3.5 text-[#003366]" />
-          <span>Ativo:</span>
-          <span className="font-mono-data font-bold">
-            {selectedProduct ? selectedProduct.sku : 'Nenhum'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1 text-[#059669]">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Metrologia Auditada</span>
-        </div>
-      </div>
-
-      {/* Right: Autosave status & Clock */}
-      <div className="flex items-center gap-4">
-        {saveStatus === 'saving' && (
-          <div className="flex items-center gap-1.5 text-[#D97706]">
-            <span className="w-2 h-2 rounded-full bg-[#D97706] animate-pulse" />
-            <span>Gravando alterações...</span>
-          </div>
-        )}
-
-        {saveStatus === 'unsaved' && (
-          <div className="flex items-center gap-1.5 text-[#D97706]">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Alterações pendentes de salvamento</span>
-          </div>
-        )}
-
-        {saveStatus === 'saved' && (
-          <div className="flex items-center gap-1.5 text-[#059669]">
-            <CheckCircle className="w-3.5 h-3.5" />
-            <span>Salvo às {formattedTime}</span>
-          </div>
-        )}
-
-        <div className="flex items-center gap-1 border-l border-[#E5E5E5] pl-3 text-[#737373] font-mono-data">
-          <span>v2.0</span>
-        </div>
-      </div>
-    </footer>
-  )
+import { useShallow } from 'zustand/react/shallow'
+import { useEditorStore,type SaveStatus } from '../../features/editor/editor-store'
+import { AlertCircle,CheckCircle2,Database } from 'lucide-react'
+const labels:Record<SaveStatus,string>={saved:'Sincronizado com a equipe',local:'Salvo somente neste dispositivo',saving:'Gravando revisão…',unsaved:'Alterações pendentes',error:'Falha ao salvar — dados mantidos no editor',conflict:'Conflito com outra revisão — requer reconciliação'}
+export function StatusBar(){
+  const {status,time,product,revision}=useEditorStore(useShallow(s=>({status:s.saveStatus,time:s.lastSavedAt,product:s.products.find(p=>p.id===s.selectedProductId),revision:s.catalog?.version})))
+  const formatted=time?new Date(time).toLocaleTimeString('pt-BR'):''
+  return <footer className="no-print flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-2 text-[11px] text-slate-500"><span className="flex items-center gap-2"><Database size={13}/>{product?.sku??'Sem produto selecionado'} · Revisão {revision??0}</span><span role="status" className={'flex items-center gap-1.5 '+(status==='saved'?'text-emerald-700':status==='error'||status==='conflict'?'text-red-700':'text-slate-600')}>{status==='saved'?<CheckCircle2 size={13}/>:<AlertCircle size={13}/>} {labels[status]}{formatted?' · '+formatted:''}</span></footer>
 }

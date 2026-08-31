@@ -1,162 +1,129 @@
-import * as XLSX from 'xlsx'
-import { Product, ProductData } from '../../lib/types/database'
+import Papa from 'papaparse'
+import { Product } from '../../lib/types/database'
+import { ImportedProductSchema, SourceField } from '../../lib/import/schema'
 
+export const IMPORT_FIELDS = ['sku', 'name', 'family', 'title', 'subtitle', 'overview', 'features', 'range', 'accuracy', 'stability', 'controlTime', 'fluid', 'communication', 'display', 'power', 'weight', 'metadata'] as const
+export type ImportField = typeof IMPORT_FIELDS[number]
+export interface ExcelImportOptions { fileName?: string; sheetName?: string; columnMapping?: Record<string, ImportField>; existingSkus?: string[] }
 export interface ParsedExcelResult {
-  sheetNames: string[]
-  products: Partial<Product>[]
-  warnings: string[]
-  unmappedColumns: string[]
-  errors: string[]
+  sheetNames: string[]; selectedSheet: string; headers: string[]; mapping: Record<string, ImportField>
+  products: Partial<Product>[]; warnings: string[]; unmappedColumns: string[]; errors: string[]
 }
 
-export function parseExcelFile(buffer: ArrayBuffer, catalogId: string): ParsedExcelResult {
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  const result: ParsedExcelResult = {
-    sheetNames: workbook.SheetNames,
-    products: [],
-    warnings: [],
-    unmappedColumns: [],
-    errors: [],
+const aliases: Record<string, ImportField> = {
+  SKU: 'sku', MODEL: 'sku', MODELO: 'sku', CODE: 'sku', CODIGO: 'sku',
+  NAME: 'name', NOME: 'name', DESCRIPTION: 'name', DESCRICAO: 'name',
+  FAMILY: 'family', FAMILIA: 'family', CATEGORY: 'family', CATEGORIA: 'family',
+  TITLE: 'title', TITULO: 'title', SUBTITLE: 'subtitle', SUBTITULO: 'subtitle',
+  OVERVIEW: 'overview', RESUMO: 'overview', FEATURES: 'features', DESTAQUES: 'features',
+  RANGE: 'range', FAIXA: 'range', 'PRESSURE RANGE': 'range', 'FAIXA DE PRESSAO': 'range',
+  ACCURACY: 'accuracy', EXATIDAO: 'accuracy', PRECISAO: 'accuracy', STABILITY: 'stability', ESTABILIDADE: 'stability',
+  'CONTROL TIME': 'controlTime', 'TEMPO DE CONTROLE': 'controlTime', TEMPO: 'controlTime',
+  FLUID: 'fluid', FLUIDO: 'fluid', COMPATIBILIDADE: 'fluid',
+  COMMUNICATION: 'communication', COMUNICACAO: 'communication', DISPLAY: 'display',
+  POWER: 'power', ALIMENTACAO: 'power', WEIGHT: 'weight', PESO: 'weight',
+}
+const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')
+
+/** Inspect ZIP declared expansion before handing the workbook to ExcelJS. */
+function validateWorkbookArchive(buffer: ArrayBuffer): void {
+  const view = new DataView(buffer)
+  let entries = 0
+  let expanded = 0
+  for (let offset = 0; offset + 46 <= buffer.byteLength; offset++) {
+    if (view.getUint32(offset, true) !== 0x02014b50) continue
+    entries++
+    const size = view.getUint32(offset + 24, true)
+    expanded += size
+    if (entries > 2000 || size > 10 * 1024 * 1024 || expanded > 40 * 1024 * 1024) throw new Error('Planilha excede os limites de descompressão (40 MB / 2.000 entradas).')
+    if (view.getUint16(offset + 8, true) & 1) throw new Error('Planilha criptografada não é suportada.')
+    offset += 45 + view.getUint16(offset + 28, true) + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true)
   }
+  if (!entries) throw new Error('Arquivo XLSX inválido. Use .xlsx ou .csv; o formato .xls não é suportado.')
+}
 
-  // Look for product sheets or default first sheet
-  const targetSheetName =
-    workbook.SheetNames.find((n) =>
-      n.toUpperCase().includes('Y17') ||
-      n.toUpperCase().includes('PCON') ||
-      n.toUpperCase().includes('CONFIG') ||
-      n.toUpperCase().includes('PROD') ||
-      n.toUpperCase().includes('BASE')
-    ) || workbook.SheetNames[0]
-
-  if (!targetSheetName) {
-    result.errors.push('Nenhuma planilha encontrada no arquivo.')
-    return result
-  }
-
-  const sheet = workbook.Sheets[targetSheetName]
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
-
-  if (rows.length < 2) {
-    result.errors.push(`A planilha "${targetSheetName}" não contém dados suficientes.`)
-    return result
-  }
-
-  // Extract headers
-  const headers = rows[0].map((h) => String(h).trim())
-  const recognizedHeaders = new Set([
-    'SKU', 'MODEL', 'MODELO', 'CODE', 'CÓDIGO',
-    'NAME', 'NOME', 'DESCRIPTION', 'DESCRIÇÃO',
-    'TITLE', 'TÍTULO', 'OVERVIEW', 'RESUMO',
-    'RANGE', 'FAIXA', 'PRESSURE RANGE', 'FAIXA DE PRESSÃO',
-    'ACCURACY', 'EXATIDÃO', 'PRECISÃO',
-    'STABILITY', 'ESTABILIDADE',
-    'CONTROL TIME', 'TEMPO DE CONTROLE', 'TEMPO',
-    'FLUID', 'FLUIDO', 'COMPATIBILIDADE',
-    'COMMUNICATION', 'COMUNICAÇÃO', 'DISPLAY',
-    'POWER', 'ALIMENTAÇÃO', 'WEIGHT', 'PESO',
-  ])
-
-  // Track unmapped headers
-  headers.forEach((h) => {
-    if (h && !recognizedHeaders.has(h.toUpperCase())) {
-      if (!result.unmappedColumns.includes(h)) {
-        result.unmappedColumns.push(h)
-      }
-    }
-  })
-
-  if (result.unmappedColumns.length > 0) {
-    result.warnings.push(
-      `Colunas adicionais identificadas e armazenadas em metadados: ${result.unmappedColumns.join(', ')}`
-    )
-  }
-
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i]
-    if (!row || row.every((c) => c === '')) continue
-
-    const rowObj: Record<string, any> = {}
-    headers.forEach((h, idx) => {
-      if (h) rowObj[h] = row[idx]
-    })
-
-    const sku =
-      rowObj['SKU'] ||
-      rowObj['Model'] ||
-      rowObj['Modelo'] ||
-      rowObj['Code'] ||
-      rowObj['Código'] ||
-      `PCON-AUTO-${i}`
-
-    const name =
-      rowObj['Name'] ||
-      rowObj['Nome'] ||
-      rowObj['Description'] ||
-      rowObj['Descrição'] ||
-      sku
-
-    const title = rowObj['Title'] || rowObj['Título'] || name
-    const overview = rowObj['Overview'] || rowObj['Resumo'] || 'Controlador e calibrador automático de alta precisão.'
-    const rangeStr = rowObj['Range'] || rowObj['Faixa'] || rowObj['Pressure Range'] || rowObj['Faixa de Pressão'] || '0 a 210 bar'
-    const accuracyStr = rowObj['Accuracy'] || rowObj['Exatidão'] || rowObj['Precisão'] || '± 0,012% FS'
-    const stabilityStr = rowObj['Stability'] || rowObj['Estabilidade'] || '± 0,002% FS'
-    const timeStr = rowObj['Control Time'] || rowObj['Tempo de Controle'] || rowObj['Tempo'] || '< 15 s'
-    const fluidStr = rowObj['Fluid'] || rowObj['Fluido'] || rowObj['Compatibilidade'] || 'Gases limpos e não corrosivos'
-    const commStr = rowObj['Communication'] || rowObj['Comunicação'] || 'Ethernet, USB, RS-232/485'
-    const displayStr = rowObj['Display'] || 'Touchscreen Colorido 5.7"'
-    const powerStr = rowObj['Power'] || rowObj['Alimentação'] || '100 a 240 Vca (50/60 Hz)'
-
-    const data: ProductData = {
-      marketing: {
-        title,
-        overview,
-        features: [
-          'Controle automático de pressão com alta estabilidade',
-          'Display gráfico touchscreen colorido intuitivo',
-          'Comunicação digital Ethernet, USB e Modbus',
-          'Gabinete industrial robusto para bancada ou rack',
-        ],
-      },
-      // Especificações estruturadas diretamente para SpecsTableSection e Cover Quick Specs
-      specs: [
-        { param: 'Faixa de Controle', value: rangeStr },
-        { param: 'Exatidão da Indicação', value: accuracyStr },
-        { param: 'Estabilidade de Controle', value: stabilityStr },
-        { param: 'Tempo de Resposta', value: timeStr },
-        { param: 'Compatibilidade de Fluido', value: fluidStr },
-      ],
-      // Especificações de Calibração Elétrica
-      electrical: [
-        { function_name: 'Medição de Corrente (mA)', range: '0 a 24 mA', resolution: '0,0001 mA', accuracy: '± (0,01% Leit. + 0,002 mA)' },
-        { function_name: 'Medição de Tensão (V)', range: '0 a 30 V', resolution: '0,0001 V', accuracy: '± (0,01% Leit. + 0,002 V)' },
-        { function_name: 'Alimentação de Loop (Transmissor)', range: '24 Vcc ± 8%', resolution: '—', accuracy: 'Corrente máx: 25 mA' },
-      ],
-      // Especificações Gerais
-      general: [
-        { param: 'Display / Interface', value: displayStr },
-        { param: 'Comunicação Digital', value: commStr },
-        { param: 'Alimentação Elétrica', value: powerStr },
-        { param: 'Temperatura de Operação', value: '0 a 50 °C' },
-      ],
-      // Compatibilidade legado
-      pressure_specs: {
-        control_range: rangeStr,
-        display_accuracy: accuracyStr,
-        control_stability: stabilityStr,
-      },
-    }
-
-    result.products.push({
-      catalog_id: catalogId,
-      sku: String(sku).trim(),
-      name: String(name).trim(),
-      family: 'PCON',
-      status: 'draft',
-      sort_order: i,
-      data,
+export async function parseExcelFile(buffer: ArrayBuffer, catalogId: string, options: ExcelImportOptions = {}): Promise<ParsedExcelResult> {
+  if (buffer.byteLength > 5 * 1024 * 1024) throw new Error('Arquivo deve ter no máximo 5 MB.')
+  const fileName = (options.fileName || 'planilha.xlsx').slice(0, 255)
+  let sheets: Array<{ name: string; rows: string[][] }>
+  if (/\.csv$/i.test(fileName)) {
+    const parsed = Papa.parse<string[]>(new TextDecoder('utf-8', { fatal: true }).decode(buffer), { skipEmptyLines: 'greedy' })
+    if (parsed.errors.some((error) => error.type === 'Quotes')) throw new Error('CSV contém aspas inválidas.')
+    sheets = [{ name: 'CSV', rows: parsed.data }]
+  } else {
+    validateWorkbookArchive(buffer)
+    const ExcelJS = await import('exceljs')
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer)
+    sheets = workbook.worksheets.map((sheet) => {
+      if (sheet.rowCount > 5001 || sheet.columnCount > 200) throw new Error('Limite de 5.000 produtos e 200 colunas por aba.')
+      const rows: string[][] = []
+      sheet.eachRow({ includeEmpty: true }, (row) => {
+        const values: string[] = []
+        for (let column = 1; column <= sheet.columnCount; column++) {
+          const cell = row.getCell(column)
+          if (cell.formula && cell.result === undefined) throw new Error(`Fórmula sem resultado calculado em ${sheet.name}!${cell.address}. Recalcule e salve no Excel.`)
+          values.push(cell.text)
+        }
+        rows.push(values)
+      })
+      return { name: sheet.name, rows }
     })
   }
-
+  const selected = sheets.find((sheet) => sheet.name === options.sheetName) || sheets.find((sheet) => /Y17|PCON|CONFIG|PROD|BASE/i.test(sheet.name)) || sheets[0]
+  const result: ParsedExcelResult = { sheetNames: sheets.map((sheet) => sheet.name), selectedSheet: selected?.name || '', headers: [], mapping: {}, products: [], warnings: [], unmappedColumns: [], errors: [] }
+  if (!selected || selected.rows.length < 2) { result.errors.push('A aba selecionada não possui cabeçalho e dados.'); return result }
+  if (selected.rows.length > 5001 || selected.rows.some((row) => row.length > 200)) throw new Error('Limite de 5.000 produtos e 200 colunas por aba.')
+  result.headers = selected.rows[0].map((header) => header.trim())
+  const nonemptyHeaders = result.headers.filter(Boolean)
+  if (new Set(nonemptyHeaders.map(normalize)).size !== nonemptyHeaders.length) { result.errors.push('Existem cabeçalhos duplicados. Renomeie as colunas antes de importar.'); return result }
+  for (const header of nonemptyHeaders) {
+    result.mapping[header] = options.columnMapping?.[header] || aliases[normalize(header)] || 'metadata'
+    if (result.mapping[header] === 'metadata') result.unmappedColumns.push(header)
+  }
+  const targets = Object.values(result.mapping).filter((field) => field !== 'metadata')
+  if (new Set(targets).size !== targets.length) { result.errors.push('Duas colunas estão mapeadas para o mesmo campo. Ajuste o mapeamento.'); return result }
+  if (!targets.includes('sku') || !targets.includes('name')) { result.errors.push('Mapeie as colunas SKU e Nome para continuar.'); return result }
+  const seenSkus = new Set((options.existingSkus || []).map(normalize))
+  for (let index = 1; index < selected.rows.length; index++) {
+    const row = selected.rows[index]
+    if (!row.some((value) => value.trim())) continue
+    const unnamedColumn = row.findIndex((value, column) => value.trim() && !result.headers[column])
+    if (unnamedColumn >= 0) { result.errors.push(`Linha ${index + 1}: a coluna ${unnamedColumn + 1} possui dados sem cabeçalho; produto não importado.`); continue }
+    const values: Partial<Record<ImportField, string>> = {}
+    const metadata: Record<string, string> = {}
+    const sourceFields: Record<string, SourceField> = {}
+    result.headers.forEach((header, column) => {
+      if (!header) return
+      const value = String(row[column] || '').trim()
+      if (!value) return
+      const field = result.mapping[header]
+      if (field === 'metadata') metadata[header] = value
+      else values[field] = value
+      sourceFields[field === 'metadata' ? `metadata.${header}` : field] = { document: fileName, page: null, sheet: selected.name, row: index + 1, quote: value, confidence: 'verbatim' }
+    })
+    const sku = values.sku || ''
+    if (!sku || !values.name) { result.errors.push(`Linha ${index + 1}: SKU e Nome são obrigatórios; nenhum valor foi presumido.`); continue }
+    if (seenSkus.has(normalize(sku))) { result.errors.push(`Linha ${index + 1}: SKU duplicado (${sku}); produto não importado.`); continue }
+    const specs = (['range', 'accuracy', 'stability', 'controlTime', 'fluid'] as const).filter((field) => values[field]).map((field) => ({ param: ({ range: 'Faixa', accuracy: 'Exatidão', stability: 'Estabilidade', controlTime: 'Tempo de Controle', fluid: 'Compatibilidade de Fluido' })[field], value: values[field]! }))
+    const general = (['communication', 'display', 'power', 'weight'] as const).filter((field) => values[field]).map((field) => ({ param: ({ communication: 'Comunicação', display: 'Display', power: 'Alimentação', weight: 'Peso' })[field], desc: values[field]! }))
+    // Store provenance under the same paths consumed by the editor/renderers.
+    for (const field of ['title', 'subtitle', 'overview'] as const) {
+      if (sourceFields[field]) { sourceFields[`marketing.${field}`] = sourceFields[field]; delete sourceFields[field] }
+    }
+    if (!values.title && sourceFields.name) sourceFields['marketing.title'] = sourceFields.name
+    ;(['range', 'accuracy', 'stability', 'controlTime', 'fluid'] as const).filter((field) => values[field]).forEach((field, specIndex) => { sourceFields[`specs.${specIndex}.value`] = sourceFields[field]; delete sourceFields[field] })
+    ;(['communication', 'display', 'power', 'weight'] as const).filter((field) => values[field]).forEach((field, specIndex) => { sourceFields[`general.${specIndex}.desc`] = sourceFields[field]; delete sourceFields[field] })
+    const parsed = ImportedProductSchema.safeParse({ sku, name: values.name, family: values.family || '', data: {
+      marketing: { title: values.title || values.name, ...(values.subtitle ? { subtitle: values.subtitle } : {}), ...(values.overview ? { overview: values.overview } : {}), features: values.features ? values.features.split(/\r?\n|;/).map((value) => value.trim()).filter(Boolean) : [] },
+      specs, electrical: [], general, accessories: [], metadata,
+      source: { kind: 'spreadsheet', document: fileName, importedAt: new Date().toISOString(), status: 'pending_review', missingFields: [...(!values.family ? ['family'] : []), ...(!specs.length ? ['specs'] : []), 'electrical', 'images'], fields: sourceFields },
+    } })
+    if (!parsed.success) { result.errors.push(`Linha ${index + 1}: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`); continue }
+    seenSkus.add(normalize(sku))
+    result.products.push({ ...parsed.data, catalog_id: catalogId, status: 'draft', sort_order: index })
+  }
+  if (result.unmappedColumns.length) result.warnings.push(`Colunas preservadas em metadados: ${result.unmappedColumns.join(', ')}.`)
+  result.warnings.push('Dados ausentes ficam vazios. Produtos serão rascunhos para revisão técnica; nenhuma especificação foi inventada.')
   return result
 }

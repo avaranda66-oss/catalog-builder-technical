@@ -1,6 +1,4 @@
-// ============================================================================
-// TEAM AUTH & COLLABORATIVE AUDIT TYPES
-// ============================================================================
+import type { UserRole } from './database'
 
 export interface TeamUser {
   id: string
@@ -8,6 +6,8 @@ export interface TeamUser {
   area: string
   email?: string
   loggedAt: string
+  /** Loaded from public.profiles after the access token is verified by Auth. */
+  role: UserRole
 }
 
 export interface AuditLogItem {
@@ -30,5 +30,3 @@ export const PREDEFINED_AREAS = [
   'Diretoria & Gestão',
   'Marketing & Catálogos',
 ] as const
-
-export const DEFAULT_ADMIN_PASSWORD = 'presysadmin'

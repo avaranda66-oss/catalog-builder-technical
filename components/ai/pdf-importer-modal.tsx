@@ -1,528 +1,92 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useRef, useState } from 'react'
+import { Upload, X, Loader2, AlertCircle } from 'lucide-react'
 import { useEditorStore } from '../../features/editor/editor-store'
-import {
-  Upload,
-  FileText,
-  Sparkles,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  X,
-  ArrowRight,
-  Layers,
-  Table,
-  BookmarkPlus,
-  Palette,
-  CheckSquare,
-  Square,
-} from 'lucide-react'
-import { CatalogPage } from '../../lib/types/catalog-builder'
+import { authenticatedAiFetch } from '../../lib/ai/client'
+import { ImportedData, ImportedDataSchema, ImportedProductSchema, errorMessage } from '../../lib/import/schema'
 
-interface PdfImporterModalProps {
-  isOpen: boolean
-  onClose: () => void
-}
+interface PdfImporterModalProps { isOpen: boolean; onClose: () => void }
+interface Candidate { sku: string; name: string; family: string; data: ImportedData }
 
 export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onClose }) => {
-  const {
-    addProduct,
-    catalog,
-    setPages,
-    saveCurrentAsPreset,
-    setSelectedProductId,
-    setSelectedPageId,
-    addAuditLog,
-  } = useEditorStore()
-
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
+  const [candidate, setCandidate] = useState<Candidate | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [extractedProduct, setExtractedProduct] = useState<any | null>(null)
-  const [extractedPages, setExtractedPages] = useState<CatalogPage[] | null>(null)
-  const [stepMessage, setStepMessage] = useState('')
-
-  // Cloner Options
-  const [applyLayout, setApplyLayout] = useState(true)
-  const [saveAsPreset, setSaveAsPreset] = useState(true)
-  const [customPresetName, setCustomPresetName] = useState('')
-
+  const [processing, setProcessing] = useState(false)
+  const [reviewed, setReviewed] = useState(false)
+  const requestId = useRef(0)
+  const inputRef = useRef<HTMLInputElement>(null)
   if (!isOpen) return null
 
-  const handleReset = () => {
-    setFile(null)
-    setIsProcessing(false)
-    setError(null)
-    setExtractedProduct(null)
-    setExtractedPages(null)
-    setStepMessage('')
-    setCustomPresetName('')
-  }
-
-  const handleClose = () => {
-    handleReset()
+  const close = () => {
+    requestId.current++
+    setCandidate(null); setWarnings([]); setError(null); setReviewed(false); setProcessing(false)
     onClose()
   }
-
-  const processFile = async (selectedFile: File) => {
-    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
-      setError('Por favor, selecione um arquivo em formato PDF.')
-      return
-    }
-
-    setFile(selectedFile)
-    setIsProcessing(true)
-    setError(null)
-    setExtractedProduct(null)
-    setExtractedPages(null)
-    setStepMessage('Lendo documento PDF e extraindo especificações...')
-
-    let data: any = null
-
+  const processFile = async (file?: File) => {
+    if (!file || processing) return
+    setCandidate(null); setError(null); setWarnings([]); setReviewed(false)
+    if (!/\.pdf$/i.test(file.name) || file.size > 5 * 1024 * 1024) { setError('Selecione um PDF com até 5 MB.'); return }
+    const id = ++requestId.current
+    setProcessing(true)
     try {
-      // 1. Try sending directly as multipart FormData (most efficient & bypasses JSON payload limits)
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('fileName', selectedFile.name)
-
-      setStepMessage('IA analisando seções, tabelas técnicas e faixas metrológicas...')
-
-      try {
-        const response = await fetch('/api/ai/import-pdf', {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (response.ok) {
-          data = await response.json()
-        }
-      } catch (formErr) {
-        console.warn('[PDF Importer] FormData upload error, trying base64 fallback:', formErr)
-      }
-
-      // 2. Fallback: Base64 JSON payload
-      if (!data || !data.success) {
-        try {
-          const reader = new FileReader()
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(selectedFile)
-          })
-
-          const jsonResponse = await fetch('/api/ai/import-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileBase64: base64Data,
-              fileName: selectedFile.name,
-              mimeType: 'application/pdf',
-            }),
-          })
-
-          if (jsonResponse.ok) {
-            data = await jsonResponse.json()
-          }
-        } catch (jsonErr) {
-          console.warn('[PDF Importer] Base64 fallback error:', jsonErr)
-        }
-      }
-
-      // 3. Fallback: Guaranteed Client-Side Smart Parser (if serverless is slow or offline)
-      if (!data || !data.product) {
-        console.log('[PDF Importer] Using smart client metrological parser.')
-        const cleanName = selectedFile.name.replace(/\.pdf$/i, '')
-        const skuCandidate =
-          cleanName
-            .toUpperCase()
-            .replace(/[^A-Z0-9-]/g, '-')
-            .replace(/-+/g, '-')
-            .substring(0, 16) || 'IMPORT-PDF'
-
-        data = {
-          success: true,
-          product: {
-            sku: skuCandidate,
-            name: cleanName,
-            family: cleanName.includes('761') || cleanName.includes('9140') ? 'Calibradores' : 'PCON',
-            status: 'draft',
-            data: {
-              marketing: {
-                title: `Calibrador e Controlador ${cleanName}`,
-                subtitle: 'Calibradores e Padrões Industriais Metrológicos',
-                overview: `Equipamento de calibração e controle metrológico de alta exatidão importado do catálogo ${selectedFile.name}. Projetado para operações rigorosas em campo e bancada.`,
-                features: [
-                  'Controle e geração automática de alta estabilidade',
-                  'Display touchscreen colorido com navegação gráfica intuitiva',
-                  'Medição simultânea de sinais elétricos (mA, V, mV, RTD)',
-                  'Compatibilidade com software de calibração documentada ISOPLAN®',
-                ],
-              },
-              specs: [
-                { param: 'Faixa de Operação', value: 'Vácuo até 3000 psi (210 bar)' },
-                { param: 'Estabilidade de Controle', value: '± 0,002% do Fundo de Escala (FS)' },
-                { param: 'Exatidão da Indicação', value: '± 0,012% FS com sensor interno' },
-                { param: 'Tempo de Resposta', value: 'Inferior a 15 segundos' },
-              ],
-              electrical: [
-                { signal: 'Corrente (mA)', range: '0 a 24 mA', resolution: '0,0001 mA', accuracy: '± 0,01% FS', note: 'Alimentação 24V' },
-                { signal: 'Tensão (V)', range: '0 a 30 Vdc', resolution: '0,0001 V', accuracy: '± 0,01% FS', note: 'Alta impedância' },
-                { signal: 'Sonda RTD', range: '-200 a 850 °C', resolution: '0,01 °C', accuracy: '± 0,1 °C', note: 'Pt-100 / Pt-1000' },
-              ],
-              general: [
-                { param: 'Alimentação', desc: '100 a 240 Vac, 50/60 Hz' },
-                { param: 'Interface de Comunicação', desc: 'USB, RS-232/485 e Ethernet' },
-                { param: 'Garantia', desc: '1 ano contra defeitos de fabricação' },
-              ],
-              accessories: [
-                { code: 'ACC-STD-01', description: 'Cabos e pontas de prova para medição', type: 'Standard' },
-                { code: 'ACC-OPT-02', description: 'Maleta de transporte reforçada', type: 'Optional' },
-              ],
-            },
-          },
-        }
-      }
-
-      setStepMessage('Construindo estrutura de páginas e layout predefinido...')
-      setExtractedProduct(data.product)
-      setExtractedPages(data.pages || null)
-      setCustomPresetName(`Layout ${data.product.sku || selectedFile.name.replace(/\.pdf$/i, '')}`)
-    } catch (err: any) {
-      console.error('[PDF Importer Error]:', err)
-      setError(err.message || 'Ocorreu um erro ao processar o PDF.')
-    } finally {
-      setIsProcessing(false)
-    }
+      const form = new FormData(); form.append('file', file)
+      const response = await authenticatedAiFetch('/api/ai/import-pdf', { method: 'POST', body: form })
+      const result = await response.json() as { product?: { sku?: string; name?: string; family?: string; data?: unknown }; warnings?: unknown }
+      const data = ImportedDataSchema.parse(result.product?.data)
+      if (id !== requestId.current) return
+      setCandidate({ sku: result.product?.sku || '', name: result.product?.name || '', family: result.product?.family || '', data })
+      setWarnings(Array.isArray(result.warnings) ? result.warnings.filter((item): item is string => typeof item === 'string') : [])
+    } catch (cause) { if (id === requestId.current) setError(errorMessage(cause)) }
+    finally { if (id === requestId.current) setProcessing(false) }
   }
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0])
-    }
-    e.target.value = ''
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleConfirmAdd = () => {
-    if (!extractedProduct) return
-
-    const newSku = extractedProduct.sku || `IMPORT-${Date.now().toString().slice(-4)}`
-    const productPayload = {
-      catalog_id: catalog?.id || 'a0000000-0000-0000-0000-000000000001',
-      sku: newSku,
-      name: extractedProduct.name || extractedProduct.data?.marketing?.title || newSku,
-      family: extractedProduct.family || 'PCON',
-      status: 'draft' as const,
-      sort_order: 99,
-      data: extractedProduct.data || {},
-    }
-
-    // 1. Add Product
-    addProduct(productPayload)
-
-    // 2. Apply Cloned Layout Pages if selected
-    if (applyLayout && extractedPages && extractedPages.length > 0) {
-      setPages(extractedPages)
-      setSelectedPageId(extractedPages[0]?.id || null)
-    }
-
-    // 3. Save as Predefined Preset if selected
-    if (saveAsPreset && customPresetName.trim()) {
-      saveCurrentAsPreset(
-        customPresetName.trim(),
-        `Layout predefinido estruturado a partir do catálogo PDF ${file?.name || newSku}.`
-      )
-    }
-
-    addAuditLog(
-      `Importou e clonou catálogo PDF: ${file?.name || newSku}`,
-      'pdf_import',
-      newSku,
-      `Estruturou ${extractedPages?.length || 1} página(s) e especificações metrológicas`
-    )
-
-    handleClose()
+  const confirm = () => {
+    if (!candidate || !reviewed) return
+    const parsed = ImportedProductSchema.safeParse(candidate)
+    if (!parsed.success) { setError('Preencha SKU e Nome e revise o formato dos dados.'); return }
+    const state = useEditorStore.getState()
+    if (!state.catalog) { setError('Abra um catálogo antes de importar.'); return }
+    if (!state.localMode && (!state.currentUser || state.currentUser.role === 'viewer')) { setError('Entre com uma conta de edição para importar.'); return }
+    if (state.products.some((product) => product.sku.toLocaleUpperCase() === candidate.sku.trim().toLocaleUpperCase())) { setError('Já existe um produto com este SKU. A importação não substitui produtos existentes.'); return }
+    state.addProduct({ ...parsed.data, catalog_id: state.catalog.id, status: 'draft', sort_order: state.products.length })
+    if (useEditorStore.getState().lastError) { setError(useEditorStore.getState().lastError); return }
+    state.addAuditLog(`Importou texto do PDF ${candidate.data.source.document}`, 'pdf_import', candidate.sku, 'Rascunho revisado pelo usuário; fonte preservada, sem inferência de especificações ou layout.')
+    close()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in duration-200">
-      <div className="bg-[#FFFFFF] border border-[#D4D4D4] shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
-        {/* Header */}
-        <div className="h-14 bg-[#1A1A2E] text-white px-5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xs bg-[#2563EB] flex items-center justify-center text-white shadow-xs">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="font-bold text-sm leading-tight">
-                Clonador de Datasheet PDF & Gerador de Layout
-              </h2>
-              <p className="text-[11px] text-[#A3A3A3]">
-                Extrai dados técnicos, replica a estrutura exata e salva como layout predefinido
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 hover:bg-[#2D2D44] text-white rounded-xs transition-colors"
-          >
-            <X className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pdf-import-title">
+      <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="bg-slate-900 text-white flex justify-between items-center p-4">
+          <h2 id="pdf-import-title" className="font-bold text-sm">Importar dados de PDF para revisão</h2>
+          <button onClick={close} aria-label="Fechar importação"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-5 overflow-y-auto space-y-4 text-sm">
+          <p className="text-slate-600">Extração determinística de texto, sem IA generativa. PDF digitalizado, fontes especiais, imagens e layout original não são reproduzidos. Valores ausentes permanecem vazios.</p>
+          <input ref={inputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={(event) => { void processFile(event.target.files?.[0]); event.target.value = '' }} />
+          <button disabled={processing} onClick={() => inputRef.current?.click()} className="w-full border-2 border-dashed border-slate-300 p-5 flex justify-center gap-2 disabled:opacity-50">
+            {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+            {processing ? 'Extraindo texto do documento…' : 'Selecionar PDF (até 5 MB)'}
           </button>
-        </div>
-
-        {/* Content Area */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          {/* Dropzone */}
-          {!extractedProduct && (
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragOver(true)
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 ${
-                dragOver
-                  ? 'border-[#2563EB] bg-[#EFF6FF]'
-                  : 'border-[#D4D4D4] bg-[#FAFAFA] hover:border-[#2563EB] hover:bg-[#F8FAFC]'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,application/pdf"
-                className="hidden"
-                onChange={handleFileInput}
-              />
-
-              <div className="w-14 h-14 rounded-full bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center shadow-xs">
-                {isProcessing ? (
-                  <Loader2 className="w-7 h-7 animate-spin" />
-                ) : (
-                  <Upload className="w-7 h-7" />
-                )}
-              </div>
-
-              <div>
-                <p className="font-bold text-sm text-[#171717]">
-                  {isProcessing
-                    ? 'Processando com Inteligência Artificial...'
-                    : 'Arraste o catálogo em PDF aqui ou clique para selecionar'}
-                </p>
-                <p className="text-xs text-[#737373] mt-1">
-                  Suporta catálogos da Fluke, Additel, Isotech e outros fabricantes
-                </p>
-              </div>
-
-              {stepMessage && (
-                <div className="mt-2 text-xs font-semibold text-[#2563EB] bg-[#EFF6FF] px-3 py-1.5 border border-[#BFDBFE] animate-pulse">
-                  {stepMessage}
-                </div>
-              )}
+          {error && <p role="alert" className="p-3 bg-red-50 border border-red-200 text-red-800">{error}</p>}
+          {warnings.map((warning) => <p key={warning} className="p-3 bg-amber-50 text-amber-900 flex gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{warning}</p>)}
+          {candidate && <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(['sku', 'name', 'family'] as const).map((field) => <label key={field} className="text-xs font-semibold">{({ sku: 'SKU (obrigatório)', name: 'Nome (obrigatório)', family: 'Família' })[field]}
+                <input value={candidate[field]} onChange={(event) => { setCandidate({ ...candidate, [field]: event.target.value }); setReviewed(false) }} className="border border-slate-300 w-full p-2 mt-1" />
+              </label>)}
             </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3.5 bg-[#FEF2F2] border border-[#FCA5A5] text-[#991B1B] text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Erro ao processar documento</p>
-                <p className="mt-0.5">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Preview of Extracted Structure */}
-          {extractedProduct && (
-            <div className="space-y-4 animate-in fade-in duration-300">
-              <div className="p-3 bg-[#F0FDF4] border border-[#86EFAC] text-[#166534] text-xs flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 shrink-0 text-[#16A34A]" />
-                <span className="font-semibold">
-                  Estrutura e dados do PDF identificados com sucesso!
-                </span>
-              </div>
-
-              {/* Product Card Details */}
-              <div className="border border-[#D4D4D4] bg-[#FFFFFF] p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2.5">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373] block">
-                      Modelo Identificado (SKU)
-                    </span>
-                    <span className="font-mono-data font-bold text-base text-[#003366]">
-                      {extractedProduct.sku}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373] block">
-                      Família
-                    </span>
-                    <span className="text-xs font-semibold text-[#171717]">
-                      {extractedProduct.family || 'PCON'}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#737373] block">
-                    Título Comercial
-                  </span>
-                  <p className="text-xs font-bold text-[#171717]">
-                    {extractedProduct.data?.marketing?.title || extractedProduct.name}
-                  </p>
-                  <p className="text-[11px] text-[#525252] mt-0.5">
-                    {extractedProduct.data?.marketing?.subtitle || ''}
-                  </p>
-                </div>
-
-                {/* Badges of extracted items */}
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#E5E5E5] text-xs">
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-2 text-center">
-                    <span className="block font-bold text-[#003366] text-sm font-mono-data">
-                      {extractedProduct.data?.specs?.length || 0}
-                    </span>
-                    <span className="text-[10px] text-[#737373]">Especificações</span>
-                  </div>
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-2 text-center">
-                    <span className="block font-bold text-[#003366] text-sm font-mono-data">
-                      {extractedProduct.data?.marketing?.features?.length || 0}
-                    </span>
-                    <span className="text-[10px] text-[#737373]">Destaques</span>
-                  </div>
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-2 text-center">
-                    <span className="block font-bold text-[#003366] text-sm font-mono-data">
-                      {extractedProduct.data?.electrical?.length || 0}
-                    </span>
-                    <span className="text-[10px] text-[#737373]">Canais Elétricos</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Detected Multi-Page Layout Structure */}
-              <div className="border border-[#BFDBFE] bg-[#EFF6FF] p-4 space-y-2.5">
-                <div className="flex items-center gap-2 text-[#1E40AF]">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-wider">
-                    Estrutura de Páginas Gerada (3 Páginas A4):
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-[11px]">
-                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
-                    <span className="font-bold text-[#1E3A8A] block">Página 1: Capa</span>
-                    <span className="text-[10px] text-[#475569] block mt-0.5">
-                      • Banner Hero & Foto
-                      <br />• Destaques e Recursos
-                      <br />• Texto de Aplicação
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
-                    <span className="font-bold text-[#1E3A8A] block">Página 2: Metrologia</span>
-                    <span className="text-[10px] text-[#475569] block mt-0.5">
-                      • Tabela de Faixas & FS
-                      <br />• Estabilidade & Exatidão
-                      <br />• Sinais Elétricos (mA/V)
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
-                    <span className="font-bold text-[#1E3A8A] block">Página 3: Acessórios</span>
-                    <span className="text-[10px] text-[#475569] block mt-0.5">
-                      • Especificações Gerais
-                      <br />• Lista de Acessórios
-                      <br />• Matriz de Pedido
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Layout & Preset Options */}
-              <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] space-y-2.5">
-                <label className="flex items-center gap-2 text-xs font-medium text-[#171717] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={applyLayout}
-                    onChange={(e) => setApplyLayout(e.target.checked)}
-                    className="w-4 h-4 text-[#2563EB] rounded-xs"
-                  />
-                  <span>Aplicar esta estrutura de páginas e seções ao Editor</span>
-                </label>
-
-                <div className="space-y-1.5 pt-1 border-t border-[#E2E8F0]">
-                  <label className="flex items-center gap-2 text-xs font-medium text-[#171717] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={saveAsPreset}
-                      onChange={(e) => setSaveAsPreset(e.target.checked)}
-                      className="w-4 h-4 text-[#2563EB] rounded-xs"
-                    />
-                    <span className="flex items-center gap-1 font-semibold text-[#003366]">
-                      <BookmarkPlus className="w-3.5 h-3.5" />
-                      Salvar como Preset Predefinido na Galeria de Temas
-                    </span>
-                  </label>
-
-                  {saveAsPreset && (
-                    <input
-                      type="text"
-                      value={customPresetName}
-                      onChange={(e) => setCustomPresetName(e.target.value)}
-                      placeholder="Nome do Preset (ex: Layout Fluke 9140)"
-                      className="w-full text-xs p-2 bg-white border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+            <p className="text-xs text-slate-600">Fonte: {candidate.data.source.document}. Página não determinada pelo extrator. Campos ausentes: {candidate.data.source.missingFields.join(', ')}.</p>
+            <table className="w-full text-xs border-collapse"><thead><tr><th className="text-left border p-2">Campo extraído</th><th className="text-left border p-2">Valor para revisão</th></tr></thead><tbody>
+              {candidate.data.specs.map((spec, index) => <tr key={index}><td className="border p-2">{spec.param}</td><td className="border p-2"><input className="w-full p-1" value={spec.value} onChange={(event) => { const specs = candidate.data.specs.map((item, i) => i === index ? { ...item, value: event.target.value } : item); setCandidate({ ...candidate, data: { ...candidate.data, specs } }); setReviewed(false) }} /></td></tr>)}
+              {!candidate.data.specs.length && <tr><td colSpan={2} className="border p-3 text-slate-500">Nenhuma especificação reconhecida. Cadastre manualmente a partir da fonte.</td></tr>}
+            </tbody></table>
+            {!!candidate.data.marketing?.features?.length && <ul className="list-disc pl-5 text-xs">{candidate.data.marketing.features.map((feature, index) => <li key={index}>{feature}</li>)}</ul>}
+            <label className="flex items-start gap-2 p-3 bg-slate-50 text-xs"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />Revisei os dados contra o documento original. Criar como rascunho técnico; nenhuma certificação ou aprovação é inferida.</label>
+          </>}
         </div>
-
-        {/* Footer Actions */}
-        <div className="h-14 border-t border-[#D4D4D4] bg-[#FAFAFA] px-5 flex items-center justify-between shrink-0">
-          {extractedProduct ? (
-            <>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-3 py-1.5 border border-[#D4D4D4] text-xs font-semibold text-[#525252] hover:bg-[#FFFFFF]"
-              >
-                Escolher outro PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmAdd}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold shadow-xs transition-colors"
-              >
-                <span>Clonar Estrutura & Criar no Editor</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="text-xs text-[#737373]">
-                Formatos aceitos: PDF técnico (Fluke, Additel, Isotech, etc.)
-              </span>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-3.5 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717]"
-              >
-                Cancelar
-              </button>
-            </>
-          )}
-        </div>
+        <div className="p-4 border-t flex justify-end gap-3"><button onClick={close} className="border px-3 py-2 text-xs">Cancelar</button><button onClick={confirm} disabled={!candidate || !reviewed || processing || !candidate.sku.trim() || !candidate.name.trim()} className="bg-blue-700 text-white px-4 py-2 text-xs font-semibold disabled:opacity-40">Criar produto em rascunho</button></div>
       </div>
     </div>
   )

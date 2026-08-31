@@ -1,226 +1,80 @@
 'use client'
 
-import React, { useRef, useState, useCallback } from 'react'
-import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react'
-import { fileToDataUrl, uploadImage } from '../../lib/supabase/api'
-import { isSupabaseConfigured } from '../../lib/supabase/client'
+import { useRef, useState } from 'react'
+import Image from 'next/image'
+import { Upload, X, Loader2 } from 'lucide-react'
+import { fileToDataUrl, uploadImage } from '@/lib/supabase/api'
+import { isSupabaseConfigured } from '@/lib/supabase/client'
+import { IMAGE_TYPES, mediaUploadPath, validateImageFile } from '@/lib/catalog/media'
 
 interface ImageUploaderProps {
-  /** Current image URLs */
   images: string[]
-  /** Callback when images change */
   onChange: (images: string[]) => void
-  /** Maximum number of images allowed */
   maxImages?: number
-  /** Label shown above the uploader */
   label?: string
-  /** CSS class for the container */
   className?: string
-  /** Product SKU for organizing uploads */
   productSku?: string
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({
-  images,
-  onChange,
-  maxImages = 6,
-  label = 'Imagens do Produto',
-  className = '',
-  productSku = 'unknown',
-}) => {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isUploading, setIsUploading] = useState(false)
+export function ImageUploader({ images, onChange, maxImages = 6, label = 'Imagens', className = '', productSku = 'produto' }: ImageUploaderProps) {
+  const input = useRef<HTMLInputElement>(null)
+  const busy = useRef(false)
+  const [uploading, setUploading] = useState(false)
+  const [localMode, setLocalMode] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
-
-  const handleFiles = useCallback(async (files: FileList) => {
+  const upload = async (files: FileList | File[]) => {
+    if (busy.current) return
+    setError(''); setMessage('')
+    if (!localMode && !isSupabaseConfigured()) { setError('A biblioteca em nuvem não está configurada. Selecione explicitamente o modo local para continuar offline.'); return }
     const remaining = maxImages - images.length
-    if (remaining <= 0) return
-
-    setIsUploading(true)
-    const newImages = [...images]
-
-    const fileArray = Array.from(files).slice(0, remaining)
-
-    for (const file of fileArray) {
-      if (!file.type.startsWith('image/')) continue
-
-      try {
-        // Try Supabase Storage first, fallback to Data URL
-        if (isSupabaseConfigured()) {
-          const path = `products/${productSku}/${Date.now()}-${file.name}`
-          const publicUrl = await uploadImage(file, path)
-          if (publicUrl) {
-            newImages.push(publicUrl)
-            continue
-          }
-        }
-
-        // Fallback: convert to Data URL (works offline, stored in localStorage)
-        const dataUrl = await fileToDataUrl(file)
-        newImages.push(dataUrl)
-      } catch (err) {
-        console.error('[ImageUploader] Failed to process file:', file.name, err)
+    if (remaining <= 0) { setError('Limite de imagens deste bloco atingido.'); return }
+    if (files.length > remaining) { setError(`Selecione no máximo ${remaining} imagem(ns). Nenhum arquivo foi enviado.`); return }
+    const fileList = Array.from(files)
+    const invalid = fileList.map(file => validateImageFile(file, localMode)).filter(Boolean)
+    if (invalid.length) { setError(invalid.join(' ')); return }
+    busy.current = true; setUploading(true)
+    const urls: string[] = []
+    const failures: string[] = []
+    try {
+      for (const file of fileList) {
+        try {
+          const bitmap = await createImageBitmap(file)
+          const pixels = bitmap.width * bitmap.height
+          bitmap.close()
+          if (pixels > 40_000_000) throw new Error('Imagem excede 40 megapixels.')
+          const url = localMode ? await fileToDataUrl(file) : await uploadImage(file, mediaUploadPath(productSku, file.type, crypto.randomUUID()))
+          if (!url) throw new Error('O servidor não confirmou o upload. Verifique sua sessão e permissões.')
+          urls.push(url)
+        } catch (cause) { failures.push(`${file.name}: ${cause instanceof Error ? cause.message : 'falha ao carregar imagem'}`) }
       }
-    }
-
-    onChange(newImages)
-    setIsUploading(false)
-  }, [images, maxImages, onChange, productSku])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    if (e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files)
-    }
-  }, [handleFiles])
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(true)
+      if (urls.length) { onChange([...images, ...urls]); setMessage(`${urls.length} imagem(ns) ${localMode ? 'adicionada(s) somente neste navegador' : 'enviada(s) à biblioteca'}.`) }
+      if (failures.length) setError(failures.join(' '))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao guardar referências das imagens.') }
+    finally { busy.current = false; setUploading(false) }
   }
-
-  const handleDragLeave = () => setDragOver(false)
-
-  const handleMove = (index: number, direction: -1 | 1) => {
+  const move = (index: number, direction: number) => {
     const target = index + direction
-    if (target < 0 || target >= images.length) return
+    if (target < 0 || target >= images.length || busy.current) return
     const updated = [...images]
-    const temp = updated[index]
-    updated[index] = updated[target]
-    updated[target] = temp
+    ;[updated[index], updated[target]] = [updated[target], updated[index]]
     onChange(updated)
   }
-
-  const handleRemove = (index: number) => {
-    const updated = images.filter((_, i) => i !== index)
-    onChange(updated)
-  }
-
-  const handleClick = () => {
-    fileInputRef.current?.click()
-  }
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files)
-    }
-    // Reset so same file can be re-selected
-    e.target.value = ''
-  }
-
-  return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold uppercase tracking-wider text-[#525252]">
-          {label} ({images.length}/{maxImages})
-        </label>
-        {images.length > 1 && (
-          <span className="text-[10px] text-[#2563EB]">
-            Use as setas para reordenar / definir principal
-          </span>
-        )}
-      </div>
-
-      {/* Thumbnails Grid */}
-      {images.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {images.map((src, i) => (
-            <div
-              key={i}
-              className="relative group border border-[#D4D4D4] bg-[#F8FAFC] aspect-square flex flex-col items-center justify-center p-1 overflow-hidden rounded-xs shadow-2xs"
-            >
-              <img
-                src={src}
-                alt={`Imagem ${i + 1}`}
-                className="max-w-full max-h-full object-contain"
-              />
-
-              {/* Position Badge */}
-              <span className={`absolute top-1 left-1 text-[9px] px-1.5 py-0.5 font-bold uppercase rounded-xs shadow-2xs ${
-                i === 0 ? 'bg-[#003366] text-white' : 'bg-[#1E293B]/80 text-white'
-              }`}>
-                {i === 0 ? '1ª Principal' : `${i + 1}ª Foto`}
-              </span>
-
-              {/* Controls Bar */}
-              <div className="absolute inset-x-0 bottom-0 bg-black/70 p-1 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleMove(i, -1)}
-                    disabled={i === 0}
-                    title="Mover para a esquerda"
-                    className="p-1 text-white hover:bg-white/20 disabled:opacity-30 rounded-xs text-xs font-bold"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMove(i, 1)}
-                    disabled={i === images.length - 1}
-                    title="Mover para a direita"
-                    className="p-1 text-white hover:bg-white/20 disabled:opacity-30 rounded-xs text-xs font-bold"
-                  >
-                    →
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleRemove(i)}
-                  className="p-1 text-red-400 hover:text-red-300 hover:bg-white/20 rounded-xs"
-                  title="Remover imagem"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Drop Zone / Upload Button */}
-      {images.length < maxImages && (
-        <div
-          onClick={handleClick}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed cursor-pointer transition-colors ${
-            dragOver
-              ? 'border-[#2563EB] bg-[#EFF6FF]'
-              : 'border-[#D4D4D4] bg-[#FAFAFA] hover:border-[#A3A3A3] hover:bg-[#F5F5F5]'
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={handleFileInput}
-          />
-          {isUploading ? (
-            <>
-              <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin" />
-              <span className="text-xs text-[#525252]">Enviando...</span>
-            </>
-          ) : (
-            <>
-              <div className="w-8 h-8 rounded-full bg-[#EFF6FF] flex items-center justify-center">
-                <Upload className="w-4 h-4 text-[#2563EB]" />
-              </div>
-              <span className="text-xs text-[#525252]">
-                Arraste fotos ou clique para enviar
-              </span>
-              <span className="text-[10px] text-[#A3A3A3]">
-                JPG, PNG, WebP • máx. {maxImages - images.length} imagem(ns)
-              </span>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
+  return <div className={`space-y-3 ${className}`}>
+    <p className="text-xs font-semibold text-gray-700">{label} ({images.length}/{maxImages})</p>
+    <label className="flex items-start gap-2 text-[11px] text-gray-600"><input type="checkbox" checked={localMode} disabled={uploading} onChange={event => setLocalMode(event.target.checked)} />Modo local explícito: guardar imagens neste navegador (até 500 KB cada; não compartilhadas com a equipe).</label>
+    {images.some(url => url.startsWith('data:')) && <p className="rounded bg-amber-50 p-2 text-[11px] text-amber-900">Este bloco contém imagens locais. Envie os arquivos à biblioteca para compartilhar e reduzir o armazenamento do navegador.</p>}
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{images.map((src,index) => <figure key={`${src}-${index}`} className="overflow-hidden rounded border bg-gray-50 p-2">
+      <Image src={src} alt={`${label} ${index + 1}`} width={180} height={130} unoptimized className="h-28 w-full object-contain" />
+      <figcaption className="mt-2 flex items-center justify-between text-xs"><span>{index + 1}</span><button type="button" disabled={uploading || index === 0} aria-label={`Mover imagem ${index + 1} para esquerda`} onClick={() => move(index,-1)} className="disabled:opacity-25">←</button><button type="button" disabled={uploading || index === images.length-1} aria-label={`Mover imagem ${index+1} para direita`} onClick={() => move(index,1)} className="disabled:opacity-25">→</button><button type="button" disabled={uploading} aria-label={`Remover imagem ${index+1}`} onClick={() => onChange(images.filter((_,i) => i !== index))} className="text-red-700"><X size={14} /></button></figcaption>
+    </figure>)}</div>
+    {images.length < maxImages && <div onDragOver={event => { event.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={event => { event.preventDefault(); setDragOver(false); void upload(event.dataTransfer.files) }} className={`rounded border-2 border-dashed p-4 text-center ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+      <input ref={input} type="file" multiple accept={IMAGE_TYPES.join(',')} className="hidden" disabled={uploading} onChange={event => { if (event.target.files) void upload(event.target.files); event.target.value = '' }} />
+      <button type="button" disabled={uploading} onClick={() => input.current?.click()} className="flex w-full items-center justify-center gap-2 text-xs font-semibold text-blue-800">{uploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}{uploading ? 'Processando arquivos…' : 'Selecionar imagens ou arrastar aqui'}</button>
+      <p className="mt-2 text-[10px] text-gray-500">JPEG, PNG, WebP · {localMode ? '500 KB' : '8 MB'} · até 40 megapixels</p>
+    </div>}
+    {message && <p role="status" className="text-xs text-green-800">{message}</p>}
+    {error && <p role="alert" className="rounded bg-red-50 p-2 text-xs text-red-800">{error}</p>}
+  </div>
 }

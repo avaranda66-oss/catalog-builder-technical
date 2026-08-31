@@ -33,6 +33,7 @@ export const SectionTypeEnum = z.enum([
   'specs_table',
   'comparison_grid',
   'image_gallery',
+  'single_image',
   'text_block',
   'accessories_table',
   'ordering_codes',
