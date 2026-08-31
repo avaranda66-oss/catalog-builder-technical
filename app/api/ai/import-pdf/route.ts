@@ -59,15 +59,34 @@ function buildDynamicPagesForProduct(sku: string, title: string): CatalogPage[] 
 
 export async function POST(req: NextRequest) {
   try {
-    const { fileBase64, fileName } = await req.json()
+    let pdfBuffer: Buffer | null = null
+    let fileName: string = 'Documento.pdf'
 
-    if (!fileBase64) {
-      return NextResponse.json({ error: 'Arquivo PDF em Base64 é obrigatório.' }, { status: 400 })
+    const contentType = req.headers.get('content-type') || ''
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData()
+      const file = formData.get('file') as File | null
+      if (file) {
+        fileName = file.name || 'Documento.pdf'
+        const arrayBuffer = await file.arrayBuffer()
+        pdfBuffer = Buffer.from(arrayBuffer)
+      }
+    } else {
+      const body = await req.json().catch(() => ({}))
+      fileName = body.fileName || 'Documento.pdf'
+      if (body.fileBase64) {
+        const cleanBase64 = body.fileBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '')
+        pdfBuffer = Buffer.from(cleanBase64, 'base64')
+      }
     }
 
-    // 1. Clean base64 header
-    const cleanBase64 = fileBase64.replace(/^data:application\/pdf;base64,/, '').replace(/\s+/g, '')
-    const pdfBuffer = Buffer.from(cleanBase64, 'base64')
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      return NextResponse.json(
+        { error: 'Arquivo PDF não recebido ou corrompido.' },
+        { status: 400 }
+      )
+    }
 
     // 2. Extract plain text from PDF buffer using pure JS extractor
     const pdfText = extractTextFromPdfBuffer(pdfBuffer)
