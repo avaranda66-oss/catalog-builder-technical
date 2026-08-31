@@ -29,7 +29,7 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 ## Estado do deploy remoto
 
 - PR aberto: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/1`.
-- Commit publicado: `ddc8c58625c075c39ce2275eaa177271a0600fda`.
+- Deploy publicado com as alterações até o commit `75414b3`\.
 - Vercel marcou o deploy como pronto; o alias público é `https://catalog-builder-technical.vercel.app`.
 - O HTML público responde, mas `/api/ai/chat` retorna `503` porque o projeto Vercel ainda não recebeu `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - O preview Netlify retorna `401` para a mesma rota, confirmando que a proteção de autenticação está ativa quando o ambiente remoto possui a configuração.
