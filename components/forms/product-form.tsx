@@ -533,6 +533,89 @@ const HeroBannerEditor: React.FC<any> = ({
           productSku={product.sku}
         />
       </div>
+
+      {/* Destaques e Recursos Técnicos (Bullets da Capa) */}
+      <div className="p-3.5 bg-[#FFFFFF] border border-[#D4D4D4] space-y-3 rounded-xs shadow-2xs">
+        <div className="flex items-center justify-between border-b border-[#E5E5E5] pb-2">
+          <div>
+            <span className="text-xs font-bold uppercase text-[#003366] block">
+              Destaques e Recursos Técnicos (Bullets da Capa)
+            </span>
+            <span className="text-[10px] text-[#737373]">
+              Edite, adicione ou remova os marcadores com ícone de checklist exibidos na Capa
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const currentFeatures: string[] = marketing.features || []
+              updateProductData(product.id, 'marketing.features', [
+                ...currentFeatures,
+                'Novo destaque técnico / recurso de alta precisão',
+              ])
+            }}
+            className="flex items-center gap-1 text-xs font-bold bg-[#EFF6FF] text-[#2563EB] hover:bg-[#DBEAFE] px-2.5 py-1 rounded-xs border border-[#BFDBFE] transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Adicionar Destaque</span>
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {(marketing.features || []).map((feat: string, idx: number) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="w-5 h-5 bg-[#003366] text-white text-[10px] font-bold flex items-center justify-center rounded-xs shrink-0">
+                {idx + 1}
+              </span>
+              <input
+                type="text"
+                value={feat}
+                onChange={(e) => {
+                  const updated = [...(marketing.features || [])]
+                  updated[idx] = e.target.value
+                  updateProductData(product.id, 'marketing.features', updated)
+                }}
+                placeholder="Ex: Controle automático de alta exatidão..."
+                className="flex-1 h-8 px-2 text-xs bg-[#F8FAFC] border border-[#CBD5E1] focus:border-[#2563EB] focus:bg-[#FFFFFF] focus:outline-none rounded-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = (marketing.features || []).filter((_: any, i: number) => i !== idx)
+                  updateProductData(product.id, 'marketing.features', updated)
+                }}
+                className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] rounded-xs transition-colors cursor-pointer"
+                title="Excluir destaque"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+
+          {(!marketing.features || marketing.features.length === 0) && (
+            <p className="text-xs text-[#94A3B8] italic text-center py-2">
+              Nenhum destaque adicionado. Clique no botão acima para adicionar recursos técnicos.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Visão Geral e Aplicação (Overview da Capa) */}
+      <div className="p-3.5 bg-[#FFFFFF] border border-[#D4D4D4] space-y-2 rounded-xs shadow-2xs">
+        <label className="block text-xs font-bold uppercase text-[#003366]">
+          Visão Geral e Descrição de Aplicação (Texto da Capa)
+        </label>
+        <span className="text-[10px] text-[#737373] block -mt-1">
+          Texto descritivo posicionado abaixo dos destaques ou ao lado da foto na primeira página
+        </span>
+        <textarea
+          rows={4}
+          value={marketing.overview || ''}
+          onChange={(e) => updateProductData(product.id, 'marketing.overview', e.target.value)}
+          placeholder="Ex: O Calibrador PCON é ideal para laboratórios de metrologia e calibração de instrumentos de pressão em campo..."
+          className="w-full p-2.5 text-xs leading-relaxed bg-[#F8FAFC] border border-[#CBD5E1] focus:border-[#2563EB] focus:bg-[#FFFFFF] focus:outline-none rounded-xs"
+        />
+      </div>
     </div>
   )
 }
