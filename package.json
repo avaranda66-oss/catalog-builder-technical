@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types scripts/run-tests.mjs",
+    "health:check": "node scripts/health-check.mjs",
+    "catalog:validate": "node --experimental-strip-types scripts/catalog-cli.mjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",
