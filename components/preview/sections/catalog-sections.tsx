@@ -5,7 +5,7 @@ import { PageSection } from '@/lib/types/catalog-builder'
 import { DesignTokens, ContactInfo } from '@/lib/types/catalog-builder'
 import { Product } from '@/lib/types/database'
 import { useEditorStore } from '@/features/editor/editor-store'
-import { Globe, Phone, Mail } from 'lucide-react'
+import { Globe, Phone, Mail, SlidersHorizontal, ArrowLeftRight, Trash2, Maximize2, MoveHorizontal, LayoutGrid } from 'lucide-react'
 
 // ============================================================================
 // SHARED PROPS
@@ -23,9 +23,10 @@ export interface SectionProps {
 // ============================================================================
 
 export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, tokens, contact }) => {
-  const { isVisualEditMode, updateProductData, updateProductField } = useEditorStore()
+  const { isVisualEditMode, updateProductData, updateProductField, pages, updateSection } = useEditorStore()
   const sku = product?.sku || 'SKU'
   const marketing = product?.data?.marketing || {}
+  const images: string[] = marketing.images || []
   const specs = product?.data?.specs || []
   const style = section.style || {}
 
@@ -162,19 +163,91 @@ export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, to
           </div>
         </div>
 
-        {/* Right Column: Hero Product Badge & Quick Specs Box */}
+        {/* Right Column: Hero Product Photos & Quick Specs Box */}
         <div className="col-span-5 flex flex-col gap-2.5">
-          {/* Product Hero Image or Badge */}
-          <div className="h-36 bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center p-3 text-center overflow-hidden">
-            {marketing.images && marketing.images.length > 0 ? (
-              <img
-                src={marketing.images[0]}
-                alt={marketing.title || product?.name || sku}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <>
-                <div className="w-14 h-14 text-white flex items-center justify-center font-bold text-sm mx-auto mb-1.5 shadow-xs" style={{ backgroundColor: primaryColor }}>
+          {/* Product Hero Image Container */}
+          <div
+            style={{
+              height: `${section.config?.imageHeightPx || 160}px`,
+            }}
+            className="relative group bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center text-center overflow-hidden transition-all"
+          >
+            {/* Visual Edit Interactive Floating Controls */}
+            {isVisualEditMode && (
+              <div className="absolute top-1 inset-x-1 z-30 bg-[#1A1A2E]/95 text-white text-[10px] p-1.5 rounded-xs shadow-lg flex flex-wrap items-center justify-between gap-1 select-none">
+                <div className="flex items-center gap-1">
+                  <span className="text-[#A3A3A3] font-bold">Alt:</span>
+                  {[120, 160, 200, 250].map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => {
+                        const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
+                        if (parentPage) {
+                          updateSection(parentPage.id, section.id, {
+                            config: { ...(section.config || {}), imageHeightPx: h },
+                          })
+                        }
+                      }}
+                      className={`px-1.5 py-0.5 rounded-xs font-mono-data font-bold transition-colors ${
+                        (section.config?.imageHeightPx || 160) === h
+                          ? 'bg-[#2563EB] text-white'
+                          : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      {h}px
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {/* Fit Mode */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
+                      const nextFit = (section.config?.imageFit || 'contain') === 'contain' ? 'cover' : 'contain'
+                      if (parentPage) {
+                        updateSection(parentPage.id, section.id, {
+                          config: { ...(section.config || {}), imageFit: nextFit },
+                        })
+                      }
+                    }}
+                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 text-white rounded-xs font-semibold"
+                    title="Alternar entre Conter (proporcional) e Preencher (cover)"
+                  >
+                    {(section.config?.imageFit || 'contain') === 'contain' ? '📐 Conter' : '🖼️ Preencher'}
+                  </button>
+
+                  {/* Multi-Photo Swap Order */}
+                  {images.length > 1 && product && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const swapped = [...images]
+                        const temp = swapped[0]
+                        swapped[0] = swapped[1]
+                        swapped[1] = temp
+                        updateProductData(product.id, 'marketing.images', swapped)
+                      }}
+                      className="px-1.5 py-0.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xs flex items-center gap-1 font-semibold"
+                      title="Inverter ordem das fotos (mudar qual foto é a principal)"
+                    >
+                      <ArrowLeftRight className="w-3 h-3" />
+                      Trocar Posição
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Photo Rendering based on count and layout */}
+            {images.length === 0 ? (
+              <div className="p-3">
+                <div
+                  className="w-14 h-14 text-white flex items-center justify-center font-bold text-sm mx-auto mb-1.5 shadow-xs"
+                  style={{ backgroundColor: primaryColor }}
+                >
                   {sku.split('-')[1] || sku.substring(0, 4)}
                 </div>
                 <span className="text-xs font-bold text-[#171717] uppercase tracking-wide block font-mono-data">
@@ -183,7 +256,80 @@ export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, to
                 <span className="text-[9px] text-[#737373]">
                   {marketing.subtitle || 'Instrumento de Alta Precisão'}
                 </span>
-              </>
+              </div>
+            ) : images.length === 1 ? (
+              <div className="w-full h-full flex items-center justify-center p-2 bg-white">
+                <img
+                  src={images[0]}
+                  alt={marketing.title || product?.name || sku}
+                  style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                  className="max-h-full max-w-full"
+                />
+              </div>
+            ) : images.length === 2 ? (
+              (section.config?.imageLayout || 'auto') === 'stacked' ? (
+                <div className="flex flex-col gap-1.5 w-full h-full p-1.5 bg-white">
+                  <div className="flex-1 border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-1">
+                    <img
+                      src={images[0]}
+                      alt="Foto 1"
+                      style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                      className="max-h-full max-w-full"
+                    />
+                  </div>
+                  <div className="flex-1 border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-1">
+                    <img
+                      src={images[1]}
+                      alt="Foto 2"
+                      style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                      className="max-h-full max-w-full"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 w-full h-full p-2 bg-white">
+                  <div className="border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-1 h-full">
+                    <img
+                      src={images[0]}
+                      alt="Foto 1"
+                      style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                      className="max-h-full max-w-full"
+                    />
+                  </div>
+                  <div className="border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-1 h-full">
+                    <img
+                      src={images[1]}
+                      alt="Foto 2"
+                      style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                      className="max-h-full max-w-full"
+                    />
+                  </div>
+                </div>
+              )
+            ) : (
+              /* 3 or more images: 1 main top image + 2 bottom thumbnails */
+              <div className="flex flex-col gap-1.5 w-full h-full p-1.5 bg-white">
+                <div className="flex-1 border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-1">
+                  <img
+                    src={images[0]}
+                    alt="Foto Principal"
+                    style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                    className="max-h-full max-w-full"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 h-16 shrink-0">
+                  {images.slice(1, 3).map((img: string, idx: number) => (
+                    <div key={idx} className="border border-[#E5E5E5] bg-[#F8FAFC] flex items-center justify-center overflow-hidden rounded-xs p-0.5">
+                      <img
+                        src={img}
+                        alt={`Foto ${idx + 2}`}
+                        style={{ objectFit: (section.config?.imageFit as any) || 'contain' }}
+                        className="max-h-full max-w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 

@@ -82,6 +82,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   const handleDragLeave = () => setDragOver(false)
 
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= images.length) return
+    const updated = [...images]
+    const temp = updated[index]
+    updated[index] = updated[target]
+    updated[target] = temp
+    onChange(updated)
+  }
+
   const handleRemove = (index: number) => {
     const updated = images.filter((_, i) => i !== index)
     onChange(updated)
@@ -101,31 +111,70 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   return (
     <div className={`space-y-2 ${className}`}>
-      <label className="text-xs font-semibold uppercase tracking-wider text-[#525252]">
-        {label} ({images.length}/{maxImages})
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold uppercase tracking-wider text-[#525252]">
+          {label} ({images.length}/{maxImages})
+        </label>
+        {images.length > 1 && (
+          <span className="text-[10px] text-[#2563EB]">
+            Use as setas para reordenar / definir principal
+          </span>
+        )}
+      </div>
 
       {/* Thumbnails Grid */}
       {images.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {images.map((src, i) => (
             <div
               key={i}
-              className="relative group border border-[#D4D4D4] bg-[#F8FAFC] aspect-square flex items-center justify-center overflow-hidden"
+              className="relative group border border-[#D4D4D4] bg-[#F8FAFC] aspect-square flex flex-col items-center justify-center p-1 overflow-hidden rounded-xs shadow-2xs"
             >
               <img
                 src={src}
                 alt={`Imagem ${i + 1}`}
                 className="max-w-full max-h-full object-contain"
               />
-              <button
-                type="button"
-                onClick={() => handleRemove(i)}
-                className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Remover imagem"
-              >
-                <X className="w-3 h-3" />
-              </button>
+
+              {/* Position Badge */}
+              <span className={`absolute top-1 left-1 text-[9px] px-1.5 py-0.5 font-bold uppercase rounded-xs shadow-2xs ${
+                i === 0 ? 'bg-[#003366] text-white' : 'bg-[#1E293B]/80 text-white'
+              }`}>
+                {i === 0 ? '1ª Principal' : `${i + 1}ª Foto`}
+              </span>
+
+              {/* Controls Bar */}
+              <div className="absolute inset-x-0 bottom-0 bg-black/70 p-1 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleMove(i, -1)}
+                    disabled={i === 0}
+                    title="Mover para a esquerda"
+                    className="p-1 text-white hover:bg-white/20 disabled:opacity-30 rounded-xs text-xs font-bold"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMove(i, 1)}
+                    disabled={i === images.length - 1}
+                    title="Mover para a direita"
+                    className="p-1 text-white hover:bg-white/20 disabled:opacity-30 rounded-xs text-xs font-bold"
+                  >
+                    →
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRemove(i)}
+                  className="p-1 text-red-400 hover:text-red-300 hover:bg-white/20 rounded-xs"
+                  title="Remover imagem"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

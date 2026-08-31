@@ -270,6 +270,7 @@ const SectionEditor: React.FC<SectionEditorProps> = ({
           section={section}
           pageId={pageId}
           updateSectionContent={updateSectionContent}
+          updateSection={updateSection}
         />
       )}
 
@@ -375,9 +376,19 @@ const SectionEditor: React.FC<SectionEditorProps> = ({
 // ============================================================================
 // 1. HERO BANNER EDITOR
 // ============================================================================
-const HeroBannerEditor: React.FC<any> = ({ product, updateProductData, section, pageId, updateSectionContent }) => {
+const HeroBannerEditor: React.FC<any> = ({
+  product,
+  updateProductData,
+  section,
+  pageId,
+  updateSectionContent,
+  updateSection,
+}) => {
   const marketing = product.data?.marketing || {}
   const images = marketing.images || []
+  const currentHeight = section.config?.imageHeightPx || 160
+  const currentFit = section.config?.imageFit || 'contain'
+  const currentLayout = section.config?.imageLayout || 'auto'
 
   return (
     <div className="space-y-4">
@@ -425,13 +436,81 @@ const HeroBannerEditor: React.FC<any> = ({ product, updateProductData, section, 
         />
       </div>
 
-      {/* Image Uploader for Hero Banner */}
+      {/* Image Display & Layout Controls */}
+      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] space-y-3 rounded-xs">
+        <span className="text-xs font-bold uppercase text-[#334155] block">
+          Ajustes Visuais das Fotos na Capa
+        </span>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          {/* Height */}
+          <div>
+            <label className="text-[10px] font-bold text-[#64748B] block uppercase mb-1">
+              Altura do Bloco:
+            </label>
+            <select
+              value={currentHeight}
+              onChange={(e) =>
+                updateSection(pageId, section.id, {
+                  config: { ...(section.config || {}), imageHeightPx: Number(e.target.value) },
+                })
+              }
+              className="w-full h-8 px-2 bg-white border border-[#CBD5E1] text-xs focus:border-[#2563EB] focus:outline-none font-mono-data"
+            >
+              <option value={120}>120px (Compacto)</option>
+              <option value={160}>160px (Padrão)</option>
+              <option value={200}>200px (Grande)</option>
+              <option value={250}>250px (Expandido)</option>
+            </select>
+          </div>
+
+          {/* Fit */}
+          <div>
+            <label className="text-[10px] font-bold text-[#64748B] block uppercase mb-1">
+              Enquadramento:
+            </label>
+            <select
+              value={currentFit}
+              onChange={(e) =>
+                updateSection(pageId, section.id, {
+                  config: { ...(section.config || {}), imageFit: e.target.value },
+                })
+              }
+              className="w-full h-8 px-2 bg-white border border-[#CBD5E1] text-xs focus:border-[#2563EB] focus:outline-none"
+            >
+              <option value="contain">Conter (Proporcional / Sem corte)</option>
+              <option value="cover">Preencher (Cobrir caixa)</option>
+            </select>
+          </div>
+
+          {/* Multi-Photo Layout */}
+          <div>
+            <label className="text-[10px] font-bold text-[#64748B] block uppercase mb-1">
+              Disposição (2+ fotos):
+            </label>
+            <select
+              value={currentLayout}
+              onChange={(e) =>
+                updateSection(pageId, section.id, {
+                  config: { ...(section.config || {}), imageLayout: e.target.value },
+                })
+              }
+              className="w-full h-8 px-2 bg-white border border-[#CBD5E1] text-xs focus:border-[#2563EB] focus:outline-none"
+            >
+              <option value="auto">Lado a Lado (2 Colunas)</option>
+              <option value="stacked">Empilhado (Vertical)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Image Uploader for Hero Banner with Reordering */}
       <div className="pt-2 border-t border-[#E5E5E5]">
         <ImageUploader
           images={images}
           onChange={(newImages) => updateProductData(product.id, 'marketing.images', newImages)}
           maxImages={3}
-          label="Foto Principal do Produto (Capa)"
+          label="Fotos do Produto na Capa (Capa & Destaque)"
           productSku={product.sku}
         />
       </div>
