@@ -20,12 +20,14 @@ import {
 interface ToolbarProps {
   onOpenAiPanel: () => void
   onImportClick: () => void
+  onOpenPdfImport: () => void
   onExportPdfClick: () => void
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   onOpenAiPanel,
   onImportClick,
+  onOpenPdfImport,
   onExportPdfClick,
 }) => {
   const {
@@ -140,13 +142,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </button>
         </div>
 
+        {/* Import PDF via AI */}
+        <button
+          type="button"
+          onClick={onOpenPdfImport}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] text-xs font-semibold text-[#1E40AF] transition-colors"
+          title="Importar catálogo em PDF e clonar para sua marca com IA"
+        >
+          <Upload className="w-3.5 h-3.5 text-[#2563EB]" />
+          Importar PDF
+        </button>
+
         {/* Import Excel */}
         <button
           type="button"
           onClick={onImportClick}
           className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#D4D4D4] bg-[#FFFFFF] hover:bg-[#F5F5F5] text-xs font-medium text-[#171717]"
         >
-          <Upload className="w-3.5 h-3.5 text-[#525252]" />
+          <FileSpreadsheet className="w-3.5 h-3.5 text-[#525252]" />
           Importar Excel
         </button>
 

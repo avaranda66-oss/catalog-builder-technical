@@ -3,9 +3,10 @@
 import React, { useState } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { PageManager } from '../pages/page-manager'
-import { Plus, Search, Trash2, Layers, FileText } from 'lucide-react'
+import { PresetManager } from '../presets/preset-manager'
+import { Plus, Search, Trash2, Layers, FileText, Palette } from 'lucide-react'
 
-type SidebarTab = 'products' | 'pages'
+type SidebarTab = 'products' | 'pages' | 'themes'
 
 export const Sidebar: React.FC = () => {
   const {
@@ -51,13 +52,13 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="w-64 border-r border-[#D4D4D4] bg-[#FAFAFA] flex flex-col h-full select-none shrink-0">
+    <aside className="w-68 border-r border-[#D4D4D4] bg-[#FAFAFA] flex flex-col h-full select-none shrink-0">
       {/* Tab Switcher */}
       <div className="flex border-b border-[#D4D4D4] bg-[#FFFFFF]">
         <button
           type="button"
           onClick={() => setActiveTab('products')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-colors ${
             activeTab === 'products'
               ? 'border-b-2 border-[#2563EB] text-[#2563EB] bg-[#EFF6FF]'
               : 'text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F5]'
@@ -69,7 +70,7 @@ export const Sidebar: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('pages')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-colors ${
             activeTab === 'pages'
               ? 'border-b-2 border-[#2563EB] text-[#2563EB] bg-[#EFF6FF]'
               : 'text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F5]'
@@ -77,6 +78,18 @@ export const Sidebar: React.FC = () => {
         >
           <FileText className="w-3.5 h-3.5" />
           Páginas
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('themes')}
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 text-[10.5px] font-bold uppercase tracking-wider transition-colors ${
+            activeTab === 'themes'
+              ? 'border-b-2 border-[#2563EB] text-[#2563EB] bg-[#EFF6FF]'
+              : 'text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F5]'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          Temas
         </button>
       </div>
 
@@ -172,8 +185,10 @@ export const Sidebar: React.FC = () => {
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === 'pages' ? (
         <PageManager />
+      ) : (
+        <PresetManager />
       )}
 
       {/* Footer info */}

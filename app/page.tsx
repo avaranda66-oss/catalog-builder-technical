@@ -13,6 +13,7 @@ import { CatalogDocument } from '../components/preview/catalog-document'
 import { AiPanel } from '../components/ai/ai-panel'
 import { StagedChangesModal } from '../components/ai/staged-changes'
 import { ExcelImportModal } from '../components/forms/excel-import-modal'
+import { PdfImporterModal } from '../components/ai/pdf-importer-modal'
 import { Loader2 } from 'lucide-react'
 
 export default function CatalogBuilderApp() {
@@ -30,6 +31,7 @@ export default function CatalogBuilderApp() {
 
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [loadSource, setLoadSource] = useState<string>('')
 
@@ -120,6 +122,7 @@ export default function CatalogBuilderApp() {
       <Toolbar
         onOpenAiPanel={() => setIsAiPanelOpen(true)}
         onImportClick={() => setIsImportModalOpen(true)}
+        onOpenPdfImport={() => setIsPdfModalOpen(true)}
         onExportPdfClick={() => window.print()}
       />
 
@@ -162,11 +165,22 @@ export default function CatalogBuilderApp() {
       <StatusBar />
 
       {/* 4. Drawers & Modals */}
-      <AiPanel isOpen={isAiPanelOpen} onClose={() => setIsAiPanelOpen(false)} />
+      <AiPanel
+        isOpen={isAiPanelOpen}
+        onClose={() => setIsAiPanelOpen(false)}
+        onOpenPdfImport={() => {
+          setIsAiPanelOpen(false)
+          setIsPdfModalOpen(true)
+        }}
+      />
       <StagedChangesModal />
       <ExcelImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+      />
+      <PdfImporterModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
       />
     </div>
   )

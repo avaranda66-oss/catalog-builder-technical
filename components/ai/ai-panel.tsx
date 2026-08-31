@@ -2,14 +2,29 @@
 
 import React, { useState, useEffect } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
-import { Bot, Mic, MicOff, Send, X, Shield, Terminal, ArrowRight } from 'lucide-react'
+import {
+  Bot,
+  Mic,
+  MicOff,
+  Send,
+  X,
+  Shield,
+  Terminal,
+  ArrowRight,
+  Upload,
+  Globe,
+  CheckCircle2,
+  Sparkles,
+  Sliders,
+} from 'lucide-react'
 
 interface AiPanelProps {
   isOpen: boolean
   onClose: () => void
+  onOpenPdfImport?: () => void
 }
 
-export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
+export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose, onOpenPdfImport }) => {
   const {
     products,
     selectedProductId,
@@ -25,7 +40,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
   >([
     {
       role: 'assistant',
-      text: 'Assistente Técnico Presys pronto. Você pode solicitar alterações de especificações, traduções, ajustes em textos comerciais ou verificações metrológicas.',
+      text: 'Olá! Sou o Assistente Técnico Jarvis. Posso ajudar você a criar novos catálogos a partir de PDFs de referência (Fluke, Additel, etc.), ajustar especificações técnicas, traduzir conteúdos para inglês/espanhol ou verificar a consistência metrológica.',
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     },
   ])
@@ -143,19 +158,24 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-[#FFFFFF] border-l border-[#D4D4D4] shadow-2xl flex flex-col z-40 select-none">
+    <div className="fixed inset-y-0 right-0 w-96 bg-[#FFFFFF] border-l border-[#D4D4D4] shadow-2xl flex flex-col z-40 select-none animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="h-14 bg-[#1A1A2E] text-white px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-[#003366] bg-white p-0.5" />
-          <span className="font-bold text-xs uppercase tracking-wider">
-            Assistente Técnico de Catálogo
-          </span>
+          <div className="w-7 h-7 bg-[#2563EB] rounded-xs flex items-center justify-center text-white shadow-xs">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-bold text-xs uppercase tracking-wider block">
+              Assistente Jarvis
+            </span>
+            <span className="text-[10px] text-[#A3A3A3]">Engenharia & Metrologia IA</span>
+          </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 hover:bg-[#2D2D44] text-white"
+          className="p-1 hover:bg-[#2D2D44] text-white rounded-xs"
         >
           <X className="w-4 h-4" />
         </button>
@@ -169,29 +189,73 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
         </span>
       </div>
 
+      {/* PDF Importer Quick Action Banner */}
+      {onOpenPdfImport && (
+        <div className="p-3 bg-[#EFF6FF] border-b border-[#BFDBFE]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Upload className="w-4 h-4 text-[#2563EB]" />
+              <div>
+                <span className="text-xs font-bold text-[#1E40AF] block">
+                  Clonar Catálogo por PDF
+                </span>
+                <span className="text-[10px] text-[#3B82F6]">
+                  Fluke, Additel, Isotech, etc.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenPdfImport}
+              className="px-2.5 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[11px] font-bold rounded-xs shadow-xs transition-colors"
+            >
+              Importar PDF
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick Command Suggestions */}
       <div className="p-3 bg-[#F8FAFC] border-b border-[#E2E8F0] space-y-1.5">
         <span className="text-[11px] font-bold uppercase tracking-wider text-[#525252] block mb-1">
-          Comandos Rápidos:
+          Ações Rápidas em 1-Clique:
         </span>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() =>
-              handleSendPrompt('Adicione o protocolo HART e compatibilidade Modbus nos recursos')
+              handleSendPrompt('Traduza o título, subtítulo e descrição deste produto para Inglês Técnico comercial mantendo todas as especificações e grandezas inalteradas.')
             }
             className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
           >
-            <ArrowRight className="w-3 h-3 text-[#2563EB]" /> Adicionar Protocolo HART
+            <Globe className="w-3 h-3 text-[#2563EB]" /> Traduzir p/ Inglês
           </button>
           <button
             type="button"
             onClick={() =>
-              handleSendPrompt('Ajuste a estabilidade de controle para 0.002 %FS com base FS')
+              handleSendPrompt('Audite a consistência das grandezas físicas e exatidões metrológicas deste produto. Verifique se as unidades (%FS, bar, psi, mA) estão coerentes.')
             }
             className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
           >
-            <ArrowRight className="w-3 h-3 text-[#2563EB]" /> Validar Estabilidade 0.002%
+            <CheckCircle2 className="w-3 h-3 text-[#059669]" /> Auditar Metrologia
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              handleSendPrompt('Enriqueça os destaques comerciais e técnicos adicionando compatibilidade com software de calibração ISOPLAN e protocolo HART.')
+            }
+            className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
+          >
+            <Sparkles className="w-3 h-3 text-[#D97706]" /> Enriquecer Destaques
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              handleSendPrompt('Ajuste a estabilidade de controle para 0,002% do Fundo de Escala e adicione o tempo de resposta típico de 10 segundos.')
+            }
+            className="text-[11px] bg-[#FFFFFF] hover:bg-[#EFF6FF] text-[#171717] px-2 py-1 border border-[#D4D4D4] flex items-center gap-1 text-left"
+          >
+            <Sliders className="w-3 h-3 text-[#7C3AED]" /> Ajustar Estabilidade
           </button>
         </div>
       </div>
@@ -209,7 +273,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
           >
             <div className="flex items-center justify-between mb-1 pb-1 border-b border-black/5 text-[10px] text-[#6B7280]">
               <span className="font-semibold uppercase tracking-wider">
-                {msg.role === 'user' ? 'Você' : 'Assistente'}
+                {msg.role === 'user' ? 'Você' : 'Jarvis'}
               </span>
               <span>{msg.time}</span>
             </div>
@@ -220,7 +284,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
         {isAiLoading && (
           <div className="p-3 text-xs bg-[#F5F5F5] border border-[#D4D4D4] text-[#525252] flex items-center gap-2">
             <span className="w-2 h-2 bg-[#003366] rounded-full animate-ping" />
-            <span>Processando regras metrológicas e gerando proposta...</span>
+            <span>Jarvis analisando regras e gerando proposta técnica...</span>
           </div>
         )}
       </div>
@@ -238,7 +302,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
                 handleSendPrompt()
               }
             }}
-            placeholder="Digite um comando técnico ou clique no microfone..."
+            placeholder="Digite seu comando ou clique no microfone..."
             className="flex-1 p-2 text-xs bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none resize-none"
           />
         </div>
@@ -255,7 +319,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
           >
             {isListening ? (
               <>
-                <MicOff className="w-3.5 h-3.5" /> Gravando Voz...
+                <MicOff className="w-3.5 h-3.5 text-[#DC2626]" /> Fale seu comando...
               </>
             ) : (
               <>
@@ -268,7 +332,7 @@ export const AiPanel: React.FC<AiPanelProps> = ({ isOpen, onClose }) => {
             type="button"
             onClick={() => handleSendPrompt()}
             disabled={!inputPrompt.trim() || isAiLoading}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#1A1A2E] hover:bg-[#2D2D44] disabled:opacity-40 text-white text-xs font-bold"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#1A1A2E] hover:bg-[#2D2D44] disabled:opacity-40 text-white text-xs font-bold transition-colors"
           >
             <Send className="w-3.5 h-3.5" />
             Executar
