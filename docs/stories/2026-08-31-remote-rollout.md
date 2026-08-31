@@ -16,7 +16,7 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 - [x] Lint, typecheck, testes e build passam localmente.
 - [x] A branch de rollout é publicada no GitHub para Preview da Vercel.
 - [x] O Site URL e os redirects do Auth remoto apontam para a Vercel e preservam localhost.
-- [ ] Testar login, criação de senha, salvar, importar, revisar e exportar no Preview remoto.
+- [ ] Testar login, criação de senha, salvar, importar, revisar e exportar no Preview remoto depois de configurar as variáveis públicas no Vercel.
 - [ ] Promover a branch para `main` somente após o teste remoto.
 
 ## Dados remotos verificados
@@ -25,6 +25,15 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 - `00004_team_workspace` já aplicada; não reaplicar migration incompatível.
 - Conta de teste `gabrielvantournhoudt@gmail.com` confirmada, ativa e com papel `admin`.
 - Catálogo publicado existente preservado.
+
+## Estado do deploy remoto
+
+- PR aberto: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/1`.
+- Commit publicado: `ddc8c58625c075c39ce2275eaa177271a0600fda`.
+- Vercel marcou o deploy como pronto; o alias público é `https://catalog-builder-technical.vercel.app`.
+- O HTML público responde, mas `/api/ai/chat` retorna `503` porque o projeto Vercel ainda não recebeu `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- O preview Netlify retorna `401` para a mesma rota, confirmando que a proteção de autenticação está ativa quando o ambiente remoto possui a configuração.
+- Após preencher as variáveis no Vercel, é necessário fazer um novo deploy do PR antes de testar o fluxo autenticado.
 
 ## File list
 
@@ -44,7 +53,7 @@ Como equipe Presys, quero publicar a implementação corporativa no repositório
 
 ### Completion notes
 
-A branch separada reúne a implementação local corporativa e o framework AIOX. O Supabase foi consultado por Management API para confirmar o schema e a conta de teste; a URL do Auth foi ajustada para a Vercel e nenhum dado de catálogo foi alterado.
+A branch separada reúne a implementação local corporativa e o framework AIOX. O Supabase foi consultado por Management API para confirmar o schema e a conta de teste; a URL do Auth foi ajustada para a Vercel e nenhum dado de catálogo foi alterado. O deploy remoto está pronto, aguardando apenas as variáveis públicas do Vercel para a validação autenticada.
 
 ### Validation
 
