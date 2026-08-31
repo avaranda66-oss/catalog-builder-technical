@@ -132,6 +132,28 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
 
+## 🔁 Reconstrução AIOX
+
+Esta branch (`codex/catalogbuilder-rebuild`) preserva o editor visual do commit `1e93d6d` e evolui domínio, persistência e colaboração por stories. O diretório original continua separado para comparação.
+
+Documentos de decisão:
+
+- `docs/briefing.md` — visão, requisitos confirmados e perguntas abertas;
+- `docs/prd.md` — requisitos funcionais, não funcionais e roadmap;
+- `docs/architecture.md` — camadas e fronteiras de infraestrutura;
+- `docs/frontend/frontend-spec.md` — contrato de preservação visual;
+- `docs/stories/` — critérios, file list e validação de cada fatia.
+
+Comandos adicionais:
+
+```bash
+npm run health:check
+npm run catalog:validate -- validate-product tests/fixtures/product-valid.json
+npm test
+npm run typecheck
+npm run lint
+```
+
 ### Verificação de Tipos
 
 ```bash
