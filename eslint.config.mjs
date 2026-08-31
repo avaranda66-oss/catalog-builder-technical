@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // AIOX is vendored framework tooling; the product lint scope is the app code.
+    ".aiox-core/**",
   ]),
 ]);
 
