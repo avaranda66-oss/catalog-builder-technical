@@ -13,7 +13,12 @@ import {
   ArrowRight,
   Layers,
   Table,
+  BookmarkPlus,
+  Palette,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
+import { CatalogPage } from '../../lib/types/catalog-builder'
 
 interface PdfImporterModalProps {
   isOpen: boolean
@@ -21,7 +26,14 @@ interface PdfImporterModalProps {
 }
 
 export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onClose }) => {
-  const { addProduct, catalog, setSelectedProductId } = useEditorStore()
+  const {
+    addProduct,
+    catalog,
+    setPages,
+    saveCurrentAsPreset,
+    setSelectedProductId,
+    setSelectedPageId,
+  } = useEditorStore()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -29,7 +41,13 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extractedProduct, setExtractedProduct] = useState<any | null>(null)
+  const [extractedPages, setExtractedPages] = useState<CatalogPage[] | null>(null)
   const [stepMessage, setStepMessage] = useState('')
+
+  // Cloner Options
+  const [applyLayout, setApplyLayout] = useState(true)
+  const [saveAsPreset, setSaveAsPreset] = useState(true)
+  const [customPresetName, setCustomPresetName] = useState('')
 
   if (!isOpen) return null
 
@@ -38,7 +56,9 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
     setIsProcessing(false)
     setError(null)
     setExtractedProduct(null)
+    setExtractedPages(null)
     setStepMessage('')
+    setCustomPresetName('')
   }
 
   const handleClose = () => {
@@ -56,10 +76,10 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
     setIsProcessing(true)
     setError(null)
     setExtractedProduct(null)
-    setStepMessage('Lendo documento PDF e analisando estrutura...')
+    setExtractedPages(null)
+    setStepMessage('Lendo documento PDF e extraindo especificações...')
 
     try {
-      // Convert file to base64
       const reader = new FileReader()
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string)
@@ -68,7 +88,7 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
       })
 
       const base64Data = await base64Promise
-      setStepMessage('IA analisando tabelas técnicas, faixas metrológicas e recursos...')
+      setStepMessage('IA analisando seções, tabelas técnicas e faixas metrológicas...')
 
       const response = await fetch('/api/ai/import-pdf', {
         method: 'POST',
@@ -86,11 +106,13 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
         throw new Error(data.error || 'Falha ao processar o arquivo PDF.')
       }
 
-      setStepMessage('Formatando para o padrão de catálogo Presys...')
+      setStepMessage('Construindo estrutura de páginas e layout predefinido...')
       setExtractedProduct(data.product)
+      setExtractedPages(data.pages || null)
+      setCustomPresetName(`Layout ${data.product.sku || selectedFile.name.replace(/\.pdf$/i, '')}`)
     } catch (err: any) {
       console.error('[PDF Importer Error]:', err)
-      setError(err.message || 'Ocorreu um erro ao processar o PDF com a IA.')
+      setError(err.message || 'Ocorreu um erro ao processar o PDF.')
     } finally {
       setIsProcessing(false)
     }
@@ -125,7 +147,23 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
       data: extractedProduct.data || {},
     }
 
+    // 1. Add Product
     addProduct(productPayload)
+
+    // 2. Apply Cloned Layout Pages if selected
+    if (applyLayout && extractedPages && extractedPages.length > 0) {
+      setPages(extractedPages)
+      setSelectedPageId(extractedPages[0]?.id || null)
+    }
+
+    // 3. Save as Predefined Preset if selected
+    if (saveAsPreset && customPresetName.trim()) {
+      saveCurrentAsPreset(
+        customPresetName.trim(),
+        `Layout predefinido estruturado a partir do catálogo PDF ${file?.name || newSku}.`
+      )
+    }
+
     handleClose()
   }
 
@@ -135,15 +173,15 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="h-14 bg-[#1A1A2E] text-white px-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xs bg-[#2563EB] flex items-center justify-center text-white">
+            <div className="w-8 h-8 rounded-xs bg-[#2563EB] flex items-center justify-center text-white shadow-xs">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
               <h2 className="font-bold text-sm leading-tight">
-                Importador Inteligente de Datasheet PDF
+                Clonador de Datasheet PDF & Gerador de Layout
               </h2>
               <p className="text-[11px] text-[#A3A3A3]">
-                Transforme qualquer PDF técnico (Fluke, Additel, etc.) em catálogo editável da sua marca
+                Extrai dados técnicos, replica a estrutura exata e salva como layout predefinido
               </p>
             </div>
           </div>
@@ -197,7 +235,7 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
                     : 'Arraste o catálogo em PDF aqui ou clique para selecionar'}
                 </p>
                 <p className="text-xs text-[#737373] mt-1">
-                  Suporta catálogos e datasheets técnicos de calibração em PDF
+                  Suporta catálogos da Fluke, Additel, Isotech e outros fabricantes
                 </p>
               </div>
 
@@ -220,13 +258,13 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {/* Preview of Extracted Product */}
+          {/* Preview of Extracted Structure */}
           {extractedProduct && (
             <div className="space-y-4 animate-in fade-in duration-300">
               <div className="p-3 bg-[#F0FDF4] border border-[#86EFAC] text-[#166534] text-xs flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 shrink-0 text-[#16A34A]" />
                 <span className="font-semibold">
-                  Catálogo analisado com sucesso! Revise os dados extraídos antes de adicionar:
+                  Estrutura e dados do PDF identificados com sucesso!
                 </span>
               </div>
 
@@ -285,6 +323,80 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
                   </div>
                 </div>
               </div>
+
+              {/* Detected Multi-Page Layout Structure */}
+              <div className="border border-[#BFDBFE] bg-[#EFF6FF] p-4 space-y-2.5">
+                <div className="flex items-center gap-2 text-[#1E40AF]">
+                  <Layers className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    Estrutura de Páginas Gerada (3 Páginas A4):
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
+                    <span className="font-bold text-[#1E3A8A] block">Página 1: Capa</span>
+                    <span className="text-[10px] text-[#475569] block mt-0.5">
+                      • Banner Hero & Foto
+                      <br />• Destaques e Recursos
+                      <br />• Texto de Aplicação
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
+                    <span className="font-bold text-[#1E3A8A] block">Página 2: Metrologia</span>
+                    <span className="text-[10px] text-[#475569] block mt-0.5">
+                      • Tabela de Faixas & FS
+                      <br />• Estabilidade & Exatidão
+                      <br />• Sinais Elétricos (mA/V)
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 border border-[#BFDBFE] rounded-xs shadow-2xs">
+                    <span className="font-bold text-[#1E3A8A] block">Página 3: Acessórios</span>
+                    <span className="text-[10px] text-[#475569] block mt-0.5">
+                      • Especificações Gerais
+                      <br />• Lista de Acessórios
+                      <br />• Matriz de Pedido
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Layout & Preset Options */}
+              <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] space-y-2.5">
+                <label className="flex items-center gap-2 text-xs font-medium text-[#171717] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyLayout}
+                    onChange={(e) => setApplyLayout(e.target.checked)}
+                    className="w-4 h-4 text-[#2563EB] rounded-xs"
+                  />
+                  <span>Aplicar esta estrutura de páginas e seções ao Editor</span>
+                </label>
+
+                <div className="space-y-1.5 pt-1 border-t border-[#E2E8F0]">
+                  <label className="flex items-center gap-2 text-xs font-medium text-[#171717] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={saveAsPreset}
+                      onChange={(e) => setSaveAsPreset(e.target.checked)}
+                      className="w-4 h-4 text-[#2563EB] rounded-xs"
+                    />
+                    <span className="flex items-center gap-1 font-semibold text-[#003366]">
+                      <BookmarkPlus className="w-3.5 h-3.5" />
+                      Salvar como Preset Predefinido na Galeria de Temas
+                    </span>
+                  </label>
+
+                  {saveAsPreset && (
+                    <input
+                      type="text"
+                      value={customPresetName}
+                      onChange={(e) => setCustomPresetName(e.target.value)}
+                      placeholder="Nome do Preset (ex: Layout Fluke 9140)"
+                      className="w-full text-xs p-2 bg-white border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -305,14 +417,14 @@ export const PdfImporterModal: React.FC<PdfImporterModalProps> = ({ isOpen, onCl
                 onClick={handleConfirmAdd}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold shadow-xs transition-colors"
               >
-                <span>Criar Catálogo no Editor</span>
+                <span>Clonar Estrutura & Criar no Editor</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </>
           ) : (
             <>
               <span className="text-xs text-[#737373]">
-                Formatos aceitos: PDF técnico (máx. 20 MB)
+                Formatos aceitos: PDF técnico (Fluke, Additel, Isotech, etc.)
               </span>
               <button
                 type="button"
