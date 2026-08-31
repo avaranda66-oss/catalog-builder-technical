@@ -73,8 +73,15 @@ export default function CatalogBuilderApp() {
   // Cloud sync handler (Stable reference with getState to prevent re-render cascades)
   const handleCloudSync = useCallback(async (isSilent = false) => {
     try {
-      if (!isSilent) setIsSyncingCloud(true)
       const store = useEditorStore.getState()
+
+      // GUARD: Never overwrite if user has unsaved edits in progress
+      if (store.saveStatus === 'unsaved') {
+        console.log('[Cloud Sync] Skipped background pull because local edits are in progress.')
+        return
+      }
+
+      if (!isSilent) setIsSyncingCloud(true)
       const cloudData = await syncFromCloud({
         catalog: store.catalog || INITIAL_CATALOG,
         products: store.products.length > 0 ? store.products : INITIAL_PRODUCTS,
@@ -110,7 +117,7 @@ export default function CatalogBuilderApp() {
     }
   }, [setCurrentUser, handleCloudSync])
 
-  // Periodic Auto-Sync (Every 60s & on focus, ONLY when user is logged in)
+  // Periodic Auto-Sync (Every 60s & on focus, ONLY when user is logged in and not editing)
   useEffect(() => {
     if (!currentUser) return
 
@@ -126,6 +133,41 @@ export default function CatalogBuilderApp() {
       window.removeEventListener('focus', onFocus)
     }
   }, [currentUser, handleCloudSync])
+
+  // AUTOMATIC AUTO-SAVE (Debounced 2.5s — saves everything to cloud and localStorage without clicking save)
+  useEffect(() => {
+    if (saveStatus !== 'unsaved') return
+
+    const timer = setTimeout(async () => {
+      const store = useEditorStore.getState()
+      if (!store.catalog) return
+
+      try {
+        console.log('[Auto-Save] Automatically persisting changes to Supabase Cloud & localStorage...')
+        await saveAll(
+          {
+            catalog: store.catalog,
+            products: store.products,
+            fieldDefinitions: store.fieldDefinitions,
+            pages: store.pages,
+            designTokens: store.designTokens,
+            contact: store.contact,
+            presets: store.presets,
+            auditLogs: store.auditLogs,
+          },
+          store.currentUser,
+          `Salvação automática em tempo real`
+        )
+        store.setLastCloudSync(new Date().toISOString())
+        store.markSaved()
+        console.log('[Auto-Save] Successfully synced to cloud!')
+      } catch (err) {
+        console.warn('[Auto-Save] Background auto-save error:', err)
+      }
+    }, 2500)
+
+    return () => clearTimeout(timer)
+  }, [saveStatus, products, pages, designTokens, contact])
 
   const handleLogout = useCallback(() => {
     clearStoredUser()
