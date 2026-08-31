@@ -15,6 +15,7 @@ import { ExcelImportModal } from '../components/forms/excel-import-modal'
 import { PdfImporterModal } from '../components/ai/pdf-importer-modal'
 import { UserGateModal, getStoredUser, clearStoredUser } from '../components/auth/user-gate-modal'
 import { AuditLogModal } from '../components/audit/audit-log-modal'
+import { TranslationModal } from '../components/ai/translation-modal'
 import {
   INITIAL_CATALOG,
   INITIAL_PRODUCTS,
@@ -63,6 +64,7 @@ export default function CatalogBuilderApp() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [isTranslateModalOpen, setIsTranslateModalOpen] = useState(false)
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false)
   const [mobileView, setMobileView] = useState<'editor' | 'preview'>('editor')
   const [isHydrated, setIsHydrated] = useState(false)
@@ -191,6 +193,7 @@ export default function CatalogBuilderApp() {
         onOpenPdfImport={() => setIsPdfModalOpen(true)}
         onExportPdfClick={() => window.print()}
         onOpenAuditModal={() => setIsAuditModalOpen(true)}
+        onOpenTranslate={() => setIsTranslateModalOpen(true)}
         onSyncCloud={() => handleCloudSync(false)}
         onLogout={handleLogout}
         onToggleSidebarMobile={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)}
@@ -348,6 +351,10 @@ export default function CatalogBuilderApp() {
       <PdfImporterModal
         isOpen={isPdfModalOpen}
         onClose={() => setIsPdfModalOpen(false)}
+      />
+      <TranslationModal
+        isOpen={isTranslateModalOpen}
+        onClose={() => setIsTranslateModalOpen(false)}
       />
     </div>
   )

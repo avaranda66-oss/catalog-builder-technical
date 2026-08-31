@@ -127,119 +127,203 @@ export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, to
         )}
       </div>
 
-      {/* 2-Column Hero & Highlights Grid */}
-      <div className="grid grid-cols-12 gap-4 mt-3">
-        {/* Left Column: Key Features & Overview Description */}
-        <div className="col-span-7 space-y-3">
-          <div className="bg-[#FAFAFA] p-3 border-l-4 border border-[#E5E5E5]" style={{ borderLeftColor: primaryColor }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: primaryColor }}>
-              Destaques e Recursos Técnicos
-            </h3>
-            <ul className="space-y-1.5">
-              {features.slice(0, 6).map((feat, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] text-[#262626] leading-tight">
-                  <span className="w-3.5 h-3.5 text-white flex items-center justify-center text-[9px] shrink-0 mt-0.5" style={{ backgroundColor: primaryColor }}>
-                    ✓
-                  </span>
-                  <span>{feat}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Overview Text */}
-          <div className="text-[11px] leading-relaxed text-[#333333] space-y-1.5" style={{ fontFamily: tokens.fonts.body }}>
-            {isVisualEditMode && product ? (
-              <textarea
-                rows={3}
-                value={marketing.overview || ''}
-                onChange={(e) => updateProductData(product.id, 'marketing.overview', e.target.value)}
-                placeholder="Descrição geral do produto na capa..."
-                className="w-full p-2 text-xs border border-dashed border-blue-400 bg-transparent focus:outline-none"
+      {/* Check for Fluke-Style / Exact Split Variant */}
+      {section.config?.layoutVariant === 'fluke_split' ? (
+        <div className="space-y-4 mt-2">
+          {/* Full-width Product Hero Image Banner */}
+          <div
+            style={{ height: `${section.config?.imageHeightPx || 180}px` }}
+            className="relative group bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-center overflow-hidden transition-all"
+          >
+            {images.length > 0 ? (
+              <img
+                src={images[0]}
+                alt={product?.name || 'Product'}
+                className="w-full h-full object-contain"
               />
             ) : (
-              <p>{marketing.overview || 'Instrumento de calibração metrológica de alto desempenho para indústria e laboratório.'}</p>
+              <div className="text-center p-4">
+                <div className="w-16 h-16 bg-[#FBBF24] text-[#1E1B4B] font-black text-sm flex items-center justify-center mx-auto mb-2 rounded-xs shadow-sm">
+                  {sku}
+                </div>
+                <span className="text-xs font-bold text-[#1E293B] block">
+                  {product?.name || 'Instrumento de Calibração Industrial'}
+                </span>
+                <span className="text-[10px] text-[#64748B]">
+                  Adicione fotos do produto no painel de edição
+                </span>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Right Column: Hero Product Photos & Quick Specs Box */}
-        <div className="col-span-5 flex flex-col gap-2.5">
-          {/* Product Hero Image Container */}
-          <div
-            style={{
-              height: `${section.config?.imageHeightPx || 160}px`,
-            }}
-            className="relative group bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center text-center overflow-hidden transition-all"
-          >
-            {/* Visual Edit Interactive Floating Controls */}
-            {isVisualEditMode && (
-              <div className="absolute top-1 inset-x-1 z-30 bg-[#1A1A2E]/95 text-white text-[10px] p-1.5 rounded-xs shadow-lg flex flex-wrap items-center justify-between gap-1 select-none">
-                <div className="flex items-center gap-1">
-                  <span className="text-[#A3A3A3] font-bold">Alt:</span>
-                  {[120, 160, 200, 250].map((h) => (
+          {/* 2-Column Split: Left Text Paragraphs | Right Yellow/Brand Callout Card */}
+          <div className="grid grid-cols-12 gap-4">
+            {/* Left Column (60% width): Detailed Technical Text */}
+            <div className="col-span-7 space-y-3 text-[11px] leading-relaxed text-[#1E293B]" style={{ fontFamily: tokens.fonts.body }}>
+              {isVisualEditMode && product ? (
+                <textarea
+                  rows={4}
+                  value={marketing.overview || ''}
+                  onChange={(e) => updateProductData(product.id, 'marketing.overview', e.target.value)}
+                  placeholder="Descrição técnica e introdução do produto..."
+                  className="w-full p-2 text-xs border border-dashed border-blue-400 bg-transparent focus:outline-none"
+                />
+              ) : (
+                <p className="whitespace-pre-line text-justify">
+                  {marketing.overview || 'Instrumento de calibração metrológica de alto desempenho para indústria e laboratório.'}
+                </p>
+              )}
+
+              {/* Sub-heading & Application description */}
+              <div className="pt-1">
+                <h3 className="text-xs font-bold text-[#0F172A] tracking-tight mb-1">
+                  High performance for the industrial environment
+                </h3>
+                <p className="text-[10.5px] text-[#475569] leading-normal text-justify">
+                  Projetado especificamente para condições rigorosas de processo industrial com alta portabilidade, controle de gradiente térmico patenteado e garantia de estabilidade ambiental.
+                </p>
+              </div>
+            </div>
+
+            {/* Right Column (40% width): Highlight Callout Box (Fluke Yellow / Brand Style) */}
+            <div className="col-span-5">
+              <div
+                className="p-3.5 border rounded-xs shadow-xs"
+                style={{
+                  backgroundColor: style.accentColor === '#F59E0B' || primaryColor.includes('F59') || primaryColor.includes('FBB') ? '#FBBF24' : '#FEF3C7',
+                  borderColor: '#D97706',
+                  color: '#1E1B4B',
+                }}
+              >
+                <h3 className="text-xs font-black uppercase tracking-wider mb-2.5 text-[#1E1B4B]">
+                  Key Features & Highlights
+                </h3>
+                <ul className="space-y-2">
+                  {features.slice(0, 6).map((feat, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[11px] text-[#1E1B4B] font-medium leading-tight">
+                      <span className="text-[12px] font-black shrink-0 leading-none mt-0.5">•</span>
+                      <span>{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Standard 2-Column Hero & Highlights Grid */
+        <div className="grid grid-cols-12 gap-4 mt-3">
+          {/* Left Column: Key Features & Overview Description */}
+          <div className="col-span-7 space-y-3">
+            <div className="bg-[#FAFAFA] p-3 border-l-4 border border-[#E5E5E5]" style={{ borderLeftColor: primaryColor }}>
+              <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: primaryColor }}>
+                Destaques e Recursos Técnicos
+              </h3>
+              <ul className="space-y-1.5">
+                {features.slice(0, 6).map((feat, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-[11px] text-[#262626] leading-tight">
+                    <span className="w-3.5 h-3.5 text-white flex items-center justify-center text-[9px] shrink-0 mt-0.5" style={{ backgroundColor: primaryColor }}>
+                      ✓
+                    </span>
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Overview Text */}
+            <div className="text-[11px] leading-relaxed text-[#333333] space-y-1.5" style={{ fontFamily: tokens.fonts.body }}>
+              {isVisualEditMode && product ? (
+                <textarea
+                  rows={3}
+                  value={marketing.overview || ''}
+                  onChange={(e) => updateProductData(product.id, 'marketing.overview', e.target.value)}
+                  placeholder="Descrição geral do produto na capa..."
+                  className="w-full p-2 text-xs border border-dashed border-blue-400 bg-transparent focus:outline-none"
+                />
+              ) : (
+                <p>{marketing.overview || 'Instrumento de calibração metrológica de alto desempenho para indústria e laboratório.'}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Hero Product Photos & Quick Specs Box */}
+          <div className="col-span-5 flex flex-col gap-2.5">
+            {/* Product Hero Image Container */}
+            <div
+              style={{
+                height: `${section.config?.imageHeightPx || 160}px`,
+              }}
+              className="relative group bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center text-center overflow-hidden transition-all"
+            >
+              {/* Visual Edit Interactive Floating Controls */}
+              {isVisualEditMode && (
+                <div className="absolute top-1 inset-x-1 z-30 bg-[#1A1A2E]/95 text-white text-[10px] p-1.5 rounded-xs shadow-lg flex flex-wrap items-center justify-between gap-1 select-none">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[#A3A3A3] font-bold">Alt:</span>
+                    {[120, 160, 200, 250].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => {
+                          const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
+                          if (parentPage) {
+                            updateSection(parentPage.id, section.id, {
+                              config: { ...(section.config || {}), imageHeightPx: h },
+                            })
+                          }
+                        }}
+                        className={`px-1.5 py-0.5 rounded-xs font-mono-data font-bold transition-colors ${
+                          (section.config?.imageHeightPx || 160) === h
+                            ? 'bg-[#2563EB] text-white'
+                            : 'bg-white/10 text-white hover:bg-white/20'
+                        }`}
+                      >
+                        {h}px
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {/* Fit Mode */}
                     <button
-                      key={h}
                       type="button"
                       onClick={() => {
                         const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
+                        const nextFit = (section.config?.imageFit || 'contain') === 'contain' ? 'cover' : 'contain'
                         if (parentPage) {
                           updateSection(parentPage.id, section.id, {
-                            config: { ...(section.config || {}), imageHeightPx: h },
+                            config: { ...(section.config || {}), imageFit: nextFit },
                           })
                         }
                       }}
-                      className={`px-1.5 py-0.5 rounded-xs font-mono-data font-bold transition-colors ${
-                        (section.config?.imageHeightPx || 160) === h
-                          ? 'bg-[#2563EB] text-white'
-                          : 'bg-white/10 text-white hover:bg-white/20'
-                      }`}
+                      className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 text-white rounded-xs font-semibold"
+                      title="Alternar entre Conter (proporcional) e Preencher (cover)"
                     >
-                      {h}px
+                      {(section.config?.imageFit || 'contain') === 'contain' ? '📐 Conter' : '🖼️ Preencher'}
                     </button>
-                  ))}
-                </div>
 
-                <div className="flex items-center gap-1">
-                  {/* Fit Mode */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const parentPage = pages.find((p) => p.sections.some((s) => s.id === section.id))
-                      const nextFit = (section.config?.imageFit || 'contain') === 'contain' ? 'cover' : 'contain'
-                      if (parentPage) {
-                        updateSection(parentPage.id, section.id, {
-                          config: { ...(section.config || {}), imageFit: nextFit },
-                        })
-                      }
-                    }}
-                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 text-white rounded-xs font-semibold"
-                    title="Alternar entre Conter (proporcional) e Preencher (cover)"
-                  >
-                    {(section.config?.imageFit || 'contain') === 'contain' ? '📐 Conter' : '🖼️ Preencher'}
-                  </button>
-
-                  {/* Multi-Photo Swap Order */}
-                  {images.length > 1 && product && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const swapped = [...images]
-                        const temp = swapped[0]
-                        swapped[0] = swapped[1]
-                        swapped[1] = temp
-                        updateProductData(product.id, 'marketing.images', swapped)
-                      }}
-                      className="px-1.5 py-0.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xs flex items-center gap-1 font-semibold"
-                      title="Inverter ordem das fotos (mudar qual foto é a principal)"
-                    >
-                      <ArrowLeftRight className="w-3 h-3" />
-                      Trocar Posição
-                    </button>
-                  )}
+                    {/* Multi-Photo Swap Order */}
+                    {images.length > 1 && product && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const swapped = [...images]
+                          const temp = swapped[0]
+                          swapped[0] = swapped[1]
+                          swapped[1] = temp
+                          updateProductData(product.id, 'marketing.images', swapped)
+                        }}
+                        className="px-1.5 py-0.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xs flex items-center gap-1 font-semibold"
+                        title="Inverter ordem das fotos (mudar qual foto é a principal)"
+                      >
+                        <ArrowLeftRight className="w-3 h-3" />
+                        Trocar Posição
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Photo Rendering based on count and layout */}
             {images.length === 0 ? (
@@ -356,6 +440,7 @@ export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, to
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

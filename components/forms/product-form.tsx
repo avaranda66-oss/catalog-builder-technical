@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { PageSection } from '../../lib/types/catalog-builder'
 import { ImageUploader } from '../ui/image-uploader'
+import { TranslationModal } from '../ai/translation-modal'
 import {
   Plus,
   Trash2,
@@ -18,6 +19,7 @@ import {
   Settings,
   Image,
   ListChecks,
+  Globe,
 } from 'lucide-react'
 
 export const ProductForm: React.FC = () => {
@@ -37,9 +39,11 @@ export const ProductForm: React.FC = () => {
     isVisualEditMode,
   } = useEditorStore()
 
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
+  const [isTranslateModalOpen, setIsTranslateModalOpen] = useState(false)
+
   // Selected Page
   const currentPage = pages.find((p) => p.id === selectedPageId) || pages[0]
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
 
   const product = products.find((p) => p.id === selectedProductId) || products[0]
 
@@ -82,6 +86,16 @@ export const ProductForm: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTranslateModalOpen(true)}
+              className="flex items-center gap-1 text-xs font-semibold px-2 sm:px-2.5 py-1 border border-[#2563EB] bg-[#EFF6FF] text-[#1E40AF] hover:bg-[#DBEAFE] rounded-xs shadow-2xs cursor-pointer"
+              title="Traduzir dados deste catálogo para Inglês, Espanhol, Francês e outros com IA"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span className="hidden xs:inline">Traduzir (IA)</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsVisualEditMode(!isVisualEditMode)}
@@ -217,6 +231,11 @@ export const ProductForm: React.FC = () => {
           </div>
         )}
       </div>
+
+      <TranslationModal
+        isOpen={isTranslateModalOpen}
+        onClose={() => setIsTranslateModalOpen(false)}
+      />
     </div>
   )
 }

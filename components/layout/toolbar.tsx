@@ -19,6 +19,7 @@ import {
   Eye,
   FileText,
   Sparkles,
+  Globe,
 } from 'lucide-react'
 
 interface ToolbarProps {
@@ -27,6 +28,7 @@ interface ToolbarProps {
   onOpenPdfImport: () => void
   onExportPdfClick: () => void
   onOpenAuditModal?: () => void
+  onOpenTranslate?: () => void
   onSyncCloud?: () => void
   onLogout?: () => void
   onToggleSidebarMobile?: () => void
@@ -40,6 +42,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onOpenPdfImport,
   onExportPdfClick,
   onOpenAuditModal,
+  onOpenTranslate,
   onSyncCloud,
   onLogout,
   onToggleSidebarMobile,
@@ -262,6 +265,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <FileSpreadsheet className="w-3.5 h-3.5 text-[#525252]" />
             <span>Excel</span>
           </button>
+
+          {/* AI Translation Button */}
+          {onOpenTranslate && (
+            <button
+              type="button"
+              onClick={onOpenTranslate}
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 border border-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] text-xs font-semibold text-[#1E40AF] rounded-xs shadow-2xs"
+              title="Traduzir catálogo automaticamente para Inglês, Espanhol, Francês e outros com IA"
+            >
+              <Globe className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span className="hidden sm:inline">Traduzir (IA)</span>
+            </button>
+          )}
 
           {/* AI Assistant */}
           <button

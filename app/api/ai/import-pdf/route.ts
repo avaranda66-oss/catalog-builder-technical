@@ -5,51 +5,49 @@ import { createPage, createSection, CatalogPage } from '../../../../lib/types/ca
 
 export const runtime = 'nodejs'
 
-function buildDynamicPagesForProduct(sku: string, title: string): CatalogPage[] {
-  // Page 1: Capa & Visão Geral
+function buildDynamicPagesForProduct(sku: string, title: string, isFlukeStyle = false): CatalogPage[] {
+  // Page 1: Cover & Highlights (Unified clean layout without duplicate sections)
   const p1 = createPage(
-    'Capa & Destaques Comerciais',
+    'Cover & Key Highlights',
     [
       createSection('hero_banner', {
-        title: 'Capa e Destaques',
-        config: { showLogo: true, showSubtitle: true, showImage: true },
-      }),
-      createSection('features_list', {
-        title: 'Recursos e Inovações',
-        config: { maxItems: 8, columns: 1 },
-      }),
-      createSection('text_block', {
-        title: 'Descrição de Aplicação em Bancada e Campo',
-        config: { alignment: 'left' },
+        title: 'Cover & Highlights',
+        config: {
+          showLogo: true,
+          showSubtitle: true,
+          showImage: true,
+          layoutVariant: isFlukeStyle ? 'fluke_split' : 'standard',
+        },
+        style: isFlukeStyle ? { accentColor: '#F59E0B' } : undefined,
       }),
     ],
     { sort_order: 0 }
   )
 
-  // Page 2: Especificações Técnicas e Metrologia
+  // Page 2: Specifications & Metrological Matrix
   const p2 = createPage(
-    'Especificações Técnicas',
+    'Technical Specifications',
     [
       createSection('specs_table', {
-        title: 'Tabela de Especificações Metrológicas',
-        config: { columns: ['Parâmetro / Grandeza', 'Faixa / Especificação'], showHeader: true },
+        title: 'Metrological Specifications Table',
+        config: { columns: ['Parameter / Quantity', 'Specification / Operating Range'], showHeader: true },
       }),
       createSection('electrical_table', {
-        title: 'Sinais Elétricos e Termometria',
-        config: { columns: ['Sinal', 'Faixa', 'Resolução', 'Exatidão', 'Observação'] },
+        title: 'Electrical Signals & Thermometry Readout',
+        config: { columns: ['Signal', 'Range', 'Resolution', 'Accuracy', 'Notes'] },
       }),
     ],
     { sort_order: 1 }
   )
 
-  // Page 3: Dados Gerais, Acessórios e Código de Encomenda
+  // Page 3: Ordering Codes & Accessories
   const p3 = createPage(
-    'Acessórios & Código de Pedido',
+    'Ordering Information & Accessories',
     [
-      createSection('general_specs_table', { title: 'Especificações Gerais e Construtivas' }),
-      createSection('accessories_table', { title: 'Acessórios Standard e Opcionais' }),
-      createSection('ordering_codes', { title: 'Guia de Seleção e Código de Encomenda' }),
-      createSection('contact_footer', { title: 'Contato e Certificações Presys' }),
+      createSection('general_specs_table', { title: 'General & Environmental Specifications' }),
+      createSection('accessories_table', { title: 'Standard & Optional Accessories' }),
+      createSection('ordering_codes', { title: 'Model Selection Guide & Ordering Matrix' }),
+      createSection('contact_footer', { title: 'Contact & Quality Certifications' }),
     ],
     { sort_order: 2 }
   )
@@ -93,6 +91,10 @@ export async function POST(req: NextRequest) {
     console.log(`[AI PDF Import] Extracted ${pdfText.length} characters of text from ${fileName}`)
 
     const cleanName = (fileName || 'Documento').replace(/\.pdf$/i, '')
+    const isFluke =
+      fileName.toLowerCase().includes('fluke') ||
+      pdfText.toLowerCase().includes('fluke') ||
+      pdfText.toLowerCase().includes('metrology well')
     const apiKey = process.env.GEMINI_API_KEY
 
     // If Gemini API is available and we have text, call Gemini with pure text prompt
@@ -101,53 +103,52 @@ export async function POST(req: NextRequest) {
         const ai = new GoogleGenAI({ apiKey })
 
         const systemInstruction = `
-Você é um Engenheiro Sênior Especialista em Metrologia Industrial, Calibração, Automação e Catálogos Técnicos.
-Sua missão é extrair com precisão máxima as especificações e dados comerciais do texto fornecido de um datasheet PDF e estruturar um catálogo técnico em Português para a plataforma Catalog Builder.
+You are a Senior Industrial Metrologist and Technical Catalog Engineer.
+Your mission is to extract the EXACT specifications, commercial marketing text, highlights, and metrological data from the provided PDF datasheet text.
 
-DIRETRIZES FUNDAMENTAIS:
-1. Identifique o Modelo/SKU exato (ex: Fluke 9140, Additel 761A, Isotech Venus 4951, Europa 4520, etc.).
-2. Crie um Título Comercial limpo e atraente (ex: "Calibrador de Temperatura de Poço Seco de Alta Performance").
-3. Subtítulo técnico claro e profissional (ex: "Calibração de Sensores de Temperatura em Campo e Bancada").
-4. Descrição Geral (overview) detalhada, destacando precisão, aplicações industriais e diferenciais.
-5. Lista de 4 a 6 Destaques e Recursos Técnicos (features).
-6. Tabela de Especificações Metrológicas (specs): extraia Faixa de Operação/Temperatura/Pressão, Estabilidade, Exatidão (%FS ou °C), Resolução, Uniformidade, etc.
-7. Tabela de Sinais Elétricos (electrical): extraia faixas de mA, V, RTD, TC se houver.
-8. Especificações Gerais (general): Alimentação elétrica, Dimensões, Peso, Interface de comunicação.
-9. Acessórios (accessories): Acessórios inclusos e opcionais.
+CRITICAL INSTRUCTIONS:
+1. PRESERVE THE ORIGINAL LANGUAGE: If the PDF document is in English, output all titles, descriptions, bullets, and specs in ENGLISH. If in Portuguese, output in Portuguese. Do NOT force translation.
+2. SKU Identification: Extract the exact Model / Family SKU (e.g., "Fluke 9140 / 9142", "Additel 761A", "Isotech Venus 4951", "Europa 4520").
+3. Commercial Title: Use the actual bold product title from the datasheet (e.g., "Field Metrology Wells", "Automated Pressure Calibrator").
+4. Technical Subtitle: Extract the subtitle or category (e.g., "Technical Data", "High-Precision Temperature Calibration").
+5. Overview (marketing.overview): Extract the complete introductory and application text paragraphs verbatim or faithfully summarized.
+6. Key Features (marketing.features): Extract the 4 to 6 bullet points (e.g., "Lightweight, portable, and fast", "Cool to -25 °C in 15 minutes", "Built-in two-channel readout").
+7. Metrological Specs (specs): Extract Range, Stability, Accuracy, Resolution, Uniformity, Heating/Cooling times.
+8. Electrical Specs (electrical): mA, V, RTD, TC channels if present.
+9. General Specs & Accessories: Dimensions, weight, power, accessories.
 
-ATENÇÃO: NUNCA gere mensagens de erro ou textos de "dados corrompidos". Sempre gere um catálogo completo, profissional e pronto para publicação comercial e técnica.
-
-FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
+STRICT JSON OUTPUT FORMAT:
 {
-  "sku": "MODELO-SKU",
-  "name": "Nome Comercial Completo",
-  "family": "Família/Categoria",
+  "sku": "MODEL-SKU",
+  "name": "Full Commercial Name",
+  "family": "Calibrators",
+  "isFlukeStyle": ${isFluke},
   "data": {
     "marketing": {
-      "title": "Título Comercial do Catálogo",
-      "subtitle": "Subtítulo / Categoria Técnica",
-      "overview": "Descrição geral detalhada...",
+      "title": "Commercial Title",
+      "subtitle": "Technical Subtitle",
+      "overview": "Complete overview description...",
       "features": [
-        "Destaque técnico 1",
-        "Destaque técnico 2",
-        "Destaque técnico 3",
-        "Destaque técnico 4"
+        "Feature 1",
+        "Feature 2",
+        "Feature 3",
+        "Feature 4"
       ]
     },
     "specs": [
-      { "param": "Faixa de Temperatura / Pressão", "value": "-45 a 250 °C" },
-      { "param": "Estabilidade", "value": "± 0,01 °C" },
-      { "param": "Exatidão / Resolução", "value": "± 0,05 °C / 0,001 °C" }
+      { "param": "Range", "value": "-25 °C to 150 °C" },
+      { "param": "Stability", "value": "± 0.01 °C" },
+      { "param": "Accuracy", "value": "± 0.2 °C" }
     ],
     "electrical": [
-      { "signal": "mA", "range": "0 a 24 mA", "resolution": "0,001 mA", "accuracy": "± 0,01% FS", "note": "Alimentação 24V" }
+      { "signal": "mA", "range": "4 to 20 mA", "resolution": "0.001 mA", "accuracy": "± 0.01% FS", "note": "24V Loop" }
     ],
     "general": [
-      { "param": "Alimentação", "desc": "100-240 VAC, 50/60 Hz" },
-      { "param": "Dimensões e Peso", "desc": "Construção compacta e robusta" }
+      { "param": "Power", "desc": "100-240 VAC, 50/60 Hz" },
+      { "param": "Weight", "desc": "8.2 kg (18 lb)" }
     ],
     "accessories": [
-      { "code": "ACC-01", "description": "Maleta e cabos de conexão", "type": "Standard" }
+      { "code": "ACC-01", "description": "Carrying case and test leads", "type": "Standard" }
     ]
   }
 }
@@ -162,7 +163,7 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
               role: 'user',
               parts: [
                 {
-                  text: `Analise o seguinte conteúdo textual extraído do arquivo PDF "${fileName}":\n\n${trimmedText}`,
+                  text: `Analyze the following textual content extracted from the PDF datasheet "${fileName}":\n\n${trimmedText}`,
                 },
               ],
             },
@@ -179,7 +180,8 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
         if (extractedProduct && extractedProduct.data) {
           const dynamicPages = buildDynamicPagesForProduct(
             extractedProduct.sku || cleanName,
-            extractedProduct.data.marketing?.title || cleanName
+            extractedProduct.data.marketing?.title || cleanName,
+            isFluke
           )
 
           return NextResponse.json({
