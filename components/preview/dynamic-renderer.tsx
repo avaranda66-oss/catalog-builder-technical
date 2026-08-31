@@ -18,6 +18,7 @@ import {
   CustomTableSection,
   ContactFooterSection,
   ImageGallerySection,
+  SingleImageSection,
   OrderingCodesSection,
   BlankSpacerSection,
   SectionProps,
@@ -47,6 +48,7 @@ const SECTION_COMPONENTS: Record<SectionType, React.FC<SectionProps & { allProdu
   custom_table: CustomTableSection,
   contact_footer: ContactFooterSection,
   image_gallery: ImageGallerySection,
+  single_image: SingleImageSection,
   ordering_codes: OrderingCodesSection,
   blank_spacer: BlankSpacerSection,
 }

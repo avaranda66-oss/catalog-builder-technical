@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
 import { PageSection } from '../../lib/types/catalog-builder'
+import { ImageUploader } from '../ui/image-uploader'
 import {
   Plus,
   Trash2,
@@ -340,6 +341,26 @@ const SectionEditor: React.FC<SectionEditorProps> = ({
         />
       )}
 
+      {section.type === 'image_gallery' && (
+        <ImageGalleryEditor
+          product={product}
+          updateProductData={updateProductData}
+          section={section}
+          pageId={pageId}
+          updateSectionContent={updateSectionContent}
+        />
+      )}
+
+      {section.type === 'single_image' && (
+        <SingleImageEditor
+          product={product}
+          updateProductData={updateProductData}
+          section={section}
+          pageId={pageId}
+          updateSectionContent={updateSectionContent}
+        />
+      )}
+
       {section.type === 'contact_footer' && (
         <ContactFooterEditor
           section={section}
@@ -356,6 +377,7 @@ const SectionEditor: React.FC<SectionEditorProps> = ({
 // ============================================================================
 const HeroBannerEditor: React.FC<any> = ({ product, updateProductData, section, pageId, updateSectionContent }) => {
   const marketing = product.data?.marketing || {}
+  const images = marketing.images || []
 
   return (
     <div className="space-y-4">
@@ -400,6 +422,17 @@ const HeroBannerEditor: React.FC<any> = ({ product, updateProductData, section, 
           }
           placeholder="Ex: Calibração e Instrumentação"
           className="w-full h-9 px-3 text-xs bg-[#FFFFFF] border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+        />
+      </div>
+
+      {/* Image Uploader for Hero Banner */}
+      <div className="pt-2 border-t border-[#E5E5E5]">
+        <ImageUploader
+          images={images}
+          onChange={(newImages) => updateProductData(product.id, 'marketing.images', newImages)}
+          maxImages={3}
+          label="Foto Principal do Produto (Capa)"
+          productSku={product.sku}
         />
       </div>
     </div>
@@ -962,3 +995,155 @@ const ContactFooterEditor: React.FC<any> = ({ section, pageId, updateSectionCont
     </div>
   )
 }
+
+// ============================================================================
+// 10. IMAGE GALLERY EDITOR
+// ============================================================================
+const ImageGalleryEditor: React.FC<any> = ({ product, updateProductData, section, pageId, updateSectionContent }) => {
+  const images: any[] = section.content?.images || product.data?.marketing?.images || []
+  const cols = section.config?.columns || 3
+
+  const handleImagesChange = (newImageUrls: string[]) => {
+    // Keep captions if objects existed, or map strings
+    const updatedImages = newImageUrls.map((url, i) => {
+      const existing = images[i]
+      if (typeof existing === 'object' && existing !== null) {
+        return { ...existing, url }
+      }
+      return { url, caption: '' }
+    })
+
+    updateSectionContent(pageId, section.id, {
+      ...section.content,
+      images: updatedImages,
+    })
+    updateProductData(product.id, 'marketing.images', newImageUrls)
+  }
+
+  const handleCaptionChange = (index: number, caption: string) => {
+    const updated = [...images].map((img, i) => {
+      if (i !== index) return img
+      if (typeof img === 'string') return { url: img, caption }
+      return { ...img, caption }
+    })
+    updateSectionContent(pageId, section.id, {
+      ...section.content,
+      images: updated,
+    })
+  }
+
+  const imageUrls = images.map((img) => (typeof img === 'string' ? img : img.url || img.src || ''))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <label className="text-xs font-semibold text-[#525252] uppercase tracking-wide">
+            Colunas do Grid:
+          </label>
+          <select
+            value={cols}
+            onChange={(e) =>
+              updateSectionContent(pageId, section.id, {
+                ...section.content,
+                // Note: section.config can be updated via updateSection or stored in content
+              })
+            }
+            className="h-8 px-2 text-xs bg-white border border-[#D4D4D4]"
+          >
+            <option value={2}>2 Colunas</option>
+            <option value={3}>3 Colunas</option>
+            <option value={4}>4 Colunas</option>
+          </select>
+        </div>
+      </div>
+
+      <ImageUploader
+        images={imageUrls.filter(Boolean)}
+        onChange={handleImagesChange}
+        maxImages={8}
+        label="Fotos da Galeria"
+        productSku={product.sku}
+      />
+
+      {images.length > 0 && (
+        <div className="space-y-2 pt-2 border-t border-[#E5E5E5]">
+          <span className="text-[10px] font-bold uppercase text-[#737373] block">
+            Legendas das Imagens
+          </span>
+          <div className="space-y-2">
+            {images.map((img, i) => {
+              const caption = typeof img === 'string' ? '' : img.caption || ''
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="font-mono-data text-xs text-[#737373] w-6 text-center">
+                    #{i + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={caption}
+                    onChange={(e) => handleCaptionChange(i, e.target.value)}
+                    placeholder={`Legenda da imagem ${i + 1} (opcional)`}
+                    className="flex-1 h-8 px-2 text-xs bg-white border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// 11. SINGLE IMAGE / DIAGRAM EDITOR
+// ============================================================================
+const SingleImageEditor: React.FC<any> = ({ product, updateProductData, section, pageId, updateSectionContent }) => {
+  const imageUrl = section.content?.imageUrl || section.content?.url || (typeof section.content === 'string' ? section.content : '') || ''
+  const caption = section.content?.caption || section.config?.caption || ''
+  const align = section.config?.align || 'center'
+  const maxHeightMm = section.config?.maxHeightMm || 60
+
+  const handleImageChange = (urls: string[]) => {
+    const url = urls[0] || ''
+    updateSectionContent(pageId, section.id, {
+      ...section.content,
+      imageUrl: url,
+      url,
+    })
+  }
+
+  const handleCaptionChange = (newCaption: string) => {
+    updateSectionContent(pageId, section.id, {
+      ...section.content,
+      caption: newCaption,
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      <ImageUploader
+        images={imageUrl ? [imageUrl] : []}
+        onChange={handleImageChange}
+        maxImages={1}
+        label="Imagem / Diagrama Técnico"
+        productSku={product.sku}
+      />
+
+      <div className="space-y-1.5">
+        <label className="block text-xs font-semibold text-[#525252] uppercase tracking-wide">
+          Legenda da Imagem (opcional)
+        </label>
+        <input
+          type="text"
+          value={caption}
+          onChange={(e) => handleCaptionChange(e.target.value)}
+          placeholder="Ex: Diagrama Dimensional (em mm) do PCON-Y17"
+          className="w-full h-8 px-2 text-xs bg-white border border-[#D4D4D4] focus:border-[#2563EB] focus:outline-none"
+        />
+      </div>
+    </div>
+  )
+}
+

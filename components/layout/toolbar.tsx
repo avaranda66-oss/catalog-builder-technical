@@ -1,7 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useCallback } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
+import { saveAll } from '../../lib/supabase/api'
 import {
   Save,
   Undo2,
@@ -32,18 +33,37 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     mode,
     setMode,
     saveStatus,
+    setSaveStatus,
     markSaved,
     undo,
     redo,
     canUndo,
     canRedo,
     products,
+    fieldDefinitions,
+    pages,
+    designTokens,
+    contact,
   } = useEditorStore()
 
-  const handleSave = () => {
-    // In local mode, mark saved
-    markSaved()
-  }
+  const handleSave = useCallback(async () => {
+    if (!catalog) return
+    setSaveStatus('saving')
+    try {
+      await saveAll({
+        catalog,
+        products,
+        fieldDefinitions,
+        pages,
+        designTokens,
+        contact,
+      })
+      markSaved()
+    } catch (err) {
+      console.error('[Save] Failed:', err)
+      setSaveStatus('unsaved')
+    }
+  }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
 
   return (
     <header className="h-14 border-b border-[#D4D4D4] bg-[#FFFFFF] px-4 flex items-center justify-between select-none shrink-0 z-20">

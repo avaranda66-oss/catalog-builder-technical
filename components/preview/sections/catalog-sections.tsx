@@ -164,17 +164,27 @@ export const HeroBannerSection: React.FC<SectionProps> = ({ section, product, to
 
         {/* Right Column: Hero Product Badge & Quick Specs Box */}
         <div className="col-span-5 flex flex-col gap-2.5">
-          {/* Product Hero Badge */}
-          <div className="h-36 bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center p-3 text-center">
-            <div className="w-14 h-14 text-white flex items-center justify-center font-bold text-sm mx-auto mb-1.5 shadow-xs" style={{ backgroundColor: primaryColor }}>
-              {sku.split('-')[1] || sku.substring(0, 4)}
-            </div>
-            <span className="text-xs font-bold text-[#171717] uppercase tracking-wide block font-mono-data">
-              {sku}
-            </span>
-            <span className="text-[9px] text-[#737373]">
-              Gabinete Industrial de Alta Precisão
-            </span>
+          {/* Product Hero Image or Badge */}
+          <div className="h-36 bg-[#F8FAFC] border border-[#D4D4D4] flex flex-col items-center justify-center p-3 text-center overflow-hidden">
+            {marketing.images && marketing.images.length > 0 ? (
+              <img
+                src={marketing.images[0]}
+                alt={marketing.title || product?.name || sku}
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <>
+                <div className="w-14 h-14 text-white flex items-center justify-center font-bold text-sm mx-auto mb-1.5 shadow-xs" style={{ backgroundColor: primaryColor }}>
+                  {sku.split('-')[1] || sku.substring(0, 4)}
+                </div>
+                <span className="text-xs font-bold text-[#171717] uppercase tracking-wide block font-mono-data">
+                  {sku}
+                </span>
+                <span className="text-[9px] text-[#737373]">
+                  {marketing.subtitle || 'Instrumento de Alta Precisão'}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Quick Specs Summary Box */}
@@ -336,7 +346,11 @@ export const TextBlockSection: React.FC<SectionProps> = ({ section, product, tok
 
 export const SpecsTableSection: React.FC<SectionProps> = ({ section, product, tokens }) => {
   const { isVisualEditMode, updateProductData } = useEditorStore()
-  const rows = section.content?.rows || product?.data?.specs || []
+  // Prefer product.data.specs when section template rows are empty-valued
+  const templateRows = section.content?.rows || []
+  const productSpecs = product?.data?.specs || []
+  const hasFilledTemplate = templateRows.some((r: any) => r.value && String(r.value).trim() !== '')
+  const rows = hasFilledTemplate ? templateRows : (productSpecs.length > 0 ? productSpecs : templateRows)
   const columns = section.config?.columns || ['Parâmetro Metrológico', 'Especificação Técnica']
   const style = section.style || {}
   const primaryColor = style.accentColor || tokens.colors.primary
@@ -426,7 +440,10 @@ export const SpecsTableSection: React.FC<SectionProps> = ({ section, product, to
 // ============================================================================
 
 export const ElectricalTableSection: React.FC<SectionProps> = ({ section, product, tokens }) => {
-  const rows = section.content?.rows || product?.data?.electrical || []
+  // Prefer product.data.electrical over empty section template
+  const templateRows = section.content?.rows || []
+  const productElectrical = product?.data?.electrical || []
+  const rows = productElectrical.length > 0 ? productElectrical : templateRows
   const columns = section.config?.columns || ['Sinal', 'Faixa', 'Resolução', 'Exatidão', 'Observação']
   const style = section.style || {}
   const primaryColor = style.accentColor || tokens.colors.primary
@@ -490,7 +507,10 @@ export const ElectricalTableSection: React.FC<SectionProps> = ({ section, produc
 // ============================================================================
 
 export const GeneralSpecsTableSection: React.FC<SectionProps> = ({ section, product, tokens }) => {
-  const rows = section.content?.rows || product?.data?.general || []
+  // Prefer product.data.general over empty section template
+  const templateRows = section.content?.rows || []
+  const productGeneral = product?.data?.general || []
+  const rows = productGeneral.length > 0 ? productGeneral : templateRows
   const style = section.style || {}
   const primaryColor = style.accentColor || tokens.colors.primary
 
@@ -776,13 +796,16 @@ export const ContactFooterSection: React.FC<SectionProps> = ({ section, tokens, 
 // IMAGE GALLERY
 // ============================================================================
 
-export const ImageGallerySection: React.FC<SectionProps> = ({ section, tokens }) => {
-  const images = section.content?.images || []
+export const ImageGallerySection: React.FC<SectionProps> = ({ section, product, tokens }) => {
+  // Merge: section images + product marketing images
+  const sectionImages = section.content?.images || []
+  const productImages = product?.data?.marketing?.images || []
+  const allImages = sectionImages.length > 0 ? sectionImages : productImages
   const cols = section.config?.columns || 3
   const style = section.style || {}
   const primaryColor = style.accentColor || tokens.colors.primary
 
-  if (images.length === 0) {
+  if (allImages.length === 0) {
     return (
       <div className="p-6 text-center text-[11px] text-[#A3A3A3] italic border border-dashed" style={{ borderColor: tokens.colors.border }}>
         Galeria vazia — adicione imagens no editor.
@@ -810,13 +833,95 @@ export const ImageGallerySection: React.FC<SectionProps> = ({ section, tokens })
         </h3>
       )}
       <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-        {images.map((img: any, i: number) => (
-          <div key={i} className="border border-[#D4D4D4] bg-[#F8FAFC] flex flex-col items-center justify-center p-2">
-            <div className="w-full h-20 bg-[#E5E5E5] flex items-center justify-center text-xs text-[#737373]">
-              {typeof img === 'string' ? img : img.caption || `Imagem ${i + 1}`}
+        {allImages.map((img: any, i: number) => {
+          const src = typeof img === 'string' ? img : img.url || img.src || ''
+          const caption = typeof img === 'string' ? '' : img.caption || ''
+          return (
+            <div key={i} className="border border-[#D4D4D4] bg-[#F8FAFC] flex flex-col items-center justify-center p-2">
+              {src ? (
+                <img
+                  src={src}
+                  alt={caption || `Imagem ${i + 1}`}
+                  className="w-full h-20 object-contain"
+                />
+              ) : (
+                <div className="w-full h-20 bg-[#E5E5E5] flex items-center justify-center text-xs text-[#737373]">
+                  {caption || `Imagem ${i + 1}`}
+                </div>
+              )}
+              {caption && (
+                <span className="text-[9px] text-[#737373] mt-1 text-center">{caption}</span>
+              )}
             </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// SINGLE IMAGE / DIAGRAM
+// ============================================================================
+
+export const SingleImageSection: React.FC<SectionProps> = ({ section, product, tokens }) => {
+  const imageUrl = section.content?.imageUrl || section.content?.url || section.content?.src || (typeof section.content === 'string' ? section.content : null) || product?.data?.marketing?.images?.[0] || null
+  const caption = section.content?.caption || section.config?.caption || ''
+  const maxHeightMm = section.config?.maxHeightMm || 60
+  const align = section.config?.align || 'center'
+  const style = section.style || {}
+  const primaryColor = style.accentColor || tokens.colors.primary
+
+  return (
+    <div
+      style={{
+        padding: style.paddingMm ? `${style.paddingMm}mm` : undefined,
+        marginBottom: style.marginBottomMm !== undefined ? `${style.marginBottomMm}mm` : undefined,
+      }}
+    >
+      {!style.hideHeader && (
+        <h3
+          className="font-bold uppercase tracking-wider mb-1.5 pb-0.5"
+          style={{
+            color: primaryColor,
+            borderBottom: `1px solid ${primaryColor}`,
+            fontSize: style.titleFontSizePx ? `${style.titleFontSizePx}px` : '12px',
+          }}
+        >
+          {section.title}
+        </h3>
+      )}
+      <div
+        className={`flex flex-col ${
+          align === 'left' ? 'items-start' : align === 'right' ? 'items-end' : 'items-center'
+        }`}
+      >
+        {imageUrl ? (
+          <div
+            className="border border-[#D4D4D4] bg-[#FFFFFF] p-2 flex flex-col items-center justify-center max-w-full overflow-hidden"
+            style={{ maxHeight: `${maxHeightMm}mm` }}
+          >
+            <img
+              src={imageUrl}
+              alt={caption || section.title}
+              className="max-w-full object-contain"
+              style={{ maxHeight: `${maxHeightMm - 10}mm` }}
+            />
           </div>
-        ))}
+        ) : (
+          <div
+            className="w-full bg-[#F8FAFC] border border-dashed border-[#D4D4D4] flex flex-col items-center justify-center p-6 text-center text-xs text-[#737373]"
+            style={{ minHeight: `${Math.min(maxHeightMm, 40)}mm` }}
+          >
+            <span>Nenhuma imagem selecionada.</span>
+            <span className="text-[10px] text-[#A3A3A3] mt-0.5">Faça upload da imagem no editor deste bloco.</span>
+          </div>
+        )}
+        {caption && (
+          <span className="text-[10px] text-[#737373] mt-1 italic text-center font-sans">
+            {caption}
+          </span>
+        )}
       </div>
     </div>
   )

@@ -12,6 +12,7 @@ export const SECTION_TYPES = [
   'specs_table',
   'comparison_grid',
   'image_gallery',
+  'single_image',
   'text_block',
   'accessories_table',
   'ordering_codes',
@@ -88,6 +89,13 @@ export const SECTION_TYPE_CATALOG: SectionTypeInfo[] = [
     description: 'Grid de fotos do produto com legendas opcionais',
     icon: 'GalleryHorizontalEnd',
     defaultConfig: { columns: 3, showCaptions: true },
+  },
+  {
+    type: 'single_image',
+    label: 'Foto / Diagrama',
+    description: 'Imagem individual ou esquema técnico com legenda',
+    icon: 'Image',
+    defaultConfig: { maxHeightMm: 60, align: 'center', caption: '' },
   },
   {
     type: 'accessories_table',

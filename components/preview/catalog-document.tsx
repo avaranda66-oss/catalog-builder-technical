@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { useEditorStore } from '../../features/editor/editor-store'
+import { saveAll } from '../../lib/supabase/api'
 import { DynamicCatalogRenderer } from './dynamic-renderer'
 import {
   ZoomIn,
@@ -16,6 +17,7 @@ import {
 
 export const CatalogDocument: React.FC = () => {
   const {
+    catalog,
     products,
     selectedProductId,
     pages,
@@ -24,6 +26,8 @@ export const CatalogDocument: React.FC = () => {
     contact,
     isVisualEditMode,
     setIsVisualEditMode,
+    fieldDefinitions,
+    setSaveStatus,
     markSaved,
     saveStatus,
   } = useEditorStore()
@@ -38,11 +42,26 @@ export const CatalogDocument: React.FC = () => {
     window.print()
   }
 
-  const handleManualSave = () => {
-    markSaved()
-    setSavedBadge(true)
-    setTimeout(() => setSavedBadge(false), 2000)
-  }
+  const handleManualSave = useCallback(async () => {
+    if (!catalog) return
+    setSaveStatus('saving')
+    try {
+      await saveAll({
+        catalog,
+        products,
+        fieldDefinitions,
+        pages,
+        designTokens,
+        contact,
+      })
+      markSaved()
+      setSavedBadge(true)
+      setTimeout(() => setSavedBadge(false), 2000)
+    } catch (err) {
+      console.error('[Save] Failed:', err)
+      setSaveStatus('unsaved')
+    }
+  }, [catalog, products, fieldDefinitions, pages, designTokens, contact, setSaveStatus, markSaved])
 
   const visiblePages = pages.filter((p) => p.visible)
 
