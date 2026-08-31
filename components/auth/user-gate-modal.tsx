@@ -13,7 +13,6 @@ import {
   Users,
   UserPlus,
   Trash2,
-  Sparkles,
 } from 'lucide-react'
 
 interface UserGateModalProps {
@@ -21,35 +20,8 @@ interface UserGateModalProps {
   onLogin: (user: TeamUser) => void
 }
 
-const AUTH_STORAGE_KEY = 'pcon-team-auth-user-v2'
-const REGISTERED_USERS_KEY = 'pcon-team-registered-users-v2'
-
-const DEFAULT_TEAM_PROFILES: TeamUser[] = [
-  {
-    id: 'usr_eduardo_varanda',
-    name: 'Eduardo Varanda',
-    area: 'Engenharia',
-    loggedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_carlos_varanda',
-    name: 'Carlos Varanda',
-    area: 'Diretoria',
-    loggedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_lab_metrologia',
-    name: 'Laboratório de Metrologia',
-    area: 'Metrologia & Laboratório',
-    loggedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_comercial',
-    name: 'Comercial & Vendas',
-    area: 'Comercial & Vendas',
-    loggedAt: new Date().toISOString(),
-  },
-]
+const AUTH_STORAGE_KEY = 'pcon-team-auth-user-v3'
+const REGISTERED_USERS_KEY = 'pcon-team-registered-users-v3'
 
 export function getStoredUser(): TeamUser | null {
   if (typeof window === 'undefined') return null
@@ -66,7 +38,7 @@ export function saveStoredUser(user: TeamUser): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
 
-  // Also add to registered users list
+  // Also add to registered users list (only real users)
   const existing = getRegisteredUsers()
   if (!existing.some((u) => u.name.toLowerCase() === user.name.toLowerCase())) {
     saveRegisteredUsers([user, ...existing])
@@ -79,17 +51,14 @@ export function clearStoredUser(): void {
 }
 
 export function getRegisteredUsers(): TeamUser[] {
-  if (typeof window === 'undefined') return DEFAULT_TEAM_PROFILES
+  if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(REGISTERED_USERS_KEY)
-    if (!raw) {
-      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(DEFAULT_TEAM_PROFILES))
-      return DEFAULT_TEAM_PROFILES
-    }
+    if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_TEAM_PROFILES
+    return Array.isArray(parsed) ? parsed : []
   } catch {
-    return DEFAULT_TEAM_PROFILES
+    return []
   }
 }
 
@@ -101,7 +70,7 @@ export function saveRegisteredUsers(users: TeamUser[]): void {
 export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLogin }) => {
   const [registeredUsers, setRegisteredUsers] = useState<TeamUser[]>([])
   const [selectedUser, setSelectedUser] = useState<TeamUser | null>(null)
-  const [mode, setMode] = useState<'select' | 'new'>('select')
+  const [mode, setMode] = useState<'select' | 'new'>('new')
 
   const [newName, setNewName] = useState('')
   const [newArea, setNewArea] = useState<string>(PREDEFINED_AREAS[0])
@@ -117,6 +86,9 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
     setRegisteredUsers(users)
     if (users.length > 0) {
       setSelectedUser(users[0])
+      setMode('select')
+    } else {
+      setMode('new')
     }
   }, [])
 
@@ -134,7 +106,11 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
     setRegisteredUsers(updated)
     saveRegisteredUsers(updated)
     if (selectedUser?.id === userId) {
-      setSelectedUser(updated[0] || null)
+      const nextUser = updated[0] || null
+      setSelectedUser(nextUser)
+      if (!nextUser) {
+        setMode('new')
+      }
     }
   }
 
@@ -150,7 +126,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
 
     let finalUser: TeamUser
 
-    if (mode === 'select') {
+    if (mode === 'select' && registeredUsers.length > 0) {
       if (!selectedUser) {
         setError('Por favor, selecione um perfil de usuário da lista.')
         return
@@ -162,7 +138,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
     } else {
       const trimmedName = newName.trim()
       if (!trimmedName || trimmedName.length < 2) {
-        setError('Por favor, informe seu nome para criar seu perfil de identificação.')
+        setError('Por favor, informe seu nome para identificação nas edições.')
         return
       }
 
@@ -175,7 +151,10 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
       }
 
       // Save to registered users list
-      const updated = [finalUser, ...registeredUsers.filter((u) => u.name.toLowerCase() !== finalUser.name.toLowerCase())]
+      const updated = [
+        finalUser,
+        ...registeredUsers.filter((u) => u.name.toLowerCase() !== finalUser.name.toLowerCase()),
+      ]
       setRegisteredUsers(updated)
       saveRegisteredUsers(updated)
     }
@@ -202,40 +181,42 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
           </span>
         </div>
 
-        {/* Tab Selector: Existing Users vs Create New User */}
-        <div className="flex border-b border-[#E2E8F0] bg-[#F8FAFC] shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setMode('select')
-              setError('')
-            }}
-            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer ${
-              mode === 'select'
-                ? 'border-[#2563EB] text-[#2563EB] bg-[#FFFFFF]'
-                : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Selecionar Usuário ({registeredUsers.length})</span>
-          </button>
+        {/* Tab Selector: Only show if there are registered users */}
+        {registeredUsers.length > 0 && (
+          <div className="flex border-b border-[#E2E8F0] bg-[#F8FAFC] shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('select')
+                setError('')
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer ${
+                mode === 'select'
+                  ? 'border-[#2563EB] text-[#2563EB] bg-[#FFFFFF]'
+                  : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Usuários Salvos ({registeredUsers.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMode('new')
-              setError('')
-            }}
-            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer ${
-              mode === 'new'
-                ? 'border-[#2563EB] text-[#2563EB] bg-[#FFFFFF]'
-                : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Criar Novo Usuário</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('new')
+                setError('')
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer ${
+                mode === 'new'
+                  ? 'border-[#2563EB] text-[#2563EB] bg-[#FFFFFF]'
+                  : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Novo Usuário</span>
+            </button>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
@@ -246,12 +227,12 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
             </div>
           )}
 
-          {/* Mode 1: List of Existing Registered Users */}
-          {mode === 'select' && (
+          {/* Mode 1: List of Real Registered Users */}
+          {mode === 'select' && registeredUsers.length > 0 && (
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-[#475569] flex items-center justify-between">
-                <span>Escolha seu Perfil de Acesso:</span>
-                <span className="text-[10px] text-[#94A3B8] font-normal">Clique para selecionar</span>
+                <span>Selecione seu Perfil:</span>
+                <span className="text-[10px] text-[#94A3B8] font-normal">Clique para escolher</span>
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 border border-[#E2E8F0] bg-[#F8FAFC] rounded-xs">
@@ -287,16 +268,14 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
 
                       <div className="flex items-center gap-1 shrink-0">
                         {isSelected && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
-                        {registeredUsers.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteUser(e, user.id)}
-                            className="p-1 text-[#94A3B8] hover:text-[#EF4444] rounded-xs"
-                            title="Remover da lista rápida"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteUser(e, user.id)}
+                          className="p-1 text-[#94A3B8] hover:text-[#EF4444] rounded-xs"
+                          title="Remover perfil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   )
@@ -305,20 +284,20 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
             </div>
           )}
 
-          {/* Mode 2: Create New User Form */}
-          {mode === 'new' && (
+          {/* Mode 2: Create New User */}
+          {(mode === 'new' || registeredUsers.length === 0) && (
             <div className="space-y-3">
               {/* User Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-[#475569] flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-[#2563EB]" />
-                  <span>Seu Nome Completo</span>
+                  <span>Seu Nome / Identificador</span>
                 </label>
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Ex: Eduardo Varanda, Roberto Calibração..."
+                  placeholder="Digite seu nome completo"
                   className="w-full h-10 px-3 text-sm bg-[#F8FAFC] border border-[#CBD5E1] focus:border-[#2563EB] focus:bg-[#FFFFFF] focus:outline-none rounded-xs"
                   autoFocus
                 />
@@ -328,7 +307,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-[#475569] flex items-center gap-1.5">
                   <Building className="w-3.5 h-3.5 text-[#2563EB]" />
-                  <span>Área / Departamento</span>
+                  <span>Área / Departamento Responsável</span>
                 </label>
                 <select
                   value={newArea}
@@ -355,7 +334,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
             </div>
           )}
 
-          {/* Password field (Required for security) */}
+          {/* Password field (Required) */}
           <div className="space-y-1.5 pt-1">
             <label className="text-xs font-bold uppercase tracking-wider text-[#475569] flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-[#2563EB]" />
@@ -395,7 +374,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
             className="w-full h-11 bg-[#059669] hover:bg-[#047857] disabled:bg-[#9CA3AF] text-white text-sm font-bold tracking-wide flex items-center justify-center gap-2 rounded-xs shadow-md transition-colors cursor-pointer"
           >
             <span>
-              {mode === 'select'
+              {mode === 'select' && registeredUsers.length > 0
                 ? `Entrar como ${selectedUser?.name || 'Usuário'}`
                 : 'Criar Perfil e Entrar no Sistema'}
             </span>
