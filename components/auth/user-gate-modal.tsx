@@ -37,6 +37,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
   const [area, setArea] = useState<string>(PREDEFINED_AREAS[0])
   const [customArea, setCustomArea] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -49,7 +50,7 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
 
     const trimmedPass = password.trim().toLowerCase()
     if (trimmedPass !== DEFAULT_ADMIN_PASSWORD) {
-      setError('Senha incorreta. Digite a senha de acesso da equipe (presysadmin).')
+      setError('Senha incorreta. Por favor, verifique a senha de acesso com a equipe.')
       return
     }
 
@@ -105,17 +106,28 @@ export const UserGateModal: React.FC<UserGateModalProps> = ({ currentUser, onLog
               <Lock className="w-3.5 h-3.5 text-[#2563EB]" />
               <span>Senha de Acesso da Equipe</span>
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Digite a senha (padrão: presysadmin)"
-              className="w-full h-10 px-3 text-sm bg-[#F8FAFC] border border-[#CBD5E1] focus:border-[#2563EB] focus:bg-[#FFFFFF] focus:outline-none rounded-xs font-mono-data"
-              autoFocus
-            />
-            <span className="text-[10px] text-[#94A3B8] block">
-              Dica: a senha padrão de colaboração é <strong className="text-[#334155]">presysadmin</strong>
-            </span>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Digite a senha de acesso"
+                className="w-full h-10 pl-3 pr-10 text-sm bg-[#F8FAFC] border border-[#CBD5E1] focus:border-[#2563EB] focus:bg-[#FFFFFF] focus:outline-none rounded-xs font-mono-data"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-2.5 text-[#94A3B8] hover:text-[#475569] p-0.5"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <span className="text-xs font-semibold">Ocultar</span>
+                ) : (
+                  <span className="text-xs font-semibold">Ver</span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* User Name */}

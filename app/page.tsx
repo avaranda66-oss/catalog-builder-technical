@@ -68,65 +68,53 @@ export default function CatalogBuilderApp() {
   const [isHydrated, setIsHydrated] = useState(false)
   const [isSyncingCloud, setIsSyncingCloud] = useState(false)
 
-  // Cloud sync handler
+  // Cloud sync handler (Stable reference with getState to prevent re-render cascades)
   const handleCloudSync = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setIsSyncingCloud(true)
+      const store = useEditorStore.getState()
       const cloudData = await syncFromCloud({
-        catalog: catalog || INITIAL_CATALOG,
-        products: products.length > 0 ? products : INITIAL_PRODUCTS,
-        fieldDefinitions: fieldDefinitions.length > 0 ? fieldDefinitions : INITIAL_FIELD_DEFINITIONS,
-        pages: pages.length > 0 ? pages : DEFAULT_PAGES,
-        designTokens: designTokens || PRESYS_DESIGN_TOKENS,
-        contact: contact || PRESYS_CONTACT,
+        catalog: store.catalog || INITIAL_CATALOG,
+        products: store.products.length > 0 ? store.products : INITIAL_PRODUCTS,
+        fieldDefinitions: store.fieldDefinitions.length > 0 ? store.fieldDefinitions : INITIAL_FIELD_DEFINITIONS,
+        pages: store.pages.length > 0 ? store.pages : DEFAULT_PAGES,
+        designTokens: store.designTokens || PRESYS_DESIGN_TOKENS,
+        contact: store.contact || PRESYS_CONTACT,
       })
 
       if (cloudData && cloudData.products && cloudData.products.length > 0) {
-        setProducts(cloudData.products)
-        if (cloudData.pages) setPages(cloudData.pages)
-        if (cloudData.designTokens) setDesignTokens(cloudData.designTokens)
-        if (cloudData.contact) setContact(cloudData.contact)
-        if (cloudData.auditLogs) setAuditLogs(cloudData.auditLogs)
-        if (cloudData.lastUpdatedBy) setLastUpdatedBy(cloudData.lastUpdatedBy)
-        setLastCloudSync(new Date().toISOString())
+        store.setProducts(cloudData.products)
+        if (cloudData.pages) store.setPages(cloudData.pages)
+        if (cloudData.designTokens) store.setDesignTokens(cloudData.designTokens)
+        if (cloudData.contact) store.setContact(cloudData.contact)
+        if (cloudData.auditLogs) store.setAuditLogs(cloudData.auditLogs)
+        if (cloudData.lastUpdatedBy) store.setLastUpdatedBy(cloudData.lastUpdatedBy)
+        store.setLastCloudSync(new Date().toISOString())
       }
     } catch (err) {
       console.warn('[Cloud Sync] Failed to sync:', err)
     } finally {
       if (!isSilent) setIsSyncingCloud(false)
     }
-  }, [
-    catalog,
-    products,
-    fieldDefinitions,
-    pages,
-    designTokens,
-    contact,
-    setProducts,
-    setPages,
-    setDesignTokens,
-    setContact,
-    setAuditLogs,
-    setLastCloudSync,
-    setLastUpdatedBy,
-  ])
+  }, [])
 
-  // Hydration & Initial Cloud Sync
+  // Hydration & Initial Load (Run once on mount)
   useEffect(() => {
     setIsHydrated(true)
     const storedUser = getStoredUser()
     if (storedUser) {
       setCurrentUser(storedUser)
+      handleCloudSync(true)
     }
-    // Pull fresh data from Supabase Cloud on mount
-    handleCloudSync(true)
   }, [setCurrentUser, handleCloudSync])
 
-  // Periodic Auto-Sync (Every 45 seconds & on window focus for real-time team collaboration)
+  // Periodic Auto-Sync (Every 60s & on focus, ONLY when user is logged in)
   useEffect(() => {
+    if (!currentUser) return
+
     const interval = setInterval(() => {
       handleCloudSync(true)
-    }, 45000)
+    }, 60000)
 
     const onFocus = () => handleCloudSync(true)
     window.addEventListener('focus', onFocus)
@@ -135,7 +123,7 @@ export default function CatalogBuilderApp() {
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
     }
-  }, [handleCloudSync])
+  }, [currentUser, handleCloudSync])
 
   const handleLogout = useCallback(() => {
     clearStoredUser()
