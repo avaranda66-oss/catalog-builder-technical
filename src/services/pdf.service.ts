@@ -94,7 +94,6 @@ export class PDFService {
             const buttons = clonedDoc.querySelectorAll('button, .no-print, [data-editor-action], .a4-limit-guideline, .divergence-badge, .editor-only');
             buttons.forEach((btn) => ((btn as HTMLElement).style.display = 'none'));
 
-            // Remove all active selection rings and focus states in cloned element
             if (clonedElement) {
               clonedElement.style.width = '794px';
               clonedElement.style.minWidth = '794px';
@@ -106,6 +105,13 @@ export class PDFService {
               clonedElement.style.overflow = 'hidden';
               clonedElement.style.margin = '0';
               clonedElement.style.boxShadow = 'none';
+
+              // Remove all active selection rings and focus states in cloned element
+              const selectedEls = clonedElement.querySelectorAll('[class*="ring-"], [class*="bg-blue-500/10"]');
+              selectedEls.forEach((el) => {
+                el.classList.remove('ring-1', 'ring-2', 'ring-blue-400', 'ring-blue-500', 'ring-blue-600', 'bg-blue-500/10');
+                (el as HTMLElement).style.boxShadow = 'none';
+              });
 
               // Convert any img with object-cover / object-contain to background-image for faithful html2canvas rendering
               const imgs = clonedElement.querySelectorAll('img');

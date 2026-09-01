@@ -333,12 +333,13 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                         style={{
                           width: `${holeDiameter}px`,
                           height: `${holeDiameter}px`,
+                          lineHeight: `${holeDiameter}px`,
                           left: `calc(50% + ${x}px - ${holeDiameter / 2}px)`,
                           top: `calc(50% + ${y}px - ${holeDiameter / 2}px)`
                         }}
                         onClick={(e) => handleSelectHole(insIdx, holeIdx, holeValue, e)}
                         onDoubleClick={(e) => handleDeleteHole(insIdx, holeIdx, e)}
-                        className={`absolute rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                        className={`absolute rounded-full text-center transition-all cursor-pointer select-none overflow-visible ${
                           isSelected
                             ? 'bg-amber-300 ring-2 ring-amber-500 text-slate-950 font-black z-30 scale-110 shadow-md'
                             : 'bg-slate-950 hover:bg-amber-200 text-white hover:text-slate-950 border border-slate-600'
@@ -357,10 +358,20 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                               if (e.key === 'Escape') setActiveHoleKey(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full text-center bg-transparent font-mono font-black text-[9px] outline-none text-slate-950 px-0"
+                            className="w-full h-full text-center bg-transparent font-mono font-black text-[9px] outline-none text-slate-950 px-0"
+                            style={{ lineHeight: `${holeDiameter}px` }}
                           />
                         ) : (
-                          <span className="text-[9px] font-mono font-bold leading-none select-none text-center px-0.5 whitespace-nowrap">
+                          <span
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              height: `${holeDiameter}px`,
+                              lineHeight: `${holeDiameter}px`,
+                              fontSize: holeValue.length > 3 ? '7.5px' : holeValue.length > 2 ? '8.5px' : '9.5px'
+                            }}
+                            className="font-mono font-bold text-center tracking-tighter"
+                          >
                             {holeValue}
                           </span>
                         )}

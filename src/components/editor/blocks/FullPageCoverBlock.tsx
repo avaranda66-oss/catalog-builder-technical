@@ -521,14 +521,19 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                   onBlur={(e) => handleUpdateLayer(layer.id, { content: e.currentTarget.innerText.trim() })}
                   style={{
                     fontSize: `${layer.fontSize || 10}px`,
+                    lineHeight: '1.2',
                     color: layer.color || '#93c5fd',
                     backgroundColor: layer.backgroundColor || 'rgba(30, 58, 138, 0.4)',
                     borderColor: layer.borderColor || 'rgba(96, 165, 250, 0.5)',
                     borderWidth: `${layer.borderWidth || 1}px`,
                     borderStyle: 'solid',
-                    padding: '2px 8px'
+                    padding: '3px 8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxSizing: 'border-box'
                   }}
-                  className="outline-none focus:bg-white/20 cursor-text font-mono font-bold uppercase tracking-widest inline-block select-none"
+                  className="outline-none focus:bg-white/20 cursor-text font-mono font-bold uppercase tracking-widest select-none"
                 >
                   {layer.content || 'SELO / BADGE'}
                 </div>
