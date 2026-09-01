@@ -1,5 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Image, Trash2, Loader2, Link2, Search } from 'lucide-react';
+import {
+  X,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Loader2,
+  Link2,
+  Search,
+  Edit2,
+  Check
+} from 'lucide-react';
 import { useMediaStore, MediaAsset } from '../../stores/useMediaStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 
@@ -11,6 +21,7 @@ export const MediaGalleryModal: React.FC = () => {
     closeGallery,
     addAsset,
     addUrlAsset,
+    updateAsset,
     deleteAsset,
     isUploading
   } = useMediaStore();
@@ -21,41 +32,96 @@ export const MediaGalleryModal: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newUrlName, setNewUrlName] = useState('');
-  const [selectedAssetUrl, setSelectedAssetUrl] = useState<string | null>(null);
+  const [newCategory, setNewCategory] = useState<MediaAsset['category']>('cover');
+
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState('');
+  const [uploadCategory, setUploadCategory] = useState<MediaAsset['category']>('cover');
+
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState<MediaAsset['category']>('cover');
+  const [editTags, setEditTags] = useState('');
+
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!isGalleryOpen) return null;
 
   const handleSelectImage = (url: string) => {
-    setSelectedAssetUrl(url);
     if (galleryTargetCallback) {
       galleryTargetCallback(url);
       closeGallery();
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const created = await addAsset(file, 'cover');
-    if (created && galleryTargetCallback) {
-      galleryTargetCallback(created.url);
-      closeGallery();
+    setUploadFile(file);
+    setUploadName(file.name.replace(/\.[^/.]+$/, ''));
+  };
+
+  const handleExecuteUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) return;
+
+    const created = await addAsset(uploadFile, uploadCategory, uploadName.trim());
+    if (created) {
+      setSuccessMessage(`Foto "${created.name}" enviada com sucesso para o banco na nuvem!`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+      setUploadFile(null);
+      setUploadName('');
+      setActiveTab('all');
     }
   };
 
   const handleAddUrl = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl.trim()) return;
-    addUrlAsset(newUrl.trim(), newUrlName.trim() || 'Imagem Externa', 'cover');
-    if (galleryTargetCallback) {
-      galleryTargetCallback(newUrl.trim());
-      closeGallery();
-    }
+    addUrlAsset(newUrl.trim(), newUrlName.trim() || 'Imagem Externa', newCategory);
+    setSuccessMessage(`Imagem adicionada com sucesso!`);
+    setTimeout(() => setSuccessMessage(null), 4000);
     setNewUrl('');
     setNewUrlName('');
+    setActiveTab('all');
   };
 
-  // Coleta também imagens que já estão cadastradas nos produtos da biblioteca
+  const handleStartEdit = (asset: MediaAsset, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingAssetId(asset.id);
+    setEditName(asset.name);
+    setEditCategory(asset.category);
+    setEditTags(asset.tags?.join(', ') || '');
+  };
+
+  const handleSaveEdit = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const tagsArray = editTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    updateAsset(id, {
+      name: editName.trim() || 'Sem Título',
+      category: editCategory,
+      tags: tagsArray
+    });
+
+    setEditingAssetId(null);
+    setSuccessMessage('Informações da imagem atualizadas com sucesso!');
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleDelete = (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`Tem certeza que deseja excluir a imagem "${name}" do banco de dados?`)) {
+      deleteAsset(id);
+      setSuccessMessage(`Imagem "${name}" removida com sucesso.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
+
+  // Coleta imagens dos produtos da biblioteca
   const productImages: MediaAsset[] = products
     .filter((p) => Boolean(p.imageUrl))
     .map((p) => ({
@@ -67,7 +133,10 @@ export const MediaGalleryModal: React.FC = () => {
       createdAt: p.updatedAt || new Date().toISOString()
     }));
 
-  const allCombinedAssets = [...assets, ...productImages.filter((pi) => !assets.some((a) => a.url === pi.url))];
+  const allCombinedAssets = [
+    ...assets,
+    ...productImages.filter((pi) => !assets.some((a) => a.url === pi.url))
+  ];
 
   const filteredAssets = allCombinedAssets.filter((item) => {
     if (activeTab === 'covers' && item.category !== 'cover') return false;
@@ -83,140 +152,230 @@ export const MediaGalleryModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-4xl w-full flex flex-col max-h-[85vh] overflow-hidden">
+      <div className="bg-white rounded-none shadow-2xl border border-slate-400 max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className="p-3.5 border-b border-slate-300 flex items-center justify-between bg-slate-100">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#003366] text-white rounded-lg flex items-center justify-center shadow-xs">
-              <Image className="w-4 h-4" />
+            <div className="w-7 h-7 bg-[#003366] text-white rounded-none flex items-center justify-center shadow-xs">
+              <ImageIcon className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Banco Central de Imagens & Fotografias</h2>
-              <p className="text-[11px] text-slate-500 font-mono">
-                Acervo de fotos em alta resolução para Capas, Fichas Técnicas e Produtos
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
+                Banco Central de Fotografias & Mídia PRESYS
+              </h2>
+              <p className="text-[10px] text-slate-500 font-mono">
+                Armazenamento em Nuvem no Supabase Storage · Acessível em qualquer dispositivo
               </p>
             </div>
           </div>
-          <button onClick={closeGallery} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <button onClick={closeGallery} className="text-slate-400 hover:text-slate-700 p-1 rounded-none">
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Notificação de Sucesso */}
+        {successMessage && (
+          <div className="bg-emerald-50 border-b border-emerald-300 px-4 py-2 text-xs font-bold text-emerald-800 flex items-center gap-1.5 font-mono animate-fade-in">
+            <Check className="w-4 h-4 text-emerald-600" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
         {/* Abas e Filtros */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border-b border-slate-200 bg-slate-100/70">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2.5 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-1 w-full sm:w-auto">
             <button
+              type="button"
               onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'all' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border ${
+                activeTab === 'all'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
               }`}
             >
               Todas ({allCombinedAssets.length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('covers')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'covers' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border ${
+                activeTab === 'covers'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
               }`}
             >
               Capas & Banners
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('products')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'products' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border ${
+                activeTab === 'products'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
               }`}
             >
-              Fotos dos Produtos
+              Fotos de Produtos
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('upload')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1 ${
-                activeTab === 'upload' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              className={`px-3 py-1 text-xs font-bold rounded-none transition-colors flex items-center gap-1 border ${
+                activeTab === 'upload'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>Nova Imagem</span>
+              <span>+ Enviar Foto Nova</span>
             </button>
           </div>
 
           {/* Busca */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+          <div className="relative w-full sm:w-72">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por nome ou tag..."
-              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-[#003366]"
+              placeholder="Buscar por nome, modelo ou tag..."
+              className="w-full pl-8 pr-3 py-1 bg-white border border-slate-300 rounded-none text-xs font-sans focus:outline-none focus:border-[#003366]"
             />
           </div>
         </div>
 
-        {/* Conteúdo */}
-        <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
+        {/* Conteúdo da Galeria */}
+        <div className="flex-1 overflow-y-auto p-4 bg-slate-100/50">
           {activeTab === 'upload' ? (
-            <div className="max-w-md mx-auto py-4 space-y-4">
-              {/* Upload direto para o Supabase */}
-              <div className="p-6 bg-white border-2 border-dashed border-slate-300 hover:border-[#003366] rounded-xl text-center space-y-3 transition-colors">
-                <div className="w-12 h-12 bg-blue-50 text-[#003366] rounded-full flex items-center justify-center mx-auto">
-                  {isUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
+            <div className="max-w-xl mx-auto py-2 space-y-4">
+              {/* Formulário de Upload Completo */}
+              <form onSubmit={handleExecuteUpload} className="p-4 bg-white border border-slate-300 rounded-none space-y-3 shadow-xs">
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                  <Upload className="w-4 h-4 text-[#003366]" />
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider font-mono">
+                    Carregar Foto do Computador para a Nuvem
+                  </h3>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-xs">Fazer Upload de Fotografia Real (Nuvem)</h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Formatos JPG, PNG, WebP em alta resolução. A foto será salva no Supabase Storage.
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="image/*"
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="px-4 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-bold text-xs shadow-xs transition-colors"
-                >
-                  {isUploading ? 'Enviando Imagem...' : 'Selecionar Arquivo do Computador'}
-                </button>
-              </div>
 
-              {/* Inserir via URL externa */}
-              <form onSubmit={handleAddUrl} className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
-                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                  <Link2 className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Adicionar por Link de Imagem (URL)</span>
-                </h4>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-5 bg-slate-50 border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/30 rounded-none text-center cursor-pointer transition-all"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChosen}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <ImageIcon className="w-8 h-8 mx-auto mb-2 text-[#003366]" />
+                  {uploadFile ? (
+                    <div>
+                      <p className="font-bold text-slate-900 text-xs font-mono">{uploadFile.name}</p>
+                      <p className="text-[10px] text-slate-500">{(uploadFile.size / 1024 / 1024).toFixed(2)} MB · Clique para trocar</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-bold text-slate-800 text-xs">Clique para selecionar a imagem</p>
+                      <p className="text-[10px] text-slate-500">Formatos JPG, PNG, WebP em alta resolução</p>
+                    </div>
+                  )}
+                </div>
+
+                {uploadFile && (
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Nome / Descrição da Imagem *</label>
+                      <input
+                        type="text"
+                        value={uploadName}
+                        onChange={(e) => setUploadName(e.target.value)}
+                        placeholder="Ex: Capa PCON-Y18 em Bancada Industrial"
+                        required
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-none text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Categoria</label>
+                      <select
+                        value={uploadCategory}
+                        onChange={(e) => setUploadCategory(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-none text-xs bg-white"
+                      >
+                        <option value="cover">Capa / Banner Full Page</option>
+                        <option value="product">Foto de Produto / Equipamento</option>
+                        <option value="diagram">Diagrama Técnico / Esquema</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isUploading}
+                      className="w-full py-2 bg-[#003366] hover:bg-[#002244] text-white font-bold text-xs rounded-none shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Enviando para o Supabase Storage...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Salvar Imagem no Banco de Fotos</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </form>
+
+              {/* Inserir por URL Externa */}
+              <form onSubmit={handleAddUrl} className="p-4 bg-white border border-slate-300 rounded-none space-y-3 shadow-xs">
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                  <Link2 className="w-4 h-4 text-slate-600" />
+                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider font-mono">
+                    Ou Adicionar por Link Direto (URL Externa)
+                  </h4>
+                </div>
                 <div>
-                  <label className="block text-[11px] text-slate-600 mb-1">Nome / Descrição da Foto</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Nome / Descrição da Foto</label>
                   <input
                     type="text"
                     value={newUrlName}
                     onChange={(e) => setNewUrlName(e.target.value)}
-                    placeholder="Ex: Capa PSV Portable Studio"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
+                    placeholder="Ex: Foto de Campo PCON"
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-none text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-600 mb-1">URL Pública da Imagem *</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Categoria</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value as any)}
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-none text-xs bg-white"
+                  >
+                    <option value="cover">Capa / Banner Full Page</option>
+                    <option value="product">Foto de Produto / Equipamento</option>
+                    <option value="diagram">Diagrama Técnico / Esquema</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">URL Pública da Imagem *</label>
                   <input
                     type="url"
                     value={newUrl}
                     onChange={(e) => setNewUrl(e.target.value)}
                     placeholder="https://..."
                     required
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-none text-xs font-mono"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs shadow-xs transition-colors"
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-none transition-colors"
                 >
-                  Salvar Imagem na Galeria
+                  Salvar Link na Galeria
                 </button>
               </form>
             </div>
@@ -228,53 +387,119 @@ export const MediaGalleryModal: React.FC = () => {
                 </div>
               ) : (
                 filteredAssets.map((asset) => {
-                  const isSelected = selectedAssetUrl === asset.url;
+                  const isEditing = editingAssetId === asset.id;
+
                   return (
                     <div
                       key={asset.id}
-                      onClick={() => handleSelectImage(asset.url)}
-                      className={`group relative bg-white border rounded-xl overflow-hidden cursor-pointer shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
-                        isSelected ? 'border-[#003366] ring-2 ring-[#003366]' : 'border-slate-200 hover:border-[#003366]'
-                      }`}
+                      onClick={() => !isEditing && handleSelectImage(asset.url)}
+                      className="group relative bg-white border border-slate-300 hover:border-[#003366] rounded-none overflow-hidden cursor-pointer shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
                     >
-                      {/* Container da Imagem */}
-                      <div className="w-full h-36 bg-slate-900 overflow-hidden relative flex items-center justify-center">
+                      {/* Container da Foto */}
+                      <div className="w-full h-36 bg-slate-950 overflow-hidden relative flex items-center justify-center">
                         <img
                           src={asset.url}
                           alt={asset.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
                         />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center">
-                          <span className="px-3 py-1 bg-white text-[#003366] rounded-md font-bold text-[11px] shadow-sm">
-                            Usar esta Foto
-                          </span>
-                        </div>
+                        {/* Overlay para Usar */}
+                        {!isEditing && (
+                          <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center">
+                            <span className="px-3 py-1 bg-[#003366] text-white rounded-none font-bold text-[10px] shadow-sm font-mono uppercase tracking-wider">
+                              Usar no Catálogo
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Informações da Imagem */}
-                      <div className="p-2.5 bg-white space-y-1">
-                        <p className="font-bold text-slate-900 text-xs truncate" title={asset.name}>
-                          {asset.name}
-                        </p>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                          <span className="capitalize">{asset.category}</span>
-                          {asset.isCustom && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteAsset(asset.id);
-                              }}
-                              className="text-slate-400 hover:text-red-600 p-0.5"
-                              title="Remover da galeria"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+                      {/* Informações e Modo de Edição */}
+                      <div className="p-2 bg-white space-y-1 border-t border-slate-200">
+                        {isEditing ? (
+                          <div onClick={(e) => e.stopPropagation()} className="space-y-1.5 pt-0.5">
+                            <div>
+                              <label className="block text-[9px] font-mono text-slate-500">Nome / Título:</label>
+                              <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="w-full p-1 border border-slate-300 text-xs font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-mono text-slate-500">Categoria:</label>
+                              <select
+                                value={editCategory}
+                                onChange={(e) => setEditCategory(e.target.value as any)}
+                                className="w-full p-1 border border-slate-300 text-[10px] bg-white"
+                              >
+                                <option value="cover">Capa</option>
+                                <option value="product">Produto</option>
+                                <option value="diagram">Diagrama</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-mono text-slate-500">Tags (separadas por vírgula):</label>
+                              <input
+                                type="text"
+                                value={editTags}
+                                onChange={(e) => setEditTags(e.target.value)}
+                                placeholder="pcon, pressao, calibração"
+                                className="w-full p-1 border border-slate-300 text-[10px]"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1 pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => handleSaveEdit(asset.id, e)}
+                                className="flex-1 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-none flex items-center justify-center gap-1"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Salvar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingAssetId(null);
+                                }}
+                                className="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded-none"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-bold text-slate-900 text-xs truncate" title={asset.name}>
+                              {asset.name}
+                            </p>
+                            <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                              <span className="capitalize px-1 bg-slate-100 border border-slate-200">
+                                {asset.category}
+                              </span>
+
+                              {/* Ações de Edição e Exclusão */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleStartEdit(asset, e)}
+                                  className="text-slate-400 hover:text-blue-600 p-0.5"
+                                  title="Editar nome e tags da foto"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDelete(asset.id, asset.name, e)}
+                                  className="text-slate-400 hover:text-red-600 p-0.5"
+                                  title="Excluir foto do banco de dados"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -285,13 +510,13 @@ export const MediaGalleryModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
-          <span className="text-[11px] text-slate-500 font-mono">
-            {allCombinedAssets.length} imagem(ns) no acervo PRESYS
+        <div className="p-2.5 border-t border-slate-300 flex items-center justify-between bg-slate-100">
+          <span className="text-[10px] text-slate-600 font-mono">
+            {allCombinedAssets.length} foto(s) no Banco Central PRESYS
           </span>
           <button
             onClick={closeGallery}
-            className="px-4 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg"
+            className="px-4 py-1 text-xs font-bold bg-white hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-none"
           >
             Fechar
           </button>

@@ -59,6 +59,7 @@ interface MediaState {
   selectAsset: (id: string | null) => void;
   addAsset: (file: File, category?: MediaAsset['category'], name?: string) => Promise<MediaAsset | null>;
   addUrlAsset: (url: string, name: string, category?: MediaAsset['category']) => void;
+  updateAsset: (id: string, updates: Partial<MediaAsset>) => void;
   deleteAsset: (id: string) => void;
   loadAssets: () => Promise<void>;
 }
@@ -80,7 +81,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   addAsset: async (file, category = 'cover', name) => {
     set({ isUploading: true });
     try {
-      // 1. Upload para o Supabase Storage no bucket correto 'product-images'
+      // 1. Upload para o Supabase Storage no bucket 'product-images'
       const res = await SupabaseService.uploadProductImage(file, 'product-images');
       if (res.success && res.url) {
         const newAsset: MediaAsset = {
@@ -124,6 +125,17 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     SupabaseService.pushMediaAssetToCloud(newAsset).catch(() => {});
   },
 
+  updateAsset: (id, updates) => {
+    const updated = get().assets.map((a) => (a.id === id ? { ...a, ...updates } : a));
+    set({ assets: updated });
+    localStorage.setItem('cb_media_assets', JSON.stringify(updated));
+
+    const target = updated.find((a) => a.id === id);
+    if (target) {
+      SupabaseService.pushMediaAssetToCloud(target).catch(() => {});
+    }
+  },
+
   deleteAsset: (id) => {
     const updated = get().assets.filter((a) => a.id !== id);
     set({ assets: updated });
@@ -152,8 +164,8 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       const cloudAssets = await SupabaseService.pullMediaAssetsFromCloud();
       if (cloudAssets.length > 0) {
         const local = get().assets;
-        const cloudUrls = new Set(cloudAssets.map((c) => c.url));
-        const merged = [...cloudAssets, ...local.filter((l) => !cloudUrls.has(l.url))];
+        const cloudIds = new Set(cloudAssets.map((c) => c.id));
+        const merged = [...cloudAssets, ...local.filter((l) => !cloudIds.has(l.id))];
         set({ assets: merged });
         localStorage.setItem('cb_media_assets', JSON.stringify(merged));
       }
