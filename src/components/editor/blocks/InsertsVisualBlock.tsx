@@ -333,7 +333,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                         style={{
                           width: `${holeDiameter}px`,
                           height: `${holeDiameter}px`,
-                          transform: `translate(${x}px, ${y}px)`
+                          left: `calc(50% + ${x}px - ${holeDiameter / 2}px)`,
+                          top: `calc(50% + ${y}px - ${holeDiameter / 2}px)`
                         }}
                         onClick={(e) => handleSelectHole(insIdx, holeIdx, holeValue, e)}
                         onDoubleClick={(e) => handleDeleteHole(insIdx, holeIdx, e)}
@@ -359,7 +360,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                             className="w-full text-center bg-transparent font-mono font-black text-[9px] outline-none text-slate-950 px-0"
                           />
                         ) : (
-                          <span className="text-[10px] font-mono font-bold leading-none select-none">
+                          <span className="text-[9px] font-mono font-bold leading-none select-none text-center px-0.5 whitespace-nowrap">
                             {holeValue}
                           </span>
                         )}

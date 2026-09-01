@@ -351,12 +351,15 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
       style={{ boxSizing: 'border-box' }}
     >
       {/* 1. Fotografia de Fundo Full-Bleed A4 */}
-      <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
-        <img
-          src={backgroundImageUrl}
-          alt="Capa do Catálogo"
-          className="w-full h-full object-cover object-center"
-        />
+      <div
+        className="absolute inset-0 z-0 overflow-hidden bg-slate-950 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: `url("${backgroundImageUrl}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      >
         {/* Overlay Escuro com Contraste Configurável */}
         <div
           className="absolute inset-0 bg-slate-950 pointer-events-none"

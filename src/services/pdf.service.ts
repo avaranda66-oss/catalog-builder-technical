@@ -16,8 +16,24 @@ export class PDFService {
   }
 
   /**
+   * Ensures all image elements within a root container are fully loaded.
+   */
+  private static async preloadImages(container: Element): Promise<void> {
+    const images = Array.from(container.querySelectorAll('img'));
+    const promises = images.map((img) => {
+      if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // Don't block export on failed image
+        setTimeout(resolve, 3000); // 3s timeout per image
+      });
+    });
+    await Promise.all(promises);
+  }
+
+  /**
    * Exports all A4 pages to a multi-page high-resolution PDF document (300 DPI+).
-   * Ensures styles, colors, fonts, and images are preserved accurately.
+   * Ensures styles, colors, fonts, and images are preserved accurately without deformation.
    */
   static async exportToPDF(
     pageContainerSelector: string = '.a4-page-container',
@@ -30,12 +46,17 @@ export class PDFService {
         await document.fonts.ready;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
       const pageElements = document.querySelectorAll(pageContainerSelector);
       if (!pageElements || pageElements.length === 0) {
-        throw new Error('No A4 pages found for PDF export.');
+        throw new Error('Nenhuma página A4 encontrada para exportar o PDF.');
       }
+
+      // Preload images across all pages
+      for (const pageEl of Array.from(pageElements)) {
+        await this.preloadImages(pageEl);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -55,26 +76,58 @@ export class PDFService {
           pdf.addPage('a4', 'portrait');
         }
 
-        // Scroll to element to ensure viewport visibility for rendering
-        pageEl.scrollIntoView();
-        await new Promise((resolve) => setTimeout(resolve, 80));
-
         const canvas = await html2canvas(pageEl, {
           scale: scale,
           useCORS: true,
+          allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
           width: 794,
           height: 1123,
-          scrollX: 0,
-          scrollY: 0,
           windowWidth: 794,
           windowHeight: 1123,
-          imageTimeout: 15000,
-          onclone: (clonedDoc) => {
+          imageTimeout: 20000,
+          onclone: (clonedDoc, clonedElement) => {
             clonedDoc.body.classList.add('pdf-export-mode');
-            const buttons = clonedDoc.querySelectorAll('button, .no-print, [data-editor-action]');
+
+            // Hide editor elements, guidelines and buttons
+            const buttons = clonedDoc.querySelectorAll('button, .no-print, [data-editor-action], .a4-limit-guideline, .divergence-badge, .editor-only');
             buttons.forEach((btn) => ((btn as HTMLElement).style.display = 'none'));
+
+            // Remove all active selection rings and focus states in cloned element
+            if (clonedElement) {
+              clonedElement.style.width = '794px';
+              clonedElement.style.minWidth = '794px';
+              clonedElement.style.maxWidth = '794px';
+              clonedElement.style.height = '1123px';
+              clonedElement.style.minHeight = '1123px';
+              clonedElement.style.maxHeight = '1123px';
+              clonedElement.style.boxSizing = 'border-box';
+              clonedElement.style.overflow = 'hidden';
+              clonedElement.style.margin = '0';
+              clonedElement.style.boxShadow = 'none';
+
+              // Convert any img with object-cover / object-contain to background-image for faithful html2canvas rendering
+              const imgs = clonedElement.querySelectorAll('img');
+              imgs.forEach((img) => {
+                const src = img.getAttribute('src');
+                if (!src) return;
+
+                const isCover = img.classList.contains('object-cover') || img.style.objectFit === 'cover';
+                const isContain = img.classList.contains('object-contain') || img.style.objectFit === 'contain';
+
+                if (isCover || isContain) {
+                  const bgDiv = clonedDoc.createElement('div');
+                  bgDiv.className = img.className;
+                  bgDiv.style.cssText = img.style.cssText;
+                  bgDiv.style.backgroundImage = `url("${src}")`;
+                  bgDiv.style.backgroundSize = isCover ? 'cover' : 'contain';
+                  bgDiv.style.backgroundPosition = 'center center';
+                  bgDiv.style.backgroundRepeat = 'no-repeat';
+                  img.parentNode?.replaceChild(bgDiv, img);
+                }
+              });
+            }
           }
         });
 
@@ -89,7 +142,7 @@ export class PDFService {
       return { success: true, blob };
     } catch (err: any) {
       console.error('Error generating PDF:', err);
-      return { success: false, message: err.message || 'Failed to generate PDF.' };
+      return { success: false, message: err.message || 'Falha ao gerar o arquivo PDF.' };
     } finally {
       document.body.classList.remove('pdf-export-mode');
     }
