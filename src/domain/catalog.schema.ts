@@ -46,9 +46,8 @@ export interface CanvasLayer {
   zIndex: number;
   visible: boolean;
   locked?: boolean;
-  // Propriedades de Texto & Badge
   content?: string;
-  fontSize?: number; // em px (8 a 120)
+  fontSize?: number;
   fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'black';
   fontFamily?: 'sans' | 'mono' | 'serif';
   color?: string;
@@ -56,16 +55,14 @@ export interface CanvasLayer {
   letterSpacing?: 'normal' | 'wide' | 'widest';
   textTransform?: 'none' | 'uppercase' | 'capitalize';
   lineHeight?: 'tight' | 'normal' | 'relaxed';
-  // Propriedades de Imagem
   imageUrl?: string;
   objectFit?: 'cover' | 'contain' | 'fill';
-  // Propriedades de Forma/Linha/Badge
   backgroundColor?: string;
   borderColor?: string;
   borderWidth?: number;
   borderRadius?: number;
-  opacity?: number; // 0 a 100
-  padding?: number; // em px
+  opacity?: number;
+  padding?: number;
 }
 
 export interface TableColumnConfig {
@@ -152,10 +149,15 @@ export interface CatalogPreset {
   id: string;
   name: string;
   description: string;
+  category?: 'layout_template' | 'official_product_catalog';
   isSystem?: boolean;
   catalog: Catalog;
   createdAt: string;
 }
+
+// =========================================================================
+// ZOD SCHEMAS (Para validação em runtime)
+// =========================================================================
 
 export const CanvasLayerSchema = z.object({
   id: z.string(),
@@ -169,10 +171,10 @@ export const CanvasLayerSchema = z.object({
   visible: z.boolean().default(true),
   locked: z.boolean().optional().default(false),
   content: z.string().optional().default(''),
-  fontSize: z.number().optional().default(14),
+  fontSize: z.number().min(8).max(120).optional().default(16),
   fontWeight: z.enum(['normal', 'medium', 'semibold', 'bold', 'black']).optional().default('normal'),
   fontFamily: z.enum(['sans', 'mono', 'serif']).optional().default('sans'),
-  color: z.string().optional().default('#ffffff'),
+  color: z.string().optional().default('#000000'),
   textAlign: z.enum(['left', 'center', 'right']).optional().default('left'),
   letterSpacing: z.enum(['normal', 'wide', 'widest']).optional().default('normal'),
   textTransform: z.enum(['none', 'uppercase', 'capitalize']).optional().default('none'),
@@ -199,18 +201,18 @@ export const TableColumnConfigSchema = z.object({
   id: z.string().optional(),
   key: z.string(),
   label: z.string(),
-  visible: z.boolean().default(true),
+  visible: z.boolean().optional().default(true),
   width: z.number().optional(),
-  isCustom: z.boolean().default(false),
-  type: z.enum(['text', 'number', 'badge']).default('text')
+  isCustom: z.boolean().optional().default(false),
+  type: z.enum(['text', 'number', 'badge']).optional().default('text')
 });
 
 export const CatalogTableRowSchema = z.object({
   id: z.string(),
   productRefId: z.string().optional().default(''),
-  localOverrides: z.record(z.string()).default({}),
+  localOverrides: z.record(z.string()).optional().default({}),
   customNotes: z.string().optional().default(''),
-  order: z.number().int().default(0)
+  order: z.number().int().optional().default(0)
 });
 
 export const FeatureItemSchema = z.object({
@@ -231,7 +233,7 @@ export const ContentBlockSchema = z.object({
   id: z.string(),
   type: BlockTypeSchema,
   position: BlockPositionSchema.optional(),
-  style: z.record(z.any()).optional().default({}),
+  style: z.record(z.any()).optional(),
   badgeText: z.string().optional(),
   title: z.string().optional(),
   subtitle: z.string().optional(),
@@ -251,7 +253,7 @@ export const ContentBlockSchema = z.object({
     address: z.string().optional(),
     logoUrl: z.string().optional()
   }).optional(),
-  customData: z.record(z.any()).optional().default({})
+  customData: z.record(z.any()).optional()
 });
 
 export const CatalogPageSchema = z.object({
@@ -277,6 +279,7 @@ export const CatalogPresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
+  category: z.enum(['layout_template', 'official_product_catalog']).optional().default('layout_template'),
   isSystem: z.boolean().optional().default(false),
   catalog: CatalogSchema,
   createdAt: z.string().datetime().or(z.string())

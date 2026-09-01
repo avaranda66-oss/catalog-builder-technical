@@ -3,17 +3,16 @@ import { useCatalogStore } from '../../src/stores/useCatalogStore';
 
 describe('useCatalogStore', () => {
   beforeEach(() => {
-    useCatalogStore.getState().createCatalogFromPreset('Catálogo de Teste', 'preset-presys-pcon-flagship-4p');
+    useCatalogStore.getState().createCatalogFromPreset('Catálogo de Teste TA-25N', 'preset-presys-ta-25n-datasheet');
   });
 
-  it('deve inicializar com o preset padrão contendo 4 páginas', () => {
+  it('deve inicializar com o preset oficial do TA-25N contendo 3 páginas', () => {
     const catalog = useCatalogStore.getState().currentCatalog;
     expect(catalog).not.toBeNull();
-    expect(catalog?.pages.length).toBe(4);
+    expect(catalog?.pages.length).toBe(3);
     expect(catalog?.pages[0].pageType).toBe('cover');
     expect(catalog?.pages[1].pageType).toBe('technical');
     expect(catalog?.pages[2].pageType).toBe('technical');
-    expect(catalog?.pages[3].pageType).toBe('technical');
   });
 
   it('deve registrar override local na tabela do catálogo sem mutar a estrutura global', () => {
@@ -22,13 +21,13 @@ describe('useCatalogStore', () => {
     const tableBlock = catalog.pages[1].blocks!.find((b) => b.type === 'table')!;
     const firstRow = tableBlock.tableRows![0];
 
-    store.updateCellOverride(tableBlock.id, firstRow.id, 'range', '0 a 75');
+    store.updateCellOverride(tableBlock.id, firstRow.id, 'range', '-25 a 140 °C (Personalizado)');
 
     const updatedCatalog = useCatalogStore.getState().currentCatalog!;
     const updatedTable = updatedCatalog.pages[1].blocks!.find((b) => b.type === 'table')!;
     const updatedRow = updatedTable.tableRows![0];
 
-    expect(updatedRow.localOverrides?.['range']).toBe('0 a 75');
+    expect(updatedRow.localOverrides?.['range']).toBe('-25 a 140 °C (Personalizado)');
   });
 
   it('deve restaurar o valor oficial removendo a chave de override local', () => {
@@ -38,9 +37,9 @@ describe('useCatalogStore', () => {
     const firstRow = tableBlock.tableRows![0];
 
     // Aplica override
-    store.updateCellOverride(tableBlock.id, firstRow.id, 'range', '0 a 75');
+    store.updateCellOverride(tableBlock.id, firstRow.id, 'range', '-25 a 140 °C (Personalizado)');
     const page1Table = useCatalogStore.getState().currentCatalog!.pages[1].blocks.find((b) => b.type === 'table')!;
-    expect(page1Table.tableRows![0].localOverrides?.['range']).toBe('0 a 75');
+    expect(page1Table.tableRows![0].localOverrides?.['range']).toBe('-25 a 140 °C (Personalizado)');
 
     // Restaura
     store.restoreCellToLibrary(tableBlock.id, firstRow.id, 'range');

@@ -77,13 +77,14 @@ export const EditorView: React.FC = () => {
             <span>Importar / Recortar PDF</span>
           </button>
 
-          {/* Botão de Modelos / Presets */}
+          {/* Botão de Templates & Catálogos Prontos */}
           <button
             onClick={() => setIsPresetModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-brand-700 hover:bg-brand-50 border border-brand-200 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+            title="Escolha entre Templates de Estrutura em Branco ou Catálogos de Produtos Prontos"
           >
             <Layers className="w-3.5 h-3.5 text-brand-600" />
-            <span>Modelos & Presets</span>
+            <span>Templates & Catálogos Prontos</span>
           </button>
 
           <button

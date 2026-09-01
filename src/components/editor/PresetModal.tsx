@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, CheckCircle2, FileText, ArrowRight, LayoutTemplate } from 'lucide-react';
+import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { SYSTEM_PRESETS } from '../../data/presets';
 import { CatalogPreset, Catalog } from '../../domain/catalog.schema';
@@ -11,7 +11,7 @@ interface PresetModalProps {
 
 export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => {
   const { currentCatalog, setCurrentCatalog, saveCurrentCatalog } = useCatalogStore();
-  const [activeTab, setActiveTab] = useState<'system' | 'save' | 'custom'>('system');
+  const [activeTab, setActiveTab] = useState<'layout_templates' | 'official_catalogs' | 'custom' | 'save'>('official_catalogs');
   const [customPresets, setCustomPresets] = useState<CatalogPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [presetDesc, setPresetDesc] = useState('');
@@ -32,8 +32,16 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
   if (!isOpen) return null;
 
+  const layoutTemplates = SYSTEM_PRESETS.filter((p) => p.category === 'layout_template' || !p.category);
+  const officialCatalogs = SYSTEM_PRESETS.filter((p) => p.category === 'official_product_catalog');
+
   const handleApplyPreset = (preset: CatalogPreset) => {
-    if (confirm(`Deseja carregar o modelo "${preset.name}"? As páginas atuais do catálogo serão substituídas pela estrutura deste modelo.`)) {
+    const isTemplate = preset.category === 'layout_template';
+    const actionLabel = isTemplate
+      ? `Carregar o esqueleto de layout "${preset.name}"? As páginas atuais serão substituídas pela estrutura em branco deste modelo.`
+      : `Carregar o catálogo oficial "${preset.name}" com todos os dados técnicos e fotos reais pré-configurados?`;
+
+    if (confirm(actionLabel)) {
       const newCatalog: Catalog = {
         ...structuredClone(preset.catalog),
         id: `cat-${Date.now()}`,
@@ -54,6 +62,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
       id: `preset-custom-${Date.now()}`,
       name: presetName.trim(),
       description: presetDesc.trim() || 'Modelo personalizado criado pelo usuário.',
+      category: 'layout_template',
       isSystem: false,
       catalog: structuredClone(currentCatalog),
       createdAt: new Date().toISOString()
@@ -62,7 +71,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
     const updated = [newPreset, ...customPresets];
     setCustomPresets(updated);
     localStorage.setItem('cb_custom_presets', JSON.stringify(updated));
-    setMessage(`Modelo "${presetName}" salvo com sucesso!`);
+    setMessage(`Template "${presetName}" salvo com sucesso!`);
     setPresetName('');
     setPresetDesc('');
   };
@@ -75,14 +84,20 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-4xl w-full flex flex-col max-h-[88vh] overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2">
-            <LayoutTemplate className="w-5 h-5 text-[#003366]" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[#003366] text-white rounded-lg">
+              <Layers className="w-5 h-5" />
+            </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Galeria de Modelos & Presets de Catálogo</h2>
-              <p className="text-[11px] text-slate-500 font-mono">Estruturas editoriais homologadas para catálogos técnicos, fichas e datasheets</p>
+              <h2 className="text-sm font-bold text-slate-900">
+                Central de Estruturas & Catálogos de Produtos
+              </h2>
+              <p className="text-[11px] text-slate-500 font-mono">
+                Diferencie entre <strong>Esqueletos em Branco</strong> (templates sem produto) e <strong>Catálogos Prontos</strong> (com dados oficiais)
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg">
@@ -90,155 +105,197 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
           </button>
         </div>
 
-        {/* Abas */}
-        <div className="flex border-b border-slate-200 bg-slate-100/70 p-1">
+        {/* Abas Superiores de Navegação */}
+        <div className="grid grid-cols-4 border-b border-slate-200 bg-slate-100/70 p-1.5 gap-1.5 text-xs font-semibold">
+          {/* Aba 1: Catálogos Oficiais Prontos */}
           <button
-            onClick={() => { setActiveTab('system'); setMessage(null); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${
-              activeTab === 'system' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            onClick={() => { setActiveTab('official_catalogs'); setMessage(null); }}
+            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'official_catalogs'
+                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            Modelos de Fábrica Homologados ({SYSTEM_PRESETS.length})
+            <Package className="w-4 h-4 text-emerald-600" />
+            <span>📦 Catálogos Prontos ({officialCatalogs.length})</span>
           </button>
+
+          {/* Aba 2: Templates de Estrutura em Branco */}
           <button
-            onClick={() => { setActiveTab('save'); setMessage(null); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${
-              activeTab === 'save' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            onClick={() => { setActiveTab('layout_templates'); setMessage(null); }}
+            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'layout_templates'
+                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            Salvar Documento Atual como Modelo
+            <LayoutTemplate className="w-4 h-4 text-blue-600" />
+            <span>🏗️ Templates em Branco ({layoutTemplates.length})</span>
           </button>
+
+          {/* Aba 3: Meus Templates Salvos */}
           <button
             onClick={() => { setActiveTab('custom'); setMessage(null); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${
-              activeTab === 'custom' ? 'bg-white text-[#003366] shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'custom'
+                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            Meus Modelos Salvos ({customPresets.length})
+            <Bookmark className="w-4 h-4 text-amber-600" />
+            <span>💾 Meus Templates ({customPresets.length})</span>
+          </button>
+
+          {/* Aba 4: Salvar Atual como Template */}
+          <button
+            onClick={() => { setActiveTab('save'); setMessage(null); }}
+            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'save'
+                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Save className="w-4 h-4 text-slate-600" />
+            <span>➕ Salvar Catálogo Atual</span>
           </button>
         </div>
 
-        {/* Conteúdo */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs bg-slate-50/50">
-          {activeTab === 'system' && (
+        {/* Conteúdo das Abas */}
+        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+          {message && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{message}</span>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* ABA 1: CATÁLOGOS OFICIAIS PRONTOS (COM DADOS E FOTOS REAIS) */}
+          {/* ========================================================================= */}
+          {activeTab === 'official_catalogs' && (
             <div className="space-y-4">
-              <p className="text-slate-600 leading-relaxed text-[11px]">
-                Selecione uma estrutura editorial completa. As páginas, capas, tabelas e diagramas serão configurados automaticamente no editor A4.
-              </p>
+              <div className="bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl flex items-start gap-2 text-xs text-emerald-900">
+                <Package className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Catálogos de Produtos Oficiais Prontos:</strong> Estes documentos já vêm 100% populados com fotos reais de laboratório, especificações completas de engenharia (manuais PRESYS EM0314-01 / EM0291-04), tabelas de bornes e códigos de inserts.
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {SYSTEM_PRESETS.map((preset) => (
+                {officialCatalogs.map((preset) => (
                   <div
                     key={preset.id}
-                    className="p-4 border border-slate-200 hover:border-[#003366] rounded-xl bg-white hover:shadow-lg transition-all flex flex-col justify-between group space-y-3"
+                    className="bg-white border border-slate-200 hover:border-emerald-500 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
                   >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold text-slate-900 text-xs group-hover:text-[#003366] transition-colors leading-tight">
-                          {preset.name}
-                        </h3>
-                        <span className="px-2 py-0.5 bg-blue-50 text-[#003366] font-mono text-[9px] font-bold rounded-full border border-blue-200 shrink-0">
-                          {preset.catalog.pages.length} pág(s) A4
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold text-[10px] tracking-wide uppercase flex items-center gap-1">
+                          <Package className="w-3 h-3" />
+                          Produto Oficial
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {preset.catalog.pages.length} página(s) A4
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                      <h3 className="font-bold text-slate-900 text-sm group-hover:text-emerald-700 transition-colors">
+                        {preset.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                         {preset.description}
                       </p>
 
-                      {/* Miniaturas de Páginas */}
-                      <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
-                        {preset.catalog.pages.map((p, pIdx) => (
-                          <span
-                            key={p.id || pIdx}
-                            className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-mono border border-slate-200"
-                          >
-                            Pág. {p.pageNumber}: {p.title || 'Seções'}
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5 text-[10px] text-slate-600">
+                        {preset.catalog.pages.map((p, idx) => (
+                          <span key={p.id} className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            Pág {idx + 1}: {p.title || p.pageType}
                           </span>
                         ))}
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        Tema: {preset.catalog.themeId}
-                      </span>
-                      <button
-                        onClick={() => handleApplyPreset(preset)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-bold text-xs shadow-2xs transition-colors"
-                      >
-                        <span>Usar este Modelo</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleApplyPreset(preset)}
+                      className="mt-4 w-full py-2 bg-slate-900 group-hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    >
+                      <span>Abrir este Catálogo Completo</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {activeTab === 'save' && (
-            <form onSubmit={handleSaveCustomPreset} className="space-y-4 max-w-lg mx-auto bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-950 space-y-1">
-                <p className="font-bold flex items-center gap-1.5 text-xs">
-                  <Save className="w-4 h-4 text-[#003366]" />
-                  <span>Salvar Estrutura como Modelo Corporativo</span>
-                </p>
-                <p className="text-[11px] leading-relaxed text-slate-700">
-                  O layout atual com <strong>{currentCatalog?.pages.length || 0} página(s)</strong>, blocos, tabelas e estilização será salvo na sua biblioteca pessoal para reutilização rápida.
-                </p>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nome do Modelo *</label>
-                <input
-                  type="text"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  placeholder="Ex: Catálogo Oficial Linha PCON 2026"
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-[#003366]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Descrição / Finalidade</label>
-                <textarea
-                  rows={3}
-                  value={presetDesc}
-                  onChange={(e) => setPresetDesc(e.target.value)}
-                  placeholder="Ex: Modelo de 3 páginas para propostas técnicas com transmissores e manifolds."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-[#003366]"
-                />
-              </div>
-
-              {message && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center gap-2 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{message}</span>
+          {/* ========================================================================= */}
+          {/* ABA 2: TEMPLATES / ESQUELETOS DE ESTRUTURA EM BRANCO (SEM PRODUTO FIXO) */}
+          {/* ========================================================================= */}
+          {activeTab === 'layout_templates' && (
+            <div className="space-y-4">
+              <div className="bg-blue-50/70 border border-blue-200 p-3 rounded-xl flex items-start gap-2 text-xs text-blue-900">
+                <LayoutTemplate className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Esqueletos de Estrutura em Branco:</strong> Modelos pré-moldados sem nenhum produto amarrado. Escolha uma estrutura de 1, 2 ou 3 páginas para você preencher livremente e vincular qualquer equipamento da Biblioteca Oficial.
                 </div>
-              )}
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-bold shadow-sm transition-colors"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Salvar Modelo no Workspace</span>
-                </button>
               </div>
-            </form>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {layoutTemplates.map((preset) => (
+                  <div
+                    key={preset.id}
+                    className="bg-white border border-slate-200 hover:border-blue-500 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-semibold text-[10px] tracking-wide uppercase flex items-center gap-1">
+                          <LayoutTemplate className="w-3 h-3" />
+                          Esqueleto em Branco
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {preset.catalog.pages.length} página(s) A4
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition-colors">
+                        {preset.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                        {preset.description}
+                      </p>
+
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5 text-[10px] text-slate-600">
+                        {preset.catalog.pages.map((p, idx) => (
+                          <span key={p.id} className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            Pág {idx + 1}: {p.title || p.pageType}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleApplyPreset(preset)}
+                      className="mt-4 w-full py-2 bg-slate-900 group-hover:bg-blue-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    >
+                      <span>Usar este Esqueleto de Layout</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
+          {/* ========================================================================= */}
+          {/* ABA 3: MEUS TEMPLATES SALVOS */}
+          {/* ========================================================================= */}
           {activeTab === 'custom' && (
-            <div className="space-y-3">
+            <div>
               {customPresets.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-2 bg-white rounded-xl border border-dashed border-slate-200">
-                  <FileText className="w-8 h-8 mx-auto text-slate-300" />
-                  <p className="font-semibold text-slate-700">Você ainda não salvou nenhum modelo personalizado.</p>
-                  <p className="text-[11px] text-slate-500">
-                    Use a aba "Salvar Documento Atual como Modelo" para criar templates reutilizáveis.
+                <div className="text-center py-12 text-slate-400">
+                  <Bookmark className="w-12 h-12 mx-auto mb-2 opacity-40 text-amber-500" />
+                  <p className="text-xs font-medium text-slate-600">Nenhum template personalizado salvo</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Você pode salvar a estrutura do catálogo ativo a qualquer momento na aba "Salvar Catálogo Atual".
                   </p>
                 </div>
               ) : (
@@ -246,28 +303,35 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                   {customPresets.map((preset) => (
                     <div
                       key={preset.id}
-                      className="p-4 border border-slate-200 rounded-xl bg-white flex flex-col justify-between gap-3 shadow-2xs"
+                      className="bg-white border border-slate-200 hover:border-amber-400 rounded-xl p-4 shadow-sm flex flex-col justify-between"
                     >
                       <div>
-                        <h3 className="font-bold text-slate-900 text-xs">{preset.name}</h3>
-                        <p className="text-[11px] text-slate-600 mt-1">{preset.description}</p>
-                        <span className="text-[10px] text-slate-400 font-mono mt-2 block">
-                          Criado em: {new Date(preset.createdAt || Date.now()).toLocaleDateString('pt-BR')} ({preset.catalog.pages.length} páginas)
-                        </span>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold text-[10px] uppercase">
+                            Personalizado
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {preset.catalog.pages.length} folha(s)
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-slate-900 text-sm">{preset.name}</h3>
+                        <p className="text-xs text-slate-500 mt-1">{preset.description}</p>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button
-                          onClick={() => handleDeleteCustomPreset(preset.id)}
-                          className="px-2.5 py-1 text-red-600 hover:bg-red-50 rounded text-xs font-medium"
-                        >
-                          Excluir
-                        </button>
+                      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100">
                         <button
                           onClick={() => handleApplyPreset(preset)}
-                          className="px-3.5 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-bold text-xs shadow-2xs"
+                          className="flex-1 py-1.5 bg-slate-900 hover:bg-amber-600 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
                         >
-                          Aplicar Modelo
+                          <span>Carregar</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCustomPreset(preset.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Excluir Template"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -276,16 +340,57 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
               )}
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="p-3 border-t border-slate-200 flex justify-end bg-slate-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg"
-          >
-            Fechar
-          </button>
+          {/* ========================================================================= */}
+          {/* ABA 4: SALVAR ATUAL COMO TEMPLATE */}
+          {/* ========================================================================= */}
+          {activeTab === 'save' && (
+            <div className="max-w-xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 mb-1">
+                Salvar Estrutura do Catálogo Atual
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Guarde a composição de páginas, tabelas e cabeçalhos do catálogo que você está editando para reutilizar em futuros produtos.
+              </p>
+
+              <form onSubmit={handleSaveCustomPreset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nome do Template *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Ex: Template Calibradores Portáteis (2 Folhas)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Descrição Técnica (Opcional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={presetDesc}
+                    onChange={(e) => setPresetDesc(e.target.value)}
+                    placeholder="Ex: Layout limpo com tabela de exatidão e diagrama de bornes para instrumentos de bancada."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Salvar como Novo Template</span>
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>
