@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Shield, Zap, Award, Plus, Trash2 } from 'lucide-react';
+import { Award, Plus, Trash2 } from 'lucide-react';
 import { ContentBlock, FeatureItem } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 
@@ -14,16 +14,16 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
   const features: FeatureItem[] = block.features || [];
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
-    updateBlock(pageId, block.id, { title: e.currentTarget.innerText });
+    updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
   };
 
   const handleItemTitleBlur = (id: string, text: string) => {
-    const updated = features.map((f) => (f.id === id ? { ...f, title: text } : f));
+    const updated = features.map((f) => (f.id === id ? { ...f, title: text.trim() } : f));
     updateBlock(pageId, block.id, { features: updated });
   };
 
   const handleItemDescBlur = (id: string, text: string) => {
-    const updated = features.map((f) => (f.id === id ? { ...f, description: text } : f));
+    const updated = features.map((f) => (f.id === id ? { ...f, description: text.trim() } : f));
     updateBlock(pageId, block.id, { features: updated });
   };
 
@@ -32,7 +32,7 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
       id: `feat-${Date.now()}`,
       title: 'Novo Destaque Técnico',
       description: 'Descrição sucinta do benefício ou especificação diferencial.',
-      icon: 'CheckCircle2'
+      icon: 'Award'
     };
     updateBlock(pageId, block.id, { features: [...features, newItem] });
   };
@@ -47,52 +47,61 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-3.5 rounded-xl border border-slate-200 bg-white shadow-sm transition-all ${
-        isSelected ? 'ring-2 ring-brand-500 bg-brand-50/20' : 'hover:ring-1 hover:ring-slate-300'
+      className={`relative p-3 bg-white rounded-none border border-slate-300 transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      <h3
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={handleTitleBlur}
-        className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2.5 outline-none focus:bg-slate-100 rounded px-1 flex items-center gap-1.5"
-      >
-        <Award className="w-4 h-4 text-brand-600" />
-        <span>{block.title || 'Destaques e Recursos Principais'}</span>
-      </h3>
+      {/* Header Técnico */}
+      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2">
+        <h3
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={handleTitleBlur}
+          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
+        >
+          <Award className="w-3.5 h-3.5 text-[#003366]" />
+          <span>{block.title || 'DESTAQUES & RECURSOS TÉCNICOS DO CALIBRADOR'}</span>
+        </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        {features.map((feat, idx) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddFeature();
+          }}
+          className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none no-print"
+          data-editor-action="true"
+        >
+          <Plus className="w-3 h-3" />
+          <span>+ Adicionar Destaque</span>
+        </button>
+      </div>
+
+      {/* Grid de Destaques (Cantos Retos) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {features.map((item) => (
           <div
-            key={feat.id}
-            className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5 group relative hover:border-slate-300 transition-all text-left"
+            key={item.id}
+            className="flex items-start gap-2 p-2 bg-slate-50 border border-slate-200 rounded-none hover:border-slate-400 transition-colors group relative"
           >
-            <div className="p-1 rounded bg-brand-100 text-brand-700 flex-shrink-0 mt-0.5">
-              {idx % 3 === 0 ? (
-                <Shield className="w-3.5 h-3.5" />
-              ) : idx % 3 === 1 ? (
-                <Zap className="w-3.5 h-3.5" />
-              ) : (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              )}
-            </div>
+            <span className="text-[#003366] font-bold text-xs shrink-0 mt-0.5 select-none">■</span>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pr-4">
               <h4
                 contentEditable
                 suppressContentEditableWarning
-                onBlur={(e) => handleItemTitleBlur(feat.id, e.currentTarget.innerText)}
-                className="text-[11px] font-bold text-slate-900 outline-none focus:bg-white rounded"
+                onBlur={(e) => handleItemTitleBlur(item.id, e.currentTarget.innerText)}
+                className="text-[11px] font-bold text-slate-900 leading-snug outline-none focus:bg-amber-100 rounded-none cursor-text"
               >
-                {feat.title}
+                {item.title}
               </h4>
               <p
                 contentEditable
                 suppressContentEditableWarning
-                onBlur={(e) => handleItemDescBlur(feat.id, e.currentTarget.innerText)}
-                className="text-[10px] text-slate-500 font-normal leading-relaxed outline-none focus:bg-white rounded mt-0.5"
+                onBlur={(e) => handleItemDescBlur(item.id, e.currentTarget.innerText)}
+                className="text-[10px] text-slate-600 leading-normal outline-none focus:bg-amber-50 rounded-none mt-0.5 cursor-text"
               >
-                {feat.description}
+                {item.description}
               </p>
             </div>
 
@@ -100,29 +109,16 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleRemoveFeature(feat.id);
+                handleRemoveFeature(item.id);
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 rounded transition-opacity"
-              title="Remover destaque"
+              className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-0.5 no-print"
+              data-editor-action="true"
+              title="Excluir destaque"
             >
               <Trash2 className="w-3 h-3" />
             </button>
           </div>
         ))}
-      </div>
-
-      <div className="mt-2.5 flex justify-start">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAddFeature();
-          }}
-          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-md transition-colors"
-        >
-          <Plus className="w-3 h-3" />
-          <span>Adicionar Destaque</span>
-        </button>
       </div>
     </div>
   );

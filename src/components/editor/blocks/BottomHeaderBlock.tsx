@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Phone, Mail, Globe } from 'lucide-react';
+import { Phone, Mail, Globe } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 
@@ -20,7 +20,7 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
   const gradientClass =
     block.style?.gradient ||
     custom.gradient ||
-    'bg-gradient-to-r from-slate-900 via-[#002244] to-slate-900';
+    'bg-[#001f3f]';
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
@@ -58,79 +58,76 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-5 rounded-2xl ${gradientClass} text-white shadow-lg transition-all ${
-        isSelected ? 'ring-3 ring-brand-400 shadow-xl' : 'hover:ring-1 hover:ring-slate-400'
+      className={`relative p-3.5 rounded-none ${gradientClass} text-white transition-all border border-slate-700 ${
+        isSelected ? 'ring-2 ring-blue-500' : 'hover:border-slate-500'
       }`}
     >
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Lado Esquerdo: Identidade e Resumo */}
-        <div className="space-y-1 text-left flex-1">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-brand-400 shrink-0" />
-            <h3
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={handleTitleBlur}
-              className="text-sm font-extrabold tracking-wide uppercase outline-none focus:bg-white/10 rounded px-1 -ml-1 cursor-text"
-            >
-              {block.title || 'PRESYS INSTRUMENTOS & SISTEMAS LTDA'}
-            </h3>
             <span
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
-              className="text-[9px] bg-brand-500/30 border border-brand-400/40 text-brand-200 px-2 py-0.5 rounded font-mono outline-none focus:bg-white/20 cursor-text"
+              className="text-[9px] font-mono font-bold tracking-widest uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-none outline-none focus:bg-white/20 cursor-text"
             >
-              {block.badgeText || 'ISO 9001 / RBC'}
+              {block.badgeText || 'PRESYS METROLOGIA'}
             </span>
           </div>
+
+          <h2
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={handleTitleBlur}
+            className="text-lg font-black tracking-tight text-white outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text leading-tight"
+          >
+            {block.title || 'ESPECIFICAÇÕES TÉCNICAS E SISTEMAS DE CALIBRAÇÃO'}
+          </h2>
 
           <p
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
-            className="text-xs text-slate-300 outline-none focus:bg-white/10 rounded px-1 -ml-1 cursor-text"
+            className="text-xs text-slate-300 font-medium outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text"
           >
-            {block.subtitle ||
-              'Soluções completas para calibração de pressão, temperatura e sinais de processo.'}
+            {block.subtitle || 'Instrumentos de alta precisão para laboratório e controle em processos contínuos.'}
           </p>
         </div>
 
-        {/* Lado Direito: Contatos e Certificação 100% Editáveis */}
-        <div className="flex items-center gap-4 text-[10px] text-slate-300 font-mono flex-shrink-0">
-          <div className="flex flex-col gap-1 text-right">
-            <span className="flex items-center gap-1 justify-end">
-              <Phone className="w-3 h-3 text-brand-400" />
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={handlePhoneBlur}
-                className="outline-none focus:bg-white/20 rounded px-0.5 cursor-text"
-              >
-                {custom.phone || '+55 (11) 3038-1300'}
-              </span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-[10px] text-slate-300 font-mono pt-2 md:pt-0 border-t md:border-t-0 md:border-l border-white/10 md:pl-4">
+          <div className="flex items-center gap-1.5">
+            <Phone className="w-3 h-3 text-blue-400 shrink-0" />
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={handlePhoneBlur}
+              className="outline-none focus:bg-white/20 rounded-none px-0.5 cursor-text"
+            >
+              {custom.phone || '+55 (11) 3038-1300'}
             </span>
-            <span className="flex items-center gap-1 justify-end">
-              <Mail className="w-3 h-3 text-brand-400" />
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={handleEmailBlur}
-                className="outline-none focus:bg-white/20 rounded px-0.5 cursor-text"
-              >
-                {custom.email || 'vendas@presys.com.br'}
-              </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Mail className="w-3 h-3 text-blue-400 shrink-0" />
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={handleEmailBlur}
+              className="outline-none focus:bg-white/20 rounded-none px-0.5 cursor-text"
+            >
+              {custom.email || 'vendas@presys.com.br'}
             </span>
-            <span className="flex items-center gap-1 justify-end">
-              <Globe className="w-3 h-3 text-brand-400" />
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={handleWebsiteBlur}
-                className="outline-none focus:bg-white/20 rounded px-0.5 cursor-text"
-              >
-                {custom.website || 'www.presys.com.br'}
-              </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={handleWebsiteBlur}
+              className="outline-none focus:bg-white/20 rounded-none px-0.5 cursor-text"
+            >
+              {custom.website || 'www.presys.com.br'}
             </span>
           </div>
         </div>

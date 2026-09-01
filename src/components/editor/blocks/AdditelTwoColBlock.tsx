@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, Check, Plus, Trash2 } from 'lucide-react';
+import { Upload, Plus, Trash2 } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 
@@ -19,16 +19,15 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
 
   const custom = block.customData || {};
   const bulletList: string[] = custom.bullets || [
-    'Automated and self-contained pressure generation and control to 1,500 psi (100 bar)',
-    'Precision accuracy models to 0.01% FS with high stability',
-    'Two removable internal pressure modules for multi-range selection',
-    'Control stability better than 0.003% FS',
-    'Full HART and Profibus field communicator on-board',
-    'Data logging, task management and automated calibration report generation',
-    'Patented electric pump technology with fast response'
+    'Geração e controle automático de pressão até 100 bar (1.500 psi)',
+    'Modelos de alta exatidão metrológica até 0.01% FE com estabilidade térmica',
+    'Dois módulos internos intercambiáveis para seleção de múltiplas faixas',
+    'Estabilidade de controle superior a 0.003% FE',
+    'Comunicador de campo HART e Modbus integrado na placa principal',
+    'Datalogger, gerenciador de tarefas e emissão automática de relatórios'
   ];
 
-  const themeColor = custom.themeColor || '#2563EB';
+  const themeColor = custom.themeColor || '#003366';
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
@@ -63,7 +62,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
   };
 
   const handleAddBullet = () => {
-    const updated = [...bulletList, 'Novo diferencial técnico'];
+    const updated = [...bulletList, 'Novo diferencial metrológico'];
     updateBlock(pageId, block.id, {
       customData: { ...custom, bullets: updated }
     });
@@ -97,81 +96,83 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-5 rounded-2xl bg-white border border-slate-200 shadow-md transition-all ${
-        isSelected ? 'ring-3 ring-blue-500 shadow-xl' : 'hover:border-slate-300'
+      className={`relative p-3 bg-white rounded-none border border-slate-300 transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      {/* Faixa Superior com Título Estilo Dual-Column */}
-      <div
-        style={{ borderColor: themeColor }}
-        className="flex items-center justify-between pb-3 border-b-2 mb-4 gap-4"
-      >
-        <div>
-          <h2
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={handleTitleBlur}
-            className="text-2xl font-black text-slate-900 tracking-tight outline-none focus:bg-amber-50 rounded px-1 -ml-1 cursor-text"
-          >
-            {block.title || 'Presys PCON-Y18'}
-          </h2>
-          <h3
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={handleSubtitleBlur}
-            style={{ color: themeColor }}
-            className="text-sm font-bold tracking-normal outline-none focus:bg-amber-50 rounded px-1 -ml-1 cursor-text"
-          >
-            {block.subtitle || 'Series Automated Pressure Calibrators'}
-          </h3>
+      {/* Header Estilo Metrologia */}
+      <div className="flex items-center justify-between pb-2 border-b-2 border-slate-900 mb-3 gap-3">
+        <div className="flex-1">
+          <div className="flex items-baseline gap-2">
+            <h1
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={handleTitleBlur}
+              className="text-xl font-black text-slate-900 tracking-tight outline-none focus:bg-slate-100 rounded-none px-1 -ml-1 cursor-text leading-tight"
+            >
+              {block.title || 'SÉRIE PRESYS PCON'}
+            </h1>
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={handleSubtitleBlur}
+              className="text-sm font-bold text-slate-600 outline-none focus:bg-slate-100 rounded-none px-1 cursor-text"
+            >
+              {block.subtitle || 'Calibrador Automático de Pressão'}
+            </span>
+          </div>
         </div>
 
-        <div className="text-right">
+        {/* Badge Lateral */}
+        <div
+          style={{ backgroundColor: themeColor }}
+          className="px-3 py-1 text-white text-right rounded-none border border-slate-900 shrink-0 select-none"
+        >
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeMainBlur}
-            style={{ color: themeColor }}
-            className="font-extrabold text-lg font-serif italic tracking-wide block outline-none focus:bg-amber-50 rounded px-1 cursor-text"
+            className="font-mono font-bold text-xs tracking-wider block outline-none focus:bg-white/20 px-0.5 cursor-text leading-none uppercase"
           >
-            {block.badgeText || 'PRESYS Metrology'}
+            {block.badgeText || 'PRESYS'}
           </span>
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeSubBlur}
-            className="text-[10px] text-slate-500 font-mono block outline-none focus:bg-amber-50 rounded px-1 cursor-text"
+            className="text-[8px] font-mono text-blue-200 block outline-none focus:bg-white/20 px-0.5 cursor-text uppercase tracking-widest mt-0.5"
           >
-            {custom.badgeSubtitle || 'Metrology Made Simple'}
+            {custom.badgeSubtitle || 'Precision Metrology'}
           </span>
         </div>
       </div>
 
-      {/* Grid 2 Colunas Assimétricas (Foto à Esquerda | Recursos à Direita) */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-        {/* Coluna Esquerda: Imagem do Equipamento com Overlay para Troca de Foto */}
-        <div className="md:col-span-5 flex flex-col items-center group relative">
-          <div className="w-full h-56 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-2 relative shadow-inner">
+      {/* Grid 2 Colunas */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+        {/* Coluna Esquerda: Imagem e Visão Geral */}
+        <div className="md:col-span-6 space-y-2 flex flex-col justify-between">
+          <div className="w-full h-44 rounded-none overflow-hidden bg-slate-900 border border-slate-300 flex items-center justify-center p-2 relative group">
             <img
               src={
                 block.imageUrl ||
                 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80'
               }
-              alt="Calibrador"
+              alt="Produto Metrológico"
               className="max-h-full max-w-full object-contain"
             />
 
-            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2 text-white">
+            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-[10px] font-bold shadow flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-[#003366] hover:bg-blue-700 text-white font-bold rounded-none text-xs flex items-center gap-1.5 no-print"
+                data-editor-action="true"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Trocar Foto Local</span>
+                <span>Trocar Imagem</span>
               </button>
             </div>
 
@@ -183,79 +184,70 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
               className="hidden"
             />
           </div>
-          <span className="text-[10px] text-slate-500 mt-1.5 italic text-center">
-            {block.imageCaption || 'Instrumento autônomo com bomba elétrica e módulos duplos.'}
-          </span>
+
+          <p
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={handleOverviewBlur}
+            className="text-[11px] text-slate-700 leading-normal outline-none focus:bg-amber-50 rounded-none px-1 cursor-text"
+          >
+            {custom.overview ||
+              'A linha de calibradores automáticos de pressão oferece geração autônoma e medição com exatidão metrológica. Ideal para testes automatizados de transmissores, manômetros e pressostatos em laboratório e campo.'}
+          </p>
         </div>
 
-        {/* Coluna Direita: Bullets de Destaque Estilo Additel */}
-        <div className="md:col-span-7 space-y-2">
-          <div className="flex items-center justify-between pb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Diferenciais de Engenharia ({bulletList.length})
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddBullet();
-              }}
-              className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200"
-            >
-              <Plus className="w-3 h-3" />
-              <span>+ Diferencial</span>
-            </button>
-          </div>
-
-          {bulletList.map((bullet, idx) => (
-            <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-800 group">
-              <div
-                style={{ backgroundColor: themeColor }}
-                className="w-3.5 h-3.5 rounded text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs"
-              >
-                <Check className="w-2.5 h-2.5 stroke-[3]" />
-              </div>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={(e) => handleBulletBlur(idx, e.currentTarget.innerText)}
-                className="outline-none focus:bg-amber-50 rounded px-1 flex-1 leading-snug cursor-text"
-              >
-                {bullet}
+        {/* Coluna Direita: Lista de Recursos Técnicos */}
+        <div className="md:col-span-6 p-2.5 bg-slate-50 border border-slate-200 rounded-none flex flex-col justify-between space-y-1.5">
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-300 pb-1 mb-1.5">
+              <span className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
+                Recursos Técnicos de Destaque
               </span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleRemoveBullet(idx);
+                  handleAddBullet();
                 }}
-                className="p-0.5 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Excluir bullet"
+                className="flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-white border border-slate-300 px-1.5 py-0.5 rounded-none hover:bg-slate-100 no-print"
+                data-editor-action="true"
               >
-                <Trash2 className="w-3 h-3" />
+                <Plus className="w-2.5 h-2.5" />
+                <span>+ Item</span>
               </button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Caixa de Overview / Visão Geral no Rodapé do Bloco */}
-      <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-        <span
-          style={{ color: themeColor }}
-          className="text-[11px] font-extrabold uppercase tracking-wider block"
-        >
-          OVERVIEW / VISÃO GERAL
-        </span>
-        <p
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={handleOverviewBlur}
-          className="text-[11px] text-slate-700 leading-relaxed outline-none focus:bg-white rounded px-1 cursor-text"
-        >
-          {custom.overview ||
-            'O calibrador automático representa um avanço metrológico completo com geração de pressão autônoma de vácuo até 100 bar (1.500 psi). Totalmente integrado com bomba elétrica de velocidade controlada, módulos intercambiáveis de alta exatidão (0.01% FE) e comunicação com protocolo HART e Profibus.'}
-        </p>
+            <ul className="space-y-1 text-[10px] text-slate-800">
+              {bulletList.map((bullet, idx) => (
+                <li key={idx} className="flex items-start gap-1.5 group relative">
+                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none">■</span>
+                  <span
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleBulletBlur(idx, e.currentTarget.innerText)}
+                    className="outline-none focus:bg-amber-100 rounded-none flex-1 leading-snug cursor-text"
+                  >
+                    {bullet}
+                  </span>
+                  {bulletList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveBullet(idx);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-0.5 no-print"
+                      data-editor-action="true"
+                      title="Excluir item"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

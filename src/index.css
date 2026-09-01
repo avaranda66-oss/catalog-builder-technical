@@ -13,6 +13,7 @@
     color: #0f172a;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
@@ -30,6 +31,7 @@
 /* Tipografia Técnica */
 .font-mono-tech {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-feature-settings: "tnum" 1;
 }
 
 /* Grid Linhas Finas Estilo Planilha */
@@ -42,6 +44,31 @@
   background-color: #f8fafc;
 }
 
+/* ========================================================================= */
+/* MODO DE EXPORTAÇÃO DE PDF E IMPRESSÃO DE ALTA RESOLUÇÃO                   */
+/* ========================================================================= */
+@media print, screen and (min-width: 0px) {
+  body.pdf-export-mode .no-print,
+  body.pdf-export-mode button,
+  body.pdf-export-mode [data-editor-action],
+  body.pdf-export-mode .a4-limit-guideline,
+  body.pdf-export-mode .divergence-badge,
+  body.pdf-export-mode .editor-only {
+    display: none !important;
+  }
+
+  body.pdf-export-mode .a4-page-container {
+    box-shadow: none !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+
+  body.pdf-export-mode * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
 @media print {
   body {
     background: transparent !important;
@@ -51,7 +78,7 @@
     margin: 0 !important;
     border: none !important;
   }
-  .no-print, .a4-limit-guideline {
+  .no-print, .a4-limit-guideline, button, [data-editor-action], .editor-only {
     display: none !important;
   }
 }

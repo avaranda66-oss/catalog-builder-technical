@@ -54,7 +54,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
 
   const handleUpdateItem = (idx: number, field: 'title' | 'desc' | 'badge', val: string) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], [field]: val };
+    updated[idx] = { ...updated[idx], [field]: val.trim() };
     updateBlock(pageId, block.id, {
       customData: { ...custom, items: updated }
     });
@@ -62,10 +62,10 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
 
   const handleAddItem = () => {
     const newItem = {
-      title: 'Novo Recurso Digital',
-      desc: 'Descrição da funcionalidade ou protocolo industrial.',
+      title: 'Novo Recurso de Conectividade',
+      desc: 'Descrição técnica da integração digital e recursos metrológicos.',
       icon: 'Laptop',
-      badge: 'Recurso'
+      badge: 'Digital'
     };
     updateBlock(pageId, block.id, {
       customData: { ...custom, items: [...items, newItem] }
@@ -80,43 +80,60 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
     });
   };
 
+  const renderIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Wifi':
+        return <Wifi className="w-4 h-4 text-[#003366]" />;
+      case 'Usb':
+        return <Usb className="w-4 h-4 text-[#003366]" />;
+      case 'Database':
+        return <Database className="w-4 h-4 text-[#003366]" />;
+      default:
+        return <Laptop className="w-4 h-4 text-[#003366]" />;
+    }
+  };
+
   return (
     <div
       onClick={(e) => {
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-5 rounded-2xl bg-white border border-slate-200 shadow-md transition-all ${
-        isSelected ? 'ring-3 ring-brand-500 shadow-xl' : 'hover:border-slate-300'
+      className={`relative p-3 bg-white rounded-none border border-slate-300 transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200 mb-3 gap-2">
+      {/* Header Técnico */}
+      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2 gap-2">
         <h3
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
-          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-amber-100 rounded px-1 flex items-center gap-2 flex-1 cursor-text"
+          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 flex-1 cursor-text"
+          title="Clique para editar o título"
         >
-          <Laptop className="w-4 h-4 text-[#003366] shrink-0" />
+          <Laptop className="w-3.5 h-3.5 text-[#003366] shrink-0" />
           <span>{block.title || 'SOFTWARE DE CALIBRAÇÃO & CONECTIVIDADE INDUSTRIAL'}</span>
         </h3>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeBlur}
-            className="text-[10px] text-brand-700 font-bold bg-brand-50 px-2 py-0.5 rounded border border-brand-200 outline-none focus:bg-amber-50 cursor-text"
+            className="text-[9px] text-[#003366] font-mono font-bold bg-blue-50 px-2 py-0.5 rounded-none border border-blue-200 outline-none focus:bg-amber-100 cursor-text"
           >
-            {block.badgeText || custom.badgeText || 'Digital Factory 4.0'}
+            {block.badgeText || 'Digital Factory 4.0'}
           </span>
+
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               handleAddItem();
             }}
-            className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded"
+            className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none no-print"
+            data-editor-action="true"
           >
             <Plus className="w-3 h-3" />
             <span>+ Card</span>
@@ -124,56 +141,62 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Grid de Cards de Conectividade (Cantos Retos) */}
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, minmax(0, 1fr))`
+        }}
+      >
         {items.map((item: any, idx: number) => (
           <div
             key={idx}
-            className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-2 hover:bg-brand-50/20 hover:border-brand-300 transition-colors relative group"
+            className="p-2.5 bg-slate-50 border border-slate-200 rounded-none flex flex-col justify-between space-y-1 hover:border-slate-400 transition-colors group relative"
           >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRemoveItem(idx);
-              }}
-              className="absolute top-2 right-2 p-0.5 text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Excluir card"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+            {items.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemoveItem(idx);
+                }}
+                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-600 no-print"
+                data-editor-action="true"
+                title="Excluir"
+              >
+                <Trash2 className="w-2.5 h-2.5" />
+              </button>
+            )}
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between pr-4">
-                <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-2xs">
-                  {idx % 4 === 0 && <Laptop className="w-4 h-4 text-brand-400" />}
-                  {idx % 4 === 1 && <Wifi className="w-4 h-4 text-brand-400" />}
-                  {idx % 4 === 2 && <Usb className="w-4 h-4 text-brand-400" />}
-                  {idx % 4 === 3 && <Database className="w-4 h-4 text-brand-400" />}
-                </div>
-                <span
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => handleUpdateItem(idx, 'badge', e.currentTarget.innerText.trim())}
-                  className="text-[9px] font-mono text-slate-500 font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200 outline-none focus:bg-amber-50 cursor-text"
-                >
-                  {item.badge}
-                </span>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-1 mb-1">
+              <div className="w-7 h-7 bg-white border border-slate-300 flex items-center justify-center">
+                {renderIcon(item.icon)}
               </div>
 
+              <span
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => handleUpdateItem(idx, 'badge', e.currentTarget.innerText)}
+                className="text-[8px] font-mono text-slate-500 uppercase tracking-wider outline-none focus:bg-amber-100 px-0.5"
+              >
+                {item.badge}
+              </span>
+            </div>
+
+            <div>
               <h4
                 contentEditable
                 suppressContentEditableWarning
-                onBlur={(e) => handleUpdateItem(idx, 'title', e.currentTarget.innerText.trim())}
-                className="font-bold text-slate-900 text-xs outline-none focus:bg-amber-100 rounded px-0.5 cursor-text"
+                onBlur={(e) => handleUpdateItem(idx, 'title', e.currentTarget.innerText)}
+                className="font-bold text-slate-900 text-[11px] outline-none focus:bg-amber-100 leading-snug cursor-text"
               >
                 {item.title}
               </h4>
-
               <p
                 contentEditable
                 suppressContentEditableWarning
-                onBlur={(e) => handleUpdateItem(idx, 'desc', e.currentTarget.innerText.trim())}
-                className="text-[10px] text-slate-600 leading-relaxed outline-none focus:bg-amber-50 rounded px-0.5 cursor-text"
+                onBlur={(e) => handleUpdateItem(idx, 'desc', e.currentTarget.innerText)}
+                className="text-[9px] text-slate-600 leading-relaxed outline-none focus:bg-amber-50 mt-1 cursor-text"
               >
                 {item.desc}
               </p>

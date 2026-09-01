@@ -1,7 +1,10 @@
 import React from 'react';
-import { Package, Plus, Trash2 } from 'lucide-react';
+import { Package, Plus, Columns } from 'lucide-react';
 import { ContentBlock, TableColumnConfig, CatalogTableRow } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
+import { useLibraryStore } from '../../../stores/useLibraryStore';
+import { TechnicalTable } from '../../technical-table/TechnicalTable';
+import { TableVisualFamily } from '../../technical-table/table-tokens';
 
 interface AccessoriesTableBlockProps {
   block: ContentBlock;
@@ -14,7 +17,8 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
   pageId,
   isSelected
 }) => {
-  const { updateBlock, setSelectedBlockId } = useCatalogStore();
+  const { updateBlock, setSelectedBlockId, updateCellOverride } = useCatalogStore();
+  const { getProduct } = useLibraryStore();
 
   const columns: TableColumnConfig[] = block.tableColumns || [
     { key: 'codigo', label: 'Código do Acessório', visible: true, width: 140 },
@@ -22,10 +26,21 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
     { key: 'tipo', label: 'Fornecimento', visible: true, width: 120 }
   ];
 
-  const rows: CatalogTableRow[] = block.tableRows || [];
+  const rows: CatalogTableRow[] = block.tableRows || [
+    {
+      id: 'arow-1',
+      localOverrides: {
+        codigo: 'PRESYS-MNF-2V',
+        descricao: 'Válvula Manifold de 2 Vias em Inox 316',
+        tipo: 'Opcional'
+      }
+    }
+  ];
+
+  const family: TableVisualFamily = (block.customData?.tableFamily as TableVisualFamily) || 'family_header';
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
-    updateBlock(pageId, block.id, { title: e.currentTarget.innerText });
+    updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
   };
 
   const handleColumnLabelBlur = (colKey: string, newLabel: string) => {
@@ -33,19 +48,12 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
     updateBlock(pageId, block.id, { tableColumns: updated });
   };
 
-  const handleCellBlur = (rowId: string, colKey: string, value: string) => {
-    const updatedRows = rows.map((r) =>
-      r.id === rowId ? { ...r, localOverrides: { ...(r.localOverrides || {}), [colKey]: value } } : r
-    );
-    updateBlock(pageId, block.id, { tableRows: updatedRows });
-  };
-
   const handleAddRow = () => {
     const newRow: CatalogTableRow = {
       id: `arow-${Date.now()}`,
       localOverrides: {
-        codigo: 'PCON-NOVO-ACC',
-        descricao: 'Descrição do novo acessório ou conexão de montagem',
+        codigo: 'PRESYS-NOVO-ACC',
+        descricao: 'Novo acessório ou kit de conexão de alta pressão',
         tipo: 'Opcional'
       },
       order: rows.length
@@ -61,11 +69,16 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
     const customKey = `col_${Date.now()}`;
     const newCol: TableColumnConfig = {
       key: customKey,
-      label: 'Nova Coluna',
+      label: 'Nova Informação',
       visible: true,
       isCustom: true
     };
     updateBlock(pageId, block.id, { tableColumns: [...columns, newCol] });
+  };
+
+  const handleRemoveColumn = (colKey: string) => {
+    if (columns.length <= 1) return;
+    updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
   };
 
   return (
@@ -74,19 +87,20 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-3 rounded-xl border border-slate-200 bg-white shadow-sm transition-all ${
-        isSelected ? 'ring-2 ring-brand-500 bg-brand-50/20' : 'hover:ring-1 hover:ring-slate-300'
+      className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      <div className="flex items-center justify-between mb-2">
+      {/* Header Técnico */}
+      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
         <h3
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
-          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded px-1 flex items-center gap-1.5"
+          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
         >
-          <Package className="w-4 h-4 text-emerald-600" />
-          <span>{block.title || 'Tabela de Acessórios & Opcionais'}</span>
+          <Package className="w-3.5 h-3.5 text-[#003366]" />
+          <span>{block.title || 'TABELA DE ACESSÓRIOS & OPCIONAIS PRESYS'}</span>
         </h3>
 
         <button
@@ -95,87 +109,40 @@ export const AccessoriesTableBlock: React.FC<AccessoriesTableBlockProps> = ({
             e.stopPropagation();
             handleAddColumn();
           }}
-          className="text-[10px] text-slate-600 hover:text-brand-600 font-medium px-2 py-0.5 border border-slate-200 hover:border-brand-300 rounded bg-slate-50 transition-colors"
-          title="Adicionar coluna"
+          className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
+          data-editor-action="true"
+          title="Adicionar coluna técnica"
         >
-          + Coluna
+          <Columns className="w-3 h-3" />
+          <span>+ Coluna</span>
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded border border-slate-200">
-        <table className="w-full text-left border-collapse text-[11px] font-sans">
-          <thead>
-            <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
-              {columns
-                .filter((c) => c.visible !== false)
-                .map((col) => (
-                  <th key={col.key} className="py-2 px-2.5 border-r border-slate-200 last:border-r-0">
-                    <span
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) => handleColumnLabelBlur(col.key, e.currentTarget.innerText)}
-                      className="outline-none focus:bg-amber-100 rounded px-1 block font-bold cursor-text"
-                      title="Clique para renomear esta coluna"
-                    >
-                      {col.label}
-                    </span>
-                  </th>
-                ))}
-              <th className="py-2 px-1 text-center w-8 text-slate-400">#</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row, idx) => (
-              <tr
-                key={row.id}
-                className={`hover:bg-slate-50/70 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
-              >
-                {columns
-                  .filter((c) => c.visible !== false)
-                  .map((col) => (
-                    <td
-                      key={col.key}
-                      className="py-1.5 px-2.5 border-r border-slate-100 last:border-r-0 align-middle text-slate-800"
-                    >
-                      <span
-                        contentEditable
-                        suppressContentEditableWarning
-                        onBlur={(e) => handleCellBlur(row.id, col.key, e.currentTarget.innerText)}
-                        className="outline-none font-mono text-[11px] block px-1 py-0.5 rounded focus:bg-amber-50 focus:ring-1 focus:ring-amber-400"
-                      >
-                        {(row.localOverrides && row.localOverrides[col.key]) || '—'}
-                      </span>
-                    </td>
-                  ))}
-                <td className="py-1.5 px-1 text-center align-middle">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveRow(row.id);
-                    }}
-                    className="text-slate-300 hover:text-red-600 p-0.5 rounded"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Motor Unificado de Tabela */}
+      <TechnicalTable
+        columns={columns}
+        rows={rows}
+        getProduct={getProduct}
+        family={family}
+        isEditable={true}
+        onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
+        onRemoveRow={handleRemoveRow}
+        onRemoveColumn={handleRemoveColumn}
+        onRenameColumn={handleColumnLabelBlur}
+      />
 
-      <div className="mt-2 flex justify-start">
+      {/* Rodapé de Ações do Editor */}
+      <div className="mt-1.5 flex items-center justify-end no-print" data-editor-action="true">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             handleAddRow();
           }}
-          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors"
+          className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#003366] hover:bg-[#002244] px-2.5 py-1 rounded-none transition-colors"
         >
           <Plus className="w-3 h-3" />
-          <span>Inserir Linha de Acessório</span>
+          <span>+ Inserir Linha de Acessório</span>
         </button>
       </div>
     </div>

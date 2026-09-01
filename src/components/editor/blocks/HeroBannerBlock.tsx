@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, Image as ImageIcon } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 
@@ -49,7 +49,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
 
   const gradientClass =
     block.style?.gradient ||
-    'bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900';
+    'bg-[#001f3f]';
 
   return (
     <div
@@ -57,83 +57,67 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-6 rounded-2xl ${gradientClass} text-white shadow-xl overflow-hidden transition-all ${
-        isSelected ? 'ring-4 ring-brand-400/80 shadow-2xl' : 'hover:ring-2 hover:ring-slate-400/50'
+      className={`relative p-4 rounded-none ${gradientClass} text-white border border-slate-700 transition-all ${
+        isSelected ? 'ring-2 ring-blue-500' : 'hover:border-slate-500'
       }`}
     >
-      {/* Luz ambiente de fundo */}
-      <div className="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-        {/* Lado Esquerdo: Textos Institucionais 100% Editáveis */}
-        <div className="flex-1 space-y-2.5">
-          {/* Badge Superior */}
-          <div className="inline-block">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+        <div className="md:col-span-8 space-y-2">
+          <div className="flex items-center gap-2">
             <span
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
-              className="px-3 py-1 bg-brand-600/30 border border-brand-400/40 rounded-full text-[10px] font-mono font-bold tracking-widest text-brand-200 uppercase outline-none focus:bg-brand-500/40 focus:ring-1 focus:ring-brand-300 block cursor-text"
-              title="Clique para editar o selo da empresa"
+              className="px-2.5 py-0.5 rounded-none bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold tracking-widest uppercase border border-blue-400/30 outline-none focus:bg-white/20 cursor-text"
             >
-              {block.badgeText || 'PRESYS — INSTRUMENTAÇÃO INDUSTRIAL DE PRECISÃO'}
+              {block.badgeText || 'PRESYS · ESTAÇÕES DE TESTE EM CAMPO E OFICINA'}
             </span>
           </div>
 
-          {/* Título Principal */}
-          <h1
+          <h2
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
-            className="text-2xl font-extrabold tracking-tight text-white outline-none focus:bg-white/10 rounded px-1 -ml-1 cursor-text leading-tight"
-            title="Clique para editar o título principal"
+            className="text-xl font-black tracking-tight text-white outline-none focus:bg-white/10 rounded-none px-1 -ml-1 leading-snug cursor-text"
           >
-            {block.title || 'Linha Industrial Presys PCON & Série T'}
-          </h1>
+            {block.title || 'PSV Portable — Sistema Pneumático e Hidrostático'}
+          </h2>
 
-          {/* Subtítulo */}
           <p
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
-            className="text-xs text-slate-300 font-normal outline-none focus:bg-white/10 rounded px-1 -ml-1 cursor-text leading-relaxed max-w-md"
-            title="Clique para editar a descrição do produto"
+            className="text-xs text-slate-300 font-normal leading-relaxed outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text"
           >
             {block.subtitle ||
-              'Calibradores de processos, transmissores inteligentes e padrões metrológicos para controle rigoroso de plantas industriais.'}
+              'Faixas de pressão configuráveis até 300 bar, fixação universal de flanges e aquisição automática de dados para calibração de válvulas de segurança.'}
           </p>
         </div>
 
-        {/* Lado Direito: Foto do Produto com Suporte a Upload Local */}
-        <div className="w-full md:w-56 flex flex-col items-center flex-shrink-0 group relative">
-          <div className="w-full h-36 rounded-xl overflow-hidden bg-slate-800 border-2 border-white/20 shadow-lg relative group">
-            {block.imageUrl ? (
-              <img
-                src={block.imageUrl}
-                alt="Produto Presys"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 space-y-1">
-                <ImageIcon className="w-8 h-8 text-slate-500" />
-                <span className="text-[10px]">Sem fotografia</span>
-              </div>
-            )}
+        <div className="md:col-span-4 flex flex-col items-center justify-center">
+          <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900 border border-slate-700 relative group flex items-center justify-center p-2">
+            <img
+              src={
+                block.imageUrl ||
+                'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
+              }
+              alt="Produto Destaque"
+              className="max-h-full max-w-full object-contain filter drop-shadow"
+            />
 
-            {/* Overlay com Botão de Troca de Foto Local */}
-            <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-2xs opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center gap-1.5 cursor-pointer">
+            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-[10px] font-bold shadow-md flex items-center gap-1.5 transition-colors"
+                className="px-2.5 py-1 bg-[#003366] hover:bg-blue-700 text-white rounded-none text-[10px] font-bold flex items-center gap-1 no-print"
+                data-editor-action="true"
               >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Carregar Foto do PC</span>
+                <Upload className="w-3 h-3" />
+                <span>Trocar Foto</span>
               </button>
-              <span className="text-[9px] text-slate-300">PNG, JPG, WEBP</span>
             </div>
 
             <input
@@ -145,15 +129,13 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
             />
           </div>
 
-          {/* Legenda da Fotografia Editável */}
           <p
             contentEditable
             suppressContentEditableWarning
             onBlur={handleCaptionBlur}
-            className="text-[10px] text-slate-400 text-center italic mt-1.5 outline-none focus:bg-white/10 rounded px-1 cursor-text truncate max-w-full"
-            title="Clique para editar a legenda da fotografia"
+            className="text-[9px] text-slate-400 font-mono text-center mt-1 outline-none focus:bg-white/10 rounded-none px-1 cursor-text"
           >
-            {block.imageCaption || 'Calibrador Presys com comunicação HART.'}
+            {block.imageCaption || 'Calibrador Presys com comunicação HART'}
           </p>
         </div>
       </div>

@@ -19,19 +19,19 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
 
   const custom = block.customData || {};
   const highlights: string[] = custom.highlights || [
-    'Lightweight, portable, and extremely fast',
-    'Cool to -25 °C in 15 minutes and heat to 660 °C in 15 minutes',
-    'Built-in two-channel readout for PRT, RTD, thermocouple, 4-20 mA current',
-    'True reference thermometry with accuracy to ±0.01 °C',
-    'On-board automation and documented calibration test routines',
-    'Metrology performance in accuracy, stability, uniformity, and loading'
+    'Leve, portátil e de resposta térmica ultrarrápida',
+    'Resfria até -25 °C e aquece até 660 °C em poucos minutos',
+    'Dois canais de medição para PRT, RTD, termopar e 4-20 mA',
+    'Exatidão metrológica com estabilidade térmica de ±0.01 °C',
+    'Rotinas automáticas de calibração com emissão de relatórios',
+    'Homogeneidade radial e axial certificada conforme normas internacionais'
   ];
 
-  const badgeBg = custom.badgeBg || '#FFC20E';
-  const badgeTextColor = custom.badgeTextColor || '#000000';
-  const badgeBorderColor = custom.badgeBorderColor || '#E5A900';
-  const boxBg = custom.boxBg || '#FFF9E6';
-  const boxBorder = custom.boxBorder || '#FFE082';
+  const badgeBg = custom.badgeBg || '#003366';
+  const badgeTextColor = custom.badgeTextColor || '#ffffff';
+  const badgeBorderColor = custom.badgeBorderColor || '#002244';
+  const boxBg = custom.boxBg || '#f8fafc';
+  const boxBorder = custom.boxBorder || '#cbd5e1';
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
@@ -100,45 +100,45 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-5 rounded-2xl bg-white border border-slate-200 shadow-md transition-all ${
-        isSelected ? 'ring-3 ring-amber-500 shadow-xl' : 'hover:border-slate-300'
+      className={`relative p-3 bg-white rounded-none border border-slate-300 transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      {/* Header com Tarja Colorida Customizável */}
-      <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900 mb-4 gap-4">
+      {/* Header com Tarja Metrológica Retilínea */}
+      <div className="flex items-center justify-between pb-2 border-b-2 border-slate-900 mb-3 gap-3">
         <div>
           <h1
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
-            className="text-2xl font-black text-slate-900 tracking-tight outline-none focus:bg-amber-100 rounded px-1 -ml-1 cursor-text"
+            className="text-xl font-black text-slate-900 tracking-tight outline-none focus:bg-slate-100 rounded-none px-1 -ml-1 cursor-text leading-tight"
           >
-            {block.title || 'Field Metrology Wells / Presys Série T'}
+            {block.title || 'SÉRIE DE CALIBRAÇÃO TÉRMICA PRESYS'}
           </h1>
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
-            className="text-xs font-bold text-slate-600 uppercase tracking-widest block outline-none focus:bg-amber-50 rounded px-1 -ml-1 cursor-text"
+            className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block outline-none focus:bg-slate-100 rounded-none px-1 -ml-1 cursor-text mt-0.5"
           >
-            {block.subtitle || 'Technical Data & Metrology Specifications'}
+            {block.subtitle || 'Technical Specifications & Performance Data'}
           </span>
         </div>
 
-        {/* Tarja Metrológica 100% Editável (Texto Principal e Secundário) */}
+        {/* Tarja Metrológica Cantos Retos */}
         <div
           style={{
             backgroundColor: badgeBg,
             color: badgeTextColor,
             borderColor: badgeBorderColor
           }}
-          className="px-4 py-1.5 rounded font-black text-sm tracking-wider shadow-sm flex items-center gap-2 border flex-shrink-0"
+          className="px-3 py-1 rounded-none font-bold text-xs tracking-wider flex items-center gap-1.5 border shrink-0 uppercase font-mono select-none"
         >
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeMainBlur}
-            className="font-extrabold outline-none focus:bg-white/30 rounded px-0.5 cursor-text"
+            className="outline-none focus:bg-white/30 rounded-none px-0.5 cursor-text"
           >
             {block.badgeText || 'PRESYS'}
           </span>
@@ -146,38 +146,39 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeSecondaryBlur}
-            className="text-[10px] font-normal outline-none focus:bg-white/30 rounded px-0.5 cursor-text opacity-90"
+            className="text-[9px] outline-none focus:bg-white/30 rounded-none px-0.5 cursor-text opacity-90"
           >
             {custom.badgeSecondary || 'Calibration'}
           </span>
         </div>
       </div>
 
-      {/* Imagem do Bloco Seco e Destaques */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-        {/* Coluna Esquerda: Imagem e Texto Explicativo */}
-        <div className="md:col-span-7 space-y-3 flex flex-col justify-between">
-          <div className="w-full h-44 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center p-2 relative group shadow-inner">
+      {/* Grid Principal do Bloco */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+        {/* Coluna Esquerda: Imagem e Descrição */}
+        <div className="md:col-span-7 space-y-2 flex flex-col justify-between">
+          <div className="w-full h-40 rounded-none overflow-hidden bg-slate-900 border border-slate-300 flex items-center justify-center p-2 relative group">
             <img
               src={
                 block.imageUrl ||
                 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80'
               }
-              alt="Bloco Seco"
+              alt="Instrumento Metrológico"
               className="max-h-full max-w-full object-contain"
             />
 
-            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="px-3 py-1.5 bg-[#FFC20E] hover:bg-amber-400 text-black font-bold rounded-lg text-xs shadow flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-[#003366] hover:bg-blue-700 text-white font-bold rounded-none text-xs flex items-center gap-1.5 no-print"
+                data-editor-action="true"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Trocar Imagem Local</span>
+                <span>Trocar Imagem</span>
               </button>
             </div>
 
@@ -194,63 +195,66 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             contentEditable
             suppressContentEditableWarning
             onBlur={handleDescBlur}
-            className="text-[11px] text-slate-700 leading-relaxed outline-none focus:bg-amber-50 rounded px-1 cursor-text"
+            className="text-[11px] text-slate-700 leading-normal outline-none focus:bg-amber-50 rounded-none px-1 cursor-text"
           >
             {custom.description ||
-              'Os blocos secos de calibração metrológica combinam máxima portabilidade e velocidade térmica com desempenho de laboratório primário. Com compensação de gradiente térmico integrada e canais de medição de processo para leitura de Pt100, termopares e loop de 24V.'}
+              'Os calibradores metrológicos combinam máxima portabilidade e velocidade com estabilidade de laboratório primário. Com compensação de gradiente térmico integrada e canais para medição de Pt100, termopares e loop de 24V.'}
           </p>
         </div>
 
-        {/* Coluna Direita: Caixa de Destaques Customizável */}
+        {/* Coluna Direita: Box de Destaques Técnicos */}
         <div
-          style={{
-            backgroundColor: boxBg,
-            borderColor: boxBorder
-          }}
-          className="md:col-span-5 border rounded-xl p-4 flex flex-col justify-between space-y-2.5 shadow-xs"
+          style={{ backgroundColor: boxBg, borderColor: boxBorder }}
+          className="md:col-span-5 p-2.5 rounded-none border flex flex-col justify-between space-y-1.5"
         >
-          <div className="flex items-center justify-between border-b border-amber-300 pb-1">
-            <span className="text-[11px] font-black text-slate-900 uppercase tracking-wide">
-              Destaques de Performance
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddHighlight();
-              }}
-              className="p-0.5 text-amber-900 hover:text-black rounded"
-              title="Adicionar novo item"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-300 pb-1 mb-1.5">
+              <span className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
+                Destaques Metrológicos
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddHighlight();
+                }}
+                className="flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-white border border-slate-300 px-1.5 py-0.5 rounded-none hover:bg-slate-100 no-print"
+                data-editor-action="true"
+              >
+                <Plus className="w-2.5 h-2.5" />
+                <span>+ Item</span>
+              </button>
+            </div>
 
-          <div className="space-y-2">
-            {highlights.map((item, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-900 leading-tight group">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 flex-shrink-0" />
-                <span
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => handleHighlightBlur(idx, e.currentTarget.innerText)}
-                  className="outline-none focus:bg-white rounded px-0.5 flex-1 cursor-text"
-                >
-                  {item}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveHighlight(idx);
-                  }}
-                  className="p-0.5 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Excluir item"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
+            <ul className="space-y-1 text-[10px] text-slate-800">
+              {highlights.map((h, idx) => (
+                <li key={idx} className="flex items-start gap-1.5 group relative">
+                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none">■</span>
+                  <span
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleHighlightBlur(idx, e.currentTarget.innerText)}
+                    className="outline-none focus:bg-amber-100 rounded-none flex-1 leading-snug cursor-text"
+                  >
+                    {h}
+                  </span>
+                  {highlights.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveHighlight(idx);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-0.5 no-print"
+                      data-editor-action="true"
+                      title="Excluir item"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>

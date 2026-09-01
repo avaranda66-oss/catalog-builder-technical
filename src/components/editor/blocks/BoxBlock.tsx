@@ -12,7 +12,7 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
 
   const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
-    updateBlock(pageId, block.id, { textContent: e.currentTarget.innerText });
+    updateBlock(pageId, block.id, { textContent: e.currentTarget.innerText.trim() });
   };
 
   return (
@@ -21,14 +21,14 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative rounded-lg transition-all ${
-        isSelected ? 'ring-2 ring-brand-500' : 'hover:ring-1 hover:ring-slate-300'
+      className={`relative rounded-none transition-all ${
+        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
       style={{
         backgroundColor: block.style?.backgroundColor || '#f8fafc',
-        borderColor: block.style?.borderColor || '#e2e8f0',
+        borderColor: block.style?.borderColor || '#cbd5e1',
         borderWidth: block.style?.borderWidth || '1px',
-        padding: block.style?.padding || '16px',
+        padding: block.style?.padding || '12px',
         borderStyle: 'solid'
       }}
     >
@@ -36,9 +36,9 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
         contentEditable
         suppressContentEditableWarning
         onBlur={handleBlur}
-        className="outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap"
+        className="outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap cursor-text"
         dangerouslySetInnerHTML={{
-          __html: (block.textContent || 'Digite observações ou caixas conceituais...')
+          __html: (block.textContent || 'Digite notas técnicas ou advertências metrológicas...')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
         }}
