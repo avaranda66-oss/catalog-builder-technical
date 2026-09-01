@@ -1,38 +1,47 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SupabaseService } from '../../src/services/supabase.service';
-import { INITIAL_PRODUCTS } from '../../src/data/initialProducts';
-import { SYSTEM_PRESETS } from '../../src/data/presets';
+import { MOCK_PRODUCTS, MOCK_CATALOG } from '../fixtures/mockData';
 
-describe('SupabaseService (Cloud Storage & Multi-Device Sync)', () => {
+describe('SupabaseService (Isolamento Estrito em Teste & Mocking Total)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('verifica status de conexão com retorno estruturado', async () => {
+  it('verifica status de conexão com retorno estruturado via mock', async () => {
     const status = await SupabaseService.checkConnection();
     expect(status).toBeDefined();
     expect(typeof status.connected).toBe('boolean');
     expect(status.url).toBeDefined();
   });
 
-  it('fallback de upload de imagem em Base64 local quando offline', async () => {
-    const fakeFile = new File(['fake-image-binary-data'], 'sensor-presys-pcon.jpg', { type: 'image/jpeg' });
+  it('realiza upload simulado de imagem sem chamada de rede real', async () => {
+    const fakeFile = new File(['fake-binary-content'], 'sensor-presys-test.jpg', { type: 'image/jpeg' });
     const result = await SupabaseService.uploadProductImage(fakeFile);
 
     expect(result).toBeDefined();
     expect(result.success).toBe(true);
     expect(result.url).toBeDefined();
+    expect(typeof result.url).toBe('string');
   });
 
-  it('prepara payload de sincronização de produtos para a nuvem', async () => {
-    const result = await SupabaseService.pushProductsToCloud(INITIAL_PRODUCTS.slice(0, 2));
+  it('prepara e executa sincronização de produtos via mock em memória', async () => {
+    const result = await SupabaseService.pushProductsToCloud(MOCK_PRODUCTS);
     expect(result).toBeDefined();
     expect(typeof result.success).toBe('boolean');
+    expect(result.success).toBe(true);
   });
 
-  it('prepara payload de sincronização de catálogos para a nuvem', async () => {
-    const result = await SupabaseService.pushCatalogsToCloud([SYSTEM_PRESETS[0].catalog]);
+  it('prepara e executa sincronização de catálogos via mock em memória', async () => {
+    const result = await SupabaseService.pushCatalogsToCloud([MOCK_CATALOG]);
     expect(result).toBeDefined();
     expect(typeof result.success).toBe('boolean');
+    expect(result.success).toBe(true);
+  });
+
+  it('bloqueia e impede chamadas de rede externas de produção durante testes', async () => {
+    // Garante que a barreira de segurança global do tests/setup.ts funciona
+    await expect(async () => {
+      await fetch('https://bjxqvrpbigwgabwbhtqa.supabase.co/rest/v1/products');
+    }).rejects.toThrow(/Live network call prohibited in unit test suite/);
   });
 });

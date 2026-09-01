@@ -560,5 +560,384 @@ export const SYSTEM_PRESETS: CatalogPreset[] = [
         }
       ]
     }
+  },
+
+  // =========================================================================
+  // PRESET 4: DATASHEET INDIVIDUAL PRESYS TA-25N (-25 to 155 °C)
+  // =========================================================================
+  {
+    id: 'preset-presys-ta-25n-datasheet',
+    name: 'PRESYS TA-25N — Advanced Temperature Calibrator (-25 to 155 °C)',
+    description: 'Datasheet técnico completo do calibrador de bloco seco TA-25N para exportação, com especificações elétricas, metrologia tripla, benchmarks de aquecimento e tabela de inserts.',
+    isSystem: true,
+    createdAt: '2026-09-01T12:00:00.000Z',
+    catalog: {
+      id: 'cat-ta-25n-datasheet',
+      title: 'PRESYS TA-25N — Advanced Temperature Calibrator',
+      subtitle: 'Dry-Block Calibrator with Embedded Multi-Signal Electric Calibrator (-25 to 155 °C)',
+      themeId: 'default-technical',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      pages: [
+        {
+          id: 'p1-ta25n-cover',
+          pageNumber: 1,
+          pageType: 'cover',
+          title: 'Capa Editorial TA-25N',
+          blocks: [
+            {
+              id: 'b1-ta25n-hero',
+              type: 'full_page_cover',
+              title: 'TA-25N',
+              subtitle: 'Advanced Temperature Calibrator (-25 to 155 °C)',
+              badgeText: 'PRESYS METROLOGY · ISO 17025 ACCREDITED COMPLIANCE · CE MARK',
+              imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85',
+              customData: {
+                coverStyle: 'photo_hero',
+                overlayOpacity: 40,
+                textAlign: 'left',
+                showLogoBox: true,
+                showAccentLine: true,
+                brandName: 'PRESYS',
+                brandSubtitle: 'INSTRUMENTS & SYSTEMS',
+                overview: 'Calibrador de temperatura de bloco seco de alta performance para calibração de termopares, termorresistências, termostatos e transmissores 4-20 mA / HART com exatidão de até ±0.05 °C com padrão externo.',
+                footerLeft: 'www.presys.com.br · vendas@presys.com.br',
+                footerRight: 'CE Compliant · EN 61010-1 / EN 61326-1'
+              }
+            }
+          ]
+        },
+        {
+          id: 'p2-ta25n-specs',
+          pageNumber: 2,
+          pageType: 'technical',
+          title: 'Ficha Técnica TA-25N',
+          blocks: [
+            {
+              id: 'b2-ta25n-header',
+              type: 'hero_banner',
+              badgeText: 'ESPECIFICAÇÕES TÉCNICAS E METROLÓGICAS OFICIAIS',
+              title: 'PRESYS TA-25N — Especificações de Engenharia',
+              subtitle: 'Faixa de trabalho de -25 a 155 °C com controle térmico Peltier e calibrador multissinais elétrico incorporado.',
+              imageUrl: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80',
+              imageCaption: 'Gabinete metálico compacto 260x200x305 mm com touchscreen 5.7".'
+            },
+            {
+              id: 'b3-ta25n-table',
+              type: 'table',
+              title: 'Parâmetros Metrológicos e Elétricos (Manual EM0314-01)',
+              tableColumns: [
+                { key: 'code', label: 'Modelo', visible: true, width: 100 },
+                { key: 'range', label: 'Faixa Operacional', visible: true, width: 130 },
+                { key: 'accuracy', label: 'Exatidão', visible: true, width: 190 },
+                { key: 'powerSupply', label: 'Alimentação / Potência', visible: true, width: 160 }
+              ],
+              tableRows: [
+                { id: 'r1', productRefId: 'prod-presys-ta-25n', localOverrides: {}, order: 0 }
+              ]
+            },
+            {
+              id: 'b4-ta25n-features',
+              type: 'features_list',
+              title: 'Destaques Metrológicos e Funcionais',
+              features: [
+                { id: 'f1', title: 'Exatidão Tripla', description: '±0.1 °C com referência interna, ±0.07 °C com referência externa e ±0.05 °C com sensor padrão externo Callendar-Van Dusen.' },
+                { id: 'f2', title: 'Dinâmica Térmica Rápida', description: 'Aquecimento de 25 a 140 °C em apenas 10 minutos; Resfriamento de 25 a -25 °C em 11 minutos (Peltier 200 W).' },
+                { id: 'f3', title: 'Comunicação e Web Server', description: 'Ethernet integrado com servidor Web na porta 5000, USB host/device, protocolo HART® nativo e software ISOPLAN®.' }
+              ]
+            },
+            {
+              id: 'b5-ta25n-bottom',
+              type: 'bottom_header',
+              title: 'PRESYS INSTRUMENTOS E SISTEMAS LTDA · SÃO PAULO, BRASIL'
+            }
+          ]
+        },
+        {
+          id: 'p3-ta25n-inserts',
+          pageNumber: 3,
+          pageType: 'technical',
+          title: 'Insertos e Acessórios TA-25N',
+          blocks: [
+            {
+              id: 'b6-ta25n-inserts-visual',
+              type: 'inserts_visual',
+              title: 'Blocos de Prova (Inserts) Intercambiáveis Ø 25.4 x 124 mm',
+              subtitle: 'Modelos padrão métricos, imperiais, multi-furos e Insert Caneca exclusivo com microesferas de aço.',
+              badgeText: 'ACESSÓRIOS E COMPONENTES ORIGINAIS PRESYS',
+              customData: {
+                selectedInserts: ['IN01', 'IN02', 'IN03', 'IN04', 'IN05', 'IN06', 'IN07', 'IN08', 'INCL', 'IN1P', 'IN1A', 'IN1E']
+              }
+            },
+            {
+              id: 'b7-ta25n-conn-visual',
+              type: 'software_connectivity',
+              title: 'Diagrama de Ligações Frontais e Conectividade',
+              subtitle: 'Bornes para medição de mA, mV, RTD 2/3/4 fios, Termopares, Termostatos e Fonte TPS 24V HART®.',
+              badgeText: 'PAINEL FRONTAL MULTISSINAIS'
+            },
+            {
+              id: 'b8-ta25n-footer',
+              type: 'bottom_header',
+              title: 'PRESYS — METROLOGIA E AUTOMAÇÃO INDUSTRIAL'
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  // =========================================================================
+  // PRESET 5: DATASHEET INDIVIDUAL PRESYS TA-35N (-35 to 155 °C)
+  // =========================================================================
+  {
+    id: 'preset-presys-ta-35n-datasheet',
+    name: 'PRESYS TA-35N — Advanced Temperature Calibrator (-35 to 155 °C)',
+    description: 'Datasheet técnico completo do calibrador de bloco seco TA-35N para exportação, com faixa até -35 °C, potência de 300 W, probe externo e protocolo HART.',
+    isSystem: true,
+    createdAt: '2026-09-01T12:00:00.000Z',
+    catalog: {
+      id: 'cat-ta-35n-datasheet',
+      title: 'PRESYS TA-35N — Advanced Temperature Calibrator',
+      subtitle: 'Dry-Block Calibrator with Embedded Multi-Signal Electric Calibrator (-35 to 155 °C)',
+      themeId: 'default-technical',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      pages: [
+        {
+          id: 'p1-ta35n-cover',
+          pageNumber: 1,
+          pageType: 'cover',
+          title: 'Capa Editorial TA-35N',
+          blocks: [
+            {
+              id: 'b1-ta35n-hero',
+              type: 'full_page_cover',
+              title: 'TA-35N',
+              subtitle: 'Advanced Temperature Calibrator (-35 to 155 °C)',
+              badgeText: 'PRESYS METROLOGY · ISO 17025 ACCREDITED COMPLIANCE · CE MARK',
+              imageUrl: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=1400&q=85',
+              customData: {
+                coverStyle: 'photo_hero',
+                overlayOpacity: 40,
+                textAlign: 'left',
+                showLogoBox: true,
+                showAccentLine: true,
+                brandName: 'PRESYS',
+                brandSubtitle: 'INSTRUMENTS & SYSTEMS',
+                overview: 'Calibrador de temperatura de bloco seco com faixa expandida até -35 °C, ideal para indústrias farmacêutica, química, alimentícia e calibração de sensores criogênicos com exatidão até ±0.05 °C.',
+                footerLeft: 'www.presys.com.br · vendas@presys.com.br',
+                footerRight: 'CE Compliant · EN 61010-1 / EN 61326-1'
+              }
+            }
+          ]
+        },
+        {
+          id: 'p2-ta35n-specs',
+          pageNumber: 2,
+          pageType: 'technical',
+          title: 'Ficha Técnica TA-35N',
+          blocks: [
+            {
+              id: 'b2-ta35n-header',
+              type: 'hero_banner',
+              badgeText: 'ESPECIFICAÇÕES TÉCNICAS E METROLÓGICAS OFICIAIS',
+              title: 'PRESYS TA-35N — Especificações de Engenharia',
+              subtitle: 'Faixa de trabalho de -35 a 155 °C com controle térmico Peltier de 300 W e calibrador elétrico multissinais.',
+              imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
+              imageCaption: 'Gabinete 260x200x305 mm, 10.5 kg, poço Ø 25.4 x 124 mm.'
+            },
+            {
+              id: 'b3-ta35n-table',
+              type: 'table',
+              title: 'Parâmetros Metrológicos e Elétricos (Manual EM0314-01)',
+              tableColumns: [
+                { key: 'code', label: 'Modelo', visible: true, width: 100 },
+                { key: 'range', label: 'Faixa Operacional', visible: true, width: 130 },
+                { key: 'accuracy', label: 'Exatidão', visible: true, width: 190 },
+                { key: 'powerSupply', label: 'Alimentação / Potência', visible: true, width: 160 }
+              ],
+              tableRows: [
+                { id: 'r1', productRefId: 'prod-presys-ta-35n', localOverrides: {}, order: 0 }
+              ]
+            },
+            {
+              id: 'b4-ta35n-features',
+              type: 'features_list',
+              title: 'Destaques Metrológicos e Funcionais',
+              features: [
+                { id: 'f1', title: 'Faixa Térmica Subzero (-35 °C)', description: 'Atinge -35 °C a partir da temperatura ambiente de 23 °C em apenas 16 minutos com excelente estabilidade de 0.02 °C.' },
+                { id: 'f2', title: 'Calibração Automática de Tarefas', description: 'Execução de rotinas As Found e As Left diretamente no instrumento, calculando desvios e gerando laudos em PDF.' },
+                { id: 'f3', title: 'Entrada Probe Externo CVD', description: 'Controle de temperatura baseado em sensor padrão externo inserido no poço com coeficientes Callendar-Van Dusen.' }
+              ]
+            },
+            {
+              id: 'b5-ta35n-bottom',
+              type: 'bottom_header',
+              title: 'PRESYS INSTRUMENTOS E SISTEMAS LTDA · SÃO PAULO, BRASIL'
+            }
+          ]
+        },
+        {
+          id: 'p3-ta35n-inserts',
+          pageNumber: 3,
+          pageType: 'technical',
+          title: 'Insertos e Acessórios TA-35N',
+          blocks: [
+            {
+              id: 'b6-ta35n-inserts-visual',
+              type: 'inserts_visual',
+              title: 'Blocos de Prova (Inserts) Intercambiáveis Ø 25.4 x 124 mm',
+              subtitle: 'Modelos padrão métricos, imperiais, multi-furos e Insert Caneca exclusivo com microesferas de aço.',
+              badgeText: 'ACESSÓRIOS E COMPONENTES ORIGINAIS PRESYS',
+              customData: {
+                selectedInserts: ['IN01', 'IN02', 'IN03', 'IN04', 'IN05', 'IN06', 'IN07', 'IN08', 'INCL', 'IN1P', 'IN1A', 'IN1E']
+              }
+            },
+            {
+              id: 'b7-ta35n-conn-visual',
+              type: 'software_connectivity',
+              title: 'Diagrama de Ligações Frontais e Conectividade',
+              subtitle: 'Bornes para medição de mA, mV, RTD 2/3/4 fios, Termopares, Termostatos e Fonte TPS 24V HART®.',
+              badgeText: 'PAINEL FRONTAL MULTISSINAIS'
+            },
+            {
+              id: 'b8-ta35n-footer',
+              type: 'bottom_header',
+              title: 'PRESYS — METROLOGIA E AUTOMAÇÃO INDUSTRIAL'
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  // =========================================================================
+  // PRESET 6: DATASHEET INDIVIDUAL PRESYS TA-50N (-50 to 155 °C)
+  // =========================================================================
+  {
+    id: 'preset-presys-ta-50n-datasheet',
+    name: 'PRESYS TA-50N — Advanced Temperature Calibrator (-50 to 155 °C)',
+    description: 'Datasheet técnico completo do calibrador de bloco seco TA-50N para exportação, com estágio criogênico de -50 °C, potência de 400 W, chassi reforçado e exatidão metrológica tripla.',
+    isSystem: true,
+    createdAt: '2026-09-01T12:00:00.000Z',
+    catalog: {
+      id: 'cat-ta-50n-datasheet',
+      title: 'PRESYS TA-50N — Advanced Temperature Calibrator',
+      subtitle: 'Dry-Block Calibrator with Embedded Multi-Signal Electric Calibrator (-50 to 155 °C)',
+      themeId: 'default-technical',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      pages: [
+        {
+          id: 'p1-ta50n-cover',
+          pageNumber: 1,
+          pageType: 'cover',
+          title: 'Capa Editorial TA-50N',
+          blocks: [
+            {
+              id: 'b1-ta50n-hero',
+              type: 'full_page_cover',
+              title: 'TA-50N',
+              subtitle: 'Advanced Temperature Calibrator (-50 to 155 °C)',
+              badgeText: 'PRESYS METROLOGY · ISO 17025 ACCREDITED COMPLIANCE · CE MARK',
+              imageUrl: 'https://images.unsplash.com/photo-1581092162384-8987c1d64718?auto=format&fit=crop&w=1400&q=85',
+              customData: {
+                coverStyle: 'photo_hero',
+                overlayOpacity: 40,
+                textAlign: 'left',
+                showLogoBox: true,
+                showAccentLine: true,
+                brandName: 'PRESYS',
+                brandSubtitle: 'INSTRUMENTS & SYSTEMS',
+                overview: 'Calibrador de temperatura de bloco seco de ultra-baixa temperatura até -50 °C com 400 W de potência termoelétrica, ideal para calibrações de extrema exatidão em laboratórios acreditados e indústrias de processo.',
+                footerLeft: 'www.presys.com.br · vendas@presys.com.br',
+                footerRight: 'CE Compliant · EN 61010-1 / EN 61326-1'
+              }
+            }
+          ]
+        },
+        {
+          id: 'p2-ta50n-specs',
+          pageNumber: 2,
+          pageType: 'technical',
+          title: 'Ficha Técnica TA-50N',
+          blocks: [
+            {
+              id: 'b2-ta50n-header',
+              type: 'hero_banner',
+              badgeText: 'ESPECIFICAÇÕES TÉCNICAS E METROLÓGICAS OFICIAIS',
+              title: 'PRESYS TA-50N — Especificações de Engenharia',
+              subtitle: 'Faixa operacional de -50 a 155 °C com estágio Peltier de alta potência de 400 W e chassi 315x200x305 mm.',
+              imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
+              imageCaption: 'Chassi reforçado 315x200x305 mm, 12.5 kg, com dissipação otimizada.'
+            },
+            {
+              id: 'b3-ta50n-table',
+              type: 'table',
+              title: 'Parâmetros Metrológicos e Elétricos (Manual EM0314-01)',
+              tableColumns: [
+                { key: 'code', label: 'Modelo', visible: true, width: 100 },
+                { key: 'range', label: 'Faixa Operacional', visible: true, width: 130 },
+                { key: 'accuracy', label: 'Exatidão', visible: true, width: 190 },
+                { key: 'powerSupply', label: 'Alimentação / Potência', visible: true, width: 160 }
+              ],
+              tableRows: [
+                { id: 'r1', productRefId: 'prod-presys-ta-50n', localOverrides: {}, order: 0 }
+              ]
+            },
+            {
+              id: 'b4-ta50n-features',
+              type: 'features_list',
+              title: 'Destaques Metrológicos e Funcionais',
+              features: [
+                { id: 'f1', title: 'Ultra-Baixa Temperatura (-50 °C)', description: 'Resfriamento potente de 25 a -50 °C em 25 minutos com dissipação térmica otimizada e estabilidade de 0.02 °C.' },
+                { id: 'f2', title: 'Calibrador Multissinais Completo', description: 'Medição independente de corrente (mA), mV, Ohms, RTDs (Pt100, Pt1000), Termopares (J, K, T, E, N, R, S, B, C) e Switches.' },
+                { id: 'f3', title: 'Conectividade e Protocolo HART®', description: 'Fonte de 24 Vcc integrada para transmissores a 2 fios e comunicador HART® com biblioteca DD da FieldComm Group.' }
+              ]
+            },
+            {
+              id: 'b5-ta50n-bottom',
+              type: 'bottom_header',
+              title: 'PRESYS INSTRUMENTOS E SISTEMAS LTDA · SÃO PAULO, BRASIL'
+            }
+          ]
+        },
+        {
+          id: 'p3-ta50n-inserts',
+          pageNumber: 3,
+          pageType: 'technical',
+          title: 'Insertos e Acessórios TA-50N',
+          blocks: [
+            {
+              id: 'b6-ta50n-inserts-visual',
+              type: 'inserts_visual',
+              title: 'Blocos de Prova (Inserts) Intercambiáveis Ø 25.4 x 124 mm',
+              subtitle: 'Modelos padrão métricos, imperiais, multi-furos e Insert Caneca exclusivo com microesferas de aço.',
+              badgeText: 'ACESSÓRIOS E COMPONENTES ORIGINAIS PRESYS',
+              customData: {
+                selectedInserts: ['IN01', 'IN02', 'IN03', 'IN04', 'IN05', 'IN06', 'IN07', 'IN08', 'INCL', 'IN1P', 'IN1A', 'IN1E']
+              }
+            },
+            {
+              id: 'b7-ta50n-conn-visual',
+              type: 'software_connectivity',
+              title: 'Diagrama de Ligações Frontais e Conectividade',
+              subtitle: 'Bornes para medição de mA, mV, RTD 2/3/4 fios, Termopares, Termostatos e Fonte TPS 24V HART®.',
+              badgeText: 'PAINEL FRONTAL MULTISSINAIS'
+            },
+            {
+              id: 'b8-ta50n-footer',
+              type: 'bottom_header',
+              title: 'PRESYS — METROLOGIA E AUTOMAÇÃO INDUSTRIAL'
+            }
+          ]
+        }
+      ]
+    }
   }
 ];
+

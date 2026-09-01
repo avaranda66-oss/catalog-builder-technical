@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RotateCcw, FileText, Layers } from 'lucide-react';
+import { RotateCcw, FileText, Layers, Crop } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { PageThumbnailList } from './PageThumbnailList';
 import { A4Canvas } from './A4Canvas';
@@ -8,10 +8,12 @@ import { AddProductModal } from './AddProductModal';
 import { ExportPDFModal } from './ExportPDFModal';
 import { AIAssistantDrawer } from '../ai/AIAssistantDrawer';
 import { PresetModal } from './PresetModal';
+import { PDFImportModal } from './PDFImportModal';
 
 export const EditorView: React.FC = () => {
   const { currentCatalog, setCurrentCatalog, createCatalogFromPreset } = useCatalogStore();
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [isPDFImportModalOpen, setIsPDFImportModalOpen] = useState(false);
 
   if (!currentCatalog) {
     return (
@@ -22,7 +24,7 @@ export const EditorView: React.FC = () => {
           </div>
           <h2 className="text-base font-bold text-slate-900">Iniciar Novo Catálogo Técnico</h2>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Crie um catálogo a partir dos modelos pré-configurados (Ficha Técnica 3 Páginas, Comparativo ou Datasheet).
+            Crie um catálogo a partir dos modelos pré-configurados (Ficha Técnica 3 Páginas, Comparativo ou Datasheets TA-25N/35N/50N).
           </p>
           <button
             onClick={() => setIsPresetModalOpen(true)}
@@ -65,6 +67,16 @@ export const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão de Importar / Recortar PDF */}
+          <button
+            onClick={() => setIsPDFImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+            title="Importe páginas completas ou recorte gráficos e tabelas de PDFs existentes"
+          >
+            <Crop className="w-3.5 h-3.5 text-amber-600" />
+            <span>Importar / Recortar PDF</span>
+          </button>
+
           {/* Botão de Modelos / Presets */}
           <button
             onClick={() => setIsPresetModalOpen(true)}
@@ -98,8 +110,13 @@ export const EditorView: React.FC = () => {
       {/* Modais e Gavetas */}
       <AddProductModal />
       <ExportPDFModal />
+      {isPresetModalOpen && (
+        <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />
+      )}
+      {isPDFImportModalOpen && (
+        <PDFImportModal isOpen={isPDFImportModalOpen} onClose={() => setIsPDFImportModalOpen(false)} />
+      )}
       <AIAssistantDrawer />
-      <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />
     </div>
   );
 };
