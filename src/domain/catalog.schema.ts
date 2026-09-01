@@ -33,6 +33,41 @@ export interface BlockPosition {
   zIndex: number;
 }
 
+export type CanvasLayerType = 'text' | 'image' | 'shape' | 'line' | 'badge';
+
+export interface CanvasLayer {
+  id: string;
+  type: CanvasLayerType;
+  label: string;
+  x: number; // 0 a 100%
+  y: number; // 0 a 100%
+  width?: number; // em % ou px
+  height?: number; // em px
+  zIndex: number;
+  visible: boolean;
+  locked?: boolean;
+  // Propriedades de Texto & Badge
+  content?: string;
+  fontSize?: number; // em px (8 a 120)
+  fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'black';
+  fontFamily?: 'sans' | 'mono' | 'serif';
+  color?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  letterSpacing?: 'normal' | 'wide' | 'widest';
+  textTransform?: 'none' | 'uppercase' | 'capitalize';
+  lineHeight?: 'tight' | 'normal' | 'relaxed';
+  // Propriedades de Imagem
+  imageUrl?: string;
+  objectFit?: 'cover' | 'contain' | 'fill';
+  // Propriedades de Forma/Linha/Badge
+  backgroundColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  borderRadius?: number;
+  opacity?: number; // 0 a 100
+  padding?: number; // em px
+}
+
 export interface TableColumnConfig {
   id?: string;
   key: string;
@@ -122,6 +157,36 @@ export interface CatalogPreset {
   createdAt: string;
 }
 
+export const CanvasLayerSchema = z.object({
+  id: z.string(),
+  type: z.enum(['text', 'image', 'shape', 'line', 'badge']),
+  label: z.string().default('Camada'),
+  x: z.number().min(0).max(100).default(5),
+  y: z.number().min(0).max(100).default(5),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  zIndex: z.number().int().default(1),
+  visible: z.boolean().default(true),
+  locked: z.boolean().optional().default(false),
+  content: z.string().optional().default(''),
+  fontSize: z.number().optional().default(14),
+  fontWeight: z.enum(['normal', 'medium', 'semibold', 'bold', 'black']).optional().default('normal'),
+  fontFamily: z.enum(['sans', 'mono', 'serif']).optional().default('sans'),
+  color: z.string().optional().default('#ffffff'),
+  textAlign: z.enum(['left', 'center', 'right']).optional().default('left'),
+  letterSpacing: z.enum(['normal', 'wide', 'widest']).optional().default('normal'),
+  textTransform: z.enum(['none', 'uppercase', 'capitalize']).optional().default('none'),
+  lineHeight: z.enum(['tight', 'normal', 'relaxed']).optional().default('normal'),
+  imageUrl: z.string().optional().default(''),
+  objectFit: z.enum(['cover', 'contain', 'fill']).optional().default('cover'),
+  backgroundColor: z.string().optional().default('transparent'),
+  borderColor: z.string().optional().default('transparent'),
+  borderWidth: z.number().optional().default(0),
+  borderRadius: z.number().optional().default(0),
+  opacity: z.number().min(0).max(100).optional().default(100),
+  padding: z.number().optional().default(0)
+});
+
 export const BlockPositionSchema = z.object({
   x: z.number().min(0).default(0),
   y: z.number().min(0).default(0),
@@ -159,14 +224,14 @@ export const OrderingSegmentSchema = z.object({
   id: z.string(),
   code: z.string(),
   name: z.string(),
-  options: z.array(z.string()).default([])
+  options: z.array(z.string()).optional().default([])
 });
 
 export const ContentBlockSchema = z.object({
   id: z.string(),
   type: BlockTypeSchema,
   position: BlockPositionSchema.optional(),
-  style: z.record(z.any()).default({}),
+  style: z.record(z.any()).optional().default({}),
   badgeText: z.string().optional(),
   title: z.string().optional(),
   subtitle: z.string().optional(),
@@ -186,35 +251,33 @@ export const ContentBlockSchema = z.object({
     address: z.string().optional(),
     logoUrl: z.string().optional()
   }).optional(),
-  customData: z.record(z.any()).optional()
+  customData: z.record(z.any()).optional().default({})
 });
-
-export const PageTypeSchema = z.enum(['cover', 'technical', 'custom', 'presentation']);
 
 export const CatalogPageSchema = z.object({
   id: z.string(),
   pageNumber: z.number().int().positive(),
-  pageType: PageTypeSchema.default('custom'),
+  pageType: z.enum(['cover', 'technical', 'custom', 'presentation']).optional().default('technical'),
   title: z.string().optional().default(''),
   blocks: z.array(ContentBlockSchema).default([])
 });
 
 export const CatalogSchema = z.object({
   id: z.string(),
-  title: z.string().min(1, 'Título é obrigatório'),
+  title: z.string(),
   subtitle: z.string().optional().default(''),
   themeId: z.string().default('default-technical'),
-  pages: z.array(CatalogPageSchema).min(1, 'Catálogo deve ter ao menos 1 página'),
-  createdAt: z.string().default(() => new Date().toISOString()),
-  updatedAt: z.string().default(() => new Date().toISOString()),
-  version: z.number().int().positive().default(1)
+  pages: z.array(CatalogPageSchema).default([]),
+  createdAt: z.string().datetime().or(z.string()),
+  updatedAt: z.string().datetime().or(z.string()),
+  version: z.number().int().default(1)
 });
 
 export const CatalogPresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  isSystem: z.boolean().default(false),
+  isSystem: z.boolean().optional().default(false),
   catalog: CatalogSchema,
-  createdAt: z.string().default(() => new Date().toISOString())
+  createdAt: z.string().datetime().or(z.string())
 });

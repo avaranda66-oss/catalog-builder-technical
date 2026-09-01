@@ -48,7 +48,7 @@ export class SupabaseService {
 
   /**
    * Upload de foto real de produto para o Supabase Storage.
-   * Se o upload remoto falhar ou o bucket ainda não existir, utiliza fallback Base64 local.
+   * Se o upload remoto falhar, utiliza fallback Base64 local.
    */
   static async uploadProductImage(
     file: File,
@@ -116,7 +116,6 @@ export class SupabaseService {
 
   /**
    * Upload de base64 image diretamente para Supabase Storage.
-   * Converte o data URL para Blob e faz upload.
    */
   static async uploadBase64Image(
     base64: string,
@@ -129,7 +128,6 @@ export class SupabaseService {
     }
 
     try {
-      // Converte base64 para Blob
       const res = await fetch(base64);
       const blob = await res.blob();
       const ext = blob.type.split('/')[1] || 'png';
@@ -155,7 +153,7 @@ export class SupabaseService {
 
   /**
    * Sincroniza produtos oficiais com a nuvem (Supabase).
-   * Usa as colunas EXATAS do schema SQL: id, code, name, category, family, description, image_url, specifications
+   * Schema: sku, name, family, data (jsonb), updated_at
    */
   static async pushProductsToCloud(
     products: Product[]
@@ -166,22 +164,30 @@ export class SupabaseService {
     }
 
     try {
-      const payload = products.map((p) => ({
-        id: p.id,
-        code: p.code,
-        name: p.model,
-        category: p.family || 'Geral',
-        family: p.family || 'Geral',
-        description: p.description || '',
-        image_url: p.imageUrl || '',
-        specifications: p.specs || {},
-        is_verified: true,
-        updated_at: new Date().toISOString()
-      }));
+      const payload = products.map((p) => {
+        // Valida se o ID é UUID válido para o Postgres, senão omite para auto-geração
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
+        const item: any = {
+          sku: p.code,
+          name: p.model,
+          family: p.family || 'Geral',
+          data: {
+            specs: p.specs,
+            description: p.description,
+            imageUrl: p.imageUrl,
+            version: p.version
+          },
+          updated_at: new Date().toISOString()
+        };
+        if (isUUID) {
+          item.id = p.id;
+        }
+        return item;
+      });
 
       const { error } = await supabase
         .from('products')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'sku' });
 
       if (error) {
         console.warn('Erro ao salvar produtos no Supabase:', error.message);
@@ -218,13 +224,14 @@ export class SupabaseService {
       }
 
       const products: Product[] = data.map((row: any) => {
-        const specs = row.specifications || {};
+        const rowData = row.data || {};
+        const specs = rowData.specs || {};
         return {
           id: row.id,
-          code: row.code || 'PRESYS-ITEM',
-          model: row.name || 'Modelo',
-          family: row.family || row.category || 'Geral',
-          description: row.description || '',
+          code: row.sku || row.code || 'PRESYS-ITEM',
+          model: row.name || row.model || 'Modelo',
+          family: row.family || 'Geral',
+          description: rowData.description || '',
           specs: {
             range: specs.range || '',
             unit: specs.unit || '',
@@ -235,10 +242,10 @@ export class SupabaseService {
             protectionDegree: specs.protectionDegree || 'IP67',
             customSpecs: specs.customSpecs || {}
           },
-          imageUrl: row.image_url || '',
+          imageUrl: rowData.imageUrl || '',
           createdAt: row.created_at || new Date().toISOString(),
           updatedAt: row.updated_at || new Date().toISOString(),
-          version: 1
+          version: row.version || rowData.version || 1
         };
       });
 
@@ -251,7 +258,6 @@ export class SupabaseService {
 
   /**
    * Sincroniza catálogos completos com o Supabase.
-   * Usa as colunas EXATAS do schema SQL: id, title, description, pages, version, is_published
    */
   static async pushCatalogsToCloud(
     catalogs: Catalog[]
@@ -262,19 +268,28 @@ export class SupabaseService {
     }
 
     try {
-      const payload = catalogs.map((c) => ({
-        id: c.id,
-        title: c.title,
-        description: c.subtitle || '',
-        pages: c.pages,
-        version: String(c.version || '1.0.0'),
-        is_published: false,
-        updated_at: new Date().toISOString()
-      }));
+      const payload = catalogs.map((c) => {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.id);
+        const item: any = {
+          name: c.title,
+          locale: 'pt-BR',
+          template_key: c.themeId || 'default-technical',
+          brand: {
+            subtitle: c.subtitle,
+            pages: c.pages,
+            version: c.version
+          },
+          updated_at: new Date().toISOString()
+        };
+        if (isUUID) {
+          item.id = c.id;
+        }
+        return item;
+      });
 
       const { error } = await supabase
         .from('catalogs')
-        .upsert(payload, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'name' });
 
       if (error) {
         return { success: false, count: 0, message: error.message };
@@ -309,16 +324,19 @@ export class SupabaseService {
         return { success: true, catalogs: [], message: 'Nenhum catálogo encontrado na nuvem.' };
       }
 
-      const catalogs: Catalog[] = data.map((row: any) => ({
-        id: row.id,
-        title: row.title || 'Catálogo',
-        subtitle: row.description || '',
-        themeId: 'default-technical',
-        pages: row.pages || [],
-        createdAt: row.created_at || new Date().toISOString(),
-        updatedAt: row.updated_at || new Date().toISOString(),
-        version: Number(row.version) || 1
-      }));
+      const catalogs: Catalog[] = data.map((row: any) => {
+        const brand = row.brand || {};
+        return {
+          id: row.id,
+          title: row.name || 'Catálogo',
+          subtitle: brand.subtitle || '',
+          themeId: row.template_key || 'default-technical',
+          pages: brand.pages || [],
+          createdAt: row.created_at || new Date().toISOString(),
+          updatedAt: row.updated_at || new Date().toISOString(),
+          version: brand.version || row.version || 1
+        };
+      });
 
       const validated = z.array(CatalogSchema).parse(catalogs);
       return { success: true, catalogs: validated, message: `${validated.length} catálogo(s) baixado(s) da nuvem!` };

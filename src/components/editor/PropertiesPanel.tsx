@@ -22,7 +22,8 @@ import {
   Laptop,
   AlignLeft,
   AlignCenter,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Minus
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
@@ -1416,255 +1417,293 @@ export const PropertiesPanel: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Painel do Modo Canva: Camadas e Escala dos Textos */}
-                <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-200 space-y-3">
-                  <div className="flex items-center justify-between border-b border-blue-200 pb-2">
-                    <span className="font-bold text-[#003366] text-xs flex items-center gap-1.5">
-                      <SlidersHorizontal className="w-3.5 h-3.5" />
-                      <span>Camadas & Tamanhos de Fonte</span>
+                {/* Painel do Modo Canva Dinâmico: Ferramentas & Camadas Livres */}
+                <div className="bg-slate-50 p-3 rounded-none border border-slate-300 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="font-bold text-[#003366] text-xs flex items-center gap-1.5 font-mono">
+                      <Layers className="w-3.5 h-3.5 text-[#003366]" />
+                      <span>Ferramentas & Camadas ({((selectedBlock.customData?.canvasLayers as any[]) || []).length})</span>
                     </span>
-                    <span className="text-[9px] font-mono text-blue-700 font-semibold">
-                      Arraste com o mouse no Canvas
+                    <span className="text-[9px] font-mono text-slate-500">
+                      Arraste livremente no Canvas
                     </span>
                   </div>
 
-                  {/* 1. Título Comercial */}
-                  <div className="space-y-1 bg-white p-2 rounded-lg border border-blue-100 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800">📝 Título Comercial</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-[#003366]">
-                          {selectedBlock.customData?.titleConfig?.size || 42}px
-                        </span>
-                        <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedBlock.customData?.titleConfig?.visible !== false}
-                            onChange={(e) =>
-                              updateBlock(blockPageId, selectedBlock.id, {
-                                customData: {
-                                  ...(selectedBlock.customData || {}),
-                                  titleConfig: {
-                                    ...(selectedBlock.customData?.titleConfig || { x: 5, y: 22, size: 42 }),
-                                    visible: e.target.checked
-                                  }
-                                }
-                              })
-                            }
-                            className="rounded text-[#003366]"
-                          />
-                          <span>Exibir</span>
-                        </label>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="18"
-                      max="72"
-                      value={selectedBlock.customData?.titleConfig?.size || 42}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: {
-                            ...(selectedBlock.customData || {}),
-                            titleConfig: {
-                              ...(selectedBlock.customData?.titleConfig || { x: 5, y: 22 }),
-                              size: Number(e.target.value),
-                              visible: true
-                            }
-                          }
-                        })
-                      }
-                      className="w-full accent-[#003366] cursor-pointer"
-                    />
-                  </div>
-
-                  {/* 2. Subtítulo Técnico */}
-                  <div className="space-y-1 bg-white p-2 rounded-lg border border-blue-100 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800">📄 Subtítulo</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-[#003366]">
-                          {selectedBlock.customData?.subtitleConfig?.size || 16}px
-                        </span>
-                        <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedBlock.customData?.subtitleConfig?.visible !== false}
-                            onChange={(e) =>
-                              updateBlock(blockPageId, selectedBlock.id, {
-                                customData: {
-                                  ...(selectedBlock.customData || {}),
-                                  subtitleConfig: {
-                                    ...(selectedBlock.customData?.subtitleConfig || { x: 5, y: 29, size: 16 }),
-                                    visible: e.target.checked
-                                  }
-                                }
-                              })
-                            }
-                            className="rounded text-[#003366]"
-                          />
-                          <span>Exibir</span>
-                        </label>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="12"
-                      max="36"
-                      value={selectedBlock.customData?.subtitleConfig?.size || 16}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: {
-                            ...(selectedBlock.customData || {}),
-                            subtitleConfig: {
-                              ...(selectedBlock.customData?.subtitleConfig || { x: 5, y: 29 }),
-                              size: Number(e.target.value),
-                              visible: true
-                            }
-                          }
-                        })
-                      }
-                      className="w-full accent-[#003366] cursor-pointer"
-                    />
-                  </div>
-
-                  {/* 3. Logotipo PRESYS */}
-                  <div className="space-y-1 bg-white p-2 rounded-lg border border-blue-100 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800">🏷️ Logotipo / Marca</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-[#003366]">
-                          {selectedBlock.customData?.logoConfig?.size || 22}px
-                        </span>
-                        <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedBlock.customData?.logoConfig?.visible !== false}
-                            onChange={(e) =>
-                              updateBlock(blockPageId, selectedBlock.id, {
-                                customData: {
-                                  ...(selectedBlock.customData || {}),
-                                  logoConfig: {
-                                    ...(selectedBlock.customData?.logoConfig || { x: 5, y: 3.5, size: 22 }),
-                                    visible: e.target.checked
-                                  }
-                                }
-                              })
-                            }
-                            className="rounded text-[#003366]"
-                          />
-                          <span>Exibir</span>
-                        </label>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="14"
-                      max="40"
-                      value={selectedBlock.customData?.logoConfig?.size || 22}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: {
-                            ...(selectedBlock.customData || {}),
-                            logoConfig: {
-                              ...(selectedBlock.customData?.logoConfig || { x: 5, y: 3.5 }),
-                              size: Number(e.target.value),
-                              visible: true
-                            }
-                          }
-                        })
-                      }
-                      className="w-full accent-[#003366] cursor-pointer"
-                    />
-                  </div>
-
-                  {/* 4. Badge Metrológico */}
-                  <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-blue-100 shadow-2xs">
-                    <label className="text-xs font-bold text-slate-800">🎖️ Selo Metrológico / Badge</label>
-                    <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedBlock.customData?.badgeConfig?.visible !== false}
-                        onChange={(e) =>
-                          updateBlock(blockPageId, selectedBlock.id, {
-                            customData: {
-                              ...(selectedBlock.customData || {}),
-                              badgeConfig: {
-                                ...(selectedBlock.customData?.badgeConfig || { x: 62, y: 3.8, size: 10 }),
-                                visible: e.target.checked
-                              }
-                            }
-                          })
-                        }
-                        className="rounded text-[#003366]"
-                      />
-                      <span>Exibir</span>
+                  {/* 1. Barra de Inserção de Novas Ferramentas / Camadas */}
+                  <div>
+                    <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1.5">
+                      + Adicionar Novo Elemento Livre
                     </label>
-                  </div>
-
-                  {/* 5. Linha de Acento */}
-                  <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-blue-100 shadow-2xs">
-                    <label className="text-xs font-bold text-slate-800">➖ Linha de Destaque Azul</label>
-                    <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedBlock.customData?.accentLineConfig?.visible !== false}
-                        onChange={(e) =>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prev = (selectedBlock.customData?.canvasLayers as any[]) || [];
+                          const newLayer = {
+                            id: `layer-${Date.now()}`,
+                            type: 'text',
+                            label: `Texto Livre ${prev.length + 1}`,
+                            content: 'Novo Texto Técnico',
+                            x: 10,
+                            y: 20 + prev.length * 5,
+                            fontSize: 22,
+                            fontWeight: 'bold',
+                            color: '#ffffff',
+                            visible: true,
+                            zIndex: prev.length + 10
+                          };
                           updateBlock(blockPageId, selectedBlock.id, {
-                            customData: {
-                              ...(selectedBlock.customData || {}),
-                              accentLineConfig: {
-                                ...(selectedBlock.customData?.accentLineConfig || { x: 5, y: 33, width: 80 }),
-                                visible: e.target.checked
-                              }
-                            }
-                          })
-                        }
-                        className="rounded text-[#003366]"
-                      />
-                      <span>Exibir</span>
-                    </label>
+                            customData: { ...(selectedBlock.customData || {}), canvasLayers: [...prev, newLayer] }
+                          });
+                        }}
+                        className="p-1.5 bg-white hover:bg-blue-50 border border-slate-300 hover:border-blue-400 text-slate-800 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <Type className="w-3 h-3 text-blue-600" />
+                        <span>+ Texto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prev = (selectedBlock.customData?.canvasLayers as any[]) || [];
+                          const newLayer = {
+                            id: `layer-${Date.now()}`,
+                            type: 'badge',
+                            label: `Selo / Badge ${prev.length + 1}`,
+                            content: 'CERTIFICADO RBC ISO 17025',
+                            x: 10,
+                            y: 10,
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            fontFamily: 'mono',
+                            color: '#93c5fd',
+                            backgroundColor: 'rgba(30, 58, 138, 0.5)',
+                            borderColor: 'rgba(96, 165, 250, 0.5)',
+                            borderWidth: 1,
+                            visible: true,
+                            zIndex: prev.length + 10
+                          };
+                          updateBlock(blockPageId, selectedBlock.id, {
+                            customData: { ...(selectedBlock.customData || {}), canvasLayers: [...prev, newLayer] }
+                          });
+                        }}
+                        className="p-1.5 bg-white hover:bg-amber-50 border border-slate-300 hover:border-amber-400 text-slate-800 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-600" />
+                        <span>+ Selo</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prev = (selectedBlock.customData?.canvasLayers as any[]) || [];
+                          const newLayer = {
+                            id: `layer-${Date.now()}`,
+                            type: 'line',
+                            label: `Linha Técnica ${prev.length + 1}`,
+                            x: 10,
+                            y: 35,
+                            width: 100,
+                            height: 3,
+                            backgroundColor: '#3b82f6',
+                            visible: true,
+                            zIndex: prev.length + 10
+                          };
+                          updateBlock(blockPageId, selectedBlock.id, {
+                            customData: { ...(selectedBlock.customData || {}), canvasLayers: [...prev, newLayer] }
+                          });
+                        }}
+                        className="p-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <Minus className="w-3 h-3 text-blue-600" />
+                        <span>+ Linha</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Botões de Ação Rápida */}
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: {
-                            ...(selectedBlock.customData || {}),
-                            titleConfig: { ...(selectedBlock.customData?.titleConfig || {}), visible: false },
-                            subtitleConfig: { ...(selectedBlock.customData?.subtitleConfig || {}), visible: false },
-                            overviewConfig: { ...(selectedBlock.customData?.overviewConfig || {}), visible: false }
-                          }
-                        })
-                      }
-                      className="px-2 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold rounded-lg transition-colors"
-                      title="Oculta os textos sobrepostos caso sua foto de fundo já possua o título impresso"
-                    >
-                      Ocultar Textos da Foto
-                    </button>
+                  {/* 2. Lista de Camadas Existentes com Controles Individuais */}
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider">
+                      Camadas no Canvas
+                    </label>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: {
-                            ...(selectedBlock.customData || {}),
-                            logoConfig: { x: 5, y: 3.5, size: 22, visible: true },
-                            badgeConfig: { x: 62, y: 3.8, size: 10, visible: true },
-                            titleConfig: { x: 5, y: 22, size: 42, visible: true },
-                            subtitleConfig: { x: 5, y: 29, size: 16, visible: true },
-                            accentLineConfig: { x: 5, y: 33, width: 80, visible: true },
-                            overviewConfig: { x: 5, y: 36, size: 12, visible: true }
-                          }
-                        })
-                      }
-                      className="px-2 py-1.5 bg-white hover:bg-slate-100 text-[#003366] text-[10px] font-bold rounded-lg border border-blue-200 transition-colors"
-                    >
-                      Restaurar Padrão
-                    </button>
+                    {(((selectedBlock.customData?.canvasLayers as any[]) || []).length === 0) ? (
+                      <p className="text-[10px] text-slate-500 italic p-2 bg-white border border-slate-200 text-center">
+                        Nenhum elemento adicionado. Use os botões acima para criar textos, selos e linhas livres.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                        {((selectedBlock.customData?.canvasLayers as any[]) || []).map((layer: any, idx: number) => {
+                          const layers = (selectedBlock.customData?.canvasLayers as any[]) || [];
+
+                          const updateCurrentLayer = (updates: any) => {
+                            const updated = layers.map((l: any) => (l.id === layer.id ? { ...l, ...updates } : l));
+                            updateBlock(blockPageId, selectedBlock.id, {
+                              customData: { ...(selectedBlock.customData || {}), canvasLayers: updated }
+                            });
+                          };
+
+                          const deleteCurrentLayer = () => {
+                            const updated = layers.filter((l: any) => l.id !== layer.id);
+                            updateBlock(blockPageId, selectedBlock.id, {
+                              customData: { ...(selectedBlock.customData || {}), canvasLayers: updated }
+                            });
+                          };
+
+                          return (
+                            <div
+                              key={layer.id}
+                              className="p-2.5 bg-white border border-slate-300 rounded-none shadow-2xs space-y-2"
+                            >
+                              {/* Header do Layer */}
+                              <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  <span className="text-slate-400 font-mono text-[9px]">#{idx + 1}</span>
+                                  <input
+                                    type="text"
+                                    value={layer.label || 'Elemento'}
+                                    onChange={(e) => updateCurrentLayer({ label: e.target.value })}
+                                    className="font-bold text-slate-800 text-xs bg-transparent outline-none focus:bg-amber-50 px-1 border-b border-transparent focus:border-amber-400 flex-1 truncate"
+                                  />
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentLayer({ visible: layer.visible === false ? true : false })}
+                                    className={`p-1 text-xs rounded-none ${layer.visible !== false ? 'text-blue-600 bg-blue-50' : 'text-slate-400 bg-slate-100'}`}
+                                    title={layer.visible !== false ? 'Ocultar elemento' : 'Exibir elemento'}
+                                  >
+                                    {layer.visible !== false ? '👁️' : '🚫'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={deleteCurrentLayer}
+                                    className="p-1 text-slate-400 hover:text-red-600"
+                                    title="Excluir camada"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Conteúdo de Texto se for Text ou Badge */}
+                              {(layer.type === 'text' || layer.type === 'badge') && (
+                                <div>
+                                  <label className="block text-[9px] font-mono text-slate-500">Conteúdo do Texto</label>
+                                  <input
+                                    type="text"
+                                    value={layer.content || ''}
+                                    onChange={(e) => updateCurrentLayer({ content: e.target.value })}
+                                    className="w-full p-1 border border-slate-300 text-xs font-sans mt-0.5 bg-slate-50 focus:bg-white"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Posição X e Y (Enquadramento) */}
+                              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1.5 border border-slate-200">
+                                <div>
+                                  <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
+                                    <span>Posição X (Horizontal)</span>
+                                    <span className="font-bold text-[#003366]">{layer.x}%</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="95"
+                                    value={layer.x || 0}
+                                    onChange={(e) => updateCurrentLayer({ x: Number(e.target.value) })}
+                                    className="w-full accent-[#003366] cursor-pointer"
+                                  />
+                                </div>
+
+                                <div>
+                                  <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
+                                    <span>Posição Y (Vertical)</span>
+                                    <span className="font-bold text-[#003366]">{layer.y}%</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="95"
+                                    value={layer.y || 0}
+                                    onChange={(e) => updateCurrentLayer({ y: Number(e.target.value) })}
+                                    className="w-full accent-[#003366] cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Botões de Alinhamento Rápido */}
+                              <div className="flex items-center justify-between gap-1 pt-0.5">
+                                <span className="text-[9px] font-mono text-slate-500">Alinhar:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentLayer({ x: 5 })}
+                                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-[9px] font-mono border border-slate-300"
+                                    title="Alinhar na margem esquerda (5%)"
+                                  >
+                                    Margem Esq.
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentLayer({ x: 50, textAlign: 'center' })}
+                                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-[9px] font-mono border border-slate-300"
+                                    title="Centralizar horizontalmente (50%)"
+                                  >
+                                    Centro (X)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateCurrentLayer({ y: 5 })}
+                                    className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-[9px] font-mono border border-slate-300"
+                                    title="Alinhar ao topo (5%)"
+                                  >
+                                    Topo
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Tamanho da Fonte (para Text e Badge) */}
+                              {(layer.type === 'text' || layer.type === 'badge') && (
+                                <div>
+                                  <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
+                                    <span>Tamanho da Fonte</span>
+                                    <span className="font-bold text-[#003366]">{layer.fontSize || 16}px</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="8"
+                                    max="80"
+                                    value={layer.fontSize || 16}
+                                    onChange={(e) => updateCurrentLayer({ fontSize: Number(e.target.value) })}
+                                    className="w-full accent-[#003366] cursor-pointer"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Largura (para Linha ou Forma) */}
+                              {(layer.type === 'line' || layer.type === 'shape' || layer.type === 'image') && (
+                                <div>
+                                  <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
+                                    <span>Largura (px)</span>
+                                    <span className="font-bold text-[#003366]">{layer.width || 100}px</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="20"
+                                    max="700"
+                                    value={layer.width || 100}
+                                    onChange={(e) => updateCurrentLayer({ width: Number(e.target.value) })}
+                                    className="w-full accent-[#003366] cursor-pointer"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
