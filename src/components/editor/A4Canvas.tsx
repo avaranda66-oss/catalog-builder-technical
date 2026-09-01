@@ -776,10 +776,12 @@ export const A4Canvas: React.FC = () => {
               {/* Área de Conteúdo com Distribuição Inteligente de Altura */}
               <div
                 className={`flex-1 ${
-                  isSingleFullCover ? 'p-0' : 'py-3'
+                  isSingleFullCover ? 'p-0 h-full w-full' : 'py-3'
                 } flex flex-col ${
                   isAutoFit && !isSingleFullCover && blockCount > 1
                     ? 'justify-between space-y-4'
+                    : isSingleFullCover
+                    ? 'space-y-0'
                     : 'space-y-3'
                 }`}
               >
