@@ -155,7 +155,7 @@ export const Navbar: React.FC = () => {
           ) : (
             <>
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Saved {lastSavedAt ? `at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'locally'}</span>
+              <span>Saved {lastSavedAt ? `at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'in Cloud'}</span>
             </>
           )}
         </div>

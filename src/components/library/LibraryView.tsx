@@ -129,8 +129,11 @@ export const LibraryView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white select-none overflow-hidden text-xs">
-      <div className="border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900">
-        Biblioteca em modo local: a sincronização segura está em preparação. {isAdmin ? 'Alterações ficam apenas neste dispositivo.' : 'Como Colaborador, a Biblioteca está somente para leitura.'}
+      <div className="border-b border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[11px] text-emerald-900 flex items-center justify-between">
+        <span>
+          🟢 Sincronização em nuvem ativa via Supabase: {isAdmin ? 'Produtos e especificações oficiais são sincronizados e compartilhados entre administradores.' : 'Como Colaborador, a Biblioteca oficial está em modo somente-leitura.'}
+        </span>
+        <span className="text-[10px] text-emerald-700 font-mono font-semibold">● Sincronizado</span>
       </div>
       {/* 1. Barra de Fórmulas / Célula Ativa Estilo Excel */}
       <div className="h-9 bg-[#f8fafc] border-b border-slate-300 px-3 flex items-center justify-between shrink-0 gap-3">
