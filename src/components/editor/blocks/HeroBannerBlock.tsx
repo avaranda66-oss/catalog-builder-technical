@@ -65,7 +65,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
-              className="px-2.5 py-0.5 rounded-none bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold tracking-widest uppercase border border-blue-400/30 outline-none focus:bg-white/20 cursor-text"
+              className="inline-flex items-center justify-center px-2.5 py-1 leading-none rounded-none bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold tracking-widest uppercase border border-blue-400/30 outline-none focus:bg-white/20 cursor-text box-border"
             >
               {block.badgeText || 'PRESYS · ESTAÇÕES DE TESTE EM CAMPO E OFICINA'}
             </span>

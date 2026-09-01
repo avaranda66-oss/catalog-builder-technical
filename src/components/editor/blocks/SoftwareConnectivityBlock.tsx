@@ -121,7 +121,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeBlur}
-            className="text-[9px] text-[#003366] font-mono font-bold bg-blue-50 px-2 py-0.5 rounded-none border border-blue-200 outline-none focus:bg-amber-100 cursor-text"
+            className="inline-flex items-center justify-center text-[9px] text-[#003366] font-mono font-bold bg-blue-50 px-2.5 py-1 leading-none rounded-none border border-blue-200 outline-none focus:bg-amber-100 cursor-text box-border"
           >
             {block.badgeText || 'Digital Factory 4.0'}
           </span>

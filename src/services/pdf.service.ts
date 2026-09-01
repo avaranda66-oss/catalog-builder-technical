@@ -67,7 +67,7 @@ export class PDFService {
 
       const pdfWidth = 210;
       const pdfHeight = 297;
-      const scale = options.scale || 3; // 300 DPI+ ultra high resolution
+      const scale = options.scale || 3.5; // 350+ DPI Ultra High Definition lossless rendering
 
       for (let i = 0; i < pageElements.length; i++) {
         const pageEl = pageElements[i] as HTMLElement;
@@ -137,8 +137,8 @@ export class PDFService {
           }
         });
 
-        const imgData = canvas.toDataURL('image/jpeg', options.quality || 0.98);
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'SLOW');
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       }
 
       const fileName = options.fileName || `PRESYS_Catalog_${new Date().toISOString().slice(0, 10)}.pdf`;

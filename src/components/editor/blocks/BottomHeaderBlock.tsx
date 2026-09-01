@@ -69,7 +69,7 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
-              className="text-[9px] font-mono font-bold tracking-widest uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-none outline-none focus:bg-white/20 cursor-text"
+              className="inline-flex items-center justify-center text-[9px] font-mono font-bold tracking-widest uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2.5 py-1 leading-none rounded-none outline-none focus:bg-white/20 cursor-text box-border"
             >
               {block.badgeText || 'PRESYS METROLOGIA'}
             </span>
