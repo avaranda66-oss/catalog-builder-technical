@@ -555,55 +555,55 @@ export const SidebarBlockLibrary: React.FC = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setActiveCategory('all')}
-            className={`flex-1 py-1 text-[11px] font-semibold rounded transition-colors ${
+            className={`flex-1 py-1 text-[11px] font-bold rounded-none transition-colors ${
               activeCategory === 'all'
                 ? 'bg-[#003366] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Todos
+            All
           </button>
           <button
             onClick={() => setActiveCategory('headers')}
-            className={`flex-1 py-1 text-[11px] font-semibold rounded transition-colors ${
+            className={`flex-1 py-1 text-[11px] font-bold rounded-none transition-colors ${
               activeCategory === 'headers'
                 ? 'bg-[#003366] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Capas
+            Covers
           </button>
           <button
             onClick={() => setActiveCategory('tables')}
-            className={`flex-1 py-1 text-[11px] font-semibold rounded transition-colors ${
+            className={`flex-1 py-1 text-[11px] font-bold rounded-none transition-colors ${
               activeCategory === 'tables'
                 ? 'bg-[#003366] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Tabelas
+            Tables
           </button>
           <button
             onClick={() => setActiveCategory('structures')}
-            className={`flex-1 py-1 text-[11px] font-semibold rounded transition-colors ${
+            className={`flex-1 py-1 text-[11px] font-bold rounded-none transition-colors ${
               activeCategory === 'structures'
                 ? 'bg-[#003366] text-white shadow-2xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Estruturas
+            Blocks
           </button>
         </div>
 
-        {/* Busca */}
+        {/* Search */}
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar estrutura ou tabela..."
-            className="w-full pl-8 pr-2.5 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-[#003366]"
+            placeholder="Search blocks, tables, covers..."
+            className="w-full pl-8 pr-3 py-1 bg-slate-50 border border-slate-300 rounded-none text-xs focus:bg-white focus:outline-none focus:border-[#003366]"
           />
         </div>
       </div>

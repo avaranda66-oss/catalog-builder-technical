@@ -27,6 +27,8 @@ interface TechnicalTableProps {
   onRemoveColumn?: (colKey: string) => void;
   onRenameColumn?: (colKey: string, newLabel: string) => void;
   onToggleLegend?: (show: boolean) => void;
+  onUpdateLegendItem?: (markerType: any, newLabel: string) => void;
+  onUpdateLegendTitle?: (newTitle: string) => void;
   className?: string;
 }
 
@@ -44,6 +46,8 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   onRemoveColumn,
   onRenameColumn,
   onToggleLegend,
+  onUpdateLegendItem,
+  onUpdateLegendTitle,
   className = ''
 }) => {
   const tokens = TABLE_VISUAL_FAMILIES[family] || TABLE_VISUAL_FAMILIES.monochrome;
@@ -180,7 +184,12 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
       {/* Legenda Técnica — Opcional e Togglável */}
       <div className="flex items-center justify-between mt-1">
         {showLegend ? (
-          <TechnicalLegend config={{ ...legendConfig, showLegend: true }} />
+          <TechnicalLegend
+            config={{ ...legendConfig, showLegend: true }}
+            onUpdateLegendItem={onUpdateLegendItem}
+            onUpdateLegendTitle={onUpdateLegendTitle}
+            isEditable={isEditable}
+          />
         ) : (
           <div />
         )}

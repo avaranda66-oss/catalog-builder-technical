@@ -7,28 +7,70 @@ import {
   BookOpen,
   CheckCircle2,
   RefreshCw,
-  Image
+  Image as ImageIcon,
+  Globe,
+  Sparkles,
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
+import { AIService } from '../../services/ai.service';
 import { PresetModal } from '../editor/PresetModal';
 import { BackupModal } from './BackupModal';
 
+const TRANSLATION_LANGUAGES = [
+  { code: 'en', label: 'English (US)', flag: '🇺🇸' },
+  { code: 'fr', label: 'French (Français)', flag: '🇫🇷' },
+  { code: 'es', label: 'Spanish (Español)', flag: '🇪🇸' },
+  { code: 'de', label: 'German (Deutsch)', flag: '🇩🇪' },
+  { code: 'pt', label: 'Portuguese (Português)', flag: '🇧🇷' }
+];
+
 export const Navbar: React.FC = () => {
   const { activeTab, setActiveTab, setExportPDFModalOpen } = useUIStore();
-  const { isSaving, lastSavedAt } = useCatalogStore();
+  const { currentCatalog, isSaving, lastSavedAt } = useCatalogStore();
   const { openGallery } = useMediaStore();
 
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [isTranslateOpen, setIsTranslateOpen] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationStatus, setTranslationStatus] = useState<string | null>(null);
+
+  const handleTranslate = async (langLabel: string) => {
+    if (!currentCatalog) return;
+    setIsTranslating(true);
+    setIsTranslateOpen(false);
+    setTranslationStatus(`Translating catalog to ${langLabel} with Gemini AI...`);
+
+    try {
+      const res = await AIService.translateCatalog(currentCatalog, langLabel);
+      if (res.success && res.catalog) {
+        // Atualiza o catálogo em tempo real no estúdio
+        useCatalogStore.setState({ currentCatalog: res.catalog });
+        useCatalogStore.getState().saveCurrentCatalog();
+        setTranslationStatus(`Catalog translated to ${langLabel}!`);
+        setTimeout(() => setTranslationStatus(null), 4000);
+      } else {
+        alert(res.error || 'Failed to translate catalog.');
+        setTranslationStatus(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Translation error');
+      setTranslationStatus(null);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   return (
     <header className="h-12 bg-white border-b border-slate-300 px-4 flex items-center justify-between select-none z-30 flex-shrink-0">
-      {/* Logotipo Corporativo e Identidade Técnica */}
+      {/* Corporate Logo & Technical Branding */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#003366] text-white flex items-center justify-center font-bold text-xs rounded border border-[#002244] shadow-xs">
+          <div className="w-7 h-7 bg-[#003366] text-white flex items-center justify-center font-bold text-xs rounded-none border border-[#002244] shadow-xs">
             P
           </div>
           <div>
@@ -37,110 +79,158 @@ export const Navbar: React.FC = () => {
               <span className="text-[11px] font-normal text-slate-500">| Catalog Studio</span>
             </div>
             <span className="text-[9px] text-slate-400 font-mono tracking-tight block">
-              Sistema Editorial & Base Técnica
+              Technical Editorial & Publishing System
             </span>
           </div>
         </div>
 
-        {/* Separador Vertical */}
+        {/* Vertical Divider */}
         <div className="h-5 w-[1px] bg-slate-200" />
 
-        {/* 3 Ambientes Principais do Produto */}
+        {/* 3 Core Workspace Tabs */}
         <nav className="flex items-center gap-1">
           <button
             onClick={() => setActiveTab('library')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-semibold transition-colors ${
               activeTab === 'library'
-                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs'
+                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <Table2 className="w-3.5 h-3.5" />
-            <span>Biblioteca (Planilha)</span>
+            <span>Library (Spreadsheet)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('editor')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-semibold transition-colors ${
               activeTab === 'editor'
-                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs'
+                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Studio A4 (Editor)</span>
+            <span>A4 Studio (Editor)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('catalogs')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-none text-xs font-semibold transition-colors ${
               activeTab === 'catalogs'
-                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs'
+                ? 'bg-slate-100 text-[#003366] border border-slate-300 shadow-2xs font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Publicações & PDF</span>
+            <span>Publications & PDF</span>
           </button>
         </nav>
       </div>
 
-      {/* Ações Técnicas e Status */}
+      {/* Technical Actions & Status */}
       <div className="flex items-center gap-2.5">
-        {/* Status de Salvamento */}
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-200">
+        {/* Translation / AI Status Notification */}
+        {translationStatus && (
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#003366] bg-blue-50 px-2.5 py-1 rounded-none border border-blue-200">
+            {isTranslating ? (
+              <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+            ) : (
+              <Sparkles className="w-3 h-3 text-amber-500" />
+            )}
+            <span className="font-bold">{translationStatus}</span>
+          </div>
+        )}
+
+        {/* Auto-Save Status */}
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded-none border border-slate-200">
           {isSaving ? (
             <>
               <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
-              <span>Gravando alterações...</span>
+              <span>Saving changes...</span>
             </>
           ) : (
             <>
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Salvo localmente {lastSavedAt ? `às ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}</span>
+              <span>Saved {lastSavedAt ? `at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'locally'}</span>
             </>
           )}
         </div>
 
-        {/* Galeria de Fotos / Banco de Imagens */}
+        {/* AI Translation Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsTranslateOpen(!isTranslateOpen)}
+            disabled={isTranslating}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
+            title="Translate entire catalog with Google Gemini AI"
+          >
+            <Globe className="w-3.5 h-3.5 text-[#003366]" />
+            <span>Translate (AI)</span>
+            <ChevronDown className="w-3 h-3 text-slate-400" />
+          </button>
+
+          {isTranslateOpen && (
+            <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-300 shadow-xl rounded-none py-1 z-50">
+              <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                Translate Catalog With AI:
+              </div>
+              {TRANSLATION_LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  type="button"
+                  onClick={() => handleTranslate(lang.label)}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 hover:text-[#003366] flex items-center justify-between transition-colors font-medium"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{lang.flag}</span>
+                    <span>{lang.label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Photo Bank / Media Central */}
         <button
           onClick={() => openGallery(() => {})}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-2xs transition-colors"
-          title="Abrir Banco Central de Imagens e Fotografias"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
+          title="Open Central Photo Bank & Media Library"
         >
-          <Image className="w-3.5 h-3.5 text-[#003366]" />
-          <span>Banco de Fotos</span>
+          <ImageIcon className="w-3.5 h-3.5 text-[#003366]" />
+          <span>Photo Bank</span>
         </button>
 
-        {/* Modelos / Presets */}
+        {/* Templates / Presets */}
         <button
           onClick={() => setIsPresetModalOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-2xs transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
         >
           <BookOpen className="w-3.5 h-3.5 text-slate-600" />
-          <span>Modelos</span>
+          <span>Templates</span>
         </button>
 
-        {/* Backup / Portabilidade */}
+        {/* Backup / Cloud Sync */}
         <button
           onClick={() => setIsBackupModalOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-2xs transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
         >
           <HardDrive className="w-3.5 h-3.5 text-slate-600" />
-          <span>Backup / Sincronizar</span>
+          <span>Cloud Sync</span>
         </button>
 
-        {/* Exportar PDF */}
+        {/* Export PDF */}
         <button
           onClick={() => setExportPDFModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-[#003366] hover:bg-[#002244] rounded border border-[#002244] shadow-xs transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-[#003366] hover:bg-[#002244] rounded-none border border-[#002244] shadow-xs transition-colors"
         >
           <Printer className="w-3.5 h-3.5" />
-          <span>Gerar PDF</span>
+          <span>Export PDF</span>
         </button>
       </div>
 
-      {/* Modais */}
+      {/* Modals */}
       <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />
       <BackupModal isOpen={isBackupModalOpen} onClose={() => setIsBackupModalOpen(false)} />
     </header>

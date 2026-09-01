@@ -1,13 +1,13 @@
 export type TableVisualFamily = 'monochrome' | 'precision_blue' | 'family_header';
 
 export type TechnicalMarkerType =
-  | 'filled_square' // ■ Incluído / Selecionado
-  | 'empty_square' // □ Não selecionado
-  | 'filled_circle' // ● Suportado / Padrão
-  | 'empty_circle' // ○ Opcional
-  | 'asterisk' // * Nota 1
-  | 'double_asterisk' // ** Nota 2
-  | 'dash'; // — Não aplicável
+  | 'filled_square' // ■ Included / Selected
+  | 'empty_square' // □ Not selected / Optional
+  | 'filled_circle' // ● Supported / Standard
+  | 'empty_circle' // ○ Optional
+  | 'asterisk' // * Note 1
+  | 'double_asterisk' // ** Note 2
+  | 'dash'; // — Not applicable
 
 export interface MarkerLegendItem {
   type: TechnicalMarkerType;
@@ -17,10 +17,10 @@ export interface MarkerLegendItem {
 
 export interface TableStyleTokens {
   family: TableVisualFamily;
-  borderOuter: string; // Espessura 0.75pt
-  borderHeader: string; // Espessura 0.75pt
-  borderGroup: string; // Espessura 0.50pt
-  borderInner: string; // Espessura 0.25pt
+  borderOuter: string; // 0.75pt thickness
+  borderHeader: string; // 0.75pt thickness
+  borderGroup: string; // 0.50pt thickness
+  borderInner: string; // 0.25pt thickness
   headerBg: string;
   headerTextColor: string;
   headerFontWeight: string;
@@ -29,7 +29,7 @@ export interface TableStyleTokens {
 }
 
 export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> = {
-  // 1. Estilo Isotech / Fluke: Preto, cinza técnico e branco puro
+  // 1. Isotech / Fluke Style: Black, technical gray, and pure white
   monochrome: {
     family: 'monochrome',
     borderOuter: 'border border-slate-700',
@@ -43,7 +43,7 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
     accentColor: '#1e293b'
   },
 
-  // 2. Estilo Additel: Grade fina de precisão e azul metrológico
+  // 2. Additel Style: Precision grid and metrology blue
   precision_blue: {
     family: 'precision_blue',
     borderOuter: 'border border-[#003366]',
@@ -57,7 +57,7 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
     accentColor: '#003366'
   },
 
-  // 3. Estilo Presys: Barra de família de instrumentos e linhas técnicas
+  // 3. Presys Style: Family bar and technical lines
   family_header: {
     family: 'family_header',
     borderOuter: 'border border-slate-400',
@@ -73,11 +73,11 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
 };
 
 export const DEFAULT_MARKER_LEGENDS: Record<TechnicalMarkerType, string> = {
-  filled_square: 'Item incluído na configuração padrão',
-  empty_square: 'Item não selecionado / disponível como opcional',
-  filled_circle: 'Função suportada nativamente',
-  empty_circle: 'Recurso opcional sob encomenda',
-  asterisk: 'Consulte nota técnica de rodapé (*)',
-  double_asterisk: 'Disponível apenas sob calibração especial (**)',
-  dash: 'Não aplicável para este modelo'
+  filled_square: 'Included in standard configuration',
+  empty_square: 'Optional / available upon request',
+  filled_circle: 'Natively supported function',
+  empty_circle: 'Optional feature on demand',
+  asterisk: 'Refer to technical footnote (*)',
+  double_asterisk: 'Available only under special calibration (**)',
+  dash: 'Not applicable for this model'
 };

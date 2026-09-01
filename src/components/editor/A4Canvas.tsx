@@ -719,15 +719,15 @@ export const A4Canvas: React.FC = () => {
                 {/* 4. Alternador de Preenchimento Inteligente A4 */}
                 <button
                   onClick={() => handleToggleAutoFit(page.id)}
-                  className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border transition-colors shadow-2xs ${
+                  className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-none border transition-colors shadow-2xs ${
                     isAutoFit
                       ? 'bg-blue-50 text-blue-900 border-blue-300'
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                   }`}
-                  title="Ajusta o espaçamento vertical para preencher harmoniosamente a folha de 297 mm sem deixar espaços vazios"
+                  title="Adjusts vertical spacing to fill the 297mm A4 sheet harmoniously"
                 >
                   <Maximize2 className="w-3 h-3 text-[#003366]" />
-                  <span>{isAutoFit ? 'Auto-Fit A4 Ativo' : 'Auto-Fit Desligado'}</span>
+                  <span>{isAutoFit ? 'Auto-Fit Active' : 'Auto-Fit Off'}</span>
                 </button>
 
                 {/* Excluir Folha */}
@@ -737,8 +737,8 @@ export const A4Canvas: React.FC = () => {
                       e.stopPropagation();
                       removePage(page.id);
                     }}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors ml-1"
-                    title="Excluir esta folha A4"
+                    className="p-1 text-slate-400 hover:text-red-600 rounded-none transition-colors ml-1"
+                    title="Delete this A4 page"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -752,7 +752,7 @@ export const A4Canvas: React.FC = () => {
               <span>50 mm</span>
               <span>100 mm</span>
               <span>150 mm</span>
-              <span>210 mm (Largura A4)</span>
+              <span>210 mm (A4 Width)</span>
             </div>
 
             {/* Folha A4 WYSIWYG Milimétrica com Suporte a Preenchimento Integral */}
@@ -768,8 +768,8 @@ export const A4Canvas: React.FC = () => {
               {/* Cabeçalho Técnico da Folha (Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
                 <div className="flex items-center justify-between pb-2 border-b border-slate-300 text-[10px] text-slate-400 font-mono flex-shrink-0">
-                  <span className="font-semibold text-slate-600">PRESYS INSTRUMENTOS & SISTEMAS — CATALOG STUDIO</span>
-                  <span>FOLHA {page.pageNumber} DE {currentCatalog.pages.length}</span>
+                  <span className="font-semibold text-slate-600">PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO</span>
+                  <span>PAGE {page.pageNumber} OF {currentCatalog.pages.length}</span>
                 </div>
               )}
 
@@ -870,12 +870,12 @@ export const A4Canvas: React.FC = () => {
                       setActiveMenuPageId(page.id);
                       setActiveDropdown('headers');
                     }}
-                    className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-xl text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center"
+                    className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center"
                   >
                     <Plus className="w-8 h-8 mb-2 text-[#003366]" />
-                    <span className="font-bold text-slate-800 text-sm">Esta folha A4 está vazia</span>
+                    <span className="font-bold text-slate-800 text-sm">This A4 page is empty</span>
                     <span className="text-[11px] text-slate-500 mt-1">
-                      Use os menus '+ Capas', '+ Tabelas' ou '+ Estruturas' na barra acima para escolher elementos com preview ao passar o mouse.
+                      Use '+ Covers', '+ Tables' or '+ Blocks' in the toolbar to insert elements.
                     </span>
                   </div>
                 )}
@@ -884,8 +884,8 @@ export const A4Canvas: React.FC = () => {
               {/* Rodapé Técnico da Folha (Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
                 <div className="pt-2 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-400 font-mono flex-shrink-0">
-                  <span>PRESYS Instrumentos e Sistemas — Especificações sujeitas a alterações sem aviso prévio</span>
-                  <span>Página {page.pageNumber}</span>
+                  <span>PRESYS Instruments & Systems — Specifications subject to change without notice</span>
+                  <span>Page {page.pageNumber}</span>
                 </div>
               )}
             </div>
@@ -897,10 +897,10 @@ export const A4Canvas: React.FC = () => {
       <div className="w-[794px] py-4 flex items-center justify-center">
         <button
           onClick={() => addPage('technical')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-lg border border-slate-300 shadow-sm hover:border-[#003366] transition-all"
+          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-none border border-slate-300 shadow-xs hover:border-[#003366] transition-all"
         >
           <Plus className="w-4 h-4 text-[#003366]" />
-          <span>Inserir Nova Página A4</span>
+          <span>Insert New A4 Page</span>
         </button>
       </div>
     </div>

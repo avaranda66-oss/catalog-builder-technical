@@ -21,11 +21,13 @@
 .a4-page-container {
   width: 794px; /* Proporção de 210mm em 96 DPI */
   min-height: 1123px; /* Proporção de 297mm em 96 DPI */
+  height: 1123px;
   background: #ffffff;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1), 0 0 0 1px #cbd5e1;
   position: relative;
   box-sizing: border-box;
   page-break-after: always;
+  overflow: hidden;
 }
 
 /* Tipografia Técnica */
@@ -45,8 +47,44 @@
 }
 
 /* ========================================================================= */
-/* MODO DE EXPORTAÇÃO DE PDF E IMPRESSÃO DE ALTA RESOLUÇÃO                   */
+/* MODO DE IMPRESSÃO GRÁFICA NATIVA VETORIAL E EXPORTAÇÃO EM ALTA RESOLUÇÃO */
 /* ========================================================================= */
+@page {
+  size: 210mm 297mm;
+  margin: 0;
+}
+
+@media print {
+  html, body, #root, main {
+    height: auto !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  header, nav, aside, .no-print, [data-editor-action], button, .a4-limit-guideline, .divergence-badge, .editor-only {
+    display: none !important;
+  }
+
+  .a4-page-container {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
 @media print, screen and (min-width: 0px) {
   body.pdf-export-mode .no-print,
   body.pdf-export-mode button,
@@ -66,19 +104,5 @@
   body.pdf-export-mode * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-  }
-}
-
-@media print {
-  body {
-    background: transparent !important;
-  }
-  .a4-page-container {
-    box-shadow: none !important;
-    margin: 0 !important;
-    border: none !important;
-  }
-  .no-print, .a4-limit-guideline, button, [data-editor-action], .editor-only {
-    display: none !important;
   }
 }

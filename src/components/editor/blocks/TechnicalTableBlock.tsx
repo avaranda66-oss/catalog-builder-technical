@@ -103,6 +103,43 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
         getProduct={getProduct}
         family={family}
         isEditable={true}
+        legendConfig={{
+          showLegend: block.customData?.showLegend ?? true,
+          title: block.customData?.legendTitle || 'LEGEND:',
+          items: block.customData?.legendLabels
+            ? Object.entries(block.customData.legendLabels).map(([type, label]) => ({
+                type: type as any,
+                label: String(label)
+              }))
+            : undefined
+        }}
+        onToggleLegend={(show) =>
+          updateBlock(pageId, block.id, {
+            customData: { ...(block.customData || {}), showLegend: show }
+          })
+        }
+        onUpdateLegendTitle={(newTitle) =>
+          updateBlock(pageId, block.id, {
+            customData: { ...(block.customData || {}), legendTitle: newTitle }
+          })
+        }
+        onUpdateLegendItem={(markerType, newLabel) => {
+          const currentLabels = block.customData?.legendLabels || {
+            filled_square: 'Item included in standard configuration',
+            empty_square: 'Item not selected / available as optional',
+            asterisk: 'Refer to technical footnote (*)',
+            dash: 'Not applicable for this model'
+          };
+          updateBlock(pageId, block.id, {
+            customData: {
+              ...(block.customData || {}),
+              legendLabels: {
+                ...currentLabels,
+                [markerType]: newLabel
+              }
+            }
+          });
+        }}
         onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
         onRestoreCell={(rowId, colKey) => restoreCellToLibrary(block.id, rowId, colKey)}
         onRemoveRow={(rowId) => removeRowFromTable(block.id, rowId)}
