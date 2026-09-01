@@ -141,21 +141,13 @@ export const PropertiesPanel: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    // 1. Upload direto para o Supabase Storage (Nuvem Pública)
-    const { SupabaseService } = await import('../../services/supabase.service');
-    const res = await SupabaseService.uploadProductImage(file, 'product-images');
-    if (res.success && res.url) {
+    const { readImageAsLocalDataUrl } = await import('../../services/local-image.service');
+    const imageUrl = await readImageAsLocalDataUrl(file);
+    if (imageUrl) {
       updateBlock(blockPageId, selectedBlock.id, {
-        imageUrl: res.url,
-        customData: { ...(selectedBlock.customData || {}), backgroundImageUrl: res.url }
+        imageUrl,
+        customData: { ...(selectedBlock.customData || {}), backgroundImageUrl: imageUrl }
       });
-      // Salva no banco de mídia para ficar disponível nos outros computadores
-      SupabaseService.pushMediaAssetToCloud({
-        id: `media-${Date.now()}`,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        url: res.url,
-        category: 'cover'
-      }).catch(() => {});
     }
   };
 
@@ -163,19 +155,13 @@ export const PropertiesPanel: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    const { SupabaseService } = await import('../../services/supabase.service');
-    const res = await SupabaseService.uploadProductImage(file, 'product-images');
-    if (res.success && res.url) {
+    const { readImageAsLocalDataUrl } = await import('../../services/local-image.service');
+    const imageUrl = await readImageAsLocalDataUrl(file);
+    if (imageUrl) {
       const currentImages = selectedBlock.images || [];
       updateBlock(blockPageId, selectedBlock.id, {
-        images: [...currentImages, { url: res.url, caption: 'Nova foto de aplicação' }]
+        images: [...currentImages, { url: imageUrl, caption: 'Nova foto de aplicação' }]
       });
-      SupabaseService.pushMediaAssetToCloud({
-        id: `media-${Date.now()}`,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        url: res.url,
-        category: 'product'
-      }).catch(() => {});
     }
   };
 

@@ -1,47 +1,103 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SupabaseService } from '../../src/services/supabase.service';
 import { MOCK_PRODUCTS, MOCK_CATALOG } from '../fixtures/mockData';
+import { mockSupabaseClient } from '../setup';
 
-describe('SupabaseService (Isolamento Estrito em Teste & Mocking Total)', () => {
+describe('SupabaseService v2 (RPCs com CAS e Isolamento Total)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('verifica status de conexão com retorno estruturado via mock', async () => {
-    const status = await SupabaseService.checkConnection();
-    expect(status).toBeDefined();
-    expect(typeof status.connected).toBe('boolean');
-    expect(status.url).toBeDefined();
+  it('lista workspace compartilhado via RPC list_workspace_v2', async () => {
+    const mockWorkspace = {
+      catalogs: [{ id: 'cat-1', name: 'Catálogo Presys', status: 'published', version: 1, brand: {} }],
+      products: [{ id: 'prod-1', sku: 'TA-25N', name: 'TA-25N', family: 'Calibradores', version: 1, data: {} }],
+      templates: [],
+      userRole: 'admin'
+    };
+
+    mockSupabaseClient.rpc.mockResolvedValueOnce({ data: mockWorkspace, error: null });
+
+    const result = await SupabaseService.listWorkspace();
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual(mockWorkspace);
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('list_workspace_v2');
   });
 
-  it('realiza upload simulado de imagem sem chamada de rede real', async () => {
-    const fakeFile = new File(['fake-binary-content'], 'sensor-presys-test.jpg', { type: 'image/jpeg' });
-    const result = await SupabaseService.uploadProductImage(fakeFile);
+  it('salva produto oficial com controle de versão otimista (CAS)', async () => {
+    const mockSavedProduct = {
+      id: 'prod-uuid-1',
+      sku: 'TA-25N',
+      name: 'TA-25N Calibrador',
+      version: 2
+    };
 
-    expect(result).toBeDefined();
+    mockSupabaseClient.rpc.mockResolvedValueOnce({ data: mockSavedProduct, error: null });
+
+    const result = await SupabaseService.saveOfficialProduct(MOCK_PRODUCTS[0], 1);
     expect(result.success).toBe(true);
-    expect(result.url).toBeDefined();
-    expect(typeof result.url).toBe('string');
+    expect(result.data).toEqual(mockSavedProduct);
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('save_official_product_v2', {
+      p_product: MOCK_PRODUCTS[0],
+      p_expected_version: 1
+    });
   });
 
-  it('prepara e executa sincronização de produtos via mock em memória', async () => {
-    const result = await SupabaseService.pushProductsToCloud(MOCK_PRODUCTS);
-    expect(result).toBeDefined();
-    expect(typeof result.success).toBe('boolean');
-    expect(result.success).toBe(true);
+  it('trata conflito de concorrência 40001 ao salvar produto desatualizado', async () => {
+    mockSupabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '40001', message: 'Conflito de Concorrência: o produto foi modificado em outro dispositivo' }
+    });
+
+    const result = await SupabaseService.saveOfficialProduct(MOCK_PRODUCTS[0], 1);
+    expect(result.success).toBe(false);
+    expect(result.conflict).toBe(true);
+    expect(result.error).toContain('Conflito de Concorrência');
   });
 
-  it('prepara e executa sincronização de catálogos via mock em memória', async () => {
-    const result = await SupabaseService.pushCatalogsToCloud([MOCK_CATALOG]);
-    expect(result).toBeDefined();
-    expect(typeof result.success).toBe('boolean');
+  it('salva catálogo compartilhado com controle de versão otimista (CAS)', async () => {
+    const mockSavedCatalog = {
+      id: 'cat-uuid-1',
+      name: 'Catálogo TA-25N',
+      version: 3
+    };
+
+    mockSupabaseClient.rpc.mockResolvedValueOnce({ data: mockSavedCatalog, error: null });
+
+    const result = await SupabaseService.saveCatalog(MOCK_CATALOG, 2, 'Atualização de blocos');
     expect(result.success).toBe(true);
+    expect(result.data).toEqual(mockSavedCatalog);
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('save_catalog_v2', {
+      p_catalog: MOCK_CATALOG,
+      p_expected_version: 2,
+      p_summary: 'Atualização de blocos'
+    });
+  });
+
+  it('trata conflito de concorrência 40001 ao salvar catálogo desatualizado', async () => {
+    mockSupabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '40001', message: 'Conflito de Concorrência: o catálogo foi modificado em outro dispositivo' }
+    });
+
+    const result = await SupabaseService.saveCatalog(MOCK_CATALOG, 1);
+    expect(result.success).toBe(false);
+    expect(result.conflict).toBe(true);
+  });
+
+  it('exclui catálogo compartilhado via RPC delete_catalog_v2', async () => {
+    mockSupabaseClient.rpc.mockResolvedValueOnce({ data: true, error: null });
+
+    const result = await SupabaseService.deleteCatalog('cat-uuid-1');
+    expect(result.success).toBe(true);
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('delete_catalog_v2', {
+      p_catalog_id: 'cat-uuid-1'
+    });
   });
 
   it('bloqueia e impede chamadas de rede externas de produção durante testes', async () => {
-    // Garante que a barreira de segurança global do tests/setup.ts funciona
     await expect(async () => {
-      await fetch('https://bjxqvrpbigwgabwbhtqa.supabase.co/rest/v1/products');
-    }).rejects.toThrow(/Live network call prohibited in unit test suite/);
+      await fetch('https://example.test/any-network-call');
+    }).rejects.toThrow(/Network call prohibited in unit test suite/);
   });
 });

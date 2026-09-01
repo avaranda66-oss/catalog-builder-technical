@@ -38,8 +38,9 @@ export const mockSupabaseClient = {
   auth: {
     getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'usr-mock-admin', email: 'admin@presys.com.br' } }, error: null }),
     getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
-    signInWithPassword: vi.fn().mockResolvedValue({ data: { user: { id: 'usr-mock-admin' } }, error: null }),
-    signOut: vi.fn().mockResolvedValue({ error: null })
+    signInWithPassword: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    signOut: vi.fn().mockResolvedValue({ error: null }),
+    onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
   }
 };
 
@@ -53,15 +54,5 @@ vi.mock('@supabase/supabase-js', () => ({
 
 global.fetch = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
   const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-
-  // Bloqueio explícito de chamadas de produção
-  if (urlString.includes('supabase.co') || urlString.includes('googleapis.com')) {
-    throw new Error(`[SECURITY GATE G6] Live network call prohibited in unit test suite: ${urlString}`);
-  }
-
-  // Fallback seguro em memória
-  return new Response(JSON.stringify({ success: true, mock: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
+  throw new Error(`[SECURITY GATE G6] Network call prohibited in unit test suite: ${urlString}`);
 });

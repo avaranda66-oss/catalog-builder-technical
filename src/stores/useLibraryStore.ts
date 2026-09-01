@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Product, LibraryColumn } from '../domain/product.schema';
 import { INITIAL_PRODUCTS } from '../data/initialProducts';
 import { StorageService } from '../services/storage.service';
+import { SupabaseService } from '../services/supabase.service';
 
 const DEFAULT_FAMILY_COLUMNS: Record<string, LibraryColumn[]> = {
   'Transmissores de Pressão Relativa': [
@@ -44,13 +45,11 @@ const DEFAULT_FAMILY_COLUMNS: Record<string, LibraryColumn[]> = {
 interface LibraryState {
   products: Product[];
   familyColumns: Record<string, LibraryColumn[]>;
-  isAdmin: boolean;
   selectedProductId: string | null;
   searchQuery: string;
   selectedFamily: string;
   
   // Actions de Navegação
-  setAdmin: (isAdmin: boolean) => void;
   setSearchQuery: (query: string) => void;
   setSelectedFamily: (family: string) => void;
   setSelectedProduct: (id: string | null) => void;
@@ -76,12 +75,10 @@ interface LibraryState {
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   products: INITIAL_PRODUCTS,
   familyColumns: DEFAULT_FAMILY_COLUMNS,
-  isAdmin: true,
   selectedProductId: null,
   searchQuery: '',
   selectedFamily: 'Transmissores de Pressão Relativa',
 
-  setAdmin: (isAdmin) => set({ isAdmin }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSelectedFamily: (selectedFamily) => set({ selectedFamily }),
   setSelectedProduct: (selectedProductId) => set({ selectedProductId }),
@@ -102,35 +99,46 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   renameFamilyColumn: (family, columnKey, newLabel) => {
     set((state) => {
-      const currentCols = state.getColumnsForFamily(family);
+      const currentCols = state.familyColumns[family] || state.getColumnsForFamily(family);
       const updated = currentCols.map((c) => (c.key === columnKey ? { ...c, label: newLabel } : c));
       const newFamilyCols = { ...state.familyColumns, [family]: updated };
-      localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+      }
       return { familyColumns: newFamilyCols };
     });
   },
 
   addFamilyColumn: (family, columnKey, label) => {
     set((state) => {
-      const currentCols = state.getColumnsForFamily(family);
+      const currentCols = state.familyColumns[family] || state.getColumnsForFamily(family);
+      if (currentCols.some((c) => c.key === columnKey)) return state;
+
       const newCol: LibraryColumn = {
         key: columnKey,
         label,
         visible: true,
+        width: 130,
         isCustom: true
       };
-      const newFamilyCols = { ...state.familyColumns, [family]: [...currentCols, newCol] };
-      localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+
+      const updated = [...currentCols, newCol];
+      const newFamilyCols = { ...state.familyColumns, [family]: updated };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+      }
       return { familyColumns: newFamilyCols };
     });
   },
 
   removeFamilyColumn: (family, columnKey) => {
     set((state) => {
-      const currentCols = state.getColumnsForFamily(family);
+      const currentCols = state.familyColumns[family] || state.getColumnsForFamily(family);
       const updated = currentCols.filter((c) => c.key !== columnKey);
       const newFamilyCols = { ...state.familyColumns, [family]: updated };
-      localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cb_family_columns', JSON.stringify(newFamilyCols));
+      }
       return { familyColumns: newFamilyCols };
     });
   },
@@ -149,15 +157,29 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       StorageService.saveProducts(updated);
       return { products: updated };
     });
+
+    void SupabaseService.saveOfficialProduct(newProduct, 0).then((res) => {
+      if (res.success && res.data) {
+        set((state) => {
+          const updated = state.products.map((p) =>
+            p.id === newProduct.id ? { ...p, id: res.data.id, version: res.data.version } : p
+          );
+          StorageService.saveProducts(updated);
+          return { products: updated };
+        });
+      }
+    });
   },
 
   updateProduct: (id, updates) => {
     set((state) => {
-      const updated = state.products.map((p) =>
-        p.id === id
-          ? { ...p, ...updates, updatedAt: new Date().toISOString(), version: (p.version || 1) + 1 }
-          : p
-      );
+      const updated = state.products.map((p) => {
+        if (p.id !== id) return p;
+        const updatedProd = { ...p, ...updates, updatedAt: new Date().toISOString() };
+        void SupabaseService.saveOfficialProduct(updatedProd, p.version);
+        return updatedProd;
+      });
+
       StorageService.saveProducts(updated);
       return { products: updated };
     });
@@ -168,43 +190,34 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const updated = state.products.map((p) => {
         if (p.id !== productId) return p;
 
-        if (['code', 'model', 'family', 'description', 'imageUrl'].includes(fieldKey)) {
-          return { ...p, [fieldKey]: value, updatedAt: new Date().toISOString() };
-        }
-
-        const standardSpecKeys = [
-          'range',
-          'unit',
-          'accuracy',
-          'output',
-          'powerSupply',
-          'processConnection',
-          'protectionDegree'
-        ];
-
-        if (standardSpecKeys.includes(fieldKey)) {
-          return {
-            ...p,
-            specs: {
-              ...p.specs,
-              [fieldKey]: value
-            },
-            updatedAt: new Date().toISOString()
-          };
-        }
-
-        // Custom spec da família
-        return {
+        const isStandardProp = ['code', 'model', 'description', 'family', 'imageUrl'].includes(fieldKey);
+        const updatedProd: Product = {
           ...p,
+          ...(isStandardProp ? { [fieldKey]: value } : {}),
           specs: {
             ...p.specs,
+            ...(!isStandardProp ? { [fieldKey]: value } : {}),
             customSpecs: {
-              ...(p.specs.customSpecs || {}),
-              [fieldKey]: value
+              ...p.specs.customSpecs,
+              ...(!isStandardProp && !['range', 'unit', 'accuracy', 'output', 'powerSupply', 'processConnection', 'protectionDegree'].includes(fieldKey) ? { [fieldKey]: value } : {})
             }
           },
           updatedAt: new Date().toISOString()
         };
+
+        void SupabaseService.saveOfficialProduct(updatedProd, p.version).then((res) => {
+          if (res.success && res.data) {
+            set((innerState) => {
+              const innerUpdated = innerState.products.map((item) =>
+                item.id === productId ? { ...item, version: res.data.version } : item
+              );
+              StorageService.saveProducts(innerUpdated);
+              return { products: innerUpdated };
+            });
+          }
+        });
+
+        return updatedProd;
       });
 
       StorageService.saveProducts(updated);
@@ -225,7 +238,6 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   loadProducts: async () => {
-    // Carrega colunas customizadas salvas
     if (typeof window !== 'undefined') {
       const savedCols = localStorage.getItem('cb_family_columns');
       if (savedCols) {
@@ -237,38 +249,43 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       }
     }
 
-    // 1. Carrega local primeiro
-    const saved = await StorageService.loadProducts();
-
-    // 2. Tenta puxar da nuvem para sincronizar entre dispositivos
     try {
-      const { SupabaseService } = await import('../services/supabase.service');
-      const cloudResult = await SupabaseService.pullProductsFromCloud();
-      if (cloudResult.success && cloudResult.products.length > 0) {
-        // Merge: usa os produtos da nuvem + locais que não existem na nuvem
-        const cloudIds = new Set(cloudResult.products.map((p) => p.id));
-        const localOnly = (saved || []).filter((p) => !cloudIds.has(p.id));
-        const merged = [...cloudResult.products, ...localOnly];
+      const remote = await SupabaseService.listWorkspace();
+      if (remote.success && remote.data?.products && remote.data.products.length > 0) {
+        const remoteProducts: Product[] = remote.data.products.map((rp: any) => ({
+          id: rp.id,
+          code: rp.sku,
+          model: rp.name,
+          family: rp.family || 'Geral',
+          description: rp.data?.description || rp.name,
+          specs: rp.data || {},
+          imageUrl: rp.data?.imageUrl || '',
+          version: rp.version || 1,
+          createdAt: rp.created_at,
+          updatedAt: rp.updated_at
+        }));
 
-        await StorageService.saveProducts(merged);
-        set({ products: merged });
-        console.log(`☁️ ${cloudResult.products.length} produtos sincronizados da nuvem.`);
-
-        // Push local-only products back to cloud
-        if (localOnly.length > 0) {
-          SupabaseService.pushProductsToCloud(localOnly).catch(() => {});
-        }
+        await StorageService.saveProducts(remoteProducts);
+        set({ products: remoteProducts });
         return;
       }
-    } catch {
-      // Supabase offline — usa local
-    }
 
-    if (saved && saved.length > 0) {
-      set({ products: saved });
-    } else {
-      await StorageService.saveProducts(INITIAL_PRODUCTS);
-      set({ products: INITIAL_PRODUCTS });
+      const saved = await StorageService.loadProducts();
+      if (saved && saved.length > 0) {
+        set({ products: saved });
+      } else {
+        await StorageService.saveProducts(INITIAL_PRODUCTS);
+        set({ products: INITIAL_PRODUCTS });
+      }
+    } catch (e) {
+      console.warn('Fallback para produtos locais:', e);
+      const saved = await StorageService.loadProducts();
+      if (saved && saved.length > 0) {
+        set({ products: saved });
+      } else {
+        await StorageService.saveProducts(INITIAL_PRODUCTS);
+        set({ products: INITIAL_PRODUCTS });
+      }
     }
   },
 

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Product } from '../../domain/product.schema';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -24,6 +25,7 @@ export const LibraryView: React.FC = () => {
     removeFamilyColumn,
     updateProductCell
   } = useLibraryStore();
+  const isAdmin = useAuthStore((state) => state.role === 'admin');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCellInfo, setActiveCellInfo] = useState<{ rowIdx: number; colKey: string; value: string } | null>(null);
@@ -127,6 +129,9 @@ export const LibraryView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white select-none overflow-hidden text-xs">
+      <div className="border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900">
+        Biblioteca em modo local: a sincronização segura está em preparação. {isAdmin ? 'Alterações ficam apenas neste dispositivo.' : 'Como Colaborador, a Biblioteca está somente para leitura.'}
+      </div>
       {/* 1. Barra de Fórmulas / Célula Ativa Estilo Excel */}
       <div className="h-9 bg-[#f8fafc] border-b border-slate-300 px-3 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -155,36 +160,36 @@ export const LibraryView: React.FC = () => {
             />
           </div>
 
-          <button
+          {isAdmin && <button
             onClick={() => setIsAddingColumn(true)}
             className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
             title="Create new specification column for this family"
           >
             <Plus className="w-3 h-3 text-[#003366]" />
             <span>+ Column</span>
-          </button>
+          </button>}
 
-          <button
+          {isAdmin && <button
             onClick={handleExportCSV}
             className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
             title="Export this family table to CSV format"
           >
             <Download className="w-3 h-3 text-slate-600" />
             <span>Export CSV</span>
-          </button>
+          </button>}
 
-          <button
+          {isAdmin && <button
             onClick={handleAddNewRow}
             className="flex items-center gap-1 px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded-none shadow-xs transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>+ Add Product</span>
-          </button>
+          </button>}
         </div>
       </div>
 
       {/* Modal / Formulário Inline para Nova Coluna */}
-      {isAddingColumn && (
+      {isAdmin && isAddingColumn && (
         <div className="bg-blue-50/80 border-b border-blue-200 px-4 py-2 flex items-center gap-3">
           <span className="font-semibold text-blue-900 text-xs">Nome da Nova Coluna Técnica:</span>
           <input
@@ -226,7 +231,7 @@ export const LibraryView: React.FC = () => {
                   {String.fromCharCode(65 + colIdx)}
                 </th>
               ))}
-              <th className="w-10 p-1 font-normal"> </th>
+              {isAdmin && <th className="w-10 p-1 font-normal"> </th>}
             </tr>
 
             {/* Cabeçalho dos Nomes das Colunas Técnicas */}
@@ -242,7 +247,7 @@ export const LibraryView: React.FC = () => {
                     key={col.key}
                     className="p-2 border-r border-[#002244] font-semibold text-xs tracking-tight group"
                   >
-                    {isEditingThis ? (
+                    {isAdmin && isEditingThis ? (
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="text"
@@ -271,7 +276,7 @@ export const LibraryView: React.FC = () => {
                     ) : (
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate">{col.label}</span>
-                        <div className="flex items-center gap-1">
+                        {isAdmin && <div className="flex items-center gap-1">
                           <button
                             onClick={() => {
                               setEditingColKey(col.key);
@@ -291,14 +296,14 @@ export const LibraryView: React.FC = () => {
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}
-                        </div>
+                        </div>}
                       </div>
                     )}
                   </th>
                 );
               })}
 
-              <th className="p-2 w-10 text-center text-slate-300">Ações</th>
+              {isAdmin && <th className="p-2 w-10 text-center text-slate-300">Ações</th>}
             </tr>
           </thead>
 
@@ -337,6 +342,7 @@ export const LibraryView: React.FC = () => {
                         type="text"
                         value={currentValue}
                         onChange={(e) => {
+                          if (!isAdmin) return;
                           const val = e.target.value;
                           updateProductCell(product.id, col.key, val);
                           setActiveCellInfo({ rowIdx, colKey: col.key, value: val });
@@ -353,13 +359,14 @@ export const LibraryView: React.FC = () => {
                             ? 'font-bold font-mono text-slate-900'
                             : 'font-normal'
                         }`}
+                        readOnly={!isAdmin}
                       />
                     </td>
                   );
                 })}
 
                 {/* Excluir Linha */}
-                <td className="p-1.5 text-center">
+                {isAdmin && <td className="p-1.5 text-center">
                   <button
                     onClick={() => {
                       deleteProduct(product.id);
@@ -369,14 +376,14 @@ export const LibraryView: React.FC = () => {
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                </td>
+                </td>}
               </tr>
             ))}
 
             {familyProducts.length === 0 && (
               <tr>
                 <td
-                  colSpan={columnsForFamily.length + 2}
+                  colSpan={columnsForFamily.length + (isAdmin ? 2 : 1)}
                   className="p-8 text-center text-slate-400 italic text-xs"
                 >
                   Nenhum produto cadastrado nesta família. Clique em "+ Inserir Linha" para cadastrar o primeiro.
@@ -407,7 +414,7 @@ export const LibraryView: React.FC = () => {
             );
           })}
 
-          <button
+          {isAdmin && <button
             onClick={() => {
               const newFamName = prompt('Nome da nova família de produtos (ex: Válvulas de Controle):');
               if (newFamName && newFamName.trim()) {
@@ -419,7 +426,7 @@ export const LibraryView: React.FC = () => {
           >
             <Plus className="w-3 h-3" />
             <span>Nova Família</span>
-          </button>
+          </button>}
         </div>
 
         <div className="text-[10px] text-slate-500 font-mono pr-2">

@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Product, ProductSchema } from '../domain/product.schema';
-import { Catalog, CatalogSchema } from '../domain/catalog.schema';
-import { z } from 'zod';
+import { Catalog } from '@/domain/catalog.schema';
+import { Product } from '@/domain/product.schema';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -12,415 +11,167 @@ export function getSupabase(): SupabaseClient | null {
   if (!supabaseClient && supabaseUrl && supabaseAnonKey) {
     try {
       supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true
-        }
+        auth: { persistSession: true, autoRefreshToken: true }
       });
-    } catch (err) {
-      console.warn('Falha ao inicializar cliente Supabase:', err);
+    } catch {
       supabaseClient = null;
     }
   }
   return supabaseClient;
 }
 
+export interface WorkspaceData {
+  catalogs: Array<{
+    id: string;
+    name: string;
+    status: string;
+    version: number;
+    brand: any;
+    created_at: string;
+    updated_at: string;
+    updated_by?: string;
+  }>;
+  products: Array<{
+    id: string;
+    sku: string;
+    name: string;
+    family: string;
+    status: string;
+    sort_order: number;
+    version: number;
+    data: any;
+    created_at: string;
+    updated_at: string;
+  }>;
+  templates: any[];
+  userRole: 'admin' | 'editor';
+}
+
+/**
+ * SupabaseService v2: Persistência Compartilhada Segura via RPCs com CAS e RLS.
+ */
 export class SupabaseService {
-  /**
-   * Testa a conexão ativa com o backend Supabase.
-   */
   static async checkConnection(): Promise<{ connected: boolean; url: string; error?: string }> {
     const supabase = getSupabase();
-    if (!supabase) {
-      return { connected: false, url: supabaseUrl, error: 'Credenciais Supabase não configuradas no ambiente.' };
-    }
-
+    if (!supabase) return { connected: false, url: supabaseUrl, error: 'Supabase não configurado' };
     try {
-      const { error } = await supabase.from('products').select('id').limit(1);
-      if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
-        return { connected: true, url: supabaseUrl };
-      }
+      const { error } = await supabase.rpc('list_workspace_v2');
+      if (error) return { connected: false, url: supabaseUrl, error: error.message };
       return { connected: true, url: supabaseUrl };
     } catch (err: any) {
-      return { connected: false, url: supabaseUrl, error: err.message || 'Falha de rede' };
+      return { connected: false, url: supabaseUrl, error: err.message || 'Erro de conexão' };
     }
   }
 
-  /**
-   * Upload de foto real para o Supabase Storage público ('product-images').
-   * Retorna a URL pública HTTPS global acessível em qualquer computador/celular.
-   */
+  static async listWorkspace(): Promise<{ success: boolean; data?: WorkspaceData; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('list_workspace_v2');
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data as WorkspaceData };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao sincronizar workspace' };
+    }
+  }
+
+  static async saveOfficialProduct(
+    product: Partial<Product>,
+    expectedVersion?: number
+  ): Promise<{ success: boolean; data?: any; conflict?: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('save_official_product_v2', {
+        p_product: product,
+        p_expected_version: expectedVersion ?? 0
+      });
+
+      if (error) {
+        const isConflict = error.code === '40001' || error.message?.includes('Conflito de Concorrência');
+        return { success: false, conflict: isConflict, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar produto oficial' };
+    }
+  }
+
+  static async saveCatalog(
+    catalog: Partial<Catalog>,
+    expectedVersion?: number,
+    summary?: string
+  ): Promise<{ success: boolean; data?: any; conflict?: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('save_catalog_v2', {
+        p_catalog: catalog,
+        p_expected_version: expectedVersion ?? 0,
+        p_summary: summary || 'Atualização de catálogo'
+      });
+
+      if (error) {
+        const isConflict = error.code === '40001' || error.message?.includes('Conflito de Concorrência');
+        return { success: false, conflict: isConflict, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar catálogo' };
+    }
+  }
+
+  static async deleteCatalog(catalogId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { error } = await supabase.rpc('delete_catalog_v2', {
+        p_catalog_id: catalogId
+      });
+
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao excluir catálogo' };
+    }
+  }
+
   static async uploadProductImage(
     file: File,
     bucketName: string = 'product-images'
   ): Promise<{ success: boolean; url: string; isRemote: boolean; message?: string }> {
-    const supabase = getSupabase();
-
-    if (supabase) {
-      try {
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-        const filePath = `uploads/${Date.now()}_${cleanName}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from(bucketName)
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: true
-          });
-
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from(bucketName)
-            .getPublicUrl(filePath);
-
-          if (publicUrlData && publicUrlData.publicUrl) {
-            console.log('✅ Imagem enviada para o Supabase Storage:', publicUrlData.publicUrl);
-            return {
-              success: true,
-              url: publicUrlData.publicUrl,
-              isRemote: true,
-              message: 'Imagem enviada com sucesso para a nuvem!'
-            };
-          }
-        } else {
-          console.warn('Aviso no Supabase Storage upload, usando fallback local:', uploadError.message);
-        }
-      } catch (err: any) {
-        console.warn('Erro ao conectar ao Supabase Storage:', err);
-      }
-    }
-
-    // Fallback em Base64 se estiver sem internet
+    void bucketName;
     return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          success: true,
-          url: reader.result as string,
-          isRemote: false,
-          message: 'Imagem carregada localmente (Offline).'
-        });
-      };
-      reader.onerror = () => {
-        resolve({
-          success: false,
-          url: '',
-          isRemote: false,
-          message: 'Erro ao ler o arquivo de imagem.'
-        });
-      };
+      reader.onload = () => resolve({
+        success: true,
+        url: reader.result as string,
+        isRemote: false,
+        message: 'Imagem convertida localmente com sucesso.'
+      });
+      reader.onerror = () => resolve({
+        success: false,
+        url: '',
+        isRemote: false,
+        message: 'Erro ao ler o arquivo de imagem.'
+      });
       reader.readAsDataURL(file);
     });
   }
 
-  /**
-   * Upload de base64 image diretamente para Supabase Storage.
-   */
   static async uploadBase64Image(
     base64: string,
     fileName: string = 'image',
     bucketName: string = 'product-images'
   ): Promise<{ success: boolean; url: string; isRemote: boolean }> {
-    const supabase = getSupabase();
-    if (!supabase || !base64.startsWith('data:')) {
-      return { success: false, url: base64, isRemote: false };
-    }
-
-    try {
-      const res = await fetch(base64);
-      const blob = await res.blob();
-      const ext = blob.type.split('/')[1] || 'png';
-      const filePath = `uploads/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
-
-      const { error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, blob, { cacheControl: '3600', upsert: true });
-
-      if (!error) {
-        const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-        if (data?.publicUrl) {
-          return { success: true, url: data.publicUrl, isRemote: true };
-        }
-      }
-      console.warn('Upload base64 fallback:', error?.message);
-    } catch (err) {
-      console.warn('Erro no upload base64:', err);
-    }
-
-    return { success: false, url: base64, isRemote: false };
-  }
-
-  /**
-   * Sincroniza produtos oficiais com a nuvem (Supabase).
-   */
-  static async pushProductsToCloud(
-    products: Product[]
-  ): Promise<{ success: boolean; count: number; message: string }> {
-    const supabase = getSupabase();
-    if (!supabase) {
-      return { success: false, count: 0, message: 'Supabase não conectado.' };
-    }
-
-    try {
-      const payload = products.map((p) => {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
-        const item: any = {
-          sku: p.code,
-          name: p.model,
-          family: p.family || 'Geral',
-          data: {
-            specs: p.specs,
-            description: p.description,
-            imageUrl: p.imageUrl,
-            version: p.version
-          },
-          updated_at: new Date().toISOString()
-        };
-        if (isUUID) {
-          item.id = p.id;
-        }
-        return item;
-      });
-
-      const { error } = await supabase
-        .from('products')
-        .upsert(payload, { onConflict: 'sku' });
-
-      if (error) {
-        console.warn('Erro ao salvar produtos no Supabase:', error.message);
-        return { success: false, count: 0, message: error.message };
-      }
-
-      return { success: true, count: products.length, message: `${products.length} produtos sincronizados na nuvem!` };
-    } catch (err: any) {
-      return { success: false, count: 0, message: err.message || 'Erro inesperado na sincronização.' };
-    }
-  }
-
-  /**
-   * Puxa produtos oficiais atualizados da nuvem (Supabase).
-   */
-  static async pullProductsFromCloud(): Promise<{ success: boolean; products: Product[]; message: string }> {
-    const supabase = getSupabase();
-    if (!supabase) {
-      return { success: false, products: [], message: 'Supabase não conectado.' };
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        return { success: false, products: [], message: error.message };
-      }
-
-      if (!data || data.length === 0) {
-        return { success: true, products: [], message: 'Nenhum produto encontrado na nuvem.' };
-      }
-
-      const products: Product[] = data.map((row: any) => {
-        const rowData = row.data || {};
-        const specs = rowData.specs || {};
-        return {
-          id: row.id,
-          code: row.sku || row.code || 'PRESYS-ITEM',
-          model: row.name || row.model || 'Modelo',
-          family: row.family || 'Geral',
-          description: rowData.description || '',
-          specs: {
-            range: specs.range || '',
-            unit: specs.unit || '',
-            accuracy: specs.accuracy || '',
-            output: specs.output || '',
-            powerSupply: specs.powerSupply || '',
-            processConnection: specs.processConnection || '',
-            protectionDegree: specs.protectionDegree || 'IP67',
-            customSpecs: specs.customSpecs || {}
-          },
-          imageUrl: rowData.imageUrl || '',
-          createdAt: row.created_at || new Date().toISOString(),
-          updatedAt: row.updated_at || new Date().toISOString(),
-          version: row.version || rowData.version || 1
-        };
-      });
-
-      const validated = z.array(ProductSchema).parse(products);
-      return { success: true, products: validated, message: `${validated.length} produtos baixados da nuvem!` };
-    } catch (err: any) {
-      return { success: false, products: [], message: err.message || 'Falha ao processar produtos remotos.' };
-    }
-  }
-
-  /**
-   * Sincroniza catálogos completos com o Supabase.
-   */
-  static async pushCatalogsToCloud(
-    catalogs: Catalog[]
-  ): Promise<{ success: boolean; count: number; message: string }> {
-    const supabase = getSupabase();
-    if (!supabase) {
-      return { success: false, count: 0, message: 'Supabase não conectado.' };
-    }
-
-    try {
-      const payload = catalogs.map((c) => {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.id);
-        const item: any = {
-          name: c.title,
-          locale: 'pt-BR',
-          template_key: c.themeId || 'default-technical',
-          brand: {
-            subtitle: c.subtitle,
-            pages: c.pages,
-            version: c.version
-          },
-          updated_at: new Date().toISOString()
-        };
-        if (isUUID) {
-          item.id = c.id;
-        }
-        return item;
-      });
-
-      const { error } = await supabase
-        .from('catalogs')
-        .upsert(payload, { onConflict: 'name' });
-
-      if (error) {
-        return { success: false, count: 0, message: error.message };
-      }
-
-      return { success: true, count: catalogs.length, message: `${catalogs.length} catálogo(s) sincronizado(s) na nuvem!` };
-    } catch (err: any) {
-      return { success: false, count: 0, message: err.message || 'Erro na sincronização de catálogos.' };
-    }
-  }
-
-  /**
-   * Puxa catálogos da nuvem (Supabase).
-   */
-  static async pullCatalogsFromCloud(): Promise<{ success: boolean; catalogs: Catalog[]; message: string }> {
-    const supabase = getSupabase();
-    if (!supabase) {
-      return { success: false, catalogs: [], message: 'Supabase não conectado.' };
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('catalogs')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        return { success: false, catalogs: [], message: error.message };
-      }
-
-      if (!data || data.length === 0) {
-        return { success: true, catalogs: [], message: 'Nenhum catálogo encontrado na nuvem.' };
-      }
-
-      const catalogs: Catalog[] = data.map((row: any) => {
-        const brand = row.brand || {};
-        return {
-          id: row.id,
-          title: row.name || 'Catálogo',
-          subtitle: brand.subtitle || '',
-          themeId: row.template_key || 'default-technical',
-          pages: brand.pages || [],
-          createdAt: row.created_at || new Date().toISOString(),
-          updatedAt: row.updated_at || new Date().toISOString(),
-          version: brand.version || row.version || 1
-        };
-      });
-
-      const validated = z.array(CatalogSchema).parse(catalogs);
-      return { success: true, catalogs: validated, message: `${validated.length} catálogo(s) baixado(s) da nuvem!` };
-    } catch (err: any) {
-      return { success: false, catalogs: [], message: err.message || 'Falha ao processar catálogos remotos.' };
-    }
-  }
-
-  /**
-   * Sincroniza um item do Acervo de Mídia (Banco de Fotos) com o Supabase.
-   */
-  static async pushMediaAssetToCloud(asset: {
-    id: string;
-    name: string;
-    url: string;
-    category?: string;
-    tags?: string[];
-  }): Promise<boolean> {
-    const supabase = getSupabase();
-    if (!supabase) return false;
-
-    try {
-      const { error } = await supabase.from('media_library').upsert({
-        id: asset.id,
-        name: asset.name,
-        url: asset.url,
-        category: asset.category || 'product',
-        tags: asset.tags || [],
-        created_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-
-      return !error;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Puxa todos os itens do Banco de Fotos da nuvem.
-   */
-  static async pullMediaAssetsFromCloud(): Promise<Array<{
-    id: string;
-    name: string;
-    url: string;
-    category: 'product' | 'cover' | 'diagram' | 'banner';
-    tags?: string[];
-    createdAt: string;
-    isCustom?: boolean;
-  }>> {
-    const supabase = getSupabase();
-    if (!supabase) return [];
-
-    try {
-      const { data, error } = await supabase
-        .from('media_library')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error || !data) return [];
-
-      return data.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        url: row.url,
-        category: (row.category as any) || 'cover',
-        tags: row.tags || [],
-        createdAt: row.created_at || new Date().toISOString(),
-        isCustom: true
-      }));
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Deleta uma foto do Banco de Fotos no Supabase.
-   */
-  static async deleteMediaAssetFromCloud(id: string): Promise<boolean> {
-    const supabase = getSupabase();
-    if (!supabase) return false;
-
-    try {
-      const { error } = await supabase.from('media_library').delete().eq('id', id);
-      return !error;
-    } catch {
-      return false;
-    }
+    void fileName;
+    void bucketName;
+    return { success: base64.startsWith('data:'), url: base64, isRemote: false };
   }
 }

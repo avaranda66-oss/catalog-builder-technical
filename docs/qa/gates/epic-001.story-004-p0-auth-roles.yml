@@ -1,0 +1,26 @@
+schema: 1
+story: 'EPIC-001.STORY-004-P0'
+gate: FAIL
+status_reason: 'A fronteira de sessão falha fechada e os gates locais passam, mas o caminho ativo do editor ainda chama adaptadores legados de mídia e os testes obrigatórios de troca tardia de sessão e controles de Colaborador não existem.'
+reviewer: 'Quinn'
+reviewed_revision: 'working-tree-diff:bae624fba743810c322029e084ae98e991473bd7'
+updated: '2026-09-01T20:17:00-03:00'
+top_issues:
+  - id: 'REQ-001'
+    severity: high
+    finding: 'PropertiesPanel ainda chama SupabaseService.pushMediaAssetToCloud nos fluxos ativos de upload (linhas 153 e 173), e os fluxos de upload do editor continuam chamando SupabaseService.uploadProductImage. Mesmo que o adaptador atual seja no-op/local, isso viola AC 10, que exige zero chamadas aos métodos legados no caminho ativo até a STORY-005.'
+    suggested_action: 'Retirar os imports e chamadas do adaptador legado dos componentes do editor; criar um helper local com nome/contrato local ou usar diretamente o store local. Adicionar spies que comprovem zero chamadas em upload de imagem, edição de bloco e mídia.'
+  - id: 'TEST-001'
+    severity: high
+    finding: 'Os novos testes não cobrem resposta de perfil tardia após troca de usuário/SIGNED_OUT, login inválido, expiração/troca de usuário, nem tentativas de teclado/modal para controles oficiais como Colaborador. Assim AC 11 não está demonstrado.'
+    suggested_action: 'Adicionar testes determinísticos para promessa de perfil pendente seguida de SIGNED_OUT e de sessão de outro usuário, credenciais inválidas, evento de expiração/troca, ProductDrawer/MediaGallery e tentativa de acionar controles por teclado/click; manter a barreira de rede estrita.'
+  - id: 'DOC-001'
+    severity: medium
+    finding: 'A story continua em Status Approved, não InReview. O protocolo QA não permite aplicar automaticamente a transição FAIL para InProgress a partir desse estado, e o File List/checklist ainda não registra a implementação real.'
+    suggested_action: 'O responsável de desenvolvimento deve atualizar Tasks, checklist, File List e Dev Agent Record para Ready/InReview antes da nova revisão; depois @qa aplicará a transição de ciclo de vida correspondente.'
+  - id: 'MNT-001'
+    severity: medium
+    finding: 'O projeto não possui script npm run lint, que é um gate obrigatório da Constituição; build também informa chunk principal de 1.86 MB e aviso de eval em pdfjs-dist.'
+    suggested_action: 'Registrar lint como dívida/gate ausente nesta story e tratar configuração de lint e divisão de bundle em story própria, sem alegar que esta validação de Auth os aprovou.'
+waiver:
+  active: false

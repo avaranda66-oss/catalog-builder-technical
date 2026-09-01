@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { SupabaseService } from '../services/supabase.service';
 
 export interface MediaAsset {
   id: string;
@@ -73,7 +72,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
 
   openGallery: (onSelect) => {
     set({ isGalleryOpen: true, galleryTargetCallback: onSelect });
-    get().loadAssets(); // Recarrega da nuvem ao abrir
+    void get().loadAssets();
   },
   closeGallery: () => set({ isGalleryOpen: false, galleryTargetCallback: null, selectedAssetId: null }),
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
@@ -81,29 +80,25 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   addAsset: async (file, category = 'cover', name) => {
     set({ isUploading: true });
     try {
-      // 1. Upload para o Supabase Storage no bucket 'product-images'
-      const res = await SupabaseService.uploadProductImage(file, 'product-images');
-      if (res.success && res.url) {
-        const newAsset: MediaAsset = {
-          id: `media-${Date.now()}`,
-          name: name || file.name.replace(/\.[^/.]+$/, ''),
-          url: res.url,
-          category,
-          createdAt: new Date().toISOString(),
-          isCustom: true
-        };
-
-        const updated = [newAsset, ...get().assets];
-        set({ assets: updated });
-        localStorage.setItem('cb_media_assets', JSON.stringify(updated));
-
-        // 2. Registra na tabela media_library no Supabase
-        SupabaseService.pushMediaAssetToCloud(newAsset).catch((err) => {
-          console.warn('Erro ao salvar mídia na tabela do Supabase:', err);
-        });
-
-        return newAsset;
-      }
+      const localUrl = await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+      if (!localUrl) return null;
+      const newAsset: MediaAsset = {
+        id: `media-${Date.now()}`,
+        name: name || file.name.replace(/\.[^/.]+$/, ''),
+        url: localUrl,
+        category,
+        createdAt: new Date().toISOString(),
+        isCustom: true
+      };
+      const updated = [newAsset, ...get().assets];
+      set({ assets: updated });
+      localStorage.setItem('cb_media_assets', JSON.stringify(updated));
+      return newAsset;
     } finally {
       set({ isUploading: false });
     }
@@ -122,7 +117,6 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     const updated = [newAsset, ...get().assets];
     set({ assets: updated });
     localStorage.setItem('cb_media_assets', JSON.stringify(updated));
-    SupabaseService.pushMediaAssetToCloud(newAsset).catch(() => {});
   },
 
   updateAsset: (id, updates) => {
@@ -130,17 +124,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     set({ assets: updated });
     localStorage.setItem('cb_media_assets', JSON.stringify(updated));
 
-    const target = updated.find((a) => a.id === id);
-    if (target) {
-      SupabaseService.pushMediaAssetToCloud(target).catch(() => {});
-    }
   },
 
   deleteAsset: (id) => {
     const updated = get().assets.filter((a) => a.id !== id);
     set({ assets: updated });
     localStorage.setItem('cb_media_assets', JSON.stringify(updated));
-    SupabaseService.deleteMediaAssetFromCloud(id).catch(() => {});
   },
 
   loadAssets: async () => {
@@ -159,18 +148,5 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       }
     }
 
-    // 2. Puxa do Supabase (Banco de Fotos compartilhado entre todos os computadores)
-    try {
-      const cloudAssets = await SupabaseService.pullMediaAssetsFromCloud();
-      if (cloudAssets.length > 0) {
-        const local = get().assets;
-        const cloudIds = new Set(cloudAssets.map((c) => c.id));
-        const merged = [...cloudAssets, ...local.filter((l) => !cloudIds.has(l.id))];
-        set({ assets: merged });
-        localStorage.setItem('cb_media_assets', JSON.stringify(merged));
-      }
-    } catch {
-      // Offline fallback
-    }
   }
 }));

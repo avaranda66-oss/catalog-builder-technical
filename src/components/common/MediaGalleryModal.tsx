@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useMediaStore, MediaAsset } from '../../stores/useMediaStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export const MediaGalleryModal: React.FC = () => {
   const {
@@ -26,6 +27,7 @@ export const MediaGalleryModal: React.FC = () => {
     isUploading
   } = useMediaStore();
   const { products } = useLibraryStore();
+  const canManageMedia = useAuthStore((state) => state.role === 'admin');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'all' | 'products' | 'covers' | 'upload'>('all');
@@ -67,7 +69,7 @@ export const MediaGalleryModal: React.FC = () => {
 
     const created = await addAsset(uploadFile, uploadCategory, uploadName.trim());
     if (created) {
-      setSuccessMessage(`Foto "${created.name}" enviada com sucesso para o banco na nuvem!`);
+      setSuccessMessage(`Foto "${created.name}" adicionada somente neste dispositivo.`);
       setTimeout(() => setSuccessMessage(null), 4000);
       setUploadFile(null);
       setUploadName('');
@@ -161,10 +163,10 @@ export const MediaGalleryModal: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
-                Banco Central de Fotografias & Mídia PRESYS
+                Galeria local de fotografias e mídia
               </h2>
               <p className="text-[10px] text-slate-500 font-mono">
-                Armazenamento em Nuvem no Supabase Storage · Acessível em qualquer dispositivo
+                Sincronização segura em preparação · o conteúdo ainda não é compartilhado
               </p>
             </div>
           </div>
@@ -184,7 +186,7 @@ export const MediaGalleryModal: React.FC = () => {
         {/* Abas e Filtros */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2.5 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-1 w-full sm:w-auto">
-            <button
+            {canManageMedia && <button
               type="button"
               onClick={() => setActiveTab('all')}
               className={`px-3 py-1 text-xs font-bold rounded-none transition-colors border ${
@@ -194,7 +196,7 @@ export const MediaGalleryModal: React.FC = () => {
               }`}
             >
               Todas ({allCombinedAssets.length})
-            </button>
+            </button>}
             <button
               type="button"
               onClick={() => setActiveTab('covers')}
@@ -246,7 +248,7 @@ export const MediaGalleryModal: React.FC = () => {
 
         {/* Conteúdo da Galeria */}
         <div className="flex-1 overflow-y-auto p-4 bg-slate-100/50">
-          {activeTab === 'upload' ? (
+          {canManageMedia && activeTab === 'upload' ? (
             <div className="max-w-xl mx-auto py-2 space-y-4">
               {/* Formulário de Upload Completo */}
               <form onSubmit={handleExecuteUpload} className="p-4 bg-white border border-slate-300 rounded-none space-y-3 shadow-xs">
@@ -479,7 +481,7 @@ export const MediaGalleryModal: React.FC = () => {
                               </span>
 
                               {/* Ações de Edição e Exclusão */}
-                              <div className="flex items-center gap-1">
+                              {canManageMedia && <div className="flex items-center gap-1">
                                 <button
                                   type="button"
                                   onClick={(e) => handleStartEdit(asset, e)}
@@ -496,7 +498,7 @@ export const MediaGalleryModal: React.FC = () => {
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
-                              </div>
+                              </div>}
                             </div>
                           </>
                         )}
@@ -512,7 +514,7 @@ export const MediaGalleryModal: React.FC = () => {
         {/* Footer */}
         <div className="p-2.5 border-t border-slate-300 flex items-center justify-between bg-slate-100">
           <span className="text-[10px] text-slate-600 font-mono">
-            {allCombinedAssets.length} foto(s) no Banco Central PRESYS
+            {allCombinedAssets.length} foto(s) disponíveis neste dispositivo
           </span>
           <button
             onClick={closeGallery}

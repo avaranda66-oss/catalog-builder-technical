@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Trash2, AlertCircle, Upload, Image, Loader2 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useUIStore } from '../../stores/useUIStore';
-import { SupabaseService } from '../../services/supabase.service';
+import { readImageAsLocalDataUrl } from '../../services/local-image.service';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export const ProductDrawer: React.FC = () => {
   const { isProductDrawerOpen, editingProductId, closeProductDrawer } = useUIStore();
-  const { getProduct, addProduct, updateProduct, deleteProduct, isAdmin } = useLibraryStore();
+  const { getProduct, addProduct, updateProduct, deleteProduct } = useLibraryStore();
+  const isAdmin = useAuthStore((state) => state.role === 'admin');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [code, setCode] = useState('');
@@ -86,16 +88,16 @@ export const ProductDrawer: React.FC = () => {
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!isAdmin || !file) return;
 
     setIsUploadingImage(true);
     setError(null);
     try {
-      const res = await SupabaseService.uploadProductImage(file);
-      if (res.success && res.url) {
-        setImageUrl(res.url);
+      const imageUrl = await readImageAsLocalDataUrl(file);
+      if (imageUrl) {
+        setImageUrl(imageUrl);
       } else {
-        setError(res.message || 'Falha ao processar upload da imagem.');
+        setError('Falha ao processar a imagem neste dispositivo.');
       }
     } catch (err: any) {
       setError(err.message || 'Erro inesperado no upload.');
@@ -107,6 +109,7 @@ export const ProductDrawer: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!code.trim() || !model.trim() || !range.trim()) {
       setError('Código, Modelo e Faixa são obrigatórios.');
       return;
@@ -147,7 +150,7 @@ export const ProductDrawer: React.FC = () => {
   };
 
   const handleDelete = () => {
-    if (editingProductId && confirm('Tem certeza que deseja excluir este produto oficial da biblioteca?')) {
+    if (isAdmin && editingProductId && confirm('Tem certeza que deseja excluir este produto oficial da biblioteca?')) {
       deleteProduct(editingProductId);
       closeProductDrawer();
     }

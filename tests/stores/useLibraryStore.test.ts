@@ -8,10 +8,10 @@ describe('useLibraryStore (Central Engineering Library)', () => {
     useLibraryStore.getState().resetToInitial();
   });
 
-  it('inicia com produtos oficiais e colunas padrão', () => {
+  it('inicia sem uma flag local de administração', () => {
     const state = useLibraryStore.getState();
     expect(state.products.length).toBe(INITIAL_PRODUCTS.length);
-    expect(state.isAdmin).toBe(true);
+    expect('isAdmin' in state).toBe(false);
   });
 
   it('permite adicionar novo produto oficial à biblioteca', () => {

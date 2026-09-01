@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Catalog, ContentBlock } from '../domain/catalog.schema';
 import { StorageService } from '../services/storage.service';
+import { SupabaseService } from '../services/supabase.service';
 import { SYSTEM_PRESETS } from '../data/presets';
 
 interface CatalogState {
@@ -340,19 +341,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       await StorageService.saveCatalog(currentCatalog);
       set({ lastSavedAt: new Date().toISOString() });
 
-      // 2. Sincroniza com Supabase em background (fire-and-forget)
-      try {
-        const { SupabaseService } = await import('../services/supabase.service');
-        SupabaseService.pushCatalogsToCloud([currentCatalog]).then((res) => {
-          if (res.success) {
-            console.log('☁️ Catálogo sincronizado na nuvem:', res.message);
-          } else {
-            console.warn('⚠️ Sync cloud (catálogo):', res.message);
-          }
-        });
-      } catch {
-        // Supabase offline — sem problema, salvo localmente
+      // 2. Persistência Compartilhada Segura via Supabase RPC v2 com CAS
+      const remoteRes = await SupabaseService.saveCatalog(currentCatalog, currentCatalog.version);
+      if (remoteRes.success && remoteRes.data) {
+        const updatedVersion = remoteRes.data.version || currentCatalog.version + 1;
+        if (updatedVersion !== currentCatalog.version) {
+          const syncedCatalog = { ...currentCatalog, version: updatedVersion };
+          set({ currentCatalog: syncedCatalog });
+          await StorageService.saveCatalog(syncedCatalog);
+        }
+      } else if (remoteRes.conflict) {
+        console.warn('Conflito de versão detectado no servidor ao salvar catálogo.');
       }
+    } catch (e) {
+      console.warn('Sincronização em nuvem indisponível, mantido localmente:', e);
     } finally {
       set({ isSaving: false });
     }
@@ -361,48 +363,42 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   loadLatestCatalog: async () => {
     set({ isLoading: true });
     try {
-      // 1. Tenta carregar localmente primeiro (rápido)
-      const saved = await StorageService.loadCatalog();
+      // 1. Tenta carregar do Supabase Workspace compartilhado
+      const remote = await SupabaseService.listWorkspace();
+      if (remote.success && remote.data?.catalogs && remote.data.catalogs.length > 0) {
+        const remoteCatalogs: Catalog[] = remote.data.catalogs.map((rc: any) => {
+          const brandData = typeof rc.brand === 'object' && rc.brand !== null ? rc.brand : {};
+          return {
+            id: rc.id,
+            title: rc.name || brandData.title || 'Catálogo Técnico',
+            subtitle: brandData.subtitle || '',
+            themeId: brandData.themeId || 'default-technical',
+            pages: Array.isArray(brandData.pages) ? brandData.pages : [],
+            version: rc.version || 1,
+            createdAt: rc.created_at,
+            updatedAt: rc.updated_at
+          };
+        });
 
-      // 2. Tenta puxar da nuvem para sincronizar entre dispositivos
-      try {
-        const { SupabaseService } = await import('../services/supabase.service');
-        const cloudResult = await SupabaseService.pullCatalogsFromCloud();
-        if (cloudResult.success && cloudResult.catalogs.length > 0) {
-          // Salva todos os catálogos da nuvem localmente
-          for (const cat of cloudResult.catalogs) {
-            await StorageService.saveCatalog(cat);
-          }
-          // Se temos um salvo localmente, verifica se a nuvem é mais recente
-          const cloudLatest = cloudResult.catalogs[0];
-          if (saved) {
-            const localDate = new Date(saved.updatedAt).getTime();
-            const cloudDate = new Date(cloudLatest.updatedAt).getTime();
-            if (cloudDate > localDate) {
-              set({ currentCatalog: cloudLatest });
-              console.log('☁️ Catálogo mais recente carregado da nuvem.');
-            } else {
-              set({ currentCatalog: saved });
-            }
-          } else {
-            set({ currentCatalog: cloudLatest });
-            console.log('☁️ Catálogo carregado da nuvem (nenhum local encontrado).');
-          }
-        } else if (saved) {
-          set({ currentCatalog: saved });
-        } else {
-          get().createCatalogFromPreset();
+        for (const cat of remoteCatalogs) {
+          await StorageService.saveCatalog(cat);
         }
-      } catch {
-        // Supabase offline — usa local
-        if (saved) {
-          set({ currentCatalog: saved });
-        } else {
-          get().createCatalogFromPreset();
-        }
+
+        set({ savedCatalogs: remoteCatalogs, currentCatalog: remoteCatalogs[0] });
+        return;
       }
 
+      // 2. Fallback para banco local
+      const saved = await StorageService.loadCatalog();
+      if (saved) set({ currentCatalog: saved });
+      else get().createCatalogFromPreset();
+
       await get().loadAllCatalogs();
+    } catch (err) {
+      console.warn('Fallback para catálogo local:', err);
+      const saved = await StorageService.loadCatalog();
+      if (saved) set({ currentCatalog: saved });
+      else get().createCatalogFromPreset();
     } finally {
       set({ isLoading: false });
     }
@@ -449,6 +445,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   deleteCatalog: async (id: string) => {
     await StorageService.deleteCatalog(id);
+    try {
+      await SupabaseService.deleteCatalog(id);
+    } catch (e) {
+      console.warn('Erro ao excluir catálogo remoto:', e);
+    }
     const { currentCatalog } = get();
     if (currentCatalog && currentCatalog.id === id) {
       const remaining = await StorageService.loadAllCatalogs();

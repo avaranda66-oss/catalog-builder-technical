@@ -13,12 +13,14 @@ import {
   Loader2,
   ChevronDown
 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
 import { AIService } from '../../services/ai.service';
 import { PresetModal } from '../editor/PresetModal';
 import { BackupModal } from './BackupModal';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 const TRANSLATION_LANGUAGES = [
   { code: 'en', label: 'English (US)', flag: '🇺🇸' },
@@ -32,6 +34,8 @@ export const Navbar: React.FC = () => {
   const { activeTab, setActiveTab, setExportPDFModalOpen } = useUIStore();
   const { currentCatalog, isSaving, lastSavedAt } = useCatalogStore();
   const { openGallery } = useMediaStore();
+  const role = useAuthStore((state) => state.role);
+  const signOut = useAuthStore((state) => state.signOut);
 
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
@@ -156,6 +160,10 @@ export const Navbar: React.FC = () => {
           )}
         </div>
 
+        <span className="hidden md:inline text-[11px] font-mono text-slate-600 border border-slate-200 bg-slate-50 px-2 py-1">
+          {role === 'admin' ? 'Administrador' : 'Colaborador limitado'}
+        </span>
+
         {/* AI Translation Dropdown */}
         <div className="relative">
           <button
@@ -217,7 +225,7 @@ export const Navbar: React.FC = () => {
           className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
         >
           <HardDrive className="w-3.5 h-3.5 text-slate-600" />
-          <span>Cloud Sync</span>
+          <span>Backup local</span>
         </button>
 
         {/* Export PDF */}
@@ -227,6 +235,23 @@ export const Navbar: React.FC = () => {
         >
           <Printer className="w-3.5 h-3.5" />
           <span>Export PDF</span>
+        </button>
+
+        {/* User Identity & Role Badge */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-300 text-xs select-none">
+          <span className="text-slate-700 font-mono text-[11px] truncate max-w-[150px]">{useAuthStore.getState().email || 'Usuário'}</span>
+          <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${role === 'admin' ? 'bg-emerald-700 text-white' : 'bg-blue-700 text-white'}`}>
+            {role === 'admin' ? 'Admin' : 'Colaborador'}
+          </span>
+        </div>
+
+        <button
+          onClick={() => void signOut()}
+          className="p-1.5 text-slate-600 hover:text-slate-900 border border-slate-300 bg-white hover:bg-slate-100 transition-colors"
+          title="Sair do sistema"
+          aria-label="Sair"
+        >
+          <LogOut className="w-3.5 h-3.5 text-red-600" />
         </button>
       </div>
 
