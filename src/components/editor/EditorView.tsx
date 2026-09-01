@@ -89,7 +89,7 @@ export const EditorView: React.FC = () => {
       </div>
 
       {/* Workspace Triplo: Miniaturas (Esq) | Canvas A4 com Scroll (Centro) | Propriedades Fixas (Dir) */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden a4-editor-workspace">
         <PageThumbnailList />
         <A4Canvas />
         <PropertiesPanel />

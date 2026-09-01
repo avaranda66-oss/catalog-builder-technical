@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CircleDot, Plus, Trash2 } from 'lucide-react';
+import { CircleDot, Plus, Trash2, X } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 
@@ -86,8 +86,9 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
   const tableRows: InsertTableRow[] = customData.tableRows || DEFAULT_INSERTS_ROWS;
   const externalDiameter = customData.externalDiameter || 'Outer Diameter: Ø 32mm / Ø 35mm';
 
-  // Selected hole tracking: "insertIdx-holeIdx"
-  const [selectedHoleKey, setSelectedHoleKey] = useState<string | null>(null);
+  // Hole selection state: "insIdx-holeIdx"
+  const [activeHoleKey, setActiveHoleKey] = useState<string | null>(null);
+  const [editingHoleVal, setEditingHoleVal] = useState<string>('');
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
@@ -99,36 +100,45 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
     });
   };
 
-  const handleHoleChange = (insertIdx: number, holeIdx: number, newVal: string) => {
+  const handleSelectHole = (insIdx: number, holeIdx: number, val: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveHoleKey(`${insIdx}-${holeIdx}`);
+    setEditingHoleVal(val);
+  };
+
+  const handleSaveHoleValue = (insIdx: number, holeIdx: number) => {
     const updated = [...inserts];
-    const updatedHoles = [...updated[insertIdx].holes];
-    updatedHoles[holeIdx] = newVal.trim() || '6';
-    updated[insertIdx] = { ...updated[insertIdx], holes: updatedHoles };
+    const updatedHoles = [...updated[insIdx].holes];
+    updatedHoles[holeIdx] = editingHoleVal.trim() || '6';
+    updated[insIdx] = { ...updated[insIdx], holes: updatedHoles };
 
     updateBlock(pageId, block.id, {
       customData: { ...customData, inserts: updated }
     });
+    setActiveHoleKey(null);
   };
 
-  const handleDeleteHole = (insertIdx: number, holeIdx: number) => {
+  const handleDeleteHole = (insIdx: number, holeIdx: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const updated = [...inserts];
-    const updatedHoles = updated[insertIdx].holes.filter((_, i) => i !== holeIdx);
+    const updatedHoles = updated[insIdx].holes.filter((_, i) => i !== holeIdx);
     if (updatedHoles.length === 0) {
       updatedHoles.push('6');
     }
-    updated[insertIdx] = { ...updated[insertIdx], holes: updatedHoles };
-    setSelectedHoleKey(null);
+    updated[insIdx] = { ...updated[insIdx], holes: updatedHoles };
+    setActiveHoleKey(null);
 
     updateBlock(pageId, block.id, {
       customData: { ...customData, inserts: updated }
     });
   };
 
-  const handleAddHole = (insertIdx: number) => {
+  const handleAddHoleToInsert = (insIdx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
     const updated = [...inserts];
-    updated[insertIdx] = {
-      ...updated[insertIdx],
-      holes: [...updated[insertIdx].holes, '6']
+    updated[insIdx] = {
+      ...updated[insIdx],
+      holes: [...updated[insIdx].holes, '6']
     };
     updateBlock(pageId, block.id, {
       customData: { ...customData, inserts: updated }
@@ -147,7 +157,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
     });
   };
 
-  const handleRemoveInsertCircle = (index: number) => {
+  const handleRemoveInsertCircle = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (inserts.length <= 1) return;
     const updated = inserts.filter((_, i) => i !== index);
     updateBlock(pageId, block.id, {
@@ -207,7 +218,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
       }`}
     >
-      {/* Technical Header */}
+      {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2 gap-2">
         <h3
           contentEditable
@@ -236,7 +247,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
               e.stopPropagation();
               handleAddInsertCircle();
             }}
-            className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none no-print"
+            className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none no-print transition-colors"
             data-editor-action="true"
           >
             <Plus className="w-3 h-3" />
@@ -245,7 +256,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         </div>
       </div>
 
-      {/* Visual Cylinder Inserts Grid */}
+      {/* Grid Visual de Insertos Metálicos */}
       <div
         className="grid gap-2 pt-0.5 mb-2.5"
         style={{
@@ -255,122 +266,135 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         {inserts.map((ins, insIdx) => {
           const numHoles = ins.holes.length;
 
-          // Proportional cylinder dimensions based on hole count
-          let cylinderSize = 54; // default in px
-          let holeSize = 16; // default hole in px
+          // Dimensões do cilindro e furos calibrados para nunca vazar
+          const cylinderDiameter = 64; // px
+          let holeDiameter = 18; // px
 
           if (numHoles === 1) {
-            cylinderSize = 50;
-            holeSize = 22;
-          } else if (numHoles <= 3) {
-            cylinderSize = 54;
-            holeSize = 16;
+            holeDiameter = 28;
+          } else if (numHoles === 2) {
+            holeDiameter = 20;
           } else if (numHoles <= 4) {
-            cylinderSize = 58;
-            holeSize = 15;
+            holeDiameter = 18;
           } else if (numHoles <= 6) {
-            cylinderSize = 64;
-            holeSize = 14;
+            holeDiameter = 16;
           } else {
-            cylinderSize = 70;
-            holeSize = 13;
+            holeDiameter = 14;
           }
 
           return (
             <div
               key={insIdx}
-              className="flex flex-col items-center p-1.5 rounded-none bg-slate-50 border border-slate-200 hover:border-slate-400 transition-all text-center group relative"
+              className="flex flex-col items-center p-1.5 rounded-none bg-slate-50 border border-slate-200 hover:border-slate-400 transition-all text-center group relative shadow-2xs"
             >
+              {/* Botão de Excluir o Inserto Inteiro (Visível no Hover) */}
               {inserts.length > 1 && (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveInsertCircle(insIdx);
-                  }}
-                  className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-600 no-print"
+                  onClick={(e) => handleRemoveInsertCircle(insIdx, e)}
+                  className="absolute top-1 right-1 p-0.5 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity no-print"
                   data-editor-action="true"
-                  title="Remove insert cylinder"
+                  title="Delete this insert"
                 >
-                  <Trash2 className="w-2.5 h-2.5" />
+                  <Trash2 className="w-3 h-3" />
                 </button>
               )}
 
-              {/* Machined Metal Cylinder with dynamic sizing */}
+              {/* Cilindro Metálico de Alta Precisão (Sem botões sobrepostos) */}
               <div
-                style={{ width: `${cylinderSize}px`, height: `${cylinderSize}px` }}
+                style={{ width: `${cylinderDiameter}px`, height: `${cylinderDiameter}px` }}
                 className="rounded-full border-2 border-slate-700 bg-gradient-to-tr from-slate-300 via-slate-100 to-slate-200 flex items-center justify-center p-1 shadow-inner relative mb-1.5 select-none"
               >
-                {/* Geometric Hole Distribution */}
                 <div className="w-full h-full relative flex items-center justify-center">
                   {ins.holes.map((holeValue, holeIdx) => {
                     const holeKey = `${insIdx}-${holeIdx}`;
-                    const isSelectedHole = selectedHoleKey === holeKey;
+                    const isSelected = activeHoleKey === holeKey;
 
-                    // Polar geometry coordinates inside safe radius
-                    const radius = numHoles === 1 ? 0 : (cylinderSize / 2) - (holeSize / 2) - 5;
-                    const angle = (2 * Math.PI * holeIdx) / (numHoles === 1 ? 1 : numHoles) - Math.PI / 2;
-                    const x = numHoles === 1 ? 0 : Math.cos(angle) * radius;
-                    const y = numHoles === 1 ? 0 : Math.sin(angle) * radius;
+                    // Cálculo da posição polar para conter os furos dentro do raio seguro
+                    const safeRadius = (cylinderDiameter / 2) - (holeDiameter / 2) - 4;
+                    let x = 0;
+                    let y = 0;
+
+                    if (numHoles === 1) {
+                      x = 0;
+                      y = 0;
+                    } else if (numHoles === 2) {
+                      x = holeIdx === 0 ? -safeRadius * 0.75 : safeRadius * 0.75;
+                      y = 0;
+                    } else {
+                      const angle = (2 * Math.PI * holeIdx) / numHoles - Math.PI / 2;
+                      x = Math.cos(angle) * safeRadius;
+                      y = Math.sin(angle) * safeRadius;
+                    }
 
                     return (
                       <div
                         key={holeIdx}
                         style={{
-                          width: `${holeSize}px`,
-                          height: `${holeSize}px`,
+                          width: `${holeDiameter}px`,
+                          height: `${holeDiameter}px`,
                           transform: `translate(${x}px, ${y}px)`
                         }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedHoleKey(holeKey);
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteHole(insIdx, holeIdx);
-                        }}
+                        onClick={(e) => handleSelectHole(insIdx, holeIdx, holeValue, e)}
+                        onDoubleClick={(e) => handleDeleteHole(insIdx, holeIdx, e)}
                         className={`absolute rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                          isSelectedHole
-                            ? 'bg-amber-300 ring-2 ring-amber-500 text-slate-950 font-black z-20 scale-110 shadow-md'
-                            : 'bg-slate-900 hover:bg-amber-200 text-white hover:text-slate-900 border border-slate-600'
+                          isSelected
+                            ? 'bg-amber-300 ring-2 ring-amber-500 text-slate-950 font-black z-30 scale-110 shadow-md'
+                            : 'bg-slate-950 hover:bg-amber-200 text-white hover:text-slate-950 border border-slate-600'
                         }`}
-                        title="Click to edit value inline | Double-click to remove hole"
+                        title="Click to edit number | Double click or click X to remove hole"
                       >
-                        <span
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={(e) => {
-                            handleHoleChange(insIdx, holeIdx, e.currentTarget.innerText);
-                          }}
-                          className="outline-none text-[8px] font-mono font-bold leading-none select-text px-0.5"
-                        >
-                          {holeValue}
-                        </span>
+                        {isSelected ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingHoleVal}
+                            onChange={(e) => setEditingHoleVal(e.target.value)}
+                            onBlur={() => handleSaveHoleValue(insIdx, holeIdx)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveHoleValue(insIdx, holeIdx);
+                              if (e.key === 'Escape') setActiveHoleKey(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full text-center bg-transparent font-mono font-black text-[9px] outline-none text-slate-950 px-0"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-mono font-bold leading-none select-none">
+                            {holeValue}
+                          </span>
+                        )}
+
+                        {/* Botão Vermelho de Excluir Furo com X Claro */}
+                        {isSelected && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteHole(insIdx, holeIdx, e)}
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm no-print z-40"
+                            data-editor-action="true"
+                            title="Remove this hole"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
-
-                  {/* Add Extra Hole Button inside cylinder safe margin */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddHole(insIdx);
-                    }}
-                    style={{
-                      width: `${Math.max(holeSize - 2, 11)}px`,
-                      height: `${Math.max(holeSize - 2, 11)}px`
-                    }}
-                    className="absolute bottom-0 right-0 rounded-full border border-dashed border-slate-500 bg-white/70 hover:bg-[#003366] hover:text-white flex items-center justify-center text-[7px] text-slate-600 font-bold leading-none cursor-pointer transition-all no-print z-10"
-                    data-editor-action="true"
-                    title="Add hole to this cylinder"
-                  >
-                    +
-                  </button>
                 </div>
               </div>
 
-              {/* Code & Title */}
+              {/* Botão de Adicionar Furo (Abaixo do cilindro, sem sobrepor nada) */}
+              <button
+                type="button"
+                onClick={(e) => handleAddHoleToInsert(insIdx, e)}
+                className="mb-1 px-1.5 py-0.5 bg-slate-200 hover:bg-[#003366] hover:text-white text-slate-700 rounded-none text-[8px] font-bold flex items-center gap-0.5 no-print transition-colors"
+                data-editor-action="true"
+                title="Add new hole to this insert"
+              >
+                <Plus className="w-2.5 h-2.5" />
+                <span>+ Furo</span>
+              </button>
+
+              {/* Código & Título do Inserto */}
               <p
                 contentEditable
                 suppressContentEditableWarning
@@ -392,7 +416,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         })}
       </div>
 
-      {/* Technical Ordering Codes Table */}
+      {/* Tabela Técnica de Códigos */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse border border-slate-700 text-xs">
           <thead>
@@ -458,7 +482,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         </table>
       </div>
 
-      {/* Footer / Add Table Row */}
+      {/* Rodapé da Tabela */}
       <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1">
         <span>{tableRows.length} insert model(s) registered</span>
         <button

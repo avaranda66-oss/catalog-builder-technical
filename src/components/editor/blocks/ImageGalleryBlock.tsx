@@ -126,9 +126,13 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
             key={idx}
             className="flex flex-col bg-white border border-slate-300 rounded-none overflow-hidden group relative hover:border-slate-500 transition-colors"
           >
-            {/* Foto com Altura Padronizada */}
-            <div className="h-28 overflow-hidden bg-slate-900 relative group/img flex items-center justify-center">
-              <img src={img.url} alt={img.caption || 'Foto'} className="w-full h-full object-cover" />
+            {/* Foto com Altura Padronizada e Enquadramento Proporcional */}
+            <div className="w-full aspect-video overflow-hidden bg-slate-950 relative group/img flex items-center justify-center">
+              <img
+                src={img.url}
+                alt={img.caption || 'Foto'}
+                className="w-full h-full object-cover object-center"
+              />
 
               <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center gap-1.5 transition-opacity p-2 no-print" data-editor-action="true">
                 <button

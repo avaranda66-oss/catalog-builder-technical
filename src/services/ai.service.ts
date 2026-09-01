@@ -85,7 +85,7 @@ export class AIService {
         });
       });
 
-      // 2. Call Google Gemini API
+      // 2. Call Google Gemini API (Using gemini-2.5-flash with fallback to gemini-flash-latest)
       const prompt = `You are a professional industrial instrumentation and metrology technical translator.
 Translate all values in the following JSON dictionary to ${targetLanguage}.
 Keep all technical codes, units (bar, psi, mA, V, °C, etc.), and formulas intact.
@@ -93,24 +93,42 @@ Return ONLY valid JSON with the exact same keys and the translated values. Do no
 
 ${JSON.stringify(textsToTranslate, null, 2)}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json'
-          }
-        })
-      });
+      let response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1
+            }
+          })
+        }
+      );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.warn('Gemini API Translation Error:', errorText);
-        return { success: false, error: `Gemini API Error: ${response.statusText}` };
+        // Fallback para gemini-flash-latest se necessário
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.1
+              }
+            })
+          }
+        );
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = errorData?.error?.message || response.statusText;
+        console.warn('Gemini API Translation Error:', msg);
+        return { success: false, error: `Gemini API Error: ${msg}` };
       }
 
       const resData = await response.json();
@@ -119,7 +137,11 @@ ${JSON.stringify(textsToTranslate, null, 2)}`;
         return { success: false, error: 'Empty response received from Gemini AI.' };
       }
 
-      const cleanJson = rawText.replace(/```json\n?|```/g, '').trim();
+      // Robust JSON extraction
+      let cleanJson = rawText.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+      }
       const translations: Record<string, string> = JSON.parse(cleanJson);
 
       // 3. Re-inject translations into a cloned Catalog

@@ -46,7 +46,7 @@ export class PDFService {
 
       const pdfWidth = 210;
       const pdfHeight = 297;
-      const scale = options.scale || 2.5;
+      const scale = options.scale || 3; // 300 DPI+ ultra high resolution
 
       for (let i = 0; i < pageElements.length; i++) {
         const pageEl = pageElements[i] as HTMLElement;
@@ -57,7 +57,7 @@ export class PDFService {
 
         // Scroll to element to ensure viewport visibility for rendering
         pageEl.scrollIntoView();
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 80));
 
         const canvas = await html2canvas(pageEl, {
           scale: scale,
@@ -68,7 +68,8 @@ export class PDFService {
           height: 1123,
           scrollX: 0,
           scrollY: 0,
-          windowWidth: 1200,
+          windowWidth: 794,
+          windowHeight: 1123,
           imageTimeout: 15000,
           onclone: (clonedDoc) => {
             clonedDoc.body.classList.add('pdf-export-mode');
@@ -77,8 +78,8 @@ export class PDFService {
           }
         });
 
-        const imgData = canvas.toDataURL('image/jpeg', options.quality || 0.95);
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        const imgData = canvas.toDataURL('image/jpeg', options.quality || 0.98);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'SLOW');
       }
 
       const fileName = options.fileName || `PRESYS_Catalog_${new Date().toISOString().slice(0, 10)}.pdf`;

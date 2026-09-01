@@ -507,7 +507,7 @@ export const A4Canvas: React.FC = () => {
 
   return (
     <div
-      className="flex-1 min-h-0 h-full overflow-y-auto p-8 flex flex-col items-center bg-[#E2E8F0] space-y-10 scroll-smooth select-none relative"
+      className="flex-1 min-h-0 h-full overflow-y-auto p-8 flex flex-col items-center bg-[#E2E8F0] space-y-10 scroll-smooth select-none relative a4-canvas-scroll-area"
       onClick={() => {
         setSelectedBlockId(null);
         setActiveDropdown(null);
@@ -531,10 +531,10 @@ export const A4Canvas: React.FC = () => {
         const isMenuOpenForThisPage = activeMenuPageId === page.id;
 
         return (
-          <div key={page.id} id={`page-container-${page.id}`} className="flex flex-col items-center space-y-2 flex-shrink-0">
-            {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip */}
+          <div key={page.id} id={`page-container-${page.id}`} className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0">
+            {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip (Oculta na Impressão) */}
             <div
-              className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative"
+              className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative no-print"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-2.5">
@@ -746,8 +746,8 @@ export const A4Canvas: React.FC = () => {
               </div>
             </div>
 
-            {/* Régua Milimétrica Superior */}
-            <div className="w-[794px] h-3.5 bg-slate-200 border-l border-r border-t border-slate-300 flex items-center justify-between px-2 text-[8px] font-mono text-slate-500 select-none">
+            {/* Régua Milimétrica Superior (Oculta na Impressão) */}
+            <div className="w-[794px] h-3.5 bg-slate-200 border-l border-r border-t border-slate-300 flex items-center justify-between px-2 text-[8px] font-mono text-slate-500 select-none no-print">
               <span>0 mm</span>
               <span>50 mm</span>
               <span>100 mm</span>

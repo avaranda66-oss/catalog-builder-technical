@@ -23,14 +23,14 @@ export const ImageBlock: React.FC<ImageBlockProps> = ({ block, isSelected }) => 
       }`}
     >
       {block.imageUrl ? (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center justify-center w-full py-1">
           <img
             src={block.imageUrl}
-            alt={block.imageCaption || 'Imagem do Catálogo'}
-            className="w-full max-h-[480px] object-cover rounded-lg border border-slate-200 shadow-sm"
+            alt={block.imageCaption || 'Product Image'}
+            className="max-w-full max-h-[420px] h-auto object-contain rounded-none border border-slate-300 shadow-2xs"
           />
           {block.imageCaption && (
-            <p className="text-[11px] text-slate-500 italic mt-2 text-center font-sans">
+            <p className="text-[11px] text-slate-500 italic mt-1.5 text-center font-sans">
               {block.imageCaption}
             </p>
           )}
