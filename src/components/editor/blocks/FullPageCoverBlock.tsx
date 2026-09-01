@@ -1,5 +1,5 @@
-import React from 'react';
-import { CheckCircle2, Plus, Trash2, Image } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { CheckCircle2, Plus, Trash2, Image, Move } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useMediaStore } from '../../../stores/useMediaStore';
@@ -10,6 +10,15 @@ interface FullPageCoverBlockProps {
   isSelected: boolean;
 }
 
+export interface ElementPositionConfig {
+  x: number; // Percentual 0 a 100% da largura A4
+  y: number; // Percentual 0 a 100% da altura A4
+  size?: number; // Tamanho da fonte em px
+  color?: string; // Cor do texto
+  visible?: boolean; // Visibilidade
+  width?: number; // Largura em px (para linha)
+}
+
 export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
   block,
   pageId,
@@ -17,13 +26,12 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
   const { openGallery } = useMediaStore();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const custom = block.customData || {};
   const coverStyle = custom.coverStyle || 'photo_hero'; // 'photo_hero' | 'editorial_cards'
+  const isFreeform = custom.isFreeformMode ?? true; // Modo Canva ativado por padrão
   const overlayOpacity = custom.overlayOpacity ?? 45; // 0 a 100%
-  const textAlign = custom.textAlign || 'left'; // 'left' | 'center'
-  const showAccentLine = custom.showAccentLine ?? true;
-  const showLogoBox = custom.showLogoBox ?? true;
 
   const highlights = custom.highlights || [
     { label: 'Exatidão Metrológica', value: 'até 0.01% FE', icon: 'ShieldCheck' },
@@ -32,15 +40,85 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
     { label: 'Interface Touchscreen', value: 'Colorida 5.7"', icon: 'Cpu' }
   ];
 
-  const gradientClass =
-    block.style?.gradient ||
-    custom.gradient ||
-    'bg-gradient-to-b from-slate-900 via-[#001f3f] to-slate-950';
+  // Configurações de posicionamento e escala dos elementos
+  const logoConfig: ElementPositionConfig = custom.logoConfig || { x: 5, y: 3.5, size: 22, visible: true };
+  const badgeConfig: ElementPositionConfig = custom.badgeConfig || { x: 62, y: 3.8, size: 10, visible: true };
+  const titleConfig: ElementPositionConfig = custom.titleConfig || { x: 5, y: 22, size: 42, visible: true };
+  const subtitleConfig: ElementPositionConfig = custom.subtitleConfig || { x: 5, y: 29, size: 16, visible: true };
+  const accentLineConfig: ElementPositionConfig = custom.accentLineConfig || { x: 5, y: 33, width: 80, visible: true };
+  const overviewConfig: ElementPositionConfig = custom.overviewConfig || { x: 5, y: 36, size: 12, visible: true };
 
   const defaultPhotoUrl =
     block.imageUrl ||
     'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85';
 
+  const gradientClass =
+    block.style?.gradient ||
+    custom.gradient ||
+    'bg-gradient-to-b from-slate-900 via-[#001f3f] to-slate-950';
+
+  // Estado de Drag & Drop interativo
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+
+  const handleStartDrag = (key: string, currentX: number, currentY: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraggingKey(key);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: currentX,
+      startY: currentY
+    };
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!draggingKey || !dragStartRef.current || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const deltaXPixels = e.clientX - dragStartRef.current.mouseX;
+    const deltaYPixels = e.clientY - dragStartRef.current.mouseY;
+
+    const deltaXPercent = (deltaXPixels / rect.width) * 100;
+    const deltaYPercent = (deltaYPixels / rect.height) * 100;
+
+    let newX = Math.max(0, Math.min(90, dragStartRef.current.startX + deltaXPercent));
+    let newY = Math.max(0, Math.min(95, dragStartRef.current.startY + deltaYPercent));
+
+    const configKey = `${draggingKey}Config`;
+    const prevConfig = custom[configKey] || {};
+
+    updateBlock(pageId, block.id, {
+      customData: {
+        ...custom,
+        [configKey]: {
+          ...prevConfig,
+          x: Math.round(newX * 10) / 10,
+          y: Math.round(newY * 10) / 10
+        }
+      }
+    });
+  }, [draggingKey, custom, pageId, block.id, updateBlock]);
+
+  const handleMouseUp = useCallback(() => {
+    if (draggingKey) {
+      setDraggingKey(null);
+      dragStartRef.current = null;
+    }
+  }, [draggingKey]);
+
+  useEffect(() => {
+    if (draggingKey) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [draggingKey, handleMouseMove, handleMouseUp]);
+
+  // Edições inline de texto
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
   };
@@ -83,33 +161,6 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
     });
   };
 
-  const handleHighlightChange = (index: number, field: 'value' | 'label', text: string) => {
-    const updated = [...highlights];
-    updated[index] = { ...updated[index], [field]: text.trim() };
-    updateBlock(pageId, block.id, {
-      customData: { ...custom, highlights: updated }
-    });
-  };
-
-  const handleAddHighlight = () => {
-    const newHighlight = {
-      label: 'Novo Destaque Metrológico',
-      value: 'Configurável',
-      icon: 'CheckCircle2'
-    };
-    updateBlock(pageId, block.id, {
-      customData: { ...custom, highlights: [...highlights, newHighlight] }
-    });
-  };
-
-  const handleRemoveHighlight = (idx: number) => {
-    if (highlights.length <= 1) return;
-    const updated = highlights.filter((_: any, i: number) => i !== idx);
-    updateBlock(pageId, block.id, {
-      customData: { ...custom, highlights: updated }
-    });
-  };
-
   const handleOpenMediaGallery = (e: React.MouseEvent) => {
     e.stopPropagation();
     openGallery((selectedUrl) => {
@@ -119,6 +170,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 
   return (
     <div
+      ref={containerRef}
       onClick={(e) => {
         e.stopPropagation();
         setSelectedBlockId(block.id);
@@ -129,7 +181,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
       style={{ boxSizing: 'border-box' }}
     >
       {/* ========================================================================= */}
-      {/* MODO 1: CAPA FOTOGRÁFICA FULL-BLEED (ESTILO PSV PORTABLE)                 */}
+      {/* MODO 1: CAPA FOTOGRÁFICA FULL-BLEED (COM POSICIONAMENTO LIVRE CANVA)       */}
       {/* ========================================================================= */}
       {coverStyle === 'photo_hero' && (
         <>
@@ -140,16 +192,15 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
               alt="Capa do Catálogo"
               className="w-full h-full object-cover object-center filter brightness-95"
             />
-            {/* Gradiente Superior para Leitura do Logo/Título */}
+            {/* Gradiente Superior/Inferior configurável */}
             <div
               className="absolute inset-0 bg-gradient-to-b from-slate-950 via-transparent to-slate-950/80 pointer-events-none"
               style={{ opacity: overlayOpacity / 100 }}
             />
-            {/* Vinheta Escura Lateral */}
             <div className="absolute inset-0 bg-radial from-transparent via-black/20 to-black/60 pointer-events-none" />
           </div>
 
-          {/* Barra de Ações Rápidas de Capa (Modo Canva) */}
+          {/* Barra Flutuante de Ações Rápidas de Capa */}
           <div className="absolute top-4 right-4 z-30 flex items-center gap-2 opacity-0 hover:opacity-100 transition-opacity">
             <button
               type="button"
@@ -161,87 +212,198 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
             </button>
           </div>
 
-          {/* Topo: Logotipo e Identidade Técnica */}
-          <div className="relative z-10 p-10 pb-4 flex items-start justify-between">
-            {showLogoBox && (
-              <div className="border border-white/30 backdrop-blur-xs px-4 py-2 rounded-lg bg-black/20 inline-block">
-                <span
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={handleBrandNameBlur}
-                  className="font-black text-xl tracking-wider text-white block font-sans outline-none focus:bg-white/20 rounded px-1 -ml-1 cursor-text"
-                >
-                  {custom.brandName || 'PRESYS'}
-                </span>
-                <span
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={handleBrandSubtitleBlur}
-                  className="text-[9px] uppercase font-mono tracking-widest text-slate-300 block outline-none focus:bg-white/20 rounded px-1 -ml-1 cursor-text"
-                >
-                  {custom.brandSubtitle || 'INSTRUMENTOS & SISTEMAS'}
-                </span>
-              </div>
-            )}
+          {/* ===================================================================== */}
+          {/* CAMADAS LIVRES DE TEXTO E ELEMENTOS (MODO CANVA)                      */}
+          {/* ===================================================================== */}
 
-            {block.badgeText && (
+          {/* 1. Logotipo / Marca */}
+          {logoConfig.visible !== false && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('logo', logoConfig.x, logoConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${logoConfig.y}%`,
+                left: `${logoConfig.x}%`,
+                zIndex: 20
+              }}
+              className={`group border border-white/30 backdrop-blur-xs px-3.5 py-1.5 rounded-lg bg-black/30 inline-block transition-shadow ${
+                isSelected && isFreeform ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                {isSelected && isFreeform && (
+                  <Move className="w-3 h-3 text-blue-300 opacity-60 group-hover:opacity-100 pointer-events-none" />
+                )}
+                <div>
+                  <span
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={handleBrandNameBlur}
+                    style={{ fontSize: `${logoConfig.size || 22}px` }}
+                    className="font-black tracking-wider text-white block font-sans outline-none focus:bg-white/20 rounded px-1 -ml-1 cursor-text leading-none"
+                  >
+                    {custom.brandName || 'PRESYS'}
+                  </span>
+                  <span
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={handleBrandSubtitleBlur}
+                    className="text-[9px] uppercase font-mono tracking-widest text-slate-300 block outline-none focus:bg-white/20 rounded px-1 -ml-1 cursor-text mt-0.5"
+                  >
+                    {custom.brandSubtitle || 'INSTRUMENTOS & SISTEMAS'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Selo Metrológico / Badge */}
+          {badgeConfig.visible !== false && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('badge', badgeConfig.x, badgeConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${badgeConfig.y}%`,
+                left: `${badgeConfig.x}%`,
+                zIndex: 20
+              }}
+              className={`group px-3 py-1 bg-black/40 backdrop-blur-md border border-white/20 rounded-full inline-flex items-center gap-1.5 ${
+                isSelected && isFreeform ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''
+              }`}
+            >
+              {isSelected && isFreeform && (
+                <Move className="w-3 h-3 text-blue-300 opacity-60 group-hover:opacity-100 pointer-events-none" />
+              )}
               <span
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={handleBadgeBlur}
-                className="px-3 py-1 bg-black/40 backdrop-blur-md border border-white/20 rounded-full text-[10px] font-mono font-bold tracking-wider text-blue-300 uppercase outline-none focus:bg-white/20 cursor-text"
+                style={{ fontSize: `${badgeConfig.size || 10}px` }}
+                className="font-mono font-bold tracking-wider text-blue-300 uppercase outline-none focus:bg-white/20 cursor-text"
               >
-                {block.badgeText}
+                {block.badgeText || 'PRESYS · METROLOGIA & SEGURANÇA OPERACIONAL'}
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Bloco de Título Principal e Acento Visual (Estilo PSV Portable) */}
-          <div
-            className={`relative z-10 px-10 my-auto py-8 space-y-3 ${
-              textAlign === 'center' ? 'text-center max-w-2xl mx-auto' : 'text-left max-w-xl'
-            }`}
-          >
-            <h1
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={handleTitleBlur}
-              className="text-4xl sm:text-5xl font-black tracking-tight text-white uppercase outline-none focus:bg-white/20 rounded px-2 leading-none cursor-text drop-shadow-md font-sans"
+          {/* 3. Título Comercial Principal */}
+          {titleConfig.visible !== false && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('title', titleConfig.x, titleConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${titleConfig.y}%`,
+                left: `${titleConfig.x}%`,
+                zIndex: 20,
+                maxWidth: '650px'
+              }}
+              className={`group p-1.5 rounded-lg transition-all ${
+                isSelected && isFreeform ? 'cursor-move hover:ring-2 hover:ring-blue-400 hover:bg-black/30' : ''
+              }`}
             >
-              {block.title || 'PSV PORTABLE'}
-            </h1>
+              <div className="flex items-start gap-1">
+                {isSelected && isFreeform && (
+                  <Move className="w-4 h-4 text-blue-300 opacity-60 group-hover:opacity-100 mt-1 shrink-0 pointer-events-none" />
+                )}
+                <h1
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={handleTitleBlur}
+                  style={{
+                    fontSize: `${titleConfig.size || 42}px`,
+                    color: titleConfig.color || '#ffffff'
+                  }}
+                  className="font-black tracking-tight uppercase outline-none focus:bg-white/20 rounded px-1 leading-none cursor-text drop-shadow-md font-sans"
+                >
+                  {block.title || 'PSV PORTABLE'}
+                </h1>
+              </div>
+            </div>
+          )}
 
-            <p
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={handleSubtitleBlur}
-              className="text-lg sm:text-xl text-slate-200 font-normal outline-none focus:bg-white/20 rounded px-2 cursor-text drop-shadow font-sans"
+          {/* 4. Subtítulo Técnico */}
+          {subtitleConfig.visible !== false && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('subtitle', subtitleConfig.x, subtitleConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${subtitleConfig.y}%`,
+                left: `${subtitleConfig.x}%`,
+                zIndex: 20,
+                maxWidth: '600px'
+              }}
+              className={`group p-1 rounded-lg transition-all ${
+                isSelected && isFreeform ? 'cursor-move hover:ring-2 hover:ring-blue-400 hover:bg-black/30' : ''
+              }`}
             >
-              {block.subtitle || 'Portable Safety Valve Test Station'}
-            </p>
+              <div className="flex items-start gap-1">
+                {isSelected && isFreeform && (
+                  <Move className="w-3.5 h-3.5 text-blue-300 opacity-60 group-hover:opacity-100 mt-0.5 shrink-0 pointer-events-none" />
+                )}
+                <p
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={handleSubtitleBlur}
+                  style={{
+                    fontSize: `${subtitleConfig.size || 16}px`,
+                    color: subtitleConfig.color || '#e2e8f0'
+                  }}
+                  className="font-normal outline-none focus:bg-white/20 rounded px-1 cursor-text drop-shadow font-sans"
+                >
+                  {block.subtitle || 'Portable Safety Valve Test Station'}
+                </p>
+              </div>
+            </div>
+          )}
 
-            {showAccentLine && (
-              <div
-                className={`h-1 w-20 bg-blue-500 rounded-full shadow-lg ${
-                  textAlign === 'center' ? 'mx-auto' : ''
-                }`}
-              />
-            )}
+          {/* 5. Linha de Acento Azul */}
+          {accentLineConfig.visible !== false && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('accentLine', accentLineConfig.x, accentLineConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${accentLineConfig.y}%`,
+                left: `${accentLineConfig.x}%`,
+                width: `${accentLineConfig.width || 80}px`,
+                zIndex: 20
+              }}
+              className={`group py-1 cursor-move ${
+                isSelected && isFreeform ? 'hover:ring-2 hover:ring-blue-400' : ''
+              }`}
+            >
+              <div className="h-1 w-full bg-blue-500 rounded-full shadow-lg" />
+            </div>
+          )}
 
-            {custom.overview && (
+          {/* 6. Visão Geral / Descrição da Capa */}
+          {overviewConfig.visible !== false && custom.overview && (
+            <div
+              onMouseDown={(e) => isFreeform && handleStartDrag('overview', overviewConfig.x, overviewConfig.y, e)}
+              style={{
+                position: 'absolute',
+                top: `${overviewConfig.y}%`,
+                left: `${overviewConfig.x}%`,
+                zIndex: 20,
+                maxWidth: '480px'
+              }}
+              className={`group p-2.5 rounded-lg bg-black/40 backdrop-blur-xs border border-white/10 transition-all ${
+                isSelected && isFreeform ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''
+              }`}
+            >
               <p
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={handleOverviewBlur}
-                className="text-xs text-slate-300 pt-2 leading-relaxed max-w-lg outline-none focus:bg-white/20 rounded p-1 cursor-text font-sans bg-black/30 backdrop-blur-xs rounded-lg p-3 border border-white/10"
+                style={{ fontSize: `${overviewConfig.size || 12}px` }}
+                className="text-slate-300 leading-relaxed outline-none focus:bg-white/20 rounded p-1 cursor-text font-sans"
               >
                 {custom.overview}
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Rodapé Minimalista Integrado */}
-          <div className="relative z-10 p-10 pt-4 border-t border-white/10 bg-black/40 backdrop-blur-sm flex items-center justify-between text-[10px] text-slate-300 font-mono">
+          {/* Rodapé Integrado */}
+          <div className="relative z-10 p-8 pt-4 border-t border-white/10 bg-black/40 backdrop-blur-sm flex items-center justify-between text-[10px] text-slate-300 font-mono mt-auto">
             <span
               contentEditable
               suppressContentEditableWarning
@@ -263,7 +425,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODO 2: CAPA EDITORIAL COM CARDS (ESTILO PCON-Y18)                        */}
+      {/* MODO 2: CAPA EDITORIAL COM CARDS (PCON-Y18)                               */}
       {/* ========================================================================= */}
       {coverStyle === 'editorial_cards' && (
         <div className="p-8 h-full flex flex-col justify-between relative z-10">
@@ -361,7 +523,14 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleAddHighlight();
+                    const newHighlight = {
+                      label: 'Novo Destaque Metrológico',
+                      value: 'Configurável',
+                      icon: 'CheckCircle2'
+                    };
+                    updateBlock(pageId, block.id, {
+                      customData: { ...custom, highlights: [...highlights, newHighlight] }
+                    });
                   }}
                   className="flex items-center gap-1 text-[10px] font-bold text-blue-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded border border-white/20 transition-colors"
                 >
@@ -380,7 +549,11 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleRemoveHighlight(idx);
+                        if (highlights.length <= 1) return;
+                        const updated = highlights.filter((_: any, i: number) => i !== idx);
+                        updateBlock(pageId, block.id, {
+                          customData: { ...custom, highlights: updated }
+                        });
                       }}
                       className="absolute top-1 right-1 p-0.5 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Excluir"
@@ -392,7 +565,11 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                     <span
                       contentEditable
                       suppressContentEditableWarning
-                      onBlur={(e) => handleHighlightChange(idx, 'value', e.currentTarget.innerText)}
+                      onBlur={(e) => {
+                        const updated = [...highlights];
+                        updated[idx] = { ...updated[idx], value: e.currentTarget.innerText.trim() };
+                        updateBlock(pageId, block.id, { customData: { ...custom, highlights: updated } });
+                      }}
                       className="text-[11px] font-bold text-white font-mono outline-none focus:bg-white/20 rounded px-1 cursor-text"
                     >
                       {h.value}
@@ -400,7 +577,11 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                     <span
                       contentEditable
                       suppressContentEditableWarning
-                      onBlur={(e) => handleHighlightChange(idx, 'label', e.currentTarget.innerText)}
+                      onBlur={(e) => {
+                        const updated = [...highlights];
+                        updated[idx] = { ...updated[idx], label: e.currentTarget.innerText.trim() };
+                        updateBlock(pageId, block.id, { customData: { ...custom, highlights: updated } });
+                      }}
                       className="text-[9px] text-slate-400 leading-tight outline-none focus:bg-white/20 rounded px-1 cursor-text"
                     >
                       {h.label}
