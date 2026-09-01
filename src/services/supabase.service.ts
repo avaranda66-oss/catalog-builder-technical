@@ -47,8 +47,8 @@ export class SupabaseService {
   }
 
   /**
-   * Upload de foto real de produto para o Supabase Storage.
-   * Se o upload remoto falhar, utiliza fallback Base64 local.
+   * Upload de foto real para o Supabase Storage público ('product-images').
+   * Retorna a URL pública HTTPS global acessível em qualquer computador/celular.
    */
   static async uploadProductImage(
     file: File,
@@ -56,12 +56,11 @@ export class SupabaseService {
   ): Promise<{ success: boolean; url: string; isRemote: boolean; message?: string }> {
     const supabase = getSupabase();
 
-    // 1. Tenta upload no Supabase Storage
     if (supabase) {
       try {
         const fileExt = file.name.split('.').pop() || 'jpg';
         const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-        const filePath = `products/${Date.now()}_${cleanName}.${fileExt}`;
+        const filePath = `uploads/${Date.now()}_${cleanName}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from(bucketName)
@@ -76,22 +75,23 @@ export class SupabaseService {
             .getPublicUrl(filePath);
 
           if (publicUrlData && publicUrlData.publicUrl) {
+            console.log('✅ Imagem enviada para o Supabase Storage:', publicUrlData.publicUrl);
             return {
               success: true,
               url: publicUrlData.publicUrl,
               isRemote: true,
-              message: 'Imagem enviada com sucesso para o Supabase Storage!'
+              message: 'Imagem enviada com sucesso para a nuvem!'
             };
           }
         } else {
-          console.warn('Aviso no Supabase Storage upload, usando fallback:', uploadError.message);
+          console.warn('Aviso no Supabase Storage upload, usando fallback local:', uploadError.message);
         }
       } catch (err: any) {
         console.warn('Erro ao conectar ao Supabase Storage:', err);
       }
     }
 
-    // 2. Fallback de alta resiliência: Leitura local em DataURL (Base64)
+    // Fallback em Base64 se estiver sem internet
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -99,7 +99,7 @@ export class SupabaseService {
           success: true,
           url: reader.result as string,
           isRemote: false,
-          message: 'Imagem carregada localmente (Modo Offline).'
+          message: 'Imagem carregada localmente (Offline).'
         });
       };
       reader.onerror = () => {
@@ -131,7 +131,7 @@ export class SupabaseService {
       const res = await fetch(base64);
       const blob = await res.blob();
       const ext = blob.type.split('/')[1] || 'png';
-      const filePath = `products/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+      const filePath = `uploads/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
 
       const { error } = await supabase.storage
         .from(bucketName)
@@ -153,7 +153,6 @@ export class SupabaseService {
 
   /**
    * Sincroniza produtos oficiais com a nuvem (Supabase).
-   * Schema: sku, name, family, data (jsonb), updated_at
    */
   static async pushProductsToCloud(
     products: Product[]
@@ -165,7 +164,6 @@ export class SupabaseService {
 
     try {
       const payload = products.map((p) => {
-        // Valida se o ID é UUID válido para o Postgres, senão omite para auto-geração
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
         const item: any = {
           sku: p.code,
@@ -342,6 +340,87 @@ export class SupabaseService {
       return { success: true, catalogs: validated, message: `${validated.length} catálogo(s) baixado(s) da nuvem!` };
     } catch (err: any) {
       return { success: false, catalogs: [], message: err.message || 'Falha ao processar catálogos remotos.' };
+    }
+  }
+
+  /**
+   * Sincroniza um item do Acervo de Mídia (Banco de Fotos) com o Supabase.
+   */
+  static async pushMediaAssetToCloud(asset: {
+    id: string;
+    name: string;
+    url: string;
+    category?: string;
+    tags?: string[];
+  }): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      const { error } = await supabase.from('media_library').upsert({
+        id: asset.id,
+        name: asset.name,
+        url: asset.url,
+        category: asset.category || 'product',
+        tags: asset.tags || [],
+        created_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Puxa todos os itens do Banco de Fotos da nuvem.
+   */
+  static async pullMediaAssetsFromCloud(): Promise<Array<{
+    id: string;
+    name: string;
+    url: string;
+    category: 'product' | 'cover' | 'diagram' | 'banner';
+    tags?: string[];
+    createdAt: string;
+    isCustom?: boolean;
+  }>> {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('media_library')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        url: row.url,
+        category: (row.category as any) || 'cover',
+        tags: row.tags || [],
+        createdAt: row.created_at || new Date().toISOString(),
+        isCustom: true
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Deleta uma foto do Banco de Fotos no Supabase.
+   */
+  static async deleteMediaAssetFromCloud(id: string): Promise<boolean> {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    try {
+      const { error } = await supabase.from('media_library').delete().eq('id', id);
+      return !error;
+    } catch {
+      return false;
     }
   }
 }

@@ -80,18 +80,15 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (base64) {
-        updateBlock(pageId, block.id, { imageUrl: base64 });
-      }
-    };
-    reader.readAsDataURL(file);
+    const { SupabaseService } = await import('../../../services/supabase.service');
+    const res = await SupabaseService.uploadProductImage(file, 'product-images');
+    if (res.success && res.url) {
+      updateBlock(pageId, block.id, { imageUrl: res.url });
+    }
   };
 
   return (

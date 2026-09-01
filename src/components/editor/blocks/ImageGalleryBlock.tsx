@@ -52,23 +52,20 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || activeImageIdxRef.current === null) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (base64) {
-        const updated = [...images];
-        updated[activeImageIdxRef.current!] = {
-          ...updated[activeImageIdxRef.current!],
-          url: base64
-        };
-        updateBlock(pageId, block.id, { images: updated });
-      }
-    };
-    reader.readAsDataURL(file);
+    const { SupabaseService } = await import('../../../services/supabase.service');
+    const res = await SupabaseService.uploadProductImage(file, 'product-images');
+    if (res.success && res.url) {
+      const updated = [...images];
+      updated[activeImageIdxRef.current!] = {
+        ...updated[activeImageIdxRef.current!],
+        url: res.url
+      };
+      updateBlock(pageId, block.id, { images: updated });
+    }
     e.target.value = '';
   };
 

@@ -60,7 +60,7 @@ interface MediaState {
   addAsset: (file: File, category?: MediaAsset['category'], name?: string) => Promise<MediaAsset | null>;
   addUrlAsset: (url: string, name: string, category?: MediaAsset['category']) => void;
   deleteAsset: (id: string) => void;
-  loadAssets: () => void;
+  loadAssets: () => Promise<void>;
 }
 
 export const useMediaStore = create<MediaState>((set, get) => ({
@@ -70,14 +70,18 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   galleryTargetCallback: null,
   isUploading: false,
 
-  openGallery: (onSelect) => set({ isGalleryOpen: true, galleryTargetCallback: onSelect }),
+  openGallery: (onSelect) => {
+    set({ isGalleryOpen: true, galleryTargetCallback: onSelect });
+    get().loadAssets(); // Recarrega da nuvem ao abrir
+  },
   closeGallery: () => set({ isGalleryOpen: false, galleryTargetCallback: null, selectedAssetId: null }),
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
 
   addAsset: async (file, category = 'cover', name) => {
     set({ isUploading: true });
     try {
-      const res = await SupabaseService.uploadProductImage(file, 'catalog-images');
+      // 1. Upload para o Supabase Storage no bucket correto 'product-images'
+      const res = await SupabaseService.uploadProductImage(file, 'product-images');
       if (res.success && res.url) {
         const newAsset: MediaAsset = {
           id: `media-${Date.now()}`,
@@ -91,6 +95,12 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         const updated = [newAsset, ...get().assets];
         set({ assets: updated });
         localStorage.setItem('cb_media_assets', JSON.stringify(updated));
+
+        // 2. Registra na tabela media_library no Supabase
+        SupabaseService.pushMediaAssetToCloud(newAsset).catch((err) => {
+          console.warn('Erro ao salvar mídia na tabela do Supabase:', err);
+        });
+
         return newAsset;
       }
     } finally {
@@ -111,15 +121,18 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     const updated = [newAsset, ...get().assets];
     set({ assets: updated });
     localStorage.setItem('cb_media_assets', JSON.stringify(updated));
+    SupabaseService.pushMediaAssetToCloud(newAsset).catch(() => {});
   },
 
   deleteAsset: (id) => {
     const updated = get().assets.filter((a) => a.id !== id);
     set({ assets: updated });
     localStorage.setItem('cb_media_assets', JSON.stringify(updated));
+    SupabaseService.deleteMediaAssetFromCloud(id).catch(() => {});
   },
 
-  loadAssets: () => {
+  loadAssets: async () => {
+    // 1. Carrega local
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem('cb_media_assets');
       if (raw) {
@@ -129,9 +142,23 @@ export const useMediaStore = create<MediaState>((set, get) => ({
             set({ assets: parsed });
           }
         } catch (e) {
-          console.error('Erro ao carregar galeria de mídia:', e);
+          console.error('Erro ao carregar galeria local:', e);
         }
       }
+    }
+
+    // 2. Puxa do Supabase (Banco de Fotos compartilhado entre todos os computadores)
+    try {
+      const cloudAssets = await SupabaseService.pullMediaAssetsFromCloud();
+      if (cloudAssets.length > 0) {
+        const local = get().assets;
+        const cloudUrls = new Set(cloudAssets.map((c) => c.url));
+        const merged = [...cloudAssets, ...local.filter((l) => !cloudUrls.has(l.url))];
+        set({ assets: merged });
+        localStorage.setItem('cb_media_assets', JSON.stringify(merged));
+      }
+    } catch {
+      // Offline fallback
     }
   }
 }));

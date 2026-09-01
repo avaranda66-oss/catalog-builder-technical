@@ -137,35 +137,46 @@ export const PropertiesPanel: React.FC = () => {
     });
   };
 
-  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (base64) {
-        updateBlock(blockPageId, selectedBlock.id, { imageUrl: base64 });
-      }
-    };
-    reader.readAsDataURL(file);
+    // 1. Upload direto para o Supabase Storage (Nuvem Pública)
+    const { SupabaseService } = await import('../../services/supabase.service');
+    const res = await SupabaseService.uploadProductImage(file, 'product-images');
+    if (res.success && res.url) {
+      updateBlock(blockPageId, selectedBlock.id, {
+        imageUrl: res.url,
+        customData: { ...(selectedBlock.customData || {}), backgroundImageUrl: res.url }
+      });
+      // Salva no banco de mídia para ficar disponível nos outros computadores
+      SupabaseService.pushMediaAssetToCloud({
+        id: `media-${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: res.url,
+        category: 'cover'
+      }).catch(() => {});
+    }
   };
 
-  const handleAddGalleryImageFromUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddGalleryImageFromUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (base64) {
-        const currentImages = selectedBlock.images || [];
-        updateBlock(blockPageId, selectedBlock.id, {
-          images: [...currentImages, { url: base64, caption: 'Nova foto de aplicação' }]
-        });
-      }
-    };
-    reader.readAsDataURL(file);
+    const { SupabaseService } = await import('../../services/supabase.service');
+    const res = await SupabaseService.uploadProductImage(file, 'product-images');
+    if (res.success && res.url) {
+      const currentImages = selectedBlock.images || [];
+      updateBlock(blockPageId, selectedBlock.id, {
+        images: [...currentImages, { url: res.url, caption: 'Nova foto de aplicação' }]
+      });
+      SupabaseService.pushMediaAssetToCloud({
+        id: `media-${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: res.url,
+        category: 'product'
+      }).catch(() => {});
+    }
   };
 
   return (
