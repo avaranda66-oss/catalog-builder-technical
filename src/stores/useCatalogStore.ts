@@ -336,8 +336,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     set({ isSaving: true });
     try {
+      // 1. Salva localmente (IndexedDB / localStorage)
       await StorageService.saveCatalog(currentCatalog);
       set({ lastSavedAt: new Date().toISOString() });
+
+      // 2. Sincroniza com Supabase em background (fire-and-forget)
+      try {
+        const { SupabaseService } = await import('../services/supabase.service');
+        SupabaseService.pushCatalogsToCloud([currentCatalog]).then((res) => {
+          if (res.success) {
+            console.log('☁️ Catálogo sincronizado na nuvem:', res.message);
+          } else {
+            console.warn('⚠️ Sync cloud (catálogo):', res.message);
+          }
+        });
+      } catch {
+        // Supabase offline — sem problema, salvo localmente
+      }
     } finally {
       set({ isSaving: false });
     }
@@ -346,12 +361,47 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   loadLatestCatalog: async () => {
     set({ isLoading: true });
     try {
+      // 1. Tenta carregar localmente primeiro (rápido)
       const saved = await StorageService.loadCatalog();
-      if (saved) {
-        set({ currentCatalog: saved });
-      } else {
-        get().createCatalogFromPreset();
+
+      // 2. Tenta puxar da nuvem para sincronizar entre dispositivos
+      try {
+        const { SupabaseService } = await import('../services/supabase.service');
+        const cloudResult = await SupabaseService.pullCatalogsFromCloud();
+        if (cloudResult.success && cloudResult.catalogs.length > 0) {
+          // Salva todos os catálogos da nuvem localmente
+          for (const cat of cloudResult.catalogs) {
+            await StorageService.saveCatalog(cat);
+          }
+          // Se temos um salvo localmente, verifica se a nuvem é mais recente
+          const cloudLatest = cloudResult.catalogs[0];
+          if (saved) {
+            const localDate = new Date(saved.updatedAt).getTime();
+            const cloudDate = new Date(cloudLatest.updatedAt).getTime();
+            if (cloudDate > localDate) {
+              set({ currentCatalog: cloudLatest });
+              console.log('☁️ Catálogo mais recente carregado da nuvem.');
+            } else {
+              set({ currentCatalog: saved });
+            }
+          } else {
+            set({ currentCatalog: cloudLatest });
+            console.log('☁️ Catálogo carregado da nuvem (nenhum local encontrado).');
+          }
+        } else if (saved) {
+          set({ currentCatalog: saved });
+        } else {
+          get().createCatalogFromPreset();
+        }
+      } catch {
+        // Supabase offline — usa local
+        if (saved) {
+          set({ currentCatalog: saved });
+        } else {
+          get().createCatalogFromPreset();
+        }
       }
+
       await get().loadAllCatalogs();
     } finally {
       set({ isLoading: false });

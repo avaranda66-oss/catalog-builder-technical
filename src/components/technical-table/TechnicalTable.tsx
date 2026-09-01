@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TableColumnConfig, CatalogTableRow } from '../../domain/catalog.schema';
 import { TABLE_VISUAL_FAMILIES, TableVisualFamily } from './table-tokens';
 import { TechnicalCell } from './TechnicalCell';
 import { TechnicalLegend, TableLegendConfig } from './TechnicalLegend';
 import { getEffectiveValue, getFieldDivergence } from '../../domain/divergence';
 import { Product } from '../../domain/product.schema';
-import { Trash2 } from 'lucide-react';
+import { Trash2, BookOpen } from 'lucide-react';
 
 export interface ColumnGroupConfig {
   id: string;
@@ -26,6 +26,7 @@ interface TechnicalTableProps {
   onRemoveRow?: (rowId: string) => void;
   onRemoveColumn?: (colKey: string) => void;
   onRenameColumn?: (colKey: string, newLabel: string) => void;
+  onToggleLegend?: (show: boolean) => void;
   className?: string;
 }
 
@@ -42,10 +43,20 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   onRemoveRow,
   onRemoveColumn,
   onRenameColumn,
+  onToggleLegend,
   className = ''
 }) => {
   const tokens = TABLE_VISUAL_FAMILIES[family] || TABLE_VISUAL_FAMILIES.monochrome;
   const visibleColumns = columns.filter((c) => c.visible !== false);
+
+  // Legenda é opcional — o estado inicial vem do config externo (default: oculta)
+  const [showLegend, setShowLegend] = useState(legendConfig?.showLegend ?? false);
+
+  const handleToggleLegend = () => {
+    const next = !showLegend;
+    setShowLegend(next);
+    onToggleLegend?.(next);
+  };
 
   return (
     <div className={`w-full overflow-hidden rounded-none select-none ${className}`}>
@@ -166,8 +177,34 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
         </table>
       </div>
 
-      {/* Legenda Técnica */}
-      <TechnicalLegend config={legendConfig} />
+      {/* Legenda Técnica — Opcional e Togglável */}
+      <div className="flex items-center justify-between mt-1">
+        {showLegend ? (
+          <TechnicalLegend config={{ ...legendConfig, showLegend: true }} />
+        ) : (
+          <div />
+        )}
+
+        {isEditable && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleLegend();
+            }}
+            className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-none border transition-colors no-print ${
+              showLegend
+                ? 'text-[#003366] bg-blue-50 border-blue-300 hover:bg-blue-100'
+                : 'text-slate-500 bg-slate-50 border-slate-300 hover:bg-slate-100'
+            }`}
+            data-editor-action="true"
+            title={showLegend ? 'Ocultar legenda de marcadores' : 'Exibir legenda de marcadores'}
+          >
+            <BookOpen className="w-3 h-3" />
+            <span>{showLegend ? 'Ocultar Legenda' : 'Exibir Legenda'}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

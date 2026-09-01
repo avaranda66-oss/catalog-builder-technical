@@ -38,7 +38,6 @@ export class SupabaseService {
     try {
       const { error } = await supabase.from('products').select('id').limit(1);
       if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
-        // Se conectou ao Postgres, mesmo que a tabela tenha outro nome, o Supabase está online
         return { connected: true, url: supabaseUrl };
       }
       return { connected: true, url: supabaseUrl };
@@ -116,7 +115,47 @@ export class SupabaseService {
   }
 
   /**
+   * Upload de base64 image diretamente para Supabase Storage.
+   * Converte o data URL para Blob e faz upload.
+   */
+  static async uploadBase64Image(
+    base64: string,
+    fileName: string = 'image',
+    bucketName: string = 'product-images'
+  ): Promise<{ success: boolean; url: string; isRemote: boolean }> {
+    const supabase = getSupabase();
+    if (!supabase || !base64.startsWith('data:')) {
+      return { success: false, url: base64, isRemote: false };
+    }
+
+    try {
+      // Converte base64 para Blob
+      const res = await fetch(base64);
+      const blob = await res.blob();
+      const ext = blob.type.split('/')[1] || 'png';
+      const filePath = `products/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, blob, { cacheControl: '3600', upsert: true });
+
+      if (!error) {
+        const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+        if (data?.publicUrl) {
+          return { success: true, url: data.publicUrl, isRemote: true };
+        }
+      }
+      console.warn('Upload base64 fallback:', error?.message);
+    } catch (err) {
+      console.warn('Erro no upload base64:', err);
+    }
+
+    return { success: false, url: base64, isRemote: false };
+  }
+
+  /**
    * Sincroniza produtos oficiais com a nuvem (Supabase).
+   * Usa as colunas EXATAS do schema SQL: id, code, name, category, family, description, image_url, specifications
    */
   static async pushProductsToCloud(
     products: Product[]
@@ -129,15 +168,14 @@ export class SupabaseService {
     try {
       const payload = products.map((p) => ({
         id: p.id,
-        sku: p.code,
+        code: p.code,
         name: p.model,
-        family: p.family,
-        data: {
-          description: p.description,
-          specs: p.specs,
-          imageUrl: p.imageUrl,
-          version: p.version
-        },
+        category: p.family || 'Geral',
+        family: p.family || 'Geral',
+        description: p.description || '',
+        image_url: p.imageUrl || '',
+        specifications: p.specs || {},
+        is_verified: true,
         updated_at: new Date().toISOString()
       }));
 
@@ -180,18 +218,27 @@ export class SupabaseService {
       }
 
       const products: Product[] = data.map((row: any) => {
-        const rowData = row.data || {};
+        const specs = row.specifications || {};
         return {
           id: row.id,
-          code: row.sku || row.code || 'PRESYS-ITEM',
-          model: row.name || row.model || 'Modelo',
-          family: row.family || 'Geral',
-          description: rowData.description || '',
-          specs: rowData.specs || { range: '', unit: '', accuracy: '', output: '', powerSupply: '', processConnection: '', protectionDegree: 'IP67', customSpecs: {} },
-          imageUrl: rowData.imageUrl || '',
+          code: row.code || 'PRESYS-ITEM',
+          model: row.name || 'Modelo',
+          family: row.family || row.category || 'Geral',
+          description: row.description || '',
+          specs: {
+            range: specs.range || '',
+            unit: specs.unit || '',
+            accuracy: specs.accuracy || '',
+            output: specs.output || '',
+            powerSupply: specs.powerSupply || '',
+            processConnection: specs.processConnection || '',
+            protectionDegree: specs.protectionDegree || 'IP67',
+            customSpecs: specs.customSpecs || {}
+          },
+          imageUrl: row.image_url || '',
           createdAt: row.created_at || new Date().toISOString(),
           updatedAt: row.updated_at || new Date().toISOString(),
-          version: row.version || rowData.version || 1
+          version: 1
         };
       });
 
@@ -204,6 +251,7 @@ export class SupabaseService {
 
   /**
    * Sincroniza catálogos completos com o Supabase.
+   * Usa as colunas EXATAS do schema SQL: id, title, description, pages, version, is_published
    */
   static async pushCatalogsToCloud(
     catalogs: Catalog[]
@@ -216,14 +264,11 @@ export class SupabaseService {
     try {
       const payload = catalogs.map((c) => ({
         id: c.id,
-        name: c.title,
-        locale: 'pt-BR',
-        template_key: c.themeId,
-        brand: {
-          subtitle: c.subtitle,
-          pages: c.pages,
-          version: c.version
-        },
+        title: c.title,
+        description: c.subtitle || '',
+        pages: c.pages,
+        version: String(c.version || '1.0.0'),
+        is_published: false,
         updated_at: new Date().toISOString()
       }));
 
@@ -264,19 +309,16 @@ export class SupabaseService {
         return { success: true, catalogs: [], message: 'Nenhum catálogo encontrado na nuvem.' };
       }
 
-      const catalogs: Catalog[] = data.map((row: any) => {
-        const brand = row.brand || {};
-        return {
-          id: row.id,
-          title: row.name || 'Catálogo',
-          subtitle: brand.subtitle || '',
-          themeId: row.template_key || 'default-technical',
-          pages: brand.pages || [],
-          createdAt: row.created_at || new Date().toISOString(),
-          updatedAt: row.updated_at || new Date().toISOString(),
-          version: brand.version || row.version || 1
-        };
-      });
+      const catalogs: Catalog[] = data.map((row: any) => ({
+        id: row.id,
+        title: row.title || 'Catálogo',
+        subtitle: row.description || '',
+        themeId: 'default-technical',
+        pages: row.pages || [],
+        createdAt: row.created_at || new Date().toISOString(),
+        updatedAt: row.updated_at || new Date().toISOString(),
+        version: Number(row.version) || 1
+      }));
 
       const validated = z.array(CatalogSchema).parse(catalogs);
       return { success: true, catalogs: validated, message: `${validated.length} catálogo(s) baixado(s) da nuvem!` };

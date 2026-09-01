@@ -237,7 +237,33 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       }
     }
 
+    // 1. Carrega local primeiro
     const saved = await StorageService.loadProducts();
+
+    // 2. Tenta puxar da nuvem para sincronizar entre dispositivos
+    try {
+      const { SupabaseService } = await import('../services/supabase.service');
+      const cloudResult = await SupabaseService.pullProductsFromCloud();
+      if (cloudResult.success && cloudResult.products.length > 0) {
+        // Merge: usa os produtos da nuvem + locais que não existem na nuvem
+        const cloudIds = new Set(cloudResult.products.map((p) => p.id));
+        const localOnly = (saved || []).filter((p) => !cloudIds.has(p.id));
+        const merged = [...cloudResult.products, ...localOnly];
+
+        await StorageService.saveProducts(merged);
+        set({ products: merged });
+        console.log(`☁️ ${cloudResult.products.length} produtos sincronizados da nuvem.`);
+
+        // Push local-only products back to cloud
+        if (localOnly.length > 0) {
+          SupabaseService.pushProductsToCloud(localOnly).catch(() => {});
+        }
+        return;
+      }
+    } catch {
+      // Supabase offline — usa local
+    }
+
     if (saved && saved.length > 0) {
       set({ products: saved });
     } else {

@@ -237,18 +237,49 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
               </button>
             )}
 
-            {/* Desenho Técnico do Inserto Circular Metálico */}
+            {/* Desenho Técnico do Inserto Circular Metálico — Cada furo é clicável */}
             <div className="w-11 h-11 rounded-full border-2 border-slate-800 bg-gradient-to-tr from-slate-300 via-slate-100 to-slate-200 flex items-center justify-center p-0.5 shadow-2xs relative mb-1">
               <div className="flex flex-wrap items-center justify-center gap-0.5 max-w-[34px]">
                 {ins.holes.map((h, hIdx) => (
-                  <div
+                  <button
                     key={hIdx}
-                    className="w-3.5 h-3.5 rounded-full bg-slate-900 border border-slate-600 flex items-center justify-center text-[7px] text-white font-mono font-bold select-none leading-none"
-                    title={`Furo de ${h}`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const newVal = prompt(`Editar furo #${hIdx + 1} do inserto ${ins.code}:`, h);
+                      if (newVal !== null && newVal.trim() !== '') {
+                        const updatedHoles = [...ins.holes];
+                        updatedHoles[hIdx] = newVal.trim();
+                        const updatedInserts = [...inserts];
+                        updatedInserts[idx] = { ...ins, holes: updatedHoles };
+                        updateBlock(pageId, block.id, {
+                          customData: { ...customData, inserts: updatedInserts }
+                        });
+                      }
+                    }}
+                    className="w-3.5 h-3.5 rounded-full bg-slate-900 border border-slate-600 flex items-center justify-center text-[7px] text-white font-mono font-bold select-none leading-none cursor-pointer hover:bg-blue-800 hover:border-blue-400 hover:scale-125 transition-all"
+                    title={`Clique para editar o furo "${h}" — Furo #${hIdx + 1}`}
                   >
                     {h}
-                  </div>
+                  </button>
                 ))}
+                {/* Botão de adicionar furo extra */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const updatedInserts = [...inserts];
+                    updatedInserts[idx] = { ...ins, holes: [...ins.holes, '6'] };
+                    updateBlock(pageId, block.id, {
+                      customData: { ...customData, inserts: updatedInserts }
+                    });
+                  }}
+                  className="w-3 h-3 rounded-full border border-dashed border-slate-500 flex items-center justify-center text-[7px] text-slate-500 font-bold select-none leading-none cursor-pointer hover:bg-slate-600 hover:text-white hover:border-solid transition-all no-print"
+                  data-editor-action="true"
+                  title="Adicionar mais um furo neste inserto"
+                >
+                  +
+                </button>
               </div>
             </div>
 
