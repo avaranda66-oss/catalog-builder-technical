@@ -67,24 +67,56 @@ export const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão de Salvar no Supabase / Nuvem */}
+          <button
+            onClick={() => void useCatalogStore.getState().saveCurrentCatalog()}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#003366] text-white hover:bg-[#002244] border border-[#002244] rounded text-xs font-bold transition-colors shadow-xs"
+            title="Salva o catálogo atual imediatamente no banco Supabase na nuvem"
+          >
+            <span>💾 Salvar Catálogo (Nuvem)</span>
+          </button>
+
+          {/* Botão de Salvar Como Novo Catálogo */}
+          <button
+            onClick={() => {
+              const newTitle = prompt('Digite o nome para este novo catálogo:', `${currentCatalog.title} (Cópia)`);
+              if (newTitle && newTitle.trim()) {
+                const cloned = {
+                  ...structuredClone(currentCatalog),
+                  id: `cat-${Date.now()}`,
+                  title: newTitle.trim(),
+                  version: 1,
+                  updatedAt: new Date().toISOString()
+                };
+                useCatalogStore.getState().setCurrentCatalog(cloned);
+                void useCatalogStore.getState().saveCurrentCatalog();
+                alert(`Catálogo "${newTitle}" criado e salvo na nuvem com sucesso!`);
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded text-xs font-semibold transition-colors shadow-2xs"
+            title="Salva o conteúdo atual como um novo catálogo independente"
+          >
+            <span>➕ Salvar Como Novo</span>
+          </button>
+
           {/* Botão de Importar / Recortar PDF */}
           <button
             onClick={() => setIsPDFImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 rounded text-xs font-semibold transition-colors shadow-2xs"
             title="Importe páginas completas ou recorte gráficos e tabelas de PDFs existentes"
           >
             <Crop className="w-3.5 h-3.5 text-amber-600" />
-            <span>Importar / Recortar PDF</span>
+            <span>Recortar PDF</span>
           </button>
 
           {/* Botão de Templates & Catálogos Prontos */}
           <button
             onClick={() => setIsPresetModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-brand-700 hover:bg-brand-50 border border-brand-200 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#003366] hover:bg-blue-100 border border-blue-200 rounded text-xs font-bold transition-colors shadow-2xs"
             title="Escolha entre Templates de Estrutura em Branco ou Catálogos de Produtos Prontos"
           >
-            <Layers className="w-3.5 h-3.5 text-brand-600" />
-            <span>Templates & Catálogos Prontos</span>
+            <Layers className="w-3.5 h-3.5 text-[#003366]" />
+            <span>Catálogos & Modelos</span>
           </button>
 
           <button
@@ -93,10 +125,11 @@ export const EditorView: React.FC = () => {
                 createCatalogFromPreset();
               }
             }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-white text-slate-600 hover:text-slate-900 border border-slate-200 rounded text-[11px] font-medium transition-colors shadow-2xs"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-slate-500 hover:text-slate-800 border border-slate-200 rounded text-[11px] font-medium transition-colors shadow-2xs"
+            title="Recarregar catálogo padrão original"
           >
             <RotateCcw className="w-3 h-3" />
-            <span>Resetar Padrão</span>
+            <span>Resetar</span>
           </button>
         </div>
       </div>

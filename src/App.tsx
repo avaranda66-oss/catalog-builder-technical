@@ -11,6 +11,8 @@ import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
 import { useAuthStore } from './stores/useAuthStore';
 
+import { getSupabase } from './services/supabase.service';
+
 export const App: React.FC = () => {
   const { activeTab } = useUIStore();
   const { loadProducts } = useLibraryStore();
@@ -28,10 +30,37 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (status !== 'authenticated') return;
-    // Persistência local somente. A sincronização segura será introduzida na Story 005.
     void loadProducts();
     void loadLatestCatalog();
     void loadAssets();
+
+    // Sincronização em Tempo Real (Supabase Realtime WebSockets)
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'catalogs' },
+        (payload) => {
+          console.log('🔄 Atualização de catálogo recebida em tempo real via Supabase:', payload);
+          void loadLatestCatalog();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        (payload) => {
+          console.log('🔄 Atualização de produto recebida em tempo real via Supabase:', payload);
+          void loadProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [loadProducts, loadLatestCatalog, loadAssets, status]);
 
   if (status === 'loading') {
