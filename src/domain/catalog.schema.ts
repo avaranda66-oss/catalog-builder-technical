@@ -177,12 +177,23 @@ export interface MutationMetadata {
   timestamp: string;
 }
 
+export interface CatalogTranslationMeta {
+  sourceCatalogId?: string;
+  provider?: string;
+  model?: string;
+  translatedAt?: string;
+  coverage?: number;
+}
+
 export interface Catalog {
   id: string;
   title: string;
   subtitle?: string;
   themeId: string;
   pages: CatalogPage[];
+  sourceLocale?: string;
+  locale?: string;
+  translationMeta?: CatalogTranslationMeta;
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -319,12 +330,23 @@ export const CatalogPageSchema = z.object({
   blocks: z.array(ContentBlockSchema).default([])
 });
 
+export const CatalogTranslationMetaSchema = z.object({
+  sourceCatalogId: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  translatedAt: z.string().datetime().or(z.string()).optional(),
+  coverage: z.number().min(0).max(100).optional()
+});
+
 export const CatalogSchema = z.object({
   id: z.string(),
   title: z.string(),
   subtitle: z.string().optional().default(''),
   themeId: z.string().default('default-technical'),
   pages: z.array(CatalogPageSchema).default([]),
+  sourceLocale: z.string().optional().default('pt-BR'),
+  locale: z.string().optional().default('pt-BR'),
+  translationMeta: CatalogTranslationMetaSchema.optional(),
   createdAt: z.string().datetime().or(z.string()),
   updatedAt: z.string().datetime().or(z.string()),
   version: z.number().int().default(1)

@@ -9,66 +9,28 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Globe,
-  Sparkles,
-  Loader2,
-  ChevronDown,
   AlertTriangle,
   LogOut
 } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
-import { AIService } from '../../services/ai.service';
 import { PresetModal } from '../editor/PresetModal';
 import { BackupModal } from './BackupModal';
 import { useAuthStore } from '../../stores/useAuthStore';
-
-const TRANSLATION_LANGUAGES = [
-  { code: 'en', label: 'English (US)', flag: 'EN' },
-  { code: 'fr', label: 'French (Français)', flag: 'FR' },
-  { code: 'es', label: 'Spanish (Español)', flag: 'ES' },
-  { code: 'de', label: 'German (Deutsch)', flag: 'DE' },
-  { code: 'pt', label: 'Portuguese (Português)', flag: 'PT' }
-];
+import { useTranslationStore } from '../../stores/useTranslationStore';
+import { TranslationCenterModal } from '../translation/TranslationCenterModal';
 
 export const Navbar: React.FC = () => {
   const { activeTab, setActiveTab, setExportPDFModalOpen } = useUIStore();
   const { currentCatalog, syncStatus, syncError, serverSavedAt } = useCatalogStore();
   const { openGallery } = useMediaStore();
+  const openTranslationCenter = useTranslationStore((state) => state.openModal);
   const role = useAuthStore((state) => state.role);
   const signOut = useAuthStore((state) => state.signOut);
 
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
-  const [isTranslateOpen, setIsTranslateOpen] = useState(false);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [translationStatus, setTranslationStatus] = useState<string | null>(null);
-
-  const handleTranslate = async (langLabel: string) => {
-    if (!currentCatalog) return;
-    setIsTranslating(true);
-    setIsTranslateOpen(false);
-    setTranslationStatus(`Translating catalog to ${langLabel} with Gemini AI...`);
-
-    try {
-      const res = await AIService.translateCatalog(currentCatalog, langLabel);
-      if (res.success && res.catalog) {
-        // Atualiza o catálogo em tempo real no estúdio
-        useCatalogStore.setState({ currentCatalog: res.catalog });
-        useCatalogStore.getState().saveCurrentCatalog();
-        setTranslationStatus(`Catalog translated to ${langLabel}!`);
-        setTimeout(() => setTranslationStatus(null), 4000);
-      } else {
-        alert(res.error || 'Failed to translate catalog.');
-        setTranslationStatus(null);
-      }
-    } catch (err: any) {
-      alert(err.message || 'Translation error');
-      setTranslationStatus(null);
-    } finally {
-      setIsTranslating(false);
-    }
-  };
 
   return (
     <header className="h-12 bg-white border-b border-slate-300 px-4 flex items-center justify-between select-none z-30 flex-shrink-0">
@@ -134,18 +96,6 @@ export const Navbar: React.FC = () => {
 
       {/* Technical Actions & Status */}
       <div className="flex items-center gap-2.5">
-        {/* Translation / AI Status Notification */}
-        {translationStatus && (
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#003366] bg-blue-50 px-2.5 py-1 rounded-none border border-blue-200">
-            {isTranslating ? (
-              <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-            ) : (
-              <Sparkles className="w-3 h-3 text-amber-500" />
-            )}
-            <span className="font-bold">{translationStatus}</span>
-          </div>
-        )}
-
         {/* Sync Status / Conflito / Nuvem */}
         <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 border">
           {syncStatus === 'saving' && (
@@ -202,41 +152,16 @@ export const Navbar: React.FC = () => {
           {role === 'admin' ? 'Administrador' : 'Colaborador limitado'}
         </span>
 
-        {/* AI Translation Dropdown */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsTranslateOpen(!isTranslateOpen)}
-            disabled={isTranslating}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
-            title="Translate entire catalog with Google Gemini AI"
-          >
-            <Globe className="w-3.5 h-3.5 text-[#003366]" />
-            <span>Translate (AI)</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
-          </button>
-
-          {isTranslateOpen && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-300 shadow-xl rounded-none py-1 z-50">
-              <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
-                Translate Catalog With AI:
-              </div>
-              {TRANSLATION_LANGUAGES.map((lang) => (
-                <button
-                  key={lang.code}
-                  type="button"
-                  onClick={() => handleTranslate(lang.label)}
-                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 hover:text-[#003366] flex items-center justify-between transition-colors font-medium"
-                >
-                  <span className="flex items-center gap-2">
-                    <span>{lang.flag}</span>
-                    <span>{lang.label}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* AI Translation Center Trigger */}
+        <button
+          type="button"
+          onClick={openTranslationCenter}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-none shadow-2xs transition-colors"
+          title="Abrir Central de Tradução Editorial & Multilíngue (AI)"
+        >
+          <Globe className="w-3.5 h-3.5 text-[#003366]" />
+          <span>Traduzir (AI)</span>
+        </button>
 
         {/* Photo Bank / Media Central */}
         <button
@@ -296,6 +221,7 @@ export const Navbar: React.FC = () => {
       {/* Modals */}
       <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />
       <BackupModal isOpen={isBackupModalOpen} onClose={() => setIsBackupModalOpen(false)} />
+      <TranslationCenterModal />
     </header>
   );
 };

@@ -9,6 +9,7 @@ import { useUIStore } from './stores/useUIStore';
 import { usePresenceStore } from './stores/usePresenceStore';
 import { useAssetStore } from './stores/useAssetStore';
 import { useMediaStore } from './stores/useMediaStore';
+import { useTranslationStore } from './stores/useTranslationStore';
 
 if (typeof window !== 'undefined') {
   const isDebugE2E = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true';
@@ -20,6 +21,7 @@ if (typeof window !== 'undefined') {
     (window as any).usePresenceStore = usePresenceStore;
     (window as any).useAssetStore = useAssetStore;
     (window as any).useMediaStore = useMediaStore;
+    (window as any).useTranslationStore = useTranslationStore;
   }
 }
 

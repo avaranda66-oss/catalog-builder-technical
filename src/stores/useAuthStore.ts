@@ -251,6 +251,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     ++generation;
     set({ status: 'unauthenticated', errorMessage: null, ...resetIdentity() });
     useCatalogStore.getState().resetWorkspaceForIdentityChange();
+    try {
+      const { PersonalCredentialVault } = await import('@/translation/credential-vault');
+      PersonalCredentialVault.clearSessionMemory();
+    } catch {
+      // Ignora se não carregado
+    }
     const supabase = getSupabase();
     if (supabase) await supabase.auth.signOut();
   },
