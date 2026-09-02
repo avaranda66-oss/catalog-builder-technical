@@ -179,10 +179,18 @@ export interface MutationMetadata {
 
 export interface CatalogTranslationMeta {
   sourceCatalogId?: string;
+  sourceCatalogVersion?: number;
+  sourceContentHash?: string;
+  sourceLocale?: string;
+  targetLocale?: string;
   provider?: string;
   model?: string;
+  translationEngineVersion?: string;
+  glossaryVersion?: string;
   translatedAt?: string;
   coverage?: number;
+  layoutQaStatus?: 'passed' | 'warning' | 'error';
+  humanEdited?: boolean;
 }
 
 export interface Catalog {
@@ -194,6 +202,7 @@ export interface Catalog {
   sourceLocale?: string;
   locale?: string;
   translationMeta?: CatalogTranslationMeta;
+  localizedSystemStrings?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -332,10 +341,18 @@ export const CatalogPageSchema = z.object({
 
 export const CatalogTranslationMetaSchema = z.object({
   sourceCatalogId: z.string().optional(),
+  sourceCatalogVersion: z.number().int().optional(),
+  sourceContentHash: z.string().optional(),
+  sourceLocale: z.string().optional(),
+  targetLocale: z.string().optional(),
   provider: z.string().optional(),
   model: z.string().optional(),
+  translationEngineVersion: z.string().optional(),
+  glossaryVersion: z.string().optional(),
   translatedAt: z.string().datetime().or(z.string()).optional(),
-  coverage: z.number().min(0).max(100).optional()
+  coverage: z.number().min(0).max(100).optional(),
+  layoutQaStatus: z.enum(['passed', 'warning', 'error']).optional(),
+  humanEdited: z.boolean().optional()
 });
 
 export const CatalogSchema = z.object({
@@ -347,6 +364,7 @@ export const CatalogSchema = z.object({
   sourceLocale: z.string().optional().default('pt-BR'),
   locale: z.string().optional().default('pt-BR'),
   translationMeta: CatalogTranslationMetaSchema.optional(),
+  localizedSystemStrings: z.record(z.string()).optional(),
   createdAt: z.string().datetime().or(z.string()),
   updatedAt: z.string().datetime().or(z.string()),
   version: z.number().int().default(1)

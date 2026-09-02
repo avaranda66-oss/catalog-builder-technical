@@ -22,6 +22,7 @@ import { MatrixSpecTableBlock } from '../editor/blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivityBlock';
 
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
+import { FontManager } from '../../translation/font-manager';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
@@ -33,8 +34,24 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
     return null;
   }
 
+  const locale = catalog.locale || 'pt-BR';
+  const direction = FontManager.getDirectionForLocale(locale);
+  const fontFamily = FontManager.getFontFamilyForLocale(locale);
+
+  const resolveSystemString = (key: string): string => {
+    if (catalog.localizedSystemStrings && catalog.localizedSystemStrings[key]) {
+      return catalog.localizedSystemStrings[key];
+    }
+    return PrintStringRegistry.get(key as any, locale);
+  };
+
   return (
-    <div className={`clean-export-root ${className}`}>
+    <div
+      lang={locale}
+      dir={direction}
+      className={`clean-export-root ${className}`}
+      style={{ fontFamily }}
+    >
       {catalog.pages.map((page: CatalogPage, index: number) => {
         const isSingleFullCover =
           page.blocks?.length === 1 && page.blocks[0].type === 'full_page_cover';
@@ -42,7 +59,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
         return (
           <div
             key={page.id || `export-page-${index}`}
+            data-page-id={page.id}
             data-page-index={index}
+            lang={locale}
+            dir={direction}
             className="clean-export-page a4-page-container bg-white text-slate-900 mx-auto"
             style={{
               width: '794px',
@@ -54,7 +74,8 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
               pageBreakAfter: 'always',
               breakAfter: 'page',
               position: 'relative',
-              backgroundColor: '#ffffff'
+              backgroundColor: '#ffffff',
+              fontFamily
             }}
           >
             <div
@@ -141,11 +162,11 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
               {!isSingleFullCover && (
                 <div className="pt-2 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-400 font-mono flex-shrink-0">
                   <span data-print-string-key="company_brand_footer">
-                    {PrintStringRegistry.get('company_brand_footer', catalog.locale || 'pt-BR')}
+                    {resolveSystemString('company_brand_footer')}
                   </span>
                   <span>
                     <span data-print-string-key="page_label">
-                      {PrintStringRegistry.get('page_label', catalog.locale || 'pt-BR')}
+                      {resolveSystemString('page_label')}
                     </span>{' '}
                     {page.pageNumber || index + 1}
                   </span>

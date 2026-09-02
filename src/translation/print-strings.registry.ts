@@ -240,6 +240,21 @@ export class PrintStringRegistry {
   }
 
   /**
+   * Obtém a tradução estática homologada de uma string de sistema (sem fallback dinâmico).
+   * Retorna undefined se o idioma não possuir tradução homologada estática.
+   */
+  static getApprovedString(key: string, targetLocale = 'pt-BR'): string | undefined {
+    const def = SYSTEM_PRINT_STRINGS[key];
+    if (!def) return undefined;
+
+    if (targetLocale.startsWith('pt')) {
+      return def.defaultText;
+    }
+
+    return def.translations?.[targetLocale];
+  }
+
+  /**
    * Obtém a string de sistema formatada para o idioma solicitado com fallback inteligente.
    */
   static get(key: string, targetLocale = 'pt-BR'): string {

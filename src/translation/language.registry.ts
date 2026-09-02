@@ -455,6 +455,13 @@ export class LanguageRegistry {
   }
 
   /**
+   * Alias de conveniência para getLanguageByCode.
+   */
+  static getByCode(code: string): LanguageDefinition | undefined {
+    return this.getLanguageByCode(code);
+  }
+
+  /**
    * Busca dinâmica de idiomas por nome nativo, inglês ou código BCP-47.
    */
   static searchLanguages(query: string): LanguageDefinition[] {

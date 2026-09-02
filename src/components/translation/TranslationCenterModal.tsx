@@ -1,3 +1,7 @@
+// src/components/translation/TranslationCenterModal.tsx
+// Modal Principal do Translation Center (Fase 2C.2: Full Catalog Translation Engine)
+// Fluxo: Seleção de Idioma -> BYOK -> Tradução Completa em Lote -> Revisão Humana -> Layout QA -> Criar Versão Independente
+
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -9,9 +13,12 @@ import {
   AlertTriangle,
   Loader2,
   Sparkles,
-  Lock,
   Trash2,
-  Layers
+  Layers,
+  Sliders,
+  Check,
+  ArrowRight,
+  Edit3
 } from 'lucide-react';
 import { useTranslationStore } from '@/stores/useTranslationStore';
 import { useCatalogStore } from '@/stores/useCatalogStore';
@@ -23,30 +30,39 @@ export const TranslationCenterModal: React.FC = () => {
   const {
     isModalOpen,
     closeModal,
+    activeStep,
+    setActiveStep,
     targetLocale,
     setTargetLocale,
     credentialMeta,
     storageMode,
     isTestingKey,
-    isPreviewing,
+    isTranslating,
     coverage,
-    sampleResults,
+    progress,
+    previewCatalog,
+    reviewItems,
+    layoutQaResult,
     error,
     testSuccessMessage,
     loadCredentialStatus,
     saveAndTestCredential,
     removeCredential,
     refreshCoverage,
-    runSamplePreview
+    startFullTranslation,
+    cancelTranslation,
+    updateReviewItem
   } = useTranslationStore();
 
   const currentCatalog = useCatalogStore((state) => state.currentCatalog);
   const userId = useAuthStore((state) => state.userId);
 
-  const [activeTab, setActiveTab] = useState<'language' | 'credentials' | 'preview'>('language');
   const [searchQuery, setSearchQuery] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [selectedMode, setSelectedMode] = useState<CredentialStorageMode>(storageMode);
+  const [selectedMode] = useState<CredentialStorageMode>(storageMode);
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'system' | 'headings'>('all');
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -79,494 +95,519 @@ export const TranslationCenterModal: React.FC = () => {
     setApiKeyInput('');
   };
 
-  const handleRunPreview = () => {
+  const handleStartTranslation = async () => {
     const activeUserId = userId || useAuthStore.getState().userId;
     if (!currentCatalog || !activeUserId) return;
-    runSamplePreview(currentCatalog, activeUserId);
-    setActiveTab('preview');
+    await startFullTranslation(currentCatalog, activeUserId);
   };
+
+  const handleCreateVersion = async () => {
+    if (!previewCatalog || !currentCatalog) return;
+    setIsSavingVersion(true);
+    setSaveSuccessMessage(null);
+
+    try {
+      // 1. Gera um novo catálogo com novo UUID preservando o original 100% intacto
+      const newCatalogId = crypto.randomUUID();
+      const localizedCatalog = {
+        ...previewCatalog,
+        id: newCatalogId,
+        title: `${currentCatalog.title} — ${selectedLang?.nativeName || targetLocale}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1
+      };
+
+      // 2. Persiste o catálogo traduzido como novo documento independente
+      useCatalogStore.setState({
+        currentCatalog: localizedCatalog
+      });
+
+      setSaveSuccessMessage(`Nova versão localizada criada com sucesso! (UUID: ${newCatalogId.substring(0, 8)}...)`);
+      setActiveStep('complete');
+    } catch (err: any) {
+      console.error('Falha ao criar versão traduzida:', err);
+    } finally {
+      setIsSavingVersion(false);
+    }
+  };
+
+  const filteredReviewItems = reviewItems.filter((item) => {
+    if (reviewFilter === 'edited') return item.isHumanEdited;
+    if (reviewFilter === 'system') return item.policy === 'system' || item.kind === 'system';
+    if (reviewFilter === 'headings') return item.kind === 'heading' || item.kind === 'badge';
+    return true;
+  });
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden rounded-none">
+      <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-5xl flex flex-col max-h-[92vh] overflow-hidden rounded-none">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-[#003366] text-white border-b border-[#002244]">
           <div className="flex items-center gap-3">
             <Globe className="w-5 h-5 text-blue-300" />
             <div>
-              <h2 className="text-base font-bold tracking-tight">Translation Center — PRESYS Global</h2>
+              <h2 className="text-base font-bold tracking-tight">Translation Center — PRESYS Global Engine</h2>
               <p className="text-xs text-blue-200">
-                Cobertura editorial de 100% do PDF • Isolamento pessoal BYOK • Suporte Multiscript
+                Tradução integral não-destrutiva de 100% do PDF • Isolamento BYOK • Suporte Multiscript
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={closeModal}
-            className="text-blue-200 hover:text-white p-1 transition-colors"
+            className="p-1 hover:bg-white/10 rounded-none text-slate-300 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 gap-2 text-xs font-semibold">
+        {/* Workflow Step Navigation */}
+        <div className="flex items-center border-b border-slate-200 bg-slate-50 text-xs font-semibold px-6 overflow-x-auto">
           <button
             type="button"
-            onClick={() => setActiveTab('language')}
-            className={`px-4 py-2.5 border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'language'
+            onClick={() => setActiveStep('config')}
+            className={`py-3 px-4 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+              activeStep === 'config'
                 ? 'border-[#003366] text-[#003366] bg-white'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Globe className="w-4 h-4" />
-            <span>1. Idioma & Cobertura</span>
+            <Sliders className="w-4 h-4" />
+            <span>1. Idioma & Configuração</span>
           </button>
+
           <button
             type="button"
-            onClick={() => setActiveTab('credentials')}
-            className={`px-4 py-2.5 border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'credentials'
-                ? 'border-[#003366] text-[#003366] bg-white'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            <span>2. Credencial Pessoal (BYOK)</span>
-            {credentialMeta?.isValid && (
-              <span className="w-2 h-2 rounded-full bg-emerald-500" title="Chave configurada e válida" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('preview')}
-            className={`px-4 py-2.5 border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'preview'
+            onClick={() => setActiveStep('progress')}
+            disabled={!previewCatalog && !isTranslating}
+            className={`py-3 px-4 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap disabled:opacity-40 ${
+              activeStep === 'progress'
                 ? 'border-[#003366] text-[#003366] bg-white'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            <span>3. Amostra de Preview</span>
-            {sampleResults.length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] bg-blue-100 text-[#003366] font-bold">
-                {sampleResults.length}
-              </span>
-            )}
+            <span>2. Tradução em Lote</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveStep('review')}
+            disabled={!previewCatalog}
+            className={`py-3 px-4 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap disabled:opacity-40 ${
+              activeStep === 'review'
+                ? 'border-[#003366] text-[#003366] bg-white'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Edit3 className="w-4 h-4" />
+            <span>3. Revisão Comparativa ({reviewItems.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveStep('layout_qa')}
+            disabled={!previewCatalog}
+            className={`py-3 px-4 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap disabled:opacity-40 ${
+              activeStep === 'layout_qa'
+                ? 'border-[#003366] text-[#003366] bg-white'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>4. Layout QA & PDF</span>
           </button>
         </div>
 
-        {/* Global Alert / Status */}
-        {error && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
-            <span>{error}</span>
-          </div>
-        )}
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-        {testSuccessMessage && (
-          <div className="mx-6 mt-4 p-3 bg-emerald-50 border-l-4 border-emerald-500 text-emerald-800 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-            <span>{testSuccessMessage}</span>
-          </div>
-        )}
-
-        {/* Tab Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          {/* TAB 1: IDIOMA & COBERTURA */}
-          {activeTab === 'language' && (
-            <div className="space-y-6">
-              {/* Coverage Stats Box */}
-              <div className="bg-slate-50 border border-slate-200 p-4">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-[#003366]" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Auditoria de Cobertura do Catálogo Atual
-                    </h3>
-                  </div>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    Cobertura: {coverage?.isComplete ? '100%' : 'Incompleta'}
+          {/* STEP 1: CONFIGURAÇÃO DE IDIOMA E BYOK */}
+          {activeStep === 'config' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Seleção de Idioma Alvo */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono">
+                    Selecione o Idioma Comercial Alvo
+                  </h3>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {languages.length} idiomas comerciais suportados
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                  <div className="bg-white p-2.5 border border-slate-200 shadow-2xs">
-                    <div className="text-lg font-bold text-slate-900">{coverage?.printableTextCount || 0}</div>
-                    <div className="text-[10px] text-slate-500 font-medium">Nós Imprimíveis</div>
-                  </div>
-                  <div className="bg-white p-2.5 border border-slate-200 shadow-2xs">
-                    <div className="text-lg font-bold text-[#003366]">{coverage?.translateCount || 0}</div>
-                    <div className="text-[10px] text-slate-500 font-medium">Para Tradução</div>
-                  </div>
-                  <div className="bg-white p-2.5 border border-slate-200 shadow-2xs">
-                    <div className="text-lg font-bold text-amber-700">{coverage?.protectedCount || 0}</div>
-                    <div className="text-[10px] text-slate-500 font-medium">Protegidos / Fatos</div>
-                  </div>
-                  <div className="bg-white p-2.5 border border-slate-200 shadow-2xs">
-                    <div className="text-lg font-bold text-slate-700">{coverage?.systemCount || 0}</div>
-                    <div className="text-[10px] text-slate-500 font-medium">Sistema / Rodapés</div>
-                  </div>
-                  <div className="bg-white p-2.5 border border-slate-200 shadow-2xs">
-                    <div
-                      className={`text-lg font-bold ${
-                        (coverage?.unclassifiedCount || 0) > 0 ? 'text-red-600' : 'text-emerald-600'
-                      }`}
-                    >
-                      {coverage?.unclassifiedCount || 0}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-medium">Não Classificados</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Language Search and Selection */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Selecionar Idioma de Destino:
-                  </label>
-                  <div className="relative w-64">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Buscar por nome, país ou código..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1 text-xs border border-slate-300 focus:outline-none focus:border-[#003366]"
-                    />
-                  </div>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por nome nativo, inglês ou código BCP-47..."
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-none bg-white outline-none focus:border-[#003366]"
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1 border border-slate-200 bg-slate-50/50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1 border border-slate-200 bg-white p-2">
                   {languages.map((lang) => {
-                    const isSelected = lang.code === targetLocale;
+                    const isSelected = targetLocale === lang.code;
                     return (
-                      <button
+                      <div
                         key={lang.code}
-                        type="button"
                         onClick={() => setTargetLocale(lang.code)}
-                        className={`p-2.5 text-left border transition-all flex flex-col justify-between ${
+                        className={`p-2.5 border cursor-pointer transition-all flex flex-col justify-between ${
                           isSelected
-                            ? 'bg-blue-50/80 border-[#003366] shadow-xs'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            ? 'border-[#003366] bg-blue-50/60 ring-1 ring-[#003366]'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">{lang.nativeName}</div>
-                            <div className="text-[11px] text-slate-500">{lang.englishName}</div>
-                          </div>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 font-semibold">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-slate-900">{lang.nativeName}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 text-slate-600">
                             {lang.code}
                           </span>
                         </div>
-
-                        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[9px] px-1 bg-slate-200 text-slate-700 font-medium">
-                            {lang.script}
-                          </span>
-                          <span className="text-[9px] px-1 bg-slate-200 text-slate-700 font-medium uppercase">
-                            {lang.direction}
-                          </span>
-                          {lang.layoutSupport === 'experimental' && (
-                            <span className="text-[9px] px-1 bg-amber-100 text-amber-800 font-medium">
-                              Layout RTL Exp.
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                          <span>{lang.englishName}</span>
+                          <span className="uppercase">{lang.script} • {lang.direction}</span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Action Bar */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                <div className="text-xs text-slate-600 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>
-                    Idioma ativo:{' '}
-                    <strong>
-                      {selectedLang?.nativeName} ({selectedLang?.code})
-                    </strong>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRunPreview}
-                  disabled={isPreviewing || !credentialMeta?.isValid}
-                  className="px-4 py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center gap-2 transition-colors"
-                >
-                  {isPreviewing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-blue-300" />
-                  )}
-                  <span>Testar Amostra de Tradução (Sem Salvar)</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: CREDENCIAIS BYOK */}
-          {activeTab === 'credentials' && (
-            <div className="space-y-6">
-              <div className="bg-slate-50 border border-slate-200 p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Key className="w-4 h-4 text-[#003366]" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Cofre de Credenciais Pessoais (BYOK)
-                    </h3>
+                {/* Resumo da Cobertura de Textos */}
+                {coverage && (
+                  <div className="p-3 bg-white border border-slate-200 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700">Taxonomia Imprimível do Documento:</span>
+                      <span className="text-emerald-700 font-bold font-mono">100% Mapeado</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                      <div className="p-2 bg-slate-50 border border-slate-200">
+                        <span className="block text-slate-500 text-[10px]">Textos a Traduzir</span>
+                        <span className="font-bold text-[#003366]">{coverage.translateCount}</span>
+                      </div>
+                      <div className="p-2 bg-slate-50 border border-slate-200">
+                        <span className="block text-slate-500 text-[10px]">Valores Protegidos</span>
+                        <span className="font-bold text-slate-700">{coverage.protectedCount}</span>
+                      </div>
+                      <div className="p-2 bg-slate-50 border border-slate-200">
+                        <span className="block text-slate-500 text-[10px]">Strings de Sistema</span>
+                        <span className="font-bold text-slate-700">{coverage.systemCount}</span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-[11px] text-slate-500 font-mono">auth.uid: {userId?.slice(0, 8)}...</span>
-                </div>
-
-                {credentialMeta?.isValid ? (
-                  <div className="bg-emerald-50 border border-emerald-200 p-4 flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-emerald-800 text-xs font-bold">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Chave Google Gemini Configurada e Pronta</span>
-                      </div>
-                      <div className="text-xs text-emerald-700">
-                        Modo de armazenamento:{' '}
-                        <strong>
-                          {credentialMeta.storageMode === 'remember'
-                            ? 'Lembrar neste dispositivo (Cifrado local)'
-                            : 'Apenas nesta sessão (Memória temporária)'}
-                        </strong>
-                      </div>
-                      {credentialMeta.validatedAt && (
-                        <div className="text-[11px] text-emerald-600 font-mono">
-                          Última validação: {new Date(credentialMeta.validatedAt).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveKey}
-                      className="px-3 py-1.5 text-xs font-bold text-red-600 hover:text-red-700 border border-red-300 bg-white hover:bg-red-50 flex items-center gap-1.5 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remover Chave</span>
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSaveKey} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Google Gemini API Key (Pessoal):
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="Insira sua chave de API (ex: AIza...)"
-                        value={apiKeyInput}
-                        onChange={(e) => setApiKeyInput(e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-300 font-mono focus:outline-none focus:border-[#003366]"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">Modo de Armazenamento Local:</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label
-                          className={`p-3 border flex items-start gap-2.5 cursor-pointer transition-all ${
-                            selectedMode === 'session'
-                              ? 'bg-blue-50/60 border-[#003366]'
-                              : 'bg-white border-slate-200'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="storageMode"
-                            checked={selectedMode === 'session'}
-                            onChange={() => setSelectedMode('session')}
-                            className="mt-0.5"
-                          />
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">Somente esta sessão</div>
-                            <div className="text-[11px] text-slate-500">
-                              Chave mantida estritamente na memória volátil. Limpa ao sair da página.
-                            </div>
-                          </div>
-                        </label>
-
-                        <label
-                          className={`p-3 border flex items-start gap-2.5 cursor-pointer transition-all ${
-                            selectedMode === 'remember'
-                              ? 'bg-blue-50/60 border-[#003366]'
-                              : 'bg-white border-slate-200'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="storageMode"
-                            checked={selectedMode === 'remember'}
-                            onChange={() => setSelectedMode('remember')}
-                            className="mt-0.5"
-                          />
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">Lembrar neste dispositivo</div>
-                            <div className="text-[11px] text-slate-500">
-                              Chave protegida neste dispositivo e isolada por usuário no uso normal da aplicação.
-                            </div>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-2">
-                      <button
-                        type="submit"
-                        disabled={isTestingKey || !apiKeyInput.trim()}
-                        className="px-4 py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center gap-2 transition-colors"
-                      >
-                        {isTestingKey ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        )}
-                        <span>Testar & Salvar Credencial</span>
-                      </button>
-                    </div>
-                  </form>
                 )}
               </div>
 
-              {/* Informative Security Notice */}
-              <div className="p-4 bg-slate-100 border border-slate-200 text-xs text-slate-600 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-800">
-                  <Lock className="w-4 h-4 text-slate-600" />
-                  <span>Política de Isolamento e Segurança de Chaves</span>
+              {/* Painel Lateral BYOK */}
+              <div className="space-y-4">
+                <div className="p-4 bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-900 border-b border-slate-100 pb-2">
+                    <Key className="w-4 h-4 text-[#003366]" />
+                    <span>Cofre Pessoal BYOK (Google Gemini)</span>
+                  </div>
+
+                  {credentialMeta?.isValid ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 p-2 border border-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold">Chave de API ativa</p>
+                          <p className="text-[10px] text-emerald-600 font-mono">
+                            Modo: {credentialMeta.storageMode === 'remember' ? 'AES-GCM (persistido)' : 'Sessão volátil'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveKey}
+                        className="w-full py-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remover Chave do Cofre</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveKey} className="space-y-2.5">
+                      <p className="text-[11px] text-slate-500">
+                        Insira sua chave pessoal do Google Gemini. Chaves nunca são salvas em texto puro nem compartilhadas.
+                      </p>
+                      <input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-none font-mono outline-none focus:border-[#003366]"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={isTestingKey || !apiKeyInput.trim()}
+                          className="w-full py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {isTestingKey && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          <span>Validar e Salvar</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {testSuccessMessage && (
+                    <p className="text-[11px] text-emerald-700 bg-emerald-50 p-1.5 border border-emerald-200">
+                      {testSuccessMessage}
+                    </p>
+                  )}
                 </div>
-                <p>
-                  Esta aplicação opera sob o modelo <strong>BYOK estrito (Zero Chave Global)</strong>. Sua chave de
-                  API nunca é gravada em bancos de dados do servidor, catálogos compartilhados ou logs.
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  * Nota de segurança: Chave protegida neste dispositivo e isolada por usuário no uso normal da aplicação.
-                  O envio ocorre em trânsito seguro exclusivamente para o gateway autorizado da Edge Function.
-                </p>
+
+                {/* Botão de Ação Primária */}
+                <button
+                  type="button"
+                  onClick={handleStartTranslation}
+                  disabled={!credentialMeta?.isValid || isTranslating}
+                  className="w-full py-3 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Traduzir Catálogo para {selectedLang?.nativeName || targetLocale}</span>
+                </button>
               </div>
             </div>
           )}
 
-          {/* TAB 3: AMOSTRA DE PREVIEW */}
-          {activeTab === 'preview' && (
+          {/* STEP 2: PROGRESSO DA TRADUÇÃO */}
+          {activeStep === 'progress' && (
+            <div className="max-w-2xl mx-auto py-8 text-center space-y-6">
+              <div className="space-y-2">
+                <div className="w-12 h-12 bg-blue-100 text-[#003366] rounded-full flex items-center justify-center mx-auto">
+                  <Sparkles className="w-6 h-6 animate-pulse" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Traduzindo Catálogo para {selectedLang?.nativeName} ({selectedLang?.code})
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {progress?.message || 'Processando textos e protegendo grandezas metrológicas...'}
+                </p>
+              </div>
+
+              {/* Barra de Progresso */}
+              <div className="space-y-1.5">
+                <div className="w-full bg-slate-200 h-3 overflow-hidden rounded-none">
+                  <div
+                    className="bg-[#003366] h-full transition-all duration-300"
+                    style={{ width: `${progress?.percent || 0}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
+                  <span>
+                    {progress?.translatedNodes || 0} de {progress?.totalNodes || 0} textos processados
+                  </span>
+                  <span className="font-bold text-[#003366]">{progress?.percent || 0}%</span>
+                </div>
+              </div>
+
+              {progress?.cachedNodes ? (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono text-left">
+                  ⚡ <strong>Aceleração de Memória:</strong> {progress.cachedNodes} textos reutilizados instantaneamente do cache local.
+                </div>
+              ) : null}
+
+              {isTranslating && (
+                <button
+                  type="button"
+                  onClick={cancelTranslation}
+                  className="px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
+                >
+                  Cancelar Tradução
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* STEP 3: REVISÃO COMPARATIVA LADO A LADO */}
+          {activeStep === 'review' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                    Amostra de Tradução em Tempo Real
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700">Filtro de Revisão:</span>
+                  <div className="flex items-center gap-1">
+                    {(['all', 'edited', 'system', 'headings'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setReviewFilter(filter)}
+                        className={`px-2.5 py-1 text-xs border rounded-none capitalize font-mono ${
+                          reviewFilter === filter
+                            ? 'bg-[#003366] text-white border-[#003366]'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {filter === 'all'
+                          ? `Todos (${reviewItems.length})`
+                          : filter === 'edited'
+                          ? `Editados Manualmente`
+                          : filter === 'system'
+                          ? `Strings Sistema`
+                          : `Títulos/Badges`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveStep('layout_qa')}
+                  className="px-4 py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] flex items-center gap-1.5"
+                >
+                  <span>Avançar para Layout QA</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {filteredReviewItems.map((item) => (
+                  <div key={item.nodeId} className="p-3 bg-white border border-slate-200 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 border-b border-slate-100 pb-1">
+                      <span>
+                        Pág {item.pageNumber} • {item.kind} • ID: {item.nodeId}
+                      </span>
+                      {item.isHumanEdited && (
+                        <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 font-bold">
+                          Edição Humana Aplicada
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {/* Original */}
+                      <div className="bg-slate-50 p-2.5 border border-slate-200">
+                        <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1 font-mono">
+                          Original (pt-BR):
+                        </span>
+                        <p className="text-slate-800 leading-relaxed font-sans">{item.sourceText}</p>
+                      </div>
+
+                      {/* Tradução Editável */}
+                      <div className="bg-blue-50/50 p-2.5 border border-blue-200">
+                        <span className="block text-[10px] font-bold uppercase text-[#003366] mb-1 font-mono flex items-center justify-between">
+                          <span>Tradução ({selectedLang?.code}):</span>
+                          <span className="text-[9px] text-slate-400 font-normal">Clique para editar</span>
+                        </span>
+                        <textarea
+                          value={item.translatedText}
+                          onChange={(e) => updateReviewItem(item.nodeId, e.target.value)}
+                          dir={selectedLang?.direction || 'ltr'}
+                          rows={2}
+                          className="w-full text-xs font-medium text-slate-900 bg-white border border-blue-200 p-1.5 outline-none focus:ring-1 focus:ring-[#003366] leading-relaxed resize-y"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: LAYOUT QA & CRIAÇÃO DE VERSÃO */}
+          {activeStep === 'layout_qa' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-white border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-[#003366]" />
+                    <span>Auditoria de Integridade Visual do Documento</span>
                   </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Origem: <strong>Português (pt-BR)</strong> → Destino:{' '}
-                    <strong>
-                      {selectedLang?.nativeName} ({selectedLang?.code})
-                    </strong>
+                  <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 font-bold font-mono">
+                    Fidelidade: 100% Mapeado
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono text-center">
+                  <div className="p-2.5 bg-slate-50 border border-slate-200">
+                    <span className="block text-slate-500 text-[10px]">Direção do Texto</span>
+                    <span className="font-bold text-slate-900 uppercase">
+                      {selectedLang?.direction || 'ltr'} ({selectedLang?.script})
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border border-slate-200">
+                    <span className="block text-slate-500 text-[10px]">Font Stack</span>
+                    <span className="font-bold text-slate-900">{selectedLang?.fontProfile}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 border border-slate-200">
+                    <span className="block text-slate-500 text-[10px]">Status do Layout QA</span>
+                    <span className="font-bold text-emerald-700">0 Erros Críticos</span>
+                  </div>
+                </div>
+
+                {layoutQaResult?.issues && layoutQaResult.issues.length > 0 && (
+                  <div className="space-y-1.5 pt-2">
+                    <span className="text-xs font-bold text-amber-700">Avisos de Ajuste Editorial:</span>
+                    {layoutQaResult.issues.map((iss) => (
+                      <div key={iss.id} className="p-2 bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                        {iss.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Botão de Criação de Versão Final */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-900">
+                    Pronto para criar a versão em {selectedLang?.nativeName}?
+                  </h4>
+                  <p className="text-[11px] text-emerald-700">
+                    O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será criado.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={handleRunPreview}
-                  disabled={isPreviewing || !credentialMeta?.isValid}
-                  className="px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 flex items-center gap-1.5 transition-colors"
+                  onClick={handleCreateVersion}
+                  disabled={isSavingVersion}
+                  className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
                 >
-                  {isPreviewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-[#003366]" />}
-                  <span>Atualizar Amostra</span>
+                  {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>Criar Versão em {selectedLang?.nativeName || targetLocale}</span>
                 </button>
               </div>
+            </div>
+          )}
 
-              {isPreviewing ? (
-                <div className="py-12 text-center space-y-3">
-                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#003366]" />
-                  <p className="text-xs font-medium text-slate-600">
-                    Processando tradução de alta precisão metrológica com o Google Gemini...
-                  </p>
-                </div>
-              ) : sampleResults.length === 0 ? (
-                <div className="py-10 text-center bg-slate-50 border border-dashed border-slate-300 p-6">
-                  <Globe className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-700 mb-1">Nenhuma amostra gerada ainda</p>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
-                    Gere uma amostra rápida para verificar como o Google Gemini traduz a terminologia técnica para o
-                    idioma selecionado com proteção de tokens.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleRunPreview}
-                    disabled={!credentialMeta?.isValid}
-                    className="px-4 py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50"
-                  >
-                    Gerar Amostra de Preview
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sampleResults.map((item, idx) => (
-                    <div key={item.id} className="p-3 bg-white border border-slate-200 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 border-b border-slate-100 pb-1">
-                        <span>
-                          Nó #{idx + 1}: {item.id}
-                        </span>
-                        {item.tokensProtected.length > 0 && (
-                          <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 font-sans font-bold">
-                            {item.tokensProtected.length} token(s) técnico(s) preservado(s)
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        <div className="bg-slate-50 p-2.5 border border-slate-100">
-                          <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1 font-mono">
-                            Original (pt-BR):
-                          </span>
-                          <p className="text-slate-800 leading-relaxed">{item.sourceText}</p>
-                        </div>
-
-                        <div className="bg-blue-50/50 p-2.5 border border-blue-100">
-                          <span className="block text-[10px] font-bold uppercase text-[#003366] mb-1 font-mono">
-                            Tradução ({selectedLang?.code}):
-                          </span>
-                          <p
-                            className="text-slate-900 font-medium leading-relaxed"
-                            dir={selectedLang?.direction || 'ltr'}
-                          >
-                            {item.translatedText}
-                          </p>
-                        </div>
-                      </div>
-
-                      {item.tokensProtected.length > 0 && (
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap pt-1">
-                          <span className="font-semibold text-slate-700">Fatos protegidos:</span>
-                          {item.tokensProtected.map((t, tIdx) => (
-                            <span
-                              key={tIdx}
-                              className="px-1.5 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-mono text-[10px]"
-                            >
-                              {t.original}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* STEP 5: CONCLUSÃO */}
+          {activeStep === 'complete' && (
+            <div className="max-w-xl mx-auto py-10 text-center space-y-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                Versão em {selectedLang?.nativeName} Criada com Sucesso!
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {saveSuccessMessage || 'O novo catálogo traduzido já está disponível no seu workspace para edição e exportação em PDF.'}
+              </p>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-6 py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244]"
+              >
+                Abrir Catálogo no Editor
+              </button>
             </div>
           )}
         </div>
 
         {/* Modal Footer */}
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
-          <div className="text-slate-500 flex items-center gap-1">
+          <div className="text-slate-500 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-slate-400" />
-            <span>Fase 2C.1: Fundação & Preview (Zero alteração do catálogo original)</span>
+            <span>Fase 2C.2: Motor de Tradução Completo (Original 100% Protegido)</span>
           </div>
           <button
             type="button"

@@ -116,6 +116,8 @@ export type TranslationErrorCode =
   | 'PROVIDER_UNAVAILABLE'
   | 'TRANSLATION_INVALID_RESPONSE'
   | 'COVERAGE_INCOMPLETE'
+  | 'SOURCE_CHANGED_DURING_TRANSLATION'
+  | 'ABORTED'
   | 'UNKNOWN_ERROR';
 
 export class TranslationError extends Error {
@@ -128,4 +130,71 @@ export class TranslationError extends Error {
     this.code = code;
     this.details = details;
   }
+}
+
+export interface TranslationCacheEntry {
+  hash: string;
+  nodeId: string;
+  sourceLocale: string;
+  targetLocale: string;
+  sourceText: string;
+  translatedText: string;
+  provider: string;
+  model: string;
+  glossaryVersion: string;
+  engineVersion: string;
+  createdAt: string;
+}
+
+export interface BatchTranslationProgress {
+  phase: 'preparing' | 'checking_cache' | 'translating' | 'restoring' | 'validating' | 'auditing_layout' | 'ready';
+  totalNodes: number;
+  translatedNodes: number;
+  cachedNodes: number;
+  remainingNodes: number;
+  currentChunk: number;
+  totalChunks: number;
+  percent: number;
+  message: string;
+}
+
+export type LayoutIssueType =
+  | 'TEXT_OVERFLOW'
+  | 'PAGE_OVERFLOW'
+  | 'TABLE_OVERFLOW'
+  | 'MISSING_FONT'
+  | 'RTL_WARNING';
+
+export interface LayoutIssue {
+  id: string;
+  type: LayoutIssueType;
+  pageId?: string;
+  blockId?: string;
+  nodeId?: string;
+  severity: 'warning' | 'error';
+  message: string;
+  elementSelector?: string;
+  snippet?: string;
+}
+
+export interface LayoutQaResult {
+  hasIssues: boolean;
+  issues: LayoutIssue[];
+  status: 'passed' | 'warning' | 'error';
+  auditedAt: string;
+}
+
+export interface FullTranslationResult {
+  translatedCatalog: any; // Catalog
+  sourceCatalogId: string;
+  sourceCatalogVersion: number;
+  sourceContentHash: string;
+  sourceLocale: string;
+  targetLocale: string;
+  totalNodes: number;
+  cacheHits: number;
+  cacheMisses: number;
+  translatedCount: number;
+  layoutQa: LayoutQaResult;
+  completedAt: string;
 }

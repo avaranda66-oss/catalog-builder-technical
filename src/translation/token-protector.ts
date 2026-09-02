@@ -26,6 +26,14 @@ export class TechnicalTokenProtector {
   ];
 
   /**
+   * Alias de conveniência para protectTokens.
+   */
+  static protect(sourceText: string): { protectedText: string; tokenMap: Map<string, string> } {
+    const { maskedText, tokenMap } = this.protectTokens(sourceText);
+    return { protectedText: maskedText, tokenMap };
+  }
+
+  /**
    * Identifica tokens técnicos protegidos e substitui por marcadores seguros [[TECH_XXX]].
    */
   static protectTokens(sourceText: string): ProtectedTokenExtraction {
@@ -69,6 +77,13 @@ export class TechnicalTokenProtector {
     }
 
     return { maskedText: masked, tokenMap };
+  }
+
+  /**
+   * Alias de conveniência para restoreTokens.
+   */
+  static restore(translatedMaskedText: string, tokenMap: Map<string, string>): string {
+    return this.restoreTokens(translatedMaskedText, tokenMap);
   }
 
   /**
