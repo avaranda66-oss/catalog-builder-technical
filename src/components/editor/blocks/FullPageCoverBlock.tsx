@@ -59,7 +59,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
   const overlayOpacity = custom.overlayOpacity ?? 45; // 0 a 100%
   const backgroundImageUrl = useResolvedAssetUrl(
     block.assetId,
-    custom.backgroundImageUrl || block.legacyUrl || block.imageUrl || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85'
+    custom.backgroundImageUrl || block.legacyUrl || block.imageUrl
   );
 
   // Migração automática de configs legadas para canvasLayers[]
@@ -283,7 +283,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           id: newId,
           type: 'image',
           label: `Imagem / Logo ${layers.length + 1}`,
-          imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80',
+          imageUrl: '',
           x: 10,
           y: 40,
           width: 200,

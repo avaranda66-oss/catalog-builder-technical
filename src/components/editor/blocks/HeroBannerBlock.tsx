@@ -102,14 +102,18 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
 
         <div className="md:col-span-4 flex flex-col items-center justify-center">
           <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900 border border-slate-700 relative group flex items-center justify-center p-2">
-            <img
-              src={
-                displayUrl ||
-                'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
-              }
-              alt="Produto Destaque"
-              className="max-h-full max-w-full object-contain filter drop-shadow"
-            />
+            {displayUrl ? (
+              <img
+                src={displayUrl}
+                alt="Produto Destaque"
+                className="max-h-full max-w-full object-contain filter drop-shadow"
+              />
+            ) : (
+              <div className="text-slate-500 text-[10px] font-sans flex flex-col items-center gap-1 text-center p-2">
+                <Upload className="w-5 h-5 text-slate-600 no-print" />
+                <span className="no-print">Clique em Trocar para definir imagem corporativa</span>
+              </div>
+            )}
 
             <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
               <button

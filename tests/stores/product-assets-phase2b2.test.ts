@@ -38,7 +38,7 @@ describe('FASE 2B.2 — Product Asset Library & Cloud Photo Bank Test Suite', ()
     useAssetStore.setState({
       assets: [mockAsset1],
       productAssets: [mockProductAsset1],
-      resolvedUrls: { 'asset-uuid-1': 'https://signed.url/psv_portable.jpg' },
+      resolvedUrls: { 'asset-uuid-1': { url: 'https://signed.url/psv_portable.jpg', expiresAt: Date.now() + 3600000 } },
       isLoading: false,
       isUploading: false,
       error: null

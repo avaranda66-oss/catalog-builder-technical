@@ -18,14 +18,17 @@ export interface UseResolvedAssetUrlOptions {
  * mesmo que fallbackUrl seja truthy.
  */
 export function useResolvedAssetUrl(assetId?: string, fallbackUrl?: string): string | undefined {
-  const cloudResolvedUrl = useAssetStore((state) => (assetId ? state.resolvedUrls[assetId] : undefined));
+  const entry = useAssetStore((state) => (assetId ? state.resolvedUrls[assetId] : undefined));
   const resolveAssetUrl = useAssetStore((state) => state.resolveAssetUrl);
 
+  const now = Date.now();
+  const isStaleOrMissing = !entry || entry.expiresAt <= now + 60_000;
+
   useEffect(() => {
-    if (assetId && !cloudResolvedUrl) {
+    if (assetId && isStaleOrMissing) {
       void resolveAssetUrl(assetId, fallbackUrl);
     }
-  }, [assetId, cloudResolvedUrl, resolveAssetUrl, fallbackUrl]);
+  }, [assetId, isStaleOrMissing, resolveAssetUrl, fallbackUrl]);
 
-  return cloudResolvedUrl || fallbackUrl || undefined;
+  return entry?.url || fallbackUrl || undefined;
 }

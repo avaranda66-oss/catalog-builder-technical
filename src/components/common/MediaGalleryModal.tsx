@@ -431,7 +431,7 @@ export const MediaGalleryModal: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {filteredAssets.map((asset) => {
-                    const url = resolvedUrls[asset.id] || asset.storage_path;
+                    const url = resolvedUrls[asset.id]?.url || asset.storage_path;
                     const links = productAssets.filter((pa) => pa.asset_id === asset.id);
                     const primaryLink = links.find((pa) => pa.is_primary);
                     const linkedProds = links.map((pa) => products.find((p) => p.id === pa.product_id)).filter(Boolean);

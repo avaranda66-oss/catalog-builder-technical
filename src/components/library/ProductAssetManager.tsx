@@ -363,7 +363,7 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {linkedProductAssets.map((item) => {
                       const asset = item.asset!;
-                      const url = resolvedUrls[asset.id] || asset.storage_path;
+                      const url = resolvedUrls[asset.id]?.url || asset.storage_path;
                       const isLowRes = asset.width_px && asset.width_px < 800;
 
                       return (
@@ -488,7 +488,7 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
                   .filter((a) => !bankSearch || a.original_filename?.toLowerCase().includes(bankSearch.toLowerCase()))
                   .map((a) => {
                     const isAlreadyLinked = linkedProductAssets.some((pa) => pa.asset_id === a.id);
-                    const url = resolvedUrls[a.id] || a.storage_path;
+                    const url = resolvedUrls[a.id]?.url || a.storage_path;
 
                     return (
                       <div key={a.id} className="border border-slate-200 rounded p-2 bg-white flex flex-col justify-between text-center">

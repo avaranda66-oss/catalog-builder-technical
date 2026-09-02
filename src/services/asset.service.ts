@@ -178,25 +178,28 @@ export class AssetService {
   }
 
   /**
-   * Resolve URL assinada temporária com cache em memória (TTL 50min) para renderizar o asset.
+   * Resolve URL assinada temporária retornando os metadados de expiração (TTL 50min).
    */
-  static async resolveSignedUrl(storagePath: string, bucket = 'product-assets'): Promise<string> {
-    if (!storagePath) return '';
-    // Se for URL http/https legada (ex: Unsplash ou Data URL), retorna direto
+  static async resolveSignedUrlWithMeta(
+    storagePath: string,
+    bucket = 'product-assets'
+  ): Promise<{ url: string; expiresAt: number } | null> {
+    if (!storagePath) return null;
+    const now = Date.now();
+    // Se for URL http/https legada (ex: CDN externa ou Data URL), retorna direto com expiração longa
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:')) {
-      return storagePath;
+      return { url: storagePath, expiresAt: now + 365 * 24 * 3600 * 1000 };
     }
 
     const cacheKey = `${bucket}:${storagePath}`;
     const cached = signedUrlCache.get(cacheKey);
-    const now = Date.now();
 
-    if (cached && cached.expiresAt > now) {
-      return cached.url;
+    if (cached && cached.expiresAt > now + 60_000) {
+      return cached;
     }
 
     const supabase = getSupabase();
-    if (!supabase) return '';
+    if (!supabase) return null;
 
     try {
       const { data, error } = await supabase.storage
@@ -205,19 +208,28 @@ export class AssetService {
 
       if (error || !data?.signedUrl) {
         console.warn(`[AssetService] Falha ao assinar URL para ${storagePath}:`, error?.message);
-        return '';
+        return null;
       }
 
-      signedUrlCache.set(cacheKey, {
+      const entry = {
         url: data.signedUrl,
         expiresAt: now + 50 * 60 * 1000 // Cache local de 50 minutos
-      });
+      };
+      signedUrlCache.set(cacheKey, entry);
 
-      return data.signedUrl;
+      return entry;
     } catch (err) {
       console.error('[AssetService] Erro ao resolver URL assinada:', err);
-      return '';
+      return null;
     }
+  }
+
+  /**
+   * Resolve URL assinada temporária com cache em memória (TTL 50min) para renderizar o asset.
+   */
+  static async resolveSignedUrl(storagePath: string, bucket = 'product-assets'): Promise<string> {
+    const res = await AssetService.resolveSignedUrlWithMeta(storagePath, bucket);
+    return res?.url || '';
   }
 
   /**

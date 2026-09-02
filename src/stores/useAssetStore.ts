@@ -10,6 +10,11 @@ import { AssetService } from '@/services/asset.service';
 import { getSupabase } from '@/services/supabase.service';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
+export interface ResolvedAssetEntry {
+  url: string;
+  expiresAt: number;
+}
+
 interface UploadOptions {
   productId?: string | null;
   role?: ProductAssetRole;
@@ -22,7 +27,7 @@ interface UploadOptions {
 interface AssetState {
   assets: AssetRecord[];
   productAssets: ProductAssetRecord[];
-  resolvedUrls: Record<string, string>;
+  resolvedUrls: Record<string, ResolvedAssetEntry>;
   isLoading: boolean;
   isUploading: boolean;
   error: string | null;
@@ -72,7 +77,6 @@ interface AssetState {
   updateAssetMetadata: (
     assetId: string,
     updates: {
-      originalFilename?: string;
       kind?: AssetKind;
       approvalStatus?: 'draft' | 'approved' | 'rejected' | 'archived';
     }
@@ -109,13 +113,14 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       });
 
       // Pré-resolução em lote das URLs assinadas para itens ativos
-      const urlMap: Record<string, string> = { ...get().resolvedUrls };
+      const urlMap: Record<string, ResolvedAssetEntry> = { ...get().resolvedUrls };
+      const now = Date.now();
       for (const asset of data.assets) {
-        if (asset.storage_path && !urlMap[asset.id]) {
-          void AssetService.resolveSignedUrl(asset.storage_path, asset.storage_bucket).then((url) => {
-            if (url) {
+        if (asset.storage_path && (!urlMap[asset.id] || urlMap[asset.id].expiresAt <= now + 60_000)) {
+          void AssetService.resolveSignedUrlWithMeta(asset.storage_path, asset.storage_bucket).then((meta) => {
+            if (meta) {
               set((state) => ({
-                resolvedUrls: { ...state.resolvedUrls, [asset.id]: url }
+                resolvedUrls: { ...state.resolvedUrls, [asset.id]: meta }
               }));
             }
           });
@@ -159,10 +164,10 @@ export const useAssetStore = create<AssetState>((set, get) => ({
           // Resolve URL assinada se for novo asset
           if (newRec && (newRec as AssetRecord).storage_path) {
             const asset = newRec as AssetRecord;
-            void AssetService.resolveSignedUrl(asset.storage_path, asset.storage_bucket).then((url) => {
-              if (url) {
+            void AssetService.resolveSignedUrlWithMeta(asset.storage_path, asset.storage_bucket).then((meta) => {
+              if (meta) {
                 set((state) => ({
-                  resolvedUrls: { ...state.resolvedUrls, [asset.id]: url }
+                  resolvedUrls: { ...state.resolvedUrls, [asset.id]: meta }
                 }));
               }
             });
@@ -203,18 +208,16 @@ export const useAssetStore = create<AssetState>((set, get) => ({
 
   uploadAndLinkAsset: async (file, options = {}) => {
     set({ isUploading: true, error: null });
-
-    const assetId = crypto.randomUUID();
     let storagePath = '';
 
     try {
-      // 1. Calcula hash SHA-256 e lê dimensões no cliente
-      const [sha256, dimensions] = await Promise.all([
-        AssetService.computeSHA256(file),
-        AssetService.readImageDimensions(file)
-      ]);
+      // 1. Cálculo de integridade e metadados
+      const sha256 = await AssetService.computeSHA256(file);
+      const dimensions = await AssetService.readImageDimensions(file);
 
-      // 2. Upload do binário para o Supabase Storage
+      const assetId = crypto.randomUUID();
+
+      // 2. Upload seguro dos bytes no Storage Privado
       const uploadResult = await AssetService.uploadOriginalBytes(file, assetId);
       if (uploadResult.error || !uploadResult.storagePath) {
         set({ isUploading: false, error: uploadResult.error || 'Erro no upload para o Storage' });
@@ -275,11 +278,11 @@ export const useAssetStore = create<AssetState>((set, get) => ({
           isUploading: false
         }));
 
-        // Resolve e armazena URL assinada
-        void AssetService.resolveSignedUrl(newAsset.storage_path, newAsset.storage_bucket).then((url) => {
-          if (url) {
+        // Resolve e armazena URL assinada com expiração
+        void AssetService.resolveSignedUrlWithMeta(newAsset.storage_path, newAsset.storage_bucket).then((meta) => {
+          if (meta) {
             set((state) => ({
-              resolvedUrls: { ...state.resolvedUrls, [newAsset.id]: url }
+              resolvedUrls: { ...state.resolvedUrls, [newAsset.id]: meta }
             }));
           }
         });
@@ -375,7 +378,6 @@ export const useAssetStore = create<AssetState>((set, get) => ({
             a.id === assetId
               ? {
                   ...a,
-                  original_filename: updates.originalFilename ?? a.original_filename,
                   kind: updates.kind ?? a.kind,
                   approval_status: updates.approvalStatus ?? a.approval_status
                 }
@@ -411,11 +413,14 @@ export const useAssetStore = create<AssetState>((set, get) => ({
   resolveAssetUrl: async (assetId?: string, fallbackUrl?: string) => {
     if (!assetId) return fallbackUrl || '';
 
-    // Verifica cache na store
+    const now = Date.now();
+    // 1. Verifica cache na store com TTL (renova se estiver a menos de 1 min de expirar)
     const cached = get().resolvedUrls[assetId];
-    if (cached) return cached;
+    if (cached && cached.expiresAt > now + 60_000) {
+      return cached.url;
+    }
 
-    // Busca o asset nos dados carregados
+    // 2. Busca o asset nos dados carregados ou busca no banco
     let asset = get().assets.find((a) => a.id === assetId);
     if (!asset || !asset.storage_path) {
       const fetched = await AssetService.getAssetById(assetId);
@@ -431,12 +436,13 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       return fallbackUrl || '';
     }
 
-    const url = await AssetService.resolveSignedUrl(asset.storage_path, asset.storage_bucket);
-    if (url) {
+    // 3. Resolve URL assinada com metadados de expiração
+    const meta = await AssetService.resolveSignedUrlWithMeta(asset.storage_path, asset.storage_bucket);
+    if (meta) {
       set((state) => ({
-        resolvedUrls: { ...state.resolvedUrls, [assetId]: url }
+        resolvedUrls: { ...state.resolvedUrls, [assetId]: meta }
       }));
-      return url;
+      return meta.url;
     }
 
     return fallbackUrl || '';

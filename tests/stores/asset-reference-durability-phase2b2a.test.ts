@@ -135,7 +135,10 @@ describe('FASE 2B.2A — ASSET REFERENCE DURABILITY & CLOUD AUTHORITY HOTFIX', (
       ]
     });
 
-    const resolveSpy = vi.spyOn(AssetService, 'resolveSignedUrl').mockResolvedValue('https://fresh-signed-url.com/asset.jpg');
+    const resolveSpy = vi.spyOn(AssetService, 'resolveSignedUrlWithMeta').mockResolvedValue({
+      url: 'https://fresh-signed-url.com/asset.jpg',
+      expiresAt: Date.now() + 50 * 60 * 1000
+    });
 
     // Dispara resolução
     const resolved = await useAssetStore.getState().resolveAssetUrl(assetId, fallbackUrl);
@@ -143,7 +146,7 @@ describe('FASE 2B.2A — ASSET REFERENCE DURABILITY & CLOUD AUTHORITY HOTFIX', (
     // Deve chamar o serviço de resolução na nuvem
     expect(resolveSpy).toHaveBeenCalled();
     expect(resolved).toBe('https://fresh-signed-url.com/asset.jpg');
-    expect(useAssetStore.getState().resolvedUrls[assetId]).toBe('https://fresh-signed-url.com/asset.jpg');
+    expect(useAssetStore.getState().resolvedUrls[assetId].url).toBe('https://fresh-signed-url.com/asset.jpg');
   });
 
   it('ASSET-DOC-4: Documento legado com Data URL e sem assetId continua renderizando normalmente via fallback seguro', async () => {
@@ -223,7 +226,10 @@ describe('FASE 2B.2A — ASSET REFERENCE DURABILITY & CLOUD AUTHORITY HOTFIX', (
       ]
     });
 
-    vi.spyOn(AssetService, 'resolveSignedUrl').mockResolvedValue('https://signed.url/archived-photo-fresh.jpg');
+    vi.spyOn(AssetService, 'resolveSignedUrlWithMeta').mockResolvedValue({
+      url: 'https://signed.url/archived-photo-fresh.jpg',
+      expiresAt: Date.now() + 50 * 60 * 1000
+    });
 
     const resolved = await useAssetStore.getState().resolveAssetUrl('archived-asset-1');
 
