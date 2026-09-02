@@ -237,6 +237,7 @@ export class DocumentLifecycleService {
         editorContext: { kind: 'catalog', catalogId: newId },
         activePageIndex: 0,
         selectedBlockId: null,
+        selectedChildId: null,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
         isDirty: false,

@@ -5,6 +5,8 @@
 import {
   StructuralSectionData,
   StructuralCardData,
+  StructuralLayoutConfig,
+  StructuralLayoutConfigSchema,
   SPACING_MM_MAP
 } from './canvas-layout.schema';
 
@@ -221,4 +223,66 @@ export class A4LayoutEngine {
     const usableWidth = Math.max(0, totalWidthMm - totalGapMm);
     return usableWidth / columns;
   }
+}
+
+// ============================================================================
+// 6. Helpers de Mutação Imutável (Fase 3A.2 Contextual Inspector)
+// ============================================================================
+
+/**
+ * Atualiza um card estrutural filho por seu UUID estável (childId).
+ * Garante mutação 100% imutável preservando campos irmãos.
+ * Retorna { data, found } evitando falhas silenciosas.
+ */
+export function updateStructuralChildById(
+  structuralData: StructuralSectionData,
+  childId: string,
+  updates: Partial<Omit<StructuralCardData, 'id'>>
+): { data: StructuralSectionData; found: boolean } {
+  let found = false;
+  const newChildren = structuralData.children.map((child) => {
+    if (child.id === childId) {
+      found = true;
+      return {
+        ...child,
+        ...updates,
+        id: child.id // O UUID original é estritamente imutável
+      };
+    }
+    return child;
+  });
+
+  if (!found) {
+    return { data: structuralData, found: false };
+  }
+
+  return {
+    data: {
+      ...structuralData,
+      children: newChildren
+    },
+    found: true
+  };
+}
+
+/**
+ * Atualiza as configurações de layout de uma seção estrutural de forma imutável.
+ * Valida o resultado contra StructuralLayoutConfigSchema.
+ */
+export function updateStructuralLayout(
+  structuralData: StructuralSectionData,
+  layoutUpdates: Partial<StructuralLayoutConfig>
+): StructuralSectionData {
+  const mergedLayout = {
+    ...structuralData.layout,
+    ...layoutUpdates
+  };
+
+  // Validação estrita via Zod schema (impede fixedWidthMm <= 0 quando fixed)
+  const validatedLayout = StructuralLayoutConfigSchema.parse(mergedLayout);
+
+  return {
+    ...structuralData,
+    layout: validatedLayout
+  };
 }

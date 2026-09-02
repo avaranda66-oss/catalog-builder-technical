@@ -25,7 +25,8 @@ import {
   SlidersHorizontal,
   Minus,
   Eye,
-  EyeOff
+  EyeOff,
+  LayoutGrid
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
@@ -39,12 +40,17 @@ import {
   DEFAULT_INSERTS_COLUMNS,
   DEFAULT_INSERTS_ROWS
 } from './blocks/InsertsVisualBlock';
+import { StructuralSectionInspector } from './inspector/StructuralSectionInspector';
+import { StructuralCardInspector } from './inspector/StructuralCardInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
     currentCatalog,
     activePageIndex,
     selectedBlockId,
+    selectedChildId,
+    setSelectedChildId,
+    selectEditorElement,
     updateBlock: rawUpdateBlock,
     removeBlock,
     setPageTitle
@@ -233,6 +239,7 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedBlock.type === 'image_gallery' && <GalleryHorizontalEnd className="w-4 h-4 text-[#003366]" />}
                 {selectedBlock.type === 'contact_footer' && <Building2 className="w-4 h-4 text-slate-700" />}
                 {selectedBlock.type === 'custom_table' && <Grid3X3 className="w-4 h-4 text-slate-700" />}
+                {selectedBlock.type === 'structural_section' && <LayoutGrid className="w-4 h-4 text-[#003366]" />}
                 {selectedBlock.type === 'text' && <Type className="w-4 h-4 text-slate-600" />}
                 {selectedBlock.type === 'image' && <Image className="w-4 h-4 text-[#003366]" />}
                 <span className="capitalize">{selectedBlock.type.replace(/_/g, ' ')}</span>
@@ -244,8 +251,8 @@ export const PropertiesPanel: React.FC = () => {
               <div
                 className="p-2.5 rounded-lg border flex items-start gap-2 text-xs transition-all no-print"
                 style={{
-                  backgroundColor: `${remoteOnSelectedBlock[0].color}12`,
-                  borderColor: `${remoteOnSelectedBlock[0].color}55`
+                  backgroundColor: `${remoteOnSelectedBlock[0].color}15`,
+                  borderColor: `${remoteOnSelectedBlock[0].color}50`
                 }}
               >
                 <div
@@ -268,6 +275,24 @@ export const PropertiesPanel: React.FC = () => {
                   </p>
                 </div>
               </div>
+            )}
+
+            {/* SEÇÃO ESTRUTURAL (FASE 3A.2 CONTEXTUAL INSPECTOR) */}
+            {selectedBlock.type === 'structural_section' && (
+              selectedChildId && selectedBlock.structuralData?.children?.some((c) => c.id === selectedChildId) ? (
+                <StructuralCardInspector
+                  sectionBlock={selectedBlock}
+                  pageId={blockPageId}
+                  cardId={selectedChildId}
+                  onBackToSection={() => setSelectedChildId(null)}
+                />
+              ) : (
+                <StructuralSectionInspector
+                  sectionBlock={selectedBlock}
+                  pageId={blockPageId}
+                  onSelectCard={(cardId) => selectEditorElement({ blockId: selectedBlock.id, childId: cardId })}
+                />
+              )
             )}
 
             {/* SELETOR DE COR / TEMA GLOBAL PARA TODOS OS HEADERS & CAPAS */}

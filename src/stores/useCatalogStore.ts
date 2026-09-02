@@ -158,6 +158,7 @@ interface CatalogState {
   currentCatalog: Catalog | null;
   activePageIndex: number;
   selectedBlockId: string | null;
+  selectedChildId: string | null;
 
   // Status de Sincronização, Revisão Local & Persistência (Fase 1.2)
   isSaving: boolean;
@@ -180,6 +181,8 @@ interface CatalogState {
   setCurrentCatalog: (catalog: Catalog, markDirty?: boolean) => void;
   setActivePageIndex: (index: number) => void;
   setSelectedBlockId: (blockId: string | null) => void;
+  setSelectedChildId: (childId: string | null) => void;
+  selectEditorElement: (params: { blockId: string | null; childId?: string | null }) => void;
 
   // Gerenciamento de Páginas (Sem pré-incremento de versão no cliente)
   addPage: (type?: 'cover' | 'technical' | 'custom' | 'presentation') => void;
@@ -262,6 +265,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   editorContext: { kind: 'catalog', catalogId: '' },
   activePageIndex: 0,
   selectedBlockId: null,
+  selectedChildId: null,
 
   isSaving: false,
   isDirty: false,
@@ -380,6 +384,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         editorContext: { kind: 'template', templateId: template.id },
         activePageIndex: 0,
         selectedBlockId: null,
+        selectedChildId: null,
         isDirty: false,
         isSaving: false,
         localRevision: 0,
@@ -410,6 +415,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       savedCatalogs: [],
       activePageIndex: 0,
       selectedBlockId: null,
+      selectedChildId: null,
       isDirty: false,
       isSaving: false,
       localRevision: 0,
@@ -446,7 +452,10 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   setActivePageIndex: (activePageIndex) => set({ activePageIndex }),
-  setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId }),
+  setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId, selectedChildId: null }),
+  setSelectedChildId: (selectedChildId) => set({ selectedChildId }),
+  selectEditorElement: ({ blockId, childId = null }) =>
+    set({ selectedBlockId: blockId, selectedChildId: blockId ? childId : null }),
 
   // =========================================================================
   // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION E METADATA
@@ -592,7 +601,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       'ADD_BLOCK',
       { targetId: newBlockId, targetPageId: pageId, summary: `Adicionado bloco ${newBlock.type} "${newBlock.title || ''}" à página ${pageId}` }
     );
-    set({ selectedBlockId: newBlockId });
+    set({ selectedBlockId: newBlockId, selectedChildId: null });
   },
 
   updateBlock: (pageId, blockId, updates) => {
@@ -619,7 +628,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       'REMOVE_BLOCK',
       { targetId: blockId, targetPageId: pageId, summary: `Removido bloco ${blockId} da página ${pageId}` }
     );
-    set({ selectedBlockId: null });
+    set({ selectedBlockId: null, selectedChildId: null });
   },
 
   updateCellOverride: (blockId, rowId, fieldKey, value) => {
@@ -1139,6 +1148,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         savedCatalogs: updatedSavedList,
         activePageIndex: 0,
         selectedBlockId: null,
+        selectedChildId: null,
         isDirty: false,
         isSaving: false,
         localRevision: 0,
@@ -1279,6 +1289,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             editorContext: { kind: 'catalog', catalogId: id },
             activePageIndex: 0,
             selectedBlockId: null,
+            selectedChildId: null,
             isDirty: false,
             isSaving: false,
             localRevision: 0,
@@ -1314,6 +1325,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           editorContext: { kind: 'catalog', catalogId: id },
           activePageIndex: 0,
           selectedBlockId: null,
+          selectedChildId: null,
           isDirty: false,
           isSaving: false,
           localRevision: 0,
@@ -1480,6 +1492,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               editorContext: { kind: 'catalog', catalogId: matched.id },
               activePageIndex: 0,
               selectedBlockId: null,
+              selectedChildId: null,
               isDirty: false,
               isSaving: false,
               localRevision: 0,
@@ -1517,6 +1530,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             editorContext: { kind: 'catalog', catalogId: targetCatalog.id },
             activePageIndex: 0,
             selectedBlockId: null,
+            selectedChildId: null,
             isDirty: false,
             isSaving: false,
             localRevision: 0,
@@ -1547,6 +1561,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           currentCatalog: cached,
           activePageIndex: 0,
           selectedBlockId: null,
+          selectedChildId: null,
           isDirty: false,
           isSaving: false,
           localRevision: 0,
@@ -1608,6 +1623,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       currentCatalog: duplicated,
       activePageIndex: 0,
       selectedBlockId: null,
+      selectedChildId: null,
       localRevision: 1,
       lastAcknowledgedLocalRevision: 0,
       isDirty: true,
@@ -1642,6 +1658,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           currentCatalog: remaining[0],
           activePageIndex: 0,
           selectedBlockId: null,
+          selectedChildId: null,
           isDirty: false,
           isSaving: false,
           localRevision: 0,
@@ -1674,6 +1691,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       currentCatalog: newCatalog,
       activePageIndex: 0,
       selectedBlockId: null,
+      selectedChildId: null,
       localRevision: 1,
       lastAcknowledgedLocalRevision: 0,
       isDirty: true,
@@ -1790,6 +1808,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         editorContext: { kind: 'catalog', catalogId: newId },
         activePageIndex: 0,
         selectedBlockId: null,
+        selectedChildId: null,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
         isDirty: false,
@@ -1917,6 +1936,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         editorContext: { kind: 'template', templateId: newId },
         activePageIndex: 0,
         selectedBlockId: null,
+        selectedChildId: null,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
         isDirty: false,

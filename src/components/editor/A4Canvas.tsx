@@ -44,7 +44,9 @@ export const A4Canvas: React.FC = () => {
   const {
     currentCatalog,
     selectedBlockId,
+    selectedChildId,
     setSelectedBlockId,
+    selectEditorElement,
     setActivePageIndex,
     addBlock,
     addPage,
@@ -909,6 +911,7 @@ export const A4Canvas: React.FC = () => {
               onClick={(e) => {
                 e.stopPropagation();
                 setActivePageIndex(pageIndex);
+                selectEditorElement({ blockId: null, childId: null });
               }}
             >
               {/* Cabeçalho Técnico da Folha (Oculto se for Capa Full Page) */}
@@ -955,6 +958,7 @@ export const A4Canvas: React.FC = () => {
                       data-block-type={block.type}
                       onClick={() => {
                         setActivePageIndex(pageIndex);
+                        selectEditorElement({ blockId: block.id, childId: null });
                       }}
                       className={`relative ${
                         isSingleFullCover
@@ -1009,7 +1013,21 @@ export const A4Canvas: React.FC = () => {
                         <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={isSelected} />
                       )}
                       {block.type === 'structural_section' && (
-                        <StructuralSectionBlock block={block} pageId={page.id} isSelected={isSelected} />
+                        <StructuralSectionBlock
+                          block={block}
+                          pageId={page.id}
+                          isSelected={isSelected}
+                          selectedChildId={isSelected ? selectedChildId : null}
+                          onSelectSection={() => {
+                            setActivePageIndex(pageIndex);
+                            selectEditorElement({ blockId: block.id, childId: null });
+                          }}
+                          onSelectCard={(childId) => {
+                            setActivePageIndex(pageIndex);
+                            selectEditorElement({ blockId: block.id, childId });
+                          }}
+                          isExport={false}
+                        />
                       )}
                       {block.type === 'hero_banner' && (
                         <HeroBannerBlock block={block} pageId={page.id} isSelected={isSelected} />
