@@ -42,14 +42,15 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
       : `Carregar o catálogo oficial "${preset.name}" com todos os dados técnicos e fotos reais pré-configurados?`;
 
     if (confirm(actionLabel)) {
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
       const newCatalog: Catalog = {
         ...structuredClone(preset.catalog),
-        id: `cat-${Date.now()}`,
+        id: newId,
         updatedAt: new Date().toISOString(),
-        version: 1
+        version: 0
       };
       setCurrentCatalog(newCatalog);
-      saveCurrentCatalog();
+      void saveCurrentCatalog();
       onClose();
     }
   };

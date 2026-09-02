@@ -67,7 +67,7 @@ describe('SupabaseService v2 (RPCs com CAS e Isolamento Total)', () => {
     const result = await SupabaseService.saveCatalog(MOCK_CATALOG, 2, 'Atualização de blocos');
     expect(result.success).toBe(true);
     expect(result.data).toEqual(mockSavedCatalog);
-    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('save_catalog_v2', {
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('save_catalog_v3', {
       p_catalog: MOCK_CATALOG,
       p_expected_version: 2,
       p_summary: 'Atualização de blocos'

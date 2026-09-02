@@ -109,14 +109,14 @@ export class SupabaseService {
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
     try {
-      const { data, error } = await supabase.rpc('save_catalog_v2', {
+      const { data, error } = await supabase.rpc('save_catalog_v3', {
         p_catalog: catalog,
         p_expected_version: expectedVersion ?? 0,
         p_summary: summary || 'Atualização de catálogo'
       });
 
       if (error) {
-        const isConflict = error.code === '40001' || error.message?.includes('Conflito de Concorrência');
+        const isConflict = error.code === '40001' || error.message?.includes('Conflito');
         return { success: false, conflict: isConflict, error: error.message };
       }
 

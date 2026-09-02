@@ -32,7 +32,7 @@ const TRANSLATION_LANGUAGES = [
 
 export const Navbar: React.FC = () => {
   const { activeTab, setActiveTab, setExportPDFModalOpen } = useUIStore();
-  const { currentCatalog, isSaving, lastSavedAt } = useCatalogStore();
+  const { currentCatalog, syncStatus, syncError, serverSavedAt } = useCatalogStore();
   const { openGallery } = useMediaStore();
   const role = useAuthStore((state) => state.role);
   const signOut = useAuthStore((state) => state.signOut);
@@ -145,18 +145,44 @@ export const Navbar: React.FC = () => {
           </div>
         )}
 
-        {/* Auto-Save Status */}
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded-none border border-slate-200">
-          {isSaving ? (
-            <>
+        {/* Sync Status / Conflito / Nuvem */}
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 border">
+          {syncStatus === 'saving' && (
+            <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 border-blue-200">
               <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
-              <span>Saving changes...</span>
-            </>
-          ) : (
-            <>
+              <span>Sincronizando nuvem...</span>
+            </div>
+          )}
+          {syncStatus === 'synced' && (
+            <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-200">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Saved {lastSavedAt ? `at ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'in Cloud'}</span>
-            </>
+              <span>Nuvem v{currentCatalog?.version || 1} {serverSavedAt ? `(${new Date(serverSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})` : ''}</span>
+            </div>
+          )}
+          {syncStatus === 'dirty' && (
+            <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 border-amber-200">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>Alterações pendentes...</span>
+            </div>
+          )}
+          {syncStatus === 'conflict' && (
+            <div className="flex items-center gap-1.5 text-red-700 bg-red-50 border-red-200 font-bold" title={syncError || 'Conflito de concorrência detectado'}>
+              <span className="w-2 h-2 rounded-full bg-red-600" />
+              <span>⚠️ Conflito de Versão</span>
+              <button
+                onClick={() => void useCatalogStore.getState().resolveConflictKeepLocal()}
+                className="ml-1 underline text-[10px] text-red-800 hover:text-red-950"
+                title="Forçar envio das alterações locais"
+              >
+                [Forçar Envio]
+              </button>
+            </div>
+          )}
+          {syncStatus === 'offline' && (
+            <div className="flex items-center gap-1.5 text-slate-600 bg-slate-50 border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
+              <span>Modo Offline</span>
+            </div>
           )}
         </div>
 

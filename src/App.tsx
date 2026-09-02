@@ -34,7 +34,7 @@ export const App: React.FC = () => {
     void loadLatestCatalog();
     void loadAssets();
 
-    // Sincronização em Tempo Real (Supabase Realtime WebSockets)
+    // Sincronização em Tempo Real Segura (FASE 1F)
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -44,15 +44,42 @@ export const App: React.FC = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'catalogs' },
         (payload) => {
-          console.log('🔄 Atualização de catálogo recebida em tempo real via Supabase:', payload);
-          void loadLatestCatalog();
+          const changedId = (payload.new as any)?.id || (payload.old as any)?.id;
+          const { currentCatalog, syncStatus, isSaving, loadWorkspace, refreshCatalog } = useCatalogStore.getState();
+
+          // Atualiza lista em segundo plano sem trocar o documento ativo
+          void loadWorkspace();
+
+          if (payload.eventType === 'DELETE' && changedId === currentCatalog?.id) {
+            useCatalogStore.setState({
+              syncStatus: 'conflict',
+              syncError: 'Este catálogo foi excluído no servidor por outro administrador.'
+            });
+            return;
+          }
+
+          // Se a alteração foi em OUTRO catálogo, não toca no currentCatalog
+          if (changedId && currentCatalog && changedId !== currentCatalog.id) {
+            return;
+          }
+
+          // Se a alteração foi no catálogo ativo
+          if (changedId && currentCatalog && changedId === currentCatalog.id) {
+            if (syncStatus !== 'dirty' && !isSaving) {
+              void refreshCatalog(currentCatalog.id);
+            } else {
+              useCatalogStore.setState({
+                syncStatus: 'conflict',
+                syncError: 'Alteração remota detectada neste catálogo. Suas edições locais foram preservadas.'
+              });
+            }
+          }
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
-        (payload) => {
-          console.log('🔄 Atualização de produto recebida em tempo real via Supabase:', payload);
+        () => {
           void loadProducts();
         }
       )

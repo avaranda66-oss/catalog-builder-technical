@@ -4,12 +4,21 @@ import { StorageService } from '../services/storage.service';
 import { SupabaseService } from '../services/supabase.service';
 import { SYSTEM_PRESETS } from '../data/presets';
 
+export type SyncStatus = 'synced' | 'saving' | 'dirty' | 'conflict' | 'error' | 'offline';
+
 interface CatalogState {
   currentCatalog: Catalog | null;
   activePageIndex: number;
   selectedBlockId: string | null;
+
+  // Status de Sincronização & Persistência (Fase 1B/1C)
   isSaving: boolean;
-  lastSavedAt: string | null;
+  isDirty: boolean;
+  syncStatus: SyncStatus;
+  syncError: string | null;
+  serverSavedAt: string | null;
+  cachedAt: string | null;
+  lastSavedAt: string | null; // Compatibilidade de UI
 
   savedCatalogs: Catalog[];
   isLoading: boolean;
@@ -19,13 +28,13 @@ interface CatalogState {
   setActivePageIndex: (index: number) => void;
   setSelectedBlockId: (blockId: string | null) => void;
 
-  // Gerenciamento de Páginas
+  // Gerenciamento de Páginas (Sem pré-incremento de versão no cliente)
   addPage: (type?: 'cover' | 'technical' | 'custom' | 'presentation') => void;
   removePage: (pageId: string) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
   setPageTitle: (pageId: string, title: string) => void;
 
-  // Gerenciamento de Blocos
+  // Gerenciamento de Blocos (Sem pré-incremento de versão no cliente)
   addBlock: (pageId: string, block: Omit<ContentBlock, 'id'>) => void;
   updateBlock: (pageId: string, blockId: string, updates: Partial<ContentBlock>) => void;
   removeBlock: (pageId: string, blockId: string) => void;
@@ -36,29 +45,52 @@ interface CatalogState {
   addRowToTable: (blockId: string, productRefId: string) => void;
   removeRowFromTable: (blockId: string, rowId: string) => void;
 
-  // Persistência
+  // Persistência & Fila Single-Flight
   saveCurrentCatalog: () => Promise<void>;
+  loadWorkspace: () => Promise<Catalog[]>;
+  openCatalog: (id: string) => Promise<void>;
+  refreshCatalog: (id: string) => Promise<void>;
   loadLatestCatalog: () => Promise<void>;
   loadAllCatalogs: () => Promise<void>;
   loadCatalogById: (id: string) => Promise<void>;
   duplicateCatalog: (id: string) => Promise<void>;
   deleteCatalog: (id: string) => Promise<void>;
   createCatalogFromPreset: (name?: string, presetId?: string) => void;
+  resolveConflictKeepLocal: () => Promise<void>;
+  resolveConflictReloadServer: () => Promise<void>;
 }
+
+// Controle de Fila Single-Flight em nível de módulo
+let isSaveInFlight = false;
+let hasPendingSave = false;
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   currentCatalog: null,
   activePageIndex: 0,
   selectedBlockId: null,
+
   isSaving: false,
+  isDirty: false,
+  syncStatus: 'synced',
+  syncError: null,
+  serverSavedAt: null,
+  cachedAt: null,
   lastSavedAt: null,
 
   savedCatalogs: [],
   isLoading: false,
 
-  setCurrentCatalog: (currentCatalog) => set({ currentCatalog }),
+  setCurrentCatalog: (currentCatalog) => {
+    set({ currentCatalog, isDirty: true, syncStatus: 'dirty' });
+    void get().saveCurrentCatalog();
+  },
+
   setActivePageIndex: (activePageIndex) => set({ activePageIndex }),
   setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId }),
+
+  // =========================================================================
+  // FASE 1A: MUTAÇÕES LOCAIS — NENHUMA INCREMENTA VERSION POR CONTA PRÓPRIA
+  // =========================================================================
 
   addPage: (type = 'technical') => {
     const { currentCatalog } = get();
@@ -66,7 +98,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     const newPageNumber = currentCatalog.pages.length + 1;
     const newPage = {
-      id: `page-${Date.now()}`,
+      id: `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       pageNumber: newPageNumber,
       pageType: type,
       title: `Folha ${newPageNumber}`,
@@ -76,12 +108,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const updatedCatalog: Catalog = {
       ...currentCatalog,
       pages: [...currentCatalog.pages, newPage],
-      updatedAt: new Date().toISOString(),
-      version: currentCatalog.version + 1
+      updatedAt: new Date().toISOString()
+      // version mantida intacta
     };
 
-    set({ currentCatalog: updatedCatalog, activePageIndex: currentCatalog.pages.length });
-    get().saveCurrentCatalog();
+    set({
+      currentCatalog: updatedCatalog,
+      activePageIndex: currentCatalog.pages.length,
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+    void get().saveCurrentCatalog();
   },
 
   removePage: (pageId) => {
@@ -95,13 +132,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const updatedCatalog: Catalog = {
       ...currentCatalog,
       pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-      version: currentCatalog.version + 1
+      updatedAt: new Date().toISOString()
+      // version mantida intacta
     };
 
     const nextIndex = Math.min(activePageIndex, updatedPages.length - 1);
-    set({ currentCatalog: updatedCatalog, activePageIndex: nextIndex });
-    get().saveCurrentCatalog();
+    set({
+      currentCatalog: updatedCatalog,
+      activePageIndex: nextIndex,
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+    void get().saveCurrentCatalog();
   },
 
   reorderPages: (fromIndex, toIndex) => {
@@ -116,12 +158,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const updatedCatalog: Catalog = {
       ...currentCatalog,
       pages: reorderedPages,
-      updatedAt: new Date().toISOString(),
-      version: currentCatalog.version + 1
+      updatedAt: new Date().toISOString()
+      // version mantida intacta
     };
 
-    set({ currentCatalog: updatedCatalog, activePageIndex: toIndex });
-    get().saveCurrentCatalog();
+    set({
+      currentCatalog: updatedCatalog,
+      activePageIndex: toIndex,
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+    void get().saveCurrentCatalog();
   },
 
   setPageTitle: (pageId, title) => {
@@ -132,7 +179,12 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       p.id === pageId ? { ...p, title } : p
     );
 
-    set({ currentCatalog: { ...currentCatalog, pages: updatedPages } });
+    set({
+      currentCatalog: { ...currentCatalog, pages: updatedPages, updatedAt: new Date().toISOString() },
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+    void get().saveCurrentCatalog();
   },
 
   addBlock: (pageId, blockData) => {
@@ -141,7 +193,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     const newBlock: ContentBlock = {
       ...blockData,
-      id: `block-${Date.now()}`
+      id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     };
 
     const updatedPages = currentCatalog.pages.map((p) =>
@@ -151,12 +203,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const updatedCatalog: Catalog = {
       ...currentCatalog,
       pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-      version: currentCatalog.version + 1
+      updatedAt: new Date().toISOString()
+      // version mantida intacta
     };
 
-    set({ currentCatalog: updatedCatalog, selectedBlockId: newBlock.id });
-    get().saveCurrentCatalog();
+    set({
+      currentCatalog: updatedCatalog,
+      selectedBlockId: newBlock.id,
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+    void get().saveCurrentCatalog();
   },
 
   updateBlock: (pageId, blockId, updates) => {
@@ -176,9 +233,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         ...currentCatalog,
         pages: updatedPages,
         updatedAt: new Date().toISOString()
-      }
+      },
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
 
   removeBlock: (pageId, blockId) => {
@@ -197,12 +256,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       currentCatalog: {
         ...currentCatalog,
         pages: updatedPages,
-        updatedAt: new Date().toISOString(),
-        version: currentCatalog.version + 1
+        updatedAt: new Date().toISOString()
       },
-      selectedBlockId: null
+      selectedBlockId: null,
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
 
   updateCellOverride: (blockId, rowId, fieldKey, value) => {
@@ -234,9 +294,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         ...currentCatalog,
         pages: updatedPages,
         updatedAt: new Date().toISOString()
-      }
+      },
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
 
   restoreCellToLibrary: (blockId, rowId, fieldKey) => {
@@ -267,9 +329,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         ...currentCatalog,
         pages: updatedPages,
         updatedAt: new Date().toISOString()
-      }
+      },
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
 
   addRowToTable: (blockId, productRefId) => {
@@ -277,7 +341,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (!currentCatalog) return;
 
     const newRow = {
-      id: `row-${Date.now()}`,
+      id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       productRefId,
       localOverrides: {},
       customNotes: '',
@@ -301,9 +365,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         ...currentCatalog,
         pages: updatedPages,
         updatedAt: new Date().toISOString()
-      }
+      },
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
 
   removeRowFromTable: (blockId, rowId) => {
@@ -326,46 +392,124 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         ...currentCatalog,
         pages: updatedPages,
         updatedAt: new Date().toISOString()
-      }
+      },
+      isDirty: true,
+      syncStatus: 'dirty'
     });
-    get().saveCurrentCatalog();
+    void get().saveCurrentCatalog();
   },
+
+  // =========================================================================
+  // FASE 1B & 1C: FILA DE SALVAMENTO SINGLE-FLIGHT & TRATAMENTO DE CONFLITO
+  // =========================================================================
 
   saveCurrentCatalog: async () => {
     const { currentCatalog } = get();
     if (!currentCatalog) return;
 
-    set({ isSaving: true });
-    try {
-      // 1. Salva localmente (IndexedDB / localStorage)
-      await StorageService.saveCatalog(currentCatalog);
-      set({ lastSavedAt: new Date().toISOString() });
+    if (isSaveInFlight) {
+      hasPendingSave = true;
+      return;
+    }
 
-      // 2. Persistência Compartilhada Segura via Supabase RPC v2 com CAS
-      const remoteRes = await SupabaseService.saveCatalog(currentCatalog, currentCatalog.version);
-      if (remoteRes.success && remoteRes.data) {
-        const updatedVersion = remoteRes.data.version || currentCatalog.version + 1;
-        if (updatedVersion !== currentCatalog.version) {
-          const syncedCatalog = { ...currentCatalog, version: updatedVersion };
-          set({ currentCatalog: syncedCatalog });
-          await StorageService.saveCatalog(syncedCatalog);
+    isSaveInFlight = true;
+    set({ isSaving: true, syncStatus: 'saving', syncError: null });
+
+    try {
+      while (true) {
+        hasPendingSave = false;
+        const catalogSnapshot = get().currentCatalog;
+        if (!catalogSnapshot) break;
+
+        // 1. Salva em Cache Local (IndexedDB / localStorage)
+        try {
+          await StorageService.saveCatalog(catalogSnapshot);
+          set({ cachedAt: new Date().toISOString() });
+        } catch (storageErr) {
+          console.warn('Erro ao atualizar cache local:', storageErr);
         }
-      } else if (remoteRes.conflict) {
-        console.warn('Conflito de versão detectado no servidor ao salvar catálogo.');
+
+        // 2. Envia para o Supabase usando save_catalog_v3 com expectedVersion estrito
+        const remoteRes = await SupabaseService.saveCatalog(
+          catalogSnapshot,
+          catalogSnapshot.version,
+          `Salvamento de "${catalogSnapshot.title}"`
+        );
+
+        if (remoteRes.success && remoteRes.data) {
+          const confirmedVersion = Number(remoteRes.data.version) || catalogSnapshot.version + 1;
+          const nowIso = new Date().toISOString();
+
+          // Preserva edições feitas enquanto a requisição estava em voo:
+          // Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente!
+          const activeCurrent = get().currentCatalog;
+          if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
+            set({
+              currentCatalog: { ...activeCurrent, version: confirmedVersion },
+              serverSavedAt: nowIso,
+              lastSavedAt: nowIso
+            });
+          }
+
+          if (!hasPendingSave) {
+            set({ isDirty: false, syncStatus: 'synced', syncError: null });
+            break;
+          }
+          // Se houve novas alterações locais durante a requisição, continua o loop
+        } else if (remoteRes.conflict) {
+          // FASE 1C: Conflito Real 40001 (outro dispositivo atualizou antes)
+          set({
+            syncStatus: 'conflict',
+            syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
+            isDirty: true
+          });
+          break; // Não tenta novamente em loop para não sobrescrever
+        } else {
+          // Erro de rede ou offline
+          set({
+            syncStatus: 'offline',
+            syncError: remoteRes.error || 'Operando em modo offline. Alterações salvas no cache local.'
+          });
+          break;
+        }
       }
-    } catch (e) {
-      console.warn('Sincronização em nuvem indisponível, mantido localmente:', e);
     } finally {
+      isSaveInFlight = false;
       set({ isSaving: false });
     }
   },
 
-  loadLatestCatalog: async () => {
+  resolveConflictKeepLocal: async () => {
+    // Força sobrescrita com base na versão remota atualizada
+    const { currentCatalog } = get();
+    if (!currentCatalog) return;
+    const remoteList = await get().loadWorkspace();
+    const serverCat = remoteList.find((c) => c.id === currentCatalog.id);
+    const serverVersion = serverCat ? serverCat.version : currentCatalog.version;
+
+    set({
+      currentCatalog: { ...currentCatalog, version: serverVersion },
+      syncStatus: 'dirty',
+      syncError: null
+    });
+    void get().saveCurrentCatalog();
+  },
+
+  resolveConflictReloadServer: async () => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return;
+    await get().refreshCatalog(currentCatalog.id);
+  },
+
+  // =========================================================================
+  // FASE 1G & 1H: BOOT, WORKSPACE REMOTO & IDENTIDADE IMUTÁVEL
+  // =========================================================================
+
+  loadWorkspace: async () => {
     set({ isLoading: true });
     try {
-      // 1. Tenta carregar do Supabase Workspace compartilhado
       const remote = await SupabaseService.listWorkspace();
-      if (remote.success && remote.data?.catalogs && remote.data.catalogs.length > 0) {
+      if (remote.success && remote.data?.catalogs) {
         const remoteCatalogs: Catalog[] = remote.data.catalogs.map((rc: any) => {
           const brandData = typeof rc.brand === 'object' && rc.brand !== null ? rc.brand : {};
           return {
@@ -374,106 +518,211 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             subtitle: brandData.subtitle || '',
             themeId: brandData.themeId || 'default-technical',
             pages: Array.isArray(brandData.pages) ? brandData.pages : [],
-            version: rc.version || 1,
+            version: Number(rc.version) || 1,
             createdAt: rc.created_at,
             updatedAt: rc.updated_at
           };
         });
 
+        set({ savedCatalogs: remoteCatalogs });
+        // Salva cópia de leitura no cache local
         for (const cat of remoteCatalogs) {
-          await StorageService.saveCatalog(cat);
+          void StorageService.saveCatalog(cat);
         }
+        return remoteCatalogs;
+      }
+      return [];
+    } catch (err) {
+      console.warn('Erro ao carregar workspace remoto:', err);
+      return [];
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-        set({ savedCatalogs: remoteCatalogs, currentCatalog: remoteCatalogs[0] });
+  openCatalog: async (id: string) => {
+    set({ isLoading: true });
+    try {
+      // 1. Tenta carregar do workspace remoto
+      const workspaceCatalogs = await get().loadWorkspace();
+      const targetRemote = workspaceCatalogs.find((c) => c.id === id);
+
+      if (targetRemote) {
+        set({
+          currentCatalog: targetRemote,
+          activePageIndex: 0,
+          selectedBlockId: null,
+          isDirty: false,
+          syncStatus: 'synced',
+          syncError: null
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cb_active_catalog_id', id);
+        }
         return;
       }
 
-      // 2. Fallback para banco local
-      const saved = await StorageService.loadCatalog();
-      if (saved) set({ currentCatalog: saved });
-      else get().createCatalogFromPreset();
+      // 2. Fallback offline no StorageService
+      const cached = await StorageService.loadCatalog(id);
+      if (cached) {
+        set({
+          currentCatalog: cached,
+          activePageIndex: 0,
+          selectedBlockId: null,
+          syncStatus: 'offline',
+          syncError: 'Catálogo carregado do cache local.'
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cb_active_catalog_id', id);
+        }
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-      await get().loadAllCatalogs();
+  refreshCatalog: async (id: string) => {
+    const workspaceCatalogs = await get().loadWorkspace();
+    const targetRemote = workspaceCatalogs.find((c) => c.id === id);
+    if (targetRemote) {
+      set({
+        currentCatalog: targetRemote,
+        isDirty: false,
+        syncStatus: 'synced',
+        syncError: null
+      });
+    }
+  },
+
+  loadLatestCatalog: async () => {
+    set({ isLoading: true });
+    try {
+      const remoteCatalogs = await get().loadWorkspace();
+
+      if (remoteCatalogs.length > 0) {
+        const preferredId = typeof window !== 'undefined' ? localStorage.getItem('cb_active_catalog_id') : null;
+        const targetCatalog = (preferredId ? remoteCatalogs.find((c) => c.id === preferredId) : null) || remoteCatalogs[0];
+
+        set({
+          currentCatalog: targetCatalog,
+          activePageIndex: 0,
+          selectedBlockId: null,
+          isDirty: false,
+          syncStatus: 'synced',
+          syncError: null
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cb_active_catalog_id', targetCatalog.id);
+        }
+        return;
+      }
+
+      // Fallback offline
+      const cached = await StorageService.loadCatalog();
+      if (cached) {
+        set({
+          currentCatalog: cached,
+          activePageIndex: 0,
+          selectedBlockId: null,
+          syncStatus: 'offline',
+          syncError: 'Operando em modo offline com cache local.'
+        });
+      } else {
+        get().createCatalogFromPreset();
+      }
     } catch (err) {
-      console.warn('Fallback para catálogo local:', err);
-      const saved = await StorageService.loadCatalog();
-      if (saved) set({ currentCatalog: saved });
-      else get().createCatalogFromPreset();
+      console.warn('Fallback offline no bootstrap:', err);
+      const cached = await StorageService.loadCatalog();
+      if (cached) {
+        set({ currentCatalog: cached, syncStatus: 'offline' });
+      } else {
+        get().createCatalogFromPreset();
+      }
     } finally {
       set({ isLoading: false });
     }
   },
 
   loadAllCatalogs: async () => {
-    try {
-      const catalogs = await StorageService.loadAllCatalogs();
-      set({ savedCatalogs: catalogs });
-    } catch (err) {
-      console.error('Erro ao carregar lista de catálogos:', err);
-    }
+    await get().loadWorkspace();
   },
 
   loadCatalogById: async (id: string) => {
-    set({ isLoading: true });
-    try {
-      const catalog = await StorageService.loadCatalog(id);
-      if (catalog) {
-        set({ currentCatalog: catalog, activePageIndex: 0, selectedBlockId: null });
-        await StorageService.saveCatalog(catalog);
-      }
-    } finally {
-      set({ isLoading: false });
-    }
+    await get().openCatalog(id);
   },
 
   duplicateCatalog: async (id: string) => {
-    const catalog = await StorageService.loadCatalog(id);
-    if (!catalog) return;
+    const { savedCatalogs } = get();
+    const source = savedCatalogs.find((c) => c.id === id) || (await StorageService.loadCatalog(id));
+    if (!source) return;
 
+    // FASE 1D: UUID Imutável e version = 0 para criação
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
     const duplicated: Catalog = {
-      ...structuredClone(catalog),
-      id: `cat-${Date.now()}`,
-      title: `${catalog.title} (Cópia)`,
+      ...structuredClone(source),
+      id: newId,
+      title: `${source.title} (Cópia)`,
+      version: 0, // Novo documento não confirmado
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      version: 1
+      updatedAt: new Date().toISOString()
     };
 
-    await StorageService.saveCatalog(duplicated);
-    await get().loadAllCatalogs();
+    set({
+      currentCatalog: duplicated,
+      activePageIndex: 0,
+      selectedBlockId: null,
+      isDirty: true,
+      syncStatus: 'saving'
+    });
+
+    await get().saveCurrentCatalog();
+    await get().loadWorkspace();
   },
 
   deleteCatalog: async (id: string) => {
-    await StorageService.deleteCatalog(id);
     try {
       await SupabaseService.deleteCatalog(id);
     } catch (e) {
-      console.warn('Erro ao excluir catálogo remoto:', e);
+      console.warn('Erro ao excluir no Supabase:', e);
     }
+    await StorageService.deleteCatalog(id);
+
+    const remaining = await get().loadWorkspace();
     const { currentCatalog } = get();
+
     if (currentCatalog && currentCatalog.id === id) {
-      const remaining = await StorageService.loadAllCatalogs();
       if (remaining.length > 0) {
-        set({ currentCatalog: remaining[0], activePageIndex: 0, selectedBlockId: null });
+        set({ currentCatalog: remaining[0], activePageIndex: 0, selectedBlockId: null, isDirty: false, syncStatus: 'synced' });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cb_active_catalog_id', remaining[0].id);
+        }
       } else {
         get().createCatalogFromPreset();
       }
     }
-    await get().loadAllCatalogs();
   },
 
-  createCatalogFromPreset: (name = 'Catálogo Oficial de Calibração & Instrumentação PRESYS 2026', presetId?: string) => {
+  createCatalogFromPreset: (name = 'Novo Catálogo Técnico PRESYS', presetId?: string) => {
     const basePreset = (presetId ? SYSTEM_PRESETS.find((p) => p.id === presetId) : null) || SYSTEM_PRESETS[0];
-    const initialCatalog: Catalog = {
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+
+    const newCatalog: Catalog = {
       ...structuredClone(basePreset.catalog),
-      id: `cat-${Date.now()}`,
+      id: newId,
       title: name,
+      version: 0, // Inicia em 0 para insert via RPC
       updatedAt: new Date().toISOString(),
-      version: 1
+      createdAt: new Date().toISOString()
     };
 
-    set({ currentCatalog: initialCatalog, activePageIndex: 0 });
-    get().saveCurrentCatalog();
-    get().loadAllCatalogs();
+    set({
+      currentCatalog: newCatalog,
+      activePageIndex: 0,
+      selectedBlockId: null,
+      isDirty: true,
+      syncStatus: 'saving'
+    });
+
+    void get().saveCurrentCatalog();
   }
 }));
