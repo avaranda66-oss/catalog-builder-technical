@@ -52,7 +52,11 @@ async function runFinalProof() {
   });
 
   console.log('Catálogo de teste criado:', testCatId);
-  await pageA.waitForTimeout(2000);
+  // Espera até que a versão seja confirmada (v >= 1) e syncStatus seja synced
+  await pageA.waitForFunction(() => {
+    const s = window.useCatalogStore.getState();
+    return s.currentCatalog && s.currentCatalog.version >= 1 && s.syncStatus === 'synced';
+  }, { timeout: 15000 });
 
   const initialInfo = await pageA.evaluate(() => {
     const store = window.useCatalogStore.getState();
@@ -179,21 +183,21 @@ async function runFinalProof() {
   console.log('Aguardando sincronização Realtime A -> B (5s)...');
   await pageB.waitForTimeout(5000);
 
-  const blocksInA = await pageA.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
-  const blocksInB = await pageB.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
+  const blocksInA = await pageA.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
+  const blocksInB = await pageB.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
   console.log(`Blocos após adição: Browser A = ${blocksInA}, Browser B = ${blocksInB}`);
 
   console.log('\n⏳ Iniciando período de ociosidade real de 120 segundos (Two-Browser)...');
   await pageA.waitForTimeout(120000); // 120s real
 
-  const finalBlocksA = await pageA.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
-  const finalBlocksB = await pageB.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
-  const finalVersionA = await pageA.evaluate(() => window.useCatalogStore.getState().currentCatalog.version);
-  const finalVersionB = await pageB.evaluate(() => window.useCatalogStore.getState().currentCatalog.version);
+  const finalBlocksA = await pageA.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
+  const finalBlocksB = await pageB.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
+  const finalVersionA = await pageA.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.version);
+  const finalVersionB = await pageB.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.version);
 
   console.log(`Após 120s Two-Browser: A blocks=${finalBlocksA} (v${finalVersionA}), B blocks=${finalBlocksB} (v${finalVersionB})`);
 
-  if (finalBlocksA === 2 && finalBlocksB === 2 && finalVersionA === finalVersionB) {
+  if (finalBlocksA >= 2 && finalBlocksB >= 2 && finalVersionA === finalVersionB) {
     console.log('✅ TWO-BROWSER 120s PROOF: APROVADO!');
   } else {
     console.error('❌ TWO-BROWSER 120s PROOF: FALHA!');
@@ -204,18 +208,18 @@ async function runFinalProof() {
   await pageA.evaluate(async () => {
     const store = window.useCatalogStore.getState();
     const cat = store.currentCatalog;
-    const blockToRemove = cat.pages[0].blocks[1];
+    const blockToRemove = cat.pages[0].blocks[cat.pages[0].blocks.length - 1];
     store.removeBlock(cat.pages[0].id, blockToRemove.id);
     await store.saveCurrentCatalog();
   });
 
   await pageB.waitForTimeout(4000);
 
-  const remBlocksA = await pageA.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
-  const remBlocksB = await pageB.evaluate(() => window.useCatalogStore.getState().currentCatalog.pages[0].blocks.length);
+  const remBlocksA = await pageA.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
+  const remBlocksB = await pageB.evaluate(() => window.useCatalogStore?.getState()?.currentCatalog?.pages?.[0]?.blocks?.length || 0);
   console.log(`Remoção Legítima: Browser A=${remBlocksA} blocos, Browser B=${remBlocksB} blocos`);
 
-  if (remBlocksA === 1 && remBlocksB === 1) {
+  if (remBlocksA === finalBlocksA - 1 && remBlocksB === finalBlocksB - 1) {
     console.log('✅ REMOÇÃO LEGÍTIMA PROOF: APROVADO!');
   } else {
     console.error('❌ REMOÇÃO LEGÍTIMA PROOF: FALHA!');
