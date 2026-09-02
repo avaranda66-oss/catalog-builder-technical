@@ -33,27 +33,78 @@ export const CorporateIconPicker: React.FC<CorporateIconPickerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CorporateIconCategory | 'all'>('all');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const prevIsOpenRef = useRef(false);
 
-  // Foco automático no input de busca ao abrir
+  // Focus capture e restoration ao abrir e fechar
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 50);
-    } else {
+      if (!prevIsOpenRef.current) {
+        // Captura o elemento ativo como trigger antes de abrir
+        triggerRef.current = (document.activeElement as HTMLElement) || null;
+      }
+      searchInputRef.current?.focus();
+    } else if (!isOpen && prevIsOpenRef.current) {
       setSearchQuery('');
       setSelectedCategory('all');
+      // Restaura o foco ao trigger anterior
+      if (triggerRef.current && typeof triggerRef.current.focus === 'function') {
+        if (document.body.contains(triggerRef.current)) {
+          triggerRef.current.focus();
+        }
+      }
+      triggerRef.current = null;
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen]);
 
-  // Listener para fechar via tecla Escape
+  // Restauração defensiva no unmount se o componente for desmontado aberto
+  useEffect(() => {
+    return () => {
+      if (triggerRef.current && typeof triggerRef.current.focus === 'function') {
+        if (document.body.contains(triggerRef.current)) {
+          triggerRef.current.focus();
+        }
+      }
+    };
+  }, []);
+
+  // Keyboard navigation: Escape fecha e Tab/Shift+Tab mantém o foco confinado (Focus Trap)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
+        e.preventDefault();
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        if (!dialogRef.current) return;
+
+        const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
@@ -74,6 +125,7 @@ export const CorporateIconPicker: React.FC<CorporateIconPickerProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"

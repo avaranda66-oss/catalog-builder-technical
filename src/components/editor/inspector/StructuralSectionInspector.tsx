@@ -94,9 +94,11 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
 
   const handleClearIcon = () => {
     if (!rawStructuralData) return;
-    const { iconId: _removed, ...rest } = rawStructuralData;
     updateBlock(pageId, sectionBlock.id, {
-      structuralData: rest as any
+      structuralData: {
+        ...rawStructuralData,
+        iconId: undefined
+      }
     });
   };
 

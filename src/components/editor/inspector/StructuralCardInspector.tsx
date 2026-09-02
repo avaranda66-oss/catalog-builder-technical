@@ -38,9 +38,8 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
   const rawStructuralData = sectionBlock.structuralData;
   const card = rawStructuralData?.children?.find((c) => c.id === cardId);
 
-  // Stale child self-healing: se o card não for encontrado, retorna para a seção
+  // Defensivo sem side-effect durante render: se o card não for encontrado, retorna null
   if (!rawStructuralData || !card) {
-    onBackToSection();
     return null;
   }
 
@@ -63,18 +62,7 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
   };
 
   const handleClearIcon = () => {
-    const child = rawStructuralData?.children?.find((c) => c.id === cardId);
-    if (!child) return;
-    const { iconId: _removed, ...clearedChild } = child;
-    const newChildren = rawStructuralData.children.map((c) =>
-      c.id === cardId ? clearedChild : c
-    );
-    updateBlock(pageId, sectionBlock.id, {
-      structuralData: {
-        ...rawStructuralData,
-        children: newChildren
-      }
-    });
+    handleCardUpdate({ iconId: undefined });
   };
 
   return (

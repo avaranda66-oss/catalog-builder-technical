@@ -18,6 +18,7 @@ import {
 import { CorporateIcon } from '../../src/components/icons/CorporateIcon';
 import { CorporateIconPicker } from '../../src/components/icons/CorporateIconPicker';
 import { StructuralSectionBlock } from '../../src/components/editor/blocks/StructuralSectionBlock';
+import { StructuralCardInspector } from '../../src/components/editor/inspector/StructuralCardInspector';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
 import { ContentBlock, Catalog } from '../../src/domain/catalog.schema';
 import { updateStructuralChildById } from '../../src/domain/canvas-layout.engine';
@@ -347,6 +348,85 @@ describe('Fase 3A.3 — Corporate Icon Registry + Icon Picker', () => {
     });
   });
 
+  it('ICON-RENDER-5: section com title="", badgeText="" e iconId="network" renderiza SVG no Editor e Export', () => {
+    const blockWithoutTitle: ContentBlock = {
+      ...mockStructuralBlock,
+      title: '',
+      badgeText: '',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        iconId: 'network'
+      }
+    };
+
+    const editorContainer = document.createElement('div');
+    const exportContainer = document.createElement('div');
+    const editorRoot = createRoot(editorContainer);
+    const exportRoot = createRoot(exportContainer);
+
+    act(() => {
+      editorRoot.render(
+        <StructuralSectionBlock block={blockWithoutTitle} pageId="page-1" isExport={false} />
+      );
+      exportRoot.render(
+        <StructuralSectionBlock block={blockWithoutTitle} pageId="page-1" isExport={true} />
+      );
+    });
+
+    const editorSvg = editorContainer.querySelector('svg[data-corporate-icon-id="network"]');
+    const exportSvg = exportContainer.querySelector('svg[data-corporate-icon-id="network"]');
+
+    expect(editorSvg).not.toBeNull();
+    expect(exportSvg).not.toBeNull();
+
+    act(() => {
+      editorRoot.unmount();
+      exportRoot.unmount();
+    });
+  });
+
+  it('ICON-RENDER-6: section com title="", badgeText="" e unknown iconId exibe fallback no Editor e zero header no Export', () => {
+    const blockWithUnknown: ContentBlock = {
+      ...mockStructuralBlock,
+      title: '',
+      badgeText: '',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        iconId: 'unknown-sensor-xyz'
+      }
+    };
+
+    const editorContainer = document.createElement('div');
+    const exportContainer = document.createElement('div');
+    const editorRoot = createRoot(editorContainer);
+    const exportRoot = createRoot(exportContainer);
+
+    act(() => {
+      editorRoot.render(
+        <StructuralSectionBlock block={blockWithUnknown} pageId="page-1" isExport={false} />
+      );
+      exportRoot.render(
+        <StructuralSectionBlock block={blockWithUnknown} pageId="page-1" isExport={true} />
+      );
+    });
+
+    // Editor: exibe fallback controlado com tooltip
+    const fallback = editorContainer.querySelector('[data-corporate-icon-fallback="true"]');
+    expect(fallback).not.toBeNull();
+
+    // Export: ZERO SVG, ZERO fallback, ZERO header visual vazio, ZERO raw ID
+    const exportSvgs = exportContainer.querySelectorAll('svg[data-corporate-icon-id="unknown-sensor-xyz"]');
+    expect(exportSvgs.length).toBe(0);
+    expect(exportContainer.querySelector('[data-corporate-icon-fallback="true"]')).toBeNull();
+    expect(exportContainer.querySelector('.border-b')).toBeNull(); // Não cria header vazio com borda fantasma
+    expect(exportContainer.textContent).not.toContain('unknown-sensor-xyz');
+
+    act(() => {
+      editorRoot.unmount();
+      exportRoot.unmount();
+    });
+  });
+
   // ==========================================================================
   // 5. ISOLAMENTO EDITOR VS EXPORT (ICON-ENV-1)
   // ==========================================================================
@@ -669,6 +749,193 @@ describe('Fase 3A.3 — Corporate Icon Registry + Icon Picker', () => {
   });
 
   // ==========================================================================
+  // 7B. PICKER FOCUS & KEYBOARD ACCESSIBILITY (ICON-A11Y-1..5)
+  // ==========================================================================
+
+  it('ICON-A11Y-1: abrir picker coloca o foco automaticamente no input de busca', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={true}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    });
+
+    const searchInput = container.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(document.activeElement).toBe(searchInput);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
+  it('ICON-A11Y-2: pressionar Escape chama onClose', () => {
+    let closed = false;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={true}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {
+            closed = true;
+          }}
+        />
+      );
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(closed).toBe(true);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
+  it('ICON-A11Y-3: Tab no último elemento focusable cicla de volta para o primeiro', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={true}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+
+    const focusables = container.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusables[0];
+    const lastElement = focusables[focusables.length - 1];
+
+    lastElement.focus();
+    expect(document.activeElement).toBe(lastElement);
+
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      window.dispatchEvent(event);
+    });
+
+    expect(document.activeElement).toBe(firstElement);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
+  it('ICON-A11Y-4: Shift+Tab no primeiro elemento focusable cicla para o último', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={true}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+
+    const focusables = container.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusables[0];
+    const lastElement = focusables[focusables.length - 1];
+
+    firstElement.focus();
+    expect(document.activeElement).toBe(firstElement);
+
+    act(() => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      window.dispatchEvent(event);
+    });
+
+    expect(document.activeElement).toBe(lastElement);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+  });
+
+  it('ICON-A11Y-5: fechar o picker devolve o foco ao trigger que abriu o modal', () => {
+    const triggerButton = document.createElement('button');
+    triggerButton.id = 'test-trigger-button';
+    document.body.appendChild(triggerButton);
+    triggerButton.focus();
+    expect(document.activeElement).toBe(triggerButton);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={true}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+
+    act(() => {
+      root.render(
+        <CorporateIconPicker
+          isOpen={false}
+          onSelect={() => {}}
+          onClear={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+
+    expect(document.activeElement).toBe(triggerButton);
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
+    document.body.removeChild(triggerButton);
+  });
+
+  // ==========================================================================
   // 8. MUTAÇÃO & JSON PERSISTENCE (ICON-MUTATION-1..2, ICON-CLEAR-1)
   // ==========================================================================
 
@@ -725,6 +992,34 @@ describe('Fase 3A.3 — Corporate Icon Registry + Icon Picker', () => {
     expect(parsed.iconId).toBeUndefined();
     expect(parsed).not.toHaveProperty('iconId');
     expect(serialized).not.toContain('iconId');
+  });
+
+  it('CARD-DEL-INV-1: StructuralCardInspector não causa state mutation durante render quando o card não existe', () => {
+    let backCalledDuringRender = false;
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralCardInspector
+          sectionBlock={mockStructuralBlock}
+          pageId="page-1"
+          cardId="deleted-card-uuid"
+          onBackToSection={() => {
+            backCalledDuringRender = true;
+          }}
+        />
+      );
+    });
+
+    // Deve retornar null defensivamente sem disparar callback/mutação durante render
+    expect(container.innerHTML).toBe('');
+    expect(backCalledDuringRender).toBe(false);
+
+    act(() => {
+      root.unmount();
+    });
   });
 
   // ==========================================================================

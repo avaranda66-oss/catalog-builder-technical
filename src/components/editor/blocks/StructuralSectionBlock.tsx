@@ -5,7 +5,7 @@
 import React from 'react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import { SPACING_MM_MAP } from '@/domain/canvas-layout.schema';
-import { CorporateIcon } from '@/components/icons';
+import { CorporateIcon, getCorporateIcon } from '@/components/icons';
 
 interface StructuralSectionBlockProps {
   block: ContentBlock;
@@ -44,7 +44,15 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
   const gapMm = SPACING_MM_MAP[layout.gap] ?? 3;
   const paddingMm = SPACING_MM_MAP[layout.padding] ?? 4;
 
-  const hasHeader = Boolean(block.title?.trim() || block.badgeText?.trim());
+  const sectionIconId = data?.iconId;
+  const isSectionIconKnown = Boolean(getCorporateIcon(sectionIconId));
+  const hasVisibleSectionIcon = isSectionIconKnown || (!isExport && Boolean(sectionIconId));
+
+  const hasHeader = Boolean(
+    block.title?.trim() ||
+    block.badgeText?.trim() ||
+    hasVisibleSectionIcon
+  );
 
   // Mapeamento determinístico de Tokens de Background
   const bgMap = {
