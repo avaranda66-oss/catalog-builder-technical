@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { getSupabase } from '../../services/supabase.service';
 
 export const DevRealtimeHUD: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
 
   const {
     currentCatalog,
@@ -17,7 +19,7 @@ export const DevRealtimeHUD: React.FC = () => {
     realtimeStatus,
     inFlightSave
   } = useCatalogStore();
-  const { email, role } = useAuthStore();
+  const { email, role, status: authStatus, userId } = useAuthStore();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -55,12 +57,15 @@ export const DevRealtimeHUD: React.FC = () => {
       version: currentCatalog?.version ?? 0,
       pagesCount: currentCatalog?.pages?.length ?? 0,
       totalBlocks,
+      activePageIndex,
       syncStatus,
       syncError,
       isDirty,
       isSaving,
       localRevision,
       lastAcknowledgedLocalRevision,
+      authStatus,
+      userId,
       realtimeStatus,
       clientInstanceId: clientId,
       buildCommit: buildSha
@@ -70,6 +75,50 @@ export const DevRealtimeHUD: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleForceTokenRefresh = async () => {
+    setIsRefreshingAuth(true);
+    const supabase = getSupabase();
+    if (!supabase) {
+      alert('Supabase não inicializado.');
+      setIsRefreshingAuth(false);
+      return;
+    }
+
+    console.log('[DEBUG FORCING TOKEN REFRESH] Chamando supabase.auth.refreshSession()...', {
+      catalogBefore: currentCatalog?.id,
+      titleBefore: currentCatalog?.title,
+      versionBefore: currentCatalog?.version,
+      pagesBefore: currentCatalog?.pages?.length,
+      blocksBefore: totalBlocks,
+      activePageIndex,
+      isDirty,
+      localRevision,
+      authStatus,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('[DEBUG TOKEN REFRESH ERROR]', error);
+        alert('Erro ao renovar token: ' + error.message);
+      } else {
+        console.log('[DEBUG TOKEN REFRESH SUCCESS]', {
+          sessionExpiresAt: data.session?.expires_at,
+          user: data.user?.email,
+          catalogAfter: useCatalogStore.getState().currentCatalog?.id,
+          versionAfter: useCatalogStore.getState().currentCatalog?.version,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (e: any) {
+      console.error('[DEBUG TOKEN REFRESH EXCEPTION]', e);
+    } finally {
+      setIsRefreshingAuth(false);
+    }
   };
 
   return (
@@ -161,8 +210,18 @@ export const DevRealtimeHUD: React.FC = () => {
           </div>
         )}
 
-        <div className="text-[9px] text-slate-400 pt-1 border-t border-slate-800/80 truncate">
-          User: {email || 'anon'} ({role || 'user'})
+        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+          <div className="text-[9px] text-slate-400 truncate flex-1">
+            User: {email || 'anon'} ({role || 'user'})
+          </div>
+          <button
+            onClick={handleForceTokenRefresh}
+            disabled={isRefreshingAuth}
+            className="px-2 py-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 rounded text-[9px] font-bold transition-colors shadow-sm flex-shrink-0"
+            title="Executa supabase.auth.refreshSession() oficial para teste de integridade da sessão"
+          >
+            {isRefreshingAuth ? 'Renovando...' : '⚡ Forçar renovação de sessão'}
+          </button>
         </div>
       </div>
     </aside>

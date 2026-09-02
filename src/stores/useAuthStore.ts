@@ -1,6 +1,7 @@
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { getSupabase } from '@/services/supabase.service';
+import { useCatalogStore } from '@/stores/useCatalogStore';
 
 export type EffectiveRole = 'admin' | 'editor';
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'forbidden' | 'profile-error';
@@ -156,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (event === 'SIGNED_OUT') {
         ++generation;
         set({ status: 'unauthenticated', errorMessage: null, ...resetIdentity() });
+        useCatalogStore.getState().resetWorkspaceForIdentityChange();
         return;
       }
 
@@ -184,6 +186,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (prevStatus === 'authenticated' && prevUserId === currentUserId) {
           return;
         }
+
+        // Se trocou de usuário, limpa o catálogo em memória do usuário anterior antes de carregar o novo
+        if (prevUserId && currentUserId && prevUserId !== currentUserId) {
+          console.log(`🧹 [IDENTITY CHANGE] Usuário alterado de ${prevUserId} para ${currentUserId}. Limpando workspace anterior.`);
+          useCatalogStore.getState().resetWorkspaceForIdentityChange();
+        }
+
         const eventGeneration = ++generation;
         set({ status: 'loading', errorMessage: null });
         await resolveSession(session, set, eventGeneration);
@@ -241,6 +250,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     ++generation;
     set({ status: 'unauthenticated', errorMessage: null, ...resetIdentity() });
+    useCatalogStore.getState().resetWorkspaceForIdentityChange();
     const supabase = getSupabase();
     if (supabase) await supabase.auth.signOut();
   },

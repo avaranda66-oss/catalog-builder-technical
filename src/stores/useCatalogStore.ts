@@ -190,6 +190,7 @@ interface CatalogState {
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
+  resetWorkspaceForIdentityChange: () => void;
 }
 
 // Controle de Fila Single-Flight em nível de módulo
@@ -216,6 +217,25 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   savedCatalogs: [],
   isLoading: false,
+
+  resetWorkspaceForIdentityChange: () => {
+    console.log('🧹 [IDENTITY RESET] Limpando workspace em memória por troca/saída de identidade.');
+    set({
+      currentCatalog: null,
+      savedCatalogs: [],
+      activePageIndex: 0,
+      selectedBlockId: null,
+      isDirty: false,
+      isSaving: false,
+      localRevision: 0,
+      lastAcknowledgedLocalRevision: 0,
+      inFlightSave: null,
+      syncStatus: 'synced',
+      syncError: null,
+      serverSavedAt: null,
+      cachedAt: null
+    });
+  },
 
   // FASE 1.1: setCurrentCatalog é um SETTER PURO sem side-effects de rede
   setCurrentCatalog: (nextCatalog, markDirty = true) => {
