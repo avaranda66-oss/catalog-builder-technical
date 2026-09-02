@@ -287,18 +287,22 @@ export function updateStructuralLayout(
   structuralData: StructuralSectionData,
   layoutUpdates: Partial<StructuralLayoutConfig>
 ): StructuralSectionData {
-  const mergedLayout: Record<string, any> = {
+  const mergedLayout = {
     ...structuralData.layout,
     ...layoutUpdates
   };
 
-  // Se o modo for alterado para 'fill' ou fixedWidthMm for explicitamente undefined, remove fixedWidthMm
-  if (mergedLayout.widthMode === 'fill' || layoutUpdates.fixedWidthMm === undefined) {
-    delete mergedLayout.fixedWidthMm;
-  }
+  // Se o modo resultante for 'fill', remove fixedWidthMm de forma imutável e type-safe
+  const normalizedLayout =
+    mergedLayout.widthMode === 'fill'
+      ? (() => {
+          const { fixedWidthMm, ...rest } = mergedLayout;
+          return rest;
+        })()
+      : mergedLayout;
 
   // Validação estrita via Zod schema (impede fixedWidthMm <= 0 quando fixed)
-  const validatedLayout = StructuralLayoutConfigSchema.parse(mergedLayout);
+  const validatedLayout = StructuralLayoutConfigSchema.parse(normalizedLayout);
 
   return {
     ...structuralData,

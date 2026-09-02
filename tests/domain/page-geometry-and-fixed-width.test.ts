@@ -9,7 +9,8 @@ import { mmToPx, pxToMm } from '../../src/domain/physical-units';
 import {
   A4LayoutEngine,
   A4_PAGE_WIDTH_MM,
-  A4_PAGE_HEIGHT_MM
+  A4_PAGE_HEIGHT_MM,
+  updateStructuralLayout
 } from '../../src/domain/canvas-layout.engine';
 import { StructuralSectionData } from '../../src/domain/canvas-layout.schema';
 
@@ -215,6 +216,63 @@ describe('FASE 3A.5A — A4 Physical Geometry, Content Box & Fixed Width Suite',
     const result = A4LayoutEngine.validateSection(section, { availableWidthMm: contentBox.availableWidthMm });
     expect(result.valid).toBe(true);
     expect(result.issues).toHaveLength(0);
+  });
+
+  it('WIDTH-FIXED-PATCH-1: patch isolado em seção fixed (ex: gap) preserva fixedWidthMm=150 sem lançar erro', () => {
+    const fixedData: StructuralSectionData = {
+      ...sampleSectionData,
+      layout: {
+        ...sampleSectionData.layout,
+        widthMode: 'fixed',
+        fixedWidthMm: 150,
+        gap: 'sm'
+      }
+    };
+
+    const updated = updateStructuralLayout(fixedData, { gap: 'lg' });
+
+    expect(updated.layout.widthMode).toBe('fixed');
+    expect(updated.layout.fixedWidthMm).toBe(150);
+    expect(updated.layout.gap).toBe('lg');
+  });
+
+  it('WIDTH-FIXED-PATCH-2: patches independentes em seção fixed preservam fixedWidthMm=150 em todos os campos', () => {
+    const fixedData: StructuralSectionData = {
+      ...sampleSectionData,
+      layout: {
+        ...sampleSectionData.layout,
+        widthMode: 'fixed',
+        fixedWidthMm: 150,
+        mode: 'grid',
+        columns: 3,
+        gap: 'sm',
+        padding: 'sm',
+        density: 'normal',
+        align: 'left',
+        background: 'soft',
+        border: 'subtle',
+        radius: 'sm'
+      }
+    };
+
+    const patches = [
+      { patch: { mode: 'stack' as const }, expectedField: 'mode', expectedValue: 'stack' },
+      { patch: { columns: 5 }, expectedField: 'columns', expectedValue: 5 },
+      { patch: { gap: 'xl' as const }, expectedField: 'gap', expectedValue: 'xl' },
+      { patch: { padding: 'lg' as const }, expectedField: 'padding', expectedValue: 'lg' },
+      { patch: { density: 'compact' as const }, expectedField: 'density', expectedValue: 'compact' },
+      { patch: { align: 'center' as const }, expectedField: 'align', expectedValue: 'center' },
+      { patch: { background: 'surface' as const }, expectedField: 'background', expectedValue: 'surface' },
+      { patch: { border: 'solid' as const }, expectedField: 'border', expectedValue: 'solid' },
+      { patch: { radius: 'lg' as const }, expectedField: 'radius', expectedValue: 'lg' }
+    ];
+
+    for (const { patch, expectedField, expectedValue } of patches) {
+      const result = updateStructuralLayout(fixedData, patch);
+      expect(result.layout.widthMode).toBe('fixed');
+      expect(result.layout.fixedWidthMm).toBe(150);
+      expect((result.layout as any)[expectedField]).toBe(expectedValue);
+    }
   });
 
   // ==========================================================================

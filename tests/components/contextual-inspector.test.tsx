@@ -979,4 +979,68 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       root.unmount();
     });
   });
+
+  it('WIDTH-FIXED-INSPECTOR-1: alteração real de Gap em seção fixed preserva fixedWidthMm=150 no Zustand', () => {
+    const fixedBlock: ContentBlock = {
+      ...mockStructuralBlock,
+      id: 'block-sec-fixed-gap-test',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        layout: {
+          ...mockStructuralBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          gap: 'sm'
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...mockCatalog,
+        pages: [
+          {
+            ...mockCatalog.pages[0],
+            blocks: [fixedBlock]
+          }
+        ]
+      }
+    });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={fixedBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // Encontra os selects do Inspector e localiza o select de Gap
+    const selects = Array.from(container.querySelectorAll('select'));
+    const gapSelect = selects[0];
+    expect(gapSelect).toBeDefined();
+    expect(gapSelect.value).toBe('sm');
+
+    // Altera Gap de 'sm' para 'lg'
+    act(() => {
+      gapSelect.value = 'lg';
+      gapSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Verifica no Zustand que gap é 'lg', fixedWidthMm continua 150 e widthMode é 'fixed'
+    const state = useCatalogStore.getState();
+    const updatedBlock = state.currentCatalog?.pages[0].blocks[0];
+    expect(updatedBlock?.structuralData?.layout.gap).toBe('lg');
+    expect(updatedBlock?.structuralData?.layout.fixedWidthMm).toBe(150);
+    expect(updatedBlock?.structuralData?.layout.widthMode).toBe('fixed');
+
+    act(() => {
+      root.unmount();
+    });
+  });
 });
