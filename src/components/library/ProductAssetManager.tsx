@@ -363,7 +363,7 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {linkedProductAssets.map((item) => {
                       const asset = item.asset!;
-                      const url = resolvedUrls[asset.id]?.url || asset.storage_path;
+                      const url = resolvedUrls[asset.id]?.url;
                       const isLowRes = asset.width_px && asset.width_px < 800;
 
                       return (
@@ -387,7 +387,10 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
                                 className="max-h-full max-w-full object-contain"
                               />
                             ) : (
-                              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                                <span className="text-[10px] text-slate-400 font-sans">Carregando URL...</span>
+                              </div>
                             )}
 
                             {/* Badge de Foto Principal */}
@@ -484,11 +487,11 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto">
                 {assets
-                  .filter((a) => a.approval_status !== 'archived')
+                  .filter((a) => a.approval_status !== 'archived' && a.approval_status !== 'rejected')
                   .filter((a) => !bankSearch || a.original_filename?.toLowerCase().includes(bankSearch.toLowerCase()))
                   .map((a) => {
                     const isAlreadyLinked = linkedProductAssets.some((pa) => pa.asset_id === a.id);
-                    const url = resolvedUrls[a.id]?.url || a.storage_path;
+                    const url = resolvedUrls[a.id]?.url;
 
                     return (
                       <div key={a.id} className="border border-slate-200 rounded p-2 bg-white flex flex-col justify-between text-center">
@@ -496,7 +499,10 @@ export const ProductAssetManager: React.FC<ProductAssetManagerProps> = ({ produc
                           {url ? (
                             <img src={url} alt={a.original_filename || ''} className="max-h-full max-w-full object-contain" />
                           ) : (
-                            <ImageIcon className="w-6 h-6 text-slate-400" />
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                              <span className="text-[9px] text-slate-400">Carregando...</span>
+                            </div>
                           )}
                         </div>
                         <p className="text-[11px] font-bold text-slate-800 truncate" title={a.original_filename || ''}>

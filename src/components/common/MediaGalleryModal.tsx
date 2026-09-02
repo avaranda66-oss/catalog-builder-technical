@@ -113,8 +113,16 @@ export const MediaGalleryModal: React.FC = () => {
     }
   };
 
-  // Filtragem dos assets corporativos ativos (não arquivados)
-  const activeAssets = assets.filter((a) => a.approval_status !== 'archived');
+  // Filtragem dos assets corporativos ativos e selecionáveis para novos documentos/vínculos
+  const activeAssets = assets.filter((a) => {
+    if (a.approval_status === 'archived' || a.approval_status === 'rejected') {
+      return false;
+    }
+    if (!isAdmin) {
+      return a.approval_status === 'approved';
+    }
+    return true; // admin: draft + approved
+  });
 
   const filteredAssets = activeAssets.filter((asset) => {
     const linked = productAssets.filter((pa) => pa.asset_id === asset.id);
@@ -431,7 +439,7 @@ export const MediaGalleryModal: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {filteredAssets.map((asset) => {
-                    const url = resolvedUrls[asset.id]?.url || asset.storage_path;
+                    const url = resolvedUrls[asset.id]?.url;
                     const links = productAssets.filter((pa) => pa.asset_id === asset.id);
                     const primaryLink = links.find((pa) => pa.is_primary);
                     const linkedProds = links.map((pa) => products.find((p) => p.id === pa.product_id)).filter(Boolean);
@@ -439,8 +447,10 @@ export const MediaGalleryModal: React.FC = () => {
                     return (
                       <div
                         key={asset.id}
-                        onClick={() => handleSelectAsset(asset.id, url, asset.original_filename || '', primaryLink?.role)}
-                        className="group border border-slate-300 hover:border-[#003366] rounded overflow-hidden bg-white shadow-2xs hover:shadow-md cursor-pointer transition-all flex flex-col justify-between"
+                        onClick={() => url && handleSelectAsset(asset.id, url, asset.original_filename || '', primaryLink?.role)}
+                        className={`group border border-slate-300 rounded overflow-hidden bg-white shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
+                          url ? 'hover:border-[#003366] cursor-pointer' : 'opacity-70 cursor-wait'
+                        }`}
                       >
                         {/* Imagem Preview */}
                         <div className="h-40 bg-slate-100 relative flex items-center justify-center p-2 border-b border-slate-200">
@@ -456,7 +466,10 @@ export const MediaGalleryModal: React.FC = () => {
                               className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
                             />
                           ) : (
-                            <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                              <span className="text-[10px] text-slate-400 font-sans">Carregando URL...</span>
+                            </div>
                           )}
 
                           {primaryLink && (

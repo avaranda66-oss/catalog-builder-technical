@@ -13,6 +13,7 @@ interface SignedUrlCacheEntry {
 }
 
 const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
+const inFlightResolutions = new Map<string, Promise<{ url: string; expiresAt: number } | null>>();
 
 export interface FinalizeUploadParams {
   assetId: string;
@@ -178,7 +179,7 @@ export class AssetService {
   }
 
   /**
-   * Resolve URL assinada temporária retornando os metadados de expiração (TTL 50min).
+   * Resolve URL assinada temporária retornando os metadados de expiração (TTL 50min) com single-flight.
    */
   static async resolveSignedUrlWithMeta(
     storagePath: string,
@@ -198,30 +199,43 @@ export class AssetService {
       return cached;
     }
 
+    // Single-Flight: se já houver uma requisição em andamento para este storagePath, aguarda a mesma Promise
+    const inFlight = inFlightResolutions.get(cacheKey);
+    if (inFlight) {
+      return await inFlight;
+    }
+
     const supabase = getSupabase();
     if (!supabase) return null;
 
-    try {
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(storagePath, 3600); // 1 hora de validade
+    const resolutionPromise = (async () => {
+      try {
+        const { data, error } = await supabase.storage
+          .from(bucket)
+          .createSignedUrl(storagePath, 3600); // 1 hora de validade
 
-      if (error || !data?.signedUrl) {
-        console.warn(`[AssetService] Falha ao assinar URL para ${storagePath}:`, error?.message);
+        if (error || !data?.signedUrl) {
+          console.warn(`[AssetService] Falha ao assinar URL para ${storagePath}:`, error?.message);
+          return null;
+        }
+
+        const entry = {
+          url: data.signedUrl,
+          expiresAt: Date.now() + 50 * 60 * 1000 // Cache local de 50 minutos
+        };
+        signedUrlCache.set(cacheKey, entry);
+
+        return entry;
+      } catch (err) {
+        console.error('[AssetService] Erro ao resolver URL assinada:', err);
         return null;
+      } finally {
+        inFlightResolutions.delete(cacheKey);
       }
+    })();
 
-      const entry = {
-        url: data.signedUrl,
-        expiresAt: now + 50 * 60 * 1000 // Cache local de 50 minutos
-      };
-      signedUrlCache.set(cacheKey, entry);
-
-      return entry;
-    } catch (err) {
-      console.error('[AssetService] Erro ao resolver URL assinada:', err);
-      return null;
-    }
+    inFlightResolutions.set(cacheKey, resolutionPromise);
+    return await resolutionPromise;
   }
 
   /**

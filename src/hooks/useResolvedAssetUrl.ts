@@ -21,14 +21,28 @@ export function useResolvedAssetUrl(assetId?: string, fallbackUrl?: string): str
   const entry = useAssetStore((state) => (assetId ? state.resolvedUrls[assetId] : undefined));
   const resolveAssetUrl = useAssetStore((state) => state.resolveAssetUrl);
 
-  const now = Date.now();
-  const isStaleOrMissing = !entry || entry.expiresAt <= now + 60_000;
-
   useEffect(() => {
-    if (assetId && isStaleOrMissing) {
+    if (!assetId) return;
+
+    const now = Date.now();
+    const isStaleOrMissing = !entry || entry.expiresAt <= now + 60_000;
+
+    if (isStaleOrMissing) {
+      // Refresh imediato se ausente ou prestes a expirar
       void resolveAssetUrl(assetId, fallbackUrl);
+      return;
     }
-  }, [assetId, isStaleOrMissing, resolveAssetUrl, fallbackUrl]);
+
+    // Agendamento proativo com timer real: dispara 60s antes de expirar
+    const msUntilRefresh = Math.max(0, entry.expiresAt - 60_000 - now);
+    const timerId = setTimeout(() => {
+      void resolveAssetUrl(assetId, fallbackUrl);
+    }, msUntilRefresh);
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [assetId, entry?.expiresAt, resolveAssetUrl, fallbackUrl]);
 
   return entry?.url || fallbackUrl || undefined;
 }

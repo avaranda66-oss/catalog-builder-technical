@@ -93,6 +93,8 @@ interface AssetState {
   ) => (ProductAssetRecord & { asset?: AssetRecord }) | null;
 }
 
+const inFlightStoreResolutions = new Map<string, Promise<string>>();
+
 export const useAssetStore = create<AssetState>((set, get) => ({
   assets: [],
   productAssets: [],
@@ -420,32 +422,47 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       return cached.url;
     }
 
-    // 2. Busca o asset nos dados carregados ou busca no banco
-    let asset = get().assets.find((a) => a.id === assetId);
-    if (!asset || !asset.storage_path) {
-      const fetched = await AssetService.getAssetById(assetId);
-      if (fetched && fetched.storage_path) {
-        asset = fetched;
-        set((state) => ({
-          assets: [fetched, ...state.assets.filter((a) => a.id !== fetched.id)]
-        }));
+    // Single-Flight: se já houver uma resolução em andamento para este assetId na store
+    const inFlight = inFlightStoreResolutions.get(assetId);
+    if (inFlight) {
+      return await inFlight;
+    }
+
+    const resolutionPromise = (async () => {
+      try {
+        // 2. Busca o asset nos dados carregados ou busca no banco
+        let asset = get().assets.find((a) => a.id === assetId);
+        if (!asset || !asset.storage_path) {
+          const fetched = await AssetService.getAssetById(assetId);
+          if (fetched && fetched.storage_path) {
+            asset = fetched;
+            set((state) => ({
+              assets: [fetched, ...state.assets.filter((a) => a.id !== fetched.id)]
+            }));
+          }
+        }
+
+        if (!asset || !asset.storage_path) {
+          return fallbackUrl || '';
+        }
+
+        // 3. Resolve URL assinada com metadados de expiração (continua permitindo resolução de refs históricas mesmo se rejected/archived)
+        const meta = await AssetService.resolveSignedUrlWithMeta(asset.storage_path, asset.storage_bucket);
+        if (meta) {
+          set((state) => ({
+            resolvedUrls: { ...state.resolvedUrls, [assetId]: meta }
+          }));
+          return meta.url;
+        }
+
+        return fallbackUrl || '';
+      } finally {
+        inFlightStoreResolutions.delete(assetId);
       }
-    }
+    })();
 
-    if (!asset || !asset.storage_path) {
-      return fallbackUrl || '';
-    }
-
-    // 3. Resolve URL assinada com metadados de expiração
-    const meta = await AssetService.resolveSignedUrlWithMeta(asset.storage_path, asset.storage_bucket);
-    if (meta) {
-      set((state) => ({
-        resolvedUrls: { ...state.resolvedUrls, [assetId]: meta }
-      }));
-      return meta.url;
-    }
-
-    return fallbackUrl || '';
+    inFlightStoreResolutions.set(assetId, resolutionPromise);
+    return await resolutionPromise;
   },
 
   getAssetsForProduct: (productId: string) => {
@@ -456,7 +473,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
         ...pa,
         asset: assets.find((a) => a.id === pa.asset_id)
       }))
-      .filter((pa) => pa.asset && pa.asset.approval_status !== 'archived');
+      .filter((pa) => pa.asset && pa.asset.approval_status !== 'archived' && pa.asset.approval_status !== 'rejected');
   },
 
   getPrimaryAssetForProduct: (productId: string, role: ProductAssetRole = 'hero') => {
