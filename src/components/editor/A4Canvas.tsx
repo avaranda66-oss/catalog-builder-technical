@@ -31,6 +31,7 @@ import { FullPageCoverBlock } from './blocks/FullPageCoverBlock';
 import { BottomHeaderBlock } from './blocks/BottomHeaderBlock';
 import { MatrixSpecTableBlock } from './blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from './blocks/SoftwareConnectivityBlock';
+import { StructuralSectionBlock } from './blocks/StructuralSectionBlock';
 import { BlockHoverTooltip, HoverTooltipItem, TooltipPosition } from './BlockHoverTooltip';
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
@@ -1006,6 +1007,9 @@ export const A4Canvas: React.FC = () => {
                       )}
                       {block.type === 'software_connectivity' && (
                         <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={isSelected} />
+                      )}
+                      {block.type === 'structural_section' && (
+                        <StructuralSectionBlock block={block} pageId={page.id} isSelected={isSelected} />
                       )}
                       {block.type === 'hero_banner' && (
                         <HeroBannerBlock block={block} pageId={page.id} isSelected={isSelected} />

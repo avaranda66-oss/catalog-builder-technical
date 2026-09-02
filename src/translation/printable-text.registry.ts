@@ -10,6 +10,7 @@ import { extractTableBlocks } from './block-extractors/table.extractor';
 import { extractOrderingBlocks } from './block-extractors/ordering.extractor';
 import { extractGalleryBlocks } from './block-extractors/gallery.extractor';
 import { extractContactBlocks } from './block-extractors/contact.extractor';
+import { extractStructuralBlocks } from './block-extractors/structural.extractor';
 
 export type BlockExtractorFn = (block: ContentBlock, pageId: string, pageNumber: number) => PrintableTextNode[];
 
@@ -51,6 +52,9 @@ export class PrintableTextRegistry {
 
     // 7. Contact
     this.register('contact_footer', extractContactBlocks);
+
+    // 8. Structural Section (Fase 3A.1 Canvas Domain Foundation)
+    this.register('structural_section', extractStructuralBlocks);
   }
 
   /**

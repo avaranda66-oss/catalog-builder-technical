@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { StructuralSectionData, StructuralSectionDataSchema } from './canvas-layout.schema';
+
+export * from './canvas-layout.schema';
+export * from './canvas-layout.engine';
 
 export const BlockTypeSchema = z.enum([
   'text',
@@ -21,7 +25,8 @@ export const BlockTypeSchema = z.enum([
   'full_page_cover',
   'bottom_header',
   'matrix_spec_table',
-  'software_connectivity'
+  'software_connectivity',
+  'structural_section'
 ]);
 export type BlockType = z.infer<typeof BlockTypeSchema>;
 
@@ -127,6 +132,7 @@ export interface ContentBlock {
     logoUrl?: string;
   };
   customData?: Record<string, any>;
+  structuralData?: StructuralSectionData;
 }
 
 export type PageType = 'cover' | 'technical' | 'custom' | 'presentation';
@@ -328,7 +334,8 @@ export const ContentBlockSchema = z.object({
     logoAssetId: z.string().optional(),
     logoUrl: z.string().optional()
   }).optional(),
-  customData: z.record(z.any()).optional()
+  customData: z.record(z.any()).optional(),
+  structuralData: StructuralSectionDataSchema.optional()
 });
 
 export const CatalogPageSchema = z.object({

@@ -20,6 +20,7 @@ import { FullPageCoverBlock } from '../editor/blocks/FullPageCoverBlock';
 import { BottomHeaderBlock } from '../editor/blocks/BottomHeaderBlock';
 import { MatrixSpecTableBlock } from '../editor/blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivityBlock';
+import { StructuralSectionBlock } from '../editor/blocks/StructuralSectionBlock';
 
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { FontManager } from '../../translation/font-manager';
@@ -117,6 +118,9 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                     )}
                     {block.type === 'software_connectivity' && (
                       <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} />
+                    )}
+                    {block.type === 'structural_section' && (
+                      <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                     )}
                     {block.type === 'hero_banner' && (
                       <HeroBannerBlock block={block} pageId={page.id} isSelected={false} />

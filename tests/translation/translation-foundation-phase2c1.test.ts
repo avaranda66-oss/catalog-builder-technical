@@ -23,11 +23,11 @@ describe('Phase 2C.1: Global Translation Foundation, Printable Coverage & BYOK V
   // 1. PRINTABLE TEXT & COVERAGE TESTS (TR-COV-1 .. TR-COV-4)
   // =========================================================================
 
-  it('TR-COV-1: 100% dos 21 BlockTypes no BlockTypeSchema devem possuir extratores registrados', () => {
+  it('TR-COV-1: 100% dos 22 BlockTypes no BlockTypeSchema devem possuir extratores registrados', () => {
     const allBlockTypes = BlockTypeSchema.options;
-    expect(PrintableTextRegistry.getRegisteredBlockTypes().length).toBe(21);
+    expect(PrintableTextRegistry.getRegisteredBlockTypes().length).toBe(22);
 
-    expect(allBlockTypes.length).toBe(21);
+    expect(allBlockTypes.length).toBe(22);
     for (const blockType of allBlockTypes) {
       expect(
         PrintableTextRegistry.hasExtractor(blockType),

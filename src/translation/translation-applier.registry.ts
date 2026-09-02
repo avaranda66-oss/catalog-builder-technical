@@ -758,6 +758,94 @@ export class TranslationApplierRegistry {
                 appliedNodeIds.add(`p${pageNumber}_b${blockId}_description`);
               }
             }
+
+            // 13. Seção Estrutural (Fase 3A.1 Canvas Domain Foundation — Identidades Estáveis por child.id)
+            if (block.type === 'structural_section') {
+              // Título da Seção (ContentBlock.title)
+              const secTitleKey = `b${blockId}_sec_title`;
+              const secTitleFallback = `p${pageNumber}_b${blockId}_sec_title`;
+              if (transMap.has(secTitleKey)) {
+                block.title = transMap.get(secTitleKey)!;
+                appliedCount++;
+                appliedNodeIds.add(secTitleKey);
+              } else if (transMap.has(secTitleFallback)) {
+                block.title = transMap.get(secTitleFallback)!;
+                appliedCount++;
+                appliedNodeIds.add(secTitleFallback);
+              }
+
+              // Subtítulo da Seção (ContentBlock.subtitle)
+              const secSubKey = `b${blockId}_sec_subtitle`;
+              const secSubFallback = `p${pageNumber}_b${blockId}_sec_subtitle`;
+              if (transMap.has(secSubKey)) {
+                block.subtitle = transMap.get(secSubKey)!;
+                appliedCount++;
+                appliedNodeIds.add(secSubKey);
+              } else if (transMap.has(secSubFallback)) {
+                block.subtitle = transMap.get(secSubFallback)!;
+                appliedCount++;
+                appliedNodeIds.add(secSubFallback);
+              }
+
+              // Badge da Seção (ContentBlock.badgeText)
+              const secBadgeKey = `b${blockId}_sec_badge`;
+              const secBadgeFallback = `p${pageNumber}_b${blockId}_sec_badge`;
+              if (transMap.has(secBadgeKey)) {
+                block.badgeText = transMap.get(secBadgeKey)!;
+                appliedCount++;
+                appliedNodeIds.add(secBadgeKey);
+              } else if (transMap.has(secBadgeFallback)) {
+                block.badgeText = transMap.get(secBadgeFallback)!;
+                appliedCount++;
+                appliedNodeIds.add(secBadgeFallback);
+              }
+
+              // Cards Filhos por child.id (Invariante perante reordenação)
+              if (block.structuralData && Array.isArray(block.structuralData.children)) {
+                block.structuralData.children.forEach((child) => {
+                  if (!child || typeof child !== 'object' || !child.id) return;
+
+                  // Título do Card
+                  const cardTitleKey = `b${blockId}_card_${child.id}_title`;
+                  const cardTitleFallback = `p${pageNumber}_b${blockId}_card_${child.id}_title`;
+                  if (transMap.has(cardTitleKey)) {
+                    child.title = transMap.get(cardTitleKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardTitleKey);
+                  } else if (transMap.has(cardTitleFallback)) {
+                    child.title = transMap.get(cardTitleFallback)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardTitleFallback);
+                  }
+
+                  // Corpo / Descrição do Card
+                  const cardBodyKey = `b${blockId}_card_${child.id}_body`;
+                  const cardBodyFallback = `p${pageNumber}_b${blockId}_card_${child.id}_body`;
+                  if (transMap.has(cardBodyKey)) {
+                    child.body = transMap.get(cardBodyKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardBodyKey);
+                  } else if (transMap.has(cardBodyFallback)) {
+                    child.body = transMap.get(cardBodyFallback)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardBodyFallback);
+                  }
+
+                  // Badge do Card
+                  const cardBadgeKey = `b${blockId}_card_${child.id}_badge`;
+                  const cardBadgeFallback = `p${pageNumber}_b${blockId}_card_${child.id}_badge`;
+                  if (transMap.has(cardBadgeKey)) {
+                    child.badge = transMap.get(cardBadgeKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardBadgeKey);
+                  } else if (transMap.has(cardBadgeFallback)) {
+                    child.badge = transMap.get(cardBadgeFallback)!;
+                    appliedCount++;
+                    appliedNodeIds.add(cardBadgeFallback);
+                  }
+                });
+              }
+            }
           });
         }
       });
