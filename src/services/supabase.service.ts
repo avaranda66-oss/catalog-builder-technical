@@ -7,6 +7,26 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 let supabaseClient: SupabaseClient | null = null;
 
+export interface TranslationAuthDiagnostic {
+  timestamp: string;
+  sessionExists: boolean;
+  serverUserConfirmed: boolean;
+  authStoreMatches: boolean;
+  teamRole: string | null;
+  probeAuthenticated: boolean;
+  probeRole: string | null;
+  projectRef: string;
+  lastRpcName?: string;
+  lastRpcStatus?: string;
+  lastRpcError?: string;
+}
+
+let latestTranslationAuthDiagnostic: TranslationAuthDiagnostic | null = null;
+
+export function getLatestTranslationAuthDiagnostic(): TranslationAuthDiagnostic | null {
+  return latestTranslationAuthDiagnostic;
+}
+
 export function getSupabase(): SupabaseClient | null {
   if (!supabaseClient && supabaseUrl && supabaseAnonKey) {
     try {
@@ -149,6 +169,93 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Valida e garante sessão autenticada corporativa estrita (fail-closed)
+   * antes de qualquer mutação de documento ou criação de versão traduzida.
+   * 1. getSession() -> session existe
+   * 2. refreshSession() se expiração próxima (<60s)
+   * 3. auth.getUser() -> validação definitiva do JWT com o servidor Supabase Auth
+   * 4. rpc('team_role') -> confirmação estrita de role corporativa (admin / editor)
+   */
+  static async ensureAuthenticatedCorporateSession(): Promise<{
+    success: boolean;
+    userId?: string;
+    role?: 'admin' | 'editor';
+    errorCode?: string;
+    error?: string;
+  }> {
+    const supabase = getSupabase();
+    if (!supabase) {
+      return {
+        success: false,
+        errorCode: 'CLIENT_OFFLINE',
+        error: 'Supabase não inicializado no cliente.'
+      };
+    }
+
+    try {
+      // 1. Valida existência de sessão local
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session) {
+        return {
+          success: false,
+          errorCode: 'AUTH_SESSION_INVALID',
+          error: 'Sessão de autenticação ausente ou inválida. Por favor, faça login novamente.'
+        };
+      }
+
+      let session = sessionData.session;
+
+      // 2. Se token expira em menos de 60s, renova preventivamente (fail-closed)
+      if (session.expires_at) {
+        const isExpiringSoon = session.expires_at - Date.now() / 1000 < 60;
+        if (isExpiringSoon) {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData?.session) {
+            return {
+              success: false,
+              errorCode: 'AUTH_SESSION_INVALID',
+              error: 'Sessão expirada e não foi possível renovar automaticamente.'
+            };
+          }
+          session = refreshData.session;
+        }
+      }
+
+      // 3. Validação server-side definitiva do JWT via getUser()
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        return {
+          success: false,
+          errorCode: 'AUTH_SESSION_INVALID',
+          error: 'Usuário não confirmado pelo servidor Supabase Auth.'
+        };
+      }
+
+      // 4. Confirmação do role corporativo diretamente no PostgreSQL (team_role)
+      const { data: roleData, error: roleError } = await supabase.rpc('team_role');
+      if (roleError || !roleData || (roleData !== 'admin' && roleData !== 'editor')) {
+        return {
+          success: false,
+          errorCode: 'AUTHORIZATION_DENIED',
+          error: `Acesso negado: Perfil do servidor (${roleData || 'desconhecido'}) não autorizado para operações críticas.`
+        };
+      }
+
+      return {
+        success: true,
+        userId: userData.user.id,
+        role: roleData as 'admin' | 'editor'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        errorCode: 'AUTH_SESSION_INVALID',
+        error: err?.message || 'Falha ao validar sessão corporativa.'
+      };
+    }
+  }
+
   static async createTranslatedCatalog(
     catalog: Partial<Catalog>,
     sourceCatalogId: string,
@@ -158,22 +265,18 @@ export class SupabaseService {
     const supabase = getSupabase();
     if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
 
-    try {
-      const sessionRes = await supabase.auth.getSession();
-      if (sessionRes.data?.session?.expires_at) {
-        const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
-        if (isExpiringSoon) {
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError || !refreshData.session) {
-            return {
-              success: false,
-              errorCode: 'AUTH_SESSION_INVALID',
-              error: 'Sessão de autenticação expirada ou inválida. Por favor, revalide seu acesso no servidor.'
-            };
-          }
-        }
-      }
+    // Validação estrita e atômica da sessão corporativa no servidor
+    const authValidation = await this.ensureAuthenticatedCorporateSession();
+    if (!authValidation.success) {
+      void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', authValidation.errorCode, authValidation.error);
+      return {
+        success: false,
+        errorCode: authValidation.errorCode || 'AUTH_SESSION_INVALID',
+        error: authValidation.error || 'Sem permissão de acesso.'
+      };
+    }
 
+    try {
       const { data, error } = await supabase.rpc('create_translated_catalog_v1', {
         p_catalog: catalog,
         p_source_catalog_id: sourceCatalogId,
@@ -182,6 +285,10 @@ export class SupabaseService {
       });
 
       if (error) {
+        if (error.code === '42501' || error.message?.includes('permissão')) {
+          void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', error.code, error.message);
+        }
+
         const isConflict =
           error.code === '40001' ||
           error.message?.includes('SOURCE_CHANGED_DURING_TRANSLATION') ||
@@ -189,6 +296,7 @@ export class SupabaseService {
         return { success: false, conflict: isConflict, errorCode: error.code || 'RPC_ERROR', error: error.message };
       }
 
+      void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', 'SUCCESS_200');
       return { success: true, data };
     } catch (err: any) {
       return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar versão traduzida' };
@@ -204,22 +312,18 @@ export class SupabaseService {
     const supabase = getSupabase();
     if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
 
-    try {
-      const sessionRes = await supabase.auth.getSession();
-      if (sessionRes.data?.session?.expires_at) {
-        const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
-        if (isExpiringSoon) {
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError || !refreshData.session) {
-            return {
-              success: false,
-              errorCode: 'AUTH_SESSION_INVALID',
-              error: 'Sessão de autenticação expirada ou inválida. Por favor, revalide seu acesso no servidor.'
-            };
-          }
-        }
-      }
+    // Validação estrita e atômica da sessão corporativa no servidor
+    const authValidation = await this.ensureAuthenticatedCorporateSession();
+    if (!authValidation.success) {
+      void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', authValidation.errorCode, authValidation.error);
+      return {
+        success: false,
+        errorCode: authValidation.errorCode || 'AUTH_SESSION_INVALID',
+        error: authValidation.error || 'Sem permissão de acesso.'
+      };
+    }
 
+    try {
       const { data, error } = await supabase.rpc('create_translated_template_v1', {
         p_template: template,
         p_source_template_id: sourceTemplateId,
@@ -228,6 +332,10 @@ export class SupabaseService {
       });
 
       if (error) {
+        if (error.code === '42501' || error.message?.includes('permissão')) {
+          void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', error.code, error.message);
+        }
+
         const isConflict =
           error.code === '40001' ||
           error.message?.includes('SOURCE_CHANGED_DURING_TRANSLATION') ||
@@ -235,23 +343,18 @@ export class SupabaseService {
         return { success: false, conflict: isConflict, errorCode: error.code || 'RPC_ERROR', error: error.message };
       }
 
+      void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', 'SUCCESS_200');
       return { success: true, data };
     } catch (err: any) {
       return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar template traduzido' };
     }
   }
 
-  static async diagnoseCurrentTranslationAuth(): Promise<{
-    sessionExists: boolean;
-    authUserIdPresent: boolean;
-    teamRole: string | null;
-    authStoreRole: string | null;
-    authStoreUserMatchesSession: boolean;
-    supabaseProjectRef: string;
-    teamRoleError?: string;
-    probeResult?: any;
-    probeError?: string;
-  }> {
+  static async diagnoseCurrentTranslationAuth(
+    lastRpcName?: string,
+    lastRpcStatus?: string,
+    lastRpcError?: string
+  ): Promise<TranslationAuthDiagnostic> {
     let resolvedProjectRef = 'unknown';
     try {
       if (supabaseUrl) {
@@ -263,36 +366,55 @@ export class SupabaseService {
 
     const supabase = getSupabase();
     if (!supabase) {
-      return {
+      const diag: TranslationAuthDiagnostic = {
+        timestamp: new Date().toISOString(),
         sessionExists: false,
-        authUserIdPresent: false,
+        serverUserConfirmed: false,
+        authStoreMatches: false,
         teamRole: null,
-        authStoreRole: null,
-        authStoreUserMatchesSession: false,
-        supabaseProjectRef: resolvedProjectRef
+        probeAuthenticated: false,
+        probeRole: null,
+        projectRef: resolvedProjectRef,
+        lastRpcName,
+        lastRpcStatus: lastRpcStatus || 'CLIENT_OFFLINE',
+        lastRpcError: lastRpcError || 'Supabase não inicializado'
       };
+      latestTranslationAuthDiagnostic = diag;
+      return diag;
     }
 
     const { data: sessionData } = await supabase.auth.getSession();
     const session = sessionData?.session;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const serverUserConfirmed = !!userData?.user;
+
     const { useAuthStore } = await import('@/stores/useAuthStore');
     const authStoreUserId = useAuthStore.getState().userId;
-    const authStoreRole = useAuthStore.getState().role;
 
-    const { data: roleData, error: roleError } = await supabase.rpc('team_role');
-    const { data: probeData, error: probeError } = await supabase.rpc('translation_auth_probe_v1');
+    const { data: roleData } = await supabase.rpc('team_role');
+    const { data: probeData } = await supabase.rpc('translation_auth_probe_v1');
 
-    return {
+    const diag: TranslationAuthDiagnostic = {
+      timestamp: new Date().toISOString(),
       sessionExists: !!session,
-      authUserIdPresent: !!session?.user?.id,
+      serverUserConfirmed,
+      authStoreMatches: !!session?.user?.id && session.user.id === authStoreUserId,
       teamRole: (roleData as any) || null,
-      authStoreRole: authStoreRole || null,
-      authStoreUserMatchesSession: session?.user?.id === authStoreUserId,
-      supabaseProjectRef: 'bjxqvrpbigwgabwbhtqa',
-      teamRoleError: roleError?.message,
-      probeResult: probeData,
-      probeError: probeError?.message
+      probeAuthenticated: !!probeData?.authenticated,
+      probeRole: probeData?.role || null,
+      projectRef: resolvedProjectRef,
+      lastRpcName,
+      lastRpcStatus: lastRpcStatus || (probeData?.authenticated ? 'AUTH_OK' : 'UNAUTHENTICATED'),
+      lastRpcError
     };
+
+    latestTranslationAuthDiagnostic = diag;
+    return diag;
+  }
+
+  static async runTranslationAuthForensicCheck(): Promise<TranslationAuthDiagnostic> {
+    return this.diagnoseCurrentTranslationAuth('forensic_manual_probe', 'RUNNING');
   }
 
   static async getCatalog(id: string): Promise<{ success: boolean; data?: Catalog; error?: string }> {

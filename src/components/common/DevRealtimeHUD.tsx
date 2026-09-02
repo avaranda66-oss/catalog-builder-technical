@@ -2,12 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { getSupabase } from '../../services/supabase.service';
+import { getSupabase, SupabaseService, getLatestTranslationAuthDiagnostic, TranslationAuthDiagnostic } from '../../services/supabase.service';
 
 export const DevRealtimeHUD: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
+  const [authDiag, setAuthDiag] = useState<TranslationAuthDiagnostic | null>(null);
+  const [isRefreshingDiag, setIsRefreshingDiag] = useState(false);
+
+  const refreshAuthDiag = async () => {
+    setIsRefreshingDiag(true);
+    try {
+      const d = await SupabaseService.diagnoseCurrentTranslationAuth();
+      setAuthDiag(d);
+    } finally {
+      setIsRefreshingDiag(false);
+    }
+  };
+
+  useEffect(() => {
+    const existing = getLatestTranslationAuthDiagnostic();
+    if (existing) {
+      setAuthDiag(existing);
+    }
+  }, [isVisible]);
 
   const {
     currentCatalog,
@@ -69,7 +88,8 @@ export const DevRealtimeHUD: React.FC = () => {
       userId,
       realtimeStatus,
       clientInstanceId: clientId,
-      buildCommit: buildSha
+      buildCommit: buildSha,
+      authTranslationDiagnostic: authDiag || getLatestTranslationAuthDiagnostic()
     };
 
     navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(() => {
@@ -211,6 +231,34 @@ export const DevRealtimeHUD: React.FC = () => {
             inFlight: exp v{inFlightSave.expectedVersion} → tgt v{inFlightSave.targetVersion} (rev {inFlightSave.capturedRevision})
           </div>
         )}
+
+        {/* Seção DEV: Diagnóstico Seguro de Autenticação para Tradução */}
+        <div className="border-t border-slate-800/90 pt-1.5 mt-1 space-y-1">
+          <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider flex items-center justify-between">
+            <span>Auth Translation Diagnostic</span>
+            <button
+              onClick={refreshAuthDiag}
+              disabled={isRefreshingDiag}
+              className="text-[9px] text-sky-400 hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {isRefreshingDiag ? 'Checando...' : 'Checar Servidor'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-x-2 text-[10px] text-slate-300">
+            <div>Session: <span className={authDiag?.sessionExists ? 'text-emerald-400 font-bold' : 'text-rose-400'}>{authDiag?.sessionExists ? 'YES' : 'NO'}</span></div>
+            <div>Server User: <span className={authDiag?.serverUserConfirmed ? 'text-emerald-400 font-bold' : 'text-rose-400'}>{authDiag?.serverUserConfirmed ? 'YES' : 'NO'}</span></div>
+            <div>AuthStore Match: <span className={authDiag?.authStoreMatches ? 'text-emerald-400 font-bold' : 'text-rose-400'}>{authDiag?.authStoreMatches ? 'YES' : 'NO'}</span></div>
+            <div>team_role: <span className="font-bold text-amber-300">{authDiag?.teamRole || 'null'}</span></div>
+            <div>Auth Probe: <span className={authDiag?.probeAuthenticated ? 'text-emerald-400 font-bold' : 'text-rose-400'}>{authDiag?.probeAuthenticated ? 'YES' : 'NO'}</span></div>
+            <div>Probe Role: <span className="font-bold text-amber-300">{authDiag?.probeRole || 'null'}</span></div>
+            <div className="col-span-2 truncate">Project Ref: <span className="text-slate-400">{authDiag?.projectRef || 'unknown'}</span></div>
+            {authDiag?.lastRpcName && (
+              <div className="col-span-2 text-rose-300 text-[9px] truncate">
+                Last RPC: {authDiag.lastRpcName} ({authDiag.lastRpcStatus})
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
           <div className="text-[9px] text-slate-400 truncate flex-1">
