@@ -132,7 +132,8 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
               e.stopPropagation();
               handleAddMode();
             }}
-            className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none"
+            className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-none no-print"
+            data-editor-action="true"
             title="Adicionar novo modo"
           >
             <Plus className="w-3 h-3" />
@@ -175,7 +176,8 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
                       e.stopPropagation();
                       handleRemoveMode(idx);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-600 transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-600 transition-opacity no-print"
+                    data-editor-action="true"
                     title="Excluir este modo"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -204,7 +206,7 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
                 className="text-[10px] text-slate-600 leading-relaxed outline-none focus:bg-amber-50 rounded-none px-0.5 font-sans"
                 title="Clique para editar a descrição"
               >
-                {mode.desc}
+                {mode.desc || (mode as any).description}
               </p>
             </div>
           </div>

@@ -301,6 +301,7 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
             {
               id: 'b-img',
               type: 'image',
+              imageUrl: 'https://images.unsplash.com/photo-gauge',
               imageCaption: 'Vista em corte do sensor de pressão piezorresistivo de silício'
             },
             {
@@ -348,7 +349,13 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
     const result = RendererParityAuditor.auditRenderedDOM(container, real21BlockCatalog);
 
     if (result.orphanTextNodes.length > 0) {
-      console.log('ORPHAN TEXT NODES FOUND:', JSON.stringify(result.orphanTextNodes, null, 2));
+      console.log('ORPHAN TEXT NODES:', JSON.stringify(result.orphanTextNodes, null, 2));
+    }
+    if (result.missingExpectedNodes.length > 0) {
+      console.log('MISSING EXPECTED NODES:', JSON.stringify(result.missingExpectedNodes, null, 2));
+    }
+    if (result.sourceMismatchNodes.length > 0) {
+      console.log('SOURCE MISMATCH NODES:', JSON.stringify(result.sourceMismatchNodes, null, 2));
     }
 
     expect(result.blockTypeCoverage).toBe(100);
@@ -356,13 +363,15 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
     expect(result.rendererPrintableParityCoverage).toBe(100);
     expect(result.pdfPrintableTranslationCoverage).toBe(100);
     expect(result.orphanTextNodes.length).toBe(0);
+    expect(result.missingExpectedNodes.length).toBe(0);
+    expect(result.sourceMismatchNodes.length).toBe(0);
     expect(result.isComplete).toBe(true);
 
     await act(async () => root.unmount());
   });
 
   // =========================================================================
-  // 3. NEGATIVE TESTS ESTREITOS (TR-PDF-REAL-2 .. TR-PDF-REAL-6)
+  // 3. NEGATIVE TESTS ESTREITOS (TR-PDF-REAL-2 .. TR-PDF-REAL-8 & TR-VAULT-11)
   // =========================================================================
 
   it('TR-PDF-REAL-2: Injeção de texto órfão sem ID faz o auditor FALHAR e registrar nó órfão', async () => {
@@ -425,10 +434,10 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
     await act(async () => root.unmount());
   });
 
-  it('TR-PDF-REAL-4: data-printable-node-id="p_fake_nonexistent" é REJEITADO pelo auditor', async () => {
+  it('TR-PDF-REAL-4: data-printable-node-id="p1_fake_non_existent" é REJEITADO pelo auditor', async () => {
     const catalog: Catalog = {
       id: 'cat-test-neg-4',
-      title: 'Catálogo Teste ID Falso',
+      title: 'Catálogo Teste ID Fake',
       themeId: 'default',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -442,10 +451,9 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
       root.render(React.createElement(CleanA4Document, { document: catalog }));
     });
 
-    // Injeta ID inventado
     const fakeIdSpan = document.createElement('span');
-    fakeIdSpan.setAttribute('data-printable-node-id', 'p_fake_nonexistent_id');
-    fakeIdSpan.textContent = 'Texto com Node ID Inventado';
+    fakeIdSpan.setAttribute('data-printable-node-id', 'p1_fake_non_existent');
+    fakeIdSpan.textContent = 'Texto com ID Não Registrado';
     container.querySelector('.clean-export-page')?.appendChild(fakeIdSpan);
 
     const result = RendererParityAuditor.auditRenderedDOM(container, catalog);
@@ -455,7 +463,7 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
     await act(async () => root.unmount());
   });
 
-  it('TR-PDF-REAL-5: data-block-id válido + data-printable-field="inventedField" é REJEITADO pelo auditor', async () => {
+  it('TR-PDF-REAL-5: data-printable-field="inventedFakeField" em bloco é REJEITADO pelo auditor', async () => {
     const catalog: Catalog = {
       id: 'cat-test-neg-5',
       title: 'Catálogo Teste Campo Falso',
@@ -512,5 +520,113 @@ describe('Phase 2C.1B: Non-Extractable WebCrypto Vault & Real Production Rendere
     expect(result.orphanTextNodes.length).toBe(0);
 
     await act(async () => root.unmount());
+  });
+
+  it('TR-PDF-REAL-7: Nó obrigatório ausente do DOM falha a auditoria bidirecional (Registry -> DOM)', async () => {
+    const catalog: Catalog = {
+      id: 'cat-test-missing-node',
+      title: 'Catálogo Teste Nó Ausente',
+      themeId: 'default',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      pages: [
+        {
+          id: 'p1',
+          pageNumber: 1,
+          blocks: [
+            { id: 'b1', type: 'text', title: 'Título Obrigatório', textContent: 'Texto de Conteúdo' }
+          ]
+        }
+      ]
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: catalog }));
+    });
+
+    // Remove deliberadamente o elemento de título do DOM
+    const titleEl = container.querySelector('[data-printable-field="title"]');
+    if (titleEl) {
+      titleEl.remove();
+    }
+
+    const result = RendererParityAuditor.auditRenderedDOM(container, catalog);
+    expect(result.isComplete).toBe(false);
+    expect(result.missingExpectedNodes.length).toBeGreaterThan(0);
+    expect(result.missingExpectedNodes.some((m) => m.id.includes('b1_title'))).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('TR-PDF-REAL-8: Elemento com ID correto mas texto DOM divergente é detectado como sourceMismatch', async () => {
+    const catalog: Catalog = {
+      id: 'cat-test-mismatch',
+      title: 'Catálogo Teste Mismatch',
+      themeId: 'default',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      pages: [
+        {
+          id: 'p1',
+          pageNumber: 1,
+          blocks: [
+            { id: 'b1', type: 'text', textContent: 'Texto Oficial do Catálogo' }
+          ]
+        }
+      ]
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: catalog }));
+    });
+
+    // Altera o texto renderizado para algo divergente do schema
+    const textEl = container.querySelector('[data-printable-field="textContent"]');
+    if (textEl) {
+      textEl.textContent = 'Texto Divergente Não Sincronizado';
+    }
+
+    const result = RendererParityAuditor.auditRenderedDOM(container, catalog);
+    expect(result.isComplete).toBe(false);
+    expect(result.sourceMismatchNodes.length).toBeGreaterThan(0);
+    expect(result.sourceMismatchNodes[0].expectedText).toBe('Texto Oficial do Catálogo');
+    expect(result.sourceMismatchNodes[0].actualText).toBe('Texto Divergente Não Sincronizado');
+
+    await act(async () => root.unmount());
+  });
+
+  it('TR-VAULT-11: Inicialização do Vault invoca deleção proativa da base de dados legada v4', async () => {
+    const fakeDeleteDb = vi.fn();
+    const fakeOpen = vi.fn().mockImplementation(() => {
+      const req: any = {};
+      queueMicrotask(() => {
+        if (req.onsuccess) {
+          req.result = {
+            objectStoreNames: { contains: () => true }
+          };
+          req.onsuccess();
+        }
+      });
+      return req;
+    });
+
+    const originalIndexedDB = (globalThis as any).indexedDB;
+    (globalThis as any).indexedDB = {
+      deleteDatabase: fakeDeleteDb,
+      open: fakeOpen
+    };
+
+    try {
+      await (PersonalCredentialVault as any).openDB();
+      expect(fakeDeleteDb).toHaveBeenCalledWith('presys_catalog_vault_v4');
+    } finally {
+      (globalThis as any).indexedDB = originalIndexedDB;
+    }
   });
 });

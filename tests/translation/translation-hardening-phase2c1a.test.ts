@@ -403,6 +403,7 @@ describe('Phase 2C.1A: Security Gateway, WebCrypto Vault & True Printable Covera
             {
               id: 'b-img',
               type: 'image',
+              imageUrl: 'https://images.unsplash.com/photo-gauge',
               imageCaption: 'Vista em corte do sensor de pressão piezorresistivo de silício'
             },
             {

@@ -29,6 +29,22 @@ export class PersonalCredentialVault {
       return null;
     }
 
+    // Purga proativa e explícita de bancos de dados legados que continham JWK exportável
+    const legacyDBs = [
+      'presys_catalog_vault_v4',
+      'presys_catalog_vault_v3',
+      'presys_catalog_vault_v2',
+      'presys_catalog_vault_v1',
+      'presys_catalog_vault'
+    ];
+    for (const leg of legacyDBs) {
+      try {
+        indexedDB.deleteDatabase(leg);
+      } catch {
+        // Ignora silenciosamente se o banco não existir ou deleteDatabase falhar
+      }
+    }
+
     return new Promise((resolve) => {
       const request = indexedDB.open(DB_NAME, 1);
       request.onupgradeneeded = () => {

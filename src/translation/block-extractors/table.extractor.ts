@@ -18,6 +18,22 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
     });
   }
 
+  // Cabeçalhos e Linhas Derivados de customData (se presentes)
+  const customHeaders: string[] | undefined = block.customData?.headers;
+  const customRows: string[][] | undefined = block.customData?.rows;
+
+  const derivedCols: TableColumnConfig[] | undefined = customHeaders
+    ? customHeaders.map((h, i) => ({ key: `col${i + 1}`, label: h, visible: true }))
+    : undefined;
+
+  const derivedRows: CatalogTableRow[] | undefined = customRows
+    ? customRows.map((r, rIdx) => ({
+        id: `crow-${rIdx + 1}`,
+        order: rIdx,
+        localOverrides: r.reduce((acc, cell, cIdx) => ({ ...acc, [`col${cIdx + 1}`]: cell }), {})
+      }))
+    : undefined;
+
   // Cabeçalhos de Colunas (Labels exibidos no PDF)
   const defaultColsByBlockType: Record<string, any[]> = {
     custom_table: [
@@ -33,7 +49,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
     ]
   };
 
-  const columns = block.tableColumns || defaultColsByBlockType[block.type];
+  const columns = block.tableColumns || derivedCols || defaultColsByBlockType[block.type];
   if (columns && Array.isArray(columns)) {
     columns.forEach((col: TableColumnConfig, idx: number) => {
       if (col.label && col.label.trim()) {
@@ -45,14 +61,14 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
           sourceText: col.label.trim(),
           kind: 'table_header',
           policy: 'translate',
-          source: { blockType: block.type, field: `tableColumns[${idx}].label` }
+          source: { blockType: block.type, field: `col_${col.key || idx}_label` }
         });
       }
     });
   }
 
   // Linhas da Tabela: customNotes e localOverrides textuais
-  const rows = block.tableRows || defaultRowsByBlockType[block.type];
+  const rows = block.tableRows || derivedRows || defaultRowsByBlockType[block.type];
   if (rows && Array.isArray(rows)) {
     rows.forEach((row: CatalogTableRow, rIdx: number) => {
       // Notas customizadas da linha
@@ -81,53 +97,12 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
               sourceText: val.trim(),
               kind: 'table_cell',
               policy: 'translate',
-              source: { blockType: block.type, field: `tableRows[${rIdx}].localOverrides.${key}` }
+              source: { blockType: block.type, field: `row_${row.id || rIdx}_ov_${key}` }
             });
           }
         });
       }
     });
-  }
-
-  // Custom Table: Headers e Células personalizadas em customData
-  if (block.type === 'custom_table' && block.customData) {
-    if (Array.isArray(block.customData.headers)) {
-      block.customData.headers.forEach((h: string, idx: number) => {
-        if (typeof h === 'string' && h.trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_cust_h_${idx}`,
-            pageId,
-            blockId: block.id,
-            path: `customData.headers[${idx}]`,
-            sourceText: h.trim(),
-            kind: 'table_header',
-            policy: 'translate',
-            source: { blockType: block.type, field: `customData.headers[${idx}]` }
-          });
-        }
-      });
-    }
-
-    if (Array.isArray(block.customData.rows)) {
-      block.customData.rows.forEach((row: any[], rIdx: number) => {
-        if (Array.isArray(row)) {
-          row.forEach((cell: any, cIdx: number) => {
-            if (typeof cell === 'string' && cell.trim()) {
-              nodes.push({
-                id: `p${pageNumber}_b${block.id}_cust_r${rIdx}_c${cIdx}`,
-                pageId,
-                blockId: block.id,
-                path: `customData.rows[${rIdx}][${cIdx}]`,
-                sourceText: cell.trim(),
-                kind: 'table_cell',
-                policy: 'translate',
-                source: { blockType: block.type, field: `customData.rows[${rIdx}][${cIdx}]` }
-              });
-            }
-          });
-        }
-      });
-    }
   }
 
   // Matrix Spec Table: colunas, linhas, seções e cabeçalhos em customData
@@ -175,6 +150,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
       if (Array.isArray(row.values)) {
         row.values.forEach((val: string, vIdx: number) => {
           if (typeof val === 'string' && val.trim()) {
+            const isBullet = ['■', '□', '—', '-', '•'].includes(val.trim());
             nodes.push({
               id: `p${pageNumber}_b${block.id}_row_${rIdx}_val_${vIdx}`,
               pageId,
@@ -183,6 +159,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
               sourceText: val.trim(),
               kind: 'table_cell',
               policy: 'protect',
+              renderExpectation: isBullet ? 'optional' : 'required',
               source: { blockType: block.type, field: `rows[${rIdx}].values[${vIdx}]` }
             });
           }
@@ -201,6 +178,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
             sourceText: String(sec.title).trim(),
             kind: 'heading',
             policy: 'translate',
+            renderExpectation: 'optional',
             source: { blockType: block.type, field: `sections[${sIdx}].title` }
           });
         }

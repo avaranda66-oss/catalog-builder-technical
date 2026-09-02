@@ -103,7 +103,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                     {block.type === 'features_list' && (
                       <FeaturesListBlock block={block} pageId={page.id} isSelected={false} />
                     )}
-                    {block.type === 'table' && (
+                    {(block.type === 'table' || block.type === 'specs_table') && (
                       <TechnicalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                     )}
                     {block.type === 'electrical_table' && (

@@ -25,6 +25,10 @@ export interface PrintableTextNode {
   sourceText: string;
   kind: PrintableTextKind;
   policy: TranslationPolicy;
+  /** Expectativa de renderização visual no DOM de produção: 'required' (padrão) ou 'optional' (condicional/oculto) */
+  renderExpectation?: 'required' | 'optional';
+  /** Chave DOM explícita de correspondência (opcional, defaults to id) */
+  domKey?: string;
   source?: {
     blockType?: BlockType | 'catalog' | 'page' | 'system';
     field?: string;

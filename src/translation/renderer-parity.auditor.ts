@@ -14,12 +14,17 @@ export interface RendererParityResult {
   blockTypeCoverage: number; // % de BlockTypes com extratores (0-100)
   registryClassificationCoverage: number; // % de nós extraídos classificados (0-100)
   rendererPrintableParityCoverage: number; // % de textos impressos com atribuição rastreável (0-100)
-  pdfPrintableTranslationCoverage: number; // 100% se todas as 3 métricas forem 100%
+  pdfPrintableTranslationCoverage: number; // 100% se todas as métricas forem 100% e 0 órfãos/ausentes/mismatches
   totalRenderedTextNodes: number;
   attributedTextNodes: number;
   orphanTextNodes: Array<{ text: string; selectorPath: string }>;
   missingExpectedNodes: Array<{ id: string; sourceText: string }>;
+  sourceMismatchNodes: Array<{ id: string; expectedText: string; actualText: string }>;
   isComplete: boolean;
+}
+
+function normalizeText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 export class RendererParityAuditor {
@@ -43,6 +48,7 @@ export class RendererParityAuditor {
     // 3. Métrica 3: Renderer Printable Parity Coverage (Varredura Estrita do DOM Real)
     const validSystemKeys = new Set(PrintStringRegistry.getAllKeys());
     const orphanTextNodes: Array<{ text: string; selectorPath: string }> = [];
+    const sourceMismatchNodes: Array<{ id: string; expectedText: string; actualText: string }> = [];
     const foundNodeIdsInDOM = new Set<string>();
     let totalRenderedTextNodes = 0;
     let attributedTextNodes = 0;
@@ -54,27 +60,22 @@ export class RendererParityAuditor {
       targetRoot,
       NodeFilter.SHOW_TEXT,
       {
-        acceptNode: (node: Node) => {
+        acceptNode(node) {
           const parent = node.parentElement;
           if (!parent) return NodeFilter.FILTER_REJECT;
 
-          // Ignora estritamente elementos de edição e no-print
-          if (
-            parent.closest('.no-print') ||
-            parent.closest('.editor-only') ||
-            parent.closest('button') ||
-            parent.closest('input') ||
-            parent.closest('textarea') ||
-            parent.closest('select') ||
-            parent.closest('script') ||
-            parent.closest('style') ||
-            parent.closest('[aria-hidden="true"]')
-          ) {
+          // Ignora tags de infraestrutura e elementos no-print
+          const tagName = parent.tagName.toLowerCase();
+          if (['script', 'style', 'noscript', 'template', 'svg', 'path'].includes(tagName)) {
             return NodeFilter.FILTER_REJECT;
           }
 
-          const text = (node.textContent || '').trim();
-          if (!text) {
+          if (parent.closest('.no-print') || parent.closest('[data-editor-action="true"]')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          const rawText = (node.textContent || '').trim();
+          if (!rawText) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -104,6 +105,14 @@ export class RendererParityAuditor {
         if (printableNodeId && validExtractedIds.has(printableNodeId)) {
           isAttributed = true;
           foundNodeIdsInDOM.add(printableNodeId);
+          const nodeObj = extractedNodes.find((n) => n.id === printableNodeId);
+          if (nodeObj && nodeObj.policy === 'translate' && normalizeText(text) !== normalizeText(nodeObj.sourceText)) {
+            sourceMismatchNodes.push({
+              id: nodeObj.id,
+              expectedText: nodeObj.sourceText,
+              actualText: text
+            });
+          }
         }
         // Regra 2: Atribuição por chave de string de sistema EXATA no PrintStringRegistry
         else if (printStringKey && validSystemKeys.has(printStringKey)) {
@@ -111,13 +120,20 @@ export class RendererParityAuditor {
         }
         // Regra 3: Atribuição por data-block-id + data-printable-field correlacionado ao Registry
         else if (blockId && printableField) {
-          // Constrói o ID canônico correspondente
+          // Constrói o nó correspondente
           const matchingExtracted = extractedNodes.find(
-            (n) => n.blockId === blockId && (n.path.includes(printableField) || n.id.endsWith(`_${printableField}`))
+            (n) => n.blockId === blockId && (n.path.includes(printableField) || n.id.endsWith(`_${printableField}`) || (n.source?.field && n.source.field.includes(printableField)))
           );
           if (matchingExtracted) {
             isAttributed = true;
             foundNodeIdsInDOM.add(matchingExtracted.id);
+            if (matchingExtracted.policy === 'translate' && normalizeText(text) !== normalizeText(matchingExtracted.sourceText)) {
+              sourceMismatchNodes.push({
+                id: matchingExtracted.id,
+                expectedText: matchingExtracted.sourceText,
+                actualText: text
+              });
+            }
           }
         }
         // Regra 4: Caracteres exclusivamente numéricos, pontuação técnica ou símbolos de marcadores industriais protegidos
@@ -143,18 +159,18 @@ export class RendererParityAuditor {
       currentNode = walker.nextNode();
     }
 
-    // 4. Auditoria Reversa: Registry -> DOM (Detecta nós traduzíveis ausentes)
+    // 4. Auditoria Reversa: Registry -> DOM (Garante que todo nó obrigatório foi renderizado no DOM)
     const missingExpectedNodes: Array<{ id: string; sourceText: string }> = [];
     extractedNodes.forEach((node) => {
-      // Ignora nós globais do documento se a folha não renderiza título global
+      // Ignora nós globais do documento ou marcados expressamente como opcionais
       if (node.pageId === 'global') return;
+      if (node.renderExpectation === 'optional') return;
+
       if (!foundNodeIdsInDOM.has(node.id)) {
-        // Verifica se o texto do nó está no DOM
-        const hasDomElement = targetRoot.querySelector(`[data-printable-node-id="${node.id}"]`);
-        if (!hasDomElement) {
-          // Se não encontrou o elemento com o ID
-          // (permitido se o bloco não possui o nó visível)
-        }
+        missingExpectedNodes.push({
+          id: node.id,
+          sourceText: node.sourceText
+        });
       }
     });
 
@@ -167,7 +183,9 @@ export class RendererParityAuditor {
       blockTypeCoverage === 100 &&
       registryClassificationCoverage === 100 &&
       rendererPrintableParityCoverage === 100 &&
-      orphanTextNodes.length === 0;
+      orphanTextNodes.length === 0 &&
+      missingExpectedNodes.length === 0 &&
+      sourceMismatchNodes.length === 0;
 
     const pdfPrintableTranslationCoverage = isComplete ? 100 : 0;
 
@@ -180,6 +198,7 @@ export class RendererParityAuditor {
       attributedTextNodes,
       orphanTextNodes,
       missingExpectedNodes,
+      sourceMismatchNodes,
       isComplete
     };
   }

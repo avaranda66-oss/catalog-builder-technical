@@ -22,12 +22,27 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   const { updateBlock, setSelectedBlockId, updateCellOverride } = useCatalogStore();
   const { getProduct } = useLibraryStore();
 
-  const columns: TableColumnConfig[] = block.tableColumns || [
+  const customHeaders: string[] | undefined = block.customData?.headers;
+  const customRows: string[][] | undefined = block.customData?.rows;
+
+  const derivedCols: TableColumnConfig[] | undefined = customHeaders
+    ? customHeaders.map((h, i) => ({ key: `col${i + 1}`, label: h, visible: true }))
+    : undefined;
+
+  const derivedRows: CatalogTableRow[] | undefined = customRows
+    ? customRows.map((r, rIdx) => ({
+        id: `crow-${rIdx + 1}`,
+        order: rIdx,
+        localOverrides: r.reduce((acc, cell, cIdx) => ({ ...acc, [`col${cIdx + 1}`]: cell }), {})
+      }))
+    : undefined;
+
+  const columns: TableColumnConfig[] = block.tableColumns || derivedCols || [
     { key: 'col1', label: 'Item / Parâmetro', visible: true, width: 200 },
     { key: 'col2', label: 'Descrição / Especificação', visible: true }
   ];
 
-  const rows: CatalogTableRow[] = block.tableRows || [
+  const rows: CatalogTableRow[] = block.tableRows || derivedRows || [
     { id: 'crow-1', localOverrides: { col1: 'Temperatura de Operação', col2: '-40 a +85 °C' }, order: 0 },
     { id: 'crow-2', localOverrides: { col1: 'Grau de Proteção', col2: 'IP67 / NEMA 4X' }, order: 1 },
     { id: 'crow-3', localOverrides: { col1: 'Tempo de Resposta', col2: '< 100 ms' }, order: 2 }

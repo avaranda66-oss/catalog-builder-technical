@@ -109,6 +109,7 @@ export function extractFeaturesBlocks(block: ContentBlock, pageId: string, pageN
             sourceText: String(ins.label).trim(),
             kind: 'legend',
             policy: 'translate',
+            renderExpectation: 'optional',
             source: { blockType: block.type, field: `inserts[${idx}].label` }
           });
         }
@@ -121,6 +122,7 @@ export function extractFeaturesBlocks(block: ContentBlock, pageId: string, pageN
             sourceText: String(ins.description).trim(),
             kind: 'body',
             policy: 'translate',
+            renderExpectation: 'optional',
             source: { blockType: block.type, field: `inserts[${idx}].description` }
           });
         }

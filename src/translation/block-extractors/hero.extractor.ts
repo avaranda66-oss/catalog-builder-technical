@@ -4,6 +4,12 @@ import { PrintableTextNode } from '../types';
 export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
   const nodes: PrintableTextNode[] = [];
 
+  const hasCanvasLayers =
+    block.type === 'full_page_cover' &&
+    Array.isArray(block.customData?.canvasLayers) &&
+    block.customData.canvasLayers.length > 0;
+  const legacyExpectation = hasCanvasLayers ? 'optional' : 'required';
+
   if (block.badgeText && block.badgeText.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeText`,
@@ -13,6 +19,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       sourceText: block.badgeText.trim(),
       kind: 'badge',
       policy: 'translate',
+      renderExpectation: legacyExpectation,
       source: { blockType: block.type, field: 'badgeText' }
     });
   }
@@ -26,6 +33,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       sourceText: block.title.trim(),
       kind: 'heading',
       policy: 'translate',
+      renderExpectation: legacyExpectation,
       source: { blockType: block.type, field: 'title' }
     });
   }
@@ -39,6 +47,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       sourceText: block.subtitle.trim(),
       kind: 'body',
       policy: 'translate',
+      renderExpectation: legacyExpectation,
       source: { blockType: block.type, field: 'subtitle' }
     });
   }
