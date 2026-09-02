@@ -14,7 +14,7 @@ export const DevRealtimeHUD: React.FC = () => {
     realtimeStatus,
     inFlightSave
   } = useCatalogStore();
-  const { user, profile } = useAuthStore();
+  const { email, role } = useAuthStore();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -103,7 +103,7 @@ export const DevRealtimeHUD: React.FC = () => {
         )}
 
         <div className="col-span-2 text-[9px] text-slate-400 pt-1 border-t border-slate-800/80 truncate">
-          User: {profile?.full_name || user?.email || 'anon'} ({profile?.role || 'user'})
+          User: {email || 'anon'} ({role || 'user'})
         </div>
       </div>
     </aside>
