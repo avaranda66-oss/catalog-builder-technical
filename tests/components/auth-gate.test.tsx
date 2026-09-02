@@ -43,7 +43,7 @@ describe('Auth gate and limited collaborator interface', () => {
       root.render(<LibraryView />);
     });
 
-    expect(container.textContent).toContain('Biblioteca está somente para leitura');
+    expect(container.textContent).toContain('Biblioteca oficial está em modo somente-leitura');
     expect(container.textContent).not.toContain('+ Add Product');
     expect(container.querySelectorAll('input[readonly]').length).toBeGreaterThan(0);
     await act(async () => root.unmount());
