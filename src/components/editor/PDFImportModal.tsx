@@ -3,6 +3,11 @@ import { X, Upload, FileText, Crop, Plus, ArrowLeft, ArrowRight, Check, ZoomIn, 
 import * as pdfjsLib from 'pdfjs-dist';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { ContentBlock } from '../../domain/catalog.schema';
+import { PageInsertionSafetyModal } from './PageInsertionSafetyModal';
+import {
+  evaluatePageCompositionInsertion,
+  PageContentInsertionSpec
+} from '../../domain/page-composition-policy';
 
 // Configura o worker do PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
@@ -13,7 +18,14 @@ interface PDFImportModalProps {
 }
 
 export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose }) => {
-  const { currentCatalog, addBlock, activePageIndex, setCurrentCatalog } = useCatalogStore();
+  const { currentCatalog, addBlock, activePageIndex, setCurrentCatalog, insertContentOnNewPageAfter } = useCatalogStore();
+
+  const [pendingSnipInsertion, setPendingSnipInsertion] = useState<{
+    sourcePageId: string;
+    spec: PageContentInsertionSpec;
+    itemTitle: string;
+    reason: 'EXISTING_COVER_WITH_FLOW_BLOCK' | 'INCOMING_COVER_ON_NON_EMPTY_PAGE' | 'PAGE_ALREADY_MIXED';
+  } | null>(null);
 
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState<number>(0);
@@ -193,12 +205,27 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
     // Se houver uma página ativa, insere o bloco recortado
     if (currentCatalog && currentCatalog.pages[activePageIndex]) {
       const activePage = currentCatalog.pages[activePageIndex];
-      const newBlock: ContentBlock = {
-        id: `block-snip-${Date.now()}`,
+      const blockData: Omit<ContentBlock, 'id'> = {
         type: 'image',
         title: `Recorte Técnico — Pág. ${currentPage}`,
         imageUrl: snipDataUrl,
         imageCaption: `Recorte de ${fileName} (Pág. ${currentPage})`
+      };
+
+      const safety = evaluatePageCompositionInsertion(activePage, 'image');
+      if (!safety.isSafe) {
+        setPendingSnipInsertion({
+          sourcePageId: activePage.id,
+          spec: { kind: 'block', blockData },
+          itemTitle: blockData.title || 'Recorte Técnico',
+          reason: safety.reason
+        });
+        return;
+      }
+
+      const newBlock: ContentBlock = {
+        ...blockData,
+        id: `block-snip-${Date.now()}`
       };
       addBlock(activePage.id, newBlock);
       alert('Recorte inserido na página atual do catálogo!');
@@ -405,6 +432,24 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
           </div>
         )}
       </div>
+
+      <PageInsertionSafetyModal
+        isOpen={pendingSnipInsertion !== null}
+        reason={pendingSnipInsertion?.reason}
+        itemTitle={pendingSnipInsertion?.itemTitle}
+        onConfirmNewPage={() => {
+          if (pendingSnipInsertion) {
+            insertContentOnNewPageAfter(pendingSnipInsertion.sourcePageId, pendingSnipInsertion.spec);
+            setPendingSnipInsertion(null);
+            setSelection(null);
+            setIsSnipping(false);
+            onClose();
+          }
+        }}
+        onCancel={() => {
+          setPendingSnipInsertion(null);
+        }}
+      />
     </div>
   );
 };

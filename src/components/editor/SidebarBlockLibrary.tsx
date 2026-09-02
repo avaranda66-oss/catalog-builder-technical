@@ -18,6 +18,11 @@ import {
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { ContentBlock } from '../../domain/catalog.schema';
+import { PageInsertionSafetyModal } from './PageInsertionSafetyModal';
+import {
+  evaluatePageCompositionInsertion,
+  PageContentInsertionSpec
+} from '../../domain/page-composition-policy';
 import { BlockHoverTooltip } from './BlockHoverTooltip';
 import { FullPageCoverBlock } from './blocks/FullPageCoverBlock';
 import { HeroBannerBlock } from './blocks/HeroBannerBlock';
@@ -55,11 +60,18 @@ export interface SidebarBlockOption {
 }
 
 export const SidebarBlockLibrary: React.FC = () => {
-  const { currentCatalog, activePageIndex, addBlock, insertStructuralSection } = useCatalogStore();
+  const { currentCatalog, activePageIndex, addBlock, insertStructuralSection, insertContentOnNewPageAfter } = useCatalogStore();
   const [activeCategory, setActiveCategory] = useState<'all' | 'headers' | 'tables' | 'structures'>('all');
   const [search, setSearch] = useState('');
   const [hoveredItem, setHoveredItem] = useState<SidebarBlockOption | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [pendingInsertion, setPendingInsertion] = useState<{
+    sourcePageId: string;
+    spec: PageContentInsertionSpec;
+    itemTitle: string;
+    reason: 'EXISTING_COVER_WITH_FLOW_BLOCK' | 'INCOMING_COVER_ON_NON_EMPTY_PAGE' | 'PAGE_ALREADY_MIXED';
+  } | null>(null);
 
   if (!currentCatalog) return null;
 
@@ -68,7 +80,22 @@ export const SidebarBlockLibrary: React.FC = () => {
   const pageNumber = activePage?.pageNumber || 1;
 
   const handleInsert = (option: SidebarBlockOption) => {
-    if (!targetPageId) return;
+    if (!targetPageId || !activePage) return;
+    const incomingType: any = option.presetId ? 'structural_section' : (option.blockData?.type || 'text');
+
+    const safety = evaluatePageCompositionInsertion(activePage, incomingType);
+    if (!safety.isSafe) {
+      setPendingInsertion({
+        sourcePageId: targetPageId,
+        spec: option.presetId
+          ? { kind: 'structural_preset', presetId: option.presetId }
+          : { kind: 'block', blockData: option.blockData as Omit<ContentBlock, 'id'> },
+        itemTitle: option.title,
+        reason: safety.reason
+      });
+      return;
+    }
+
     if (option.presetId) {
       insertStructuralSection(targetPageId, option.presetId);
     } else if (option.blockData) {
@@ -694,6 +721,21 @@ export const SidebarBlockLibrary: React.FC = () => {
           </div>
         )}
       </div>
+
+      <PageInsertionSafetyModal
+        isOpen={pendingInsertion !== null}
+        reason={pendingInsertion?.reason}
+        itemTitle={pendingInsertion?.itemTitle}
+        onConfirmNewPage={() => {
+          if (pendingInsertion) {
+            insertContentOnNewPageAfter(pendingInsertion.sourcePageId, pendingInsertion.spec);
+            setPendingInsertion(null);
+          }
+        }}
+        onCancel={() => {
+          setPendingInsertion(null);
+        }}
+      />
     </div>
   );
 };

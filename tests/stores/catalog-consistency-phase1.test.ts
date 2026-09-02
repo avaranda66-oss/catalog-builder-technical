@@ -1116,10 +1116,10 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
 
     const pageId = baseCatalog.pages[0].id;
 
-    // 1. Adiciona bloco de capa
+    // 1. Adiciona bloco hero
     useCatalogStore.getState().addBlock(pageId, {
-      type: 'full_page_cover',
-      title: 'TA-25N Capa'
+      type: 'hero_banner',
+      title: 'TA-25N Hero'
     });
 
     // 2. Adiciona tabela técnica
@@ -1132,7 +1132,7 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
     const blocks = state.currentCatalog?.pages[0].blocks || [];
     // 1 inicial + 2 adicionados = 3 blocos
     expect(blocks.length).toBe(3);
-    expect(blocks[1].type).toBe('full_page_cover');
+    expect(blocks[1].type).toBe('hero_banner');
     expect(blocks[2].type).toBe('table');
   });
 

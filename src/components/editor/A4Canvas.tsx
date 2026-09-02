@@ -45,6 +45,12 @@ import { A4DocumentFooter } from '../shared/A4DocumentFooter';
 import { useVerticalOverflowGuard } from './hooks/useVerticalOverflowGuard';
 import { OverflowWarningBanner } from './overflow/OverflowWarningBanner';
 import { detectMixedFullPageCover } from '../../domain/overflow-guard';
+import { PageInsertionSafetyModal } from './PageInsertionSafetyModal';
+import {
+  evaluatePageCompositionInsertion,
+  evaluateMixedCoverRecovery,
+  PageContentInsertionSpec
+} from '../../domain/page-composition-policy';
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData?: Omit<ContentBlock, 'id'>;
@@ -74,6 +80,7 @@ interface EditorA4PageItemProps {
   headerOptions: BlockMenuOption[];
   tableOptions: BlockMenuOption[];
   structureOptions: BlockMenuOption[];
+  onRecoverMixedCover?: (pageId: string) => void;
 }
 
 const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
@@ -98,7 +105,8 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
   setTooltipPos,
   headerOptions,
   tableOptions,
-  structureOptions
+  structureOptions,
+  onRecoverMixedCover
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -368,7 +376,11 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
         }}
       >
         {/* Banner de Diagnóstico de Overflow / Capa Mista (Editor-Only / Não entra em BlockFlowContent) */}
-        <OverflowWarningBanner result={overflowGuard} />
+        <OverflowWarningBanner
+          result={overflowGuard}
+          onRecoverMixedCover={onRecoverMixedCover ? () => onRecoverMixedCover(page.id) : undefined}
+          isRecoveryEligible={evaluateMixedCoverRecovery(page).eligible}
+        />
 
         {/* Viewport Documental Canônico (Fase 3A.5C) */}
         <div
@@ -638,10 +650,19 @@ export const A4Canvas: React.FC = () => {
     setActivePageIndex,
     addBlock,
     insertStructuralSection,
+    insertContentOnNewPageAfter,
+    moveNonCoverBlocksToNewPage,
     reorderStructuralSectionOnPage,
     addPage,
     removePage
   } = useCatalogStore();
+
+  const [pendingInsertion, setPendingInsertion] = useState<{
+    sourcePageId: string;
+    spec: PageContentInsertionSpec;
+    itemTitle: string;
+    reason: 'EXISTING_COVER_WITH_FLOW_BLOCK' | 'INCOMING_COVER_ON_NON_EMPTY_PAGE' | 'PAGE_ALREADY_MIXED';
+  } | null>(null);
 
   const getParticipantsOnBlock = usePresenceStore((state) => state.getParticipantsOnBlock);
   const [activeMenuPageId, setActiveMenuPageId] = useState<string | null>(null);
@@ -785,6 +806,25 @@ export const A4Canvas: React.FC = () => {
   if (!currentCatalog || currentCatalog.pages.length === 0) return null;
 
   const handleSelectMenuOption = (pageId: string, opt: BlockMenuOption) => {
+    const targetPage = currentCatalog?.pages.find((p) => p.id === pageId);
+    const incomingType: any = opt.presetId ? 'structural_section' : (opt.blockData?.type || 'text');
+
+    const safety = evaluatePageCompositionInsertion(targetPage, incomingType);
+    if (!safety.isSafe) {
+      setPendingInsertion({
+        sourcePageId: pageId,
+        spec: opt.presetId
+          ? { kind: 'structural_preset', presetId: opt.presetId }
+          : { kind: 'block', blockData: opt.blockData as Omit<ContentBlock, 'id'> },
+        itemTitle: opt.title,
+        reason: safety.reason
+      });
+      setActiveDropdown(null);
+      setActiveMenuPageId(null);
+      setHoveredTooltip(null);
+      return;
+    }
+
     if (opt.presetId) {
       insertStructuralSection(pageId, opt.presetId);
     } else if (opt.blockData) {
@@ -1308,6 +1348,7 @@ export const A4Canvas: React.FC = () => {
             headerOptions={HEADER_OPTIONS}
             tableOptions={TABLE_OPTIONS}
             structureOptions={STRUCTURE_OPTIONS}
+            onRecoverMixedCover={moveNonCoverBlocksToNewPage}
           />
         );
       })}
@@ -1322,6 +1363,21 @@ export const A4Canvas: React.FC = () => {
           <span>Insert New A4 Page</span>
         </button>
       </div>
+
+      <PageInsertionSafetyModal
+        isOpen={pendingInsertion !== null}
+        reason={pendingInsertion?.reason}
+        itemTitle={pendingInsertion?.itemTitle}
+        onConfirmNewPage={() => {
+          if (pendingInsertion) {
+            insertContentOnNewPageAfter(pendingInsertion.sourcePageId, pendingInsertion.spec);
+            setPendingInsertion(null);
+          }
+        }}
+        onCancel={() => {
+          setPendingInsertion(null);
+        }}
+      />
     </div>
     </PrintLocalizationProvider>
   );
