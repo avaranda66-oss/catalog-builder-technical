@@ -531,7 +531,12 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
                       const raw = e.dataTransfer.getData('application/json');
                       if (!raw) return;
                       const data = JSON.parse(raw);
-                      if (data.type === 'structural_card' && data.childId !== child.id) {
+                      if (
+                        data.type === 'structural_card' &&
+                        data.pageId === pageId &&
+                        data.sectionId === sectionBlock.id &&
+                        data.childId !== child.id
+                      ) {
                         reorderStructuralChild(pageId, sectionBlock.id, data.childId, idx);
                       }
                     } catch {
@@ -544,7 +549,13 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
                     onDragStart={(e) => {
                       e.dataTransfer.setData(
                         'application/json',
-                        JSON.stringify({ type: 'structural_card', childId: child.id, fromIndex: idx })
+                        JSON.stringify({
+                          type: 'structural_card',
+                          pageId,
+                          sectionId: sectionBlock.id,
+                          childId: child.id,
+                          fromIndex: idx
+                        })
                       );
                       e.dataTransfer.effectAllowed = 'move';
                     }}

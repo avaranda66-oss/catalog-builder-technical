@@ -57,6 +57,7 @@ export const A4Canvas: React.FC = () => {
     setActivePageIndex,
     addBlock,
     insertStructuralSection,
+    reorderStructuralSectionOnPage,
     addPage,
     removePage
   } = useCatalogStore();
@@ -972,6 +973,30 @@ export const A4Canvas: React.FC = () => {
                     : 'space-y-3'
                 }`}
               >
+                {/* Drop Slot no topo da lista de blocos da página (Fase 3A.5B.1) */}
+                <div
+                  data-testid="block-flow-drop-slot-0"
+                  data-drop-slot-index={0}
+                  className="h-1.5 -my-1 w-full no-print editor-only"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    try {
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (!raw) return;
+                      const data = JSON.parse(raw);
+                      if (data.type === 'structural_section' && data.pageId === page.id) {
+                        reorderStructuralSectionOnPage(page.id, data.sectionId, 0);
+                      }
+                    } catch {
+                      // Fail-closed
+                    }
+                  }}
+                />
+
                 {(page.blocks || []).map((block, blockIndex) => {
                   const isSelected = block.id === selectedBlockId;
                   const remoteOnBlock = getParticipantsOnBlock(block.id);
@@ -983,9 +1008,27 @@ export const A4Canvas: React.FC = () => {
                       key={block.id}
                       data-block-id={block.id}
                       data-block-type={block.type}
+                      data-block-index={blockIndex}
                       onClick={() => {
                         setActivePageIndex(pageIndex);
                         selectEditorElement({ blockId: block.id, childId: null });
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        try {
+                          const raw = e.dataTransfer.getData('application/json');
+                          if (!raw) return;
+                          const data = JSON.parse(raw);
+                          if (data.type === 'structural_section' && data.pageId === page.id && data.sectionId !== block.id) {
+                            reorderStructuralSectionOnPage(page.id, data.sectionId, blockIndex);
+                          }
+                        } catch {
+                          // Fail-closed
+                        }
                       }}
                       className={`relative ${
                         isSingleFullCover
@@ -1109,6 +1152,32 @@ export const A4Canvas: React.FC = () => {
                     </div>
                   );
                 })}
+
+                {/* Drop Slot no final da lista de blocos da página (Fase 3A.5B.1) */}
+                {page.blocks && page.blocks.length > 0 && (
+                  <div
+                    data-testid="block-flow-drop-slot-end"
+                    data-drop-slot-index={page.blocks.length}
+                    className="h-1.5 -my-1 w-full no-print editor-only"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      try {
+                        const raw = e.dataTransfer.getData('application/json');
+                        if (!raw) return;
+                        const data = JSON.parse(raw);
+                        if (data.type === 'structural_section' && data.pageId === page.id) {
+                          reorderStructuralSectionOnPage(page.id, data.sectionId, page.blocks.length - 1);
+                        }
+                      } catch {
+                        // Fail-closed
+                      }
+                    }}
+                  />
+                )}
 
                 {(!page.blocks || page.blocks.length === 0) && (
                   <div

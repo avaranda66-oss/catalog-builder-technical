@@ -1,7 +1,7 @@
 // src/components/editor/frames/StructuralSectionInteractionFrame.tsx
-// Interaction Frame Editor-Only para Seções Estruturais (Fase 3A.5B)
-// Isola toda a lógica de pointer capture, handles de resize físico, preview transitório,
-// escala real da folha e reordenação acessível por Stable IDs, mantendo o renderer puro.
+// Interaction Frame Editor-Only para Seções Estruturais (Fase 3A.5B.1)
+// Isola toda a lógica de pointer capture, handles de resize físico ancorados à borda real da seção,
+// preview transitório com ref síncrono autoritativo, escala real da folha e reordenação acessível por Stable IDs.
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
@@ -14,7 +14,7 @@ import { StructuralSectionBlock } from '../blocks/StructuralSectionBlock';
 export interface StructuralSectionInteractionFrameProps {
   block: ContentBlock;
   pageId: string;
-  pageIndex: number;
+  pageIndex?: number;
   blockIndex: number;
   totalBlocks: number;
   isSelected?: boolean;
@@ -49,7 +49,12 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
   const [previewWidthMm, setPreviewWidthMm] = useState<number | null>(null);
   const [isResizing, setIsResizing] = useState(false);
 
+  // Refs síncronos autoritativos para imunidade contra React state lag em eventos rápidos (Fase 3A.5B.1)
+  const isResizingRef = useRef<boolean>(false);
+  const previewWidthRef = useRef<number | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
+  const activeCaptureElementRef = useRef<HTMLElement | null>(null);
+  const isFinishedNormallyRef = useRef<boolean>(false);
   const resizeSnapshotRef = useRef<ResizeSnapshot | null>(null);
 
   const layout = block.structuralData?.layout;
@@ -68,28 +73,48 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
     return pageContainer.getBoundingClientRect().width / pageContainer.offsetWidth;
   };
 
+  // Liberação segura de pointer capture
+  const safeReleasePointerCapture = () => {
+    if (activeCaptureElementRef.current && activePointerIdRef.current !== null) {
+      try {
+        activeCaptureElementRef.current.releasePointerCapture(activePointerIdRef.current);
+      } catch {
+        // Ignora se elemento desconectado ou captura já liberada
+      }
+      activeCaptureElementRef.current = null;
+    }
+  };
+
   // Cancelamento seguro (Escape, pointercancel, unmount)
   const cancelResize = () => {
-    if (!isResizing && !resizeSnapshotRef.current) return;
+    if (!isResizingRef.current && !resizeSnapshotRef.current) return;
+    safeReleasePointerCapture();
+    isResizingRef.current = false;
     setIsResizing(false);
+    previewWidthRef.current = null;
     setPreviewWidthMm(null);
     activePointerIdRef.current = null;
     resizeSnapshotRef.current = null;
   };
 
+  // Tratamento de lostpointercapture inesperado
+  const handleLostPointerCapture = () => {
+    // Se a sessão foi finalizada normalmente no pointerup, ignora o evento subsequente
+    if (isFinishedNormallyRef.current) return;
+    cancelResize();
+  };
+
   // Listener para tecla Escape durante resize
   useEffect(() => {
-    if (!isResizing) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && isResizingRef.current) {
         cancelResize();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isResizing]);
+  }, []);
 
   // Handler de PointerDown no Handle de Resize
   const handlePointerDown = (
@@ -105,7 +130,13 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
     const initialWidth = layout.fixedWidthMm ?? availableWidthMm;
     const actualScale = getActualScale();
 
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    isFinishedNormallyRef.current = false;
+    activeCaptureElementRef.current = e.currentTarget as HTMLElement;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Safe em ambientes de teste
+    }
     activePointerIdRef.current = e.pointerId;
 
     resizeSnapshotRef.current = {
@@ -119,13 +150,15 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
       initialCommittedWidth: initialWidth
     };
 
+    isResizingRef.current = true;
     setIsResizing(true);
+    previewWidthRef.current = initialWidth;
     setPreviewWidthMm(initialWidth);
   };
 
-  // Handler de PointerMove (atualiza APENAS estado local transitório, zero mutação do store)
+  // Handler de PointerMove (atualiza estado síncrono e APENAS preview transitório)
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isResizing || !resizeSnapshotRef.current) return;
+    if (!isResizingRef.current || !resizeSnapshotRef.current) return;
     if (activePointerIdRef.current !== e.pointerId) return;
 
     const snapshot = resizeSnapshotRef.current;
@@ -140,25 +173,27 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
       availableWidthMm
     });
 
+    // Atualização síncrona imediata no ref + dispatch React para render visual
+    previewWidthRef.current = newWidth;
     setPreviewWidthMm(newWidth);
   };
 
-  // Handler de PointerUp (commita exatamente UMA mutação se a largura foi modificada)
+  // Handler de PointerUp (commita exatamente UMA mutação baseada no ref síncrono)
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isResizing || !resizeSnapshotRef.current) return;
+    if (!isResizingRef.current || !resizeSnapshotRef.current) return;
     if (activePointerIdRef.current !== e.pointerId) return;
 
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignora se já liberado
-    }
+    isFinishedNormallyRef.current = true;
+    safeReleasePointerCapture();
 
     const snapshot = resizeSnapshotRef.current;
-    const finalWidth = previewWidthMm ?? snapshot.initialWidthMm;
+    // O valor autoritativo final vem do ref síncrono para imunidade contra state lag
+    const finalWidth = previewWidthRef.current ?? snapshot.initialWidthMm;
 
     // Limpa estado transitório
+    isResizingRef.current = false;
     setIsResizing(false);
+    previewWidthRef.current = null;
     setPreviewWidthMm(null);
     activePointerIdRef.current = null;
     resizeSnapshotRef.current = null;
@@ -249,6 +284,20 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
   const showRightHandle = isSelected && isFixedWidth && (align === 'left' || align === 'center');
   const showLeftHandle = isSelected && isFixedWidth && (align === 'right' || align === 'center');
 
+  // Largura e alinhamento do ResizeShell (coincide fisicamente com a seção)
+  const effectiveWidthMm = previewWidthMm ?? layout?.fixedWidthMm;
+  const shellWidthStyle: React.CSSProperties =
+    isFixedWidth && effectiveWidthMm && effectiveWidthMm > 0
+      ? { width: `${effectiveWidthMm}mm`, maxWidth: '100%' }
+      : { width: '100%' };
+
+  const shellAlignClass =
+    align === 'center'
+      ? 'mx-auto'
+      : align === 'right'
+      ? 'ml-auto'
+      : 'mr-auto';
+
   return (
     <div
       ref={frameRef}
@@ -296,61 +345,68 @@ export const StructuralSectionInteractionFrame: React.FC<StructuralSectionIntera
         </div>
       )}
 
-      {/* Badge Flutuante de Dimensão em Milímetros durante Resize */}
-      {isResizing && previewWidthMm !== null && (
-        <div
-          data-testid="resize-dimension-badge"
-          className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-mono px-2 py-0.5 rounded shadow z-40 no-print editor-only pointer-events-none"
-        >
-          {previewWidthMm.toFixed(1)} mm
-        </div>
-      )}
+      {/* Inner Interaction / Resize Shell: coincide rigorosamente com a dimensão física da seção */}
+      <div
+        data-testid="resize-shell"
+        className={`relative ${shellAlignClass}`}
+        style={shellWidthStyle}
+      >
+        {/* Badge Flutuante de Dimensão em Milímetros durante Resize */}
+        {isResizing && previewWidthMm !== null && (
+          <div
+            data-testid="resize-dimension-badge"
+            className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-mono px-2 py-0.5 rounded shadow z-40 no-print editor-only pointer-events-none whitespace-nowrap"
+          >
+            {previewWidthMm.toFixed(1)} mm
+          </div>
+        )}
 
-      {/* Resize Handle Esquerdo */}
-      {showLeftHandle && (
-        <div
-          data-testid="resize-handle-left"
-          className="absolute top-0 bottom-0 w-3 -left-1.5 cursor-ew-resize flex items-center justify-center group z-30 no-print editor-only select-none"
-          onPointerDown={(e) => handlePointerDown(e, 'left')}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={cancelResize}
-          onLostPointerCapture={cancelResize}
-          title="Redimensionar largura à esquerda"
-          aria-label="Redimensionar largura da seção à esquerda"
-        >
-          <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow border border-white group-hover:scale-110 transition-transform" />
-        </div>
-      )}
+        {/* Resize Handle Esquerdo (ancorado à borda física esquerda do ResizeShell) */}
+        {showLeftHandle && (
+          <div
+            data-testid="resize-handle-left"
+            className="absolute top-0 bottom-0 w-3 -left-1.5 cursor-ew-resize flex items-center justify-center group z-30 no-print editor-only select-none"
+            onPointerDown={(e) => handlePointerDown(e, 'left')}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={cancelResize}
+            onLostPointerCapture={handleLostPointerCapture}
+            title="Redimensionar largura à esquerda"
+            aria-label="Redimensionar largura da seção à esquerda"
+          >
+            <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow border border-white group-hover:scale-110 transition-transform" />
+          </div>
+        )}
 
-      {/* Renderer Compartilhado Puro */}
-      <StructuralSectionBlock
-        block={block}
-        pageId={pageId}
-        isSelected={isSelected}
-        selectedChildId={selectedChildId}
-        onSelectSection={onSelectSection}
-        onSelectCard={onSelectCard}
-        isExport={false}
-        previewWidthMm={previewWidthMm ?? undefined}
-      />
+        {/* Renderer Compartilhado Puro */}
+        <StructuralSectionBlock
+          block={block}
+          pageId={pageId}
+          isSelected={isSelected}
+          selectedChildId={selectedChildId}
+          onSelectSection={onSelectSection}
+          onSelectCard={onSelectCard}
+          isExport={false}
+          previewWidthMm={previewWidthMm ?? undefined}
+        />
 
-      {/* Resize Handle Direito */}
-      {showRightHandle && (
-        <div
-          data-testid="resize-handle-right"
-          className="absolute top-0 bottom-0 w-3 -right-1.5 cursor-ew-resize flex items-center justify-center group z-30 no-print editor-only select-none"
-          onPointerDown={(e) => handlePointerDown(e, 'right')}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={cancelResize}
-          onLostPointerCapture={cancelResize}
-          title="Redimensionar largura à direita"
-          aria-label="Redimensionar largura da seção à direita"
-        >
-          <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow border border-white group-hover:scale-110 transition-transform" />
-        </div>
-      )}
+        {/* Resize Handle Direito (ancorado à borda física direita do ResizeShell) */}
+        {showRightHandle && (
+          <div
+            data-testid="resize-handle-right"
+            className="absolute top-0 bottom-0 w-3 -right-1.5 cursor-ew-resize flex items-center justify-center group z-30 no-print editor-only select-none"
+            onPointerDown={(e) => handlePointerDown(e, 'right')}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={cancelResize}
+            onLostPointerCapture={handleLostPointerCapture}
+            title="Redimensionar largura à direita"
+            aria-label="Redimensionar largura da seção à direita"
+          >
+            <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow border border-white group-hover:scale-110 transition-transform" />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -9,7 +9,7 @@
 // - Reset explícito de largura ("Restaurar padrão" e "Usar largura máxima")
 // - Preservação estrita de PrintableTextNode IDs e paridade do CleanA4
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Catalog, ContentBlock } from '../../src/domain/catalog.schema';
@@ -23,6 +23,7 @@ import { createStructuralSectionFromPreset } from '../../src/domain/structural-p
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 import { StructuralSectionInteractionFrame } from '../../src/components/editor/frames/StructuralSectionInteractionFrame';
 import { StructuralSectionInspector } from '../../src/components/editor/inspector/StructuralSectionInspector';
+import { A4Canvas } from '../../src/components/editor/A4Canvas';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
 import { extractStructuralBlocks } from '../../src/translation/block-extractors/structural.extractor';
 
@@ -41,12 +42,15 @@ describe('Fase 3A.5B — Structural Resize & Reorder Suite', () => {
     if (typeof (globalThis as any).PointerEvent === 'undefined') {
       (globalThis as any).PointerEvent = MockPointerEvent;
     }
-    if (!Element.prototype.setPointerCapture) {
-      Element.prototype.setPointerCapture = () => {};
+    if (typeof (globalThis as any).IntersectionObserver === 'undefined') {
+      (globalThis as any).IntersectionObserver = class {
+        observe = vi.fn();
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      };
     }
-    if (!Element.prototype.releasePointerCapture) {
-      Element.prototype.releasePointerCapture = () => {};
-    }
+    Element.prototype.setPointerCapture = vi.fn(function (this: Element, _pointerId: number) {});
+    Element.prototype.releasePointerCapture = vi.fn(function (this: Element, _pointerId: number) {});
   });
 
   const contentBox = getPageContentBox();
@@ -990,5 +994,569 @@ describe('Fase 3A.5B — Structural Resize & Reorder Suite', () => {
     for (const node of nodesAfterReset) {
       expect(idsBefore.has(node.id)).toBe(true);
     }
+  });
+
+  // ==========================================================================
+  // FASE 3A.5B.1: RESIZE SHELL GEOMETRY & POINTER FINALIZATION HARDENING
+  // ==========================================================================
+
+  it('WIDTH-HANDLE-GEO-1: fixed=150 align=left -> ResizeShell width=150mm, mr-auto, right handle pertence ao ResizeShell', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-left',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const outerFrame = container.querySelector('[data-interaction-frame="structural_section"]') as HTMLElement;
+    expect(outerFrame.classList.contains('w-full')).toBe(true);
+
+    const resizeShell = container.querySelector('[data-testid="resize-shell"]') as HTMLElement;
+    expect(resizeShell).not.toBeNull();
+    expect(resizeShell.style.width).toBe('150mm');
+    expect(resizeShell.classList.contains('mr-auto')).toBe(true);
+
+    // O right handle é filho do resizeShell, NÃO do outerFrame diretamente
+    const rightHandle = resizeShell.querySelector('[data-testid="resize-handle-right"]');
+    expect(rightHandle).not.toBeNull();
+    expect(outerFrame.children[outerFrame.children.length - 1]).not.toBe(rightHandle);
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-HANDLE-GEO-2: fixed=150 align=right -> ResizeShell width=150mm, ml-auto, left handle pertence ao ResizeShell', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-right',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'right'
+        }
+      }
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const resizeShell = container.querySelector('[data-testid="resize-shell"]') as HTMLElement;
+    expect(resizeShell).not.toBeNull();
+    expect(resizeShell.style.width).toBe('150mm');
+    expect(resizeShell.classList.contains('ml-auto')).toBe(true);
+
+    const leftHandle = resizeShell.querySelector('[data-testid="resize-handle-left"]');
+    expect(leftHandle).not.toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-HANDLE-GEO-3: fixed=150 align=center -> ResizeShell width=150mm, mx-auto, ambos handles pertencem ao ResizeShell', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-center',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'center'
+        }
+      }
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const resizeShell = container.querySelector('[data-testid="resize-shell"]') as HTMLElement;
+    expect(resizeShell).not.toBeNull();
+    expect(resizeShell.style.width).toBe('150mm');
+    expect(resizeShell.classList.contains('mx-auto')).toBe(true);
+
+    const leftHandle = resizeShell.querySelector('[data-testid="resize-handle-left"]');
+    const rightHandle = resizeShell.querySelector('[data-testid="resize-handle-right"]');
+    expect(leftHandle).not.toBeNull();
+    expect(rightHandle).not.toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-HANDLE-GEO-4: preview during drag = 160mm -> ResizeShell e StructuralSectionBlock refletem o mesmo 160mm transient', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-geo-4',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const rightHandle = container.querySelector('[data-testid="resize-handle-right"]') as HTMLElement;
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerdown', { bubbles: true, clientX: 100, button: 0 }));
+    });
+
+    // 10mm delta px = ~37.795px
+    const delta10mmPx = mmToPx(10);
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointermove', { bubbles: true, clientX: 100 + delta10mmPx }));
+    });
+
+    const resizeShell = container.querySelector('[data-testid="resize-shell"]') as HTMLElement;
+    const blockEl = container.querySelector('.structural-section-block') as HTMLElement;
+    expect(resizeShell.style.width).toBe('160mm');
+    expect(blockEl.style.width).toBe('160mm');
+
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointercancel', { bubbles: true }));
+      root.unmount();
+    });
+  });
+
+  it('WIDTH-POINTER-FINAL-1: rapid move -> pointerup comita valor calculado imediatamente sem depender de rerender manual', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-rapid',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [fixedBlock] }]
+      },
+      selectedBlockId: 'sec-rapid'
+    });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const rightHandle = container.querySelector('[data-testid="resize-handle-right"]') as HTMLElement;
+
+    // PointerDown -> PointerMove -> PointerUp sequencial síncrono
+    const delta10mmPx = mmToPx(10);
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerdown', { bubbles: true, clientX: 100, button: 0 }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointermove', { bubbles: true, clientX: 100 + delta10mmPx }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerup', { bubbles: true, clientX: 100 + delta10mmPx }));
+    });
+
+    const updatedBlock = useCatalogStore.getState().currentCatalog?.pages[0].blocks[0]!;
+    expect(updatedBlock.structuralData?.layout.fixedWidthMm).toBe(160);
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-CAPTURE-1: normal pointerup + release capture -> exatamente uma mutation', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-cap-1',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [fixedBlock] }]
+      },
+      selectedBlockId: 'sec-cap-1'
+    });
+
+    const initialRevision = useCatalogStore.getState().localRevision;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const rightHandle = container.querySelector('[data-testid="resize-handle-right"]') as HTMLElement;
+    const delta5mmPx = mmToPx(5);
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerdown', { bubbles: true, clientX: 100, button: 0 }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointermove', { bubbles: true, clientX: 100 + delta5mmPx }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerup', { bubbles: true, clientX: 100 + delta5mmPx }));
+    });
+
+    expect(Element.prototype.releasePointerCapture).toHaveBeenCalled();
+    expect(useCatalogStore.getState().localRevision).toBe(initialRevision + 1);
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-CAPTURE-2: lostpointercapture ANTES de pointerup -> zero mutation', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-cap-2',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [fixedBlock] }]
+      },
+      selectedBlockId: 'sec-cap-2'
+    });
+
+    const initialRevision = useCatalogStore.getState().localRevision;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const rightHandle = container.querySelector('[data-testid="resize-handle-right"]') as HTMLElement;
+    const delta5mmPx = mmToPx(5);
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerdown', { bubbles: true, clientX: 100, button: 0 }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointermove', { bubbles: true, clientX: 100 + delta5mmPx }));
+      // Perda inesperada de captura antes do pointerup
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('lostpointercapture', { bubbles: true }));
+    });
+
+    // Zero mutation
+    expect(useCatalogStore.getState().localRevision).toBe(initialRevision);
+    const block = useCatalogStore.getState().currentCatalog?.pages[0].blocks[0]!;
+    expect(block.structuralData?.layout.fixedWidthMm).toBe(150);
+
+    act(() => root.unmount());
+  });
+
+  it('WIDTH-CAPTURE-3: Escape libera pointer capture e causa zero mutation', () => {
+    const fixedBlock: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-cap-3',
+      structuralData: {
+        ...sampleSectionBlock.structuralData!,
+        layout: {
+          ...sampleSectionBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 150,
+          align: 'left'
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [fixedBlock] }]
+      },
+      selectedBlockId: 'sec-cap-3'
+    });
+
+    const initialRevision = useCatalogStore.getState().localRevision;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInteractionFrame
+          block={fixedBlock}
+          pageId="page-1"
+          blockIndex={0}
+          totalBlocks={1}
+          isSelected={true}
+        />
+      );
+    });
+
+    const rightHandle = container.querySelector('[data-testid="resize-handle-right"]') as HTMLElement;
+    const delta5mmPx = mmToPx(5);
+    act(() => {
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointerdown', { bubbles: true, clientX: 100, button: 0 }));
+      rightHandle.dispatchEvent(new (globalThis as any).PointerEvent('pointermove', { bubbles: true, clientX: 100 + delta5mmPx }));
+    });
+
+    // Pressiona Escape no window
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(Element.prototype.releasePointerCapture).toHaveBeenCalled();
+    expect(useCatalogStore.getState().localRevision).toBe(initialRevision);
+
+    act(() => root.unmount());
+  });
+
+  it('REORDER-SECTION-DRAG-1: drag S para slot antes de legacy A -> S, legacy A, legacy B (legacy intacto)', () => {
+    const legacyA: ContentBlock = {
+      id: 'legacy-a',
+      type: 'matrix_spec_table',
+      title: 'Tabela Legada A',
+      tableRows: [{ id: 'r1', productRefId: 'PCON-Y18' }]
+    };
+    const secS: ContentBlock = { ...sampleSectionBlock, id: 'sec-s' };
+    const legacyB: ContentBlock = {
+      id: 'legacy-b',
+      type: 'matrix_spec_table',
+      title: 'Tabela Legada B'
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [legacyA, secS, legacyB] }]
+      }
+    });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+
+    // Drop slot 0 no topo da lista de blocos
+    const topSlot = container.querySelector('[data-testid="block-flow-drop-slot-0"]') as HTMLElement;
+    expect(topSlot).not.toBeNull();
+
+    act(() => {
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+      Object.assign(dropEvent, {
+        dataTransfer: {
+          getData: (format: string) =>
+            format === 'application/json'
+              ? JSON.stringify({ type: 'structural_section', pageId: 'page-1', sectionId: 'sec-s' })
+              : ''
+        },
+        preventDefault: () => {}
+      });
+      topSlot.dispatchEvent(dropEvent);
+    });
+
+    const blocks = useCatalogStore.getState().currentCatalog?.pages[0].blocks || [];
+    expect(blocks.map((b) => b.id)).toEqual(['sec-s', 'legacy-a', 'legacy-b']);
+    expect(blocks[1].title).toBe('Tabela Legada A');
+    expect(blocks[1].tableRows?.[0].productRefId).toBe('PCON-Y18');
+
+    act(() => root.unmount());
+  });
+
+  it('REORDER-SECTION-DRAG-2: drag S para slot depois de B -> legacy A, legacy B, S (stable ID preservado)', () => {
+    const legacyA: ContentBlock = {
+      id: 'legacy-a',
+      type: 'matrix_spec_table',
+      title: 'Tabela Legada A'
+    };
+    const secS: ContentBlock = { ...sampleSectionBlock, id: 'sec-s' };
+    const legacyB: ContentBlock = {
+      id: 'legacy-b',
+      type: 'matrix_spec_table',
+      title: 'Tabela Legada B'
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [legacyA, secS, legacyB] }]
+      }
+    });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+
+    // Drop slot final
+    const endSlot = container.querySelector('[data-testid="block-flow-drop-slot-end"]') as HTMLElement;
+    expect(endSlot).not.toBeNull();
+
+    act(() => {
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+      Object.assign(dropEvent, {
+        dataTransfer: {
+          getData: (format: string) =>
+            format === 'application/json'
+              ? JSON.stringify({ type: 'structural_section', pageId: 'page-1', sectionId: 'sec-s' })
+              : ''
+        },
+        preventDefault: () => {}
+      });
+      endSlot.dispatchEvent(dropEvent);
+    });
+
+    const blocks = useCatalogStore.getState().currentCatalog?.pages[0].blocks || [];
+    expect(blocks.map((b) => b.id)).toEqual(['legacy-a', 'legacy-b', 'sec-s']);
+    expect(blocks[2].id).toBe('sec-s');
+
+    act(() => root.unmount());
+  });
+
+  it('REORDER-CARD-SCOPE-1: payload card de section A drop em section B -> zero mutation', () => {
+    const secA: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-a'
+    };
+    const secB: ContentBlock = {
+      ...sampleSectionBlock,
+      id: 'sec-b'
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...initialCatalog,
+        pages: [{ ...initialCatalog.pages[0], blocks: [secA, secB] }]
+      },
+      selectedBlockId: 'sec-b'
+    });
+
+    const initialRevision = useCatalogStore.getState().localRevision;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          pageId="page-1"
+          sectionBlock={secB}
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    const cardB0 = secB.structuralData!.children[0].id;
+    const cardEl = container.querySelector(`[data-card-id="${cardB0}"]`) as HTMLElement;
+    expect(cardEl).not.toBeNull();
+
+    // Drop com payload originário da seção A
+    act(() => {
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+      Object.assign(dropEvent, {
+        dataTransfer: {
+          getData: (format: string) =>
+            format === 'application/json'
+              ? JSON.stringify({
+                  type: 'structural_card',
+                  pageId: 'page-1',
+                  sectionId: 'sec-a', // Seção diferente!
+                  childId: secA.structuralData!.children[0].id,
+                  fromIndex: 0
+                })
+              : ''
+        },
+        preventDefault: () => {}
+      });
+      cardEl.dispatchEvent(dropEvent);
+    });
+
+    // Zero mutation
+    expect(useCatalogStore.getState().localRevision).toBe(initialRevision);
+
+    act(() => root.unmount());
   });
 });
