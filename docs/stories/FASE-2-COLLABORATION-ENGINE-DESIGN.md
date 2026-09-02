@@ -1,100 +1,90 @@
-# FASE 2 — ARCHITECTURAL DESIGN: REALTIME COLLABORATION ENGINE (Yjs + Presence + Broadcast)
+# FASE 2 — ARCHITECTURAL DESIGN: REALTIME COLLABORATION & AWARENESS ENGINE
 
 **Projeto:** PRESYS Catalog Studio  
-**Data:** 01/09/2026  
-**Status:** PROPOSTA ARQUITETURAL PARA REVISÃO  
+**Data:** 02/09/2026  
+**Status:** PROPOSTA ARQUITETURAL MODULAR (Fases 2A, 2B, 2C, 2D)
 
 ---
 
-## 1. Diagnóstico do Modelo Atual vs. Modelo Colaborativo
+## 1. Visão Geral e Estratégia de Entrega Incremental
 
-### Limitação do Modelo Atual (Document-Level CAS)
-No modelo atual (Fase 1), o catálogo inteiro é tratado como um único JSON versionado (`v1, v2, v3...`). O mecanismo de CAS (`expected_version`) é fundamental e protege com sucesso contra *lost updates* silenciosos, mas não possui semântica de mesclagem interna:
-- Se o **Navegador A** edita o Bloco 1 da Capa e salva, a versão avança para `v11`.
-- Se o **Navegador B** edita o Bloco 2 da Folha 2 concorrentemente na versão `v10`, a tentativa de save de B recebe conflito `40001` e exige resolução manual.
-
-### Modelo Alvo (FASE 2: CRDT Granular via Yjs)
-A colaboração multiusuário em tempo real moderna desacopla o estado da interface da camada de dados compartilhados:
+A implementação de colaboração em tempo real no PRESYS Catalog Studio é dividida em 4 marcos progressivos para garantir estabilidade, clareza diagnóstica e zero regressão:
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│               ZUSTAND (Local-Only UI State)            │
-│  - Zoom, activePageIndex, selectedBlockId, sidebars    │
-└────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│            Y.Doc (CRDT Shared Document Layer)          │
-│  - Y.Map("catalogMetadata")                            │
-│  - Y.Array("pages") -> Y.Map("page")                   │
-│  - Y.Array("blocks") -> Y.Map("block") -> Y.Text()     │
-└────────────────────────────────────────────────────────┘
-          │                                 │
-          ▼                                 ▼
-┌──────────────────────┐       ┌────────────────────────┐
-│  Supabase Broadcast  │       │   Supabase Presence    │
-│  - Yjs Uint8Array    │       │   - User avatar & name │
-│    deltas (Websocket)│       │   - Active page index  │
-└──────────────────────┘       │   - Selected block ID  │
-                               └────────────────────────┘
-                                            │
-                                            ▼
-                               ┌────────────────────────┐
-                               │  PostgreSQL Snapshots  │
-                               │  - save_catalog_v3     │
-                               │  - Version audit trail │
-                               └────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ FASE 2A: Presence & Collaborator Awareness (Atual)           │
+│  - Supabase Realtime Presence por catálogo                   │
+│  - Visualização de colaboradores online, página e bloco ativo│
+│  - Zero alteração no JSON do catálogo, zero salvamento no BD │
+└──────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ FASE 2B: Soft Locking & Awareness Refinado                   │
+│  - Indicadores visuais de edição ("Marcos editando")         │
+│  - Soft warning não bloqueante de edição concorrente         │
+│  - Detecção automática de inatividade (editing -> viewing)   │
+└──────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ FASE 2C: Granular CRDT Collaboration (Yjs + Broadcast)       │
+│  - Y.Doc desacoplado para nós de páginas, blocos e células   │
+│  - Supabase Realtime Broadcast de deltas binários            │
+│  - Mesclagem determinística de edições concorrentes          │
+└──────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ FASE 2D: Snapshot Persistence & Hybrid Authority             │
+│  - Debounced Snapshot no PostgreSQL (save_catalog_v3)        │
+│  - Histórico de revisões e auditoria de autoria              │
+│  - PDF A4 rasterizado em alta resolução (com export canônico)│
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Estrutura de Tipos Yjs para o Catálogo
+## 2. Fase 2A: Presence & Awareness (Sem Yjs, Sem Modificação de Conteúdo)
 
-Cada entidade do catálogo terá um identificador UUID imutável e estável:
+### 2.1 Princípios Fundamentais
+- **Canal Dedicado**: `catalog-presence:<catalogId>` (isolado do canal global de banco).
+- **Chave de Presença por Sessão**: `${userId}:${clientInstanceId}`, permitindo que o mesmo usuário em dois navegadores/abas opere como duas sessões distintas sem sobreposição.
+- **Invariante Crítico**: Presence **NÃO** chama `saveCurrentCatalog()`, **NÃO** chama `save_catalog_v3`, **NÃO** incrementa `catalog.version` e **NÃO** altera o estado de persistência.
+- **Estado Efêmero**: Dados de presença residem na memória (`usePresenceStore`) e no cluster Realtime do Supabase.
 
-1. **`doc.getMap('catalog')`**:
-   - `id: string` (UUID imutável)
-   - `title: Y.Text` (Título colaborativo com edição caractere a caractere)
-   - `subtitle: Y.Text`
-   - `themeId: string`
-
-2. **`doc.getArray('pages')`**:
-   - Lista ordenada de `Y.Map`:
-     - `id: string` (UUID da página)
-     - `pageNumber: number`
-     - `pageType: string`
-     - `title: Y.Text`
-     - `blocks: Y.Array<Y.Map>`
-
-3. **`Y.Map('block')`**:
-   - `id: string` (UUID estável do bloco)
-   - `type: string`
-   - `title: Y.Text`
-   - `config: Y.Map`
-   - `overrides: Y.Map` (para células e overrides de tabelas)
-
----
-
-## 3. Resolução de Cenários Concorrentes
-
-| Cenário Concorrente | Comportamento Yjs / CRDT | Resultado Final |
-| :--- | :--- | :--- |
-| **A edita Bloco 1, B edita Bloco 2** | Operações ocorrem em nós independentes do `Y.Doc`. | Ambos os blocos são atualizados instantaneamente sem conflito. |
-| **A e B editam o título do mesmo bloco** | `Y.Text` resolve com inserções/deleções baseadas em Lamport timestamps. | Texto mesclado de forma determinística em ambos os navegadores. |
-| **A remove um bloco enquanto B edita o mesmo bloco** | A deleção do nó no `Y.Array` vence ou é descartada conforme regra de tombstone. | O bloco é removido; se B salvar nova alteração, o nó é reinserido ou notificado. |
-| **A adiciona Folha 4, B adiciona Folha 4** | `Y.Array.push()` intercala ordenadamente por client ID determinístico. | Ambas as folhas são preservadas (Folha 4 e Folha 5). |
+### 2.2 Estrutura da Sessão do Participante (`ParticipantSession`)
+```typescript
+export interface ParticipantSession {
+  presenceKey: string;
+  userId: string;
+  clientInstanceId: string;
+  displayLabel: string;
+  catalogId: string;
+  pageId?: string;
+  pageNumber?: number;
+  blockId?: string | null;
+  blockType?: string | null;
+  activity: 'viewing' | 'editing';
+  lastInteractionAt: string;
+  color: string;
+}
+```
 
 ---
 
-## 4. Estratégia de Persistência Híbrida (Debounced Snapshot)
+## 3. Fase 2C: Motor CRDT (Yjs) — Planejamento Futuro
 
-1. **Em tempo real**: Edições são transmitidas via canal Supabase Realtime Broadcast (`broadcast: { event: 'yjs-update' }`) em pacotes binários compactados (`Uint8Array`). Latência típica: 50-150ms.
-2. **Presença em tempo real**: Supabase Presence sincroniza quem está online, em qual folha está trabalhando e qual bloco está focado.
-3. **Persistência no PostgreSQL**: Um debounced snapshot (e.g. 1000ms de inatividade ou no botão manual) converte o `Y.Doc` para o formato canônico `Catalog` e executa a RPC `save_catalog_v3` no banco relacional para persistência de longo prazo e geração de PDFs.
+Quando aprovada a Fase 2A e 2B, o modelo de dados compartilhado será mapeado em `Y.Doc`:
+- `Y.Map("catalogMetadata")`
+- `Y.Array("pages")` -> `Y.Map("page")`
+- `Y.Array("blocks")` -> `Y.Map("block")` -> `Y.Text("title")`
 
 ---
 
-## 5. Próximos Passos (Fase 2)
-1. Instalação das dependências oficiais: `yjs` e `y-indexeddb`.
-2. Criação do provedor `SupabaseYjsProvider` integrado ao canal `catalogs:<catalog_id>`.
-3. Conexão do `useCatalogStore` com o `Y.Doc` mantendo compatibilidade com os seletores React existentes.
+## 4. Esclarecimento sobre Geração e Exportação de PDF
+
+> **Nota Técnica de Nomenclatura:**  
+> O método atual `PDFService.exportToPDF()` utiliza o pipeline `html2canvas → Canvas DOM → PNG → jsPDF.addImage()`.  
+> Portanto, trata-se de um **PDF A4 rasterizado em alta resolução** (e não de um PDF vetorial nativo).  
+> A refatoração para um motor de renderização vetorial nativo está planejada para uma fase subsequente de infraestrutura de exportação.

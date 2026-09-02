@@ -26,6 +26,7 @@ import {
   Minus
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import { usePresenceStore } from '../../stores/usePresenceStore';
 import { useMediaStore } from '../../stores/useMediaStore';
 import { TableColumnConfig } from '../../domain/catalog.schema';
 import { CalibratorModeItem, DEFAULT_CALIBRATOR_MODES } from './blocks/MultiModeCalibratorBlock';
@@ -42,11 +43,13 @@ export const PropertiesPanel: React.FC = () => {
     currentCatalog,
     activePageIndex,
     selectedBlockId,
-    updateBlock,
+    updateBlock: rawUpdateBlock,
     removeBlock,
     setPageTitle
   } = useCatalogStore();
   const { openGallery } = useMediaStore();
+  const getParticipantsOnBlock = usePresenceStore((state) => state.getParticipantsOnBlock);
+  const markEditing = usePresenceStore((state) => state.markEditing);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +70,15 @@ export const PropertiesPanel: React.FC = () => {
       break;
     }
   }
+
+  const updateBlock: typeof rawUpdateBlock = (pageId, blockId, patch) => {
+    rawUpdateBlock(pageId, blockId, patch);
+    if (selectedBlock) {
+      markEditing(activePageIndex + 1, pageId, blockId, selectedBlock.type);
+    }
+  };
+
+  const remoteOnSelectedBlock = selectedBlock ? getParticipantsOnBlock(selectedBlock.id) : [];
 
   const AVAILABLE_DEFAULT_FIELDS = [
     { key: 'code', label: 'Código' },
@@ -215,6 +227,37 @@ export const PropertiesPanel: React.FC = () => {
                 <span className="capitalize">{selectedBlock.type.replace(/_/g, ' ')}</span>
               </div>
             </div>
+
+            {/* Aviso Soft de Awareness / Outro Colaborador no Mesmo Bloco */}
+            {remoteOnSelectedBlock.length > 0 && (
+              <div
+                className="p-2.5 rounded-lg border flex items-start gap-2 text-xs transition-all no-print"
+                style={{
+                  backgroundColor: `${remoteOnSelectedBlock[0].color}12`,
+                  borderColor: `${remoteOnSelectedBlock[0].color}55`
+                }}
+              >
+                <div
+                  className="w-5 h-5 rounded-full text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs"
+                  style={{ backgroundColor: remoteOnSelectedBlock[0].color }}
+                >
+                  {remoteOnSelectedBlock[0].avatarText}
+                </div>
+                <div className="leading-snug">
+                  <div className="font-bold text-slate-900">
+                    {remoteOnSelectedBlock[0].displayLabel}{' '}
+                    {remoteOnSelectedBlock[0].activity === 'editing'
+                      ? 'está editando este bloco agora'
+                      : 'também está com este bloco selecionado'}
+                  </div>
+                  <p className="text-[10.5px] text-slate-600 mt-0.5">
+                    {remoteOnSelectedBlock[0].activity === 'editing'
+                      ? 'Atenção: edições simultâneas no mesmo documento podem exigir confirmação na nuvem.'
+                      : 'Você e este colaborador estão visualizando o mesmo componente.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* SELETOR DE COR / TEMA GLOBAL PARA TODOS OS HEADERS & CAPAS */}
             {['hero_banner', 'full_page_cover', 'bottom_header', 'fluke_header', 'additel_two_col_hero'].includes(selectedBlock.type) && (

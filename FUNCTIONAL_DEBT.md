@@ -26,7 +26,7 @@ Este documento audita sistematicamente cada botão, menu, modal e operação do 
 | **Editar Célula de Tabela** | Properties Panel / Tabela | Permite overrides pontuais ou restauração para a Biblioteca Oficial | `WORKING` | `updateCellOverride()`. |
 | **Abrir no A4 Studio** | Publications View | Alterna para a aba Editor com a página e catálogo selecionados | `WORKING` | `handleOpenInStudio()`. |
 | **Selecionar Catálogo em Publications**| Publications View | Define o catálogo ativo e atualiza a inspeção de preflight | `WORKING` | `loadCatalogById()`. |
-| **Exportar PDF de Alta Resolução**| Publications View | Executa flush prévio na nuvem e exporta PDF vetorial do catálogo selecionado | `WORKING` | `handleExportPDF` com metadados `v{version}` no arquivo. |
+| **Exportar PDF de Alta Resolução**| Publications View | Executa flush prévio na nuvem e exporta PDF A4 rasterizado em alta resolução do catálogo selecionado (via html2canvas + jsPDF) | `WORKING` | `handleExportPDF` com metadados `v{version}` no arquivo. *(Nota: Motor atual é rasterizado via canvas; refatoração vetorial nativa planejada para fase posterior)*. |
 | **Recortar / Importar PDF** | Modal PDF Import | Importa páginas ou recorta trechos de manuais em PDF | `WORKING` | `PDFImportModal`. |
 | **Mídia Customizada / Uploads** | Media Library | Armazena assets e imagens enviadas pelo usuário | `LOCAL-ONLY` | Atualmente usa `localStorage` / Data URL. *Fase 3: Migração para Supabase Storage*. |
 | **Edição Simultânea Granular** | Editor Multi-browser | Mesclagem de edições concorrentes de diferentes blocos | `PARTIAL` | Protegido contra perda via CAS 40001. *Fase 2: Motor de Colaboração Yjs + CRDT*. |

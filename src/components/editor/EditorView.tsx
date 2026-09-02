@@ -9,6 +9,7 @@ import { ExportPDFModal } from './ExportPDFModal';
 import { AIAssistantDrawer } from '../ai/AIAssistantDrawer';
 import { PresetModal } from './PresetModal';
 import { PDFImportModal } from './PDFImportModal';
+import { CollaboratorPresenceBar } from './CollaboratorPresenceBar';
 import { generateUniqueCatalogTitle } from '../../domain/catalog.schema';
 
 export const EditorView: React.FC = () => {
@@ -97,7 +98,12 @@ export const EditorView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Barra de Presença e Colaboradores em Tempo Real */}
+          <CollaboratorPresenceBar />
+
+          <div className="h-4 w-px bg-slate-250 mx-0.5" />
+
           {/* Botão de Salvar no Supabase / Nuvem (Flush explícito) */}
           <button
             onClick={async () => {

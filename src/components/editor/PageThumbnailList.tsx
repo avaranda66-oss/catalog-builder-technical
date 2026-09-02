@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, FileText, Image, Table, LayoutTemplate } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import { usePresenceStore } from '../../stores/usePresenceStore';
 import { SidebarBlockLibrary } from './SidebarBlockLibrary';
 
 export const PageThumbnailList: React.FC = () => {
@@ -11,6 +12,8 @@ export const PageThumbnailList: React.FC = () => {
     addPage,
     removePage
   } = useCatalogStore();
+
+  const getParticipantsOnPage = usePresenceStore((state) => state.getParticipantsOnPage);
 
   const [sidebarTab, setSidebarTab] = useState<'pages' | 'blocks'>('pages');
 
@@ -136,6 +139,34 @@ export const PageThumbnailList: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Indicador de Colaboradores Remotos nesta Folha */}
+                  {(() => {
+                    const pageParticipants = getParticipantsOnPage(page.pageNumber);
+                    if (pageParticipants.length === 0) return null;
+
+                    return (
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-150 text-[10px]">
+                        <div className="flex items-center -space-x-1">
+                          {pageParticipants.map((p) => (
+                            <div
+                              key={p.presenceKey}
+                              className="w-4 h-4 rounded-full text-[8px] font-bold text-white flex items-center justify-center border border-white shadow-2xs"
+                              style={{ backgroundColor: p.color }}
+                              title={`${p.displayLabel} está ${p.activity === 'editing' ? 'editando' : 'nesta página'}`}
+                            >
+                              {p.avatarText}
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-slate-500 font-mono text-[9px] truncate max-w-[120px]">
+                          {pageParticipants.length === 1
+                            ? `${pageParticipants[0].displayLabel} aqui`
+                            : `${pageParticipants.length} colaboradores`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

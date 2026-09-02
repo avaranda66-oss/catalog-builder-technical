@@ -9,6 +9,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import { usePresenceStore } from '../../stores/usePresenceStore';
 import { CatalogPage, ContentBlock } from '../../domain/catalog.schema';
 import { TextBlock } from './blocks/TextBlock';
 import { ImageBlock } from './blocks/ImageBlock';
@@ -47,6 +48,7 @@ export const A4Canvas: React.FC = () => {
     removePage
   } = useCatalogStore();
 
+  const getParticipantsOnBlock = usePresenceStore((state) => state.getParticipantsOnBlock);
   const [activeMenuPageId, setActiveMenuPageId] = useState<string | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'headers' | 'tables' | 'structures' | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<HoverTooltipItem | null>(null);
@@ -787,6 +789,9 @@ export const A4Canvas: React.FC = () => {
               >
                 {(page.blocks || []).map((block) => {
                   const isSelected = block.id === selectedBlockId;
+                  const remoteOnBlock = getParticipantsOnBlock(block.id);
+                  const hasRemote = remoteOnBlock.length > 0;
+                  const primaryRemote = remoteOnBlock[0];
 
                   return (
                     <div
@@ -794,14 +799,36 @@ export const A4Canvas: React.FC = () => {
                       onClick={() => {
                         setActivePageIndex(pageIndex);
                       }}
-                      className={
+                      className={`relative ${
                         isSingleFullCover
                           ? 'h-full w-full'
                           : isAutoFit && blockCount === 1
                           ? 'my-auto'
                           : ''
+                      }`}
+                      style={
+                        hasRemote
+                          ? {
+                              outline: `2px dashed ${primaryRemote.color}`,
+                              outlineOffset: '2px'
+                            }
+                          : undefined
                       }
                     >
+                      {/* Overlay de Presença e Awareness do Bloco (Oculto no PDF / Editor-Only) */}
+                      {hasRemote && (
+                        <div
+                          className="no-print editor-only absolute -top-3.5 right-3 z-30 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold text-white shadow-md pointer-events-none transition-all duration-150"
+                          style={{ backgroundColor: primaryRemote.color }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                          <span>
+                            {primaryRemote.displayLabel}{' '}
+                            {primaryRemote.activity === 'editing' ? 'editando' : 'aqui'}
+                          </span>
+                        </div>
+                      )}
+
                       {block.type === 'full_page_cover' && (
                         <FullPageCoverBlock block={block} pageId={page.id} isSelected={isSelected} />
                       )}
