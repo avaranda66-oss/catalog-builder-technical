@@ -159,6 +159,14 @@ export class SupabaseService {
     if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
 
     try {
+      const sessionRes = await supabase.auth.getSession();
+      if (sessionRes.data?.session?.expires_at) {
+        const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
+        if (isExpiringSoon) {
+          await supabase.auth.refreshSession();
+        }
+      }
+
       const { data, error } = await supabase.rpc('create_translated_catalog_v1', {
         p_catalog: catalog,
         p_source_catalog_id: sourceCatalogId,
@@ -190,6 +198,14 @@ export class SupabaseService {
     if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
 
     try {
+      const sessionRes = await supabase.auth.getSession();
+      if (sessionRes.data?.session?.expires_at) {
+        const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
+        if (isExpiringSoon) {
+          await supabase.auth.refreshSession();
+        }
+      }
+
       const { data, error } = await supabase.rpc('create_translated_template_v1', {
         p_template: template,
         p_source_template_id: sourceTemplateId,
@@ -209,6 +225,51 @@ export class SupabaseService {
     } catch (err: any) {
       return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar template traduzido' };
     }
+  }
+
+  static async diagnoseCurrentTranslationAuth(): Promise<{
+    sessionExists: boolean;
+    authUserIdPresent: boolean;
+    teamRole: string | null;
+    authStoreRole: string | null;
+    authStoreUserMatchesSession: boolean;
+    supabaseProjectRef: string;
+    teamRoleError?: string;
+    probeResult?: any;
+    probeError?: string;
+  }> {
+    const supabase = getSupabase();
+    if (!supabase) {
+      return {
+        sessionExists: false,
+        authUserIdPresent: false,
+        teamRole: null,
+        authStoreRole: null,
+        authStoreUserMatchesSession: false,
+        supabaseProjectRef: 'bjxqvrpbigwgabwbhtqa'
+      };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData?.session;
+    const { useAuthStore } = await import('@/stores/useAuthStore');
+    const authStoreUserId = useAuthStore.getState().userId;
+    const authStoreRole = useAuthStore.getState().role;
+
+    const { data: roleData, error: roleError } = await supabase.rpc('team_role');
+    const { data: probeData, error: probeError } = await supabase.rpc('translation_auth_probe_v1');
+
+    return {
+      sessionExists: !!session,
+      authUserIdPresent: !!session?.user?.id,
+      teamRole: (roleData as any) || null,
+      authStoreRole: authStoreRole || null,
+      authStoreUserMatchesSession: session?.user?.id === authStoreUserId,
+      supabaseProjectRef: 'bjxqvrpbigwgabwbhtqa',
+      teamRoleError: roleError?.message,
+      probeResult: probeData,
+      probeError: probeError?.message
+    };
   }
 
   static async getCatalog(id: string): Promise<{ success: boolean; data?: Catalog; error?: string }> {

@@ -75,8 +75,10 @@ export const TranslationCenterModal: React.FC = () => {
   const [isCheckingServerCaps, setIsCheckingServerCaps] = useState(false);
   const [serverRole, setServerRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
 
-  const activeCapabilities = serverCaps || getDocumentCapabilities(role);
-  const canTranslateCurrent = isTemplateMode ? activeCapabilities.canTranslateTemplate : activeCapabilities.canTranslateCatalog;
+  // Strict Fail-Closed: Sem confirmação prévia do servidor, capability é false
+  const canTranslateCurrent = serverCaps
+    ? (isTemplateMode ? serverCaps.canTranslateTemplate : serverCaps.canTranslateCatalog)
+    : false;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
