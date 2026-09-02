@@ -20,6 +20,7 @@ import { BackupModal } from './BackupModal';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useTranslationStore } from '../../stores/useTranslationStore';
 import { TranslationCenterModal } from '../translation/TranslationCenterModal';
+import { TranslationCenterErrorBoundary } from '../translation/TranslationCenterErrorBoundary';
 
 export const Navbar: React.FC = () => {
   const { activeTab, setActiveTab, setExportPDFModalOpen } = useUIStore();
@@ -221,7 +222,9 @@ export const Navbar: React.FC = () => {
       {/* Modals */}
       <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />
       <BackupModal isOpen={isBackupModalOpen} onClose={() => setIsBackupModalOpen(false)} />
-      <TranslationCenterModal />
+      <TranslationCenterErrorBoundary>
+        <TranslationCenterModal />
+      </TranslationCenterErrorBoundary>
     </header>
   );
 };

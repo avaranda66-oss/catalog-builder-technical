@@ -33,16 +33,14 @@ export interface CleanA4DocumentProps {
 export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: catalog, className = '' }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  if (!catalog || !catalog.pages || catalog.pages.length === 0) {
-    return null;
-  }
-
-  const locale = catalog.locale || 'pt-BR';
+  const locale = catalog?.locale || 'pt-BR';
   const direction = FontManager.getDirectionForLocale(locale);
   const fontFamily = FontManager.getFontFamilyForLocale(locale);
 
   React.useEffect(() => {
-    void FontManager.ensureFontsLoadedForLocale(locale);
+    if (locale) {
+      void FontManager.ensureFontsLoadedForLocale(locale);
+    }
   }, [locale]);
 
   React.useEffect(() => {
@@ -50,6 +48,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
       applyBidiIsolationToElement(containerRef.current);
     }
   }, [catalog, direction]);
+
+  if (!catalog || !catalog.pages || catalog.pages.length === 0) {
+    return null;
+  }
 
   const resolveSystemString = (key: string): string => {
     if (catalog.localizedSystemStrings && catalog.localizedSystemStrings[key]) {

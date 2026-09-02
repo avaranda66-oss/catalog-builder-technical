@@ -304,6 +304,17 @@ export class PrintStringRegistry {
   }
 
   /**
+   * Obtém todas as strings de sistema resolvidas para o idioma especificado.
+   */
+  static getAll(targetLocale = 'pt-BR'): Record<string, string> {
+    const res: Record<string, string> = {};
+    for (const key of Object.keys(SYSTEM_PRINT_STRINGS)) {
+      res[key] = this.get(key, targetLocale);
+    }
+    return res;
+  }
+
+  /**
    * Lista todas as chaves de sistema imprimíveis cadastradas.
    */
   static getAllKeys(): string[] {

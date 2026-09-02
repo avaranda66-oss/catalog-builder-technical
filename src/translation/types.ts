@@ -198,3 +198,10 @@ export interface FullTranslationResult {
   layoutQa: LayoutQaResult;
   completedAt: string;
 }
+
+export interface TranslationApplierResult {
+  translatedCatalog: any; // Catalog
+  appliedCount: number;
+  unappliedCount: number;
+  unappliedNodeIds: string[];
+}

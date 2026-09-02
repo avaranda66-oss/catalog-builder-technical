@@ -181,8 +181,16 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       set({ coverage: null });
       return;
     }
-    const audit = CoverageAuditor.auditCatalog(catalog);
-    set({ coverage: audit });
+    try {
+      const audit = CoverageAuditor.auditCatalog(catalog);
+      set({ coverage: audit, error: audit.unclassifiedCount > 0 ? `Aviso: Existem ${audit.unclassifiedCount} elementos não classificados no catálogo.` : null });
+    } catch (err: any) {
+      console.error('[TranslationStore] Falha ao analisar cobertura do catálogo:', err);
+      set({
+        coverage: null,
+        error: 'Não foi possível analisar este catálogo para tradução.'
+      });
+    }
   },
 
   runSamplePreview: async (catalog, userId) => {

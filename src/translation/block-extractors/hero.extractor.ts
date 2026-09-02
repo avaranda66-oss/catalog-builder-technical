@@ -1,8 +1,12 @@
+// src/translation/block-extractors/hero.extractor.ts
+// Extrator resiliente e protegido contra formatos legados ou malformados para blocos Hero, Headers e Capa A4.
+
 import { ContentBlock, CanvasLayer } from '@/domain/catalog.schema';
 import { PrintableTextNode } from '../types';
 
 export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
   const nodes: PrintableTextNode[] = [];
+  if (!block || typeof block !== 'object') return nodes;
 
   const hasCanvasLayers =
     block.type === 'full_page_cover' &&
@@ -10,7 +14,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     block.customData.canvasLayers.length > 0;
   const legacyExpectation = hasCanvasLayers ? 'optional' : 'required';
 
-  if (block.badgeText && block.badgeText.trim()) {
+  if (typeof block.badgeText === 'string' && block.badgeText.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeText`,
       pageId,
@@ -24,7 +28,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     });
   }
 
-  if (block.title && block.title.trim()) {
+  if (typeof block.title === 'string' && block.title.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_title`,
       pageId,
@@ -38,7 +42,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     });
   }
 
-  if (block.subtitle && block.subtitle.trim()) {
+  if (typeof block.subtitle === 'string' && block.subtitle.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_subtitle`,
       pageId,
@@ -52,7 +56,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     });
   }
 
-  if (block.imageCaption && block.imageCaption.trim()) {
+  if (typeof block.imageCaption === 'string' && block.imageCaption.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_imageCaption`,
       pageId,
@@ -66,9 +70,9 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   }
 
   // Full Page Cover: Canvas Layers de Texto e Badges
-  if (block.type === 'full_page_cover' && block.customData?.canvasLayers && Array.isArray(block.customData.canvasLayers)) {
+  if (block.type === 'full_page_cover' && Array.isArray(block.customData?.canvasLayers)) {
     block.customData.canvasLayers.forEach((layer: CanvasLayer, idx: number) => {
-      if ((layer.type === 'text' || layer.type === 'badge') && layer.content && layer.content.trim()) {
+      if (layer && typeof layer === 'object' && (layer.type === 'text' || layer.type === 'badge') && typeof layer.content === 'string' && layer.content.trim()) {
         nodes.push({
           id: `p${pageNumber}_b${block.id}_layer_${layer.id || idx}`,
           pageId,
@@ -84,7 +88,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   }
 
   // Description em customData
-  if (block.customData?.description && typeof block.customData.description === 'string' && block.customData.description.trim()) {
+  if (typeof block.customData?.description === 'string' && block.customData.description.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_description`,
       pageId,
@@ -117,27 +121,31 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     'Rotinas automáticas de calibração com emissão de relatórios',
     'Homogeneidade radial e axial certificada conforme normas internacionais'
   ];
-  const highlights = block.customData?.highlights || (block.type === 'fluke_header' ? defaultHighlights : undefined);
-  if (highlights && Array.isArray(highlights)) {
-    highlights.forEach((hl: string, idx: number) => {
-      if (typeof hl === 'string' && hl.trim()) {
-        nodes.push({
-          id: `p${pageNumber}_b${block.id}_hl_${idx}`,
-          pageId,
-          blockId: block.id,
-          path: `customData.highlights[${idx}]`,
-          sourceText: hl.trim(),
-          kind: 'body',
-          policy: 'translate',
-          source: { blockType: block.type, field: `highlights[${idx}]` }
-        });
-      }
-    });
-  }
+  const rawHighlights = block.customData?.highlights;
+  const highlights = Array.isArray(rawHighlights)
+    ? rawHighlights
+    : block.type === 'fluke_header'
+    ? defaultHighlights
+    : [];
+
+  highlights.forEach((hl: any, idx: number) => {
+    if (typeof hl === 'string' && hl.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_hl_${idx}`,
+        pageId,
+        blockId: block.id,
+        path: `customData.highlights[${idx}]`,
+        sourceText: hl.trim(),
+        kind: 'body',
+        policy: 'translate',
+        source: { blockType: block.type, field: `highlights[${idx}]` }
+      });
+    }
+  });
 
   // Fluke Header: Badge & Subtitle Fallbacks
   if (block.type === 'fluke_header') {
-    const badge = block.badgeText || 'PRESYS';
+    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'PRESYS';
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeText`,
       pageId,
@@ -149,7 +157,9 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       source: { blockType: block.type, field: 'badgeText' }
     });
 
-    const badgeSecondary = block.customData?.badgeSecondary || 'Calibration';
+    const badgeSecondary = typeof block.customData?.badgeSecondary === 'string' && block.customData.badgeSecondary.trim()
+      ? block.customData.badgeSecondary.trim()
+      : 'Calibration';
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeSecondary`,
       pageId,
@@ -164,7 +174,9 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
 
   // Additel Two Col: Overview, Badge Subtitle e Bullets
   if ((block.type as string) === 'additel_two_col' || block.type === 'additel_two_col_hero') {
-    const overview = block.customData?.overview || 'A linha de calibradores automáticos de pressão oferece geração autônoma e medição com exatidão metrológica. Ideal para testes automatizados de transmissores, manômetros e pressostatos em laboratório e campo.';
+    const overview = typeof block.customData?.overview === 'string' && block.customData.overview.trim()
+      ? block.customData.overview.trim()
+      : 'A linha de calibradores automáticos de pressão oferece geração autônoma e medição com exatidão metrológica. Ideal para testes automatizados de transmissores, manômetros e pressostatos em laboratório e campo.';
     nodes.push({
       id: `p${pageNumber}_b${block.id}_overview`,
       pageId,
@@ -176,7 +188,9 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       source: { blockType: block.type, field: 'overview' }
     });
 
-    const badgeSubtitle = block.customData?.badgeSubtitle || 'Precision Metrology';
+    const badgeSubtitle = typeof block.customData?.badgeSubtitle === 'string' && block.customData.badgeSubtitle.trim()
+      ? block.customData.badgeSubtitle.trim()
+      : 'Precision Metrology';
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeSubtitle`,
       pageId,
@@ -193,24 +207,30 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       'Estabilidade de controle melhor que 0.005% do fundo de escala',
       'Duplo canal de medição de pressão com sensores intercambiáveis'
     ];
-    const bulletList = block.customData?.bulletList || block.customData?.bullets || defaultBullets;
-    bulletList.forEach((b: string, idx: number) => {
-      nodes.push({
-        id: `p${pageNumber}_b${block.id}_bullet_${idx}`,
-        pageId,
-        blockId: block.id,
-        path: `customData.bulletList[${idx}]`,
-        sourceText: b,
-        kind: 'body',
-        policy: 'translate',
-        source: { blockType: block.type, field: `bulletList[${idx}]` }
-      });
+    const rawBullets = block.customData?.bulletList || block.customData?.bullets;
+    const bulletList = Array.isArray(rawBullets)
+      ? rawBullets
+      : defaultBullets;
+
+    bulletList.forEach((b: any, idx: number) => {
+      if (typeof b === 'string' && b.trim()) {
+        nodes.push({
+          id: `p${pageNumber}_b${block.id}_bullet_${idx}`,
+          pageId,
+          blockId: block.id,
+          path: `customData.bulletList[${idx}]`,
+          sourceText: b.trim(),
+          kind: 'body',
+          policy: 'translate',
+          source: { blockType: block.type, field: `bulletList[${idx}]` }
+        });
+      }
     });
   }
 
   // Contatos em customData (bottom_header)
   if (block.type === 'bottom_header') {
-    const badge = block.badgeText || 'PRESYS METROLOGIA';
+    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'PRESYS METROLOGIA';
     nodes.push({
       id: `p${pageNumber}_b${block.id}_badgeText`,
       pageId,
@@ -221,9 +241,9 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       policy: 'translate',
       source: { blockType: block.type, field: 'badgeText' }
     });
-    const phone = block.customData?.phone || '+55 (11) 3038-1300';
-    const email = block.customData?.email || 'vendas@presys.com.br';
-    const website = block.customData?.website || 'www.presys.com.br';
+    const phone = typeof block.customData?.phone === 'string' && block.customData.phone.trim() ? block.customData.phone.trim() : '+55 (11) 3038-1300';
+    const email = typeof block.customData?.email === 'string' && block.customData.email.trim() ? block.customData.email.trim() : 'vendas@presys.com.br';
+    const website = typeof block.customData?.website === 'string' && block.customData.website.trim() ? block.customData.website.trim() : 'www.presys.com.br';
 
     nodes.push({
       id: `p${pageNumber}_b${block.id}_phone`,

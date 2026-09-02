@@ -1,3 +1,6 @@
+// src/translation/printable-text.registry.ts
+// Registro de Extratores de Texto Imprimível com Tratamento Resiliente de Erros e Proteção contra Estruturas Legadas.
+
 import { Catalog, ContentBlock, BlockType } from '@/domain/catalog.schema';
 import { PrintableTextNode } from './types';
 import { extractTextAndBoxBlocks } from './block-extractors/text.extractor';
@@ -72,24 +75,42 @@ export class PrintableTextRegistry {
   }
 
   /**
-   * Extrai nós de um único bloco usando o extrator registrado.
+   * Extrai nós de um único bloco usando o extrator registrado com proteção fail-safe.
    */
   static extractBlockNodes(block: ContentBlock, pageId = 'p1', pageNumber = 1): PrintableTextNode[] {
+    if (!block || typeof block !== 'object') return [];
     const extractor = this.extractors.get(block.type);
     if (!extractor) return [];
-    return extractor(block, pageId, pageNumber);
+
+    try {
+      return extractor(block, pageId, pageNumber);
+    } catch (err) {
+      console.warn(`[PrintableTextRegistry] Falha ao extrair bloco ${block.id} (${block.type}):`, err);
+      return [
+        {
+          id: `p${pageNumber}_b${block.id || 'err'}_unclassified`,
+          pageId,
+          blockId: block.id,
+          path: 'unclassified',
+          sourceText: `[Erro na estrutura do bloco: ${block.type}]`,
+          kind: 'system',
+          policy: 'protect',
+          source: { blockType: block.type, field: 'unclassified' }
+        }
+      ];
+    }
   }
 
   /**
    * Extrai 100% dos nós de texto imprimíveis de um catálogo estruturado.
    */
   static extractCatalogNodes(catalog: Catalog): PrintableTextNode[] {
-    if (!catalog) return [];
+    if (!catalog || typeof catalog !== 'object') return [];
 
     const nodes: PrintableTextNode[] = [];
 
     // 1. Metadados Globais do Catálogo
-    if (catalog.title && catalog.title.trim()) {
+    if (typeof catalog.title === 'string' && catalog.title.trim()) {
       nodes.push({
         id: 'doc_catalog_title',
         pageId: 'global',
@@ -101,7 +122,7 @@ export class PrintableTextRegistry {
       });
     }
 
-    if (catalog.subtitle && catalog.subtitle.trim()) {
+    if (typeof catalog.subtitle === 'string' && catalog.subtitle.trim()) {
       nodes.push({
         id: 'doc_catalog_subtitle',
         pageId: 'global',
@@ -114,14 +135,16 @@ export class PrintableTextRegistry {
     }
 
     // 2. Varredura por Páginas e Blocos
-    const pages = catalog.pages || [];
+    const pages = Array.isArray(catalog.pages) ? catalog.pages : [];
     pages.forEach((page, pIdx) => {
+      if (!page || typeof page !== 'object') return;
       const pageNum = page.pageNumber || pIdx + 1;
+      const pageId = page.id || `p${pageNum}`;
 
-      if (page.title && page.title.trim()) {
+      if (typeof page.title === 'string' && page.title.trim()) {
         nodes.push({
           id: `p${pageNum}_page_title`,
-          pageId: page.id,
+          pageId,
           path: 'title',
           sourceText: page.title.trim(),
           kind: 'heading',
@@ -130,17 +153,32 @@ export class PrintableTextRegistry {
         });
       }
 
-      const blocks = page.blocks || [];
+      const blocks = Array.isArray(page.blocks) ? page.blocks : [];
       blocks.forEach((block) => {
+        if (!block || typeof block !== 'object') return;
         const extractor = this.extractors.get(block.type);
         if (extractor) {
-          const extracted = extractor(block, page.id, pageNum);
-          nodes.push(...extracted);
+          try {
+            const extracted = extractor(block, pageId, pageNum);
+            nodes.push(...extracted);
+          } catch (err) {
+            console.warn(`[PrintableTextRegistry] Erro ao processar bloco ${block.id}:`, err);
+            nodes.push({
+              id: `p${pageNum}_b${block.id || 'unk'}_unclassified`,
+              pageId,
+              blockId: block.id,
+              path: 'unclassified',
+              sourceText: `[Estrutura incompatível no bloco: ${block.type}]`,
+              kind: 'system',
+              policy: 'protect',
+              source: { blockType: block.type, field: 'unclassified' }
+            });
+          }
         } else {
           // Nó não classificado (gerará alerta no coverage auditor)
           nodes.push({
-            id: `p${pageNum}_b${block.id}_unclassified`,
-            pageId: page.id,
+            id: `p${pageNum}_b${block.id || 'unreg'}_unclassified`,
+            pageId,
             blockId: block.id,
             path: 'unclassified',
             sourceText: `[Bloco não registrado: ${block.type}]`,

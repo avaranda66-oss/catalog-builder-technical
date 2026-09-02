@@ -1,11 +1,15 @@
+// src/translation/block-extractors/table.extractor.ts
+// Extrator resiliente e protegido contra formatos legados ou malformados para tabelas técnicas, customizadas e matrizes.
+
 import { ContentBlock, TableColumnConfig, CatalogTableRow } from '@/domain/catalog.schema';
 import { PrintableTextNode } from '../types';
 
 export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
   const nodes: PrintableTextNode[] = [];
+  if (!block || typeof block !== 'object') return nodes;
 
   // Título do Bloco de Tabela
-  if (block.title && block.title.trim()) {
+  if (typeof block.title === 'string' && block.title.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_title`,
       pageId,
@@ -18,19 +22,21 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
     });
   }
 
-  // Cabeçalhos e Linhas Derivados de customData (se presentes)
-  const customHeaders: string[] | undefined = block.customData?.headers;
-  const customRows: string[][] | undefined = block.customData?.rows;
+  // Cabeçalhos e Linhas Derivados de customData (se presentes como arrays válidos)
+  const customHeaders: any = Array.isArray(block.customData?.headers) ? block.customData.headers : undefined;
+  const customRows: any = Array.isArray(block.customData?.rows) ? block.customData.rows : undefined;
 
   const derivedCols: TableColumnConfig[] | undefined = customHeaders
-    ? customHeaders.map((h, i) => ({ key: `col${i + 1}`, label: h, visible: true }))
+    ? customHeaders.map((h: any, i: number) => ({ key: `col${i + 1}`, label: String(h), visible: true }))
     : undefined;
 
   const derivedRows: CatalogTableRow[] | undefined = customRows
-    ? customRows.map((r, rIdx) => ({
+    ? customRows.map((r: any, rIdx: number) => ({
         id: `crow-${rIdx + 1}`,
         order: rIdx,
-        localOverrides: r.reduce((acc, cell, cIdx) => ({ ...acc, [`col${cIdx + 1}`]: cell }), {})
+        localOverrides: Array.isArray(r)
+          ? r.reduce((acc: any, cell: any, cIdx: number) => ({ ...acc, [`col${cIdx + 1}`]: String(cell) }), {})
+          : {}
       }))
     : undefined;
 
@@ -49,30 +55,32 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
     ]
   };
 
-  const columns = block.tableColumns || derivedCols || defaultColsByBlockType[block.type];
-  if (columns && Array.isArray(columns)) {
-    columns.forEach((col: TableColumnConfig, idx: number) => {
-      if (col.label && col.label.trim()) {
-        nodes.push({
-          id: `p${pageNumber}_b${block.id}_col_${col.key || idx}_label`,
-          pageId,
-          blockId: block.id,
-          path: `tableColumns[${idx}].label`,
-          sourceText: col.label.trim(),
-          kind: 'table_header',
-          policy: 'translate',
-          source: { blockType: block.type, field: `col_${col.key || idx}_label` }
-        });
-      }
-    });
-  }
+  const rawCols = block.tableColumns || derivedCols || defaultColsByBlockType[block.type];
+  const columns = Array.isArray(rawCols) ? rawCols : [];
+
+  columns.forEach((col: TableColumnConfig, idx: number) => {
+    if (col && typeof col === 'object' && typeof col.label === 'string' && col.label.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_col_${col.key || idx}_label`,
+        pageId,
+        blockId: block.id,
+        path: `tableColumns[${idx}].label`,
+        sourceText: col.label.trim(),
+        kind: 'table_header',
+        policy: 'translate',
+        source: { blockType: block.type, field: `col_${col.key || idx}_label` }
+      });
+    }
+  });
 
   // Linhas da Tabela: customNotes e localOverrides textuais
-  const rows = block.tableRows || derivedRows || defaultRowsByBlockType[block.type];
-  if (rows && Array.isArray(rows)) {
-    rows.forEach((row: CatalogTableRow, rIdx: number) => {
+  const rawRows = block.tableRows || derivedRows || defaultRowsByBlockType[block.type];
+  const rows = Array.isArray(rawRows) ? rawRows : [];
+
+  rows.forEach((row: CatalogTableRow, rIdx: number) => {
+    if (row && typeof row === 'object') {
       // Notas customizadas da linha
-      if (row.customNotes && row.customNotes.trim()) {
+      if (typeof row.customNotes === 'string' && row.customNotes.trim()) {
         nodes.push({
           id: `p${pageNumber}_b${block.id}_row_${row.id || rIdx}_notes`,
           pageId,
@@ -86,7 +94,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
       }
 
       // Overrides locais específicos da linha
-      if (row.localOverrides && typeof row.localOverrides === 'object') {
+      if (row.localOverrides && typeof row.localOverrides === 'object' && !Array.isArray(row.localOverrides)) {
         Object.entries(row.localOverrides).forEach(([key, val]) => {
           if (typeof val === 'string' && val.trim() && !key.endsWith('Id') && !key.endsWith('id')) {
             nodes.push({
@@ -102,22 +110,24 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
           }
         });
       }
-    });
-  }
+    }
+  });
 
   // Matrix Spec Table: colunas, linhas, seções e cabeçalhos em customData
   if (block.type === 'matrix_spec_table') {
-    const custom = block.customData || {};
+    const custom = (block.customData && typeof block.customData === 'object') ? block.customData : {};
     const defaultCols = ['Parâmetro / Modelo', 'PCON-Y18-LP', 'PCON-Y18', 'PCON-Y18-HP'];
-    const columns = custom.columns || defaultCols;
-    columns.forEach((col: string, idx: number) => {
-      if (typeof col === 'string' && col.trim()) {
+    const rawMatrixCols = custom.columns;
+    const matrixCols = Array.isArray(rawMatrixCols) ? rawMatrixCols : defaultCols;
+
+    matrixCols.forEach((col: any, idx: number) => {
+      if (col !== undefined && String(col).trim()) {
         nodes.push({
           id: `p${pageNumber}_b${block.id}_col_${idx}`,
           pageId,
           blockId: block.id,
           path: `customData.columns[${idx}]`,
-          sourceText: col.trim(),
+          sourceText: String(col).trim(),
           kind: 'table_header',
           policy: 'protect',
           source: { blockType: block.type, field: `columns[${idx}]` }
@@ -133,43 +143,48 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
       { param: 'Alimentação de Loop 24Vdc Isolada', values: ['■', '■', '■'] },
       { param: 'Comunicação HART / Modbus', values: ['■', '■', '□'] }
     ];
-    const rows = custom.rows || defaultRows;
-    rows.forEach((row: any, rIdx: number) => {
-      if (row.param && typeof row.param === 'string' && row.param.trim()) {
-        nodes.push({
-          id: `p${pageNumber}_b${block.id}_row_${rIdx}_param`,
-          pageId,
-          blockId: block.id,
-          path: `customData.rows[${rIdx}].param`,
-          sourceText: row.param.trim(),
-          kind: 'table_cell',
-          policy: 'translate',
-          source: { blockType: block.type, field: `rows[${rIdx}].param` }
-        });
-      }
-      if (Array.isArray(row.values)) {
-        row.values.forEach((val: string, vIdx: number) => {
-          if (typeof val === 'string' && val.trim()) {
-            const isBullet = ['■', '□', '—', '-', '•'].includes(val.trim());
-            nodes.push({
-              id: `p${pageNumber}_b${block.id}_row_${rIdx}_val_${vIdx}`,
-              pageId,
-              blockId: block.id,
-              path: `customData.rows[${rIdx}].values[${vIdx}]`,
-              sourceText: val.trim(),
-              kind: 'table_cell',
-              policy: 'protect',
-              renderExpectation: isBullet ? 'optional' : 'required',
-              source: { blockType: block.type, field: `rows[${rIdx}].values[${vIdx}]` }
-            });
-          }
-        });
+    const rawMatrixRows = custom.rows;
+    const matrixRows = Array.isArray(rawMatrixRows) ? rawMatrixRows : defaultRows;
+
+    matrixRows.forEach((row: any, rIdx: number) => {
+      if (row && typeof row === 'object') {
+        if (row.param !== undefined && String(row.param).trim()) {
+          nodes.push({
+            id: `p${pageNumber}_b${block.id}_row_${rIdx}_param`,
+            pageId,
+            blockId: block.id,
+            path: `customData.rows[${rIdx}].param`,
+            sourceText: String(row.param).trim(),
+            kind: 'table_cell',
+            policy: 'translate',
+            source: { blockType: block.type, field: `rows[${rIdx}].param` }
+          });
+        }
+        if (Array.isArray(row.values)) {
+          row.values.forEach((val: any, vIdx: number) => {
+            if (val !== undefined && String(val).trim()) {
+              const strVal = String(val).trim();
+              const isBullet = ['■', '□', '—', '-', '•'].includes(strVal);
+              nodes.push({
+                id: `p${pageNumber}_b${block.id}_row_${rIdx}_val_${vIdx}`,
+                pageId,
+                blockId: block.id,
+                path: `customData.rows[${rIdx}].values[${vIdx}]`,
+                sourceText: strVal,
+                kind: 'table_cell',
+                policy: 'protect',
+                renderExpectation: isBullet ? 'optional' : 'required',
+                source: { blockType: block.type, field: `rows[${rIdx}].values[${vIdx}]` }
+              });
+            }
+          });
+        }
       }
     });
 
-    if (custom.sections && Array.isArray(custom.sections)) {
+    if (Array.isArray(custom.sections)) {
       custom.sections.forEach((sec: any, sIdx: number) => {
-        if (sec.title && String(sec.title).trim()) {
+        if (sec && typeof sec === 'object' && sec.title !== undefined && String(sec.title).trim()) {
           nodes.push({
             id: `p${pageNumber}_b${block.id}_sec_${sIdx}_title`,
             pageId,
