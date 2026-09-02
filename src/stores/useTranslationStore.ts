@@ -21,6 +21,7 @@ import { TranslationApplierRegistry } from '@/translation/translation-applier.re
 import { TranslationLayoutAuditor } from '@/translation/layout-qa.auditor';
 import { PrintableTextRegistry } from '@/translation/printable-text.registry';
 import { FontManager } from '@/translation/font-manager';
+import { computeCatalogContentHash } from '@/translation/translation-cache';
 
 export type TranslationWorkflowStep = 'config' | 'progress' | 'review' | 'layout_qa' | 'complete';
 
@@ -52,6 +53,7 @@ interface TranslationState {
   previewCatalog: Catalog | null;
   reviewItems: TranslationReviewItem[];
   layoutQaResult: LayoutQaResult | null;
+  lastAuditedPreviewHash: string | null;
   translationResultMeta: FullTranslationResult | null;
   error: string | null;
   testSuccessMessage: string | null;
@@ -75,7 +77,7 @@ interface TranslationState {
   startFullTranslation: (sourceCatalog: Catalog | null, userId?: string | null) => Promise<boolean>;
   cancelTranslation: () => void;
   updateReviewItem: (nodeId: string, newText: string) => void;
-  runLayoutQa: (rootElement: HTMLElement | Document) => void;
+  runLayoutQa: (rootElement: HTMLElement | Document) => Promise<LayoutQaResult>;
   resetWorkflow: () => void;
 }
 
@@ -95,6 +97,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   previewCatalog: null,
   reviewItems: [],
   layoutQaResult: null,
+  lastAuditedPreviewHash: null,
   translationResultMeta: null,
   error: null,
   testSuccessMessage: null,
@@ -111,6 +114,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       previewCatalog: null,
       reviewItems: [],
       layoutQaResult: null,
+      lastAuditedPreviewHash: null,
       error: null
     });
   },
@@ -155,26 +159,21 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       set({
         credentialMeta: meta,
         isTestingKey: false,
-        testSuccessMessage: 'Chave Google Gemini validada e pronta para uso nesta sessão!'
+        storageMode,
+        testSuccessMessage: 'Chave validada e conectada com sucesso!'
       });
 
       return { success: true };
     } catch (err: any) {
-      set({ isTestingKey: false, error: err?.message || 'Falha ao testar chave de API.' });
-      return { success: false, error: err?.message || 'Erro de conexão com o provedor.' };
+      set({ isTestingKey: false, error: err?.message || 'Falha ao validar chave.' });
+      return { success: false, error: err?.message || 'Erro desconhecido' };
     }
   },
 
   removeCredential: async (userId) => {
-    if (userId) {
-      await PersonalCredentialVault.removeCredential(userId);
-    }
-    set({
-      credentialMeta: null,
-      sampleResults: [],
-      error: null,
-      testSuccessMessage: null
-    });
+    if (!userId) return;
+    await PersonalCredentialVault.removeCredential(userId);
+    set({ credentialMeta: null, testSuccessMessage: null });
   },
 
   refreshCoverage: (catalog) => {
@@ -182,8 +181,8 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       set({ coverage: null });
       return;
     }
-    const coverage = CoverageAuditor.auditCatalog(catalog);
-    set({ coverage });
+    const audit = CoverageAuditor.auditCatalog(catalog);
+    set({ coverage: audit });
   },
 
   runSamplePreview: async (catalog, userId) => {
@@ -195,20 +194,12 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
 
     const cred = await PersonalCredentialVault.getCredential(userId);
     if (!cred || !cred.apiKey) {
-      set({ error: 'Configure sua chave pessoal do Google Gemini antes de solicitar a prévia de tradução.' });
+      set({ error: 'Configure sua chave pessoal antes de solicitar a prévia.' });
       return;
     }
 
     const coverage = CoverageAuditor.auditCatalog(catalog);
     set({ coverage, isPreviewing: true, error: null });
-
-    if (!coverage.isComplete && coverage.unclassifiedCount > 0) {
-      set({
-        isPreviewing: false,
-        error: `Tradução bloqueada: Existem ${coverage.unclassifiedCount} elementos não classificados no documento.`
-      });
-      return;
-    }
 
     try {
       const translateNodes = coverage.nodes.filter((n) => n.policy === 'translate');
@@ -232,18 +223,23 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
   },
 
   startFullTranslation: async (sourceCatalog, userId) => {
-    if (!sourceCatalog) return false;
+    if (!sourceCatalog) {
+      set({ error: 'Nenhum catálogo carregado para tradução.' });
+      return false;
+    }
     if (!userId) {
-      set({ error: 'Faça login para traduzir o catálogo.' });
+      set({ error: 'Usuário não autenticado.' });
       return false;
     }
 
     const abort = new AbortController();
     set({
       isTranslating: true,
-      activeStep: 'progress',
       error: null,
       abortController: abort,
+      activeStep: 'progress',
+      layoutQaResult: null,
+      lastAuditedPreviewHash: null,
       progress: {
         phase: 'preparing',
         totalNodes: 0,
@@ -266,7 +262,6 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
         abort.signal
       );
 
-      // Constrói os itens de revisão
       const sourceNodes = PrintableTextRegistry.extractCatalogNodes(sourceCatalog);
       const translatedNodes = PrintableTextRegistry.extractCatalogNodes(result.translatedCatalog);
       const translatedNodeMap = new Map(translatedNodes.map((n) => [n.id, n.sourceText]));
@@ -294,6 +289,8 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
         previewCatalog: result.translatedCatalog,
         translationResultMeta: result,
         reviewItems,
+        layoutQaResult: null,
+        lastAuditedPreviewHash: null,
         activeStep: 'review',
         abortController: null
       });
@@ -337,7 +334,6 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       return item;
     });
 
-    // Remonta o catálogo de preview em memória com a edição humana
     const transMap = new Map<string, string>();
     updatedItems.forEach((it) => transMap.set(it.nodeId, it.translatedText));
 
@@ -351,11 +347,14 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
     const updatedCatalog = applierResult.translatedCatalog;
     if (updatedCatalog.translationMeta) {
       updatedCatalog.translationMeta.humanEdited = updatedItems.some((i) => i.isHumanEdited);
+      updatedCatalog.translationMeta.layoutQaStatus = 'pending';
     }
 
     set({
       reviewItems: updatedItems,
-      previewCatalog: updatedCatalog
+      previewCatalog: updatedCatalog,
+      layoutQaResult: null,
+      lastAuditedPreviewHash: null
     });
   },
 
@@ -364,11 +363,15 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
     await FontManager.ensureFontsLoadedForLocale(targetLocale);
     const result = TranslationLayoutAuditor.auditLayout(rootElement, targetLocale);
 
-    if (previewCatalog && previewCatalog.translationMeta) {
-      previewCatalog.translationMeta.layoutQaStatus = result.status;
+    let currentHash: string | null = null;
+    if (previewCatalog) {
+      currentHash = await computeCatalogContentHash(previewCatalog);
+      if (previewCatalog.translationMeta) {
+        previewCatalog.translationMeta.layoutQaStatus = result.status;
+      }
     }
 
-    set({ layoutQaResult: result });
+    set({ layoutQaResult: result, lastAuditedPreviewHash: currentHash });
     return result;
   },
 
@@ -380,6 +383,7 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
       previewCatalog: null,
       reviewItems: [],
       layoutQaResult: null,
+      lastAuditedPreviewHash: null,
       translationResultMeta: null,
       error: null,
       testSuccessMessage: null

@@ -23,6 +23,7 @@ import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivity
 
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { FontManager } from '../../translation/font-manager';
+import { applyBidiIsolationToElement } from '../../translation/bidi-helper';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
@@ -30,6 +31,8 @@ export interface CleanA4DocumentProps {
 }
 
 export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: catalog, className = '' }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
   if (!catalog || !catalog.pages || catalog.pages.length === 0) {
     return null;
   }
@@ -39,8 +42,14 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
   const fontFamily = FontManager.getFontFamilyForLocale(locale);
 
   React.useEffect(() => {
-    FontManager.ensureFontsLoadedForLocale(locale);
+    void FontManager.ensureFontsLoadedForLocale(locale);
   }, [locale]);
+
+  React.useEffect(() => {
+    if (direction === 'rtl' && containerRef.current) {
+      applyBidiIsolationToElement(containerRef.current);
+    }
+  }, [catalog, direction]);
 
   const resolveSystemString = (key: string): string => {
     if (catalog.localizedSystemStrings && catalog.localizedSystemStrings[key]) {
@@ -51,6 +60,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
 
   return (
     <div
+      ref={containerRef}
       lang={locale}
       dir={direction}
       className={`clean-export-root ${className}`}

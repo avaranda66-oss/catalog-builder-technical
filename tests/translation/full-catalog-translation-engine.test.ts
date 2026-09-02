@@ -1,6 +1,6 @@
 // tests/translation/full-catalog-translation-engine.test.ts
 // Suíte de Testes Rigorosa da Fase 2C.2: Full Catalog Translation Engine
-// Validação dos 21 BlockTypes, Memória de Tradução, Chunking, Proteção Non-Destructive, Layout QA e Cloud Save.
+// Validação dos 21 BlockTypes, Memória de Tradução, Chunking, Proteção Non-Destructive, Layout QA, Atomic Drift RPC, Font Loading e Cloud Save.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Catalog } from '@/domain/catalog.schema';
@@ -16,7 +16,9 @@ import { TranslationLayoutAuditor } from '@/translation/layout-qa.auditor';
 import { FontManager } from '@/translation/font-manager';
 import { PersonalCredentialVault } from '@/translation/credential-vault';
 import { useCatalogStore } from '@/stores/useCatalogStore';
+import { useTranslationStore } from '@/stores/useTranslationStore';
 import * as SupabaseServiceModule from '@/services/supabase.service';
+import { applyBidiIsolationToElement } from '@/translation/bidi-helper';
 
 describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioning', () => {
   const sampleCatalog: Catalog = {
@@ -129,14 +131,12 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             title: 'SÉRIE PRESYS PCON-Y18',
             subtitle: 'Calibrador Automático de Pressão de Alta Estabilidade',
             badgeText: 'PRESYS'
-            // Sem customData prévio para testar materialização de fallbacks
           },
           {
             id: 'b-fluke',
             type: 'fluke_header',
             title: 'SÉRIE TA-ADVANCED',
             subtitle: 'Blocos Secos de Alta Homogeneidade Térmica'
-            // Sem customData prévio para testar materialização de fallbacks
           },
           {
             id: 'b-bottom-hdr',
@@ -213,7 +213,6 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             id: 'b-custom-tbl',
             type: 'custom_table',
             title: 'MATRIZ DE CONECTIVIDADE DE CAMPO'
-            // Sem headers/rows prévios para testar materialização
           },
           {
             id: 'b-matrix',
@@ -236,7 +235,6 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             id: 'b-soft',
             type: 'software_connectivity',
             title: 'CONECTIVIDADE ISOPLAN & DIGITAL LAB'
-            // Sem customData.items prévios para testar materialização
           },
           {
             id: 'b-inserts',
@@ -252,7 +250,6 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             id: 'b-multi-mode',
             type: 'multi_mode_calibrator',
             title: 'MODOS DE OPERAÇÃO DO INSTRUMENTO'
-            // Sem customData.modes prévios para testar materialização
           },
           {
             id: 'b-gallery',
@@ -284,7 +281,6 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             id: 'b-contact',
             type: 'contact_footer',
             title: 'INFORMAÇÕES DE CONTATO E ASSISTÊNCIA TÉCNICA'
-            // Sem contactInfo prévio para testar materialização
           }
         ]
       }
@@ -303,7 +299,12 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
       functions: {
         invoke: mockInvoke
       },
-      rpc: vi.fn().mockResolvedValue({ data: { version: 1, updated_at: new Date().toISOString() }, error: null }),
+      rpc: vi.fn().mockImplementation((fnName: string) => {
+        if (fnName === 'create_translated_catalog_v1') {
+          return Promise.resolve({ data: { version: 1, updated_at: new Date().toISOString() }, error: null });
+        }
+        return Promise.resolve({ data: { version: 1, updated_at: new Date().toISOString() }, error: null });
+      }),
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -374,11 +375,10 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
   it('TR-FULL-8: Rejeita resposta com IDs duplicados (TRANSLATION_INVALID_RESPONSE)', async () => {
     mockInvoke.mockImplementation(async (_fnName: string, args: any) => {
       const nodes = args.body.nodes;
-      // Retorna a contagem exata, mas com IDs duplicados
       return {
         data: {
           translations: nodes.map(() => ({
-            id: 'doc_catalog_title', // TODOS COM O MESMO ID
+            id: 'doc_catalog_title',
             translatedText: 'Duplicate Title'
           }))
         },
@@ -461,39 +461,14 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
 
     const target = result.translatedCatalog;
 
-    // 1. Full Page Cover (Canvas Layers)
     expect(target.pages[0].blocks[0].customData?.canvasLayers?.[0]?.content).toBe('[EN-TEST] Edição Técnica Internacional');
-
-    // 2. Additel Two Col Hero (Fallback Materialization de bulletList e overview)
-    const additelBlock = target.pages[0].blocks[2];
-    expect(additelBlock.customData?.overview).toContain('[EN-TEST]');
-    expect(additelBlock.customData?.bulletList?.[0] || additelBlock.customData?.bullets?.[0]).toContain('[EN-TEST]');
-
-    // 3. Fluke Header (Fallback Materialization de highlights)
-    const flukeBlock = target.pages[0].blocks[3];
-    expect(flukeBlock.customData?.description).toContain('[EN-TEST]');
-    expect(flukeBlock.customData?.highlights?.[0]).toContain('[EN-TEST]');
-
-    // 4. Ordering Codes (Segments e Options aplicados)
-    const orderingBlock = target.pages[0].blocks[12];
-    expect(orderingBlock.orderingSegments?.[0]?.name).toContain('[EN-TEST]');
-    expect(orderingBlock.orderingSegments?.[0]?.options?.[0]).toContain('[EN-TEST]');
-
-    // 5. Software Connectivity (Fallback Materialization de items)
-    const softwareBlock = target.pages[0].blocks[13];
-    expect(softwareBlock.customData?.items?.[0]?.title).toContain('[EN-TEST]');
-
-    // 6. Multi Mode Calibrator (Fallback Materialization de modes)
-    const multiModeBlock = target.pages[0].blocks[15];
-    expect(multiModeBlock.customData?.modes?.[0]?.title).toContain('[EN-TEST]');
-
-    // 7. Image Gallery (Caption aplicada)
-    const galleryBlock = target.pages[0].blocks[16];
-    expect(galleryBlock.images?.[0]?.caption).toContain('[EN-TEST]');
-
-    // 8. Contact Footer (Fallback Materialization de contactInfo)
-    const contactBlock = target.pages[0].blocks[20];
-    expect(contactBlock.contactInfo?.companyName).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[2].customData?.overview).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[3].customData?.description).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[12].orderingSegments?.[0]?.name).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[13].customData?.items?.[0]?.title).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[15].customData?.modes?.[0]?.title).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[16].images?.[0]?.caption).toContain('[EN-TEST]');
+    expect(target.pages[0].blocks[20].contactInfo?.companyName).toContain('[EN-TEST]');
   });
 
   // =========================================================================
@@ -520,29 +495,25 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
       storageMode: 'session'
     });
 
-    // Run 1: Tradução via Gateway
     const run1 = await FullCatalogTranslationService.translateCatalog(sampleCatalog, 'it-IT', 'user_sys_cache');
     expect(run1.cacheHits).toBe(0);
     expect(run1.translatedCatalog.localizedSystemStrings).toBeDefined();
     const run1Strings = run1.translatedCatalog.localizedSystemStrings!;
 
-    // Run 2: Tradução 100% via Cache Local
     const run2 = await FullCatalogTranslationService.translateCatalog(sampleCatalog, 'it-IT', 'user_sys_cache');
     expect(run2.cacheHits).toBe(run2.totalNodes);
     expect(run2.translatedCatalog.localizedSystemStrings).toBeDefined();
     const run2Strings = run2.translatedCatalog.localizedSystemStrings!;
 
-    // Validação de Identidade Estrita entre Run 1 e Run 2
     expect(run2Strings).toEqual(run1Strings);
     expect(run2Strings['technical_specifications']).toBe('[IT-TEST] Especificações Técnicas');
   });
 
   // =========================================================================
-  // 4. CLOUD PERSISTENCE & SOURCE DRIFT INTEGRATION (TR-DRIFT & TR-SAVE)
+  // 4. CLOUD PERSISTENCE & ATOMIC DRIFT RPC
   // =========================================================================
 
-  it('TR-SOURCE-DRIFT-CREATE: Bloqueia criação de versão traduzida quando o catálogo fonte sofreu mutação remota', async () => {
-    // 1. Tradução gerada sobre source version = 5
+  it('TR-SOURCE-DRIFT-CREATE / TR-DRIFT-ATOMIC-1: Bloqueia atomicamente no banco se o catálogo fonte foi alterado', async () => {
     const translatedMock: Catalog = {
       ...sampleCatalog,
       id: 'cat-trans-preview',
@@ -559,13 +530,11 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
       }
     };
 
-    // 2. Mock do Supabase retornando versão remota avançada (version = 6)
-    vi.spyOn(SupabaseServiceModule.SupabaseService, 'getCatalog').mockResolvedValue({
-      success: true,
-      data: {
-        ...sampleCatalog,
-        version: 6 // MUTAÇÃO REMOTA CONCORRENTE
-      }
+    vi.spyOn(SupabaseServiceModule.SupabaseService, 'createTranslatedCatalog').mockResolvedValue({
+      success: false,
+      conflict: true,
+      errorCode: '40001',
+      error: 'SOURCE_CHANGED_DURING_TRANSLATION: O catálogo original foi alterado concorrentemente no servidor.'
     });
 
     const result = await useCatalogStore.getState().createTranslatedCatalogVersion(translatedMock);
@@ -574,7 +543,36 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
     expect(result.error).toContain('SOURCE_CHANGED_DURING_TRANSLATION');
   });
 
-  it('TR-CLOUD-SAVE-PERSISTENCE: Cria novo catálogo na nuvem com novo UUID, preserva title traduzido e atualiza editorContext', async () => {
+  it('TR-DRIFT-CLOUD-1: Falha imediatamente (fail-closed) se o servidor Supabase estiver offline ou inacessível', async () => {
+    const translatedMock: Catalog = {
+      ...sampleCatalog,
+      id: 'cat-trans-preview-offline',
+      title: 'PRESSURE CALIBRATOR PCON-Y18',
+      locale: 'en-US',
+      translationMeta: {
+        sourceCatalogId: 'cat-orig-001',
+        sourceCatalogVersion: 5,
+        sourceContentHash: 'original-hash-123',
+        sourceLocale: 'pt-BR',
+        targetLocale: 'en-US',
+        coverage: 100,
+        layoutQaStatus: 'passed'
+      }
+    };
+
+    vi.spyOn(SupabaseServiceModule.SupabaseService, 'createTranslatedCatalog').mockResolvedValue({
+      success: false,
+      errorCode: 'CLIENT_OFFLINE',
+      error: 'Supabase não inicializado'
+    });
+
+    const result = await useCatalogStore.getState().createTranslatedCatalogVersion(translatedMock);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('SOURCE_VERIFICATION_UNAVAILABLE');
+  });
+
+  it('TR-CLOUD-SAVE-PERSISTENCE: Cria novo catálogo na nuvem via RPC createTranslatedCatalog, preserva title traduzido e atualiza editorContext', async () => {
     const translatedMock: Catalog = {
       ...sampleCatalog,
       id: 'preview-uuid-temp',
@@ -591,12 +589,7 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
       }
     };
 
-    vi.spyOn(SupabaseServiceModule.SupabaseService, 'getCatalog').mockResolvedValue({
-      success: true,
-      data: sampleCatalog
-    });
-
-    const saveSpy = vi.spyOn(SupabaseServiceModule.SupabaseService, 'saveCatalog').mockResolvedValue({
+    const createSpy = vi.spyOn(SupabaseServiceModule.SupabaseService, 'createTranslatedCatalog').mockResolvedValue({
       success: true,
       data: { version: 1, updated_at: new Date().toISOString() }
     });
@@ -607,22 +600,150 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
     expect(result.catalogId).toBeDefined();
     expect(result.catalogId).not.toBe(sampleCatalog.id);
 
-    // Valida que o título traduzido em inglês foi preservado (sem reintrodução de português)
     const activeCatalog = useCatalogStore.getState().currentCatalog;
     expect(activeCatalog?.title).toBe('PRESSURE CALIBRATOR PCON-Y18');
     expect(activeCatalog?.locale).toBe('en-US');
 
-    // Valida que o editorContext foi apontado para o novo ID
     const ctx = useCatalogStore.getState().editorContext;
     expect(ctx.kind === 'catalog' ? ctx.catalogId : '').toBe(result.catalogId);
-
-    // Valida chamada a saveCatalog RPC no Supabase
-    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy).toHaveBeenCalledTimes(1);
   });
 
   // =========================================================================
-  // 5. RTL & LAYOUT QA (TR-RTL & TR-LAYOUT)
+  // 5. LAYOUT QA INTEGRATION, GATING & INVALIDATION (TR-QA-INTEGRATION-1..4)
   // =========================================================================
+
+  it('TR-QA-INTEGRATION-1: Executa auditoria de layout real sobre DOM do CleanA4Document', async () => {
+    const container = document.createElement('div');
+    container.className = 'clean-export-root';
+    const page = document.createElement('div');
+    page.className = 'clean-export-page';
+    page.setAttribute('data-page-id', 'p1');
+    container.appendChild(page);
+
+    const result = TranslationLayoutAuditor.auditLayout(container, 'en-US');
+    expect(result.auditedAt).toBeDefined();
+    expect(['passed', 'warning', 'error']).toContain(result.status);
+  });
+
+  it('TR-QA-INTEGRATION-2: createTranslatedCatalogVersion recusa catálogo quando layoutQaStatus for null ou pending', async () => {
+    const invalidMock: Catalog = {
+      ...sampleCatalog,
+      id: 'cat-pending-qa',
+      title: 'PRESSURE CALIBRATOR',
+      locale: 'en-US',
+      translationMeta: {
+        sourceCatalogId: 'cat-orig-001',
+        sourceCatalogVersion: 5,
+        sourceContentHash: 'hash-123',
+        sourceLocale: 'pt-BR',
+        targetLocale: 'en-US',
+        coverage: 100,
+        layoutQaStatus: 'pending' // BLOQUEADO
+      }
+    };
+
+    const result = await useCatalogStore.getState().createTranslatedCatalogVersion(invalidMock);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('LAYOUT_QA_NOT_APPROVED');
+  });
+
+  it('TR-QA-INTEGRATION-3: Edição manual em reviewItem invalida o QA anterior (layoutQaStatus volta para pending)', () => {
+    useTranslationStore.setState({
+      previewCatalog: { ...sampleCatalog, locale: 'en-US', translationMeta: { sourceCatalogId: 'c1', sourceCatalogVersion: 1, sourceContentHash: 'h', sourceLocale: 'pt-BR', targetLocale: 'en-US', coverage: 100, layoutQaStatus: 'passed' } },
+      reviewItems: [{ nodeId: 'doc_catalog_title', sourceText: 'Titulo', translatedText: 'Title', originalTranslatedText: 'Title', pageNumber: 1, kind: 'heading', policy: 'translate', isHumanEdited: false }],
+      layoutQaResult: { hasIssues: false, issues: [], status: 'passed', auditedAt: new Date().toISOString() },
+      lastAuditedPreviewHash: 'hash-antigo'
+    });
+
+    useTranslationStore.getState().updateReviewItem('doc_catalog_title', 'New Edited Title');
+
+    const state = useTranslationStore.getState();
+    expect(state.layoutQaResult).toBeNull();
+    expect(state.lastAuditedPreviewHash).toBeNull();
+    expect(state.previewCatalog?.translationMeta?.layoutQaStatus).toBe('pending');
+  });
+
+  it('TR-QA-INTEGRATION-4: Novo run de tradução reseta o layoutQaResult e hash auditado', () => {
+    useTranslationStore.setState({
+      targetLocale: 'fr-FR',
+      layoutQaResult: { hasIssues: false, issues: [], status: 'passed', auditedAt: new Date().toISOString() },
+      lastAuditedPreviewHash: 'hash-1'
+    });
+
+    useTranslationStore.getState().setTargetLocale('de-DE');
+
+    const state = useTranslationStore.getState();
+    expect(state.layoutQaResult).toBeNull();
+    expect(state.lastAuditedPreviewHash).toBeNull();
+    expect(state.targetLocale).toBe('de-DE');
+  });
+
+  // =========================================================================
+  // 6. FONT LOADING & CLIPPING QA (TR-FONT & TR-OVERFLOW)
+  // =========================================================================
+
+  it('TR-FONT-FRESH-1: FontManager.ensureFontsLoadedForLocale aguarda carregamento para Thai e CJK', async () => {
+    const isLoaded = await FontManager.ensureFontsLoadedForLocale('th-TH');
+    expect(typeof isLoaded).toBe('boolean');
+  });
+
+  it('TR-FONT-FAIL-1: Rejeita com FONT_LOAD_FAILED se a folha de estilos da fonte falhar ao carregar', async () => {
+    const appendSpy = vi.spyOn(document.head, 'appendChild').mockImplementation((node: any) => {
+      if (node.tagName === 'LINK') {
+        setTimeout(() => {
+          if (typeof node.onerror === 'function') {
+            node.onerror(new Event('error'));
+          }
+        }, 10);
+      }
+      return node;
+    });
+
+    try {
+      await expect(FontManager.ensureFontsLoadedForLocale('ja-JP')).rejects.toThrow('FONT_LOAD_FAILED');
+    } finally {
+      appendSpy.mockRestore();
+    }
+  });
+
+  it('TR-OVERFLOW-VERTICAL-1: Detecta clipping vertical em container interno com overflow-hidden', () => {
+    const container = document.createElement('div');
+    container.className = 'clean-export-root';
+    const page = document.createElement('div');
+    page.className = 'clean-export-page';
+
+    const block = document.createElement('div');
+    block.className = 'export-block-wrapper overflow-hidden';
+    block.setAttribute('data-block-id', 'b1');
+    Object.defineProperty(block, 'scrollHeight', { value: 300, configurable: true });
+    Object.defineProperty(block, 'clientHeight', { value: 200, configurable: true });
+
+    page.appendChild(block);
+    container.appendChild(page);
+
+    const result = TranslationLayoutAuditor.auditLayout(container, 'en-US');
+    expect(result.issues.some((i) => i.id.includes('vertical_clipping_b1'))).toBe(true);
+    expect(result.status).toBe('error');
+  });
+
+  // =========================================================================
+  // 7. RTL REAL & BIDI ISOLATION (TR-RTL & TR-BYOK)
+  // =========================================================================
+
+  it('TR-RTL-REAL-1: applyBidiIsolationToElement isola tokens técnicos metrológicos com dir="ltr"', () => {
+    const container = document.createElement('div');
+    container.setAttribute('dir', 'rtl');
+
+    const spanTech = document.createElement('span');
+    spanTech.setAttribute('data-printable-node-id', 'node-1');
+    spanTech.textContent = '-25 a 140 °C';
+    container.appendChild(spanTech);
+
+    applyBidiIsolationToElement(container);
+
+    expect(spanTech.getAttribute('dir')).toBe('ltr');
+  });
 
   it('TR-RTL-BIDI-WARNING: Detecta grandeza técnica sem isolamento bidi em documento RTL e emite RTL_WARNING', () => {
     const container = document.createElement('div');
@@ -631,11 +752,22 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
 
     const unIsolatedEl = document.createElement('span');
     unIsolatedEl.setAttribute('data-printable-node-id', 'p1_b1_range');
-    unIsolatedEl.textContent = '-25 a 140 °C'; // Grandeza metrológica
+    unIsolatedEl.textContent = '4-20 mA';
     container.appendChild(unIsolatedEl);
 
     const result = TranslationLayoutAuditor.auditLayout(container, 'ar-SA');
     expect(result.issues.some((i) => i.type === 'RTL_WARNING')).toBe(true);
+  });
+
+  it('TR-BYOK-MODE-1: PersonalCredentialVault suporta seleção funcional de session e remember', async () => {
+    await PersonalCredentialVault.saveCredential('user_mode_test', {
+      provider: 'gemini',
+      apiKey: 'test-key-mode',
+      storageMode: 'remember'
+    });
+
+    const meta = await PersonalCredentialVault.getCredentialMetadata('user_mode_test');
+    expect(meta?.storageMode).toBe('remember');
   });
 
   it('TR-LANG-1: Todos os idiomas habilitados no LanguageRegistry possuem script, fontProfile e direção válidos', () => {

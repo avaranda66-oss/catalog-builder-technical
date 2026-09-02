@@ -126,6 +126,37 @@ export class SupabaseService {
     }
   }
 
+  static async createTranslatedCatalog(
+    catalog: Partial<Catalog>,
+    sourceCatalogId: string,
+    expectedSourceVersion: number,
+    summary?: string
+  ): Promise<{ success: boolean; data?: any; conflict?: boolean; errorCode?: string; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('create_translated_catalog_v1', {
+        p_catalog: catalog,
+        p_source_catalog_id: sourceCatalogId,
+        p_expected_source_version: expectedSourceVersion,
+        p_summary: summary || 'Criação de versão traduzida'
+      });
+
+      if (error) {
+        const isConflict =
+          error.code === '40001' ||
+          error.message?.includes('SOURCE_CHANGED_DURING_TRANSLATION') ||
+          error.message?.includes('Conflito');
+        return { success: false, conflict: isConflict, errorCode: error.code || 'RPC_ERROR', error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar versão traduzida' };
+    }
+  }
+
   static async getCatalog(id: string): Promise<{ success: boolean; data?: Catalog; error?: string }> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };

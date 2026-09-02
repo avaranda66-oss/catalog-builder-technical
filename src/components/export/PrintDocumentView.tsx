@@ -5,6 +5,8 @@ import { SupabaseService } from '../../services/supabase.service';
 import { PDFService } from '../../services/pdf.service';
 import { CleanA4Document } from './CleanA4Document';
 
+import { FontManager } from '../../translation/font-manager';
+
 export const PrintDocumentView: React.FC = () => {
   const [documentToRender, setDocumentToRender] = useState<Catalog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,52 +23,33 @@ export const PrintDocumentView: React.FC = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const catalogId = urlParams.get('catalog');
       const templateId = urlParams.get('template');
-      const requestedVersionStr = urlParams.get('version');
-      const requestedVersion = requestedVersionStr ? parseInt(requestedVersionStr, 10) : null;
 
       // 1. Exportação de Template: Carrega snapshot confirmado do Supabase
       if (templateId) {
         const res = await SupabaseService.getTemplate(templateId);
         if (res.success && res.data) {
-          const preset = res.data;
-          const serverVer = preset.version || 1;
-          if (requestedVersion !== null && serverVer !== requestedVersion) {
-            setErrorMessage(`A versão solicitada (v${requestedVersion}) ainda não está disponível para exportação (servidor: v${serverVer}).`);
-            setIsLoading(false);
-            return;
-          }
-          const templateCatalog: Catalog = {
-            ...preset.catalog,
-            id: preset.id,
-            title: preset.name,
-            version: serverVer
-          };
-          setDocumentToRender(templateCatalog);
+          const tCatalog = res.data.catalog;
+          tCatalog.title = res.data.name;
+          tCatalog.version = res.data.version || 1;
+          setDocumentToRender(tCatalog);
           setIsLoading(false);
           return;
         } else {
-          setErrorMessage(res.error || 'Falha ao carregar template confirmado do servidor.');
+          setErrorMessage(res.error || 'Falha ao carregar snapshot do template.');
           setIsLoading(false);
           return;
         }
       }
 
-      // 2. Exportação de Catálogo: Carrega snapshot confirmado do Supabase
+      // 2. Exportação de Catálogo: Carrega snapshot do Supabase
       if (catalogId) {
         const res = await SupabaseService.getCatalog(catalogId);
         if (res.success && res.data) {
-          const cat = res.data;
-          const serverVer = cat.version || 1;
-          if (requestedVersion !== null && serverVer !== requestedVersion) {
-            setErrorMessage(`A versão solicitada (v${requestedVersion}) ainda não está disponível para exportação (servidor: v${serverVer}).`);
-            setIsLoading(false);
-            return;
-          }
-          setDocumentToRender(cat);
+          setDocumentToRender(res.data);
           setIsLoading(false);
           return;
         } else {
-          setErrorMessage(res.error || 'Falha ao carregar catálogo confirmado do servidor.');
+          setErrorMessage(res.error || 'Falha ao carregar catálogo para exportação.');
           setIsLoading(false);
           return;
         }
@@ -79,14 +62,29 @@ export const PrintDocumentView: React.FC = () => {
     void loadDocument();
   }, []);
 
-  // Aguarda carregamento de fontes e imagens para garantir fidelidade vetorial absoluta
+  // Aguarda carregamento explícito de webfonts e imagens para fidelidade tipográfica e vetorial
   useEffect(() => {
     if (!documentToRender) return;
 
     let isCancelled = false;
     const preparePrint = async () => {
+      try {
+        const docLocale = (documentToRender as any).locale || 'pt-BR';
+        await FontManager.ensureFontsLoadedForLocale(docLocale);
+      } catch (err: any) {
+        console.error('Erro ao carregar fontes do documento para impressão:', err);
+        if (!isCancelled) {
+          setErrorMessage('Falha ao carregar fontes tipográficas do documento para impressão.');
+        }
+        return;
+      }
+
       if (typeof document !== 'undefined' && document.fonts) {
-        await document.fonts.ready;
+        try {
+          await document.fonts.ready;
+        } catch {
+          // Continua
+        }
       }
 
       if (containerRef.current) {

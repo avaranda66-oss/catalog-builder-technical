@@ -1,9 +1,10 @@
 // src/translation/layout-qa.auditor.ts
 // Auditor de Layout e Qualidade Visual para Documentos Traduzidos (CleanA4Document)
-// Detecta overflow de texto, quebra de página indevida, corte de tabelas, fontes ausentes e direção RTL.
+// Detecta overflow de texto, quebra de página indevida, corte de tabelas, clipping vertical interno, fontes ausentes e direção RTL.
 
 import { LayoutIssue, LayoutQaResult } from './types';
-import { FontManager } from './font-manager';
+import { FontManager, SCRIPT_SAMPLE_TEXT } from './font-manager';
+import { LanguageRegistry } from './language.registry';
 
 export class TranslationLayoutAuditor {
   /**
@@ -14,14 +15,35 @@ export class TranslationLayoutAuditor {
     const targetRoot = rootElement instanceof Document ? rootElement.body : rootElement;
 
     const isRtl = FontManager.getDirectionForLocale(targetLocale) === 'rtl';
+    const lang = LanguageRegistry.getByCode(targetLocale);
+    const script = lang?.script || 'Latin';
 
-    // 1. Verificação de Páginas A4 (Dimensão física e transbordamento)
+    // 0. Verificação Global de Fontes (FontFaceSet / document.fonts.check)
+    if (typeof document !== 'undefined' && document.fonts && typeof document.fonts.check === 'function') {
+      const family = FontManager.getFontFamilyForLocale(targetLocale);
+      const primaryFont = family.split(',')[0].replace(/['"]/g, '').trim();
+      const sample = SCRIPT_SAMPLE_TEXT[script] || 'Test';
+
+      // Em browsers reais, document.fonts.check verifica a disponibilidade efetiva dos glifos
+      const isFontReady = document.fonts.check(`16px "${primaryFont}"`, sample);
+      if (!isFontReady && primaryFont.toLowerCase().includes('noto')) {
+        issues.push({
+          id: `missing_font_global_${script}`,
+          type: 'MISSING_FONT',
+          severity: 'error',
+          message: `Fonte tipográfica "${primaryFont}" não foi carregada no navegador para o script ${script}. O texto pode sofrer substituição indesejada.`
+        });
+      }
+    }
+
+    // 1. Verificação de Páginas A4 e Containers Internos (Dimensão física e clipping vertical)
     const pageElements = targetRoot.querySelectorAll('.clean-export-page, .export-page-container');
     pageElements.forEach((pageEl, pageIdx) => {
       const p = pageEl as HTMLElement;
       const pageId = p.getAttribute('data-page-id') || `p${pageIdx + 1}`;
+      const pageRect = typeof p.getBoundingClientRect === 'function' ? p.getBoundingClientRect() : null;
 
-      // Verifica se a folha excedeu a altura de 1 folha A4 (tolerância de 5px)
+      // 1.1. Verifica se a folha excedeu a altura de 1 folha A4 (tolerância de 5px)
       if (p.scrollHeight > p.clientHeight + 8 && p.clientHeight > 0) {
         issues.push({
           id: `page_overflow_${pageId}`,
@@ -31,9 +53,42 @@ export class TranslationLayoutAuditor {
           message: `Conteúdo da Página ${pageIdx + 1} ultrapassa o limite físico da folha A4 (${p.scrollHeight}px > ${p.clientHeight}px).`
         });
       }
+
+      // 1.2. Detecção de Clipping Vertical em containers internos com overflow-hidden
+      const internalContainers = p.querySelectorAll('.export-block-wrapper, [data-block-id], .overflow-hidden, .flex-1');
+      internalContainers.forEach((cEl) => {
+        const c = cEl as HTMLElement;
+        if (c.scrollHeight > c.clientHeight + 6 && c.clientHeight > 0) {
+          const blockId = c.getAttribute('data-block-id') || c.closest('[data-block-id]')?.getAttribute('data-block-id') || undefined;
+          issues.push({
+            id: `vertical_clipping_${blockId || pageId}_${c.scrollHeight}`,
+            type: 'TEXT_OVERFLOW',
+            pageId,
+            blockId,
+            severity: 'error',
+            message: `Conteúdo do bloco na Página ${pageIdx + 1} excede a área útil do container e está sendo cortado verticalmente (${c.scrollHeight}px > ${c.clientHeight}px).`
+          });
+        }
+
+        // Verifica se o bounding rect transborda o fundo físico da página A4
+        if (pageRect && typeof c.getBoundingClientRect === 'function') {
+          const cRect = c.getBoundingClientRect();
+          if (cRect.bottom > pageRect.bottom + 4 && pageRect.height > 0) {
+            const blockId = c.getAttribute('data-block-id') || undefined;
+            issues.push({
+              id: `bounding_overflow_${blockId || pageId}`,
+              type: 'PAGE_OVERFLOW',
+              pageId,
+              blockId,
+              severity: 'error',
+              message: `Bloco visual ultrapassa o limite inferior imprimível da folha A4 (${Math.round(cRect.bottom)}px > ${Math.round(pageRect.bottom)}px).`
+            });
+          }
+        }
+      });
     });
 
-    // 2. Verificação de Blocos e Títulos com Overflow de Texto
+    // 2. Verificação de Textos e Glifos
     const textContainers = targetRoot.querySelectorAll(
       '[data-printable-field], [data-printable-node-id], h1, h2, h3, h4, th, td'
     );
@@ -51,7 +106,7 @@ export class TranslationLayoutAuditor {
 
       const text = (htmlEl.textContent || '').trim();
 
-      // Detecta caracteres corrompidos / glyphs ausentes (ex: )
+      // Detecta caracteres corrompidos / glyphs ausentes (ex: U+FFFD)
       if (text.includes('\uFFFD')) {
         issues.push({
           id: `missing_font_${nodeId || field || text.substring(0, 10)}`,

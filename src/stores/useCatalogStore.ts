@@ -1688,39 +1688,34 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     translatedCatalog: Catalog
   ): Promise<{ success: boolean; catalogId?: string; error?: string }> => {
     try {
-      // 1. Verificação Estrita de Source Drift antes de criar/salvar
+      // 1. Validação Obrigatória de Metadata de Tradução
       const meta = translatedCatalog.translationMeta;
-      if (meta?.sourceCatalogId && meta?.sourceCatalogVersion !== undefined && meta?.sourceContentHash) {
-        let currentSource: Catalog | null = null;
-        try {
-          const res = await SupabaseService.getCatalog(meta.sourceCatalogId);
-          if (res.success && res.data) {
-            currentSource = res.data;
-          }
-        } catch {
-          // Fallback para memória local
-        }
-        if (!currentSource) {
-          const { savedCatalogs } = get();
-          currentSource = savedCatalogs.find((c) => c.id === meta.sourceCatalogId) || null;
-        }
+      if (
+        !meta ||
+        !meta.sourceCatalogId ||
+        meta.sourceCatalogVersion === undefined ||
+        !meta.sourceContentHash ||
+        !meta.sourceLocale ||
+        !meta.targetLocale
+      ) {
+        return {
+          success: false,
+          error: 'TRANSLATION_METADATA_MISSING: O catálogo traduzido não possui metadados válidos de tradução (sourceCatalogId, sourceCatalogVersion, sourceContentHash, locales).'
+        };
+      }
 
-        if (currentSource) {
-          const { FullCatalogTranslationService } = await import('../translation/full-catalog-translation.service');
-          const hasDrift = await FullCatalogTranslationService.verifySourceDrift(
-            currentSource,
-            meta.sourceCatalogVersion,
-            meta.sourceContentHash
-          );
+      if (meta.coverage !== 100) {
+        return {
+          success: false,
+          error: `TRANSLATION_INCOMPLETE: A cobertura de tradução é de ${meta.coverage}%. É exigido 100% de cobertura para persistir.`
+        };
+      }
 
-          if (hasDrift) {
-            console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o catálogo original foi alterado concorrentemente.');
-            return {
-              success: false,
-              error: 'O catálogo original foi modificado durante o processo de tradução. A versão traduzida não pode ser salva para evitar inconsistências (SOURCE_CHANGED_DURING_TRANSLATION).'
-            };
-          }
-        }
+      if (!meta.layoutQaStatus || meta.layoutQaStatus === 'pending' || meta.layoutQaStatus === 'error') {
+        return {
+          success: false,
+          error: `LAYOUT_QA_NOT_APPROVED: O Layout QA possui status "${meta.layoutQaStatus || 'não auditado'}". O salvamento só é permitido após aprovação do Layout QA.`
+        };
       }
 
       // 2. Criação da nova entidade com novo UUID
@@ -1731,24 +1726,45 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       const newCatalogToSave: Catalog = {
         ...structuredClone(translatedCatalog),
         id: newId,
-        version: 0,
+        version: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
-      // 3. Persistência real na nuvem via SupabaseService
-      const saveRes = await SupabaseService.saveCatalog(newCatalogToSave, 0, 'Criação de versão traduzida');
-      if (!saveRes.success || !saveRes.data) {
+      // 3. Persistência Atômica na Nuvem via RPC create_translated_catalog_v1 (Zero TOCTOU, Cloud-Only)
+      const rpcRes = await SupabaseService.createTranslatedCatalog(
+        newCatalogToSave,
+        meta.sourceCatalogId,
+        meta.sourceCatalogVersion,
+        `Criação de versão traduzida (${meta.targetLocale}) a partir do catálogo v${meta.sourceCatalogVersion}`
+      );
+
+      if (!rpcRes.success || !rpcRes.data) {
+        if (rpcRes.conflict || rpcRes.error?.includes('SOURCE_CHANGED_DURING_TRANSLATION')) {
+          console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o catálogo original foi alterado concorrentemente no servidor.');
+          return {
+            success: false,
+            error: 'O catálogo original foi modificado no servidor durante a tradução (SOURCE_CHANGED_DURING_TRANSLATION). A tradução deve ser refeita.'
+          };
+        }
+
+        if (rpcRes.errorCode === 'CLIENT_OFFLINE' || rpcRes.errorCode === 'NETWORK_ERROR') {
+          return {
+            success: false,
+            error: 'SOURCE_VERIFICATION_UNAVAILABLE: Não foi possível conectar ao servidor para validar a autoridade do catálogo fonte. Salvamento cancelado por segurança.'
+          };
+        }
+
         return {
           success: false,
-          error: saveRes.error || 'Não foi possível salvar a versão traduzida na nuvem.'
+          error: rpcRes.error || 'Erro ao persistir catálogo traduzido no servidor.'
         };
       }
 
       const confirmedCatalog: Catalog = {
         ...newCatalogToSave,
-        version: saveRes.data.version || 1,
-        updatedAt: saveRes.data.updated_at || new Date().toISOString()
+        version: Number(rpcRes.data.version) || 1,
+        updatedAt: rpcRes.data.updated_at || new Date().toISOString()
       };
 
       // 4. Atualização segura do StorageService local

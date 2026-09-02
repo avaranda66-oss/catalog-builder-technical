@@ -25,6 +25,7 @@ import { useCatalogStore } from '@/stores/useCatalogStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { LanguageRegistry } from '@/translation/language.registry';
 import { CredentialStorageMode } from '@/translation/types';
+import { FontManager } from '@/translation/font-manager';
 import { CleanA4Document } from '../export/CleanA4Document';
 
 export const TranslationCenterModal: React.FC = () => {
@@ -62,11 +63,12 @@ export const TranslationCenterModal: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [selectedMode] = useState<CredentialStorageMode>(storageMode);
+  const [selectedMode, setSelectedMode] = useState<CredentialStorageMode>(storageMode);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'system' | 'headings'>('all');
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+  const [confirmWarnings, setConfirmWarnings] = useState(false);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -77,11 +79,48 @@ export const TranslationCenterModal: React.FC = () => {
     }
   }, [isModalOpen, userId, currentCatalog]);
 
-  // Executa Layout QA real assim que o preview estiver montado
   useEffect(() => {
-    if (activeStep === 'review' && previewCatalog && qaContainerRef.current) {
-      runLayoutQa(qaContainerRef.current);
+    if (credentialMeta?.storageMode) {
+      setSelectedMode(credentialMeta.storageMode);
     }
+  }, [credentialMeta]);
+
+  // Executa Layout QA real no passo layout_qa assim que o CleanA4Document estiver montado
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (activeStep === 'layout_qa' && previewCatalog) {
+      setConfirmWarnings(false);
+
+      const runAudit = async () => {
+        try {
+          await FontManager.ensureFontsLoadedForLocale(targetLocale);
+          if (typeof document !== 'undefined' && document.fonts) {
+            try {
+              await document.fonts.ready;
+            } catch {
+              // Continua
+            }
+          }
+
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!isCancelled && qaContainerRef.current) {
+                void runLayoutQa(qaContainerRef.current);
+              }
+            });
+          });
+        } catch (err) {
+          console.error('Erro na auditoria de layout:', err);
+        }
+      };
+
+      void runAudit();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeStep, previewCatalog, targetLocale]);
 
   if (!isModalOpen) return null;
@@ -146,6 +185,13 @@ export const TranslationCenterModal: React.FC = () => {
     if (reviewFilter === 'headings') return item.kind === 'heading' || item.kind === 'badge';
     return true;
   });
+
+  const isSaveBlocked =
+    isSavingVersion ||
+    !layoutQaResult ||
+    layoutQaResult.status === 'pending' ||
+    layoutQaResult.status === 'error' ||
+    (layoutQaResult.status === 'warning' && !confirmWarnings);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
@@ -355,16 +401,58 @@ export const TranslationCenterModal: React.FC = () => {
                         placeholder="AIzaSy..."
                         className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-none font-mono outline-none focus:border-[#003366]"
                       />
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="submit"
-                          disabled={isTestingKey || !apiKeyInput.trim()}
-                          className="w-full py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center gap-1.5"
-                        >
-                          {isTestingKey && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          <span>Validar e Salvar</span>
-                        </button>
+
+                      {/* Seletor Funcional de Modo de Armazenamento BYOK */}
+                      <div className="space-y-1 pt-1 border-t border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-600 block uppercase">
+                          Armazenamento da Chave:
+                        </span>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <label
+                            className={`p-2 border cursor-pointer flex items-center gap-1.5 ${
+                              selectedMode === 'session'
+                                ? 'border-[#003366] bg-blue-50/50 font-bold text-[#003366]'
+                                : 'border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="storageMode"
+                              value="session"
+                              checked={selectedMode === 'session'}
+                              onChange={() => setSelectedMode('session')}
+                              className="accent-[#003366]"
+                            />
+                            <span>Somente Sessão</span>
+                          </label>
+                          <label
+                            className={`p-2 border cursor-pointer flex items-center gap-1.5 ${
+                              selectedMode === 'remember'
+                                ? 'border-[#003366] bg-blue-50/50 font-bold text-[#003366]'
+                                : 'border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="storageMode"
+                              value="remember"
+                              checked={selectedMode === 'remember'}
+                              onChange={() => setSelectedMode('remember')}
+                              className="accent-[#003366]"
+                            />
+                            <span>Lembrar Dispositivo</span>
+                          </label>
+                        </div>
                       </div>
+
+                      <button
+                        type="submit"
+                        disabled={isTestingKey || !apiKeyInput.trim()}
+                        className="w-full py-2 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {isTestingKey && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        <span>Validar e Salvar Chave</span>
+                      </button>
                     </form>
                   )}
 
@@ -527,7 +615,10 @@ export const TranslationCenterModal: React.FC = () => {
             <div className="space-y-4">
               {/* Container de QA offscreen para auditoria real do CleanA4Document */}
               {previewCatalog && (
-                <div ref={qaContainerRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, pointerEvents: 'none' }}>
+                <div
+                  ref={qaContainerRef}
+                  style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, pointerEvents: 'none' }}
+                >
                   <CleanA4Document document={previewCatalog} />
                 </div>
               )}
@@ -590,6 +681,22 @@ export const TranslationCenterModal: React.FC = () => {
                   </div>
                 )}
 
+                {layoutQaResult?.status === 'warning' && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 space-y-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-amber-900 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={confirmWarnings}
+                        onChange={(e) => setConfirmWarnings(e.target.checked)}
+                        className="rounded-none text-[#003366] focus:ring-0"
+                      />
+                      <span>
+                        Estou ciente dos {layoutQaResult.issues.length} avisos de layout e confirmo a criação da versão localizada.
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 {saveErrorMessage && (
                   <div className="p-3 bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -611,7 +718,7 @@ export const TranslationCenterModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCreateVersion}
-                  disabled={isSavingVersion || layoutQaResult?.status === 'error'}
+                  disabled={isSaveBlocked}
                   className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
                 >
                   {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
