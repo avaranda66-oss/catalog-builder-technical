@@ -665,6 +665,7 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
   // TEST 25: workspace remoto vazio e online não restaura cache antigo
   // =========================================================================
   it('TEST 25: workspace remoto online vazio cria novo catálogo sem restaurar cache obsoleto', async () => {
+    useCatalogStore.setState({ currentCatalog: null });
     vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValueOnce({
       success: true,
       data: {

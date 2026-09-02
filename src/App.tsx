@@ -23,29 +23,50 @@ export const App: React.FC = () => {
   const { loadAssets } = useMediaStore();
   const { loadTemplates, handleRealtimeTemplateEvent } = useTemplateStore();
   const status = useAuthStore((state) => state.status);
+  const userId = useAuthStore((state) => state.userId);
   const errorMessage = useAuthStore((state) => state.errorMessage);
   const initializeAuth = useAuthStore((state) => state.initialize);
   const retryProfile = useAuthStore((state) => state.retryProfile);
   const signOut = useAuthStore((state) => state.signOut);
+
+  const bootstrappedUserIdRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     void initializeAuth();
   }, [initializeAuth]);
 
   useEffect(() => {
-    if (status !== 'authenticated') return;
-    void loadProducts();
-    void loadLatestCatalog();
-    void loadAssets();
-    void loadTemplates();
+    if (status !== 'authenticated') {
+      bootstrappedUserIdRef.current = null;
+      return;
+    }
 
-    // Sincronização em Tempo Real Segura com Status Callback (FASE 1.2B & 1.3)
+    // 1. BOOTSTRAP DO WORKSPACE EXECUTADO UMA ÚNICA VEZ POR USUÁRIO/SESSÃO
+    if (userId && bootstrappedUserIdRef.current !== userId) {
+      bootstrappedUserIdRef.current = userId;
+      console.log('[WORKSPACE BOOTSTRAP]', {
+        userId,
+        timestamp: new Date().toISOString()
+      });
+      void loadProducts();
+      void loadLatestCatalog();
+      void loadAssets();
+      void loadTemplates();
+    }
+
+    // 2. Sincronização em Tempo Real Segura com Status Callback
     const supabase = getSupabase();
     if (!supabase) return;
 
     const clientId = typeof window !== 'undefined' && window.sessionStorage
       ? window.sessionStorage.getItem('cb_client_instance_id') || 'client'
       : 'client';
+
+    console.log('[REALTIME CHANNEL CREATED]', {
+      clientId,
+      userId,
+      timestamp: new Date().toISOString()
+    });
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -106,12 +127,17 @@ export const App: React.FC = () => {
     }
 
     return () => {
+      console.log('[REALTIME CHANNEL REMOVED]', {
+        clientId,
+        userId,
+        timestamp: new Date().toISOString()
+      });
       void supabase.removeChannel(channel);
       if (rawChannel) {
         void supabase.removeChannel(rawChannel);
       }
     };
-  }, [loadProducts, loadLatestCatalog, loadAssets, status]);
+  }, [loadProducts, loadLatestCatalog, loadAssets, loadTemplates, handleRealtimeTemplateEvent, status, userId]);
 
   if (status === 'loading') {
     return <main className="min-h-screen bg-slate-100 flex items-center justify-center text-sm text-slate-600">Validando acesso…</main>;

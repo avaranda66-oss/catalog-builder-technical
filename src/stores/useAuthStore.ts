@@ -11,8 +11,9 @@ interface ProfileRecord {
   is_active: boolean;
 }
 
-interface AuthState {
+export interface AuthState {
   status: AuthStatus;
+  userId: string | null;
   role: EffectiveRole | null;
   email: string | null;
   errorMessage: string | null;
@@ -27,6 +28,7 @@ let generation = 0;
 let unsubscribe: (() => void) | null = null;
 
 const resetIdentity = () => ({
+  userId: null,
   role: null,
   email: null
 });
@@ -76,6 +78,7 @@ const resolveSession = async (
 
     set({
       status: 'authenticated',
+      userId: session.user.id,
       role: profile.role,
       email: session.user.email ?? null,
       errorMessage: null
@@ -84,6 +87,33 @@ const resolveSession = async (
     if (currentGeneration === generation) {
       set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
     }
+  }
+};
+
+const revalidateProfileInBackground = async (
+  userId: string,
+  set: (partial: Partial<AuthState>) => void
+) => {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, role, is_active')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) return; // Falhas transitórias de rede não desautenticam
+    const profile = data as ProfileRecord | null;
+    if (!profile || !profile.is_active || (profile.role !== 'admin' && profile.role !== 'editor')) {
+      set({ status: 'forbidden', errorMessage: deniedMessage, ...resetIdentity() });
+      return;
+    }
+
+    set({ role: profile.role });
+  } catch {
+    // Ignora erro transitório em background
   }
 };
 
@@ -103,11 +133,60 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     unsubscribe?.();
-    const { data } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'SIGNED_IN') {
+    const { data } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+      const prevStatus = get().status;
+      const prevUserId = get().userId;
+      const currentUserId = session?.user?.id ?? null;
+
+      const isDebug = typeof window !== 'undefined' && (
+        new URLSearchParams(window.location.search).get('debugRealtime') === '1' ||
+        import.meta.env.DEV
+      );
+
+      if (isDebug) {
+        console.log('[AUTH EVENT]', {
+          event,
+          previousStatus: prevStatus,
+          userId: currentUserId,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 1. SIGNED_OUT: Desautenticação explícita
+      if (event === 'SIGNED_OUT') {
+        ++generation;
+        set({ status: 'unauthenticated', errorMessage: null, ...resetIdentity() });
+        return;
+      }
+
+      // 2. TOKEN_REFRESHED: Renovação silenciosa de token NÃO pode mudar status para loading nem desmontar editor!
+      if (event === 'TOKEN_REFRESHED') {
+        if (prevStatus === 'authenticated' && session?.user) {
+          set({
+            userId: session.user.id,
+            email: session.user.email ?? get().email
+          });
+          void revalidateProfileInBackground(session.user.id, set);
+          return;
+        }
+      }
+
+      // 3. USER_UPDATED: Revalida perfil em background silenciosamente
+      if (event === 'USER_UPDATED') {
+        if (prevStatus === 'authenticated' && session?.user) {
+          void revalidateProfileInBackground(session.user.id, set);
+          return;
+        }
+      }
+
+      // 4. SIGNED_IN: Se já autenticado para o mesmo usuário, não reseta nada
+      if (event === 'SIGNED_IN') {
+        if (prevStatus === 'authenticated' && prevUserId === currentUserId) {
+          return;
+        }
         const eventGeneration = ++generation;
-        set({ status: 'loading', errorMessage: null, ...resetIdentity() });
-        void resolveSession(session, set, eventGeneration);
+        set({ status: 'loading', errorMessage: null });
+        await resolveSession(session, set, eventGeneration);
       }
     });
     unsubscribe = () => data.subscription.unsubscribe();

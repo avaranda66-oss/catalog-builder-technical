@@ -1121,13 +1121,33 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   loadLatestCatalog: async () => {
+    const initialCatalog = get().currentCatalog;
+    const urlCatalogId = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('catalog')
+      : null;
+
+    // Se já temos um catálogo ativo e não há parâmetro de URL exigindo outro catálogo:
+    if (initialCatalog && !urlCatalogId) {
+      console.log(`🛡️ [BOOTSTRAP GUARD] loadLatestCatalog ignorado: catálogo "${initialCatalog.title}" (${initialCatalog.id}) já ativo.`);
+      return;
+    }
+
+    // Se já estamos com o catálogo solicitado na URL aberto:
+    if (initialCatalog && urlCatalogId && initialCatalog.id === urlCatalogId) {
+      console.log(`🛡️ [BOOTSTRAP GUARD] loadLatestCatalog ignorado: catálogo solicitado (${urlCatalogId}) já aberto.`);
+      return;
+    }
+
     set({ isLoading: true });
     try {
-      const urlCatalogId = typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('catalog')
-        : null;
-
       const workspaceRes = await get().loadWorkspace();
+
+      // Guard pós-await: se o usuário já editou algo enquanto a requisição rodava:
+      const stateAfterAwait = get();
+      if (stateAfterAwait.isDirty || stateAfterAwait.localRevision > 0) {
+        console.warn(`🛡️ [BOOTSTRAP RACE GUARD] loadLatestCatalog bloqueado: edição local em andamento.`);
+        return;
+      }
 
       if (workspaceRes.success) {
         if (urlCatalogId) {
