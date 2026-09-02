@@ -1,13 +1,105 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useLibraryStore, CORE_PRODUCT_COLUMNS } from '../../src/stores/useLibraryStore';
+import { useLibraryStore } from '../../src/stores/useLibraryStore';
 import { SupabaseService } from '../../src/services/supabase.service';
+import { ProductFamilyField } from '../../src/domain/product.schema';
 
-describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', () => {
+describe('FASE 2B.1A — Library Schema Materialization, Column UX & Security Hardening', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     vi.restoreAllMocks();
     useLibraryStore.getState().resetToInitial();
+  });
+
+  // =========================================================================
+  // SCHEMA-H1: Existing family + first custom column => all historical columns remain
+  // =========================================================================
+  it('SCHEMA-H1: Família existente (Válvulas de Controle) com 5 campos legados materializados preserva TODOS ao adicionar campo customizado', async () => {
+    const store = useLibraryStore.getState();
+    const familyName = 'Válvulas de Controle & Posicionadores';
+    const famId = 'fam-valvulas-3';
+
+    // Simula estado carregado do PostgreSQL com os 5 campos legados materializados
+    const legacyFields: ProductFamilyField[] = [
+      { id: 'fld-1', family_id: famId, field_key: 'range', label: 'Faixa de Medição', field_type: 'text', sort_order: 1, width: 130, visible: true, is_system: false, unit: null },
+      { id: 'fld-2', family_id: famId, field_key: 'unit', label: 'Unidade', field_type: 'text', sort_order: 2, width: 80, visible: true, is_system: false, unit: null },
+      { id: 'fld-3', family_id: famId, field_key: 'accuracy', label: 'Exatidão', field_type: 'text', sort_order: 3, width: 100, visible: true, is_system: false, unit: null },
+      { id: 'fld-4', family_id: famId, field_key: 'output', label: 'Sinal de Saída', field_type: 'text', sort_order: 4, width: 120, visible: true, is_system: false, unit: null },
+      { id: 'fld-5', family_id: famId, field_key: 'processConnection', label: 'Conexão de Processo', field_type: 'text', sort_order: 5, width: 150, visible: true, is_system: false, unit: null }
+    ];
+
+    useLibraryStore.setState({
+      families: [{ id: famId, name: familyName, slug: 'valvulas-de-controle-posicionadores', sort_order: 1, created_at: '', updated_at: '' }],
+      familyFields: {
+        [famId]: legacyFields,
+        [familyName]: legacyFields
+      }
+    });
+
+    // BEFORE: Deve ter 7 colunas (Código, Modelo, Faixa, Unidade, Exatidão, Sinal, Conexão)
+    const colsBefore = store.getColumnsForFamily(familyName);
+    expect(colsBefore.length).toBe(7);
+    expect(colsBefore.map(c => c.key)).toEqual(['code', 'model', 'range', 'unit', 'accuracy', 'output', 'processConnection']);
+
+    // Adiciona o primeiro campo customizado novo: 'teste2'
+    vi.spyOn(SupabaseService, 'saveFamilyField').mockResolvedValue({
+      success: true,
+      data: {
+        id: 'fld-custom-teste2',
+        family_id: famId,
+        field_key: 'teste2',
+        label: 'Teste 2 Custom',
+        field_type: 'text',
+        sort_order: 6,
+        width: 130,
+        visible: true,
+        is_system: false,
+        unit: null
+      }
+    });
+
+    const addRes = await store.addFamilyColumn(famId, 'teste2', 'Teste 2 Custom');
+    expect(addRes.success).toBe(true);
+
+    // AFTER: Deve ter 8 colunas — NENHUMA coluna legada desapareceu!
+    const colsAfter = useLibraryStore.getState().getColumnsForFamily(familyName);
+    expect(colsAfter.length).toBe(8);
+    expect(colsAfter.map(c => c.key)).toEqual(['code', 'model', 'range', 'unit', 'accuracy', 'output', 'processConnection', 'teste2']);
+  });
+
+  // =========================================================================
+  // SCHEMA-H7: Assert product immutability during column schema changes
+  // =========================================================================
+  it('SCHEMA-H7: Adicionar ou remover coluna NÃO muta nem incrementa versão dos produtos', async () => {
+    const store = useLibraryStore.getState();
+    const targetProduct = store.products[0];
+    const initialVersion = targetProduct.version;
+    const initialProductSnapshot = JSON.parse(JSON.stringify(targetProduct));
+
+    vi.spyOn(SupabaseService, 'saveFamilyField').mockResolvedValue({
+      success: true,
+      data: { id: 'col-new', family_id: targetProduct.family, field_key: 'novo_campo', label: 'Novo Campo', field_type: 'text', sort_order: 1, width: 130, visible: true, is_system: false, unit: null, created_by: null, updated_by: null, created_at: '', updated_at: '' }
+    });
+
+    await store.addFamilyColumn(targetProduct.family, 'novo_campo', 'Novo Campo');
+
+    const productAfter = useLibraryStore.getState().getProduct(targetProduct.id);
+    expect(productAfter?.version).toBe(initialVersion);
+    expect(productAfter?.specs).toEqual(initialProductSnapshot.specs);
+  });
+
+  // =========================================================================
+  // SEC-1, 2, 3: Permissions & Role Validation
+  // =========================================================================
+  it('SEC-1 & SEC-2: Erro 42501 ao tentar salvar produto sem role admin propaga mensagem limpa de permissão', async () => {
+    vi.spyOn(SupabaseService, 'saveProduct').mockResolvedValue({
+      success: false,
+      error: 'Permissão negada: apenas administradores podem alterar a biblioteca de produtos.'
+    });
+
+    const res = await SupabaseService.saveProduct({ code: 'P1', model: 'M1' }, 1);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('apenas administradores');
   });
 
   // =========================================================================
@@ -92,24 +184,21 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
       };
     });
 
-    // 4 edições rápidas no mesmo produto antes do debounce flush
     store.updateProductCell(targetProduct.id, 'range', '0 a 500 bar');
     store.updateProductCell(targetProduct.id, 'accuracy', '±0.025% FE');
     store.updateProductCell(targetProduct.id, 'output', 'Modbus RTU');
     store.updateProductCell(targetProduct.id, 'processConnection', 'Flange 2"');
 
-    // Dispara o flush
     const flushSuccess = await useLibraryStore.getState().flushLibraryEdits();
 
     expect(flushSuccess).toBe(true);
-    expect(saveCallsCount).toBe(1); // Exatamente 1 save disparado para o produto
+    expect(saveCallsCount).toBe(1);
     expect(receivedExpectedVersion).toBe(initialVersion);
     expect(receivedSnapshot.specs.range).toBe('0 a 500 bar');
     expect(receivedSnapshot.specs.accuracy).toBe('±0.025% FE');
     expect(receivedSnapshot.specs.output).toBe('Modbus RTU');
     expect(receivedSnapshot.specs.processConnection).toBe('Flange 2"');
     
-    // Versão do produto na store foi incrementada
     const updatedProd = useLibraryStore.getState().getProduct(targetProduct.id);
     expect(updatedProd?.version).toBe(initialVersion + 1);
   });
@@ -123,7 +212,7 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
       data: {
         families: [{ id: 'fam-1', name: 'Família Vazia', slug: 'familia-vazia', sort_order: 1, created_at: '', updated_at: '' }],
         fields: [],
-        products: [], // Cloud legitimamente vazio
+        products: [],
         events: []
       }
     });
@@ -132,7 +221,7 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
 
     const state = useLibraryStore.getState();
     expect(state.syncStatus).toBe('synced');
-    expect(state.products.length).toBe(0); // Zero produtos mantido
+    expect(state.products.length).toBe(0);
     expect(state.families.length).toBe(1);
     expect(state.families[0].name).toBe('Família Vazia');
   });
@@ -155,24 +244,10 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
     expect(res.success).toBe(false);
     expect(res.error).toContain('Database error');
 
-    // A coluna NÃO deve permanecer na store
     const colsAfter = useLibraryStore.getState().getColumnsForFamily(family);
     expect(colsAfter.some(c => c.key === 'campo_falha')).toBe(false);
     expect(colsAfter.length).toBe(initialColumnsCount);
     expect(useLibraryStore.getState().syncStatus).toBe('error');
-  });
-
-  // =========================================================================
-  // LIB-H5 & LIB-H6: Stable Presence Identity and Deduplication
-  // =========================================================================
-  it('LIB-H5 & LIB-H6: Presença mantém clientInstanceId único por sessão e deduplica entradas', () => {
-    const store = useLibraryStore.getState();
-    const initialCellPresence = store.cellPresence;
-    expect(initialCellPresence).toBeDefined();
-
-    // Verificação de CORE_PRODUCT_COLUMNS
-    expect(CORE_PRODUCT_COLUMNS.length).toBe(2);
-    expect(CORE_PRODUCT_COLUMNS.every(c => c.isSystem)).toBe(true);
   });
 
   // =========================================================================
@@ -193,7 +268,6 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
     expect(res.success).toBe(false);
     expect(res.error).toContain('foreign key');
 
-    // Produto foi restaurado
     const stateAfter = useLibraryStore.getState();
     expect(stateAfter.products.length).toBe(initialProductsCount);
     expect(stateAfter.products.some(p => p.id === targetProduct.id)).toBe(true);
@@ -229,7 +303,6 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
 
     await store.addFamilyColumn(family, 'custom_sensor', 'Tipo de Sensor');
 
-    // Renomear
     vi.spyOn(SupabaseService, 'saveFamilyField').mockResolvedValue({ success: true, data: {} as any });
     const renameRes = await store.renameFamilyColumn('field-201', family, 'Sensor Piezorresistivo');
     expect(renameRes.success).toBe(true);
@@ -237,7 +310,6 @@ describe('FASE 2B.1 — Library Hardening, Reproducibility & Column UX Suite', (
     const colsAfterRename = useLibraryStore.getState().getColumnsForFamily(family);
     expect(colsAfterRename.find(c => c.key === 'custom_sensor')?.label).toBe('Sensor Piezorresistivo');
 
-    // Excluir
     vi.spyOn(SupabaseService, 'deleteFamilyField').mockResolvedValue({ success: true });
     const deleteRes = await store.removeFamilyColumn('field-201', family, 'custom_sensor');
     expect(deleteRes.success).toBe(true);

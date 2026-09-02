@@ -269,7 +269,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   getColumnsForFamily: (family: string) => {
     const famObj = get().families.find(f => f.name === family || f.slug === family || f.id === family);
     const familyKey = famObj?.id || family;
-    const customFields = get().familyFields[familyKey] || (famObj ? get().familyFields[famObj.name] : []) || [];
+    const customFields = (famObj?.id && get().familyFields[famObj.id]) || (famObj?.name && get().familyFields[famObj.name]) || get().familyFields[familyKey] || [];
     
     const familyCols: LibraryColumn[] = customFields.map(f => ({
       id: f.id,
@@ -282,20 +282,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       fieldType: (f.field_type as any) || 'text'
     }));
 
-    // Se já existem campos customizados persistidos para a família:
-    // Garante que Código e Modelo NUNCA desapareçam
+    // Se já existem campos persistidos para a família (seja materializados ou novos):
+    // Garante que Código e Modelo NUNCA desapareçam e anexa os campos da família
     if (familyCols.length > 0) {
       const coreKeys = new Set(CORE_PRODUCT_COLUMNS.map(c => c.key));
       const nonCoreFamilyCols = familyCols.filter(c => !coreKeys.has(c.key));
       return [...CORE_PRODUCT_COLUMNS, ...nonCoreFamilyCols];
     }
 
-    // Se é uma das famílias padrão iniciais de demonstração
-    if (family === 'Transmissores de Pressão Relativa' || family === 'Transmissores de Pressão Diferencial' || family === 'Válvulas de Controle' || family === 'Transmissores de Temperatura') {
+    // Modo offline / sem conexão caso nunca tenha sincronizado
+    if (get().syncStatus === 'offline' && get().families.length === 0) {
       return DEFAULT_FALLBACK_COLUMNS;
     }
 
-    // Nova família vazia: retorna obrigatoriamente as colunas universais (Código + Modelo)
+    // Família sem campos específicos: retorna as colunas universais (Código + Modelo)
     return [...CORE_PRODUCT_COLUMNS];
   },
 
@@ -834,28 +834,41 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const newFld = payload.new as any;
         const oldFld = payload.old as any;
         set((state) => {
-          const familyId = (newFld?.family_id || oldFld?.family_id) as string;
+          let familyId = (newFld?.family_id || oldFld?.family_id) as string;
+          if (!familyId) {
+            for (const [fId, list] of Object.entries(state.familyFields)) {
+              if (list.some(f => f.id === oldFld?.id || f.field_key === oldFld?.field_key)) {
+                familyId = fId;
+                break;
+              }
+            }
+          }
           if (!familyId) return state;
 
-          const currentList = state.familyFields[familyId] || [];
+          const parentFam = state.families.find(f => f.id === familyId || f.name === familyId || f.slug === familyId);
+          const currentList = state.familyFields[familyId] || (parentFam ? (state.familyFields[parentFam.id] || state.familyFields[parentFam.name]) : []) || [];
           let updatedList = currentList;
 
           if (eventType === 'INSERT') {
-            if (!currentList.some(f => f.id === newFld.id)) {
+            if (!currentList.some(f => f.id === newFld.id || f.field_key === newFld.field_key)) {
               updatedList = [...currentList, newFld as ProductFamilyField];
             }
           } else if (eventType === 'UPDATE') {
-            updatedList = currentList.map(f => f.id === newFld.id ? (newFld as ProductFamilyField) : f);
+            updatedList = currentList.map(f => (f.id === newFld.id || f.field_key === newFld.field_key) ? (newFld as ProductFamilyField) : f);
           } else if (eventType === 'DELETE') {
-            updatedList = currentList.filter(f => f.id !== oldFld.id);
+            updatedList = currentList.filter(f => f.id !== oldFld?.id && f.field_key !== oldFld?.field_key);
           }
 
-          return {
-            familyFields: {
-              ...state.familyFields,
-              [familyId]: updatedList
-            }
+          const updatedMap = {
+            ...state.familyFields,
+            [familyId]: updatedList
           };
+          if (parentFam) {
+            updatedMap[parentFam.id] = updatedList;
+            updatedMap[parentFam.name] = updatedList;
+            if (parentFam.slug) updatedMap[parentFam.slug] = updatedList;
+          }
+          return { familyFields: updatedMap };
         });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'library_change_events' }, (payload) => {

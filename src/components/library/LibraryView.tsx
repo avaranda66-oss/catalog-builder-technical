@@ -78,7 +78,7 @@ export const LibraryView: React.FC = () => {
     void loadWorkspace();
     const unsub = initRealtimeSubscription();
     return () => unsub();
-  }, [loadWorkspace, initRealtimeSubscription]);
+  }, [loadWorkspace, initRealtimeSubscription, currentUserId]);
 
   // Listener para Ctrl+S na Biblioteca
   useEffect(() => {
@@ -161,7 +161,7 @@ export const LibraryView: React.FC = () => {
   // Excluir Coluna
   const handleDeleteColumn = async (col: any) => {
     if (col.isSystem) return;
-    if (confirm(`Deseja realmente excluir a coluna "${col.label}"?\n\nOs valores preenchidos nesta especificação serão excluídos do banco de dados.`)) {
+    if (confirm(`Remover a coluna "${col.label}" desta família?\n\nOs valores existentes serão preservados no histórico/dados e poderão ser recuperados.`)) {
       const res = await removeFamilyColumn(col.id || '', currentFamily, col.key);
       if (!res.success) {
         alert(res.error || 'Erro ao excluir coluna no servidor');
