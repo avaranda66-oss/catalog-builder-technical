@@ -1,67 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Search,
   Trash2,
   Download,
-  Edit2,
+  History,
   Check,
-  X
+  X,
+  AlertCircle,
+  Clock,
+  Users,
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Product } from '../../domain/product.schema';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { LibraryHistoryDrawer } from './LibraryHistoryDrawer';
+import { CellHistoryModal } from './CellHistoryModal';
 
 export const LibraryView: React.FC = () => {
   const {
     products,
-    familyColumns,
+    families,
+    changeEvents,
     selectedFamily,
     setSelectedFamily,
-    addProduct,
-    deleteProduct,
+    getColumnsForFamily,
+    createFamily,
     addFamilyColumn,
     renameFamilyColumn,
     removeFamilyColumn,
-    updateProductCell
+    addProduct,
+    deleteProduct,
+    updateProductCell,
+    flushLibraryEdits,
+    loadWorkspace,
+    initRealtimeSubscription,
+    setFocusedCell,
+    cellPresence,
+    familyPresence,
+    recentEditedCells,
+    syncStatus,
+    syncError
   } = useLibraryStore();
+
   const isAdmin = useAuthStore((state) => state.role === 'admin');
+  const currentUserId = useAuthStore((state) => state.userId);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeCellInfo, setActiveCellInfo] = useState<{ rowIdx: number; colKey: string; value: string } | null>(null);
+  const [activeCellInfo, setActiveCellInfo] = useState<{ rowIdx: number; colKey: string; value: string; productId: string } | null>(null);
 
-  // Estados de edição de coluna
+  // Modais de Criação / Edição
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnLabel, setNewColumnLabel] = useState('');
   const [editingColKey, setEditingColKey] = useState<string | null>(null);
   const [editingColLabel, setEditingColLabel] = useState('');
 
-  // Lista de famílias existentes
-  const families = Array.from(new Set(products.map((p) => p.family || 'Geral')));
-  if (!families.includes('Calibradores de Temperatura')) families.unshift('Calibradores de Temperatura');
-  if (!families.includes('Transmissores de Pressão Relativa')) families.unshift('Transmissores de Pressão Relativa');
+  const [isAddingFamily, setIsAddingFamily] = useState(false);
+  const [newFamilyName, setNewFamilyName] = useState('');
+  const [newFamilyDesc, setNewFamilyDesc] = useState('');
 
-  const currentFamily = selectedFamily || families[0];
-  const columnsForFamily = familyColumns[currentFamily] || [
-    { key: 'code', label: 'Código' },
-    { key: 'model', label: 'Modelo Comercial' },
-    { key: 'range', label: 'Faixa de Operação' },
-    { key: 'unit', label: 'Unidade' },
-    { key: 'accuracy', label: 'Exatidão Metrológica' },
-    { key: 'output', label: 'Sinais / Saída' }
-  ];
+  // Drawer de Histórico Geral e Modal de Célula
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [cellHistoryTarget, setCellHistoryTarget] = useState<{
+    productId: string;
+    productModel: string;
+    fieldKey: string;
+    fieldLabel: string;
+    currentValue: string;
+  } | null>(null);
+
+  // Inicialização e Assinatura Realtime
+  useEffect(() => {
+    void loadWorkspace();
+    const unsub = initRealtimeSubscription();
+    return () => unsub();
+  }, [loadWorkspace, initRealtimeSubscription]);
+
+  // Listener para Ctrl+S na Biblioteca
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void flushLibraryEdits();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [flushLibraryEdits]);
+
+  // Lista de famílias (do banco ou fallback)
+  const availableFamilies = families.length > 0
+    ? families.map(f => f.name)
+    : Array.from(new Set(products.map(p => p.family || 'Geral')));
+
+  const currentFamily = selectedFamily || availableFamilies[0] || 'Transmissores de Pressão Relativa';
+  const columnsForFamily = getColumnsForFamily(currentFamily);
 
   // Produtos filtrados da família ativa
   const familyProducts = products.filter(
     (p) =>
-      p.family === currentFamily &&
-      (p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.family === currentFamily || p.family?.toLowerCase() === currentFamily.toLowerCase()) &&
+      (p.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.description?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Inserir Nova Linha de Produto
-  const handleAddNewRow = () => {
+  // Inserir Novo Produto
+  const handleAddNewRow = async () => {
     const nextNum = products.length + 1;
     const newProd: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'version'> = {
       code: `PRESYS-${nextNum.toString().padStart(3, '0')}`,
@@ -80,33 +127,45 @@ export const LibraryView: React.FC = () => {
       },
       imageUrl: ''
     };
-    addProduct(newProd);
+    await addProduct(newProd);
   };
 
-  // Criar Nova Coluna Técnica para esta família
-  const handleConfirmAddColumn = () => {
+  // Criar Nova Coluna
+  const handleConfirmAddColumn = async () => {
     if (!newColumnLabel.trim()) return;
     const key = `spec_${Date.now()}`;
-    addFamilyColumn(currentFamily, key, newColumnLabel.trim());
+    await addFamilyColumn(currentFamily, key, newColumnLabel.trim());
     setNewColumnLabel('');
     setIsAddingColumn(false);
   };
 
   // Renomear Coluna
-  const handleConfirmRenameColumn = () => {
+  const handleConfirmRenameColumn = async () => {
     if (!editingColKey || !editingColLabel.trim()) return;
-    renameFamilyColumn(currentFamily, editingColKey, editingColLabel.trim());
+    const targetCol = columnsForFamily.find(c => c.key === editingColKey);
+    await renameFamilyColumn(targetCol?.id || '', currentFamily, editingColLabel.trim());
     setEditingColKey(null);
     setEditingColLabel('');
   };
 
-  // Excluir Coluna da Família (Direto e Instantâneo)
-  const handleDeleteColumn = (colKey: string) => {
+  // Excluir Coluna
+  const handleDeleteColumn = async (col: any) => {
     if (columnsForFamily.length <= 1) return;
-    removeFamilyColumn(currentFamily, colKey);
+    if (confirm(`Deseja realmente excluir a coluna "${col.label}"?`)) {
+      await removeFamilyColumn(col.id || '', currentFamily, col.key);
+    }
   };
 
-  // Exportar Tabela da Família como CSV
+  // Criar Nova Família
+  const handleConfirmAddFamily = async () => {
+    if (!newFamilyName.trim()) return;
+    await createFamily(newFamilyName.trim(), newFamilyDesc.trim());
+    setNewFamilyName('');
+    setNewFamilyDesc('');
+    setIsAddingFamily(false);
+  };
+
+  // Exportar CSV
   const handleExportCSV = () => {
     const headers = ['#', ...columnsForFamily.map((c) => c.label)];
     const rows = familyProducts.map((p, idx) => [
@@ -114,7 +173,7 @@ export const LibraryView: React.FC = () => {
       ...columnsForFamily.map((c) => {
         if (c.key in p) return (p as any)[c.key] || '';
         if (c.key in p.specs) return (p.specs as any)[c.key] || '';
-        return p.specs.customSpecs?.[c.key] || '';
+        return p.specs?.customSpecs?.[c.key] || '';
       })
     ]);
 
@@ -127,19 +186,60 @@ export const LibraryView: React.FC = () => {
     link.click();
   };
 
+  // Formatação do Sync Banner
+  const renderSyncBanner = () => {
+    if (syncStatus === 'saving') {
+      return (
+        <span className="text-[10px] text-amber-700 font-mono font-medium flex items-center gap-1">
+          <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
+          Salvando alterações...
+        </span>
+      );
+    }
+    if (syncStatus === 'dirty') {
+      return (
+        <span className="text-[10px] text-blue-700 font-mono font-medium flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          Alterações pendentes (Ctrl+S para salvar)
+        </span>
+      );
+    }
+    if (syncStatus === 'conflict') {
+      return (
+        <span className="text-[10px] text-rose-700 font-mono font-bold flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-rose-600" />
+          {syncError || 'Conflito detectado! Verifique seus dados.'}
+        </span>
+      );
+    }
+    if (syncStatus === 'error') {
+      return (
+        <span className="text-[10px] text-rose-700 font-mono font-medium flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-rose-600" />
+          {syncError || 'Erro ao sincronizar.'}
+        </span>
+      );
+    }
+    return (
+      <span className="text-[10px] text-emerald-700 font-mono font-medium flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        Sincronizado
+      </span>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white select-none overflow-hidden text-xs">
+      {/* 1. Banner Superior com Informação de Sincronização e Auditoria */}
       <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-700 flex items-center justify-between">
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          Sincronização em nuvem ativa via Supabase: {isAdmin ? 'Produtos e especificações oficiais são sincronizados e compartilhados entre administradores.' : 'Como Colaborador, a Biblioteca oficial está em modo somente-leitura.'}
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+          Biblioteca Corporativa em Nuvem: {isAdmin ? 'Todas as edições são persistidas via CAS no PostgreSQL e auditadas em tempo real.' : 'Como Colaborador, a Biblioteca oficial está em modo somente-leitura.'}
         </span>
-        <span className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          Sincronizado
-        </span>
+        {renderSyncBanner()}
       </div>
-      {/* 1. Barra de Fórmulas / Célula Ativa Estilo Excel */}
+
+      {/* 2. Barra de Fórmulas / Célula Ativa Estilo Excel */}
       <div className="h-9 bg-[#f8fafc] border-b border-slate-300 px-3 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="font-mono font-bold text-slate-700 bg-white px-2 py-0.5 border border-slate-300 rounded text-[11px] shrink-0">
@@ -149,7 +249,7 @@ export const LibraryView: React.FC = () => {
           <div className="flex items-center gap-1.5 flex-1 min-w-0 bg-white border border-slate-300 rounded px-2 py-0.5">
             <span className="text-slate-400 text-[10px] font-mono shrink-0">fx:</span>
             <span className="text-slate-800 font-mono text-[11px] truncate">
-              {activeCellInfo?.value !== undefined ? activeCellInfo.value : 'Click on any cell to edit directly'}
+              {activeCellInfo?.value !== undefined ? activeCellInfo.value : 'Clique em qualquer célula para editar diretamente'}
             </span>
           </div>
         </div>
@@ -162,230 +262,288 @@ export const LibraryView: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search code or model..."
+              placeholder="Buscar código ou modelo..."
               className="pl-7 pr-2 py-0.5 text-xs bg-white border border-slate-300 rounded-none focus:border-[#003366] focus:outline-none w-48 font-sans"
             />
           </div>
 
-          {isAdmin && <button
-            onClick={() => setIsAddingColumn(true)}
-            className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
-            title="Create new specification column for this family"
+          <button
+            onClick={() => setIsHistoryDrawerOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
+            title="Ver histórico de alterações recentes"
           >
-            <Plus className="w-3 h-3 text-[#003366]" />
-            <span>+ Column</span>
-          </button>}
+            <History className="w-3.5 h-3.5 text-[#003366]" />
+            <span>Histórico</span>
+          </button>
 
-          {isAdmin && <button
+          {isAdmin && (
+            <button
+              onClick={() => setIsAddingColumn(true)}
+              className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
+              title="Adicionar coluna customizada para esta família"
+            >
+              <Plus className="w-3 h-3 text-[#003366]" />
+              <span>+ Coluna</span>
+            </button>
+          )}
+
+          <button
             onClick={handleExportCSV}
             className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 rounded-none transition-colors shadow-2xs"
-            title="Export this family table to CSV format"
+            title="Exportar tabela como CSV"
           >
             <Download className="w-3 h-3 text-slate-600" />
-            <span>Export CSV</span>
-          </button>}
+            <span>Exportar CSV</span>
+          </button>
 
-          {isAdmin && <button
-            onClick={handleAddNewRow}
-            className="flex items-center gap-1 px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded-none shadow-xs transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Add Product</span>
-          </button>}
+          {isAdmin && (
+            <button
+              onClick={handleAddNewRow}
+              className="flex items-center gap-1 px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded-none shadow-xs transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Adicionar Produto</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Modal / Formulário Inline para Nova Coluna */}
+      {/* Formulário Inline para Nova Coluna */}
       {isAdmin && isAddingColumn && (
-        <div className="bg-blue-50/80 border-b border-blue-200 px-4 py-2 flex items-center gap-3">
-          <span className="font-semibold text-blue-900 text-xs">Nome da Nova Coluna Técnica:</span>
+        <div className="bg-blue-50/80 border-b border-blue-200 px-4 py-2 flex items-center gap-3 animate-in fade-in duration-100">
+          <span className="font-bold text-xs text-blue-900">Nova Coluna:</span>
           <input
             type="text"
             value={newColumnLabel}
             onChange={(e) => setNewColumnLabel(e.target.value)}
-            placeholder="Ex: Estabilidade Térmica, Conexão Elétrica..."
-            className="px-2 py-1 text-xs border border-blue-300 rounded bg-white w-64 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="Nome da coluna (ex: Conexão de Processo)"
+            className="px-2 py-1 bg-white border border-blue-300 rounded text-xs w-64 focus:outline-none focus:border-[#003366]"
             autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleConfirmAddColumn();
-              if (e.key === 'Escape') setIsAddingColumn(false);
-            }}
+            onKeyDown={(e) => e.key === 'Enter' && void handleConfirmAddColumn()}
           />
           <button
-            onClick={handleConfirmAddColumn}
-            className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded text-xs"
+            onClick={() => void handleConfirmAddColumn()}
+            className="px-2.5 py-1 bg-[#003366] text-white font-bold rounded text-xs hover:bg-[#002244]"
           >
-            Adicionar Coluna
+            Confirmar
           </button>
           <button
-            onClick={() => setIsAddingColumn(false)}
-            className="text-slate-500 hover:text-slate-700 text-xs"
+            onClick={() => { setIsAddingColumn(false); setNewColumnLabel(''); }}
+            className="px-2 py-1 bg-white border border-slate-300 text-slate-600 rounded text-xs hover:bg-slate-100"
           >
             Cancelar
           </button>
         </div>
       )}
 
-      {/* 2. Grade Tabular Estilo Excel com Linhas Finas */}
-      <div className="flex-1 overflow-auto bg-slate-100/50">
-        <table className="w-full border-collapse text-xs text-left spreadsheet-grid bg-white">
+      {/* Formulário Inline para Nova Família */}
+      {isAdmin && isAddingFamily && (
+        <div className="bg-emerald-50/80 border-b border-emerald-200 px-4 py-2 flex items-center gap-3 animate-in fade-in duration-100">
+          <span className="font-bold text-xs text-emerald-900">Nova Família:</span>
+          <input
+            type="text"
+            value={newFamilyName}
+            onChange={(e) => setNewFamilyName(e.target.value)}
+            placeholder="Nome da família (ex: Calibradores de Vazão)"
+            className="px-2 py-1 bg-white border border-emerald-300 rounded text-xs w-64 focus:outline-none focus:border-emerald-700"
+            autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && void handleConfirmAddFamily()}
+          />
+          <input
+            type="text"
+            value={newFamilyDesc}
+            onChange={(e) => setNewFamilyDesc(e.target.value)}
+            placeholder="Descrição opcional"
+            className="px-2 py-1 bg-white border border-emerald-300 rounded text-xs w-64 focus:outline-none focus:border-emerald-700"
+          />
+          <button
+            onClick={() => void handleConfirmAddFamily()}
+            className="px-2.5 py-1 bg-emerald-700 text-white font-bold rounded text-xs hover:bg-emerald-800"
+          >
+            Criar Família
+          </button>
+          <button
+            onClick={() => { setIsAddingFamily(false); setNewFamilyName(''); setNewFamilyDesc(''); }}
+            className="px-2 py-1 bg-white border border-slate-300 text-slate-600 rounded text-xs hover:bg-slate-100"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* 3. Tabela Principal de Produtos Estilo Planilha */}
+      <div className="flex-1 overflow-auto bg-slate-100 p-2">
+        <table className="w-full border-collapse bg-white border border-slate-300 shadow-xs">
           <thead>
-            {/* Linha das Letras da Planilha (A, B, C, D...) */}
-            <tr className="bg-[#f1f5f9] text-slate-400 font-mono text-[10px] text-center select-none border-b border-slate-300">
-              <th className="w-10 p-1 border-r border-slate-300 font-normal"> </th>
-              {columnsForFamily.map((_, colIdx) => (
-                <th key={colIdx} className="p-1 border-r border-slate-300 font-normal">
-                  {String.fromCharCode(65 + colIdx)}
-                </th>
-              ))}
-              {isAdmin && <th className="w-10 p-1 font-normal"> </th>}
-            </tr>
-
-            {/* Cabeçalho dos Nomes das Colunas Técnicas */}
-            <tr className="bg-[#003366] text-white font-semibold sticky top-0 z-10 shadow-xs">
-              <th className="p-2 border-r border-[#002244] w-10 text-center font-mono text-[11px] text-slate-300">
-                #
-              </th>
-
-              {columnsForFamily.map((col) => {
-                const isEditingThis = editingColKey === col.key;
-                return (
-                  <th
-                    key={col.key}
-                    className="p-2 border-r border-[#002244] font-semibold text-xs tracking-tight group"
-                  >
-                    {isAdmin && isEditingThis ? (
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          value={editingColLabel}
-                          onChange={(e) => setEditingColLabel(e.target.value)}
-                          className="px-1 py-0.5 text-xs text-slate-900 bg-white rounded border border-white focus:outline-none w-full"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleConfirmRenameColumn();
-                            if (e.key === 'Escape') setEditingColKey(null);
-                          }}
-                        />
-                        <button
-                          onClick={handleConfirmRenameColumn}
-                          className="p-0.5 text-emerald-300 hover:text-emerald-100"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setEditingColKey(null)}
-                          className="p-0.5 text-red-300 hover:text-red-100"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate">{col.label}</span>
-                        {isAdmin && <div className="flex items-center gap-1">
+            <tr className="bg-[#f1f5f9] border-b border-slate-300 text-slate-700 text-left font-bold select-none sticky top-0 z-10 shadow-2xs">
+              <th className="w-12 p-2 border-r border-slate-300 text-center font-mono text-[11px] bg-slate-200/80">#</th>
+              {columnsForFamily.map((col) => (
+                <th
+                  key={col.key}
+                  style={{ width: col.width ? `${col.width}px` : 'auto' }}
+                  className="p-2 border-r border-slate-300 text-slate-800 group relative truncate hover:bg-slate-200/50 transition-colors"
+                >
+                  {editingColKey === col.key ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={editingColLabel}
+                        onChange={(e) => setEditingColLabel(e.target.value)}
+                        className="w-full px-1 py-0.5 bg-white border border-[#003366] text-xs font-bold text-slate-900 rounded focus:outline-none"
+                        autoFocus
+                        onKeyDown={(e) => e.key === 'Enter' && void handleConfirmRenameColumn()}
+                      />
+                      <button onClick={() => void handleConfirmRenameColumn()} className="p-0.5 text-emerald-600 hover:text-emerald-800">
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setEditingColKey(null)} className="p-0.5 text-rose-600 hover:text-rose-800">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="truncate" title={col.label}>{col.label}</span>
+                      {isAdmin && col.isCustom && (
+                        <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 bg-slate-200 px-1 py-0.5 rounded">
                           <button
-                            onClick={() => {
-                              setEditingColKey(col.key);
-                              setEditingColLabel(col.label);
-                            }}
-                            className="p-0.5 text-slate-300 hover:text-white rounded"
+                            onClick={() => { setEditingColKey(col.key); setEditingColLabel(col.label); }}
+                            className="p-0.5 text-slate-500 hover:text-[#003366]"
                             title="Renomear coluna"
                           >
-                            <Edit2 className="w-3 h-3" />
+                            <span className="text-[10px] font-mono">ren</span>
                           </button>
-                          {columnsForFamily.length > 1 && (
-                            <button
-                              onClick={() => handleDeleteColumn(col.key)}
-                              className="p-0.5 text-red-300 hover:text-red-100 rounded"
-                              title="Excluir esta coluna"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>}
-                      </div>
-                    )}
-                  </th>
-                );
-              })}
-
-              {isAdmin && <th className="p-2 w-10 text-center text-slate-300">Ações</th>}
+                          <button
+                            onClick={() => void handleDeleteColumn(col)}
+                            className="p-0.5 text-slate-500 hover:text-rose-600"
+                            title="Excluir coluna"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </th>
+              ))}
+              {isAdmin && <th className="w-10 p-2 text-center text-slate-500">Ações</th>}
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-200 font-sans">
-            {familyProducts.map((product, rowIdx) => (
-              <tr key={product.id} className="hover:bg-blue-50/40 transition-colors">
-                {/* Índice da Linha (1, 2, 3...) */}
-                <td className="p-2 border-r border-slate-200 text-center font-mono text-[11px] text-slate-400 bg-slate-50/80">
-                  {rowIdx + 1}
-                </td>
+          <tbody className="divide-y divide-slate-200">
+            {familyProducts.map((product, rowIdx) => {
+              const rowPresence = Object.entries(cellPresence).filter(([k]) => k.startsWith(product.id));
+              const isRecentEdited = recentEditedCells[product.id] && (Date.now() - recentEditedCells[product.id].timestamp < 4000);
 
-                {/* Células de Dados Editáveis Estilo Planilha */}
-                {columnsForFamily.map((col) => {
-                  let currentValue = '';
-                  if (col.key in product) {
-                    currentValue = (product as any)[col.key] || '';
-                  } else if (col.key in product.specs) {
-                    currentValue = (product.specs as any)[col.key] || '';
-                  } else if (product.specs.customSpecs) {
-                    currentValue = product.specs.customSpecs[col.key] || '';
-                  }
-
-                  return (
-                    <td
-                      key={col.key}
-                      className="p-0 border-r border-slate-200"
-                      onClick={() =>
-                        setActiveCellInfo({
-                          rowIdx,
-                          colKey: col.key,
-                          value: currentValue
-                        })
-                      }
-                    >
-                      <input
-                        type="text"
-                        value={currentValue}
-                        onChange={(e) => {
-                          if (!isAdmin) return;
-                          const val = e.target.value;
-                          updateProductCell(product.id, col.key, val);
-                          setActiveCellInfo({ rowIdx, colKey: col.key, value: val });
-                        }}
-                        onFocus={() =>
-                          setActiveCellInfo({
-                            rowIdx,
-                            colKey: col.key,
-                            value: currentValue
-                          })
-                        }
-                        className={`w-full h-full px-2.5 py-1.5 bg-transparent border border-transparent focus:border-[#003366] focus:bg-white focus:outline-none text-xs text-slate-800 ${
-                          col.key === 'code' || col.key === 'model'
-                            ? 'font-bold font-mono text-slate-900'
-                            : 'font-normal'
-                        }`}
-                        readOnly={!isAdmin}
+              return (
+                <tr
+                  key={product.id}
+                  className={`hover:bg-blue-50/40 transition-colors ${
+                    isRecentEdited ? 'bg-emerald-50/80 duration-500' : 'bg-white'
+                  }`}
+                >
+                  {/* Número da Linha + Indicador de Presença */}
+                  <td className="p-1.5 border-r border-slate-300 text-center font-mono text-slate-500 bg-slate-50/80 relative">
+                    <span>{rowIdx + 1}</span>
+                    {rowPresence.length > 0 && (
+                      <span
+                        className="absolute right-0.5 top-1 w-2 h-2 rounded-full bg-blue-500"
+                        title="Colaborador ativo nesta linha"
                       />
-                    </td>
-                  );
-                })}
+                    )}
+                  </td>
 
-                {/* Excluir Linha */}
-                {isAdmin && <td className="p-1.5 text-center">
-                  <button
-                    onClick={() => {
-                      deleteProduct(product.id);
-                    }}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-                    title="Excluir produto"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </td>}
-              </tr>
-            ))}
+                  {/* Células de Dados */}
+                  {columnsForFamily.map((col) => {
+                    let currentValue = '';
+                    if (col.key in product) currentValue = (product as any)[col.key] || '';
+                    else if (col.key in product.specs) currentValue = (product.specs as any)[col.key] || '';
+                    else currentValue = product.specs?.customSpecs?.[col.key] || '';
+
+                    const cellKey = `${product.id}:${col.key}`;
+                    const activePresences = (cellPresence[cellKey] || []).filter(p => p.userId !== currentUserId);
+                    const isConcurrentEditing = activePresences.some(p => p.activity === 'editing');
+
+                    return (
+                      <td
+                        key={col.key}
+                        className={`p-0 border-r border-slate-200 relative group ${
+                          isConcurrentEditing ? 'bg-amber-50 ring-1 ring-amber-400' : ''
+                        }`}
+                      >
+                        <input
+                          type="text"
+                          value={currentValue}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateProductCell(product.id, col.key, val);
+                            setActiveCellInfo({ rowIdx, colKey: col.key, value: val, productId: product.id });
+                            setFocusedCell(product.id, col.key, true);
+                          }}
+                          onFocus={() => {
+                            setActiveCellInfo({ rowIdx, colKey: col.key, value: currentValue, productId: product.id });
+                            setFocusedCell(product.id, col.key, false);
+                          }}
+                          onBlur={() => {
+                            void flushLibraryEdits();
+                            setFocusedCell(null, null, false);
+                          }}
+                          className={`w-full h-full px-2.5 py-1.5 bg-transparent border border-transparent focus:border-[#003366] focus:bg-white focus:outline-none text-xs text-slate-800 ${
+                            col.key === 'code' || col.key === 'model'
+                              ? 'font-bold font-mono text-slate-900'
+                              : 'font-normal'
+                          }`}
+                          readOnly={!isAdmin}
+                        />
+
+                        {/* Botão de Histórico da Célula */}
+                        <button
+                          onClick={() => {
+                            setCellHistoryTarget({
+                              productId: product.id,
+                              productModel: product.model,
+                              fieldKey: col.key,
+                              fieldLabel: col.label,
+                              currentValue
+                            });
+                          }}
+                          className="hidden group-hover:flex absolute right-1 top-1 p-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-[#003366] transition-colors"
+                          title="Ver histórico desta célula"
+                        >
+                          <Clock className="w-3 h-3" />
+                        </button>
+
+                        {/* Presença na Célula */}
+                        {activePresences.length > 0 && (
+                          <div
+                            className="absolute -top-2 right-1 flex items-center gap-0.5 bg-blue-600 text-white text-[9px] font-bold px-1 rounded-full shadow-xs z-20 pointer-events-none"
+                            title={`${activePresences.map(p => p.userName).join(', ')} está ${isConcurrentEditing ? 'editando' : 'nesta célula'}`}
+                          >
+                            <span>{activePresences[0].userName?.slice(0, 2).toUpperCase()}</span>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+
+                  {/* Excluir Linha */}
+                  {isAdmin && (
+                    <td className="p-1.5 text-center">
+                      <button
+                        onClick={() => {
+                          if (confirm(`Deseja realmente excluir o produto "${product.model}"?`)) {
+                            void deleteProduct(product.id);
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                        title="Excluir produto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
 
             {familyProducts.length === 0 && (
               <tr>
@@ -393,7 +551,7 @@ export const LibraryView: React.FC = () => {
                   colSpan={columnsForFamily.length + (isAdmin ? 2 : 1)}
                   className="p-8 text-center text-slate-400 italic text-xs"
                 >
-                  Nenhum produto cadastrado nesta família. Clique em "+ Inserir Linha" para cadastrar o primeiro.
+                  Nenhum produto cadastrado nesta família. Clique em "+ Adicionar Produto" para cadastrar o primeiro.
                 </td>
               </tr>
             )}
@@ -401,45 +559,73 @@ export const LibraryView: React.FC = () => {
         </table>
       </div>
 
-      {/* 3. Barra Inferior com Abas de Famílias Estilo Excel / Google Sheets */}
+      {/* 4. Barra Inferior com Abas de Famílias Estilo Excel / Google Sheets */}
       <div className="h-8 bg-[#f1f5f9] border-t border-slate-300 px-2 flex items-center justify-between shrink-0 select-none">
         <div className="flex items-center gap-1 overflow-x-auto h-full py-0.5">
-          {families.map((fam) => {
+          {availableFamilies.map((fam) => {
             const isActive = fam === currentFamily;
+            const famObj = families.find(f => f.name === fam || f.slug === fam);
+            const famPresences = famObj ? (familyPresence[famObj.id] || []).filter(p => p.userId !== currentUserId) : [];
+
             return (
               <button
                 key={fam}
                 onClick={() => setSelectedFamily(fam)}
-                className={`px-3 py-1 text-xs font-semibold rounded-t border-t border-l border-r transition-all ${
+                className={`px-3 py-1 text-xs font-semibold rounded-t border-t border-l border-r transition-all flex items-center gap-1.5 ${
                   isActive
                     ? 'bg-white text-[#003366] border-slate-300 shadow-2xs -mb-1 z-10'
                     : 'bg-slate-200/70 text-slate-600 hover:bg-slate-200 border-transparent'
                 }`}
               >
-                {fam}
+                <span>{fam}</span>
+                {famPresences.length > 0 && (
+                  <span className="flex items-center gap-0.5 bg-blue-100 text-blue-800 text-[9px] px-1 py-0.2 rounded-full font-bold">
+                    <Users className="w-2.5 h-2.5" />
+                    <span>{famPresences.length}</span>
+                  </span>
+                )}
               </button>
             );
           })}
 
-          {isAdmin && <button
-            onClick={() => {
-              const newFamName = prompt('Nome da nova família de produtos (ex: Válvulas de Controle):');
-              if (newFamName && newFamName.trim()) {
-                setSelectedFamily(newFamName.trim());
-              }
-            }}
-            className="px-2 py-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded text-xs font-bold flex items-center gap-0.5 ml-1"
-            title="Adicionar nova família de produtos"
-          >
-            <Plus className="w-3 h-3" />
-            <span>Nova Família</span>
-          </button>}
+          {isAdmin && (
+            <button
+              onClick={() => setIsAddingFamily(true)}
+              className="px-2 py-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded text-xs font-bold flex items-center gap-0.5 ml-1"
+              title="Criar nova família de produtos"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Nova Família</span>
+            </button>
+          )}
         </div>
 
         <div className="text-[10px] text-slate-500 font-mono pr-2">
           Total: {familyProducts.length} itens listados
         </div>
       </div>
+
+      {/* Drawer de Histórico de Atividades */}
+      <LibraryHistoryDrawer
+        isOpen={isHistoryDrawerOpen}
+        onClose={() => setIsHistoryDrawerOpen(false)}
+        events={changeEvents}
+        currentFamilyName={currentFamily}
+        selectedProductId={activeCellInfo?.productId}
+      />
+
+      {/* Modal de Histórico de Célula */}
+      {cellHistoryTarget && (
+        <CellHistoryModal
+          isOpen={Boolean(cellHistoryTarget)}
+          onClose={() => setCellHistoryTarget(null)}
+          productModel={cellHistoryTarget.productModel}
+          fieldKey={cellHistoryTarget.fieldKey}
+          fieldLabel={cellHistoryTarget.fieldLabel}
+          currentValue={cellHistoryTarget.currentValue}
+          events={changeEvents.filter(ev => ev.product_id === cellHistoryTarget.productId || ev.entity_id === cellHistoryTarget.productId)}
+        />
+      )}
     </div>
   );
 };

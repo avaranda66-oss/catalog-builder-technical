@@ -36,13 +36,19 @@ export const App: React.FC = () => {
     void initializeAuth();
   }, [initializeAuth]);
 
-  // Atalho Global Profissional: Ctrl+S / Cmd+S (Salva documento ativo)
+  // Atalho Global Profissional: Ctrl+S / Cmd+S (Salva documento ou planilha ativa)
   useEffect(() => {
     const handleGlobalSaveShortcut = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> saveActiveDocument');
-        void useCatalogStore.getState().saveActiveDocument();
+        const tab = useUIStore.getState().activeTab;
+        if (tab === 'library') {
+          console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> flushLibraryEdits');
+          void useLibraryStore.getState().flushLibraryEdits();
+        } else {
+          console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> saveActiveDocument');
+          void useCatalogStore.getState().saveActiveDocument();
+        }
       }
     };
 
@@ -63,7 +69,7 @@ export const App: React.FC = () => {
         userId,
         timestamp: new Date().toISOString()
       });
-      void loadProducts();
+      void useLibraryStore.getState().loadWorkspace();
       void loadLatestCatalog();
       void loadAssets();
       void loadTemplates();

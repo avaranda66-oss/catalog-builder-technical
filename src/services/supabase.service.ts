@@ -323,6 +323,120 @@ export class SupabaseService {
     }
   }
 
+  static async listLibraryWorkspace(): Promise<{
+    success: boolean;
+    data?: {
+      families: any[];
+      fields: any[];
+      products: any[];
+      events: any[];
+    };
+    error?: string;
+  }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('list_library_workspace_v1');
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao carregar dados da biblioteca' };
+    }
+  }
+
+  static async saveProductFamily(family: Partial<any>): Promise<{ success: boolean; data?: any; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('save_product_family_v1', { p_family: family });
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar família de produtos' };
+    }
+  }
+
+  static async deleteProductFamily(familyId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('delete_product_family_v1', { p_family_id: familyId });
+      if (error) return { success: false, error: error.message };
+      return { success: Boolean(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao excluir família de produtos' };
+    }
+  }
+
+  static async saveFamilyField(field: Partial<any>): Promise<{ success: boolean; data?: any; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('save_family_field_v1', { p_field: field });
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar coluna da família' };
+    }
+  }
+
+  static async deleteFamilyField(fieldId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('delete_family_field_v1', { p_field_id: fieldId });
+      if (error) return { success: false, error: error.message };
+      return { success: Boolean(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao excluir coluna da família' };
+    }
+  }
+
+  static async saveProduct(
+    product: any,
+    expectedVersion: number = 0,
+    fieldKey?: string,
+    summary?: string
+  ): Promise<{ success: boolean; data?: any; conflict?: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('save_product_v3', {
+        p_product: product,
+        p_expected_version: expectedVersion,
+        p_field_key: fieldKey || null,
+        p_summary: summary || 'Atualização de produto'
+      });
+
+      if (error) {
+        const isConflict = error.code === '40001' || error.message.includes('Conflito');
+        return { success: false, conflict: isConflict, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar produto' };
+    }
+  }
+
+  static async deleteProduct(productId: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('delete_product_v3', { p_product_id: productId });
+      if (error) return { success: false, error: error.message };
+      return { success: Boolean(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao excluir produto' };
+    }
+  }
+
   static async uploadProductImage(
     file: File,
     bucketName: string = 'product-images'
