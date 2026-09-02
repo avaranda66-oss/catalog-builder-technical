@@ -164,7 +164,7 @@ describe('P0.5 — Professional Clean PDF Export & Render Isolation Suite', () =
     expect(container.textContent).toContain('LEGENDA METROLÓGICA:');
     expect(container.textContent).toContain('Padrão rastreado RBC');
     // Rodapé técnico A4
-    expect(container.textContent).toContain('Page 1');
+    expect(container.textContent).toMatch(/(Page|Página)\s*1/);
 
     await act(async () => root.unmount());
   });

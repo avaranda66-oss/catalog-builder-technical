@@ -1,14 +1,18 @@
 // tests/translation/translation-hardening-phase2c1a.test.ts
 // Suíte de Testes de Hardening — Fase 2C.1A: Security Gateway, WebCrypto Vault & True Printable Coverage Parity
 
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Catalog, BlockTypeSchema } from '@/domain/catalog.schema';
+import { Catalog } from '@/domain/catalog.schema';
 import { TranslationService } from '@/services/translation.service';
 import { PersonalCredentialVault } from '@/translation/credential-vault';
 import { PrintableTextRegistry } from '@/translation/printable-text.registry';
 import { PrintStringRegistry } from '@/translation/print-strings.registry';
 import { RendererParityAuditor } from '@/translation/renderer-parity.auditor';
 import { TranslationCredential } from '@/translation/types';
+import { CleanA4Document } from '@/components/export/CleanA4Document';
 import * as supabaseModule from '@/services/supabase.service';
 
 describe('Phase 2C.1A: Security Gateway, WebCrypto Vault & True Printable Coverage Parity', () => {
@@ -215,61 +219,231 @@ describe('Phase 2C.1A: Security Gateway, WebCrypto Vault & True Printable Covera
   // 3. TRUE PRINTABLE COVERAGE & RENDERER PARITY (TR-PDF-COV-1 .. TR-PDF-COV-5)
   // =========================================================================
 
-  it('TR-PDF-COV-1: Fixture extremo com 21 BlockTypes renderizado no DOM atinge 100% de paridade imprimível', () => {
-    const allBlockTypes = BlockTypeSchema.options;
+  it('TR-PDF-COV-1: Fixture extremo com 21 BlockTypes renderizado no DOM atinge 100% de paridade imprimível', async () => {
     const extremeCatalog: Catalog = {
       id: 'cat-extreme-parity',
-      title: 'Catálogo de Validação de Paridade 100%',
+      title: 'Catálogo Oficial de Calibração Industrial PRESYS',
+      subtitle: 'Linha Completa de Calibradores de Pressão, Temperatura e Sinais Elétricos',
       themeId: 'default-technical',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1,
       pages: [
         {
-          id: 'page-1',
+          id: 'page-cover',
           pageNumber: 1,
-          blocks: allBlockTypes.map((type, idx) => ({
-            id: `b${idx + 1}-${type}`,
-            type,
-            title: `Título do Bloco ${type}`,
-            subtitle: `Subtítulo do Bloco ${type}`,
-            badgeText: 'DESTAQUE',
-            imageCaption: 'Legenda Técnica'
-          }))
+          blocks: [
+            {
+              id: 'b-cover',
+              type: 'full_page_cover',
+              title: 'PRESYS INSTRUMENTAÇÃO 2026',
+              subtitle: 'Catálogo Geral de Calibração Metrológica',
+              badgeText: 'CATÁLOGO GERAL',
+              customData: {
+                canvasLayers: [
+                  { id: 'l1', type: 'text', content: 'Edição Técnica Internacional' },
+                  { id: 'l2', type: 'badge', content: 'EXATIDÃO 0.01% FS' }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          id: 'page-content-1',
+          pageNumber: 2,
+          blocks: [
+            {
+              id: 'b-hero',
+              type: 'hero_banner',
+              title: 'PSV Portable — Calibrador de Válvulas de Segurança',
+              subtitle: 'Geração pneumática até 300 bar com registro digital de bancada',
+              badgeText: 'DESTAQUE',
+              imageCaption: 'Gabinete portátil reforçado em alumínio naval'
+            },
+            {
+              id: 'b-additel',
+              type: 'additel_two_col_hero',
+              title: 'SÉRIE PRESYS PCON-Y18',
+              subtitle: 'Calibrador Automático de Pressão de Alta Estabilidade',
+              badgeText: 'PRESYS',
+              customData: {
+                badgeSubtitle: 'Precision Metrology',
+                overview: 'Controle automático de pressão com bomba elétrica integrada e comunicação Hart.',
+                bullets: ['Estabilidade de 0.002 bar', 'Display touch screen colorido', 'Isolação galvânica']
+              }
+            },
+            {
+              id: 'b-fluke',
+              type: 'fluke_header',
+              title: 'SÉRIE TA-ADVANCED',
+              subtitle: 'Blocos Secos de Alta Homogeneidade Térmica'
+            },
+            {
+              id: 'b-bottom-hdr',
+              type: 'bottom_header',
+              title: 'SOLUÇÕES DE CALIBRAÇÃO METROLÓGICA PRESYS',
+              subtitle: 'Padrões Nacionais e Internacionais Rastreáveis RBC / Inmetro'
+            },
+            {
+              id: 'b-features',
+              type: 'features_list',
+              title: 'RECURSOS METROLÓGICOS AVANÇADOS',
+              features: [
+                { id: 'f1', title: 'Controle em Malha Fechada', description: 'Tempo de assentamento menor que 15 segundos.' },
+                { id: 'f2', title: 'Software Isoplan Conectado', description: 'Emissão automática de certificados de calibração.' }
+              ]
+            },
+            {
+              id: 'b-tech-table',
+              type: 'table',
+              title: 'TABELA DE ESPECIFICAÇÕES TÉCNICAS',
+              tableColumns: [
+                { key: 'model', label: 'Modelo', visible: true },
+                { key: 'range', label: 'Faixa Operacional', visible: true },
+                { key: 'accuracy', label: 'Exatidão', visible: true }
+              ],
+              tableRows: [
+                {
+                  id: 'r1',
+                  localOverrides: {
+                    model: 'TA-25N',
+                    range: '-25 a 140 °C',
+                    accuracy: '± 0.1 °C'
+                  }
+                }
+              ]
+            },
+            {
+              id: 'b-specs-table',
+              type: 'specs_table',
+              title: 'ESPECIFICAÇÕES DE PERFORMANCE',
+              tableColumns: [
+                { key: 'param', label: 'Parâmetro', visible: true },
+                { key: 'spec', label: 'Especificação', visible: true }
+              ],
+              tableRows: [
+                { id: 'r2', localOverrides: { param: 'Estabilidade', spec: '± 0.02 °C' } }
+              ]
+            },
+            {
+              id: 'b-elec',
+              type: 'electrical_table',
+              title: 'SINAIS ELÉTRICOS & LOOP DE PROCESSO',
+              tableColumns: [
+                { key: 'signal', label: 'Sinal de Entrada/Saída', visible: true },
+                { key: 'resolution', label: 'Resolução', visible: true }
+              ],
+              tableRows: [
+                { id: 'r3', localOverrides: { signal: '4 a 20 mA com Loop 24V', resolution: '0.0001 mA' } }
+              ]
+            },
+            {
+              id: 'b-acc',
+              type: 'accessories_table',
+              title: 'ACESSÓRIOS INCLUSOS E OPCIONAIS',
+              tableColumns: [
+                { key: 'code', label: 'Código', visible: true },
+                { key: 'item', label: 'Item', visible: true }
+              ],
+              tableRows: [
+                { id: 'r4', localOverrides: { code: '06.01.0022-00', item: 'Inserto Multi-Furos de Alumínio' } }
+              ]
+            },
+            {
+              id: 'b-custom-tbl',
+              type: 'custom_table',
+              title: 'MATRIZ DE CONECTIVIDADE DE CAMPO',
+              customData: {
+                headers: ['Porta de Comunicação', 'Protocolo Suportado'],
+                rows: [['USB / RS-485', 'Protocolo Modbus RTU e HART']]
+              }
+            },
+            {
+              id: 'b-matrix',
+              type: 'matrix_spec_table',
+              title: 'MATRIZ COMPARATIVA DE MODELOS',
+              customData: {
+                sections: [{ title: 'Seção de Comparação Térmica e Estabilidade' }]
+              }
+            },
+            {
+              id: 'b-ordering',
+              type: 'ordering_codes',
+              title: 'CÓDIGO DE ENCOMENDA PRESYS (PART NUMBER)',
+              orderingSegments: [
+                { id: 's1', code: 'PCON', name: 'Calibrador Base' },
+                { id: 's2', code: '300', name: 'Faixa 300 bar' }
+              ]
+            },
+            {
+              id: 'b-soft',
+              type: 'software_connectivity',
+              title: 'CONECTIVIDADE ISOPLAN & DIGITAL LAB'
+            },
+            {
+              id: 'b-inserts',
+              type: 'inserts_visual',
+              title: 'BLOCOS DE INSERÇÃO TÉRMICA USINADOS',
+              customData: {
+                inserts: [
+                  { code: 'IN-01', title: 'Inserto Térmico 4 Furos', label: 'Inserto IN-01', description: '4 furos métricos de 6mm em latão especial.', holes: ['6mm', '6mm'] }
+                ]
+              }
+            },
+            {
+              id: 'b-multi-mode',
+              type: 'multi_mode_calibrator',
+              title: 'MODOS DE OPERAÇÃO DO INSTRUMENTO',
+              customData: {
+                modes: [
+                  { title: 'Modo Geração Autônoma', description: 'Pressurização elétrica automática via rampa de teste.' }
+                ]
+              }
+            },
+            {
+              id: 'b-img',
+              type: 'image',
+              imageCaption: 'Vista em corte do sensor de pressão piezorresistivo de silício'
+            },
+            {
+              id: 'b-gallery',
+              type: 'image_gallery',
+              title: 'GALERIA DE FOTOS EM APLICAÇÕES REAIS',
+              images: [
+                { url: 'https://images.unsplash.com/photo-1', caption: 'Calibração em linha de processo petroquímico' }
+              ]
+            },
+            {
+              id: 'b-contact',
+              type: 'contact_footer',
+              contactInfo: {
+                companyName: 'PRESYS Instrumentos & Sistemas Ltda.',
+                phone: '+55 (11) 3038-1300',
+                email: 'vendas@presys.com.br',
+                website: 'www.presys.com.br',
+                address: 'São Paulo - SP · Brasil'
+              }
+            },
+            {
+              id: 'b-text',
+              type: 'text',
+              textContent: 'Nota Metrológica: Instrumentos fornecidos com certificado rastreável Inmetro/RBC.'
+            },
+            {
+              id: 'b-box',
+              type: 'box',
+              textContent: 'Advertência de Segurança: Não exceder a pressão máxima de trabalho de 350 bar.'
+            }
+          ]
         }
       ]
     };
 
-    // Monta o container DOM simulado com todos os elementos e atribuições corretas
+    // Monta o componente real CleanA4Document no DOM via React createRoot
     const container = document.createElement('div');
-    container.className = 'a4-page-container';
-
-    // Cabeçalho da Folha A4 com PrintStringRegistry
-    const header = document.createElement('div');
-    header.innerHTML = `
-      <span data-printable-policy="protect">PRESYS INSTRUMENTS & SYSTEMS</span>
-      <span data-print-string-key="page_label">${PrintStringRegistry.get('page_label')}</span>
-      <span data-print-string-key="of_label">${PrintStringRegistry.get('of_label')}</span>
-    `;
-    container.appendChild(header);
-
-    // Blocos com data-block-id e campos
-    extremeCatalog.pages[0].blocks.forEach((block) => {
-      const blockEl = document.createElement('div');
-      blockEl.setAttribute('data-block-id', block.id);
-      blockEl.setAttribute('data-block-type', block.type);
-
-      const titleEl = document.createElement('h3');
-      titleEl.setAttribute('data-printable-field', 'title');
-      titleEl.textContent = block.title || '';
-
-      const subEl = document.createElement('p');
-      subEl.setAttribute('data-printable-field', 'subtitle');
-      subEl.textContent = block.subtitle || '';
-
-      blockEl.appendChild(titleEl);
-      blockEl.appendChild(subEl);
-      container.appendChild(blockEl);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: extremeCatalog }));
     });
 
     const result = RendererParityAuditor.auditRenderedDOM(container, extremeCatalog);
@@ -279,6 +453,10 @@ describe('Phase 2C.1A: Security Gateway, WebCrypto Vault & True Printable Covera
     expect(result.pdfPrintableTranslationCoverage).toBe(100);
     expect(result.orphanTextNodes.length).toBe(0);
     expect(result.isComplete).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it('TR-PDF-COV-2: Injeção de texto órfão sem atribuição no DOM faz o teste de paridade FALHAR obrigatoriamente', () => {

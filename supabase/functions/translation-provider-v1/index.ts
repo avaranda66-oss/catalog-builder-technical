@@ -6,17 +6,23 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const ALLOWED_ORIGINS = [
+const ALLOWED_STATIC_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'https://catalog-builder-technical.vercel.app'
 ];
 
+function isOriginAllowed(origin: string): boolean {
+  if (!origin) return false;
+  if (ALLOWED_STATIC_ORIGINS.includes(origin)) return true;
+  return /^https:\/\/catalog-builder-technical(-[a-z0-9_-]+)?\.vercel\.app$/.test(origin);
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get('Origin') || '';
-  const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app');
+  const allowed = isOriginAllowed(origin);
   return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_STATIC_ORIGINS[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
   };

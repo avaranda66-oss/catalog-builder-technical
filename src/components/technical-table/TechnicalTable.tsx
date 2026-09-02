@@ -95,7 +95,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span
-                      data-printable-field={`col:${col.key}`}
+                      data-printable-field={`col_${col.key}_label`}
                       contentEditable={isEditable && Boolean(onRenameColumn)}
                       suppressContentEditableWarning
                       onBlur={(e) => onRenameColumn?.(col.key, e.currentTarget.innerText.trim())}
@@ -145,7 +145,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                     return (
                       <td
                         key={col.key}
-                        data-printable-field={`cell:${row.id}:${col.key}`}
+                        data-printable-field={`row_${row.id}_ov_${col.key}`}
                         className="py-1.5 px-2.5 border-r border-slate-200 last:border-r-0 align-middle"
                       >
                         <TechnicalCell

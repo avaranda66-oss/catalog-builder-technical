@@ -32,13 +32,13 @@ export const ImageBlock: React.FC<ImageBlockProps> = ({ block, isSelected }) => 
             className="max-w-full max-h-[420px] h-auto object-contain rounded-none border border-slate-300 shadow-2xs"
           />
           {block.imageCaption && (
-            <p className="text-[11px] text-slate-500 italic mt-1.5 text-center font-sans">
+            <p data-printable-field="imageCaption" className="text-[11px] text-slate-500 italic mt-1.5 text-center font-sans">
               {block.imageCaption}
             </p>
           )}
         </div>
       ) : (
-        <div className="w-full h-48 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+        <div className="w-full h-48 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 bg-slate-50 no-print">
           <ImageIcon className="w-8 h-8 mb-1" />
           <span className="text-xs">Clique no painel direito para configurar a imagem</span>
         </div>

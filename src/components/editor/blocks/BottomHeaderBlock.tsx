@@ -66,6 +66,7 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span
+              data-printable-field="badgeText"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
@@ -76,6 +77,7 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
           </div>
 
           <h2
+            data-printable-field="title"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
@@ -85,6 +87,7 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
           </h2>
 
           <p
+            data-printable-field="subtitle"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
@@ -98,6 +101,8 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
           <div className="flex items-center gap-1.5">
             <Phone className="w-3 h-3 text-blue-400 shrink-0" />
             <span
+              data-printable-field="phone"
+              data-printable-policy="protect"
               contentEditable
               suppressContentEditableWarning
               onBlur={handlePhoneBlur}
@@ -110,6 +115,8 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
           <div className="flex items-center gap-1.5">
             <Mail className="w-3 h-3 text-blue-400 shrink-0" />
             <span
+              data-printable-field="email"
+              data-printable-policy="protect"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleEmailBlur}
@@ -122,6 +129,8 @@ export const BottomHeaderBlock: React.FC<BottomHeaderBlockProps> = ({
           <div className="flex items-center gap-1.5">
             <Globe className="w-3 h-3 text-blue-400 shrink-0" />
             <span
+              data-printable-field="website"
+              data-printable-policy="protect"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleWebsiteBlur}

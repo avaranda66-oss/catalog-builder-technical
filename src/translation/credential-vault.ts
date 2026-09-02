@@ -1,27 +1,31 @@
 // src/translation/credential-vault.ts
 // Cofre BYOK seguro para chaves pessoais de API
 // Modo 'session': estritamente em memória volátil (limpo no logout).
-// Modo 'remember': cifrado via WebCrypto API com chave AES-GCM (256-bit) aleatória por dispositivo.
-// Zero persistência global, zero chaves no localStorage.
+// Modo 'remember': cifrado via WebCrypto API com chave AES-GCM (256-bit) non-extractable aleatória por dispositivo.
+// Zero exportKey(), zero JWK, zero chaves em texto plano, zero chaves no localStorage.
 
 import { TranslationCredential, TranslationProviderId, StoredCredentialMetadata } from './types';
 
-const DB_NAME = 'presys_catalog_vault_v4';
+const DB_NAME = 'presys_catalog_vault_v5';
 const STORE_CREDENTIALS = 'personal_credentials';
 const STORE_DEVICE_KEYS = 'device_keys';
 
 // In-Memory Storage (Isolado e limpo a cada reset de sessão)
 const sessionMemoryVault = new Map<string, TranslationCredential>(); // key: `${userId}:${provider}`
 
-// Fallback de persistência de dispositivo para ambientes sem IndexedDB (ex: Node/SSR/Unit Tests)
-const deviceDbFallback = {
+// Fallback estritamente para ambientes não-browser (ex: SSR, Node.js / Unit Tests sem IndexedDB)
+const nonBrowserFallback = {
   credentials: new Map<string, any>(),
   deviceKeys: new Map<string, any>()
 };
 
+function isBrowserEnvironment(): boolean {
+  return typeof window !== 'undefined' && typeof indexedDB !== 'undefined' && indexedDB !== null;
+}
+
 export class PersonalCredentialVault {
   private static async openDB(): Promise<IDBDatabase | null> {
-    if (typeof indexedDB === 'undefined' || !indexedDB) {
+    if (!isBrowserEnvironment()) {
       return null;
     }
 
@@ -42,68 +46,61 @@ export class PersonalCredentialVault {
   }
 
   /**
-   * Obtém ou gera uma chave criptográfica AES-GCM (256-bit) aleatória no dispositivo para o usuário.
+   * Obtém ou gera uma CryptoKey AES-GCM (256-bit) estritamente NON-EXTRACTABLE no dispositivo.
+   * Persistida diretamente no IndexedDB via Structured Clone. Zero exportKey(), zero JWK.
    */
   private static async getOrCreateDeviceKey(db: IDBDatabase | null, keyId: string): Promise<CryptoKey | null> {
-    // 1. Tenta recuperar do IndexedDB ou fallback
-    let existingJwk: any = null;
-
+    // 1. Tenta recuperar do IndexedDB ou fallback não-browser
     if (db) {
-      const existingRecord: any = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_DEVICE_KEYS, 'readonly');
-        const req = tx.objectStore(STORE_DEVICE_KEYS).get(keyId);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-      });
-      existingJwk = existingRecord?.jwk;
-    } else {
-      existingJwk = deviceDbFallback.deviceKeys.get(keyId)?.jwk;
-    }
-
-    if (existingJwk) {
       try {
-        return await crypto.subtle.importKey(
-          'jwk',
-          existingJwk,
-          'AES-GCM',
-          true,
-          ['encrypt', 'decrypt']
-        );
+        const existingRecord: any = await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_DEVICE_KEYS, 'readonly');
+          const req = tx.objectStore(STORE_DEVICE_KEYS).get(keyId);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+
+        if (existingRecord && existingRecord.cryptoKey && existingRecord.cryptoKey instanceof CryptoKey) {
+          return existingRecord.cryptoKey as CryptoKey;
+        }
       } catch (err) {
-        console.warn('[PersonalCredentialVault] Falha ao importar chave do dispositivo:', err);
+        console.warn('[PersonalCredentialVault] Falha ao ler CryptoKey do IndexedDB:', err);
+      }
+    } else if (!isBrowserEnvironment()) {
+      const existingFallback = nonBrowserFallback.deviceKeys.get(keyId);
+      if (existingFallback && existingFallback.cryptoKey) {
+        return existingFallback.cryptoKey as CryptoKey;
       }
     }
 
-    // 2. Se não existir, gera uma nova chave aleatória no dispositivo
+    // 2. Se não existir, gera uma nova CryptoKey AES-GCM (256-bit) com extractable = FALSE
     try {
       const newKey = await crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
-        true,
+        false, // NON-EXTRACTABLE estrito
         ['encrypt', 'decrypt']
       );
-
-      const jwk = await crypto.subtle.exportKey('jwk', newKey);
 
       if (db) {
         await new Promise<void>((resolve, reject) => {
           const tx = db.transaction(STORE_DEVICE_KEYS, 'readwrite');
-          tx.objectStore(STORE_DEVICE_KEYS).put({ id: keyId, jwk });
+          tx.objectStore(STORE_DEVICE_KEYS).put({ id: keyId, cryptoKey: newKey });
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
         });
-      } else {
-        deviceDbFallback.deviceKeys.set(keyId, { id: keyId, jwk });
+      } else if (!isBrowserEnvironment()) {
+        nonBrowserFallback.deviceKeys.set(keyId, { id: keyId, cryptoKey: newKey });
       }
 
       return newKey;
     } catch (err) {
-      console.warn('[PersonalCredentialVault] Falha ao gerar chave de dispositivo:', err);
+      console.warn('[PersonalCredentialVault] Falha ao gerar/persistir CryptoKey non-extractable:', err);
       return null;
     }
   }
 
   /**
-   * Cifra o texto plano utilizando a CryptoKey do dispositivo com IV aleatório de 96 bits.
+   * Cifra o texto plano utilizando a CryptoKey non-extractable do dispositivo com IV aleatório de 96 bits.
    */
   private static async encryptWithDeviceKey(
     db: IDBDatabase | null,
@@ -113,7 +110,7 @@ export class PersonalCredentialVault {
     const cryptoKey = await this.getOrCreateDeviceKey(db, keyId);
     if (!cryptoKey) return null;
 
-    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV aleatório novo por criptografia
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV aleatório por operação
     const encoded = new TextEncoder().encode(plainText);
 
     const cipherBuffer = await crypto.subtle.encrypt(
@@ -129,7 +126,7 @@ export class PersonalCredentialVault {
   }
 
   /**
-   * Decifra o texto cifrado utilizando a CryptoKey do dispositivo e o IV armazenado.
+   * Decifra o texto cifrado utilizando a CryptoKey non-extractable do dispositivo e o IV armazenado.
    */
   private static async decryptWithDeviceKey(
     db: IDBDatabase | null,
@@ -156,7 +153,7 @@ export class PersonalCredentialVault {
 
       return new TextDecoder().decode(decryptedBuffer);
     } catch (err) {
-      console.warn('[PersonalCredentialVault] Falha na decifração:', err);
+      console.warn('[PersonalCredentialVault] Falha na decifração com CryptoKey do dispositivo:', err);
       return null;
     }
   }
@@ -194,8 +191,8 @@ export class PersonalCredentialVault {
               tx.oncomplete = () => resolve();
               tx.onerror = () => reject(tx.error);
             });
-          } else {
-            deviceDbFallback.credentials.set(key, record);
+          } else if (!isBrowserEnvironment()) {
+            nonBrowserFallback.credentials.set(key, record);
           }
         }
       } catch (err) {
@@ -237,8 +234,8 @@ export class PersonalCredentialVault {
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => resolve(null);
         });
-      } else {
-        record = deviceDbFallback.credentials.get(key) || null;
+      } else if (!isBrowserEnvironment()) {
+        record = nonBrowserFallback.credentials.get(key) || null;
       }
 
       if (!record || record.userId !== userId) {
@@ -260,7 +257,7 @@ export class PersonalCredentialVault {
       sessionMemoryVault.set(key, cred);
       return cred;
     } catch (err) {
-      console.warn('[PersonalCredentialVault] Erro ao descriptografar credencial local:', err);
+      console.warn('[PersonalCredentialVault] Erro ao recuperar credencial local:', err);
       return null;
     }
   }
@@ -301,10 +298,44 @@ export class PersonalCredentialVault {
     sessionMemoryVault.clear();
   }
 
+  /**
+   * Retorna o registro bruto do IndexedDB para propósitos de auditoria e testes de segurança.
+   */
+  static async inspectRawDeviceRecord(
+    userId: string,
+    provider: TranslationProviderId = 'gemini'
+  ): Promise<{ credentialRecord?: any; deviceKeyRecord?: any }> {
+    const key = `${userId}:${provider}`;
+    const db = await this.openDB();
+
+    if (db) {
+      const credentialRecord = await new Promise((resolve) => {
+        const tx = db.transaction(STORE_CREDENTIALS, 'readonly');
+        const req = tx.objectStore(STORE_CREDENTIALS).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(undefined);
+      });
+
+      const deviceKeyRecord = await new Promise((resolve) => {
+        const tx = db.transaction(STORE_DEVICE_KEYS, 'readonly');
+        const req = tx.objectStore(STORE_DEVICE_KEYS).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(undefined);
+      });
+
+      return { credentialRecord, deviceKeyRecord };
+    }
+
+    return {
+      credentialRecord: nonBrowserFallback.credentials.get(key),
+      deviceKeyRecord: nonBrowserFallback.deviceKeys.get(key)
+    };
+  }
+
   private static async removeFromDeviceStorage(userId: string, provider: TranslationProviderId): Promise<void> {
     const key = `${userId}:${provider}`;
-    deviceDbFallback.credentials.delete(key);
-    deviceDbFallback.deviceKeys.delete(key);
+    nonBrowserFallback.credentials.delete(key);
+    nonBrowserFallback.deviceKeys.delete(key);
 
     try {
       const db = await this.openDB();

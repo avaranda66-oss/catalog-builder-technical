@@ -106,6 +106,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
       {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2 gap-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -118,6 +119,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
 
         <div className="flex items-center gap-1.5 shrink-0">
           <span
+            data-printable-field="badgeText"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeBlur}
@@ -174,6 +176,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
               </div>
 
               <span
+                data-printable-field={`item_${idx}_badge`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleUpdateItem(idx, 'badge', e.currentTarget.innerText)}
@@ -185,6 +188,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
 
             <div>
               <h4
+                data-printable-field={`item_${idx}_title`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleUpdateItem(idx, 'title', e.currentTarget.innerText)}
@@ -193,6 +197,7 @@ export const SoftwareConnectivityBlock: React.FC<SoftwareConnectivityBlockProps>
                 {item.title}
               </h4>
               <p
+                data-printable-field={`item_${idx}_desc`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleUpdateItem(idx, 'desc', e.currentTarget.innerText)}

@@ -170,11 +170,74 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
       'zh-CN': '联系与支持信息',
       'ar-SA': 'معلومات الاتصال والدعم'
     }
+  },
+  company_brand_header: {
+    key: 'company_brand_header',
+    defaultText: 'PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO',
+    description: 'Marca institucional padrão no cabeçalho editorial',
+    translations: {
+      'en-US': 'PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO'
+    }
+  },
+  company_brand_footer: {
+    key: 'company_brand_footer',
+    defaultText: 'PRESYS Instruments & Systems — Specifications subject to change without notice',
+    description: 'Marca institucional com disclaimer no rodapé editorial',
+    translations: {
+      'en-US': 'PRESYS Instruments & Systems — Specifications subject to change without notice'
+    }
+  },
+  legend_title: {
+    key: 'legend_title',
+    defaultText: 'LEGENDA METROLÓGICA:',
+    description: 'Título da legenda da tabela de especificações',
+    translations: {
+      'en-US': 'LEGEND:'
+    }
+  },
+  legend_filled_square: {
+    key: 'legend_filled_square',
+    defaultText: 'Item de série incluído na configuração padrão',
+    description: 'Item de legenda para quadrado preenchido',
+    translations: {
+      'en-US': 'Included in standard configuration'
+    }
+  },
+  legend_empty_square: {
+    key: 'legend_empty_square',
+    defaultText: 'Item opcional disponível sob encomenda',
+    description: 'Item de legenda para quadrado vazio',
+    translations: {
+      'en-US': 'Optional / available upon request'
+    }
+  },
+  legend_asterisk: {
+    key: 'legend_asterisk',
+    defaultText: 'Consultar nota técnica de rodapé (*)',
+    description: 'Item de legenda para asterisco',
+    translations: {
+      'en-US': 'Refer to technical footnote (*)'
+    }
+  },
+  legend_dash: {
+    key: 'legend_dash',
+    defaultText: 'Não aplicável para este modelo',
+    description: 'Item de legenda para traço',
+    translations: {
+      'en-US': 'Not applicable for this model'
+    }
   }
 };
 
 export class PrintStringRegistry {
   private static overrides = new Map<string, Map<string, string>>();
+
+  /**
+   * Verifica se uma chave existe no catálogo de strings de sistema registradas.
+   */
+  static has(key: string): boolean {
+    return Boolean(key && SYSTEM_PRINT_STRINGS[key]);
+  }
 
   /**
    * Obtém a string de sistema formatada para o idioma solicitado com fallback inteligente.

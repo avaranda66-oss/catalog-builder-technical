@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Upload, Plus, Trash2 } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
@@ -17,7 +17,6 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
   isSelected
 }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
   const displayUrl = useResolvedAssetUrl(block.assetId, block.legacyUrl || block.imageUrl);
 
@@ -111,6 +110,7 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
       <div className="flex items-center justify-between pb-2 border-b-2 border-slate-900 mb-3 gap-3">
         <div>
           <h1
+            data-printable-field="title"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
@@ -119,6 +119,7 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             {block.title || 'SÉRIE DE CALIBRAÇÃO TÉRMICA PRESYS'}
           </h1>
           <span
+            data-printable-field="subtitle"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
@@ -138,6 +139,7 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
           className="px-3 py-1 rounded-none font-bold text-xs tracking-wider flex items-center gap-1.5 border shrink-0 uppercase font-mono select-none"
         >
           <span
+            data-printable-field="badgeText"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeMainBlur}
@@ -146,6 +148,8 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             {block.badgeText || 'PRESYS'}
           </span>
           <span
+            data-printable-field="badgeSecondary"
+            data-printable-policy="protect"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeSecondaryBlur}
@@ -160,45 +164,40 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
         {/* Coluna Esquerda: Imagem e Descrição */}
         <div className="md:col-span-7 space-y-2 flex flex-col justify-between">
-          <div className="w-full h-40 rounded-none overflow-hidden bg-slate-900 border border-slate-300 flex items-center justify-center p-2 relative group">
-            {displayUrl ? (
+          {displayUrl ? (
+            <div className="relative group border border-slate-200 bg-slate-50 p-2 flex items-center justify-center min-h-[140px] max-h-[180px] overflow-hidden">
               <img
                 src={displayUrl}
-                alt="Instrumento Metrológico"
-                className="max-h-full max-w-full object-contain"
+                alt={block.title || 'Product Image'}
+                className="max-h-[160px] w-auto object-contain"
               />
-            ) : (
-              <div className="text-slate-500 text-[10px] font-sans flex flex-col items-center gap-1 text-center p-2">
-                <Upload className="w-5 h-5 text-slate-600 no-print" />
-                <span className="no-print">Clique para trocar a foto do instrumento</span>
-              </div>
-            )}
-
-            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="px-3 py-1.5 bg-[#003366] hover:bg-blue-700 text-white font-bold rounded-none text-xs flex items-center gap-1.5 no-print"
-                data-editor-action="true"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Trocar Imagem</span>
-              </button>
+              <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity text-white text-xs font-bold gap-1 no-print">
+                <Upload className="w-4 h-4" />
+                <span>Alterar Imagem</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
             </div>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept="image/*"
-              className="hidden"
-            />
-          </div>
+          ) : (
+            <label className="border-2 border-dashed border-slate-300 hover:border-[#003366] bg-slate-50 hover:bg-blue-50/40 p-4 rounded-none flex flex-col items-center justify-center cursor-pointer transition-colors min-h-[140px] no-print">
+              <Upload className="w-6 h-6 text-slate-400 mb-1" />
+              <span className="text-xs font-bold text-slate-600">Carregar Imagem Frontal</span>
+              <span className="text-[10px] text-slate-400">PNG / JPG transparente</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          )}
 
           <p
+            data-printable-field="description"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleDescBlur}
@@ -216,7 +215,7 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
         >
           <div>
             <div className="flex items-center justify-between border-b border-slate-300 pb-1 mb-1.5">
-              <span className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
+              <span data-print-string-key="features_overview" className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
                 Destaques Metrológicos
               </span>
               <button
@@ -236,8 +235,9 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             <ul className="space-y-1 text-[10px] text-slate-800">
               {highlights.map((h, idx) => (
                 <li key={idx} className="flex items-start gap-1.5 group relative">
-                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none">■</span>
+                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none" data-printable-policy="protect">■</span>
                   <span
+                    data-printable-field={`hl_${idx}`}
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) => handleHighlightBlur(idx, e.currentTarget.innerText)}

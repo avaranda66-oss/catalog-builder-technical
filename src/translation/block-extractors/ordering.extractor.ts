@@ -19,6 +19,19 @@ export function extractOrderingBlocks(block: ContentBlock, pageId: string, pageN
 
   if (block.orderingSegments && Array.isArray(block.orderingSegments)) {
     block.orderingSegments.forEach((seg: OrderingSegment, idx: number) => {
+      if (seg.code && seg.code.trim()) {
+        nodes.push({
+          id: `p${pageNumber}_b${block.id}_seg_${seg.id || idx}_code`,
+          pageId,
+          blockId: block.id,
+          path: `orderingSegments[${idx}].code`,
+          sourceText: seg.code.trim(),
+          kind: 'ordering_description',
+          policy: 'protect',
+          source: { blockType: block.type, field: `orderingSegments[${idx}].code` }
+        });
+      }
+
       if (seg.name && seg.name.trim()) {
         nodes.push({
           id: `p${pageNumber}_b${block.id}_seg_${seg.id || idx}_name`,

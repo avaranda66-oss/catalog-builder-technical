@@ -21,6 +21,8 @@ import { BottomHeaderBlock } from '../editor/blocks/BottomHeaderBlock';
 import { MatrixSpecTableBlock } from '../editor/blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivityBlock';
 
+import { PrintStringRegistry } from '../../translation/print-strings.registry';
+
 export interface CleanA4DocumentProps {
   document: Catalog;
   className?: string;
@@ -66,6 +68,8 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                 {page.blocks?.map((block) => (
                   <div
                     key={block.id}
+                    data-block-id={block.id}
+                    data-block-type={block.type}
                     className="export-block-wrapper relative"
                     style={{ zIndex: block.position?.zIndex || 1 }}
                   >
@@ -136,8 +140,15 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
               {/* Rodapé Técnico Editorial da Folha (Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
                 <div className="pt-2 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-400 font-mono flex-shrink-0">
-                  <span>PRESYS Instruments & Systems — Specifications subject to change without notice</span>
-                  <span>Page {page.pageNumber || index + 1}</span>
+                  <span data-print-string-key="company_brand_footer">
+                    {PrintStringRegistry.get('company_brand_footer', catalog.locale || 'pt-BR')}
+                  </span>
+                  <span>
+                    <span data-print-string-key="page_label">
+                      {PrintStringRegistry.get('page_label', catalog.locale || 'pt-BR')}
+                    </span>{' '}
+                    {page.pageNumber || index + 1}
+                  </span>
                 </div>
               )}
             </div>

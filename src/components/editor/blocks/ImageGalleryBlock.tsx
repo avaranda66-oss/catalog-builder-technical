@@ -128,6 +128,7 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
       {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -172,6 +173,7 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
             {/* Legenda Técnica com Texto Nítido e Completo */}
             <div className="p-1.5 bg-slate-50 border-t border-slate-200 flex items-start justify-between gap-1 min-h-[36px]">
               <p
+                data-printable-field={`img_${idx}_caption`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleCaptionBlur(idx, e.currentTarget.innerText)}

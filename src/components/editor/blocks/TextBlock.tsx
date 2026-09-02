@@ -36,6 +36,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ block, pageId, isSelected,
       }}
     >
       <div
+        data-printable-field="textContent"
         contentEditable={!isExport}
         suppressContentEditableWarning
         onBlur={handleBlur}

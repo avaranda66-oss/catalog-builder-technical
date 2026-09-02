@@ -103,6 +103,7 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
       {/* Header Técnico do Bloco */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2 gap-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -115,6 +116,7 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
 
         <div className="flex items-center gap-1.5 shrink-0">
           <span
+            data-printable-field="badgeText"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeBlur}
@@ -155,6 +157,8 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
               {/* Badge Numérica Técnica */}
               <div className="flex items-center justify-between">
                 <span
+                  data-printable-field={`mode_${idx}_badge`}
+                  data-printable-policy="protect"
                   contentEditable
                   suppressContentEditableWarning
                   onBlur={(e) => handleModeUpdate(idx, 'badge', e.currentTarget.innerText.trim())}
@@ -181,6 +185,7 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
 
               {/* Título do Modo */}
               <h4
+                data-printable-field={`mode_${idx}_title`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleModeUpdate(idx, 'title', e.currentTarget.innerText.trim())}
@@ -192,6 +197,7 @@ export const MultiModeCalibratorBlock: React.FC<MultiModeCalibratorBlockProps> =
 
               {/* Descrição Técnica */}
               <p
+                data-printable-field={`mode_${idx}_desc`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleModeUpdate(idx, 'desc', e.currentTarget.innerText.trim())}

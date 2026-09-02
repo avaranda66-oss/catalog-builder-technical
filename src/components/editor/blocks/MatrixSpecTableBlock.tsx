@@ -138,6 +138,7 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
       {/* Header Técnico */}
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -176,6 +177,8 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span
+                      data-printable-field={`col_${idx}`}
+                      data-printable-policy="protect"
                       contentEditable
                       suppressContentEditableWarning
                       onBlur={(e) => handleUpdateColumnName(idx, e.currentTarget.innerText)}
@@ -213,6 +216,7 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
               >
                 <td className="py-1.5 px-2.5 border-r border-slate-200 font-bold text-slate-900 align-middle">
                   <span
+                    data-printable-field={`row_${rIdx}_param`}
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) => handleUpdateParam(rIdx, e.currentTarget.innerText)}
@@ -225,6 +229,8 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
                 {row.values.map((val, vIdx) => (
                   <td
                     key={vIdx}
+                    data-printable-field={`row_${rIdx}_val_${vIdx}`}
+                    data-printable-policy="protect"
                     className="py-1.5 px-2.5 border-r border-slate-200 last:border-r-0 text-center align-middle"
                   >
                     <TechnicalCell

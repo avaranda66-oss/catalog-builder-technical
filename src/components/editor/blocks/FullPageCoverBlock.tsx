@@ -509,6 +509,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
               {/* RENDER POR TIPO */}
               {layer.type === 'text' && (
                 <div
+                  data-printable-field={`layer_${layer.id}`}
                   contentEditable
                   suppressContentEditableWarning
                   onBlur={(e) => handleUpdateLayer(layer.id, { content: e.currentTarget.innerText.trim() })}
@@ -536,6 +537,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 
               {layer.type === 'badge' && (
                 <div
+                  data-printable-field={`layer_${layer.id}`}
                   contentEditable
                   suppressContentEditableWarning
                   onBlur={(e) => handleUpdateLayer(layer.id, { content: e.currentTarget.innerText.trim() })}

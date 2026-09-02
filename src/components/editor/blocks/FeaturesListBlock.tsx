@@ -89,7 +89,7 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
 
             <div className="flex-1 min-w-0 pr-4">
               <h4
-                data-printable-field={`feature:${item.id}:title`}
+                data-printable-field={`feat_${item.id}_title`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleItemTitleBlur(item.id, e.currentTarget.innerText)}
@@ -98,7 +98,7 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
                 {item.title}
               </h4>
               <p
-                data-printable-field={`feature:${item.id}:desc`}
+                data-printable-field={`feat_${item.id}_desc`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleItemDescBlur(item.id, e.currentTarget.innerText)}

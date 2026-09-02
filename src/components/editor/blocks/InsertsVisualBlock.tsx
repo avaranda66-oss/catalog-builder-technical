@@ -221,6 +221,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
       {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2 gap-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -233,6 +234,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
 
         <div className="flex items-center gap-2 shrink-0">
           <span
+            data-printable-field="diameter"
+            data-printable-policy="protect"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleDiameterBlur}
@@ -264,7 +267,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         }}
       >
         {inserts.map((ins, insIdx) => {
-          const numHoles = ins.holes.length;
+          const numHoles = Array.isArray(ins.holes) ? ins.holes.length : 0;
 
           // Dimensões do cilindro e furos calibrados para nunca vazar
           const cylinderDiameter = 64; // px
@@ -306,7 +309,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                 className="rounded-full border-2 border-slate-700 bg-gradient-to-tr from-slate-300 via-slate-100 to-slate-200 flex items-center justify-center p-1 shadow-inner relative mb-1.5 select-none"
               >
                 <div className="w-full h-full relative flex items-center justify-center">
-                  {ins.holes.map((holeValue, holeIdx) => {
+                  {(ins.holes || []).map((holeValue, holeIdx) => {
                     const holeKey = `${insIdx}-${holeIdx}`;
                     const isSelected = activeHoleKey === holeKey;
 
@@ -363,6 +366,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                           />
                         ) : (
                           <span
+                            data-printable-policy="protect"
                             style={{
                               display: 'block',
                               width: '100%',
@@ -408,6 +412,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
 
               {/* Código & Título do Inserto */}
               <p
+                data-printable-field={`insert_${insIdx}_code`}
+                data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleInsertCircleBlur(insIdx, 'code', e.currentTarget.innerText)}
@@ -416,6 +422,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                 {ins.code}
               </p>
               <p
+                data-printable-field={`insert_${insIdx}_title`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleInsertCircleBlur(insIdx, 'title', e.currentTarget.innerText)}
@@ -433,10 +440,10 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
         <table className="w-full border-collapse border border-slate-700 text-xs">
           <thead>
             <tr className="bg-slate-100 border-b-2 border-slate-900 text-slate-950 font-bold uppercase tracking-wider text-[10px]">
-              <th className="p-1.5 border-r border-slate-400 text-left w-16">CODE</th>
-              <th className="p-1.5 border-r border-slate-400 text-left">BLOCK DRILLING CONFIGURATION</th>
+              <th data-print-string-key="ordering_code_label" className="p-1.5 border-r border-slate-400 text-left w-16">CODE</th>
+              <th data-print-string-key="technical_specifications" className="p-1.5 border-r border-slate-400 text-left">BLOCK DRILLING CONFIGURATION</th>
               {tableColumns.map((col, cIdx) => (
-                <th key={cIdx} className="p-1.5 border-r border-slate-400 text-center font-mono">
+                <th key={cIdx} data-printable-field={`table_col_${cIdx}`} data-printable-policy="protect" className="p-1.5 border-r border-slate-400 text-center font-mono">
                   {col}
                 </th>
               ))}
@@ -447,6 +454,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
             {tableRows.map((row, rIdx) => (
               <tr key={rIdx} className="hover:bg-slate-50/80 font-mono text-[10px]">
                 <td
+                  data-printable-field={`table_r${rIdx}_code`}
+                  data-printable-policy="protect"
                   contentEditable
                   suppressContentEditableWarning
                   onBlur={(e) => handleTableCellBlur(rIdx, 'code', e.currentTarget.innerText)}
@@ -455,6 +464,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                   {row.code}
                 </td>
                 <td
+                  data-printable-field={`table_r${rIdx}_desc`}
                   contentEditable
                   suppressContentEditableWarning
                   onBlur={(e) => handleTableCellBlur(rIdx, 'holesDesc', e.currentTarget.innerText)}
@@ -465,6 +475,8 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                 {tableColumns.map((col, cIdx) => (
                   <td
                     key={cIdx}
+                    data-printable-field={`table_r${rIdx}_c${cIdx}`}
+                    data-printable-policy="protect"
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) => handleTableCellBlur(rIdx, col, e.currentTarget.innerText)}
@@ -495,7 +507,7 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
       </div>
 
       {/* Rodapé da Tabela */}
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1">
+      <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 no-print">
         <span>{tableRows.length} insert model(s) registered</span>
         <button
           type="button"

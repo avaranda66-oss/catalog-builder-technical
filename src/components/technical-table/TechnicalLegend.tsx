@@ -42,6 +42,7 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
   return (
     <div className={`pt-1.5 pb-1 px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600 font-mono select-none ${className}`}>
       <span
+        data-print-string-key="legend_title"
         contentEditable={isEditable}
         suppressContentEditableWarning
         onBlur={(e) => {
@@ -60,6 +61,7 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
         <div key={idx} className="flex items-center gap-1.5">
           <TechnicalMarker type={item.type} size={10} color="#003366" />
           <span
+            data-print-string-key={`legend_${item.type}`}
             contentEditable={isEditable}
             suppressContentEditableWarning
             onBlur={(e) => {

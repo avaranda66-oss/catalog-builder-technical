@@ -33,6 +33,7 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
       }}
     >
       <div
+        data-printable-field="textContent"
         contentEditable
         suppressContentEditableWarning
         onBlur={handleBlur}

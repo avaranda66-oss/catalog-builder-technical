@@ -108,6 +108,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
         <div className="flex-1">
           <div className="flex items-baseline gap-2">
             <h1
+              data-printable-field="title"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleTitleBlur}
@@ -116,6 +117,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
               {block.title || 'SÉRIE PRESYS PCON'}
             </h1>
             <span
+              data-printable-field="subtitle"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleSubtitleBlur}
@@ -132,6 +134,8 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
           className="px-3 py-1 text-white text-right rounded-none border border-slate-900 shrink-0 select-none"
         >
           <span
+            data-printable-field="badgeText"
+            data-printable-policy="protect"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeMainBlur}
@@ -140,6 +144,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
             {block.badgeText || 'PRESYS'}
           </span>
           <span
+            data-printable-field="badgeSubtitle"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleBadgeSubBlur}
@@ -193,6 +198,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
           </div>
 
           <p
+            data-printable-field="overview"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleOverviewBlur}
@@ -207,7 +213,7 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
         <div className="md:col-span-6 p-2.5 bg-slate-50 border border-slate-200 rounded-none flex flex-col justify-between space-y-1.5">
           <div>
             <div className="flex items-center justify-between border-b border-slate-300 pb-1 mb-1.5">
-              <span className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
+              <span data-print-string-key="features_overview" className="font-bold text-[10px] text-slate-900 uppercase tracking-wider font-mono">
                 Recursos Técnicos de Destaque
               </span>
               <button
@@ -227,8 +233,9 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
             <ul className="space-y-1 text-[10px] text-slate-800">
               {bulletList.map((bullet, idx) => (
                 <li key={idx} className="flex items-start gap-1.5 group relative">
-                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none">■</span>
+                  <span className="text-[#003366] font-bold shrink-0 mt-0.5 select-none" data-printable-policy="protect">■</span>
                   <span
+                    data-printable-field={`bullet_${idx}`}
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) => handleBulletBlur(idx, e.currentTarget.innerText)}

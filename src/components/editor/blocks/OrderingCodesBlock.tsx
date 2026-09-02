@@ -97,8 +97,8 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
         {segments.map((seg, idx) => (
           <React.Fragment key={seg.id}>
             <div className="bg-slate-800 border border-slate-700 px-2 py-1 text-center shrink-0">
-              <span className="font-bold text-blue-300 block text-[10px]" data-printable-field={`segment:${seg.id}:code`} data-printable-policy="protect">{seg.code}</span>
-              <span className="text-[8px] text-slate-400 block truncate max-w-[80px]" data-printable-field={`segment:${seg.id}:name`}>{seg.name}</span>
+              <span className="font-bold text-blue-300 block text-[10px]" data-printable-field={`seg_${seg.id}_code`} data-printable-policy="protect">{seg.code}</span>
+              <span className="text-[8px] text-slate-400 block truncate max-w-[80px]" data-printable-field={`seg_${seg.id}_name`}>{seg.name}</span>
             </div>
             {idx < segments.length - 1 && <span className="text-slate-500 font-bold px-0.5 select-none" data-printable-policy="protect">-</span>}
           </React.Fragment>
@@ -111,7 +111,7 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
           <div key={seg.id} className="p-2 border border-slate-200 bg-slate-50 rounded-none text-[10px] relative group">
             <div className="flex items-center justify-between mb-1 pb-1 border-b border-slate-200">
               <span
-                data-printable-field={`segment:${seg.id}:code`}
+                data-printable-field={`seg_${seg.id}_code`}
                 data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
@@ -135,6 +135,7 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
             </div>
 
             <div
+              data-printable-field={`seg_${seg.id}_name`}
               contentEditable
               suppressContentEditableWarning
               onBlur={(e) => handleSegmentNameBlur(seg.id, e.currentTarget.innerText)}
@@ -144,6 +145,8 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
             </div>
 
             <div
+              data-printable-field={`segment:${seg.id}:options`}
+              data-printable-policy="protect"
               contentEditable
               suppressContentEditableWarning
               onBlur={(e) => handleOptionsBlur(seg.id, e.currentTarget.innerText)}
