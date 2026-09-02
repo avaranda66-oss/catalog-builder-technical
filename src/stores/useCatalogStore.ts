@@ -1742,3 +1742,7 @@ useTemplateStore.subscribe((templateState, prevTemplateState) => {
     }
   }
 });
+
+if (typeof window !== 'undefined') {
+  (window as any).useCatalogStore = useCatalogStore;
+}
