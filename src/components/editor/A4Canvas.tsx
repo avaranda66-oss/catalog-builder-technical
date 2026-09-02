@@ -39,6 +39,7 @@ import {
   STRUCTURAL_SECTION_PRESETS,
   createStructuralSectionFromPreset
 } from '../../domain/structural-presets';
+import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData?: Omit<ContentBlock, 'id'>;
@@ -931,19 +932,18 @@ export const A4Canvas: React.FC = () => {
 
             {/* Folha A4 WYSIWYG Milimétrica com Suporte a Preenchimento Integral */}
             <div
-              className={`a4-page-container ${
-                isSingleFullCover ? 'p-0' : 'p-10'
-              } flex flex-col ${isAutoFit && !isSingleFullCover ? 'justify-between' : ''}`}
+              className={`a4-page-container flex flex-col ${isAutoFit && !isSingleFullCover ? 'justify-between' : ''}`}
+              style={{ padding: getCanonicalPagePaddingCss(isSingleFullCover) }}
               onClick={(e) => {
                 e.stopPropagation();
                 setActivePageIndex(pageIndex);
                 selectEditorElement({ blockId: null, childId: null });
               }}
             >
-              {/* Cabeçalho Técnico da Folha (Oculto se for Capa Full Page) */}
+              {/* Cabeçalho Técnico da Folha (Editor-only chrome / Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
-                <div className="flex items-center justify-between pb-2 border-b border-slate-300 text-[10px] text-slate-400 font-mono flex-shrink-0">
-                  <span className="font-semibold text-slate-600" data-printable-policy="protect">
+                <div className="no-print editor-only flex items-center justify-between pb-2 border-b border-slate-300 text-[10px] text-slate-400 font-mono flex-shrink-0">
+                  <span className="font-semibold text-slate-600">
                     PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO
                   </span>
                   <span>

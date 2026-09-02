@@ -750,23 +750,18 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       );
     });
 
-    // Encontra o botão "Fixa (mm)" e comprova que está disabled
+    // Encontra o botão "Fixa (mm)" e comprova que agora está HABILITADO na Fase 3A.5A
     const buttons = Array.from(container.querySelectorAll('button'));
     const fixedButton = buttons.find((b) => b.textContent?.includes('Fixa'));
     expect(fixedButton).toBeDefined();
-    expect(fixedButton?.disabled).toBe(true);
-
-    // O hint explicativo informa a disponibilização com controle de dimensões da página
-    expect(container.textContent).toContain(
-      'Largura fixa estará disponível com o controle de dimensões da página.'
-    );
+    expect(fixedButton?.disabled).toBe(false);
 
     act(() => {
       root.unmount();
     });
   });
 
-  it('INSPECTOR-WIDTH-3: documento existente com fixedWidthMm=160 mantém render e exibe modo somente-leitura', () => {
+  it('INSPECTOR-WIDTH-3: documento existente com fixedWidthMm=160 mantém render e exibe input de edição com content box', () => {
     const existingFixedBlock: ContentBlock = {
       ...mockStructuralBlock,
       id: 'block-sec-fixed',
@@ -801,7 +796,7 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       renderRoot.unmount();
     });
 
-    // 2. Inspector mostra valor read-only sem destruir os dados
+    // 2. Inspector mostra input de edição ativo com 160mm e limite no content box
     const inspectorContainer = document.createElement('div');
     const inspectorRoot = createRoot(inspectorContainer);
 
@@ -815,11 +810,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       );
     });
 
-    expect(inspectorContainer.textContent).toContain('Largura fixa atual:');
-    expect(inspectorContainer.textContent).toContain('160 mm');
-    expect(inspectorContainer.textContent).toContain(
-      'Configuração física preservada em modo somente-leitura.'
-    );
+    const numInput = inspectorContainer.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(numInput).not.toBeNull();
+    expect(numInput.value).toBe('160');
+    expect(parseFloat(numInput.max)).toBeCloseTo(193.0666, 3);
 
     act(() => {
       inspectorRoot.unmount();

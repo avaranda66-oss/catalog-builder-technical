@@ -17,20 +17,25 @@ import type { Catalog, ContentBlock } from './catalog.schema';
 // 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
 // ============================================================================
 
+export { mmToPx, pxToMm } from './physical-units';
+export {
+  CANONICAL_A4_GEOMETRY,
+  getPageContentBox,
+  getCanonicalPagePaddingCss
+} from './page-geometry';
+export type {
+  A4PageGeometry,
+  PageMarginsMm,
+  PageContentBox
+} from './page-geometry';
+
+// ============================================================================
+// 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
+// ============================================================================
+
 export const A4_PAGE_WIDTH_MM = 210;
 export const A4_PAGE_HEIGHT_MM = 297;
 
-// ============================================================================
-// 2. Conversões Canônicas Bidirecionais (Retornam Float Puro sem Truncamento)
-// ============================================================================
-
-export function mmToPx(mm: number, dpi: number = 96): number {
-  return (mm * dpi) / 25.4;
-}
-
-export function pxToMm(px: number, dpi: number = 96): number {
-  return (px * 25.4) / dpi;
-}
 
 // ============================================================================
 // 3. Gerador Centralizado de UUIDs Estáveis (RFC 4122 v4)

@@ -21,7 +21,11 @@ import {
   StructuralLayoutConfig,
   CanvasSpacingToken
 } from '@/domain/canvas-layout.schema';
-import { updateStructuralLayout } from '@/domain/canvas-layout.engine';
+import {
+  updateStructuralLayout,
+  A4LayoutEngine,
+  getPageContentBox
+} from '@/domain/canvas-layout.engine';
 import { useCatalogStore } from '@/stores/useCatalogStore';
 import { CorporateIcon, CorporateIconPicker, getCorporateIcon } from '@/components/icons';
 import { InspectorGroup } from './components/InspectorGroup';
@@ -82,11 +86,33 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
     }
   };
 
-  // Transição segura de widthMode: criação/edição de largura fixa fica diferida até Fase 3A.5 (A4 Guards)
+  const contentBox = getPageContentBox();
+  const maxAvailableMm = contentBox.availableWidthMm;
+
+  // Validação contextual da seção contra o Content Box A4
+  const validationResult = rawStructuralData
+    ? A4LayoutEngine.validateSection(rawStructuralData, { availableWidthMm: maxAvailableMm })
+    : null;
+  const outsideSafeWidthIssue = validationResult?.issues.find((i) => i.code === 'OUTSIDE_SAFE_WIDTH');
+
+  // Transição segura de widthMode: fill -> fixed usa EXATAMENTE availableWidthMm da geometria canônica
   const handleWidthModeChange = (mode: 'fill' | 'fixed') => {
     if (mode === 'fill') {
       handleLayoutUpdate({ widthMode: 'fill' });
+    } else if (mode === 'fixed') {
+      const initialWidthMm = layout.fixedWidthMm && layout.fixedWidthMm > 0
+        ? layout.fixedWidthMm
+        : maxAvailableMm;
+      handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: initialWidthMm });
     }
+  };
+
+  const handleFixedWidthChange = (newVal: number) => {
+    // Bloquear commit se <= 0 ou > maxAvailableMm (Fase 3A.5A)
+    if (isNaN(newVal) || newVal <= 0 || newVal > maxAvailableMm) {
+      return;
+    }
+    handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: newVal });
   };
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -184,27 +210,56 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
 
         <InspectorField
           label="Largura da Seção"
-          hint="Largura fixa estará disponível com o controle de dimensões da página."
+          hint={layout.widthMode === 'fixed' ? `Espaço útil da página: até ${maxAvailableMm} mm` : undefined}
         >
           <InspectorSegmentedControl
             options={[
               { value: 'fill', label: 'Preencher largura' },
-              { value: 'fixed', label: 'Fixa (mm)', disabled: true }
+              { value: 'fixed', label: 'Fixa (mm)' }
             ]}
             value={layout.widthMode}
             onChange={handleWidthModeChange}
           />
         </InspectorField>
 
-        {layout.widthMode === 'fixed' && layout.fixedWidthMm && (
-          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-700">
-            <div className="font-semibold text-slate-800 flex items-center justify-between">
-              <span>Largura fixa atual:</span>
-              <span className="font-mono text-[#003366] font-bold">{layout.fixedWidthMm} mm</span>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              Configuração física preservada em modo somente-leitura.
-            </p>
+        {layout.widthMode === 'fixed' && (
+          <div className="space-y-2">
+            <InspectorField
+              label="Dimensão Fixa (mm)"
+              hint={`0 < mm <= ${maxAvailableMm}`}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0.1}
+                  max={maxAvailableMm}
+                  step={0.5}
+                  value={layout.fixedWidthMm ?? maxAvailableMm}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val)) {
+                      handleFixedWidthChange(val);
+                    }
+                  }}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#003366] focus:border-[#003366]"
+                />
+                <span className="text-xs font-mono font-semibold text-slate-500 shrink-0">mm</span>
+              </div>
+            </InspectorField>
+
+            {outsideSafeWidthIssue && (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900" role="alert">
+                <div className="font-bold flex items-center gap-1 text-amber-800">
+                  <span>⚠️ Aviso de Geometria:</span>
+                </div>
+                <p className="mt-0.5 text-[10.5px]">
+                  {outsideSafeWidthIssue.message}
+                </p>
+                <p className="mt-1 text-[9.5px] text-amber-700">
+                  O documento legado foi preservado sem alterações automáticas. Ajuste a largura para adequar à folha.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

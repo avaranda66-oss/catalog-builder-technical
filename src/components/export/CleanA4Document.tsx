@@ -26,6 +26,7 @@ import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { FontManager } from '../../translation/font-manager';
 import { applyBidiIsolationToElement } from '../../translation/bidi-helper';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
+import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
@@ -92,10 +93,12 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
             }}
           >
             <div
-              className={`h-full flex flex-col justify-between ${
-                isSingleFullCover ? 'p-0' : 'p-8'
-              }`}
-              style={{ height: '1123px', boxSizing: 'border-box' }}
+              className="h-full flex flex-col justify-between"
+              style={{
+                height: '1123px',
+                boxSizing: 'border-box',
+                padding: getCanonicalPagePaddingCss(isSingleFullCover)
+              }}
             >
               {/* Conteúdo Editorial da Página */}
               <div className="flex-1 space-y-3 flex flex-col min-h-0 overflow-hidden">
