@@ -1755,6 +1755,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           };
         }
 
+        if (rpcRes.error?.includes('Could not find the function') || rpcRes.error?.includes('schema cache') || rpcRes.errorCode === 'PGRST202') {
+          return {
+            success: false,
+            error: 'Não foi possível criar a versão traduzida porque o serviço de persistência ainda não está disponível no servidor.'
+          };
+        }
+
         return {
           success: false,
           error: rpcRes.error || 'Erro ao persistir catálogo traduzido no servidor.'

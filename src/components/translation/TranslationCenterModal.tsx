@@ -58,6 +58,8 @@ export const TranslationCenterModal: React.FC = () => {
   } = useTranslationStore();
 
   const currentCatalog = useCatalogStore((state) => state.currentCatalog);
+  const editorContext = useCatalogStore((state) => state.editorContext);
+  const isTemplateMode = editorContext?.kind === 'template';
   const userId = useAuthStore((state) => state.userId);
   const qaContainerRef = useRef<HTMLDivElement>(null);
 
@@ -187,6 +189,7 @@ export const TranslationCenterModal: React.FC = () => {
   });
 
   const isSaveBlocked =
+    isTemplateMode ||
     isSavingVersion ||
     !layoutQaResult ||
     layoutQaResult.status === 'pending' ||
@@ -705,26 +708,49 @@ export const TranslationCenterModal: React.FC = () => {
                 )}
               </div>
 
-              {/* Botão de Criação de Versão Final */}
-              <div className="p-4 bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-emerald-900">
-                    Pronto para criar a versão em {selectedLang?.nativeName}?
-                  </h4>
-                  <p className="text-[11px] text-emerald-700">
-                    O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será persistido na nuvem.
-                  </p>
+              {/* Botão de Criação de Versão Final / Política para Templates */}
+              {isTemplateMode ? (
+                <div className="p-4 bg-amber-50 border border-amber-300 text-amber-900 flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-900">
+                        Este documento é um Template Corporativo
+                      </h4>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        A tradução pode ser revisada e auditada aqui, mas para criar uma publicação traduzida oficial na nuvem, abra ou crie um Catálogo baseado neste Template.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 text-xs font-bold bg-slate-300 text-slate-500 cursor-not-allowed whitespace-nowrap"
+                  >
+                    Criação bloqueada para Templates
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCreateVersion}
-                  disabled={isSaveBlocked}
-                  className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
-                >
-                  {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  <span>Criar Versão em {selectedLang?.nativeName || targetLocale}</span>
-                </button>
-              </div>
+              ) : (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-900">
+                      Pronto para criar a versão em {selectedLang?.nativeName}?
+                    </h4>
+                    <p className="text-[11px] text-emerald-700">
+                      O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será persistido na nuvem.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreateVersion}
+                    disabled={isSaveBlocked}
+                    className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
+                  >
+                    {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>Criar Versão em {selectedLang?.nativeName || targetLocale}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
