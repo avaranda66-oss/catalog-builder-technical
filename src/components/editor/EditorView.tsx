@@ -12,7 +12,7 @@ import { PDFImportModal } from './PDFImportModal';
 import { generateUniqueCatalogTitle } from '../../domain/catalog.schema';
 
 export const EditorView: React.FC = () => {
-  const { currentCatalog, setCurrentCatalog, createCatalogFromPreset } = useCatalogStore();
+  const { currentCatalog, setCurrentCatalog, createCatalogFromPreset, syncStatus, syncError } = useCatalogStore();
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [isPDFImportModalOpen, setIsPDFImportModalOpen] = useState(false);
 
@@ -44,6 +44,34 @@ export const EditorView: React.FC = () => {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      {/* Banner de Conflito e Atualização Remota */}
+      {syncStatus === 'conflict' && (
+        <div className="bg-amber-500 text-slate-950 px-6 py-2 flex items-center justify-between font-medium text-xs shadow-sm border-b border-amber-600 z-20">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">⚠️ Atualização remota aguardando resolução:</span>
+            <span>{syncError || 'Uma alteração remota não pôde ser aplicada automaticamente para preservar seu conteúdo.'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void useCatalogStore.getState().resolveConflictReloadServer()}
+              className="px-2.5 py-1 bg-slate-900 text-white rounded text-xs font-bold hover:bg-slate-800 transition-colors"
+            >
+              Usar versão do servidor
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm('A versão remota no servidor será substituída pelas suas alterações locais. Deseja continuar?')) {
+                  void useCatalogStore.getState().resolveConflictKeepLocal();
+                }
+              }}
+              className="px-2.5 py-1 bg-white border border-slate-400 text-slate-900 rounded text-xs font-bold hover:bg-slate-100 transition-colors"
+            >
+              Manter minhas alterações
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sub-Barra do Catálogo Fixa */}
       <div className="bg-slate-50 border-b border-slate-200 px-6 py-2 flex items-center justify-between flex-shrink-0 z-10 shadow-2xs no-print">
         <div className="flex items-center gap-3 flex-1 max-w-xl">

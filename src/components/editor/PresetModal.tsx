@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2 } from 'lucide-react';
+import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2, Loader2 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import { useTemplateStore } from '../../stores/useTemplateStore';
 import { SYSTEM_PRESETS } from '../../data/presets';
 import { CatalogPreset, Catalog } from '../../domain/catalog.schema';
 
@@ -11,29 +12,35 @@ interface PresetModalProps {
 
 export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => {
   const { currentCatalog, setCurrentCatalog, saveCurrentCatalog } = useCatalogStore();
+  const {
+    customTemplates,
+    systemTemplates,
+    isLoading: isTemplatesLoading,
+    loadTemplates,
+    createCustomTemplate,
+    deleteCustomTemplate
+  } = useTemplateStore();
+
   const [activeTab, setActiveTab] = useState<'layout_templates' | 'official_catalogs' | 'custom' | 'save'>('official_catalogs');
-  const [customPresets, setCustomPresets] = useState<CatalogPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [presetDesc, setPresetDesc] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('cb_custom_presets');
-      if (raw) {
-        try {
-          setCustomPresets(JSON.parse(raw));
-        } catch (e) {
-          console.error(e);
-        }
-      }
+    if (isOpen) {
+      void loadTemplates();
     }
-  }, [isOpen]);
+  }, [isOpen, loadTemplates]);
 
   if (!isOpen) return null;
 
-  const layoutTemplates = SYSTEM_PRESETS.filter((p) => p.category === 'layout_template' || !p.category);
-  const officialCatalogs = SYSTEM_PRESETS.filter((p) => p.category === 'official_product_catalog');
+  const layoutTemplates = (systemTemplates.length > 0 ? systemTemplates : SYSTEM_PRESETS).filter(
+    (p) => p.category === 'layout_template' || !p.category
+  );
+  const officialCatalogs = (systemTemplates.length > 0 ? systemTemplates : SYSTEM_PRESETS).filter(
+    (p) => p.category === 'official_product_catalog'
+  );
 
   const handleApplyPreset = (preset: CatalogPreset) => {
     const isTemplate = preset.category === 'layout_template';
@@ -55,32 +62,27 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
     }
   };
 
-  const handleSaveCustomPreset = (e: React.FormEvent) => {
+  const handleSaveCustomPreset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentCatalog || !presetName.trim()) return;
 
-    const newPreset: CatalogPreset = {
-      id: `preset-custom-${Date.now()}`,
-      name: presetName.trim(),
-      description: presetDesc.trim() || 'Modelo personalizado criado pelo usuário.',
-      category: 'layout_template',
-      isSystem: false,
-      catalog: structuredClone(currentCatalog),
-      createdAt: new Date().toISOString()
-    };
+    setIsSaving(true);
+    const res = await createCustomTemplate(presetName, presetDesc, currentCatalog);
+    setIsSaving(false);
 
-    const updated = [newPreset, ...customPresets];
-    setCustomPresets(updated);
-    localStorage.setItem('cb_custom_presets', JSON.stringify(updated));
-    setMessage(`Template "${presetName}" salvo com sucesso!`);
-    setPresetName('');
-    setPresetDesc('');
+    if (res.success) {
+      setMessage(`Template "${presetName}" salvo na nuvem com sucesso!`);
+      setPresetName('');
+      setPresetDesc('');
+    } else {
+      setMessage(`Erro ao salvar template: ${res.error || 'Falha de conexão'}`);
+    }
   };
 
-  const handleDeleteCustomPreset = (id: string) => {
-    const updated = customPresets.filter((p) => p.id !== id);
-    setCustomPresets(updated);
-    localStorage.setItem('cb_custom_presets', JSON.stringify(updated));
+  const handleDeleteCustomPreset = async (id: string) => {
+    if (confirm('Deseja excluir este template corporativo da nuvem?')) {
+      await deleteCustomTemplate(id);
+    }
   };
 
   return (
@@ -144,7 +146,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
             }`}
           >
             <Bookmark className="w-4 h-4 text-amber-600" />
-            <span>💾 Meus Templates ({customPresets.length})</span>
+            <span>💾 Meus Templates ({customTemplates.length})</span>
           </button>
 
           {/* Aba 4: Salvar Atual como Template */}
@@ -287,21 +289,26 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
           )}
 
           {/* ========================================================================= */}
-          {/* ABA 3: MEUS TEMPLATES SALVOS */}
+          {/* ABA 3: MEUS TEMPLATES SALVOS NA NUVEM */}
           {/* ========================================================================= */}
           {activeTab === 'custom' && (
             <div>
-              {customPresets.length === 0 ? (
+              {isTemplatesLoading ? (
+                <div className="text-center py-12 text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+                  <p className="text-xs font-medium text-slate-600">Sincronizando templates com a nuvem...</p>
+                </div>
+              ) : customTemplates.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <Bookmark className="w-12 h-12 mx-auto mb-2 opacity-40 text-amber-500" />
-                  <p className="text-xs font-medium text-slate-600">Nenhum template personalizado salvo</p>
+                  <p className="text-xs font-medium text-slate-600">Nenhum template personalizado salvo na nuvem</p>
                   <p className="text-[11px] text-slate-400 mt-1">
                     Você pode salvar a estrutura do catálogo ativo a qualquer momento na aba "Salvar Catálogo Atual".
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {customPresets.map((preset) => (
+                  {customTemplates.map((preset) => (
                     <div
                       key={preset.id}
                       className="bg-white border border-slate-200 hover:border-amber-400 rounded-xl p-4 shadow-sm flex flex-col justify-between"
@@ -309,7 +316,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold text-[10px] uppercase">
-                            Personalizado
+                            Nuvem / Compartilhado
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             {preset.catalog.pages.length} folha(s)
@@ -328,9 +335,9 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteCustomPreset(preset.id)}
+                          onClick={() => void handleDeleteCustomPreset(preset.id)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Excluir Template"
+                          title="Excluir Template da Nuvem"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -343,16 +350,23 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
           )}
 
           {/* ========================================================================= */}
-          {/* ABA 4: SALVAR ATUAL COMO TEMPLATE */}
+          {/* ABA 4: SALVAR ATUAL COMO TEMPLATE NA NUVEM */}
           {/* ========================================================================= */}
           {activeTab === 'save' && (
             <div className="max-w-xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-900 mb-1">
-                Salvar Estrutura do Catálogo Atual
+                Salvar Estrutura do Catálogo na Nuvem
               </h3>
               <p className="text-xs text-slate-500 mb-4">
-                Guarde a composição de páginas, tabelas e cabeçalhos do catálogo que você está editando para reutilizar em futuros produtos.
+                Guarde a composição de páginas, tabelas e cabeçalhos do catálogo que você está editando no Supabase para reutilizar em toda a equipe.
               </p>
+
+              {message && (
+                <div className={`p-3 mb-4 rounded-lg text-xs flex items-center gap-2 ${message.startsWith('Erro') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{message}</span>
+                </div>
+              )}
 
               <form onSubmit={handleSaveCustomPreset} className="space-y-4">
                 <div>
@@ -384,10 +398,11 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+                  disabled={isSaving}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Salvar como Novo Template</span>
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{isSaving ? 'Salvando na Nuvem...' : 'Salvar como Novo Template Corporativo'}</span>
                 </button>
               </form>
             </div>

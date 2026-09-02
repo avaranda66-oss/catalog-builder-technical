@@ -37,6 +37,8 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    delete (window as any).location;
+    window.location = new URL('http://localhost:5173/') as any;
     StorageService.setActiveCatalogId(catalogUUID);
     useCatalogStore.setState({
       currentCatalog: structuredClone(baseCatalog),

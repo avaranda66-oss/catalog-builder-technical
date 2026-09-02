@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Catalog } from '@/domain/catalog.schema';
+import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
 import { Product } from '@/domain/product.schema';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -142,6 +142,76 @@ export class SupabaseService {
     }
   }
 
+  static async listTemplates(): Promise<{ success: boolean; data?: CatalogPreset[]; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) return { success: false, error: error.message };
+      const presets = (data || []).map((row) => templateRowToCatalogPreset(row));
+      return { success: true, data: presets };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao carregar templates do servidor' };
+    }
+  }
+
+  static async createTemplate(preset: CatalogPreset): Promise<{ success: boolean; data?: CatalogPreset; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const validId = preset.id && !preset.id.startsWith('preset-custom-')
+        ? preset.id
+        : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0'));
+
+      const payload = {
+        id: validId,
+        name: preset.name,
+        template_key: `custom-${validId}`,
+        design_tokens: {
+          category: preset.category || 'layout_template',
+          description: preset.description || '',
+          isSystem: false
+        },
+        layout_config: preset.catalog,
+        is_system: false
+      };
+
+      const { data, error } = await supabase
+        .from('templates')
+        .upsert(payload)
+        .select()
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: templateRowToCatalogPreset(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao salvar template no servidor' };
+    }
+  }
+
+  static async deleteTemplate(id: string): Promise<{ success: boolean; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { error } = await supabase
+        .from('templates')
+        .delete()
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao excluir template no servidor' };
+    }
+  }
+
   static async uploadProductImage(
     file: File,
     bucketName: string = 'product-images'
@@ -174,4 +244,28 @@ export class SupabaseService {
     void bucketName;
     return { success: base64.startsWith('data:'), url: base64, isRemote: false };
   }
+}
+
+export function templateRowToCatalogPreset(row: any): CatalogPreset {
+  const designTokens = typeof row.design_tokens === 'object' && row.design_tokens !== null ? row.design_tokens : {};
+  const layoutConfig = typeof row.layout_config === 'object' && row.layout_config !== null ? row.layout_config : {};
+
+  return {
+    id: row.id,
+    name: row.name || 'Template Sem Nome',
+    description: designTokens.description || row.description || 'Modelo de layout customizado.',
+    category: designTokens.category || 'layout_template',
+    isSystem: row.is_system ?? false,
+    catalog: layoutConfig.pages ? layoutConfig : {
+      id: row.id,
+      title: row.name,
+      subtitle: '',
+      themeId: 'default-technical',
+      pages: [],
+      version: 1,
+      createdAt: row.created_at || new Date().toISOString(),
+      updatedAt: row.created_at || new Date().toISOString()
+    },
+    createdAt: row.created_at || new Date().toISOString()
+  };
 }

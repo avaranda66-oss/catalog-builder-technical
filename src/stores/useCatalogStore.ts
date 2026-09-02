@@ -27,6 +27,19 @@ export interface InFlightSaveInfo {
   capturedRevision: number;
 }
 
+export function updateCanonicalUrlCatalogId(catalogId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('catalog') !== catalogId) {
+      url.searchParams.set('catalog', catalogId);
+      window.history.replaceState({}, '', url.toString());
+    }
+  } catch (e) {
+    console.warn('Erro ao atualizar URL canônica:', e);
+  }
+}
+
 // Client Instance ID persistente na sessão do navegador
 export function getClientInstanceId(): string {
   if (typeof window !== 'undefined' && window.sessionStorage) {
@@ -961,12 +974,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
+            isSaving: false,
             localRevision: 0,
             lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
             syncError: null
           });
           StorageService.setActiveCatalogId(id);
+          updateCanonicalUrlCatalogId(id);
+          return;
+        } else {
+          set({
+            syncStatus: 'error',
+            syncError: `O catálogo solicitado (${id}) não foi encontrado no servidor.`
+          });
           return;
         }
       }
@@ -981,12 +1002,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           activePageIndex: 0,
           selectedBlockId: null,
           isDirty: false,
+          isSaving: false,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
           syncError: 'Catálogo carregado do cache local.'
         });
         StorageService.setActiveCatalogId(id);
+        updateCanonicalUrlCatalogId(id);
+      } else {
+        set({
+          syncStatus: 'error',
+          syncError: `O catálogo solicitado (${id}) não foi encontrado.`
+        });
       }
     } finally {
       set({ isLoading: false });
@@ -1095,9 +1123,42 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   loadLatestCatalog: async () => {
     set({ isLoading: true });
     try {
+      const urlCatalogId = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('catalog')
+        : null;
+
       const workspaceRes = await get().loadWorkspace();
 
       if (workspaceRes.success) {
+        if (urlCatalogId) {
+          const matched = workspaceRes.catalogs.find((c) => c.id === urlCatalogId);
+          if (matched) {
+            debugSetCatalog('loadLatestCatalog:UrlParam', get().currentCatalog, matched);
+            set({
+              currentCatalog: matched,
+              activePageIndex: 0,
+              selectedBlockId: null,
+              isDirty: false,
+              isSaving: false,
+              localRevision: 0,
+              lastAcknowledgedLocalRevision: 0,
+              syncStatus: 'synced',
+              syncError: null
+            });
+            StorageService.setActiveCatalogId(matched.id);
+            updateCanonicalUrlCatalogId(matched.id);
+            return;
+          } else {
+            console.error(`🚨 [CANONICAL URL] Catálogo com ID "${urlCatalogId}" não existe no workspace remoto.`);
+            set({
+              currentCatalog: null,
+              syncStatus: 'error',
+              syncError: `O catálogo solicitado na URL ("${urlCatalogId}") não foi encontrado no servidor.`
+            });
+            return;
+          }
+        }
+
         if (workspaceRes.catalogs.length > 0) {
           const preferredId = StorageService.getActiveCatalogId();
           const targetCatalog = (preferredId ? workspaceRes.catalogs.find((c) => c.id === preferredId) : null) || workspaceRes.catalogs[0];
@@ -1108,12 +1169,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
+            isSaving: false,
             localRevision: 0,
             lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
             syncError: null
           });
           StorageService.setActiveCatalogId(targetCatalog.id);
+          updateCanonicalUrlCatalogId(targetCatalog.id);
           return;
         } else {
           await get().createCatalogFromPreset();
@@ -1122,7 +1185,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }
 
       // Fallback offline
-      const cached = await StorageService.loadCatalog();
+      const cached = await StorageService.loadCatalog(urlCatalogId || undefined);
       if (cached) {
         debugSetCatalog('loadLatestCatalog:Cached', get().currentCatalog, cached);
         set({
@@ -1130,22 +1193,30 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           activePageIndex: 0,
           selectedBlockId: null,
           isDirty: false,
+          isSaving: false,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
           syncError: 'Operando em modo offline com cache local.'
         });
+        updateCanonicalUrlCatalogId(cached.id);
       } else {
-        await get().createCatalogFromPreset();
+        if (urlCatalogId) {
+          set({
+            currentCatalog: null,
+            syncStatus: 'error',
+            syncError: `O catálogo com ID "${urlCatalogId}" não foi encontrado em cache nem no servidor.`
+          });
+        } else {
+          await get().createCatalogFromPreset();
+        }
       }
-    } catch (err) {
-      console.warn('Fallback offline no bootstrap:', err);
-      const cached = await StorageService.loadCatalog();
-      if (cached) {
-        set({ currentCatalog: cached, syncStatus: 'offline' });
-      } else {
-        await get().createCatalogFromPreset();
-      }
+    } catch (err: any) {
+      console.warn('Erro no bootstrap loadLatestCatalog:', err);
+      set({
+        syncStatus: 'error',
+        syncError: err?.message || 'Erro ao inicializar catálogo.'
+      });
     } finally {
       set({ isLoading: false });
     }
@@ -1191,6 +1262,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const result = await get().saveCurrentCatalog();
     if (result.success) {
       StorageService.setActiveCatalogId(newId);
+      updateCanonicalUrlCatalogId(newId);
     }
     await get().loadWorkspace();
     return result;
@@ -1216,11 +1288,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           activePageIndex: 0,
           selectedBlockId: null,
           isDirty: false,
+          isSaving: false,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
           syncStatus: 'synced'
         });
         StorageService.setActiveCatalogId(remaining[0].id);
+        updateCanonicalUrlCatalogId(remaining[0].id);
       } else {
         await get().createCatalogFromPreset();
       }
@@ -1254,6 +1328,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const result = await get().saveCurrentCatalog();
     if (result.success) {
       StorageService.setActiveCatalogId(newId);
+      updateCanonicalUrlCatalogId(newId);
     }
     return result;
   }

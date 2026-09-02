@@ -17,6 +17,37 @@ export interface RealtimePayload {
   } | null;
 }
 
+export type HandlerDecision =
+  | 'OTHER_CATALOG'
+  | 'SELF_ECHO'
+  | 'STALE'
+  | 'LOCAL_CONFLICT'
+  | 'DEFENSIVE_BLOCK'
+  | 'APPLY_REMOTE'
+  | 'REFRESH_REMOTE'
+  | 'DELETE_ACTIVE';
+
+export interface RealtimeDecisionInfo {
+  eventId: string;
+  clientInstanceId: string;
+  changedId?: string;
+  currentCatalogId?: string;
+  remoteVersion?: number;
+  currentVersion?: number;
+  eventType: string;
+  isDirty: boolean;
+  isSaving: boolean;
+  localRevision: number;
+  acknowledgedRevision: number;
+  structuralDelta?: any;
+  decision: HandlerDecision;
+  reason?: string;
+}
+
+function logHandlerDecision(info: RealtimeDecisionInfo) {
+  console.log('[REALTIME DECISION LOG]', info);
+}
+
 /**
  * Processador de eventos Supabase Realtime para a tabela 'catalogs'.
  * Aplica atualizações remotas instantaneamente a partir do payload WAL (REPLICA IDENTITY FULL)
@@ -29,7 +60,13 @@ export async function handleCatalogRealtimeEvent(
   const changedId = payload.new?.id || payload.old?.id;
   if (!changedId) return;
 
+  const eventId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const clientId = typeof window !== 'undefined' && window.sessionStorage
+    ? window.sessionStorage.getItem('cb_client_instance_id') || 'unknown'
+    : 'unknown';
+
   console.log('[REALTIME CATALOG EVENT]', {
+    eventId,
     eventType: payload.eventType,
     newId: payload.new?.id,
     newVersion: payload.new?.version,
@@ -39,9 +76,30 @@ export async function handleCatalogRealtimeEvent(
   const state = store.getState();
   const currentCatalog = state.currentCatalog;
   const inFlight = state.inFlightSave;
+  const remoteVersion = Number(payload.new?.version) || 0;
+  const currentVersion = currentCatalog?.version || 0;
+
+  const baseLogInfo = {
+    eventId,
+    clientInstanceId: clientId,
+    changedId,
+    currentCatalogId: currentCatalog?.id,
+    remoteVersion,
+    currentVersion,
+    eventType: payload.eventType,
+    isDirty: state.isDirty,
+    isSaving: state.isSaving,
+    localRevision: state.localRevision,
+    acknowledgedRevision: state.lastAcknowledgedLocalRevision
+  };
 
   // 1. Se for um DELETE no catálogo atualmente aberto
   if (payload.eventType === 'DELETE' && changedId === currentCatalog?.id) {
+    logHandlerDecision({
+      ...baseLogInfo,
+      decision: 'DELETE_ACTIVE',
+      reason: 'Catálogo ativo foi excluído no servidor'
+    });
     store.setState({
       syncStatus: 'conflict',
       syncError: 'Este catálogo foi excluído no servidor por outro administrador.'
@@ -52,6 +110,12 @@ export async function handleCatalogRealtimeEvent(
 
   // 2. Se a alteração for em OUTRO catálogo diferente do que estou editando -> Atualiza lista salva sem tocar no currentCatalog
   if (currentCatalog && changedId !== currentCatalog.id) {
+    logHandlerDecision({
+      ...baseLogInfo,
+      decision: 'OTHER_CATALOG',
+      reason: 'Evento referente a outro documento do workspace'
+    });
+
     if (payload.new && payload.new.id) {
       const brandData = typeof payload.new.brand === 'object' && payload.new.brand !== null ? payload.new.brand : {};
       const updatedItem: Catalog = {
@@ -79,21 +143,28 @@ export async function handleCatalogRealtimeEvent(
 
   // 3. Se a alteração for no MESMO catálogo atualmente aberto:
   if (currentCatalog && changedId === currentCatalog.id) {
-    const remoteVersion = Number(payload.new?.version) || 0;
-    const currentVersion = currentCatalog.version || 0;
-
     // A) Eco / ACK do nosso próprio save em voo:
     if (
       inFlight &&
       inFlight.catalogId === changedId &&
       (remoteVersion === inFlight.targetVersion || remoteVersion === inFlight.expectedVersion + 1)
     ) {
+      logHandlerDecision({
+        ...baseLogInfo,
+        decision: 'SELF_ECHO',
+        reason: 'Eco do próprio save em voo ignorado'
+      });
       console.log('[REALTIME] Ignorando eco do próprio salvamento em voo v' + remoteVersion);
       return;
     }
 
     // B) Evento antigo ou duplicado (versão remota <= versão já confirmada no cliente):
     if (remoteVersion > 0 && remoteVersion <= currentVersion) {
+      logHandlerDecision({
+        ...baseLogInfo,
+        decision: 'STALE',
+        reason: `Versão remota v${remoteVersion} <= local confirmada v${currentVersion}`
+      });
       console.log('[REALTIME] Ignorando evento defasado/duplicado v' + remoteVersion + ' <= local v' + currentVersion);
       return;
     }
@@ -102,6 +173,11 @@ export async function handleCatalogRealtimeEvent(
     const hasUnsavedLocalEdits = state.isDirty || state.isSaving || state.localRevision > state.lastAcknowledgedLocalRevision;
 
     if (hasUnsavedLocalEdits) {
+      logHandlerDecision({
+        ...baseLogInfo,
+        decision: 'LOCAL_CONFLICT',
+        reason: `Edições locais não salvas (rev ${state.localRevision}) em conflito com v${remoteVersion}`
+      });
       console.warn('[REALTIME] Conflito detectado: alteração remota v' + remoteVersion + ' enquanto local possui edições não salvas (rev: ' + state.localRevision + ')');
       store.setState({
         syncStatus: 'conflict',
@@ -135,6 +211,12 @@ export async function handleCatalogRealtimeEvent(
             structuralDelta.removedBlocks.some((rb) => rb.blockId === remoteMutation.targetId);
 
           if (!isLegitimateBlockRemoval) {
+            logHandlerDecision({
+              ...baseLogInfo,
+              structuralDelta,
+              decision: 'DEFENSIVE_BLOCK',
+              reason: 'Remoção de blocos sem metadata REMOVE_BLOCK'
+            });
             console.warn('🚨 [DEFENSIVE GUARD] Realtime rejeitou snapshot destrutivo sem evidência de REMOVE_BLOCK:', {
               delta: structuralDelta,
               remoteMutation,
@@ -156,6 +238,12 @@ export async function handleCatalogRealtimeEvent(
             structuralDelta.removedPages.includes(remoteMutation.targetId);
 
           if (!isLegitimatePageRemoval) {
+            logHandlerDecision({
+              ...baseLogInfo,
+              structuralDelta,
+              decision: 'DEFENSIVE_BLOCK',
+              reason: 'Remoção de páginas sem metadata REMOVE_PAGE'
+            });
             console.warn('🚨 [DEFENSIVE GUARD] Realtime rejeitou snapshot com remoção não justificada de páginas:', {
               delta: structuralDelta,
               remoteMutation,
@@ -168,6 +256,13 @@ export async function handleCatalogRealtimeEvent(
             return;
           }
         }
+
+        logHandlerDecision({
+          ...baseLogInfo,
+          structuralDelta,
+          decision: 'APPLY_REMOTE',
+          reason: 'Snapshot válido aplicado com sucesso'
+        });
 
         debugSetCatalog('handleCatalogRealtimeEvent:InstantApply', currentCatalog, updatedCatalog);
 
@@ -184,8 +279,14 @@ export async function handleCatalogRealtimeEvent(
           serverSavedAt: payload.new.updated_at || new Date().toISOString()
         });
       } else {
+        logHandlerDecision({
+          ...baseLogInfo,
+          decision: 'REFRESH_REMOTE',
+          reason: 'Payload sem brand completo, buscando via workspace'
+        });
         await state.refreshCatalog(currentCatalog.id);
       }
     }
   }
 }
+

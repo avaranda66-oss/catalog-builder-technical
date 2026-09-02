@@ -3,6 +3,7 @@ import { useUIStore } from './stores/useUIStore';
 import { useLibraryStore } from './stores/useLibraryStore';
 import { useCatalogStore } from './stores/useCatalogStore';
 import { useMediaStore } from './stores/useMediaStore';
+import { useTemplateStore } from './stores/useTemplateStore';
 import { Navbar } from './components/common/Navbar';
 import { EditorView } from './components/editor/EditorView';
 import { LibraryView } from './components/library/LibraryView';
@@ -20,6 +21,7 @@ export const App: React.FC = () => {
   const { loadProducts } = useLibraryStore();
   const { loadLatestCatalog } = useCatalogStore();
   const { loadAssets } = useMediaStore();
+  const { loadTemplates, handleRealtimeTemplateEvent } = useTemplateStore();
   const status = useAuthStore((state) => state.status);
   const errorMessage = useAuthStore((state) => state.errorMessage);
   const initializeAuth = useAuthStore((state) => state.initialize);
@@ -35,10 +37,15 @@ export const App: React.FC = () => {
     void loadProducts();
     void loadLatestCatalog();
     void loadAssets();
+    void loadTemplates();
 
-    // Sincronização em Tempo Real Segura com Status Callback (FASE 1.2B)
+    // Sincronização em Tempo Real Segura com Status Callback (FASE 1.2B & 1.3)
     const supabase = getSupabase();
     if (!supabase) return;
+
+    const clientId = typeof window !== 'undefined' && window.sessionStorage
+      ? window.sessionStorage.getItem('cb_client_instance_id') || 'client'
+      : 'client';
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -56,13 +63,53 @@ export const App: React.FC = () => {
           void loadProducts();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'templates' },
+        (payload) => {
+          handleRealtimeTemplateEvent(payload as any);
+        }
+      )
       .subscribe((realtimeStatus, error) => {
         console.log('[PRESYS REALTIME STATUS]', realtimeStatus, error);
         useCatalogStore.setState({ realtimeStatus });
       });
 
+    // Listener RAW paralelo para depuração sob ?debugRealtime=1
+    let rawChannel: any = null;
+    const isDebug = typeof window !== 'undefined' && (
+      new URLSearchParams(window.location.search).get('debugRealtime') === '1' ||
+      import.meta.env.DEV
+    );
+
+    if (isDebug) {
+      rawChannel = supabase
+        .channel(`debug-raw-${clientId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'catalogs'
+          },
+          (payload) => {
+            console.log('[REALTIME RAW EVENT]', {
+              clientId,
+              receivedAt: new Date().toISOString(),
+              payload
+            });
+          }
+        )
+        .subscribe((rawStatus) => {
+          console.log(`[REALTIME RAW CHANNEL STATUS] (${clientId}):`, rawStatus);
+        });
+    }
+
     return () => {
       void supabase.removeChannel(channel);
+      if (rawChannel) {
+        void supabase.removeChannel(rawChannel);
+      }
     };
   }, [loadProducts, loadLatestCatalog, loadAssets, status]);
 
