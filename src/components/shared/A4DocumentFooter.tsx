@@ -24,7 +24,7 @@ export const A4DocumentFooter: React.FC<A4DocumentFooterProps> = ({
     if (localizedSystemStrings && localizedSystemStrings[key]) {
       return localizedSystemStrings[key];
     }
-    return PrintStringRegistry.get(key as any, locale);
+    return PrintStringRegistry.get(key, locale);
   };
 
   return (

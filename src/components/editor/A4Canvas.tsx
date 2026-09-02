@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
-import { CatalogPage, ContentBlock } from '../../domain/catalog.schema';
+import { Catalog, CatalogPage, ContentBlock } from '../../domain/catalog.schema';
 import { TextBlock } from './blocks/TextBlock';
 import { ImageBlock } from './blocks/ImageBlock';
 import { BoxBlock } from './blocks/BoxBlock';
@@ -54,7 +54,7 @@ interface BlockMenuOption extends HoverTooltipItem {
 interface EditorA4PageItemProps {
   page: CatalogPage;
   pageIndex: number;
-  currentCatalog: any;
+  currentCatalog: Catalog;
   isAutoFit: boolean;
   onToggleAutoFit: () => void;
   isMenuOpenForThisPage: boolean;
@@ -444,11 +444,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                     }
                   }}
                   className={`relative ${
-                    isSingleFullCover
-                      ? 'h-full w-full'
-                      : isAutoFit && blockCount === 1
-                      ? 'my-auto'
-                      : ''
+                    isSingleFullCover ? 'h-full w-full' : ''
                   }`}
                   style={
                     hasRemote
@@ -601,13 +597,14 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
             />
           )}
 
-          {/* Placeholder de Página Vazia (Fase 3A.5C: não participa da medição de overflow) */}
+          {/* Placeholder de Página Vazia (Editor Chrome / Overlay Absoluto, 0px in-flow) */}
           {(!page.blocks || page.blocks.length === 0) && (
             <div
+              data-testid="empty-page-placeholder"
               onClick={() => {
                 onOpenDropdown('headers');
               }}
-              className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center"
+              className="absolute inset-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center z-20 no-print editor-only"
             >
               <Plus className="w-8 h-8 mb-2 text-[#003366]" />
               <span className="font-bold text-slate-800 text-sm">This A4 page is empty</span>

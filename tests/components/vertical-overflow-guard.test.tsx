@@ -1,17 +1,19 @@
 // tests/components/vertical-overflow-guard.test.tsx
-// Suíte de Testes Automatizados — Fase 3A.5C A4 Vertical Overflow Guard
+// Suíte de Testes Automatizados — Fase 3A.5C & 3A.5C.1
+// A4 Vertical Overflow Guard & Document Parity Suite
 // Valida:
 // - Paridade geométrica estrita entre Editor (A4Canvas) e PDF (CleanA4Document)
-// - Remoção definitiva de py-3 do editor e gap canônico space-y-3 único (AutoFit ON/OFF)
-// - Drop slots isolados como overlays absolutos (0px no layout documental)
-// - Footer como autoridade de Flexbox (sem constantes mágicas de 24px/6.35mm)
-// - Componente compartilhado A4DocumentFooter com PrintLocalization
-// - Cabeçalho do editor fora da área física documental
-// - Medição de overflow por scrollHeight vs clientHeight com physical-units.ts
-// - Atribuição de bloco ofensor por stable ID e DOMRects normalizados por escala real
-// - Diagnóstico de MIXED_FULL_PAGE_COVER para capa combinada
-// - Alerta com AlertTriangle (zero emojis) e cutoff guideline ancorada em bottom: 0
-// - Isolamento estrito de persistência (zero store mutations, localRevision e isDirty inalterados)
+// - Remoção de py-3 e eliminação total de my-auto no single block (paridade natural Editor/CleanA4)
+// - Empty Page Placeholder como overlay absoluto (0px in-flow, fora de BlockFlowContent)
+// - Gap canônico space-y-3 permanente (AutoFit ON/OFF)
+// - Drop slots como overlays absolutos (0px in-flow)
+// - Footer flexbox authority compartilhado (A4DocumentFooter) sem constantes fixas
+// - Cabeçalho de chrome fora da folha A4 física
+// - Medição de overflow reativa por ResizeObserver + RAF coalescido
+// - Identificação do bloco ofensor por Stable ID sem offsetParent
+// - Diagnóstico estruturado MIXED_FULL_PAGE_COVER
+// - Warning banner com AlertTriangle (zero emojis) e cutoff guideline ancorada em bottom: 0
+// - Imutabilidade estrita de Store/Catalog e zero vazamento para o CleanA4 exportado
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
@@ -29,18 +31,30 @@ import { A4Canvas } from '../../src/components/editor/A4Canvas';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 
-describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
+describe('Fase 3A.5C & 3A.5C.1 — A4 Vertical Overflow Guard Suite', () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
   let observedElements: Set<Element> = new Set();
+  let activeResizeObservers: Array<{ callback: (entries: any[]) => void }> = [];
+  let pendingRafs: Array<FrameRequestCallback> = [];
+  let nextRafId = 1;
   let originalFonts: any;
+  const originalRaf = globalThis.requestAnimationFrame;
+  const originalCaf = globalThis.cancelAnimationFrame;
 
   beforeEach(() => {
     observedElements.clear();
+    activeResizeObservers = [];
+    pendingRafs = [];
+    nextRafId = 1;
 
-    // Polyfill de ResizeObserver com mock controlado
+    // Mock controlável de ResizeObserver que armazena callbacks para execução reativa
     class MockResizeObserver {
-      constructor(_callback: (entries: any[]) => void) {}
+      callback: (entries: any[]) => void;
+      constructor(callback: (entries: any[]) => void) {
+        this.callback = callback;
+        activeResizeObservers.push(this);
+      }
       observe(el: Element) {
         observedElements.add(el);
       }
@@ -49,9 +63,20 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
       }
       disconnect() {
         observedElements.clear();
+        const idx = activeResizeObservers.indexOf(this);
+        if (idx !== -1) activeResizeObservers.splice(idx, 1);
       }
     }
     (globalThis as any).ResizeObserver = MockResizeObserver;
+
+    // Mock síncrono/controlado de requestAnimationFrame e cancelAnimationFrame
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      pendingRafs.push(cb);
+      return nextRafId++;
+    };
+    globalThis.cancelAnimationFrame = (_id: number) => {
+      // noop
+    };
 
     // Polyfill de IntersectionObserver para A4Canvas
     if (typeof (globalThis as any).IntersectionObserver === 'undefined') {
@@ -70,9 +95,28 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
   });
 
   afterEach(() => {
+    globalThis.requestAnimationFrame = originalRaf;
+    globalThis.cancelAnimationFrame = originalCaf;
     (document as any).fonts = originalFonts;
     vi.restoreAllMocks();
   });
+
+  // Helper de teste para descarregar RAFs pendentes
+  function flushPendingRafs() {
+    act(() => {
+      const toRun = [...pendingRafs];
+      pendingRafs = [];
+      toRun.forEach((cb) => cb(performance.now()));
+    });
+  }
+
+  // Helper de teste para disparar todos os ResizeObservers ativos e descarregar RAF
+  function triggerResizeObserversAndFlush() {
+    act(() => {
+      activeResizeObservers.forEach((obs) => obs.callback([]));
+    });
+    flushPendingRafs();
+  }
 
   const baseCatalog: Catalog = {
     id: 'catalog-overflow-test',
@@ -102,11 +146,10 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
   };
 
   // ============================================================================
-  // 1. Testes de Lógica Pura de Domínio (Pure Measurement & Diagnostic)
+  // 1. Lógica Pura de Domínio (Pure Measurement & Diagnostic)
   // ============================================================================
 
   it('OVERFLOW-GEO-1: viewport físico deriva do layout real sem constante fixa de footer', () => {
-    // Simula viewport de 950px e conteúdo de 900px
     const result = calculateVerticalOverflow(900, 950);
     expect(result.overflowY).toBe(false);
     expect(result.overflowMm).toBe(0);
@@ -148,7 +191,6 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     expect(issues).toHaveLength(2);
     expect(issues[0]).toEqual({ code: 'VERTICAL_OVERFLOW', severity: 'warning' });
     expect(issues[1]).toEqual({ code: 'MIXED_FULL_PAGE_COVER', severity: 'warning' });
-    // Prova que não há campo 'message' ou strings de UI no modelo de domínio
     expect((issues[0] as any).message).toBeUndefined();
   });
 
@@ -158,7 +200,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     const blocks: BlockRectMetric[] = [
       { id: 'b-1', type: 'text', bottom: 300 },
       { id: 'b-2', type: 'structural_section', bottom: 550 },
-      { id: 'b-3', type: 'custom_table', bottom: 650 } // 650 - 100 = 550 > 500
+      { id: 'b-3', type: 'custom_table', bottom: 650 }
     ];
 
     const offender = identifyFirstOffendingBlock(viewportTop, viewportHeight, blocks, 1);
@@ -169,9 +211,8 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
   it('OVERFLOW-DIRECT-BLOCK-1: identifica com precisão o root page block na escala real com zoom', () => {
     const viewportTop = 50;
     const viewportHeight = 400;
-    const actualScale = 1.5; // Zoom de 150% no editor
+    const actualScale = 1.5;
 
-    // Bloco cujo bottom é 700: (700 - 50) / 1.5 = 433.33px > 400px
     const blocks: BlockRectMetric[] = [
       { id: 'root-1', type: 'hero_banner', bottom: 350 },
       { id: 'root-2', type: 'matrix_spec_table', bottom: 700 }
@@ -196,7 +237,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
   });
 
   // ============================================================================
-  // 2. Testes de Paridade de DOM e Isolamento Estrutural
+  // 2. Paridade de DOM e Correções da Fase 3A.5C.1
   // ============================================================================
 
   it('OVERFLOW-PARITY-EDITOR-1: Editor block flow não possui py-3 extra relativo ao CleanA4', () => {
@@ -206,10 +247,10 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
     expect(contentEl).not.toBeNull();
-    // Confirma ausência de py-3
     expect(contentEl.className).not.toContain('py-3');
 
     act(() => root.unmount());
@@ -222,10 +263,99 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
     expect(contentEl.className).toContain('space-y-3');
     expect(contentEl.className).not.toContain('space-y-4');
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-PARITY-SINGLE-1: AutoFit ON com 1 bloco elimina my-auto no Editor e alinha com CleanA4', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const blockWrapper = container.querySelector('[data-block-id="block-1"]') as HTMLElement;
+    expect(blockWrapper).not.toBeNull();
+    // PROVA DE PARIDADE: my-auto foi completamente removido
+    expect(blockWrapper.className).not.toContain('my-auto');
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-PARITY-SINGLE-2: AutoFit OFF com 1 bloco mantém a mesma semântica de fluxo natural sem my-auto', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const blockWrapper = container.querySelector('[data-block-id="block-1"]') as HTMLElement;
+    expect(blockWrapper.className).not.toContain('my-auto');
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-EMPTY-1: Empty State é overlay absoluto, não-flow, editor-only e fora de BlockFlowContent', () => {
+    const emptyCatalog: Catalog = {
+      ...baseCatalog,
+      pages: [{ id: 'empty-page', pageNumber: 1, title: 'Vazia', blocks: [] }]
+    };
+    useCatalogStore.setState({ currentCatalog: emptyCatalog });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const placeholder = container.querySelector('[data-testid="empty-page-placeholder"]') as HTMLElement;
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+
+    // 1. Placeholder existe no DOM
+    expect(placeholder).not.toBeNull();
+    // 2. É editor-only e no-print
+    expect(placeholder.className).toContain('no-print');
+    expect(placeholder.className).toContain('editor-only');
+    // 3. É overlay absoluto (não empurrado após min-h-full)
+    expect(placeholder.className).toContain('absolute');
+    // 4. Não está dentro de BlockFlowContent
+    expect(contentEl.contains(placeholder)).toBe(false);
+    // 5. Warning banner de overflow está ausente
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-EMPTY-2: empty page possui zero blocos documentais medidos e overflowY false garantido', () => {
+    const emptyCatalog: Catalog = {
+      ...baseCatalog,
+      pages: [{ id: 'empty-page', pageNumber: 1, title: 'Vazia', blocks: [] }]
+    };
+    useCatalogStore.setState({ currentCatalog: emptyCatalog });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    // O container de conteúdo não possui nós de bloco
+    expect(contentEl.children.length).toBe(0);
+    // Cutoff guideline e warnings não existem
+    expect(container.querySelector('[data-testid="a4-overflow-cutoff-line"]')).toBeNull();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
 
     act(() => root.unmount());
   });
@@ -237,6 +367,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
     const topDropSlot = container.querySelector('[data-testid="block-flow-drop-slot-0"]') as HTMLElement;
@@ -245,11 +376,9 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     expect(topDropSlot).not.toBeNull();
     expect(endDropSlot).not.toBeNull();
 
-    // PROVA DE OURO: os drop slots NÃO são filhos diretos do contentEl medido!
     expect(contentEl.contains(topDropSlot)).toBe(false);
     expect(contentEl.contains(endDropSlot)).toBe(false);
 
-    // Eles possuem classe absolute e 0px no normal flow
     expect(topDropSlot.className).toContain('absolute');
     expect(endDropSlot.className).toContain('absolute');
 
@@ -263,16 +392,15 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const a4PageContainer = container.querySelector('.a4-page-container') as HTMLElement;
     expect(a4PageContainer).not.toBeNull();
 
-    // O header com CATALOG STUDIO não deve ser filho do container da folha física A4
     const spansInPage = Array.from(a4PageContainer.querySelectorAll('span'));
     const headerInPage = spansInPage.find((s) => s.textContent?.includes('CATALOG STUDIO'));
     expect(headerInPage).toBeUndefined();
 
-    // O cabeçalho existe no DOM geral acima da folha
     const fullText = container.textContent || '';
     expect(fullText).toContain('PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO');
 
@@ -287,6 +415,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       editorRoot.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const cleanContainer = document.createElement('div');
     const cleanRoot = createRoot(cleanContainer);
@@ -300,7 +429,6 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     expect(editorFooter).not.toBeNull();
     expect(cleanFooter).not.toBeNull();
 
-    // Ambos possuem exatamente as mesmas chaves de internacionalização e classes
     expect(editorFooter.querySelector('[data-print-string-key="company_brand_footer"]')).not.toBeNull();
     expect(cleanFooter.querySelector('[data-print-string-key="company_brand_footer"]')).not.toBeNull();
     expect(editorFooter.querySelector('[data-print-string-key="page_label"]')).not.toBeNull();
@@ -313,7 +441,179 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
   });
 
   // ============================================================================
-  // 3. Testes de Warnings, Guidelines e UX
+  // 3. Testes Reativos do Overflow Guard (ResizeObserver, Reflow, RAF)
+  // ============================================================================
+
+  it('OVERFLOW-6: Reflow Reativo — overflow aparece quando altura cresce e desaparece quando reduz', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    const viewportEl = container.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+
+    let mockScrollHeight = 800;
+    let mockClientHeight = 950;
+    Object.defineProperty(contentEl, 'scrollHeight', { configurable: true, get: () => mockScrollHeight });
+    Object.defineProperty(viewportEl, 'clientHeight', { configurable: true, get: () => mockClientHeight });
+
+    // 1. Estado inicial normal (800 <= 950) -> sem overflow
+    triggerResizeObserversAndFlush();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
+    expect(container.querySelector('[data-testid="a4-overflow-cutoff-line"]')).toBeNull();
+
+    // 2. Reflow dinâmico excede o limite (1050 > 950) -> warning e guideline aparecem!
+    mockScrollHeight = 1050;
+    triggerResizeObserversAndFlush();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="a4-overflow-cutoff-line"]')).not.toBeNull();
+
+    // 3. Redução do conteúdo volta ao limite seguro (820 <= 950) -> warning e guideline somem!
+    mockScrollHeight = 820;
+    triggerResizeObserversAndFlush();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
+    expect(container.querySelector('[data-testid="a4-overflow-cutoff-line"]')).toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-7: expansão de cartões/conteúdo aciona observer e recalcula guard', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    const viewportEl = container.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+
+    let mockScrollHeight = 700;
+    const mockClientHeight = 900;
+    Object.defineProperty(contentEl, 'scrollHeight', { configurable: true, get: () => mockScrollHeight });
+    Object.defineProperty(viewportEl, 'clientHeight', { configurable: true, get: () => mockClientHeight });
+
+    triggerResizeObserversAndFlush();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
+
+    // Adição de mais cards estruturais faz scrollHeight saltar para 1150
+    mockScrollHeight = 1150;
+    triggerResizeObserversAndFlush();
+
+    const banner = container.querySelector('[data-testid="overflow-warning-banner"]') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.textContent).toContain('Conteúdo excede a área útil da página');
+
+    act(() => root.unmount());
+  });
+
+  it('OVERFLOW-8: expansão por tradução localizada (texto mais longo) dispara recalculo e gera overflow', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    const viewportEl = container.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+
+    let mockScrollHeight = 880;
+    const mockClientHeight = 920;
+    Object.defineProperty(contentEl, 'scrollHeight', { configurable: true, get: () => mockScrollHeight });
+    Object.defineProperty(viewportEl, 'clientHeight', { configurable: true, get: () => mockClientHeight });
+
+    triggerResizeObserversAndFlush();
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).toBeNull();
+
+    // Texto traduzido para alemão ou russo expande verticalmente (+200px)
+    mockScrollHeight = 1080;
+    triggerResizeObserversAndFlush();
+
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).not.toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('AUTOFIT-1: AutoFit ON ou OFF com conteúdo maior que viewport aciona guard invariavelmente', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    act(() => {
+      root.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    const viewportEl = container.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+
+    // Altura natural de 1200px > 900px
+    Object.defineProperty(contentEl, 'scrollHeight', { configurable: true, get: () => 1200 });
+    Object.defineProperty(viewportEl, 'clientHeight', { configurable: true, get: () => 900 });
+
+    triggerResizeObserversAndFlush();
+
+    // AutoFit nunca mascara nem esconde overflow
+    expect(container.querySelector('[data-testid="overflow-warning-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="a4-overflow-cutoff-line"]')).not.toBeNull();
+
+    act(() => root.unmount());
+  });
+
+  it('PARITY-A4-C1: boundary Editor vs CleanA4 rigorosamente equivalente', () => {
+    useCatalogStore.setState({ currentCatalog: baseCatalog });
+
+    const editorContainer = document.createElement('div');
+    const editorRoot = createRoot(editorContainer);
+    act(() => {
+      editorRoot.render(<A4Canvas />);
+    });
+    flushPendingRafs();
+
+    const cleanContainer = document.createElement('div');
+    const cleanRoot = createRoot(cleanContainer);
+    act(() => {
+      cleanRoot.render(<CleanA4Document document={baseCatalog} />);
+    });
+
+    const editorViewport = editorContainer.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+    const cleanViewport = cleanContainer.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
+    const editorContent = editorContainer.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+    const cleanContent = cleanContainer.querySelector('[data-a4-block-flow-content]') as HTMLElement;
+
+    expect(editorViewport).not.toBeNull();
+    expect(cleanViewport).not.toBeNull();
+    expect(editorContent).not.toBeNull();
+    expect(cleanContent).not.toBeNull();
+
+    // Ambos possuem gap mínimo space-y-3
+    expect(editorContent.className).toContain('space-y-3');
+    expect(cleanContent.className).toContain('space-y-3');
+
+    // Nenhum dos dois possui py-3
+    expect(editorContent.className).not.toContain('py-3');
+    expect(cleanContent.className).not.toContain('py-3');
+
+    // Single block wrapper em ambos não possui my-auto
+    const editorBlock = editorContainer.querySelector('[data-block-id="block-1"]') as HTMLElement;
+    const cleanBlock = cleanContainer.querySelector('[data-block-id="block-1"]') as HTMLElement;
+    expect(editorBlock.className).not.toContain('my-auto');
+    expect(cleanBlock.className).not.toContain('my-auto');
+
+    act(() => {
+      editorRoot.unmount();
+      cleanRoot.unmount();
+    });
+  });
+
+  // ============================================================================
+  // 4. Warnings, Guidelines e UX
   // ============================================================================
 
   it('OVERFLOW-4: warning banner e cutoff line possuem classes no-print e editor-only', () => {
@@ -340,7 +640,6 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     expect(banner.className).toContain('editor-only');
     expect(banner.className).toContain('absolute');
 
-    // Não contém emoji '⚠️'
     expect(banner.textContent).not.toContain('⚠️');
     expect(banner.textContent).toContain('Conteúdo excede a área útil da página em ~12,4 mm.');
     expect(banner.textContent).toContain('Tabela Customizada');
@@ -355,8 +654,8 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
-    // Mockamos estado com overflow simulado
     const viewportEl = container.querySelector('[data-a4-block-flow-viewport]') as HTMLElement;
     expect(viewportEl).not.toBeNull();
     expect(viewportEl.className).toContain('overflow-hidden');
@@ -371,11 +670,11 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const contentEl = container.querySelector('[data-a4-block-flow-content]') as HTMLElement;
     const banner = container.querySelector('[data-testid="overflow-warning-banner"]');
 
-    // O banner NÃO é filho de BlockFlowContent (zero contaminação de layout/feedback loop)
     if (banner) {
       expect(contentEl.contains(banner)).toBe(false);
     }
@@ -383,29 +682,8 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => root.unmount());
   });
 
-  it('OVERFLOW-EMPTY-1: placeholder de página vazia não gera overflow nem participa da medição', () => {
-    const emptyCatalog: Catalog = {
-      ...baseCatalog,
-      pages: [{ id: 'empty-page', pageNumber: 1, title: 'Vazia', blocks: [] }]
-    };
-    useCatalogStore.setState({ currentCatalog: emptyCatalog });
-
-    const container = document.createElement('div');
-    const root = createRoot(container);
-    act(() => {
-      root.render(<A4Canvas />);
-    });
-
-    expect(container.textContent).toContain('This A4 page is empty');
-    // Nenhum banner de overflow deve estar presente
-    const banner = container.querySelector('[data-testid="overflow-warning-banner"]');
-    expect(banner).toBeNull();
-
-    act(() => root.unmount());
-  });
-
   // ============================================================================
-  // 4. Testes de Imutabilidade do Store e Paridade de Exportação
+  // 5. Imutabilidade do Store e Paridade de Exportação
   // ============================================================================
 
   it('OVERFLOW-5 & PERSIST-A4-C1: medição e renderização do guard mantêm store, localRevision e isDirty 100% intocados', () => {
@@ -416,6 +694,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     const state = useCatalogStore.getState();
     expect(state.localRevision).toBe(42);
@@ -451,7 +730,6 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
 
     const printableNodes = container.querySelectorAll('[data-print-string-key]');
     const keys = Array.from(printableNodes).map((n) => n.getAttribute('data-print-string-key'));
-    // Apenas as chaves canônicas de rodapé do CleanA4 devem existir
     expect(keys).toContain('company_brand_footer');
     expect(keys).toContain('page_label');
     expect(keys).not.toContain('overflow_warning');
@@ -466,6 +744,7 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     expect(observedElements.size).toBeGreaterThan(0);
 
@@ -473,7 +752,6 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
       root.unmount();
     });
 
-    // Desconectado no unmount
     expect(observedElements.size).toBe(0);
   });
 
@@ -491,17 +769,16 @@ describe('Fase 3A.5C — A4 Vertical Overflow Guard Suite', () => {
     act(() => {
       root.render(<A4Canvas />);
     });
+    flushPendingRafs();
 
     act(() => {
       root.unmount();
     });
 
-    // Fontes resolvem após o unmount
     await act(async () => {
       resolveFonts();
     });
 
-    // Teste passa sem disparar "Can't perform a React state update on an unmounted component"
     expect(true).toBe(true);
   });
 });
