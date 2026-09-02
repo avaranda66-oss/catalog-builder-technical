@@ -677,4 +677,100 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
     expect(createSpy).toHaveBeenCalled();
     expect(useCatalogStore.getState().currentCatalog?.title).not.toBe('Catálogo Obsoleto no Cache');
   });
+
+  // =========================================================================
+  // TEST 26: Proteção contra Stale Snapshot Restore (A 4ª página nunca é perdida)
+  // =========================================================================
+  it('TEST 26: Adição de página local (3 -> 4) nunca é revertida por snapshot remoto defasado de 3 páginas', async () => {
+    const threePageCatalog: Catalog = {
+      ...baseCatalog,
+      version: 10,
+      pages: [
+        { id: 'p1', pageNumber: 1, pageType: 'cover', title: 'Pág 1', blocks: [] },
+        { id: 'p2', pageNumber: 2, pageType: 'technical', title: 'Pág 2', blocks: [] },
+        { id: 'p3', pageNumber: 3, pageType: 'technical', title: 'Pág 3', blocks: [] }
+      ]
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: structuredClone(threePageCatalog),
+      savedCatalogs: [structuredClone(threePageCatalog)],
+      localRevision: 0,
+      lastAcknowledgedLocalRevision: 0,
+      isDirty: false,
+      syncStatus: 'synced'
+    });
+
+    // Mock do save inicial que atrasa a resposta
+    let resolveSave: (val: any) => void;
+    const savePromise = new Promise((resolve) => {
+      resolveSave = resolve;
+    });
+
+    vi.spyOn(SupabaseService, 'saveCatalog').mockImplementationOnce(async () => {
+      await savePromise;
+      return { success: true, data: { id: catalogUUID, version: 11 } };
+    });
+
+    // 1. Usuário adiciona a Folha 4
+    useCatalogStore.getState().addPage('technical');
+
+    const stateAfterAdd = useCatalogStore.getState();
+    expect(stateAfterAdd.currentCatalog?.pages.length).toBe(4);
+    expect(stateAfterAdd.localRevision).toBe(1);
+    expect(stateAfterAdd.isDirty).toBe(true);
+
+    // 2. Simula evento Realtime / Snapshot antigo do servidor (v10 com apenas 3 páginas) chegando enquanto a 4ª página está ativa
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 10, // Versão antiga
+        name: threePageCatalog.title,
+        brand: {
+          title: threePageCatalog.title,
+          pages: threePageCatalog.pages // Apenas 3 páginas
+        }
+      }
+    });
+
+    // Verifica que o Realtime NÃO sobrescreveu a 4ª página
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(4);
+
+    // 3. Simula chamada assíncrona a refreshCatalog com snapshot de 3 páginas
+    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValue({
+      success: true,
+      data: {
+        catalogs: [
+          {
+            id: catalogUUID,
+            name: threePageCatalog.title,
+            status: 'published',
+            version: 10,
+            brand: threePageCatalog,
+            created_at: '',
+            updated_at: ''
+          }
+        ],
+        products: [],
+        templates: [],
+        userRole: 'admin'
+      }
+    });
+
+    await useCatalogStore.getState().refreshCatalog(catalogUUID);
+
+    // Proteção de segurança: refreshCatalog DEVE ser bloqueado e a 4ª página DEVE continuar intacta
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(4);
+
+    // 4. Conclui o salvamento legítimo no servidor
+    resolveSave!({ success: true });
+
+    await vi.waitFor(() => {
+      const finalState = useCatalogStore.getState();
+      expect(finalState.currentCatalog?.pages.length).toBe(4); // Folha 4 PRESERVADA
+      expect(finalState.currentCatalog?.version).toBe(11);
+      expect(finalState.syncStatus).toBe('synced');
+    });
+  });
 });

@@ -18,6 +18,38 @@ export interface InFlightSaveInfo {
   catalogId: string;
   expectedVersion: number;
   targetVersion: number;
+  capturedRevision: number;
+}
+
+// Helper de Diagnóstico e Rastreamento de Estado
+export function debugSetCatalog(
+  source: string,
+  previous: Catalog | null,
+  next: Catalog | null,
+  extra?: Record<string, any>
+) {
+  const prevCount = previous?.pages?.length ?? 0;
+  const nextCount = next?.pages?.length ?? 0;
+
+  console.log(`[DEBUG-CATALOG-STATE] [${source}]`, {
+    timestamp: new Date().toISOString(),
+    id: next?.id,
+    prevVersion: previous?.version,
+    nextVersion: next?.version,
+    prevPagesCount: prevCount,
+    nextPagesCount: nextCount,
+    prevTitle: previous?.title,
+    nextTitle: next?.title,
+    ...extra
+  });
+
+  if (previous && next && nextCount < prevCount) {
+    console.warn(`🚨 [PAGES DROPPED] Source "${source}" reduziu páginas de ${prevCount} para ${nextCount}!`, {
+      prevCatalog: previous,
+      nextCatalog: next
+    });
+    console.trace();
+  }
 }
 
 interface CatalogState {
@@ -25,15 +57,18 @@ interface CatalogState {
   activePageIndex: number;
   selectedBlockId: string | null;
 
-  // Status de Sincronização & Persistência (Fase 1 & 1.1)
+  // Status de Sincronização, Revisão Local & Persistência (Fase 1.2)
   isSaving: boolean;
   isDirty: boolean;
+  localRevision: number;
+  lastAcknowledgedLocalRevision: number;
   syncStatus: SyncStatus;
   syncError: string | null;
   serverSavedAt: string | null;
   cachedAt: string | null;
   lastSavedAt: string | null;
   inFlightSave: InFlightSaveInfo | null;
+  realtimeStatus: string;
 
   savedCatalogs: Catalog[];
   isLoading: boolean;
@@ -86,20 +121,28 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   isSaving: false,
   isDirty: false,
+  localRevision: 0,
+  lastAcknowledgedLocalRevision: 0,
   syncStatus: 'synced',
   syncError: null,
   serverSavedAt: null,
   cachedAt: null,
   lastSavedAt: null,
   inFlightSave: null,
+  realtimeStatus: 'INITIALIZING',
 
   savedCatalogs: [],
   isLoading: false,
 
-  // FASE 1.1 — Item 1: setCurrentCatalog é um SETTER PURO DE ESTADO sem side-effects de rede
-  setCurrentCatalog: (currentCatalog, markDirty = true) => {
+  // FASE 1.1: setCurrentCatalog é um SETTER PURO sem side-effects de rede
+  setCurrentCatalog: (nextCatalog, markDirty = true) => {
+    const prev = get().currentCatalog;
+    debugSetCatalog('setCurrentCatalog', prev, nextCatalog, { markDirty });
+    const nextRev = markDirty ? get().localRevision + 1 : get().localRevision;
+
     set({
-      currentCatalog,
+      currentCatalog: nextCatalog,
+      localRevision: nextRev,
       isDirty: markDirty,
       syncStatus: markDirty ? 'dirty' : 'synced'
     });
@@ -109,11 +152,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId }),
 
   // =========================================================================
-  // FASE 1A: MUTAÇÕES LOCAIS — NENHUMA INCREMENTA VERSION POR CONTA PRÓPRIA
+  // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION
   // =========================================================================
 
   addPage: (type = 'technical') => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const newPageNumber = currentCatalog.pages.length + 1;
@@ -131,9 +174,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
+    const nextRev = localRevision + 1;
+    debugSetCatalog('addPage', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: currentCatalog.pages.length,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -141,7 +188,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   removePage: (pageId) => {
-    const { currentCatalog, activePageIndex } = get();
+    const { currentCatalog, activePageIndex, localRevision } = get();
     if (!currentCatalog || currentCatalog.pages.length <= 1) return;
 
     const updatedPages = currentCatalog.pages
@@ -155,9 +202,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextIndex = Math.min(activePageIndex, updatedPages.length - 1);
+    const nextRev = localRevision + 1;
+    debugSetCatalog('removePage', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: nextIndex,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -165,7 +216,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   reorderPages: (fromIndex, toIndex) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const pages = [...currentCatalog.pages];
@@ -179,9 +230,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
+    const nextRev = localRevision + 1;
+    debugSetCatalog('reorderPages', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: toIndex,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -189,15 +244,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   setPageTitle: (pageId, title) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) =>
       p.id === pageId ? { ...p, title } : p
     );
 
+    const updatedCatalog = { ...currentCatalog, pages: updatedPages, updatedAt: new Date().toISOString() };
+    const nextRev = localRevision + 1;
+    debugSetCatalog('setPageTitle', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: { ...currentCatalog, pages: updatedPages, updatedAt: new Date().toISOString() },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -205,7 +265,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   addBlock: (pageId, blockData) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const newBlock: ContentBlock = {
@@ -223,9 +283,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
+    const nextRev = localRevision + 1;
+    debugSetCatalog('addBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
       currentCatalog: updatedCatalog,
       selectedBlockId: newBlock.id,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -233,7 +297,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   updateBlock: (pageId, blockId, updates) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) => {
@@ -244,12 +308,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       };
     });
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('updateBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -257,7 +327,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   removeBlock: (pageId, blockId) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) => {
@@ -268,13 +338,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       };
     });
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('removeBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
       selectedBlockId: null,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -282,7 +358,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   updateCellOverride: (blockId, rowId, fieldKey, value) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) => ({
@@ -305,12 +381,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       })
     }));
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('updateCellOverride', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -318,7 +400,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   restoreCellToLibrary: (blockId, rowId, fieldKey) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) => ({
@@ -340,12 +422,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       })
     }));
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('restoreCellToLibrary', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -353,7 +441,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   addRowToTable: (blockId, productRefId) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const newRow = {
@@ -376,12 +464,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       })
     }));
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('addRowToTable', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -389,7 +483,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   removeRowFromTable: (blockId, rowId) => {
-    const { currentCatalog } = get();
+    const { currentCatalog, localRevision } = get();
     if (!currentCatalog) return;
 
     const updatedPages = currentCatalog.pages.map((p) => ({
@@ -403,12 +497,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       })
     }));
 
+    const updatedCatalog = {
+      ...currentCatalog,
+      pages: updatedPages,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextRev = localRevision + 1;
+    debugSetCatalog('removeRowFromTable', currentCatalog, updatedCatalog, { localRevision: nextRev });
+
     set({
-      currentCatalog: {
-        ...currentCatalog,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString()
-      },
+      currentCatalog: updatedCatalog,
+      localRevision: nextRev,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -416,7 +516,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   // =========================================================================
-  // FASE 1B, 1C & 1.1: FILA SINGLE-FLIGHT, ERROR CLASSIFICATION & IN-FLIGHT TRACKING
+  // FASE 1B, 1C & 1.2: FILA SINGLE-FLIGHT, REVISION ACK & NUNCA RESTAURAR SNAPSHOT ANTIGO
   // =========================================================================
 
   saveCurrentCatalog: async (): Promise<SaveResult> => {
@@ -439,10 +539,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         const catalogSnapshot = get().currentCatalog;
         if (!catalogSnapshot) break;
 
+        const capturedRevision = get().localRevision;
         const expectedVersion = catalogSnapshot.version ?? 0;
         const targetVersion = expectedVersion === 0 ? 1 : expectedVersion + 1;
 
-        // Rastreia voo para resolução de eco do Realtime (Fase 1.1 Item 4)
+        // Rastreia voo para resolução de eco do Realtime e controle de revisão
         set({
           isSaving: true,
           syncStatus: 'saving',
@@ -450,11 +551,12 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           inFlightSave: {
             catalogId: catalogSnapshot.id,
             expectedVersion,
-            targetVersion
+            targetVersion,
+            capturedRevision
           }
         });
 
-        // 1. Salva em Cache Local (IndexedDB / localStorage backup — sem mudar active ID)
+        // 1. Salva em Cache Local (IndexedDB / localStorage backup)
         try {
           await StorageService.cacheCatalog(catalogSnapshot);
           set({ cachedAt: new Date().toISOString() });
@@ -466,20 +568,25 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         const remoteRes = await SupabaseService.saveCatalog(
           catalogSnapshot,
           expectedVersion,
-          `Salvamento de "${catalogSnapshot.title}"`
+          `Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`
         );
 
         if (remoteRes.success && remoteRes.data) {
           const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
           const nowIso = new Date().toISOString();
 
-          // Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente
+          // REGRA DE SEGURANÇA 1.2: Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente!
+          // NUNCA restaura um snapshot antigo de páginas/blocos sobre o estado ativo!
           const activeCurrent = get().currentCatalog;
           if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
+            const nextCatalog = { ...activeCurrent, version: confirmedVersion };
+            debugSetCatalog('saveCurrentCatalog:ACK', activeCurrent, nextCatalog, { confirmedVersion, capturedRevision });
+
             set({
-              currentCatalog: { ...activeCurrent, version: confirmedVersion },
+              currentCatalog: nextCatalog,
               serverSavedAt: nowIso,
-              lastSavedAt: nowIso
+              lastSavedAt: nowIso,
+              lastAcknowledgedLocalRevision: capturedRevision
             });
           }
 
@@ -489,12 +596,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             version: confirmedVersion
           };
 
-          if (!hasPendingSave) {
+          // Verifica se ocorreram novas edições locais enquanto o save estava em voo
+          const currentRev = get().localRevision;
+          if (currentRev === capturedRevision && !hasPendingSave) {
             set({ isDirty: false, syncStatus: 'synced', syncError: null });
             break;
           }
+          // Se currentRev > capturedRevision, continua o loop imediatamente para salvar as novas edições
         } else if (remoteRes.conflict || remoteRes.errorCode === '40001') {
-          // FASE 1C / 1.1: Conflito Real 40001
+          // FASE 1C: Conflito Real 40001
           finalResult = {
             success: false,
             status: 'conflict',
@@ -508,7 +618,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
           break;
         } else if (remoteRes.errorCode === '23505') {
-          // FASE 1.1: Erro de Unique Name
           finalResult = {
             success: false,
             status: 'error',
@@ -522,7 +631,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
           break;
         } else if (remoteRes.errorCode === '22023') {
-          // FASE 1.1: Erro de Validação de Payload
           finalResult = {
             success: false,
             status: 'error',
@@ -536,7 +644,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
           break;
         } else if (remoteRes.errorCode === '42501') {
-          // FASE 1.1: Permissão Negada
           finalResult = {
             success: false,
             status: 'error',
@@ -550,7 +657,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
           break;
         } else if (remoteRes.errorCode === 'CLIENT_OFFLINE' || remoteRes.errorCode === 'NETWORK_ERROR') {
-          // FASE 1.1: Erro Genuíno de Rede / Offline
           finalResult = {
             success: false,
             status: 'offline',
@@ -563,7 +669,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
           break;
         } else {
-          // Outro erro PostgreSQL / Servidor
           finalResult = {
             success: false,
             status: 'error',
@@ -596,6 +701,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     set({
       currentCatalog: { ...currentCatalog, version: serverVersion },
+      isDirty: true,
       syncStatus: 'dirty',
       syncError: null
     });
@@ -605,11 +711,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   resolveConflictReloadServer: async (): Promise<void> => {
     const { currentCatalog } = get();
     if (!currentCatalog) return;
-    await get().refreshCatalog(currentCatalog.id);
+    const workspaceRes = await get().loadWorkspace();
+    const targetRemote = workspaceRes.catalogs.find((c) => c.id === currentCatalog.id);
+    if (targetRemote) {
+      debugSetCatalog('resolveConflictReloadServer', currentCatalog, targetRemote);
+      set({
+        currentCatalog: targetRemote,
+        isDirty: false,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
+        syncStatus: 'synced',
+        syncError: null
+      });
+    }
   },
 
   // =========================================================================
-  // FASE 1G & 1.1: WORKSPACE, CACHE & SEPARAÇÃO DE ACTIVE CATALOG PREFERENCE
+  // FASE 1G & 1.2: WORKSPACE & REFRESH COM GUARDS DE SEGURANÇA
   // =========================================================================
 
   loadWorkspace: async () => {
@@ -633,7 +751,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
         set({ savedCatalogs: remoteCatalogs });
 
-        // FASE 1.1 Item 3: Atualiza cache de conteúdo SEM alterar cb_active_catalog_id
         for (const cat of remoteCatalogs) {
           void StorageService.cacheCatalog(cat);
         }
@@ -662,16 +779,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   openCatalog: async (id: string) => {
     set({ isLoading: true });
     try {
-      // 1. Tenta carregar do workspace remoto
       const workspaceRes = await get().loadWorkspace();
       if (workspaceRes.success) {
         const targetRemote = workspaceRes.catalogs.find((c) => c.id === id);
         if (targetRemote) {
+          const prev = get().currentCatalog;
+          debugSetCatalog('openCatalog:Remote', prev, targetRemote);
           set({
             currentCatalog: targetRemote,
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
+            localRevision: 0,
+            lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
             syncError: null
           });
@@ -680,13 +800,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       }
 
-      // 2. Fallback offline no StorageService
+      // Fallback offline no StorageService
       const cached = await StorageService.loadCatalog(id);
       if (cached) {
+        const prev = get().currentCatalog;
+        debugSetCatalog('openCatalog:Cached', prev, cached);
         set({
           currentCatalog: cached,
           activePageIndex: 0,
           selectedBlockId: null,
+          isDirty: false,
+          localRevision: 0,
+          lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
           syncError: 'Catálogo carregado do cache local.'
         });
@@ -698,12 +823,27 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   refreshCatalog: async (id: string) => {
+    const { isDirty, isSaving, localRevision, lastAcknowledgedLocalRevision, currentCatalog } = get();
+
+    // REGRA DE SEGURANÇA 1.2: NÃO substitui currentCatalog se houver edições locais pendentes
+    if (isDirty || isSaving || localRevision > lastAcknowledgedLocalRevision) {
+      console.warn(`🛡️ [SAFETY GUARD] refreshCatalog(${id}) bloqueado para proteger alterações locais não sincronizadas.`);
+      set({
+        syncStatus: 'conflict',
+        syncError: 'Alteração remota detectada enquanto você editava. Suas alterações locais foram mantidas.'
+      });
+      return;
+    }
+
     const workspaceRes = await get().loadWorkspace();
     const targetRemote = workspaceRes.catalogs.find((c) => c.id === id);
-    if (targetRemote) {
+    if (targetRemote && currentCatalog && targetRemote.id === currentCatalog.id) {
+      debugSetCatalog('refreshCatalog:SafeApply', currentCatalog, targetRemote);
       set({
         currentCatalog: targetRemote,
         isDirty: false,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
         syncStatus: 'synced',
         syncError: null
       });
@@ -720,30 +860,36 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           const preferredId = StorageService.getActiveCatalogId();
           const targetCatalog = (preferredId ? workspaceRes.catalogs.find((c) => c.id === preferredId) : null) || workspaceRes.catalogs[0];
 
+          debugSetCatalog('loadLatestCatalog:Remote', get().currentCatalog, targetCatalog);
           set({
             currentCatalog: targetCatalog,
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
+            localRevision: 0,
+            lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
             syncError: null
           });
           StorageService.setActiveCatalogId(targetCatalog.id);
           return;
         } else {
-          // FASE 1.1 Item 9: Workspace online legitimamente vazio -> cria novo sem ressuscitar cache obsoleto
           await get().createCatalogFromPreset();
           return;
         }
       }
 
-      // Fallback offline genuíno (quando workspaceRes.success é false)
+      // Fallback offline
       const cached = await StorageService.loadCatalog();
       if (cached) {
+        debugSetCatalog('loadLatestCatalog:Cached', get().currentCatalog, cached);
         set({
           currentCatalog: cached,
           activePageIndex: 0,
           selectedBlockId: null,
+          isDirty: false,
+          localRevision: 0,
+          lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
           syncError: 'Operando em modo offline com cache local.'
         });
@@ -776,7 +922,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const source = savedCatalogs.find((c) => c.id === id) || (await StorageService.loadCatalog(id));
     if (!source) return null;
 
-    // FASE 1.1 Item 7: Título único inteligente para evitar violação de 23505
     const existingTitles = savedCatalogs.map((c) => c.title);
     const uniqueTitle = generateUniqueCatalogTitle(source.title, existingTitles);
 
@@ -785,15 +930,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       ...structuredClone(source),
       id: newId,
       title: uniqueTitle,
-      version: 0, // Novo documento não confirmado
+      version: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
+    debugSetCatalog('duplicateCatalog', get().currentCatalog, duplicated);
     set({
       currentCatalog: duplicated,
       activePageIndex: 0,
       selectedBlockId: null,
+      localRevision: 1,
+      lastAcknowledgedLocalRevision: 0,
       isDirty: true,
       syncStatus: 'saving'
     });
@@ -820,7 +968,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     if (currentCatalog && currentCatalog.id === id) {
       if (remaining.length > 0) {
-        set({ currentCatalog: remaining[0], activePageIndex: 0, selectedBlockId: null, isDirty: false, syncStatus: 'synced' });
+        debugSetCatalog('deleteCatalog:Remaining', currentCatalog, remaining[0]);
+        set({
+          currentCatalog: remaining[0],
+          activePageIndex: 0,
+          selectedBlockId: null,
+          isDirty: false,
+          localRevision: 0,
+          lastAcknowledgedLocalRevision: 0,
+          syncStatus: 'synced'
+        });
         StorageService.setActiveCatalogId(remaining[0].id);
       } else {
         await get().createCatalogFromPreset();
@@ -841,10 +998,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       createdAt: new Date().toISOString()
     };
 
+    debugSetCatalog('createCatalogFromPreset', get().currentCatalog, newCatalog);
     set({
       currentCatalog: newCatalog,
       activePageIndex: 0,
       selectedBlockId: null,
+      localRevision: 1,
+      lastAcknowledgedLocalRevision: 0,
       isDirty: true,
       syncStatus: 'saving'
     });
