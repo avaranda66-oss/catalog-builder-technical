@@ -23,6 +23,7 @@ import { PrintableTextRegistry } from '../../src/translation/printable-text.regi
 import { TranslationApplierRegistry } from '../../src/translation/translation-applier.registry';
 import { StructuralSectionBlock } from '../../src/components/editor/blocks/StructuralSectionBlock';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
+import { RendererParityAuditor } from '../../src/translation/renderer-parity.auditor';
 
 describe('Fase 3A.1 — Canvas Domain Foundation', () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -575,6 +576,106 @@ describe('Fase 3A.1 — Canvas Domain Foundation', () => {
     expect(container.querySelector('[data-block-type="structural_section"]')).not.toBeNull();
     expect(container.textContent).toContain('CONECTIVIDADE E LIGAÇÕES FRONTAIS');
     expect(container.textContent).toContain('Integração direta com Presys Suite e calibração RBC automatizada.');
+
+    await act(async () => root.unmount());
+  });
+
+  it('CANVAS-RENDER-3: Não há vazamento textual de iconId no DOM ou no PDF', async () => {
+    const block = createPilotStructuralBlock();
+    const catalog = createCatalogWithBlock(block, 1);
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: catalog }));
+    });
+
+    const text = container.textContent || '';
+    expect(text).not.toContain('[network]');
+    expect(text).not.toContain('[monitor]');
+    expect(text).not.toContain('[usb]');
+    expect(text).not.toContain('[database]');
+    expect(text).not.toContain('network');
+    expect(text).not.toContain('monitor');
+    expect(text).not.toContain('usb');
+    expect(text).not.toContain('database');
+
+    await act(async () => root.unmount());
+  });
+
+  // ==========================================================================
+  // GRUPO 6: PARIDADE ESTRITA COM RENDERER PARITY AUDITOR (2 Testes)
+  // ==========================================================================
+
+  it('CANVAS-PARITY-1: RendererParityAuditor atinge 100% de cobertura com 0 órfãos e 0 ausências na seção estrutural', async () => {
+    const block = createPilotStructuralBlock();
+    const catalog = createCatalogWithBlock(block, 1);
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: catalog }));
+    });
+
+    const result = RendererParityAuditor.auditRenderedDOM(container, catalog);
+
+    if (result.orphanTextNodes.length > 0) {
+      console.error('ORPHAN TEXT NODES:', JSON.stringify(result.orphanTextNodes, null, 2));
+    }
+    if (result.missingExpectedNodes.length > 0) {
+      console.error('MISSING EXPECTED NODES:', JSON.stringify(result.missingExpectedNodes, null, 2));
+    }
+    if (result.sourceMismatchNodes.length > 0) {
+      console.error('SOURCE MISMATCH NODES:', JSON.stringify(result.sourceMismatchNodes, null, 2));
+    }
+
+    expect(result.orphanTextNodes.length).toBe(0);
+    expect(result.missingExpectedNodes.length).toBe(0);
+    expect(result.sourceMismatchNodes.length).toBe(0);
+    expect(result.rendererPrintableParityCoverage).toBe(100);
+    expect(result.isComplete).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('CANVAS-PARITY-2: Target traduzido mantém paridade bidirecional no DOM com 0 órfãos e mesmos stable node IDs', async () => {
+    const block = createPilotStructuralBlock();
+    const catalog = createCatalogWithBlock(block, 1);
+
+    const translations = [
+      { id: `b${block.id}_sec_title`, text: 'CONNECTIVITÉ ET LIAISONS FRONTALES' },
+      { id: `b${block.id}_sec_subtitle`, text: 'Panneau numérique avec interfaces de terrain isolées.' },
+      { id: `b${block.id}_sec_badge`, text: 'Numérique & Métrologie 4.0' },
+      { id: `b${block.id}_card_11111111-1111-4111-8111-111111111111_title`, text: 'Logiciel' },
+      { id: `b${block.id}_card_11111111-1111-4111-8111-111111111111_body`, text: 'Intégration directe avec Presys Suite.' },
+      { id: `b${block.id}_card_11111111-1111-4111-8111-111111111111_badge`, text: 'Logiciel' },
+      { id: `b${block.id}_card_22222222-2222-4222-8222-222222222222_title`, text: 'Protocoles' },
+      { id: `b${block.id}_card_22222222-2222-4222-8222-222222222222_body`, text: 'Communication native HART® et Modbus.' },
+      { id: `b${block.id}_card_22222222-2222-4222-8222-222222222222_badge`, text: 'Protocoles' },
+      { id: `b${block.id}_card_33333333-3333-4333-8333-333333333333_title`, text: 'Matériel' },
+      { id: `b${block.id}_card_33333333-3333-4333-8333-333333333333_body`, text: 'Ports USB et Ethernet frontaux.' },
+      { id: `b${block.id}_card_33333333-3333-4333-8333-333333333333_badge`, text: 'Matériel' },
+      { id: `b${block.id}_card_44444444-4444-4444-8444-444444444444_title`, text: 'Mémoire' },
+      { id: `b${block.id}_card_44444444-4444-4444-8444-444444444444_body`, text: 'Datalogger interne avec haute capacité.' },
+      { id: `b${block.id}_card_44444444-4444-4444-8444-444444444444_badge`, text: 'Mémoire' }
+    ];
+
+    const { translatedCatalog, unappliedCount } = TranslationApplierRegistry.apply(catalog, translations, 'fr-FR');
+    expect(unappliedCount).toBe(0);
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CleanA4Document, { document: translatedCatalog }));
+    });
+
+    const result = RendererParityAuditor.auditRenderedDOM(container, translatedCatalog);
+
+    expect(result.orphanTextNodes.length).toBe(0);
+    expect(result.missingExpectedNodes.length).toBe(0);
+    expect(result.sourceMismatchNodes.length).toBe(0);
+    expect(result.rendererPrintableParityCoverage).toBe(100);
+    expect(result.isComplete).toBe(true);
 
     await act(async () => root.unmount());
   });
