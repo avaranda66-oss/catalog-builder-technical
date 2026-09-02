@@ -6,6 +6,7 @@ import { useCatalogStore } from './stores/useCatalogStore';
 import { useAuthStore } from './stores/useAuthStore';
 import { useLibraryStore } from './stores/useLibraryStore';
 import { useUIStore } from './stores/useUIStore';
+import { usePresenceStore } from './stores/usePresenceStore';
 
 if (typeof window !== 'undefined') {
   const isDebugE2E = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true';
@@ -14,6 +15,7 @@ if (typeof window !== 'undefined') {
     (window as any).useAuthStore = useAuthStore;
     (window as any).useLibraryStore = useLibraryStore;
     (window as any).useUIStore = useUIStore;
+    (window as any).usePresenceStore = usePresenceStore;
   }
 }
 

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { PresenceService, ParticipantSession } from '../services/presence.service';
+import { PresenceService, ParticipantSession, PresenceConnectionStatus } from '../services/presence.service';
 import { getClientInstanceId } from './useCatalogStore';
 
 export interface PresenceState {
-  presenceStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  presenceStatus: PresenceConnectionStatus;
   activeCatalogId: string | null;
   documentKind: 'catalog' | 'template';
   currentSession: ParticipantSession | null;
@@ -27,6 +27,8 @@ export interface PresenceState {
   getRemoteParticipants: () => ParticipantSession[];
   getParticipantsOnPage: (pageNumber: number) => ParticipantSession[];
   getParticipantsOnBlock: (blockId: string) => ParticipantSession[];
+  getUniqueUsersCount: () => number;
+  getTotalSessionsCount: () => number;
 }
 
 export const usePresenceStore = create<PresenceState>((set, get) => ({
@@ -69,19 +71,23 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       pageId,
       (syncedParticipants) => {
         get().handlePresenceSync(syncedParticipants);
+      },
+      (status) => {
+        set({
+          presenceStatus: status,
+          currentSession: PresenceService.getCurrentSession()
+        });
       }
     );
 
-    const initialSession = PresenceService.getCurrentSession();
     set({
-      presenceStatus: 'connected',
-      currentSession: initialSession
+      currentSession: PresenceService.getCurrentSession()
     });
   },
 
   trackLocation: (pageNumber: number, pageId?: string, blockId?: string | null, blockType?: string | null) => {
     const { presenceStatus, activeCatalogId } = get();
-    if (presenceStatus !== 'connected' || !activeCatalogId) return;
+    if ((presenceStatus !== 'connected' && presenceStatus !== 'connecting') || !activeCatalogId) return;
 
     // Cancela qualquer timer de edição pendente se o bloco mudou
     const currentTimer = get().editingTimeoutId;
@@ -160,7 +166,7 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     if (timer) {
       clearTimeout(timer);
     }
-    PresenceService.leave();
+    void PresenceService.leave();
     set({
       presenceStatus: 'disconnected',
       activeCatalogId: null,
@@ -176,7 +182,8 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     const myKey = currentSession?.presenceKey;
     const myClientId = getClientInstanceId();
 
-    return Object.values(participants).filter((p) => {
+    return Object.values(participants || {}).filter((p) => {
+      if (!p) return false;
       if (myKey && p.presenceKey === myKey) return false;
       if (p.clientInstanceId === myClientId) return false;
       return true;
@@ -185,12 +192,26 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
 
   getParticipantsOnPage: (pageNumber: number) => {
     const remotes = get().getRemoteParticipants();
-    return remotes.filter((p) => p.pageNumber === pageNumber);
+    return remotes.filter((p) => p && p.pageNumber === pageNumber);
   },
 
   getParticipantsOnBlock: (blockId: string) => {
     if (!blockId) return [];
     const remotes = get().getRemoteParticipants();
-    return remotes.filter((p) => p.blockId === blockId);
+    return remotes.filter((p) => p && p.blockId === blockId);
+  },
+
+  getUniqueUsersCount: () => {
+    const { currentSession } = get();
+    const remotes = get().getRemoteParticipants();
+    const all = currentSession ? [currentSession, ...remotes] : remotes;
+    const userIds = all.map((s) => s?.userId).filter(Boolean);
+    return new Set(userIds).size;
+  },
+
+  getTotalSessionsCount: () => {
+    const { currentSession } = get();
+    const remotes = get().getRemoteParticipants();
+    return (currentSession ? 1 : 0) + remotes.length;
   }
 }));

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, FileText, Image, Table, LayoutTemplate } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
@@ -14,12 +14,26 @@ export const PageThumbnailList: React.FC = () => {
   } = useCatalogStore();
 
   const getParticipantsOnPage = usePresenceStore((state) => state.getParticipantsOnPage);
-
   const [sidebarTab, setSidebarTab] = useState<'pages' | 'blocks'>('pages');
+  const thumbnailRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Efeito para manter a miniatura da página ativa visível na barra lateral
+  useEffect(() => {
+    if (sidebarTab === 'pages') {
+      const activeEl = thumbnailRefs.current[activePageIndex];
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [activePageIndex, sidebarTab]);
 
   if (!currentCatalog) return null;
 
   const handleSelectPage = (index: number, pageId: string) => {
+    // Avisa o observer do Canvas para pausar durante o scroll suave
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('presys:programmatic-page-scroll'));
+    }
     setActivePageIndex(index);
     const element = document.getElementById(`page-container-${pageId}`);
     if (element) {
@@ -92,6 +106,9 @@ export const PageThumbnailList: React.FC = () => {
               return (
                 <div
                   key={page.id}
+                  ref={(el) => {
+                    thumbnailRefs.current[index] = el;
+                  }}
                   onClick={() => handleSelectPage(index, page.id)}
                   className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col gap-1.5 ${
                     isActive

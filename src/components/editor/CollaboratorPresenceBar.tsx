@@ -17,12 +17,33 @@ export const CollaboratorPresenceBar: React.FC = () => {
     currentSession,
     initializePresence,
     trackLocation,
-    getRemoteParticipants
+    getRemoteParticipants,
+    getUniqueUsersCount,
+    getTotalSessionsCount
   } = usePresenceStore();
 
-  const remoteParticipants = getRemoteParticipants();
-  const totalCount = (currentSession ? 1 : 0) + remoteParticipants.length;
+  const remoteParticipants = getRemoteParticipants ? getRemoteParticipants() : [];
+  const uniqueUsers = getUniqueUsersCount ? getUniqueUsersCount() : 1;
+  const totalSessions = getTotalSessionsCount ? getTotalSessionsCount() : 1;
   const isTemplate = editorContext?.kind === 'template';
+
+  // Label amigável e preciso que diferencia pessoas de sessões abertas
+  const getDisplayCountLabel = () => {
+    if (presenceStatus === 'reconnecting') return 'Reconectando...';
+    if (presenceStatus === 'connecting') return 'Conectando...';
+    if (presenceStatus === 'error') return 'Offline';
+
+    if (uniqueUsers <= 1 && totalSessions <= 1) {
+      return '1 participante';
+    }
+    if (uniqueUsers === 1 && totalSessions > 1) {
+      return `1 colaborador · ${totalSessions} sessões`;
+    }
+    if (uniqueUsers > 1 && totalSessions === uniqueUsers) {
+      return `${uniqueUsers} colaboradores`;
+    }
+    return `${uniqueUsers} colaboradores · ${totalSessions} sessões`;
+  };
 
   // Fecha o popover ao clicar fora
   useEffect(() => {
@@ -49,7 +70,7 @@ export const CollaboratorPresenceBar: React.FC = () => {
 
   // Atualiza a localização (página/bloco) do usuário local
   useEffect(() => {
-    if (currentCatalog?.id && presenceStatus === 'connected') {
+    if (currentCatalog?.id && (presenceStatus === 'connected' || presenceStatus === 'connecting')) {
       const activePage = currentCatalog.pages[activePageIndex];
       const selectedBlock = activePage?.blocks?.find((b) => b.id === selectedBlockId);
       trackLocation(
@@ -73,12 +94,19 @@ export const CollaboratorPresenceBar: React.FC = () => {
       >
         {/* Indicador de Status Realtime */}
         <span className="flex h-2 w-2 relative">
-          {presenceStatus === 'connected' ? (
+          {presenceStatus === 'connected' && (
             <>
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </>
-          ) : (
+          )}
+          {presenceStatus === 'reconnecting' && (
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 animate-pulse"></span>
+          )}
+          {presenceStatus === 'connecting' && (
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500 animate-pulse"></span>
+          )}
+          {(presenceStatus === 'disconnected' || presenceStatus === 'error') && (
             <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-300"></span>
           )}
         </span>
@@ -116,11 +144,7 @@ export const CollaboratorPresenceBar: React.FC = () => {
         {/* Label de Contagem e Detalhes */}
         <div className="flex items-center gap-1 font-medium text-slate-700">
           <Users className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
-          <span>
-            {totalCount === 1
-              ? '1 participante'
-              : `${totalCount} colaboradores`}
-          </span>
+          <span>{getDisplayCountLabel()}</span>
           <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
         </div>
       </button>
@@ -134,7 +158,7 @@ export const CollaboratorPresenceBar: React.FC = () => {
               Presença em Tempo Real
             </span>
             <span className="text-[10.5px] font-mono text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
-              {totalCount} ativo(s)
+              {totalSessions} sessão(ões) · {uniqueUsers} usuário(s)
             </span>
           </div>
 

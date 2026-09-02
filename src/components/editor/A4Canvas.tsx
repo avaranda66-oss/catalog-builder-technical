@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus,
   Trash2,
@@ -54,6 +54,138 @@ export const A4Canvas: React.FC = () => {
   const [hoveredTooltip, setHoveredTooltip] = useState<HoverTooltipItem | null>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition | null>(null);
   const [autoFitPages, setAutoFitPages] = useState<Record<string, boolean>>({});
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScrollRef = useRef<boolean>(false);
+  const programmaticScrollTimerRef = useRef<any>(null);
+  const locationBroadcastTimerRef = useRef<any>(null);
+
+  // Listener para scroll programático disparado pela thumbnail
+  useEffect(() => {
+    const handleProgrammaticScrollStart = () => {
+      isProgrammaticScrollRef.current = true;
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current);
+      }
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 750);
+    };
+
+    window.addEventListener('presys:programmatic-page-scroll', handleProgrammaticScrollStart);
+    return () => {
+      window.removeEventListener('presys:programmatic-page-scroll', handleProgrammaticScrollStart);
+      if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
+    };
+  }, []);
+
+  // IntersectionObserver para seguir o scroll do usuário
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !currentCatalog?.pages?.length) return;
+
+    const pageElements = container.querySelectorAll<HTMLElement>('[data-page-index]');
+    if (!pageElements.length) return;
+
+    const entriesMap = new Map<number, IntersectionObserverEntry>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isProgrammaticScrollRef.current) return;
+
+        entries.forEach((entry) => {
+          const idx = Number(entry.target.getAttribute('data-page-index'));
+          if (!isNaN(idx)) {
+            entriesMap.set(idx, entry);
+          }
+        });
+
+        const containerRect = container.getBoundingClientRect();
+        const containerCenterY = containerRect.top + containerRect.height / 2;
+
+        let bestIndex = -1;
+        let minDistanceToCenter = Infinity;
+        let maxIntersectionRatio = 0;
+
+        entriesMap.forEach((entry, idx) => {
+          if (entry.isIntersecting || entry.intersectionRatio > 0) {
+            const rect = entry.boundingClientRect;
+            const pageCenterY = rect.top + rect.height / 2;
+            const distanceToCenter = Math.abs(pageCenterY - containerCenterY);
+
+            if (
+              distanceToCenter < minDistanceToCenter ||
+              (Math.abs(distanceToCenter - minDistanceToCenter) < 40 && entry.intersectionRatio > maxIntersectionRatio)
+            ) {
+              minDistanceToCenter = distanceToCenter;
+              maxIntersectionRatio = entry.intersectionRatio;
+              bestIndex = idx;
+            }
+          }
+        });
+
+        if (bestIndex >= 0 && bestIndex !== useCatalogStore.getState().activePageIndex) {
+          const currentIdx = useCatalogStore.getState().activePageIndex;
+          const currentEntry = entriesMap.get(currentIdx);
+          
+          let shouldSwitch = true;
+          if (currentEntry && currentEntry.isIntersecting) {
+            const currentCenterY = currentEntry.boundingClientRect.top + currentEntry.boundingClientRect.height / 2;
+            const currentDist = Math.abs(currentCenterY - containerCenterY);
+            if (minDistanceToCenter > currentDist - 30 && maxIntersectionRatio < (currentEntry.intersectionRatio + 0.1)) {
+              shouldSwitch = false;
+            }
+          }
+
+          if (shouldSwitch) {
+            setActivePageIndex(bestIndex);
+
+            // Consistência: se o bloco selecionado não pertencer à nova página, desseleciona
+            const { selectedBlockId, setSelectedBlockId, currentCatalog } = useCatalogStore.getState();
+            if (selectedBlockId && currentCatalog) {
+              const newActivePage = currentCatalog.pages[bestIndex];
+              const blockBelongs = newActivePage?.blocks?.some((b) => b.id === selectedBlockId);
+              if (!blockBelongs) {
+                setSelectedBlockId(null);
+              }
+            }
+
+            // Notifica Presence com debounce leve (150ms)
+            if (locationBroadcastTimerRef.current) {
+              clearTimeout(locationBroadcastTimerRef.current);
+            }
+            locationBroadcastTimerRef.current = setTimeout(() => {
+              const cat = useCatalogStore.getState().currentCatalog;
+              const newPage = cat?.pages[bestIndex];
+              if (newPage) {
+                const selBlockId = useCatalogStore.getState().selectedBlockId;
+                const selBlock = newPage.blocks?.find((b) => b.id === selBlockId);
+                usePresenceStore.getState().trackLocation(
+                  bestIndex + 1,
+                  newPage.id,
+                  selBlock ? selBlockId : null,
+                  selBlock ? selBlock.type : null
+                );
+              }
+            }, 150);
+          }
+        }
+      },
+      {
+        root: container,
+        threshold: [0, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9, 1.0]
+      }
+    );
+
+    pageElements.forEach((el) => observer.observe(el));
+
+    return () => {
+      observer.disconnect();
+      if (locationBroadcastTimerRef.current) {
+        clearTimeout(locationBroadcastTimerRef.current);
+      }
+    };
+  }, [currentCatalog?.pages?.length, setActivePageIndex]);
 
   if (!currentCatalog || currentCatalog.pages.length === 0) return null;
 
@@ -509,6 +641,8 @@ export const A4Canvas: React.FC = () => {
 
   return (
     <div
+      ref={scrollContainerRef}
+      id="canvas-scroll-container"
       className="flex-1 min-h-0 h-full overflow-y-auto p-8 flex flex-col items-center bg-[#E2E8F0] space-y-10 scroll-smooth select-none relative a4-canvas-scroll-area"
       onClick={() => {
         setSelectedBlockId(null);
@@ -533,7 +667,13 @@ export const A4Canvas: React.FC = () => {
         const isMenuOpenForThisPage = activeMenuPageId === page.id;
 
         return (
-          <div key={page.id} id={`page-container-${page.id}`} className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0">
+          <div
+            key={page.id}
+            id={`page-container-${page.id}`}
+            data-page-index={pageIndex}
+            data-page-id={page.id}
+            className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0"
+          >
             {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip (Oculta na Impressão) */}
             <div
               className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative no-print"
@@ -818,14 +958,24 @@ export const A4Canvas: React.FC = () => {
                       {/* Overlay de Presença e Awareness do Bloco (Oculto no PDF / Editor-Only) */}
                       {hasRemote && (
                         <div
-                          className="no-print editor-only absolute -top-3.5 right-3 z-30 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold text-white shadow-md pointer-events-none transition-all duration-150"
+                          className="no-print editor-only absolute -top-3.5 right-3 z-30 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold text-white shadow-md pointer-events-auto transition-all duration-150 cursor-default"
                           style={{ backgroundColor: primaryRemote.color }}
+                          title={
+                            remoteOnBlock.length > 1
+                              ? remoteOnBlock.map((r) => `${r.displayLabel} (${r.activity === 'editing' ? 'editando' : 'aqui'})`).join(', ')
+                              : `${primaryRemote.displayLabel} (${primaryRemote.activity === 'editing' ? 'editando' : 'aqui'})`
+                          }
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                           <span>
                             {primaryRemote.displayLabel}{' '}
                             {primaryRemote.activity === 'editing' ? 'editando' : 'aqui'}
                           </span>
+                          {remoteOnBlock.length > 1 && (
+                            <span className="bg-black/25 px-1.5 py-0.2 rounded-full text-[8.5px]">
+                              +{remoteOnBlock.length - 1}
+                            </span>
+                          )}
                         </div>
                       )}
 
