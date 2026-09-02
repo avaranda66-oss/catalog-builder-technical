@@ -213,6 +213,7 @@ export interface Catalog {
   updatedAt: string;
   version: number;
   lastMutation?: MutationMetadata;
+  [key: string]: any;
 }
 
 export interface CatalogPreset {
@@ -375,7 +376,7 @@ export const CatalogSchema = z.object({
   createdAt: z.string().datetime().or(z.string()),
   updatedAt: z.string().datetime().or(z.string()),
   version: z.number().int().default(1)
-});
+}).passthrough();
 
 export const CatalogPresetSchema = z.object({
   id: z.string(),
@@ -414,6 +415,31 @@ export function generateUniqueCatalogTitle(baseTitle: string, existingTitles: st
     index++;
   }
   return `${cleanBase} (Cópia ${index})`;
+}
+
+/**
+ * Resolução defensiva de locale do documento na ordem canônica (Fase 3A.4A):
+ * 1. catalog.locale
+ * 2. catalog.translationMeta?.targetLocale
+ * 3. catalog.sourceLocale
+ * 4. Fallback legado documentado: 'pt-BR'
+ */
+export function resolveDocumentLocale(catalog: Partial<Catalog> | null | undefined): string {
+  if (!catalog) return 'pt-BR';
+  if (typeof catalog.locale === 'string' && catalog.locale.trim()) {
+    return catalog.locale.trim();
+  }
+  if (
+    catalog.translationMeta &&
+    typeof catalog.translationMeta.targetLocale === 'string' &&
+    catalog.translationMeta.targetLocale.trim()
+  ) {
+    return catalog.translationMeta.targetLocale.trim();
+  }
+  if (typeof catalog.sourceLocale === 'string' && catalog.sourceLocale.trim()) {
+    return catalog.sourceLocale.trim();
+  }
+  return 'pt-BR';
 }
 
 export interface StructuralDelta {

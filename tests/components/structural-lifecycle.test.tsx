@@ -7,8 +7,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Catalog
+  Catalog,
+  resolveDocumentLocale
 } from '../../src/domain/catalog.schema';
+import { catalogRowToCatalog } from '../../src/services/supabase.service';
 import {
   StructuralSectionDataSchema
 } from '../../src/domain/canvas-layout.schema';
@@ -778,4 +780,341 @@ describe('Fase 3A.4 — Structural Sections & Cards Lifecycle', () => {
       expect(page.blocks![0].id.startsWith('block-')).toBe(true);
     });
   });
+
+  // ==========================================================================
+  // 13. PRESERVAÇÃO DE METADADOS EM ROUND-TRIP (CATALOG-ROUNDTRIP)
+  // ==========================================================================
+  describe('13. Preservação de Metadados em Round-Trip (Fase 3A.4A)', () => {
+    it('CATALOG-ROUNDTRIP-1: metadados completos preservados no mapper (locale, sourceLocale, translationMeta, localizedSystemStrings, pages, themeId, version)', () => {
+      const persistedPayload: Partial<Catalog> = {
+        title: 'Catálogo de Automação',
+        subtitle: 'Subtítulo Técnico',
+        themeId: 'presys-corporate',
+        locale: 'fr-FR',
+        sourceLocale: 'pt-BR',
+        translationMeta: {
+          sourceCatalogId: 'cat-src-001',
+          sourceCatalogVersion: 2,
+          targetLocale: 'fr-FR',
+          provider: 'google-translate',
+          coverage: 98,
+          layoutQaStatus: 'passed'
+        },
+        localizedSystemStrings: {
+          specificationsTitle: 'Spécifications Techniques',
+          featuresTitle: 'Caractéristiques Principales'
+        },
+        pages: [
+          {
+            id: 'page-fr-1',
+            pageNumber: 1,
+            pageType: 'technical',
+            title: 'Page 1',
+            blocks: []
+          }
+        ],
+        lastMutation: {
+          kind: 'MANUAL_EDIT',
+          clientInstanceId: 'client-test-123',
+          timestamp: '2026-09-02T10:00:00.000Z',
+          summary: 'Traduzido para fr-FR'
+        }
+      };
+
+      const rowFromDb = {
+        id: 'cat-fr-999',
+        name: 'Catálogo Francês Autorizado',
+        version: 3,
+        created_at: '2026-09-02T10:00:00.000Z',
+        updated_at: '2026-09-02T12:00:00.000Z',
+        brand: persistedPayload
+      };
+
+      const hydrated = catalogRowToCatalog(rowFromDb);
+
+      expect(hydrated.id).toBe('cat-fr-999');
+      expect(hydrated.title).toBe('Catálogo Francês Autorizado');
+      expect(hydrated.version).toBe(3);
+      expect(hydrated.createdAt).toBe('2026-09-02T10:00:00.000Z');
+      expect(hydrated.updatedAt).toBe('2026-09-02T12:00:00.000Z');
+      expect(hydrated.themeId).toBe('presys-corporate');
+      expect(hydrated.locale).toBe('fr-FR');
+      expect(hydrated.sourceLocale).toBe('pt-BR');
+      expect(hydrated.translationMeta).toEqual(persistedPayload.translationMeta);
+      expect(hydrated.localizedSystemStrings).toEqual(persistedPayload.localizedSystemStrings);
+      expect(hydrated.lastMutation).toEqual(persistedPayload.lastMutation);
+      expect(hydrated.pages.length).toBe(1);
+      expect(hydrated.pages[0].id).toBe('page-fr-1');
+    });
+
+    it('CATALOG-ROUNDTRIP-2: metadados futuros desconhecidos preservados (customFutureMetadata)', () => {
+      const customFutureData = {
+        complianceHash: 'sha256-abcdef1234567890',
+        experimentalFlags: { autoFlowEnabled: true, meshLevel: 2 },
+        customTenantId: 'tenant-omega-77'
+      };
+
+      const rowWithCustomData = {
+        id: 'cat-future-001',
+        name: 'Catálogo com Extensões Futuras',
+        version: 1,
+        created_at: '2026-09-02T10:00:00.000Z',
+        updated_at: '2026-09-02T10:00:00.000Z',
+        brand: {
+          themeId: 'default-technical',
+          pages: [],
+          customFutureMetadata: customFutureData
+        }
+      };
+
+      const hydrated = catalogRowToCatalog(rowWithCustomData);
+
+      expect((hydrated as any).customFutureMetadata).toBeDefined();
+      expect((hydrated as any).customFutureMetadata).toEqual(customFutureData);
+    });
+
+    it('CATALOG-ROUNDTRIP-3: campos de autoridade da row sobrescrevem payload', () => {
+      const rowWithMismatchedAuthority = {
+        id: 'authoritative-row-id',
+        name: 'Título Autoritativo da Row',
+        version: 5,
+        created_at: '2026-09-02T15:00:00.000Z',
+        updated_at: '2026-09-02T16:00:00.000Z',
+        brand: {
+          id: 'obsolete-brand-id',
+          title: 'Título Desatualizado do Payload',
+          version: 1,
+          createdAt: '2020-01-01T00:00:00.000Z',
+          updatedAt: '2020-01-01T00:00:00.000Z',
+          themeId: 'presys-default',
+          pages: []
+        }
+      };
+
+      const hydrated = catalogRowToCatalog(rowWithMismatchedAuthority);
+
+      // Campos autoritativos da linha PostgreSQL devem prevalecer incondicionalmente
+      expect(hydrated.id).toBe('authoritative-row-id');
+      expect(hydrated.title).toBe('Título Autoritativo da Row');
+      expect(hydrated.version).toBe(5);
+      expect(hydrated.createdAt).toBe('2026-09-02T15:00:00.000Z');
+      expect(hydrated.updatedAt).toBe('2026-09-02T16:00:00.000Z');
+    });
+  });
+
+  // ==========================================================================
+  // 14. GOVERNANÇA DE LOCALE & RESOLUÇÃO DEFENSIVA (ROUNDTRIP-I18N)
+  // ==========================================================================
+  describe('14. Resolução Defensiva de Locale & Inserção Estrutural (Fase 3A.4A)', () => {
+    it('ROUNDTRIP-I18N-1: catálogo FR carregado -> inserção de preset estrutural -> zero copy em português', () => {
+      const frCatalogRow = {
+        id: 'cat-fr-roundtrip',
+        name: 'Catalogue International FR',
+        version: 2,
+        created_at: '2026-09-02T10:00:00.000Z',
+        updated_at: '2026-09-02T10:00:00.000Z',
+        brand: {
+          locale: 'fr-FR',
+          sourceLocale: 'pt-BR',
+          pages: [
+            {
+              id: 'page-1',
+              pageNumber: 1,
+              blocks: []
+            }
+          ]
+        }
+      };
+
+      // Hidrata via mapper canônico
+      const loadedCatalog = catalogRowToCatalog(frCatalogRow);
+      expect(loadedCatalog.locale).toBe('fr-FR');
+
+      // Aplica no store
+      useCatalogStore.setState({
+        currentCatalog: loadedCatalog,
+        activePageIndex: 0,
+        selectedBlockId: null,
+        selectedChildId: null,
+        isDirty: false,
+        localRevision: 0
+      });
+
+      // Insere seção estrutural
+      useCatalogStore.getState().insertStructuralSection('page-1', 'structural-connectivity');
+
+      const updatedCatalog = useCatalogStore.getState().currentCatalog!;
+      const insertedBlock = updatedCatalog.pages[0].blocks![0];
+
+      expect(insertedBlock.type).toBe('structural_section');
+      // Invariante i18n estrita: zero vazamento de copy em português em documento francês
+      expect(insertedBlock.title).toBe('');
+      expect(insertedBlock.subtitle).toBe('');
+      expect(insertedBlock.badgeText).toBe('');
+
+      for (const card of insertedBlock.structuralData!.children) {
+        expect(card.title).toBe('');
+        expect(card.body).toBe('');
+        expect(card.badge).toBeUndefined();
+        // Ícone canônico corporativo mantido
+        expect(card.iconId).toBeDefined();
+      }
+    });
+
+    it('ROUNDTRIP-I18N-2: catálogo legado sem metadados de locale -> fallback documentado "pt-BR"', () => {
+      const legacyCatalog: Partial<Catalog> = {
+        id: 'cat-legacy-pt',
+        title: 'Catálogo Legado Sem Metadados',
+        pages: [{ id: 'page-1', pageNumber: 1, blocks: [] }]
+      };
+
+      const resolved = resolveDocumentLocale(legacyCatalog);
+      expect(resolved).toBe('pt-BR');
+
+      useCatalogStore.setState({
+        currentCatalog: {
+          ...initialCatalog,
+          locale: undefined,
+          sourceLocale: undefined,
+          translationMeta: undefined
+        },
+        activePageIndex: 0,
+        selectedBlockId: null,
+        selectedChildId: null
+      });
+
+      useCatalogStore.getState().insertStructuralSection('page-1', 'structural-connectivity');
+
+      const updated = useCatalogStore.getState().currentCatalog!;
+      const block = updated.pages[0].blocks![0];
+
+      // Fallback pt-BR deve renderizar a copy oficial editorial do preset
+      expect(block.title).toBe('Conectividade e Interfaces');
+      expect(block.structuralData?.children[0].title).toBe('Comunicação de Rede');
+    });
+
+    it('ROUNDTRIP-I18N-3: catálogo com translationMeta.targetLocale = "fr-FR" e locale = undefined -> efetivo "fr-FR"', () => {
+      const translatedWithoutExplicitLocale: Partial<Catalog> = {
+        id: 'cat-trans-no-locale',
+        title: 'Document Translaté',
+        locale: undefined,
+        translationMeta: {
+          targetLocale: 'fr-FR',
+          provider: 'google-translate'
+        } as any,
+        pages: [{ id: 'page-1', pageNumber: 1, blocks: [] }]
+      };
+
+      const resolved = resolveDocumentLocale(translatedWithoutExplicitLocale);
+      expect(resolved).toBe('fr-FR');
+
+      useCatalogStore.setState({
+        currentCatalog: {
+          ...initialCatalog,
+          locale: undefined,
+          translationMeta: { targetLocale: 'fr-FR' } as any
+        },
+        activePageIndex: 0,
+        selectedBlockId: null,
+        selectedChildId: null
+      });
+
+      useCatalogStore.getState().insertStructuralSection('page-1', 'structural-connectivity');
+
+      const block = useCatalogStore.getState().currentCatalog!.pages[0].blocks![0];
+      // Como o locale efetivo foi resolvido para fr-FR, campos textuais devem ser neutros/vazios
+      expect(block.title).toBe('');
+      expect(block.structuralData?.children[0].title).toBe('');
+    });
+  });
+
+  // ==========================================================================
+  // 15. FAIL-CLOSED & ROBUSTEZ DE AÇÕES (Fase 3A.4A)
+  // ==========================================================================
+  describe('15. Fail-Closed & Robustez de Ações (Fase 3A.4A)', () => {
+    it('STRUCT-INSERT-FAIL-2: inserção com pageId inválido é um no-op estrito (zero blocos, zero revision bump, zero dirty, zero alteração de seleção)', () => {
+      useCatalogStore.setState({
+        currentCatalog: JSON.parse(JSON.stringify(initialCatalog)),
+        activePageIndex: 0,
+        selectedBlockId: 'pre-existing-block-id',
+        selectedChildId: null,
+        localRevision: 0,
+        isDirty: false
+      });
+
+      const store = useCatalogStore.getState();
+      store.insertStructuralSection('page-inexistente-999', 'structural-connectivity');
+
+      const stateAfter = useCatalogStore.getState();
+
+      // Zero mutação, zero alteração
+      expect(stateAfter.currentCatalog!.pages[0].blocks?.length).toBe(0);
+      expect(stateAfter.localRevision).toBe(0);
+      expect(stateAfter.isDirty).toBe(false);
+      expect(stateAfter.selectedBlockId).toBe('pre-existing-block-id');
+      expect(stateAfter.selectedChildId).toBeNull();
+    });
+
+    it('STRUCT-DELETE-FAIL-1: remoção de childId inexistente mantém a seleção intacta no card selecionado, zero revision bump, zero dirty', () => {
+      const store = useCatalogStore.getState();
+      store.insertStructuralSection('page-1', 'structural-connectivity');
+
+      const section = useCatalogStore.getState().currentCatalog!.pages[0].blocks![0];
+      const validCard = section.structuralData!.children[0];
+
+      // Seleciona o card existente
+      useCatalogStore.setState({
+        selectedBlockId: section.id,
+        selectedChildId: validCard.id,
+        localRevision: 10,
+        isDirty: false
+      });
+
+      // Tenta remover child inexistente
+      store.removeStructuralChild('page-1', section.id, 'uuid-fantasma-inexistente');
+
+      const stateAfter = useCatalogStore.getState();
+
+      // Seleção DEVE ser mantida no card válido
+      expect(stateAfter.selectedBlockId).toBe(section.id);
+      expect(stateAfter.selectedChildId).toBe(validCard.id);
+      expect(stateAfter.localRevision).toBe(10);
+      expect(stateAfter.isDirty).toBe(false);
+      // Número de cards não muda
+      expect(stateAfter.currentCatalog!.pages[0].blocks![0].structuralData?.children.length).toBe(4);
+    });
+
+    it('STRUCT-REMOVE-BLOCK-FAIL-1: remoção de blockId ou pageId inexistente é um no-op completo', () => {
+      const store = useCatalogStore.getState();
+      store.insertStructuralSection('page-1', 'structural-connectivity');
+
+      const section = useCatalogStore.getState().currentCatalog!.pages[0].blocks![0];
+
+      useCatalogStore.setState({
+        selectedBlockId: section.id,
+        selectedChildId: null,
+        localRevision: 20,
+        isDirty: false
+      });
+
+      // 1. Tenta remover bloco inexistente em página existente
+      store.removeBlock('page-1', 'block-inexistente-xyz');
+
+      let stateAfter = useCatalogStore.getState();
+      expect(stateAfter.selectedBlockId).toBe(section.id);
+      expect(stateAfter.localRevision).toBe(20);
+      expect(stateAfter.isDirty).toBe(false);
+      expect(stateAfter.currentCatalog!.pages[0].blocks?.length).toBe(1);
+
+      // 2. Tenta remover bloco existente em página inexistente
+      store.removeBlock('page-fantasma-999', section.id);
+
+      stateAfter = useCatalogStore.getState();
+      expect(stateAfter.selectedBlockId).toBe(section.id);
+      expect(stateAfter.localRevision).toBe(20);
+      expect(stateAfter.isDirty).toBe(false);
+      expect(stateAfter.currentCatalog!.pages[0].blocks?.length).toBe(1);
+    });
+  });
 });
+

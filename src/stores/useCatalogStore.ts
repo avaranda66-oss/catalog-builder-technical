@@ -10,6 +10,7 @@ import {
   MutationKind,
   generateUniqueCatalogTitle,
   analyzeCatalogStructuralDelta,
+  resolveDocumentLocale,
   EditorDocumentContext
 } from '../domain/catalog.schema';
 import {
@@ -26,7 +27,7 @@ import {
   createStructuralSectionFromPreset
 } from '../domain/structural-presets';
 import { StorageService } from '../services/storage.service';
-import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
+import { SupabaseService, templateRowToCatalogPreset, catalogRowToCatalog } from '../services/supabase.service';
 import { useTemplateStore } from './useTemplateStore';
 import { SYSTEM_PRESETS } from '../data/presets';
 
@@ -654,6 +655,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   removeBlock: (pageId, blockId) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const targetBlock = page?.blocks?.find((b) => b.id === blockId);
+    if (!page || !targetBlock) {
+      // Fail-closed (Fase 3A.4A): se página ou bloco não existem, zero state change (zero mutação, zero dirty, seleção preservada)
+      return;
+    }
+
     // Invariant-safe selection transition (Fase 3A.4):
     // Se o bloco a ser removido for o atualmente selecionado, limpa a seleção PRIMEIRO.
     // O estado intermediário em que o bloco ainda existe no documento mas a seleção já é nula é 100% válido.
@@ -665,9 +673,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     get().commitDocumentMutation(
       (draft) => {
-        const page = draft.pages.find((p) => p.id === pageId);
-        if (page) {
-          page.blocks = (page.blocks || []).filter((b) => b.id !== blockId);
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        if (p) {
+          p.blocks = (p.blocks || []).filter((b) => b.id !== blockId);
         }
       },
       'REMOVE_BLOCK',
@@ -676,14 +684,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   insertStructuralSection: (pageId, presetId) => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return;
+
+    const targetPage = currentCatalog.pages.find((p) => p.id === pageId);
+    if (!targetPage) {
+      // Fail-closed (Fase 3A.4A): se pageId não existe no catálogo, complete no-op (zero bloco, zero revision bump, zero dirty, zero alteração de seleção)
+      return;
+    }
+
     const preset = getStructuralSectionPreset(presetId);
     if (!preset) {
       // Fail-closed (Fase 3A.4): preset desconhecido aborta sem mutação, dirty ou incremento de versão
       return;
     }
 
-    const { currentCatalog } = get();
-    const sectionBlock = createStructuralSectionFromPreset(presetId, currentCatalog?.locale);
+    const locale = resolveDocumentLocale(currentCatalog);
+    const sectionBlock = createStructuralSectionFromPreset(presetId, locale);
 
     get().commitDocumentMutation(
       (draft) => {
@@ -700,8 +717,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }
     );
 
-    // Seleciona o novo bloco estrutural preservando rigorosamente seu UUID RFC 4122 v4
-    set({ selectedBlockId: sectionBlock.id, selectedChildId: null });
+    // Garante que o bloco foi persistido no catálogo antes de atualizar a seleção
+    const updatedCatalog = get().currentCatalog;
+    const blockPersisted = updatedCatalog?.pages
+      .find((p) => p.id === pageId)
+      ?.blocks?.some((b) => b.id === sectionBlock.id);
+
+    if (blockPersisted) {
+      set({ selectedBlockId: sectionBlock.id, selectedChildId: null });
+    }
   },
 
   duplicateStructuralSection: (pageId, sectionId) => {
@@ -812,23 +836,24 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return;
     }
 
-    // Invariant-safe selection transition (Fase 3A.4):
-    // Se o card a ser removido for o atualmente selecionado, transita a seleção para a seção pai PRIMEIRO.
-    // Estado intermediário: o documento ainda possui o card, e a seleção já aponta para a seção pai (100% válido).
-    const { selectedBlockId, selectedChildId } = get();
-    if (selectedBlockId === sectionId && selectedChildId === childId) {
-      set({ selectedChildId: null });
-    }
-
+    // 1. Executa a pure function primeiro
     const { data: updatedStructuralData, found, removedChild } = removeStructuralChildById(
       sectionBlock.structuralData,
       childId
     );
 
+    // 2. Se !found => return ZERO STATE CHANGE (seleção intocada, zero dirty, zero revision bump)
     if (!found) {
       return;
     }
 
+    // 3. Se found e o card removido for o atualmente selecionado, transita a seleção para a seção pai PRIMEIRO
+    const { selectedBlockId, selectedChildId } = get();
+    if (selectedBlockId === sectionId && selectedChildId === childId) {
+      set({ selectedChildId: null });
+    }
+
+    // 4. Commit da mutação com dados atualizados
     get().commitDocumentMutation(
       (draft) => {
         const p = draft.pages.find((pg) => pg.id === pageId);
@@ -1483,19 +1508,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     try {
       const remote = await SupabaseService.listWorkspace();
       if (remote.success && remote.data?.catalogs) {
-        const remoteCatalogs: Catalog[] = remote.data.catalogs.map((rc: any) => {
-          const brandData = typeof rc.brand === 'object' && rc.brand !== null ? rc.brand : {};
-          return {
-            id: rc.id,
-            title: rc.name || brandData.title || 'Catálogo Técnico',
-            subtitle: brandData.subtitle || '',
-            themeId: brandData.themeId || 'default-technical',
-            pages: Array.isArray(brandData.pages) ? brandData.pages : [],
-            version: Number(rc.version) || 1,
-            createdAt: rc.created_at,
-            updatedAt: rc.updated_at
-          };
-        });
+        const remoteCatalogs: Catalog[] = remote.data.catalogs.map((rc: any) => catalogRowToCatalog(rc));
 
         set({ savedCatalogs: remoteCatalogs });
 

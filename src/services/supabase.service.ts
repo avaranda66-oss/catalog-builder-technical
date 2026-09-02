@@ -541,17 +541,7 @@ export class SupabaseService {
       if (error) return { success: false, error: error.message };
       if (!data) return { success: false, error: 'Catálogo não encontrado' };
 
-      const catalogData = (data.brand && data.brand.pages) ? data.brand : (data.brand?.catalog || data);
-      const catalog: Catalog = {
-        id: data.id,
-        title: data.name || catalogData.title || 'Catálogo Sem Título',
-        subtitle: catalogData.subtitle,
-        themeId: catalogData.themeId || 'default-technical',
-        pages: catalogData.pages || [],
-        version: data.version || 1,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at
-      };
+      const catalog = catalogRowToCatalog(data);
       return { success: true, data: catalog };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao carregar catálogo do servidor' };
@@ -876,6 +866,41 @@ export class SupabaseService {
     void bucketName;
     return { success: base64.startsWith('data:'), url: base64, isRemote: false };
   }
+}
+
+/**
+ * Converte canonicamente uma linha de catálogo (do Supabase RPC list_workspace_v2 ou tabela catalogs)
+ * para a interface completa Catalog.
+ * 
+ * Regra Crítica (Fase 3A.4A):
+ * - Spread do payload persistido PRIMEIRO (preservando locale, sourceLocale, translationMeta,
+ *   localizedSystemStrings, lastMutation e custom metadata futuros).
+ * - Campos autoritativos da row do banco DEPOIS (id, title/name, version, timestamps, themeId fallback, pages).
+ * - Zero allowlist curta restritiva.
+ */
+export function catalogRowToCatalog(row: any): Catalog {
+  if (!row) return row;
+  const brand = typeof row.brand === 'object' && row.brand !== null ? row.brand : {};
+  const payload = (brand.pages && Array.isArray(brand.pages))
+    ? brand
+    : (brand.catalog && Array.isArray(brand.catalog.pages))
+      ? brand.catalog
+      : brand;
+
+  const versionNum = row.version !== undefined && row.version !== null && !isNaN(Number(row.version))
+    ? Number(row.version)
+    : (payload.version ?? 1);
+
+  return {
+    ...payload,
+    id: row.id || payload.id,
+    title: row.name || row.title || payload.title || 'Catálogo Sem Título',
+    version: versionNum,
+    createdAt: row.created_at || row.createdAt || payload.createdAt || new Date().toISOString(),
+    updatedAt: row.updated_at || row.updatedAt || payload.updatedAt || new Date().toISOString(),
+    themeId: payload.themeId || 'default-technical',
+    pages: Array.isArray(payload.pages) ? payload.pages : []
+  };
 }
 
 export function templateRowToCatalogPreset(row: any): CatalogPreset {
