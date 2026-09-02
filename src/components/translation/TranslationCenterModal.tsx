@@ -18,7 +18,8 @@ import {
   Sliders,
   Check,
   ArrowRight,
-  Edit3
+  Edit3,
+  RefreshCw
 } from 'lucide-react';
 import { useTranslationStore } from '@/stores/useTranslationStore';
 import { useCatalogStore } from '@/stores/useCatalogStore';
@@ -76,6 +77,9 @@ export const TranslationCenterModal: React.FC = () => {
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [confirmWarnings, setConfirmWarnings] = useState(false);
   const [sourceSnapshot, setSourceSnapshot] = useState<TranslationSourceSnapshot | null>(null);
+  const [fontStatus, setFontStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [fontErrorMessage, setFontErrorMessage] = useState<string | null>(null);
+  const [fontDetails, setFontDetails] = useState<{ primaryFont: string; script: string; source: string } | null>(null);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -92,7 +96,7 @@ export const TranslationCenterModal: React.FC = () => {
     }
   }, [credentialMeta]);
 
-  // Executa Layout QA real no passo layout_qa assim que o CleanA4Document estiver montado
+  // Executa Layout QA real no passo layout_qa assim que a fonte estiver confirmada e o CleanA4Document montado
   useEffect(() => {
     let isCancelled = false;
 
@@ -101,7 +105,24 @@ export const TranslationCenterModal: React.FC = () => {
 
       const runAudit = async () => {
         try {
-          await FontManager.ensureFontsLoadedForLocale(targetLocale);
+          setFontStatus('loading');
+          setFontErrorMessage(null);
+
+          const fontRes = await FontManager.ensureFontsLoadedForLocale(targetLocale);
+          if (!fontRes.success) {
+            if (!isCancelled) {
+              setFontStatus('error');
+              setFontErrorMessage(fontRes.error || `Não foi possível preparar a fonte ${fontRes.primaryFont} para o script ${fontRes.script}.`);
+              setFontDetails({ primaryFont: fontRes.primaryFont, script: fontRes.script, source: fontRes.source });
+            }
+            return;
+          }
+
+          if (!isCancelled) {
+            setFontStatus('ready');
+            setFontDetails({ primaryFont: fontRes.primaryFont, script: fontRes.script, source: fontRes.source });
+          }
+
           if (typeof document !== 'undefined' && document.fonts) {
             try {
               await document.fonts.ready;
@@ -110,6 +131,7 @@ export const TranslationCenterModal: React.FC = () => {
             }
           }
 
+          // Aguarda 2 quadros de renderização para garantir que o layout reflow já aplicou a fonte
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               if (!isCancelled && qaContainerRef.current) {
@@ -117,8 +139,12 @@ export const TranslationCenterModal: React.FC = () => {
               }
             });
           });
-        } catch (err) {
+        } catch (err: any) {
           console.error('Erro na auditoria de layout:', err);
+          if (!isCancelled) {
+            setFontStatus('error');
+            setFontErrorMessage(err?.message || 'Erro ao carregar fontes tipográficas.');
+          }
         }
       };
 
@@ -226,6 +252,43 @@ export const TranslationCenterModal: React.FC = () => {
     }
   };
 
+  const handleRetryFontLoad = async () => {
+    FontManager.clearCache();
+    setFontStatus('loading');
+    setFontErrorMessage(null);
+
+    try {
+      const fontRes = await FontManager.ensureFontsLoadedForLocale(targetLocale);
+      if (!fontRes.success) {
+        setFontStatus('error');
+        setFontErrorMessage(fontRes.error || `Falha ao carregar fonte ${fontRes.primaryFont}.`);
+        return;
+      }
+
+      setFontStatus('ready');
+      setFontDetails({ primaryFont: fontRes.primaryFont, script: fontRes.script, source: fontRes.source });
+
+      if (typeof document !== 'undefined' && document.fonts) {
+        try {
+          await document.fonts.ready;
+        } catch {
+          // Continua
+        }
+      }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (qaContainerRef.current) {
+            void runLayoutQa(qaContainerRef.current);
+          }
+        });
+      });
+    } catch (err: any) {
+      setFontStatus('error');
+      setFontErrorMessage(err?.message || 'Erro inesperado ao recarregar fonte.');
+    }
+  };
+
   const filteredReviewItems = reviewItems.filter((item) => {
     if (reviewFilter === 'edited') return item.isHumanEdited;
     if (reviewFilter === 'system') return item.policy === 'system' || item.kind === 'system';
@@ -236,6 +299,7 @@ export const TranslationCenterModal: React.FC = () => {
   const isSaveBlocked =
     isSavingVersion ||
     !layoutQaResult ||
+    fontStatus !== 'ready' ||
     layoutQaResult.status === 'pending' ||
     layoutQaResult.status === 'error' ||
     (layoutQaResult.status === 'warning' && !confirmWarnings);
@@ -689,6 +753,48 @@ export const TranslationCenterModal: React.FC = () => {
                     Fidelidade: 100% Mapeado
                   </span>
                 </div>
+
+                {/* STATUS DE TIPOGRAFIA MULTISCRIPT */}
+                {fontStatus === 'loading' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 text-xs flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#003366] shrink-0" />
+                    <span>
+                      Preparando e ativando fonte tipográfica self-hosted ({FontManager.getPrimaryFontForLocale(targetLocale)})...
+                    </span>
+                  </div>
+                )}
+
+                {fontStatus === 'ready' && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>
+                        <strong>Tipografia Pronta:</strong> Fonte "{fontDetails?.primaryFont || FontManager.getPrimaryFontForLocale(targetLocale)}" ativada com sucesso (Self-Hosted / Bundled).
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 font-bold">
+                      Zero Google Fonts • 100% Offline
+                    </span>
+                  </div>
+                )}
+
+                {fontStatus === 'error' && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+                    <div className="flex items-center gap-2 font-bold">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Erro de Tipografia Multiscript</span>
+                    </div>
+                    <p className="text-xs text-rose-700">{fontErrorMessage || 'Não foi possível carregar a fonte necessária para o PDF.'}</p>
+                    <button
+                      type="button"
+                      onClick={handleRetryFontLoad}
+                      className="px-3 py-1.5 bg-rose-700 text-white hover:bg-rose-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Tentar carregar fonte novamente</span>
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono text-center">
                   <div className="p-2.5 bg-slate-50 border border-slate-200">

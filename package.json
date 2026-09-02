@@ -11,6 +11,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/noto-sans": "^5.3.0",
+    "@fontsource/noto-sans-arabic": "^5.3.0",
+    "@fontsource/noto-sans-devanagari": "^5.3.0",
+    "@fontsource/noto-sans-hebrew": "^5.3.0",
+    "@fontsource/noto-sans-jp": "^5.3.0",
+    "@fontsource/noto-sans-kr": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@fontsource/noto-sans-thai": "^5.3.0",
     "@supabase/supabase-js": "^2.112.4",
     "@tanstack/react-table": "^8.20.5",
     "html2canvas": "^1.4.1",

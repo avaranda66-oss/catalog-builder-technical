@@ -70,7 +70,13 @@ export const PrintDocumentView: React.FC = () => {
     const preparePrint = async () => {
       try {
         const docLocale = (documentToRender as any).locale || 'pt-BR';
-        await FontManager.ensureFontsLoadedForLocale(docLocale);
+        const fontResult = await FontManager.ensureFontsLoadedForLocale(docLocale);
+        if (!fontResult.success) {
+          if (!isCancelled) {
+            setErrorMessage(fontResult.error || 'Falha ao carregar fontes tipográficas do documento para impressão.');
+          }
+          return;
+        }
       } catch (err: any) {
         console.error('Erro ao carregar fontes do documento para impressão:', err);
         if (!isCancelled) {

@@ -38,12 +38,6 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
   const fontFamily = FontManager.getFontFamilyForLocale(locale);
 
   React.useEffect(() => {
-    if (locale) {
-      void FontManager.ensureFontsLoadedForLocale(locale);
-    }
-  }, [locale]);
-
-  React.useEffect(() => {
     if (direction === 'rtl' && containerRef.current) {
       applyBidiIsolationToElement(containerRef.current);
     }
