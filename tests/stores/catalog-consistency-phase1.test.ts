@@ -49,7 +49,9 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
       syncError: null,
       serverSavedAt: null,
       cachedAt: null,
-      inFlightSave: null
+      inFlightSave: null,
+      localRevision: 0,
+      lastAcknowledgedLocalRevision: 0
     });
   });
 
