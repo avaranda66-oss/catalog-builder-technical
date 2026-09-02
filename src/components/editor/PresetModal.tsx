@@ -3,7 +3,8 @@ import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, L
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useTemplateStore } from '../../stores/useTemplateStore';
 import { SYSTEM_PRESETS } from '../../data/presets';
-import { CatalogPreset, Catalog } from '../../domain/catalog.schema';
+import { CatalogPreset } from '../../domain/catalog.schema';
+import { DocumentLifecycleService } from '../../services/document-lifecycle.service';
 
 interface PresetModalProps {
   isOpen: boolean;
@@ -11,7 +12,7 @@ interface PresetModalProps {
 }
 
 export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => {
-  const { currentCatalog, setCurrentCatalog, saveCurrentCatalog } = useCatalogStore();
+  const { currentCatalog } = useCatalogStore();
   const {
     customTemplates,
     systemTemplates,
@@ -49,23 +50,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
       : `Criar uma cópia editável do catálogo "${preset.name}"?`;
 
     if (confirm(actionLabel)) {
-      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-      const newCatalog: Catalog = {
-        ...structuredClone(preset.catalog),
-        id: newId,
-        title: preset.name,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        version: 0,
-        lastMutation: {
-          kind: 'CREATE_COPY',
-          clientInstanceId: typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem('cb_client_instance_id') || 'client' : 'client',
-          summary: `Criado a partir do preset "${preset.name}"`,
-          timestamp: new Date().toISOString()
-        }
-      };
-      setCurrentCatalog(newCatalog);
-      const res = await saveCurrentCatalog();
+      const res = await DocumentLifecycleService.createCatalogFromTemplate(preset, { title: preset.name });
       if (res.success) {
         void useCatalogStore.getState().loadWorkspace();
       }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   Catalog,
+  CatalogPreset,
   ContentBlock,
   CatalogPage,
   CatalogTableRow,
@@ -15,6 +16,8 @@ import { StorageService } from '../services/storage.service';
 import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
 import { useTemplateStore } from './useTemplateStore';
 import { SYSTEM_PRESETS } from '../data/presets';
+
+export type { EditorDocumentContext };
 
 export type SyncStatus = 'synced' | 'saving' | 'dirty' | 'conflict' | 'error' | 'offline';
 
@@ -229,6 +232,7 @@ interface CatalogState {
   handleTemplateFlushAck: (templateId: string, confirmedVersion: number, error?: string) => void;
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
   createTranslatedCatalogVersion: (translatedCatalog: Catalog) => Promise<{ success: boolean; catalogId?: string; error?: string }>;
+  createTranslatedTemplateVersion: (translatedTemplate: Catalog) => Promise<{ success: boolean; templateId?: string; error?: string }>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
@@ -1815,6 +1819,151 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return {
         success: false,
         error: err?.message || 'Erro inesperado ao salvar versão traduzida.'
+      };
+    }
+  },
+
+  createTranslatedTemplateVersion: async (
+    translatedTemplate: Catalog
+  ): Promise<{ success: boolean; templateId?: string; error?: string }> => {
+    try {
+      const meta = translatedTemplate.translationMeta;
+      if (
+        !meta ||
+        !meta.sourceCatalogId ||
+        meta.sourceCatalogVersion === undefined ||
+        !meta.sourceContentHash ||
+        !meta.sourceLocale ||
+        !meta.targetLocale
+      ) {
+        return {
+          success: false,
+          error: 'TRANSLATION_METADATA_MISSING: O template traduzido não possui metadados válidos de tradução.'
+        };
+      }
+
+      if (meta.coverage !== 100) {
+        return {
+          success: false,
+          error: `TRANSLATION_INCOMPLETE: A cobertura de tradução é de ${meta.coverage}%. É exigido 100% de cobertura para persistir.`
+        };
+      }
+
+      if (!meta.layoutQaStatus || meta.layoutQaStatus === 'pending' || meta.layoutQaStatus === 'error') {
+        return {
+          success: false,
+          error: `LAYOUT_QA_NOT_APPROVED: O Layout QA possui status "${meta.layoutQaStatus || 'não auditado'}".`
+        };
+      }
+
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+
+      const newTemplateToSave: Catalog = {
+        ...structuredClone(translatedTemplate),
+        id: newId,
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const rpcRes = await SupabaseService.createTranslatedTemplate(
+        newTemplateToSave,
+        meta.sourceCatalogId,
+        meta.sourceCatalogVersion,
+        `Criação de template traduzido (${meta.targetLocale}) a partir do template v${meta.sourceCatalogVersion}`
+      );
+
+      if (!rpcRes.success || !rpcRes.data) {
+        if (rpcRes.conflict || rpcRes.error?.includes('SOURCE_CHANGED_DURING_TRANSLATION')) {
+          console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o template original foi alterado concorrentemente no servidor.');
+          return {
+            success: false,
+            error: 'O template original foi modificado no servidor durante a tradução (SOURCE_CHANGED_DURING_TRANSLATION). A tradução deve ser refeita.'
+          };
+        }
+
+        if (rpcRes.errorCode === 'CLIENT_OFFLINE' || rpcRes.errorCode === 'NETWORK_ERROR') {
+          return {
+            success: false,
+            error: 'SOURCE_VERIFICATION_UNAVAILABLE: Não foi possível conectar ao servidor para validar a autoridade do template fonte.'
+          };
+        }
+
+        if (rpcRes.error?.includes('Could not find the function') || rpcRes.error?.includes('schema cache') || rpcRes.errorCode === 'PGRST202') {
+          return {
+            success: false,
+            error: 'Não foi possível criar a versão traduzida porque o serviço de persistência ainda não está disponível no servidor.'
+          };
+        }
+
+        return {
+          success: false,
+          error: rpcRes.error || 'Erro ao persistir template traduzido no servidor.'
+        };
+      }
+
+      const confirmedTemplateCatalog: Catalog = {
+        ...newTemplateToSave,
+        version: Number(rpcRes.data.version) || 1,
+        updatedAt: rpcRes.data.updated_at || new Date().toISOString()
+      };
+
+      // Atualiza Zustand State e Contexto do Editor
+      debugSetCatalog('createTranslatedTemplateVersion', get().currentCatalog, confirmedTemplateCatalog);
+      set(() => ({
+        currentCatalog: confirmedTemplateCatalog,
+        editorContext: { kind: 'template', templateId: newId },
+        activePageIndex: 0,
+        selectedBlockId: null,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
+        isDirty: false,
+        isSaving: false,
+        syncStatus: 'synced',
+        syncError: null,
+        lastSavedAt: new Date().toISOString()
+      }));
+
+      // Atualiza lista de templates customizados no useTemplateStore
+      try {
+        const { useTemplateStore } = await import('./useTemplateStore');
+        const customTemplatePreset: CatalogPreset = {
+          id: newId,
+          name: confirmedTemplateCatalog.title,
+          description: `Template traduzido (${meta.targetLocale})`,
+          category: 'layout_template',
+          isSystem: false,
+          version: 1,
+          catalog: confirmedTemplateCatalog,
+          createdAt: confirmedTemplateCatalog.createdAt || new Date().toISOString(),
+          updatedAt: confirmedTemplateCatalog.updatedAt || new Date().toISOString()
+        };
+        useTemplateStore.setState((s) => ({
+          customTemplates: [customTemplatePreset, ...s.customTemplates.filter((t) => t.id !== newId)]
+        }));
+      } catch (err) {
+        console.warn('[useCatalogStore] Não foi possível atualizar useTemplateStore:', err);
+      }
+
+      // Atualiza URL Canônica
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('catalog');
+        url.searchParams.set('template', newId);
+        window.history.replaceState({}, '', url.toString());
+      }
+
+      return {
+        success: true,
+        templateId: newId
+      };
+    } catch (err: any) {
+      console.error('Falha ao criar versão de template traduzido:', err);
+      return {
+        success: false,
+        error: err?.message || 'Erro inesperado ao salvar template traduzido.'
       };
     }
   },

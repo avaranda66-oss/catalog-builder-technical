@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { RotateCcw, FileText, Layers, Crop, Save, Copy, FilePlus, AlertTriangle } from 'lucide-react';
+import { RotateCcw, Layers, Crop, Save, Copy, FilePlus, AlertTriangle, BookmarkPlus, Globe, FileText } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import { useTranslationStore } from '../../stores/useTranslationStore';
+import { DocumentLifecycleService } from '../../services/document-lifecycle.service';
 import { PageThumbnailList } from './PageThumbnailList';
 import { A4Canvas } from './A4Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
@@ -10,7 +12,6 @@ import { AIAssistantDrawer } from '../ai/AIAssistantDrawer';
 import { PresetModal } from './PresetModal';
 import { PDFImportModal } from './PDFImportModal';
 import { CollaboratorPresenceBar } from './CollaboratorPresenceBar';
-import { generateUniqueCatalogTitle } from '../../domain/catalog.schema';
 
 export const EditorView: React.FC = () => {
   const {
@@ -148,63 +149,111 @@ export const EditorView: React.FC = () => {
           {/* Botão Contextual de Salvar Documento Ativo (Flush / Ctrl+S) */}
           <button
             onClick={async () => {
-              const res = await saveActiveDocument();
+              const res = await DocumentLifecycleService.saveActiveDocument();
               if (res.success) {
-                console.log(`[SAVE] ${isTemplateMode ? 'Template' : 'Catálogo'} "${currentCatalog.title}" confirmado na nuvem v${res.version}.`);
+                console.log(`[SAVE] ${isTemplateMode ? 'Template' : 'Catálogo'} "${currentCatalog.title}" salvo com sucesso.`);
               }
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors shadow-2xs bg-presys-navy text-white hover:bg-presys-dark border border-presys-dark"
             title={`Salvar alterações na nuvem (Ctrl+S / Autosave ativo)`}
           >
             <Save className="w-3.5 h-3.5" />
-            <span>Salvar agora</span>
+            <span>Salvar</span>
           </button>
 
-          {/* Botão Contextual de Duplicação / Criação */}
+          {/* Ações Contextuais: Template vs Catálogo */}
           {isTemplateMode ? (
-            <button
-              onClick={async () => {
-                const newId = typeof crypto !== 'undefined' && crypto.randomUUID
-                  ? crypto.randomUUID()
-                  : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-                const newCat = structuredClone(currentCatalog);
-                newCat.id = newId;
-                newCat.title = `${currentCatalog.title} (Catálogo)`;
-                newCat.version = 1;
-                useCatalogStore.getState().setCurrentCatalog(newCat, true);
-                useCatalogStore.getState().setEditorContext({ kind: 'catalog', catalogId: newId });
-                const res = await useCatalogStore.getState().saveCurrentCatalog();
-                if (res.success) {
-                  alert(`Novo Catálogo "${newCat.title}" criado a partir do template com sucesso.`);
-                }
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
-              title="Cria um novo catálogo independente a partir deste template"
-            >
-              <FilePlus className="w-3.5 h-3.5 text-slate-500" />
-              <span>Criar Catálogo</span>
-            </button>
-          ) : (
-            <button
-              onClick={async () => {
-                const savedList = useCatalogStore.getState().savedCatalogs;
-                const defaultTitle = generateUniqueCatalogTitle(`${currentCatalog.title} (Cópia)`, savedList.map((c) => c.title));
-                const newTitle = prompt('Digite o nome para este novo catálogo:', defaultTitle);
-                if (newTitle && newTitle.trim()) {
-                  const res = await useCatalogStore.getState().saveAsNewCatalog(newTitle.trim());
-                  if (res.success && res.status === 'synced') {
-                    alert(`Catálogo "${newTitle.trim()}" duplicado e salvo na nuvem com sucesso.`);
-                  } else {
-                    alert(`Aviso: Erro ao duplicar catálogo (${res.error || 'erro'}).`);
+            <>
+              <button
+                onClick={async () => {
+                  const res = await DocumentLifecycleService.duplicateActiveDocument();
+                  if (res.success) {
+                    alert(`Template "${currentCatalog.title}" duplicado com sucesso.`);
                   }
-                }
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
-              title="Duplica o conteúdo atual em um novo catálogo independente"
-            >
-              <Copy className="w-3.5 h-3.5 text-slate-500" />
-              <span>Duplicar</span>
-            </button>
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
+                title="Duplica este template corporativo na nuvem"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>Duplicar Template</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  const res = await DocumentLifecycleService.createCatalogFromTemplate(currentCatalog, {
+                    title: `${currentCatalog.title} (Catálogo)`
+                  });
+                  if (res.success) {
+                    alert(`Novo Catálogo criado a partir deste template com sucesso.`);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
+                title="Cria um novo catálogo de produto independente a partir deste template"
+              >
+                <FilePlus className="w-3.5 h-3.5 text-slate-500" />
+                <span>Criar Catálogo</span>
+              </button>
+
+              <button
+                onClick={() => useTranslationStore.getState().openModal()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+                title="Traduzir este template para outros idiomas e criar cópia localizada"
+              >
+                <Globe className="w-3.5 h-3.5 text-blue-700" />
+                <span>Traduzir Template</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={async () => {
+                  const defaultTitle = `${currentCatalog.title} (Cópia)`;
+                  const newTitle = prompt('Nome para o novo catálogo duplicado:', defaultTitle);
+                  if (newTitle && newTitle.trim()) {
+                    const res = await DocumentLifecycleService.duplicateActiveDocument({ newTitle: newTitle.trim() });
+                    if (res.success) {
+                      alert(`Catálogo "${newTitle.trim()}" duplicado com sucesso.`);
+                    }
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
+                title="Duplica o conteúdo atual em um novo catálogo independente"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>Duplicar Catálogo</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  const defaultName = `${currentCatalog.title} (Template)`;
+                  const name = prompt('Nome para o novo Template Corporativo:', defaultName);
+                  if (name && name.trim()) {
+                    const desc = prompt('Descrição do template (opcional):', 'Template salvo a partir do catálogo.') || '';
+                    const res = await DocumentLifecycleService.saveCatalogAsTemplate(currentCatalog, {
+                      name: name.trim(),
+                      description: desc.trim()
+                    });
+                    if (res.success) {
+                      alert(`Template "${name.trim()}" salvo com sucesso em Meus Templates Nuvem!`);
+                    }
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
+                title="Salva a estrutura deste catálogo como um modelo reutilizável na nuvem"
+              >
+                <BookmarkPlus className="w-3.5 h-3.5 text-slate-500" />
+                <span>Salvar como Template</span>
+              </button>
+
+              <button
+                onClick={() => useTranslationStore.getState().openModal()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-semibold transition-colors shadow-2xs"
+                title="Traduzir este catálogo para outros idiomas e criar cópia localizada"
+              >
+                <Globe className="w-3.5 h-3.5 text-blue-700" />
+                <span>Traduzir Catálogo</span>
+              </button>
+            </>
           )}
 
           {/* Botão de Importar / Recortar PDF */}

@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { LanguageRegistry } from '@/translation/language.registry';
 import { CredentialStorageMode } from '@/translation/types';
 import { FontManager } from '@/translation/font-manager';
+import { DocumentLifecycleService } from '@/services/document-lifecycle.service';
 import { CleanA4Document } from '../export/CleanA4Document';
 
 export const TranslationCenterModal: React.FC = () => {
@@ -161,16 +162,20 @@ export const TranslationCenterModal: React.FC = () => {
     setSaveErrorMessage(null);
 
     try {
-      // Cria a nova versão persistida na nuvem via action oficial do CatalogStore
-      const result = await useCatalogStore.getState().createTranslatedCatalogVersion(previewCatalog);
+      const result = await DocumentLifecycleService.createLocalizedVariant({
+        translatedDocument: previewCatalog,
+        sourceContext: editorContext,
+        targetLocale
+      });
 
       if (!result.success) {
         setSaveErrorMessage(result.error || 'Não foi possível salvar a versão traduzida na nuvem.');
         return;
       }
 
+      const createdId = result.newId || (result as any).catalogId || (result as any).templateId || '';
       setSaveSuccessMessage(
-        `Nova versão localizada criada e salva na nuvem com sucesso! (ID: ${result.catalogId?.substring(0, 8)}...)`
+        `Nova cópia localizada criada e salva na nuvem com sucesso! (ID: ${createdId.substring(0, 8)}...)`
       );
       setActiveStep('complete');
     } catch (err: any) {
@@ -189,7 +194,6 @@ export const TranslationCenterModal: React.FC = () => {
   });
 
   const isSaveBlocked =
-    isTemplateMode ||
     isSavingVersion ||
     !layoutQaResult ||
     layoutQaResult.status === 'pending' ||
@@ -708,49 +712,28 @@ export const TranslationCenterModal: React.FC = () => {
                 )}
               </div>
 
-              {/* Botão de Criação de Versão Final / Política para Templates */}
-              {isTemplateMode ? (
-                <div className="p-4 bg-amber-50 border border-amber-300 text-amber-900 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-900">
-                        Este documento é um Template Corporativo
-                      </h4>
-                      <p className="text-[11px] text-amber-800 mt-0.5">
-                        A tradução pode ser revisada e auditada aqui, mas para criar uma publicação traduzida oficial na nuvem, abra ou crie um Catálogo baseado neste Template.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled
-                    className="px-4 py-2 text-xs font-bold bg-slate-300 text-slate-500 cursor-not-allowed whitespace-nowrap"
-                  >
-                    Criação bloqueada para Templates
-                  </button>
+              {/* Botão de Criação de Cópia Localizada Final */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-900">
+                    Pronto para criar a cópia em {selectedLang?.nativeName}?
+                  </h4>
+                  <p className="text-[11px] text-emerald-700">
+                    {isTemplateMode
+                      ? `O template original permanece 100% inalterado. Um novo template independente (${currentCatalog?.title} · ${selectedLang?.nativeName}) será salvo na nuvem em Meus Templates.`
+                      : `O catálogo original permanece 100% inalterado. Um novo catálogo independente (${currentCatalog?.title} · ${selectedLang?.nativeName}) com UUID próprio será persistido na nuvem.`}
+                  </p>
                 </div>
-              ) : (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-emerald-900">
-                      Pronto para criar a versão em {selectedLang?.nativeName}?
-                    </h4>
-                    <p className="text-[11px] text-emerald-700">
-                      O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será persistido na nuvem.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCreateVersion}
-                    disabled={isSaveBlocked}
-                    className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
-                  >
-                    {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    <span>Criar Versão em {selectedLang?.nativeName || targetLocale}</span>
-                  </button>
-                </div>
-              )}
+                <button
+                  type="button"
+                  onClick={handleCreateVersion}
+                  disabled={isSaveBlocked}
+                  className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>Criar cópia em {selectedLang?.nativeName || targetLocale}</span>
+                </button>
+              </div>
             </div>
           )}
 
