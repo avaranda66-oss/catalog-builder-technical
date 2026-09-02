@@ -1366,8 +1366,16 @@ export const PropertiesPanel: React.FC = () => {
                     <button
                       type="button"
                       onClick={() =>
-                        openGallery((selectedUrl) => {
-                          updateBlock(blockPageId, selectedBlock.id, { imageUrl: selectedUrl });
+                        openGallery((selection) => {
+                          if (typeof selection === 'string') {
+                            updateBlock(blockPageId, selectedBlock.id, { imageUrl: selection, legacyUrl: selection });
+                          } else {
+                            updateBlock(blockPageId, selectedBlock.id, {
+                              assetId: selection.assetId,
+                              imageUrl: selection.url,
+                              legacyUrl: selection.url
+                            });
+                          }
                         })
                       }
                       className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-bold text-xs shadow-xs transition-colors"

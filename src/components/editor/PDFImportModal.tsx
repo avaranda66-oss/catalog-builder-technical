@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, Crop, Plus, ArrowLeft, ArrowRight, Check, ZoomIn, ZoomOut, Info } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useCatalogStore } from '../../stores/useCatalogStore';
-import { useMediaStore } from '../../stores/useMediaStore';
 import { ContentBlock } from '../../domain/catalog.schema';
 
 // Configura o worker do PDF.js
@@ -15,7 +14,6 @@ interface PDFImportModalProps {
 
 export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose }) => {
   const { currentCatalog, addBlock, activePageIndex, setCurrentCatalog } = useCatalogStore();
-  const { addUrlAsset } = useMediaStore();
 
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState<number>(0);
@@ -133,9 +131,6 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
     const canvas = canvasRef.current;
     const dataUrl = canvas.toDataURL('image/png', 1.0);
 
-    // Salva na galeria de mídia
-    addUrlAsset(dataUrl, `${fileName} - Pág ${currentPage}`, 'diagram');
-
     // Cria a nova página
     const newPageNumber = currentCatalog.pages.length + 1;
     const newPageId = `page-pdf-${Date.now()}`;
@@ -195,9 +190,6 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
 
     const snipDataUrl = cropCanvas.toDataURL('image/png', 1.0);
 
-    // Adiciona na galeria
-    addUrlAsset(snipDataUrl, `Recorte ${fileName} Pág ${currentPage}`, 'diagram');
-
     // Se houver uma página ativa, insere o bloco recortado
     if (currentCatalog && currentCatalog.pages[activePageIndex]) {
       const activePage = currentCatalog.pages[activePageIndex];
@@ -209,9 +201,9 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
         imageCaption: `Recorte de ${fileName} (Pág. ${currentPage})`
       };
       addBlock(activePage.id, newBlock);
-      alert('Recorte inserido na página atual do catálogo e salvo na Galeria de Mídia!');
+      alert('Recorte inserido na página atual do catálogo!');
     } else {
-      alert('Recorte salvo com sucesso na Galeria de Mídia!');
+      alert('Recorte gerado com sucesso!');
     }
 
     setSelection(null);

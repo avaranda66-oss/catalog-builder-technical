@@ -7,6 +7,8 @@ import { useAuthStore } from './stores/useAuthStore';
 import { useLibraryStore } from './stores/useLibraryStore';
 import { useUIStore } from './stores/useUIStore';
 import { usePresenceStore } from './stores/usePresenceStore';
+import { useAssetStore } from './stores/useAssetStore';
+import { useMediaStore } from './stores/useMediaStore';
 
 if (typeof window !== 'undefined') {
   const isDebugE2E = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true';
@@ -16,6 +18,8 @@ if (typeof window !== 'undefined') {
     (window as any).useLibraryStore = useLibraryStore;
     (window as any).useUIStore = useUIStore;
     (window as any).usePresenceStore = usePresenceStore;
+    (window as any).useAssetStore = useAssetStore;
+    (window as any).useMediaStore = useMediaStore;
   }
 }
 

@@ -1,60 +1,52 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useMediaStore, INITIAL_MEDIA_ASSETS } from '../../src/stores/useMediaStore';
+import { useMediaStore, INITIAL_DEMO_MEDIA_ASSETS } from '../../src/stores/useMediaStore';
 
-describe('useMediaStore (Central Image & Media Gallery)', () => {
+describe('useMediaStore (Photo Bank & Cloud Gallery Facade)', () => {
   beforeEach(() => {
-    localStorage.clear();
     useMediaStore.setState({
-      assets: INITIAL_MEDIA_ASSETS,
+      demoAssets: INITIAL_DEMO_MEDIA_ASSETS,
       isGalleryOpen: false,
       selectedAssetId: null,
-      galleryTargetCallback: null
+      galleryTargetCallback: null,
+      targetProductId: null
     });
   });
 
-  it('inicia com acervo de imagens oficiais da PRESYS', () => {
+  it('inicia com acervo de demonstração isolado e classificado como demo', () => {
     const state = useMediaStore.getState();
-    expect(state.assets.length).toBeGreaterThanOrEqual(4);
-    expect(state.assets.some((a) => a.id === 'media-psv-portable')).toBe(true);
+    expect(state.demoAssets.length).toBeGreaterThanOrEqual(4);
+    expect(state.demoAssets.every((a) => a.category === 'demo')).toBe(true);
+    expect(state.demoAssets.every((a) => a.isDemo === true)).toBe(true);
   });
 
-  it('permite abrir e fechar a galeria com callback de seleção', () => {
-    let selectedImage = '';
+  it('permite abrir e fechar a galeria com callback de seleção MediaSelection', () => {
+    let receivedAssetId = '';
+    let receivedUrl = '';
     const store = useMediaStore.getState();
 
-    store.openGallery((url) => {
-      selectedImage = url;
+    store.openGallery((selection) => {
+      if (typeof selection === 'string') {
+        receivedUrl = selection;
+      } else {
+        receivedAssetId = selection.assetId || '';
+        receivedUrl = selection.url;
+      }
     });
 
     expect(useMediaStore.getState().isGalleryOpen).toBe(true);
     expect(useMediaStore.getState().galleryTargetCallback).toBeDefined();
 
-    useMediaStore.getState().galleryTargetCallback?.('https://exemplo.com/foto-psv.jpg');
-    expect(selectedImage).toBe('https://exemplo.com/foto-psv.jpg');
+    useMediaStore.getState().galleryTargetCallback?.({
+      assetId: 'asset-uuid-123',
+      url: 'https://exemplo.com/foto-psv.jpg',
+      originalFilename: 'foto-psv.jpg',
+      role: 'hero'
+    });
+
+    expect(receivedAssetId).toBe('asset-uuid-123');
+    expect(receivedUrl).toBe('https://exemplo.com/foto-psv.jpg');
 
     store.closeGallery();
     expect(useMediaStore.getState().isGalleryOpen).toBe(false);
-  });
-
-  it('permite adicionar imagem por URL e salvar na galeria', () => {
-    const store = useMediaStore.getState();
-    const initialCount = store.assets.length;
-
-    store.addUrlAsset('https://exemplo.com/nova-capa.jpg', 'Nova Capa de Teste', 'cover');
-
-    const updated = useMediaStore.getState();
-    expect(updated.assets.length).toBe(initialCount + 1);
-    expect(updated.assets[0].name).toBe('Nova Capa de Teste');
-  });
-
-  it('permite excluir imagem customizada da galeria', () => {
-    const store = useMediaStore.getState();
-    store.addUrlAsset('https://exemplo.com/foto-temp.jpg', 'Foto Temporária', 'product');
-
-    const added = useMediaStore.getState().assets[0];
-    store.deleteAsset(added.id);
-
-    const finalAssets = useMediaStore.getState().assets;
-    expect(finalAssets.some((a) => a.id === added.id)).toBe(false);
   });
 });

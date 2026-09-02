@@ -56,6 +56,7 @@ export interface CanvasLayer {
   textTransform?: 'none' | 'uppercase' | 'capitalize';
   lineHeight?: 'tight' | 'normal' | 'relaxed';
   imageUrl?: string;
+  assetId?: string;
   objectFit?: 'cover' | 'contain' | 'fill';
   backgroundColor?: string;
   borderColor?: string;
@@ -106,9 +107,11 @@ export interface ContentBlock {
   title?: string;
   subtitle?: string;
   textContent?: string;
+  assetId?: string;
   imageUrl?: string;
+  legacyUrl?: string;
   imageCaption?: string;
-  images?: { url: string; caption?: string }[];
+  images?: { assetId?: string; url: string; caption?: string }[];
   tableColumns?: TableColumnConfig[];
   tableRows?: CatalogTableRow[];
   features?: FeatureItem[];
@@ -119,6 +122,7 @@ export interface ContentBlock {
     email?: string;
     website?: string;
     address?: string;
+    logoAssetId?: string;
     logoUrl?: string;
   };
   customData?: Record<string, any>;

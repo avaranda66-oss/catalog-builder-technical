@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ContentBlock, CanvasLayer, CanvasLayerType } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
+import { useAssetStore } from '../../../stores/useAssetStore';
 
 export interface ElementPositionConfig {
   x: number;
@@ -37,9 +38,12 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 
   const custom = block.customData || {};
   const overlayOpacity = custom.overlayOpacity ?? 45; // 0 a 100%
+  const resolvedCoverUrl = useAssetStore((state) => (block.assetId ? state.resolvedUrls[block.assetId] : undefined));
   const backgroundImageUrl =
+    resolvedCoverUrl ||
     custom.backgroundImageUrl ||
     block.imageUrl ||
+    (block as any).legacyUrl ||
     'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85';
 
   // Migração automática de configs legadas para canvasLayers[]

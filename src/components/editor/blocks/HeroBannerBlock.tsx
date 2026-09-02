@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Upload } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
+import { useAssetStore } from '../../../stores/useAssetStore';
 
 interface HeroBannerBlockProps {
   block: ContentBlock;
@@ -48,34 +49,36 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
     block.style?.gradient ||
     'bg-[#001f3f]';
 
+  const resolvedUrl = useAssetStore((state) => (block.assetId ? state.resolvedUrls[block.assetId] : undefined)) || block.imageUrl || (block as any).legacyUrl;
+
   return (
     <div
       onClick={(e) => {
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-4 rounded-none ${gradientClass} text-white border border-slate-700 transition-all ${
-        isSelected ? 'ring-2 ring-blue-500' : 'hover:border-slate-500'
+      className={`relative p-5 rounded-none text-white ${gradientClass} transition-all cursor-pointer ${
+        isSelected ? 'ring-2 ring-blue-400' : 'hover:ring-1 hover:ring-slate-400'
       }`}
     >
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
         <div className="md:col-span-8 space-y-2">
-          <div className="flex items-center gap-2">
+          {block.badgeText && (
             <span
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
-              className="inline-flex items-center justify-center px-2.5 py-1 leading-none rounded-none bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold tracking-widest uppercase border border-blue-400/30 outline-none focus:bg-white/20 cursor-text box-border"
+              className="inline-block px-2.5 py-0.5 bg-blue-600/80 text-white text-[10px] font-bold tracking-wider uppercase rounded-none outline-none focus:bg-blue-600 cursor-text"
             >
-              {block.badgeText || 'PRESYS · ESTAÇÕES DE TESTE EM CAMPO E OFICINA'}
+              {block.badgeText}
             </span>
-          </div>
+          )}
 
           <h2
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
-            className="text-xl font-black tracking-tight text-white outline-none focus:bg-white/10 rounded-none px-1 -ml-1 leading-snug cursor-text"
+            className="text-lg font-black tracking-tight leading-tight outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text"
           >
             {block.title || 'PSV Portable — Sistema Pneumático e Hidrostático'}
           </h2>
@@ -95,7 +98,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
           <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900 border border-slate-700 relative group flex items-center justify-center p-2">
             <img
               src={
-                block.imageUrl ||
+                resolvedUrl ||
                 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
               }
               alt="Produto Destaque"
