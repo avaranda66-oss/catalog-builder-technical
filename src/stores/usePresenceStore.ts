@@ -5,13 +5,19 @@ import { getClientInstanceId } from './useCatalogStore';
 export interface PresenceState {
   presenceStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
   activeCatalogId: string | null;
+  documentKind: 'catalog' | 'template';
   currentSession: ParticipantSession | null;
   participants: Record<string, ParticipantSession>;
   error: string | null;
   editingTimeoutId: any | null;
 
   // Actions
-  initializePresence: (catalogId: string, pageNumber?: number, pageId?: string) => void;
+  initializePresence: (
+    documentId: string,
+    pageNumber?: number,
+    pageId?: string,
+    kind?: 'catalog' | 'template'
+  ) => void;
   trackLocation: (pageNumber: number, pageId?: string, blockId?: string | null, blockType?: string | null) => void;
   markEditing: (pageNumber: number, pageId?: string, blockId?: string | null, blockType?: string | null) => void;
   handlePresenceSync: (syncMap: Record<string, ParticipantSession>) => void;
@@ -26,29 +32,39 @@ export interface PresenceState {
 export const usePresenceStore = create<PresenceState>((set, get) => ({
   presenceStatus: 'disconnected',
   activeCatalogId: null,
+  documentKind: 'catalog',
   currentSession: null,
   participants: {},
   error: null,
   editingTimeoutId: null,
 
-  initializePresence: (catalogId: string, pageNumber: number = 1, pageId?: string) => {
-    if (!catalogId) return;
+  initializePresence: (
+    documentId: string,
+    pageNumber: number = 1,
+    pageId?: string,
+    kind: 'catalog' | 'template' = 'catalog'
+  ) => {
+    if (!documentId) return;
 
-    // Se já está conectado no mesmo catálogo, apenas sincroniza localização
-    if (get().activeCatalogId === catalogId && get().presenceStatus === 'connected') {
+    // Se já está conectado no mesmo documento, apenas sincroniza localização
+    if (
+      get().activeCatalogId === documentId &&
+      get().documentKind === kind &&
+      get().presenceStatus === 'connected'
+    ) {
       get().trackLocation(pageNumber, pageId);
       return;
     }
 
-    // Se estava em outro catálogo, faz leave anterior
-    if (get().activeCatalogId && get().activeCatalogId !== catalogId) {
+    // Se estava em outro documento, faz leave anterior
+    if (get().activeCatalogId && (get().activeCatalogId !== documentId || get().documentKind !== kind)) {
       get().leavePresence();
     }
 
-    set({ presenceStatus: 'connecting', activeCatalogId: catalogId, error: null });
+    set({ presenceStatus: 'connecting', activeCatalogId: documentId, documentKind: kind, error: null });
 
-    PresenceService.subscribeToCatalog(
-      catalogId,
+    PresenceService.subscribeToDocument(
+      { kind, id: documentId },
       pageNumber,
       pageId,
       (syncedParticipants) => {

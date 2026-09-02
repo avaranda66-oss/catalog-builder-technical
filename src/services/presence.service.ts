@@ -3,13 +3,20 @@ import { getSupabase } from './supabase.service';
 import { useAuthStore } from '../stores/useAuthStore';
 import { getClientInstanceId } from '../stores/useCatalogStore';
 
+export interface DocumentPresenceTarget {
+  kind: 'catalog' | 'template';
+  id: string;
+}
+
 export interface ParticipantSession {
   presenceKey: string;
   userId: string;
   clientInstanceId: string;
   displayLabel: string;
   avatarText: string;
-  catalogId: string;
+  documentKind: 'catalog' | 'template';
+  documentId: string;
+  catalogId?: string;
   pageId?: string;
   pageNumber: number;
   blockId?: string | null;
@@ -59,34 +66,41 @@ export function buildDisplayLabel(email?: string, name?: string): string {
 }
 
 class PresenceServiceClass {
+  private activeTarget: DocumentPresenceTarget | null = null;
   private activeChannel: RealtimeChannel | null = null;
-  private activeCatalogId: string | null = null;
   private currentTrackPayload: ParticipantSession | null = null;
 
   public getActiveCatalogId(): string | null {
-    return this.activeCatalogId;
+    return this.activeTarget?.id || null;
   }
 
   public getCurrentSession(): ParticipantSession | null {
     return this.currentTrackPayload;
   }
 
-  public subscribeToCatalog(
-    catalogId: string,
+  public subscribeToDocument(
+    target: DocumentPresenceTarget,
     initialPageNumber: number = 1,
     initialPageId?: string,
     onSync?: (participants: Record<string, ParticipantSession>) => void
   ): RealtimeChannel | null {
     const supabase = getSupabase();
-    if (!supabase) return null;
+    if (!supabase || typeof (supabase as any).channel !== 'function') {
+      return null;
+    }
 
     // Se já está no mesmo canal, apenas atualiza
-    if (this.activeChannel && this.activeCatalogId === catalogId) {
+    if (
+      this.activeChannel &&
+      this.activeTarget &&
+      this.activeTarget.kind === target.kind &&
+      this.activeTarget.id === target.id
+    ) {
       return this.activeChannel;
     }
 
-    // Se estava em outro catálogo, faz cleanup primeiro
-    if (this.activeChannel && this.activeCatalogId !== catalogId) {
+    // Se estava em outro documento, faz cleanup primeiro
+    if (this.activeChannel) {
       this.leave();
     }
 
@@ -104,7 +118,9 @@ class PresenceServiceClass {
       clientInstanceId,
       displayLabel,
       avatarText,
-      catalogId,
+      documentKind: target.kind,
+      documentId: target.id,
+      catalogId: target.id,
       pageId: initialPageId,
       pageNumber: initialPageNumber,
       blockId: null,
@@ -115,9 +131,9 @@ class PresenceServiceClass {
     };
 
     this.currentTrackPayload = initialSession;
-    this.activeCatalogId = catalogId;
+    this.activeTarget = target;
 
-    const channelName = `catalog-presence:${catalogId}`;
+    const channelName = `presence:${target.kind}:${target.id}`;
     const channel = supabase.channel(channelName, {
       config: {
         presence: {
@@ -165,6 +181,20 @@ class PresenceServiceClass {
     return channel;
   }
 
+  public subscribeToCatalog(
+    catalogId: string,
+    initialPageNumber: number = 1,
+    initialPageId?: string,
+    onSync?: (participants: Record<string, ParticipantSession>) => void
+  ): RealtimeChannel | null {
+    return this.subscribeToDocument(
+      { kind: 'catalog', id: catalogId },
+      initialPageNumber,
+      initialPageId,
+      onSync
+    );
+  }
+
   public async updateLocation(
     pageNumber: number,
     pageId?: string,
@@ -202,7 +232,7 @@ class PresenceServiceClass {
         console.warn('[PRESENCE LEAVE ERROR]', err);
       }
       this.activeChannel = null;
-      this.activeCatalogId = null;
+      this.activeTarget = null;
       this.currentTrackPayload = null;
     }
   }

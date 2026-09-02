@@ -35,6 +35,20 @@ export const App: React.FC = () => {
     void initializeAuth();
   }, [initializeAuth]);
 
+  // Atalho Global Profissional: Ctrl+S / Cmd+S (Salva documento ativo)
+  useEffect(() => {
+    const handleGlobalSaveShortcut = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> saveActiveDocument');
+        void useCatalogStore.getState().saveActiveDocument();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalSaveShortcut);
+    return () => window.removeEventListener('keydown', handleGlobalSaveShortcut);
+  }, []);
+
   useEffect(() => {
     if (status !== 'authenticated') {
       bootstrappedUserIdRef.current = null;

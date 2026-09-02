@@ -4,10 +4,12 @@ import {
   ContentBlock,
   generateUniqueCatalogTitle,
   MutationMetadata,
-  analyzeCatalogStructuralDelta
+  analyzeCatalogStructuralDelta,
+  EditorDocumentContext
 } from '../domain/catalog.schema';
 import { StorageService } from '../services/storage.service';
 import { SupabaseService } from '../services/supabase.service';
+import { useTemplateStore } from './useTemplateStore';
 import { SYSTEM_PRESETS } from '../data/presets';
 
 export type SyncStatus = 'synced' | 'saving' | 'dirty' | 'conflict' | 'error' | 'offline';
@@ -27,17 +29,29 @@ export interface InFlightSaveInfo {
   capturedRevision: number;
 }
 
-export function updateCanonicalUrlCatalogId(catalogId: string) {
+export function updateCanonicalUrlDocument(context: EditorDocumentContext) {
   if (typeof window === 'undefined') return;
   try {
     const url = new URL(window.location.href);
-    if (url.searchParams.get('catalog') !== catalogId) {
-      url.searchParams.set('catalog', catalogId);
-      window.history.replaceState({}, '', url.toString());
+    if (context.kind === 'catalog') {
+      if (url.searchParams.get('catalog') !== context.catalogId) {
+        url.searchParams.set('catalog', context.catalogId);
+      }
+      url.searchParams.delete('template');
+    } else if (context.kind === 'template') {
+      if (url.searchParams.get('template') !== context.templateId) {
+        url.searchParams.set('template', context.templateId);
+      }
+      url.searchParams.delete('catalog');
     }
+    window.history.replaceState({}, '', url.toString());
   } catch (e) {
-    console.warn('Erro ao atualizar URL canônica:', e);
+    console.warn('Erro ao atualizar URL canônica do documento:', e);
   }
+}
+
+export function updateCanonicalUrlCatalogId(catalogId: string) {
+  updateCanonicalUrlDocument({ kind: 'catalog', catalogId });
 }
 
 // Client Instance ID persistente na sessão do navegador
@@ -188,6 +202,10 @@ interface CatalogState {
   duplicateCatalog: (id: string) => Promise<SaveResult | null>;
   deleteCatalog: (id: string) => Promise<void>;
   saveAsNewCatalog: (newTitle: string) => Promise<SaveResult & { newCatalogId?: string }>;
+  editorContext: EditorDocumentContext;
+  setEditorContext: (ctx: EditorDocumentContext) => void;
+  openTemplateForEditing: (templateId: string) => Promise<void>;
+  saveActiveDocument: () => Promise<SaveResult>;
   flushCatalog: (catalogId?: string) => Promise<SaveResult>;
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
@@ -215,6 +233,7 @@ function getCatalogQueue(catalogId: string): CatalogSaveQueue {
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   currentCatalog: null,
+  editorContext: { kind: 'catalog', catalogId: '' },
   activePageIndex: 0,
   selectedBlockId: null,
 
@@ -233,6 +252,91 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   savedCatalogs: [],
   isLoading: false,
+
+  setEditorContext: (editorContext) => set({ editorContext }),
+
+  saveActiveDocument: async (): Promise<SaveResult> => {
+    const { editorContext, currentCatalog } = get();
+    if (editorContext.kind === 'catalog') {
+      return await get().flushCatalog(editorContext.catalogId || currentCatalog?.id);
+    } else if (editorContext.kind === 'template') {
+      const res = await useTemplateStore.getState().flushTemplate(editorContext.templateId);
+      if (res.success) {
+        set({ isDirty: false, syncStatus: 'synced', syncError: null });
+        return { success: true, status: 'synced', version: res.data?.version };
+      }
+      return {
+        success: false,
+        status: res.conflict ? 'conflict' : 'error',
+        error: res.error
+      };
+    }
+    return { success: false, status: 'error', error: 'Contexto de documento desconhecido' };
+  },
+
+  openTemplateForEditing: async (templateId: string) => {
+    set({ isLoading: true });
+    try {
+      // 1. Flush de documento anterior se dirty
+      const currentCtx = get().editorContext;
+      if (currentCtx.kind === 'catalog' && get().isDirty) {
+        await get().flushCatalog(currentCtx.catalogId);
+      } else if (currentCtx.kind === 'template' && get().isDirty) {
+        await useTemplateStore.getState().flushTemplate(currentCtx.templateId);
+      }
+
+      // 2. Localiza template na store ou no Supabase
+      let template = useTemplateStore.getState().customTemplates.find((t) => t.id === templateId);
+      if (!template) {
+        const res = await SupabaseService.getTemplate(templateId);
+        if (res.success && res.data) {
+          template = res.data;
+        }
+      }
+
+      if (!template) {
+        set({
+          syncStatus: 'error',
+          syncError: `O template solicitado (${templateId}) não foi encontrado.`
+        });
+        return;
+      }
+
+      // 3. Carrega o clone do layout do template para o Studio
+      const templateCatalog = structuredClone(template.catalog);
+      templateCatalog.id = template.id;
+      templateCatalog.title = template.name;
+      templateCatalog.version = template.version || 1;
+
+      debugSetCatalog('openTemplateForEditing', get().currentCatalog, templateCatalog);
+
+      set({
+        currentCatalog: templateCatalog,
+        editorContext: { kind: 'template', templateId: template.id },
+        activePageIndex: 0,
+        selectedBlockId: null,
+        isDirty: false,
+        isSaving: false,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
+        inFlightSave: null,
+        syncStatus: 'synced',
+        syncError: null
+      });
+
+      updateCanonicalUrlDocument({ kind: 'template', templateId: template.id });
+
+      // 4. Conecta presença no canal do template
+      try {
+        const { usePresenceStore } = await import('./usePresenceStore');
+        usePresenceStore.getState().initializePresence(template.id, 1, undefined, 'template');
+      } catch (e) {
+        console.warn('Erro ao conectar presença de template:', e);
+      }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
   resetWorkspaceForIdentityChange: () => {
     console.log('🧹 [IDENTITY RESET] Limpando workspace em memória por troca/saída de identidade.');
@@ -713,9 +817,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   // =========================================================================
 
   saveCurrentCatalog: async (): Promise<SaveResult> => {
-    const { currentCatalog } = get();
+    const { currentCatalog, editorContext } = get();
     if (!currentCatalog) {
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo para salvar.' };
+    }
+
+    // REGRA DE DOMÍNIO FASE 1.5: Se o documento for TEMPLATE, ZERO escritas na tabela catalogs
+    if (editorContext?.kind === 'template') {
+      const templateId = editorContext.templateId || currentCatalog.id;
+      const expectedVer = currentCatalog.version ?? 1;
+      await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer);
+      return { success: true, status: 'synced', version: expectedVer };
     }
 
     const queue = getCatalogQueue(currentCatalog.id);
@@ -1132,6 +1244,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           debugSetCatalog('openCatalog:Remote', prev, targetRemote);
           set({
             currentCatalog: targetRemote,
+            editorContext: { kind: 'catalog', catalogId: id },
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
@@ -1142,7 +1255,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             syncError: null
           });
           StorageService.setActiveCatalogId(id);
-          updateCanonicalUrlCatalogId(id);
+          updateCanonicalUrlDocument({ kind: 'catalog', catalogId: id });
+          try {
+            const { usePresenceStore } = await import('./usePresenceStore');
+            usePresenceStore.getState().initializePresence(id, 1, undefined, 'catalog');
+          } catch (e) {
+            console.warn('Erro ao conectar presença no catálogo:', e);
+          }
           return;
         } else {
           set({
@@ -1160,6 +1279,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         debugSetCatalog('openCatalog:Cached', prev, cached);
         set({
           currentCatalog: cached,
+          editorContext: { kind: 'catalog', catalogId: id },
           activePageIndex: 0,
           selectedBlockId: null,
           isDirty: false,
@@ -1170,7 +1290,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           syncError: 'Catálogo carregado do cache local.'
         });
         StorageService.setActiveCatalogId(id);
-        updateCanonicalUrlCatalogId(id);
+        updateCanonicalUrlDocument({ kind: 'catalog', catalogId: id });
       } else {
         set({
           syncStatus: 'error',
@@ -1283,9 +1403,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   loadLatestCatalog: async () => {
     const initialCatalog = get().currentCatalog;
-    const urlCatalogId = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('catalog')
-      : null;
+    const urlParams = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+    const urlTemplateId = urlParams.get('template');
+    const urlCatalogId = urlParams.get('catalog');
+
+    // 1. Se a URL possui ?template=<id>, abre o template diretamente para edição
+    if (urlTemplateId) {
+      await get().openTemplateForEditing(urlTemplateId);
+      return;
+    }
 
     // Se já temos um catálogo ativo e não há parâmetro de URL exigindo outro catálogo:
     if (initialCatalog && !urlCatalogId) {
@@ -1317,6 +1445,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             debugSetCatalog('loadLatestCatalog:UrlParam', get().currentCatalog, matched);
             set({
               currentCatalog: matched,
+              editorContext: { kind: 'catalog', catalogId: matched.id },
               activePageIndex: 0,
               selectedBlockId: null,
               isDirty: false,
@@ -1327,7 +1456,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               syncError: null
             });
             StorageService.setActiveCatalogId(matched.id);
-            updateCanonicalUrlCatalogId(matched.id);
+            updateCanonicalUrlDocument({ kind: 'catalog', catalogId: matched.id });
+            try {
+              const { usePresenceStore } = await import('./usePresenceStore');
+              usePresenceStore.getState().initializePresence(matched.id, 1, undefined, 'catalog');
+            } catch (e) {
+              console.warn('Erro ao conectar presença:', e);
+            }
             return;
           } else {
             console.error(`🚨 [CANONICAL URL] Catálogo com ID "${urlCatalogId}" não existe no workspace remoto.`);
@@ -1347,6 +1482,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           debugSetCatalog('loadLatestCatalog:Remote', get().currentCatalog, targetCatalog);
           set({
             currentCatalog: targetCatalog,
+            editorContext: { kind: 'catalog', catalogId: targetCatalog.id },
             activePageIndex: 0,
             selectedBlockId: null,
             isDirty: false,
@@ -1357,7 +1493,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             syncError: null
           });
           StorageService.setActiveCatalogId(targetCatalog.id);
-          updateCanonicalUrlCatalogId(targetCatalog.id);
+          updateCanonicalUrlDocument({ kind: 'catalog', catalogId: targetCatalog.id });
+          try {
+            const { usePresenceStore } = await import('./usePresenceStore');
+            usePresenceStore.getState().initializePresence(targetCatalog.id, 1, undefined, 'catalog');
+          } catch (e) {
+            console.warn('Erro ao conectar presença:', e);
+          }
           return;
         } else {
           await get().createCatalogFromPreset();

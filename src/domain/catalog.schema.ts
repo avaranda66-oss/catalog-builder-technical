@@ -178,7 +178,9 @@ export interface CatalogPreset {
   category?: 'layout_template' | 'official_product_catalog';
   isSystem?: boolean;
   catalog: Catalog;
+  version?: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 // =========================================================================
@@ -308,8 +310,20 @@ export const CatalogPresetSchema = z.object({
   category: z.enum(['layout_template', 'official_product_catalog']).optional().default('layout_template'),
   isSystem: z.boolean().optional().default(false),
   catalog: CatalogSchema,
-  createdAt: z.string().datetime().or(z.string())
+  version: z.number().int().optional().default(1),
+  createdAt: z.string().datetime().or(z.string()),
+  updatedAt: z.string().datetime().or(z.string()).optional()
 });
+
+export type EditorDocumentContext =
+  | {
+      kind: 'catalog';
+      catalogId: string;
+    }
+  | {
+      kind: 'template';
+      templateId: string;
+    };
 
 export function generateUniqueCatalogTitle(baseTitle: string, existingTitles: string[]): string {
   const titleSet = new Set(existingTitles.map((t) => t.trim().toLowerCase()));

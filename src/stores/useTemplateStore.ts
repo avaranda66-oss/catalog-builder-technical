@@ -7,7 +7,7 @@ export interface TemplateState {
   customTemplates: CatalogPreset[];
   systemTemplates: CatalogPreset[];
   isLoading: boolean;
-  syncStatus: 'synced' | 'saving' | 'error' | 'offline';
+  syncStatus: 'synced' | 'saving' | 'conflict' | 'error' | 'offline';
   syncError: string | null;
 
   loadTemplates: () => Promise<void>;
@@ -16,9 +16,42 @@ export interface TemplateState {
     description: string,
     catalog: Catalog
   ) => Promise<{ success: boolean; data?: CatalogPreset; error?: string }>;
+  updateCustomTemplate: (
+    templateId: string,
+    catalog: Catalog,
+    expectedVersion?: number,
+    name?: string,
+    description?: string
+  ) => Promise<{ success: boolean; data?: CatalogPreset; conflict?: boolean; error?: string }>;
+  flushTemplate: (templateId?: string) => Promise<{ success: boolean; data?: CatalogPreset; conflict?: boolean; error?: string }>;
   deleteCustomTemplate: (id: string) => Promise<{ success: boolean; error?: string }>;
   migrateLegacyLocalStoragePresets: () => Promise<void>;
   handleRealtimeTemplateEvent: (payload: { eventType: string; new?: any; old?: any }) => void;
+}
+
+interface TemplateSaveQueue {
+  pendingCatalog: Catalog | null;
+  pendingName?: string;
+  pendingDescription?: string;
+  expectedVersion: number;
+  inFlightPromise: Promise<{ success: boolean; data?: CatalogPreset; conflict?: boolean; error?: string }> | null;
+  debounceTimer: any | null;
+}
+
+const templateSaveQueues = new Map<string, TemplateSaveQueue>();
+
+function getOrCreateTemplateQueue(templateId: string, initialVersion: number = 1): TemplateSaveQueue {
+  let q = templateSaveQueues.get(templateId);
+  if (!q) {
+    q = {
+      pendingCatalog: null,
+      expectedVersion: initialVersion,
+      inFlightPromise: null,
+      debounceTimer: null
+    };
+    templateSaveQueues.set(templateId, q);
+  }
+  return q;
 }
 
 export const useTemplateStore = create<TemplateState>((set, get) => ({
@@ -124,6 +157,119 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
       syncError: res.error || 'Falha ao salvar template no Supabase.'
     });
     return { success: false, error: res.error };
+  },
+
+  updateCustomTemplate: async (
+    templateId: string,
+    catalog: Catalog,
+    expectedVersion?: number,
+    name?: string,
+    description?: string
+  ) => {
+    const existing = get().customTemplates.find((t) => t.id === templateId);
+    const version = expectedVersion ?? existing?.version ?? 1;
+    const queue = getOrCreateTemplateQueue(templateId, version);
+
+    queue.pendingCatalog = structuredClone(catalog);
+    queue.pendingName = name;
+    queue.pendingDescription = description;
+    queue.expectedVersion = version;
+
+    set({ syncStatus: 'saving', syncError: null });
+
+    if (queue.debounceTimer) {
+      clearTimeout(queue.debounceTimer);
+    }
+
+    queue.debounceTimer = setTimeout(() => {
+      queue.debounceTimer = null;
+      void get().flushTemplate(templateId);
+    }, 600);
+
+    return { success: true };
+  },
+
+  flushTemplate: async (templateId?: string) => {
+    const targetId = templateId || Array.from(templateSaveQueues.keys())[0];
+    if (!targetId) {
+      return { success: true };
+    }
+
+    const queue = getOrCreateTemplateQueue(targetId);
+    if (queue.debounceTimer) {
+      clearTimeout(queue.debounceTimer);
+      queue.debounceTimer = null;
+    }
+
+    if (queue.inFlightPromise) {
+      await queue.inFlightPromise;
+    }
+
+    if (!queue.pendingCatalog) {
+      return { success: true };
+    }
+
+    const catalogToSave = queue.pendingCatalog;
+    const saveName = queue.pendingName;
+    const saveDesc = queue.pendingDescription;
+    const expectedVer = queue.expectedVersion;
+    queue.pendingCatalog = null;
+
+    set({ syncStatus: 'saving', syncError: null });
+
+    const execPromise = (async () => {
+      const res = await SupabaseService.updateTemplate(
+        targetId,
+        catalogToSave,
+        expectedVer,
+        saveName,
+        saveDesc
+      );
+
+      if (res.success && res.data) {
+        const savedPreset = res.data;
+        queue.expectedVersion = savedPreset.version || (expectedVer + 1);
+
+        const currentList = get().customTemplates;
+        const updatedList = currentList.map((t) => (t.id === targetId ? savedPreset : t));
+        if (!currentList.some((t) => t.id === targetId)) {
+          updatedList.unshift(savedPreset);
+        }
+
+        set({
+          customTemplates: updatedList,
+          syncStatus: 'synced',
+          syncError: null
+        });
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cb_custom_presets', JSON.stringify(updatedList));
+        }
+
+        return { success: true, data: savedPreset };
+      }
+
+      if (res.conflict) {
+        set({
+          syncStatus: 'conflict',
+          syncError: res.error || 'Conflito de concorrência detectado no template.'
+        });
+        return { success: false, conflict: true, error: res.error };
+      }
+
+      set({
+        syncStatus: 'error',
+        syncError: res.error || 'Falha ao salvar template.'
+      });
+      return { success: false, error: res.error };
+    })();
+
+    queue.inFlightPromise = execPromise;
+    try {
+      return await execPromise;
+    } finally {
+      queue.inFlightPromise = null;
+    }
   },
 
   deleteCustomTemplate: async (id: string) => {

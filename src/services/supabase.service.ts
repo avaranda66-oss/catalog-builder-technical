@@ -195,6 +195,86 @@ export class SupabaseService {
     }
   }
 
+  static async getTemplate(id: string): Promise<{ success: boolean; data?: CatalogPreset; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: templateRowToCatalogPreset(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao carregar template' };
+    }
+  }
+
+  static async updateTemplate(
+    templateId: string,
+    catalog: Catalog,
+    expectedVersion: number = 0,
+    name?: string,
+    description?: string
+  ): Promise<{ success: boolean; data?: CatalogPreset; conflict?: boolean; serverVersion?: number; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      // 1. Tenta RPC save_template_v1 (com CAS e atomicidade)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('save_template_v1', {
+        p_template_id: templateId,
+        p_expected_version: expectedVersion,
+        p_layout_config: catalog,
+        p_name: name || catalog.title,
+        p_description: description
+      });
+
+      if (!rpcError && rpcData) {
+        if (rpcData.conflict || rpcData.errorCode === '40001') {
+          return {
+            success: false,
+            conflict: true,
+            serverVersion: rpcData.serverVersion,
+            error: rpcData.error || 'Conflito de versão no template.'
+          };
+        }
+        if (rpcData.success && rpcData.data) {
+          return { success: true, data: templateRowToCatalogPreset(rpcData.data) };
+        }
+      }
+
+      // 2. Fallback: update direto na tabela caso a migration ainda não esteja no cluster
+      const updatePayload: any = {
+        layout_config: catalog,
+        name: name || catalog.title,
+        updated_at: new Date().toISOString()
+      };
+      if (description) {
+        updatePayload.design_tokens = {
+          category: 'layout_template',
+          description,
+          isSystem: false
+        };
+      }
+
+      const { data, error } = await supabase
+        .from('templates')
+        .update(updatePayload)
+        .eq('id', templateId)
+        .select()
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: templateRowToCatalogPreset(data) };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao atualizar template no servidor' };
+    }
+  }
+
   static async deleteTemplate(id: string): Promise<{ success: boolean; error?: string }> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
@@ -249,6 +329,7 @@ export class SupabaseService {
 export function templateRowToCatalogPreset(row: any): CatalogPreset {
   const designTokens = typeof row.design_tokens === 'object' && row.design_tokens !== null ? row.design_tokens : {};
   const layoutConfig = typeof row.layout_config === 'object' && row.layout_config !== null ? row.layout_config : {};
+  const version = typeof row.version === 'number' ? row.version : (layoutConfig.version || 1);
 
   return {
     id: row.id,
@@ -256,16 +337,18 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
     description: designTokens.description || row.description || 'Modelo de layout customizado.',
     category: designTokens.category || 'layout_template',
     isSystem: row.is_system ?? false,
-    catalog: layoutConfig.pages ? layoutConfig : {
+    version,
+    catalog: layoutConfig.pages ? { ...layoutConfig, version } : {
       id: row.id,
       title: row.name,
       subtitle: '',
       themeId: 'default-technical',
       pages: [],
-      version: 1,
+      version,
       createdAt: row.created_at || new Date().toISOString(),
-      updatedAt: row.created_at || new Date().toISOString()
+      updatedAt: row.updated_at || row.created_at || new Date().toISOString()
     },
-    createdAt: row.created_at || new Date().toISOString()
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || row.created_at || new Date().toISOString()
   };
 }
