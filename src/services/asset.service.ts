@@ -159,6 +159,25 @@ export class AssetService {
   }
 
   /**
+   * Busca um único Asset pelo UUID.
+   */
+  static async getAssetById(assetId: string): Promise<AssetRecord | null> {
+    const supabase = getSupabase();
+    if (!supabase || !assetId) return null;
+    try {
+      const { data, error } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('id', assetId)
+        .single();
+      if (error || !data) return null;
+      return data as AssetRecord;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Resolve URL assinada temporária com cache em memória (TTL 50min) para renderizar o asset.
    */
   static async resolveSignedUrl(storagePath: string, bucket = 'product-assets'): Promise<string> {
@@ -295,7 +314,6 @@ export class AssetService {
   static async updateAssetMetadata(
     assetId: string,
     updates: {
-      originalFilename?: string;
       kind?: AssetKind;
       approvalStatus?: 'draft' | 'approved' | 'rejected' | 'archived';
     }
@@ -305,7 +323,6 @@ export class AssetService {
 
     const { data, error } = await supabase.rpc('update_asset_metadata_v1', {
       p_asset_id: assetId,
-      p_original_filename: updates.originalFilename || null,
       p_kind: updates.kind || null,
       p_approval_status: updates.approvalStatus || null
     });

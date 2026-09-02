@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
-import { useAssetStore } from '../../../stores/useAssetStore';
+import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 
 interface ImageBlockProps {
   block: ContentBlock;
@@ -12,14 +12,7 @@ interface ImageBlockProps {
 
 export const ImageBlock: React.FC<ImageBlockProps> = ({ block, isSelected }) => {
   const { setSelectedBlockId } = useCatalogStore();
-  const resolvedUrl = useAssetStore((state) => (block.assetId ? state.resolvedUrls[block.assetId] : undefined)) || block.imageUrl || block.legacyUrl;
-  const resolveAssetUrl = useAssetStore((state) => state.resolveAssetUrl);
-
-  useEffect(() => {
-    if (block.assetId && !resolvedUrl) {
-      void resolveAssetUrl(block.assetId, block.imageUrl);
-    }
-  }, [block.assetId, resolvedUrl, resolveAssetUrl, block.imageUrl]);
+  const displayUrl = useResolvedAssetUrl(block.assetId, block.legacyUrl || block.imageUrl);
 
   return (
     <div
@@ -31,10 +24,10 @@ export const ImageBlock: React.FC<ImageBlockProps> = ({ block, isSelected }) => 
         isSelected ? 'ring-2 ring-brand-500 bg-brand-50/20' : 'hover:ring-1 hover:ring-slate-300'
       }`}
     >
-      {resolvedUrl ? (
+      {displayUrl ? (
         <div className="flex flex-col items-center justify-center w-full py-1">
           <img
-            src={resolvedUrl}
+            src={displayUrl}
             alt={block.imageCaption || 'Product Image'}
             className="max-w-full max-h-[420px] h-auto object-contain rounded-none border border-slate-300 shadow-2xs"
           />

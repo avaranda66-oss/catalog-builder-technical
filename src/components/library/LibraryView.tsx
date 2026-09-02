@@ -78,19 +78,17 @@ export const LibraryView: React.FC = () => {
 
   // Modal de Fotos & Arquivos Corporativos
   const [selectedProductForAssets, setSelectedProductForAssets] = useState<Product | null>(null);
-  const { loadWorkspaceAssets, initRealtimeSubscription: initAssetRealtime, productAssets } = useAssetStore();
+  const { loadWorkspaceAssets, productAssets } = useAssetStore();
 
   // Inicialização e Assinatura Realtime
   useEffect(() => {
     void loadWorkspace();
     void loadWorkspaceAssets();
     const unsubLib = initRealtimeSubscription();
-    const unsubAsset = initAssetRealtime();
     return () => {
       unsubLib();
-      unsubAsset();
     };
-  }, [loadWorkspace, loadWorkspaceAssets, initRealtimeSubscription, initAssetRealtime, currentUserId]);
+  }, [loadWorkspace, loadWorkspaceAssets, initRealtimeSubscription, currentUserId]);
 
   // Listener para Ctrl+S na Biblioteca
   useEffect(() => {

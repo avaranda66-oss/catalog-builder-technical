@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useAssetStore } from '../../../stores/useAssetStore';
+import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 
 interface HeroBannerBlockProps {
   block: ContentBlock;
@@ -17,6 +18,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
 }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
 
   const handleBadgeBlur = (e: React.FocusEvent<HTMLSpanElement>) => {
     updateBlock(pageId, block.id, { badgeText: e.currentTarget.innerText.trim() });
@@ -38,10 +40,14 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const { readImageAsLocalDataUrl } = await import('../../../services/local-image.service');
-    const imageUrl = await readImageAsLocalDataUrl(file);
-    if (imageUrl) {
-      updateBlock(pageId, block.id, { imageUrl });
+    const res = await uploadAndLinkAsset(file, {
+      role: 'hero',
+      isPrimary: true,
+      caption: block.title || 'Foto de Destaque'
+    });
+
+    if (res.success && res.assetId) {
+      updateBlock(pageId, block.id, { assetId: res.assetId });
     }
   };
 
@@ -49,7 +55,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
     block.style?.gradient ||
     'bg-[#001f3f]';
 
-  const resolvedUrl = useAssetStore((state) => (block.assetId ? state.resolvedUrls[block.assetId] : undefined)) || block.imageUrl || (block as any).legacyUrl;
+  const displayUrl = useResolvedAssetUrl(block.assetId, block.legacyUrl || block.imageUrl);
 
   return (
     <div
@@ -98,7 +104,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
           <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900 border border-slate-700 relative group flex items-center justify-center p-2">
             <img
               src={
-                resolvedUrl ||
+                displayUrl ||
                 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
               }
               alt="Produto Destaque"
@@ -116,26 +122,25 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
                 data-editor-action="true"
               >
                 <Upload className="w-3 h-3" />
-                <span>Trocar Foto</span>
+                <span>Trocar Imagem</span>
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
             </div>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept="image/*"
-              className="hidden"
-            />
           </div>
 
           <p
             contentEditable
             suppressContentEditableWarning
             onBlur={handleCaptionBlur}
-            className="text-[9px] text-slate-400 font-mono text-center mt-1 outline-none focus:bg-white/10 rounded-none px-1 cursor-text"
+            className="text-[10px] text-slate-400 italic mt-1 text-center outline-none focus:bg-white/10 px-1 rounded-none cursor-text"
           >
-            {block.imageCaption || 'Calibrador Presys com comunicação HART'}
+            {block.imageCaption || 'Estação portátil em gabinete industrial'}
           </p>
         </div>
       </div>

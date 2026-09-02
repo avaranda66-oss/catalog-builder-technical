@@ -2,12 +2,46 @@ import React, { useRef } from 'react';
 import { GalleryHorizontalEnd, Trash2, Upload, Plus } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
+import { useAssetStore } from '../../../stores/useAssetStore';
+import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 
 interface ImageGalleryBlockProps {
   block: ContentBlock;
   pageId: string;
   isSelected: boolean;
 }
+
+const GalleryItemImage: React.FC<{
+  item: { assetId?: string; url: string; caption?: string };
+  onUploadClick: () => void;
+}> = ({ item, onUploadClick }) => {
+  const displayUrl = useResolvedAssetUrl(item.assetId, item.url);
+
+  return (
+    <div className="w-full aspect-video overflow-hidden bg-slate-950 relative group/img flex items-center justify-center">
+      <img
+        src={displayUrl || item.url}
+        alt={item.caption || 'Foto'}
+        className="w-full h-full object-cover object-center"
+      />
+
+      <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center gap-1.5 transition-opacity p-2 no-print" data-editor-action="true">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUploadClick();
+          }}
+          className="px-2 py-1 bg-[#003366] text-white font-bold rounded-none text-[9px] flex items-center gap-1 hover:bg-blue-700 no-print"
+          data-editor-action="true"
+        >
+          <Upload className="w-3 h-3" />
+          <span>Trocar</span>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
   block,
@@ -17,6 +51,7 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeImageIdxRef = useRef<number | null>(null);
+  const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
 
   const images = block.images || [
     { url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80', caption: 'Montagem em bancada de calibração' },
@@ -56,13 +91,16 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
     const file = e.target.files?.[0];
     if (!file || activeImageIdxRef.current === null) return;
 
-    const { readImageAsLocalDataUrl } = await import('../../../services/local-image.service');
-    const imageUrl = await readImageAsLocalDataUrl(file);
-    if (imageUrl) {
+    const res = await uploadAndLinkAsset(file, {
+      role: 'application',
+      caption: images[activeImageIdxRef.current]?.caption || 'Foto de Aplicação'
+    });
+
+    if (res.success && res.assetId) {
       const updated = [...images];
       updated[activeImageIdxRef.current!] = {
         ...updated[activeImageIdxRef.current!],
-        url: imageUrl
+        assetId: res.assetId
       };
       updateBlock(pageId, block.id, { images: updated });
     }
@@ -126,29 +164,10 @@ export const ImageGalleryBlock: React.FC<ImageGalleryBlockProps> = ({
             key={idx}
             className="flex flex-col bg-white border border-slate-300 rounded-none overflow-hidden group relative hover:border-slate-500 transition-colors"
           >
-            {/* Foto com Altura Padronizada e Enquadramento Proporcional */}
-            <div className="w-full aspect-video overflow-hidden bg-slate-950 relative group/img flex items-center justify-center">
-              <img
-                src={img.url}
-                alt={img.caption || 'Foto'}
-                className="w-full h-full object-cover object-center"
-              />
-
-              <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center gap-1.5 transition-opacity p-2 no-print" data-editor-action="true">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerUploadForIndex(idx);
-                  }}
-                  className="px-2 py-1 bg-[#003366] text-white font-bold rounded-none text-[9px] flex items-center gap-1 hover:bg-blue-700 no-print"
-                  data-editor-action="true"
-                >
-                  <Upload className="w-3 h-3" />
-                  <span>Trocar</span>
-                </button>
-              </div>
-            </div>
+            <GalleryItemImage
+              item={img}
+              onUploadClick={() => triggerUploadForIndex(idx)}
+            />
 
             {/* Legenda Técnica com Texto Nítido e Completo */}
             <div className="p-1.5 bg-slate-50 border-t border-slate-200 flex items-start justify-between gap-1 min-h-[36px]">

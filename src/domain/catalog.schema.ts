@@ -57,6 +57,7 @@ export interface CanvasLayer {
   lineHeight?: 'tight' | 'normal' | 'relaxed';
   imageUrl?: string;
   assetId?: string;
+  legacyUrl?: string;
   objectFit?: 'cover' | 'contain' | 'fill';
   backgroundColor?: string;
   borderColor?: string;
@@ -225,6 +226,8 @@ export const CanvasLayerSchema = z.object({
   textTransform: z.enum(['none', 'uppercase', 'capitalize']).optional().default('none'),
   lineHeight: z.enum(['tight', 'normal', 'relaxed']).optional().default('normal'),
   imageUrl: z.string().optional().default(''),
+  assetId: z.string().optional(),
+  legacyUrl: z.string().optional(),
   objectFit: z.enum(['cover', 'contain', 'fill']).optional().default('cover'),
   backgroundColor: z.string().optional().default('transparent'),
   borderColor: z.string().optional().default('transparent'),
@@ -283,9 +286,15 @@ export const ContentBlockSchema = z.object({
   title: z.string().optional(),
   subtitle: z.string().optional(),
   textContent: z.string().optional(),
+  assetId: z.string().optional(),
   imageUrl: z.string().optional(),
+  legacyUrl: z.string().optional(),
   imageCaption: z.string().optional(),
-  images: z.array(z.object({ url: z.string(), caption: z.string().optional() })).optional(),
+  images: z.array(z.object({
+    assetId: z.string().optional(),
+    url: z.string(),
+    caption: z.string().optional()
+  })).optional(),
   tableColumns: z.array(TableColumnConfigSchema).optional(),
   tableRows: z.array(CatalogTableRowSchema).optional(),
   features: z.array(FeatureItemSchema).optional(),
@@ -296,6 +305,7 @@ export const ContentBlockSchema = z.object({
     email: z.string().optional(),
     website: z.string().optional(),
     address: z.string().optional(),
+    logoAssetId: z.string().optional(),
     logoUrl: z.string().optional()
   }).optional(),
   customData: z.record(z.any()).optional()

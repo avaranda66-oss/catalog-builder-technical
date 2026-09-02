@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Trash2, AlertCircle, Upload, Image, Loader2 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useUIStore } from '../../stores/useUIStore';
-import { readImageAsLocalDataUrl } from '../../services/local-image.service';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useAssetStore } from '../../stores/useAssetStore';
 
 export const ProductDrawer: React.FC = () => {
   const { isProductDrawerOpen, editingProductId, closeProductDrawer } = useUIStore();
   const { getProduct, addProduct, updateProduct, deleteProduct } = useLibraryStore();
   const isAdmin = useAuthStore((state) => state.role === 'admin');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
 
   const [code, setCode] = useState('');
   const [family, setFamily] = useState('Transmissores de Pressão Relativa');
@@ -19,8 +20,8 @@ export const ProductDrawer: React.FC = () => {
   const [unit, setUnit] = useState('bar');
   const [accuracy, setAccuracy] = useState('±0.075% FS');
   const [output, setOutput] = useState('4-20 mA + HART');
-  const [powerSupply, setPowerSupply] = useState('12 a 45 Vdc');
-  const [processConnection, setProcessConnection] = useState('1/2" NPT Macho');
+  const [powerSupply, setPowerSupply] = useState('12 a 45 Vcc');
+  const [processConnection, setProcessConnection] = useState('1/2" NPT');
   const [protectionDegree, setProtectionDegree] = useState('IP67');
   const [customSpecs, setCustomSpecs] = useState<{ key: string; value: string }[]>([]);
   const [newCustomKey, setNewCustomKey] = useState('');
@@ -31,39 +32,46 @@ export const ProductDrawer: React.FC = () => {
   const [version, setVersion] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (editingProductId) {
-      const prod = getProduct(editingProductId);
-      if (prod) {
-        setCode(prod.code);
-        setFamily(prod.family);
-        setModel(prod.model);
-        setDescription(prod.description || '');
-        setRange(prod.specs.range);
-        setUnit(prod.specs.unit);
-        setAccuracy(prod.specs.accuracy);
-        setOutput(prod.specs.output || '4-20 mA + HART');
-        setPowerSupply(prod.specs.powerSupply || '12 a 45 Vdc');
-        setProcessConnection(prod.specs.processConnection || '1/2" NPT Macho');
-        setProtectionDegree(prod.specs.protectionDegree || 'IP67');
-        setImageUrl(prod.imageUrl || '');
-        setCreatedAt(prod.createdAt || null);
-        setVersion(prod.version || 1);
+  const initialProduct = editingProductId ? getProduct(editingProductId) : undefined;
 
-        const specsObj = prod.specs.customSpecs || {};
-        setCustomSpecs(Object.entries(specsObj).map(([key, value]) => ({ key, value: String(value) })));
+  useEffect(() => {
+    if (initialProduct) {
+      setCode(initialProduct.code || '');
+      setFamily(initialProduct.family || 'Transmissores de Pressão Relativa');
+      setModel(initialProduct.model || '');
+      setDescription(initialProduct.description || '');
+      setRange(initialProduct.specs?.range || '');
+      setUnit(initialProduct.specs?.unit || 'bar');
+      setAccuracy(initialProduct.specs?.accuracy || '±0.075% FS');
+      setOutput(initialProduct.specs?.output || '4-20 mA + HART');
+      setPowerSupply(initialProduct.specs?.powerSupply || '12 a 45 Vcc');
+      setProcessConnection(initialProduct.specs?.processConnection || '1/2" NPT');
+      setProtectionDegree(initialProduct.specs?.protectionDegree || 'IP67');
+      setImageUrl(initialProduct.imageUrl || '');
+      setCreatedAt(initialProduct.createdAt || null);
+      setVersion(initialProduct.version || 1);
+
+      if (initialProduct.specs?.customSpecs) {
+        setCustomSpecs(
+          Object.entries(initialProduct.specs.customSpecs).map(([key, value]) => ({
+            key,
+            value: String(value)
+          }))
+        );
+      } else {
+        setCustomSpecs([]);
       }
     } else {
       setCode('');
       setFamily('Transmissores de Pressão Relativa');
       setModel('');
       setDescription('');
-      setRange('0 a 100');
+      setRange('');
       setUnit('bar');
-      setAccuracy('±0.1% FS');
+      setAccuracy('±0.075% FS');
       setOutput('4-20 mA + HART');
-      setPowerSupply('12 a 45 Vdc');
-      setProcessConnection('1/2" NPT Macho');
+      setPowerSupply('12 a 45 Vcc');
+      setProcessConnection('1/2" NPT');
       setProtectionDegree('IP67');
       setImageUrl('');
       setCreatedAt(null);
@@ -71,7 +79,7 @@ export const ProductDrawer: React.FC = () => {
       setCustomSpecs([]);
     }
     setError(null);
-  }, [editingProductId, isProductDrawerOpen, getProduct]);
+  }, [initialProduct, isProductDrawerOpen]);
 
   if (!isProductDrawerOpen) return null;
 
@@ -93,11 +101,16 @@ export const ProductDrawer: React.FC = () => {
     setIsUploadingImage(true);
     setError(null);
     try {
-      const imageUrl = await readImageAsLocalDataUrl(file);
-      if (imageUrl) {
-        setImageUrl(imageUrl);
+      const res = await uploadAndLinkAsset(file, {
+        productId: initialProduct?.id || null,
+        role: 'hero',
+        isPrimary: true,
+        caption: model || 'Foto do Produto'
+      });
+      if (res.success) {
+        setImageUrl(res.assetId || '');
       } else {
-        setError('Falha ao processar a imagem neste dispositivo.');
+        setError(res.message || 'Falha ao processar upload corporativo.');
       }
     } catch (err: any) {
       setError(err.message || 'Erro inesperado no upload.');

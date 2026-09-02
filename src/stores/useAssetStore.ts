@@ -287,7 +287,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
 
       return {
         success: true,
-        assetId,
+        assetId: finalizeResult.asset?.id || assetId,
         productAssetId: finalizeResult.product_asset?.id
       };
     } catch (err: any) {
@@ -416,7 +416,17 @@ export const useAssetStore = create<AssetState>((set, get) => ({
     if (cached) return cached;
 
     // Busca o asset nos dados carregados
-    const asset = get().assets.find((a) => a.id === assetId);
+    let asset = get().assets.find((a) => a.id === assetId);
+    if (!asset || !asset.storage_path) {
+      const fetched = await AssetService.getAssetById(assetId);
+      if (fetched && fetched.storage_path) {
+        asset = fetched;
+        set((state) => ({
+          assets: [fetched, ...state.assets.filter((a) => a.id !== fetched.id)]
+        }));
+      }
+    }
+
     if (!asset || !asset.storage_path) {
       return fallbackUrl || '';
     }

@@ -155,28 +155,37 @@ export const PropertiesPanel: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    const { readImageAsLocalDataUrl } = await import('../../services/local-image.service');
-    const imageUrl = await readImageAsLocalDataUrl(file);
-    if (imageUrl) {
+    const { useAssetStore } = await import('../../stores/useAssetStore');
+    const res = await useAssetStore.getState().uploadAndLinkAsset(file, {
+      role: 'hero',
+      caption: selectedBlock.title || 'Foto de Capa/Destaque'
+    });
+
+    if (res.success && res.assetId) {
       updateBlock(blockPageId, selectedBlock.id, {
-        imageUrl,
-        customData: { ...(selectedBlock.customData || {}), backgroundImageUrl: imageUrl }
+        assetId: res.assetId
       });
     }
+    e.target.value = '';
   };
 
   const handleAddGalleryImageFromUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedBlock) return;
 
-    const { readImageAsLocalDataUrl } = await import('../../services/local-image.service');
-    const imageUrl = await readImageAsLocalDataUrl(file);
-    if (imageUrl) {
+    const { useAssetStore } = await import('../../stores/useAssetStore');
+    const res = await useAssetStore.getState().uploadAndLinkAsset(file, {
+      role: 'application',
+      caption: 'Nova foto de aplicação'
+    });
+
+    if (res.success && res.assetId) {
       const currentImages = selectedBlock.images || [];
       updateBlock(blockPageId, selectedBlock.id, {
-        images: [...currentImages, { url: imageUrl, caption: 'Nova foto de aplicação' }]
+        images: [...currentImages, { assetId: res.assetId, url: '', caption: 'Nova foto de aplicação' }]
       });
     }
+    e.target.value = '';
   };
 
   return (
@@ -1369,11 +1378,9 @@ export const PropertiesPanel: React.FC = () => {
                         openGallery((selection) => {
                           if (typeof selection === 'string') {
                             updateBlock(blockPageId, selectedBlock.id, { imageUrl: selection, legacyUrl: selection });
-                          } else {
+                          } else if (selection.assetId) {
                             updateBlock(blockPageId, selectedBlock.id, {
-                              assetId: selection.assetId,
-                              imageUrl: selection.url,
-                              legacyUrl: selection.url
+                              assetId: selection.assetId
                             });
                           }
                         })

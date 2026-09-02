@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { ContentBlock, CanvasLayer, CanvasLayerType } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
-import { useAssetStore } from '../../../stores/useAssetStore';
+import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 
 export interface ElementPositionConfig {
   x: number;
@@ -21,6 +21,25 @@ export interface ElementPositionConfig {
   visible?: boolean;
   width?: number;
 }
+
+const CoverImageLayer: React.FC<{ layer: CanvasLayer }> = ({ layer }) => {
+  const displayUrl = useResolvedAssetUrl(layer.assetId, layer.legacyUrl || layer.imageUrl);
+  return (
+    <div
+      style={{
+        width: `${layer.width || 200}px`,
+        height: `${layer.height || 140}px`
+      }}
+      className="overflow-hidden bg-slate-900 border border-slate-700 relative group/img"
+    >
+      <img
+        src={displayUrl || layer.imageUrl}
+        alt={layer.label}
+        className="w-full h-full object-contain"
+      />
+    </div>
+  );
+};
 
 interface FullPageCoverBlockProps {
   block: ContentBlock;
@@ -38,13 +57,10 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 
   const custom = block.customData || {};
   const overlayOpacity = custom.overlayOpacity ?? 45; // 0 a 100%
-  const resolvedCoverUrl = useAssetStore((state) => (block.assetId ? state.resolvedUrls[block.assetId] : undefined));
-  const backgroundImageUrl =
-    resolvedCoverUrl ||
-    custom.backgroundImageUrl ||
-    block.imageUrl ||
-    (block as any).legacyUrl ||
-    'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85';
+  const backgroundImageUrl = useResolvedAssetUrl(
+    block.assetId,
+    custom.backgroundImageUrl || block.legacyUrl || block.imageUrl || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85'
+  );
 
   // Migração automática de configs legadas para canvasLayers[]
   const getInitialLayers = (): CanvasLayer[] => {
@@ -554,19 +570,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
               )}
 
               {layer.type === 'image' && (
-                <div
-                  style={{
-                    width: `${layer.width || 200}px`,
-                    height: `${layer.height || 140}px`
-                  }}
-                  className="overflow-hidden bg-slate-900 border border-slate-700 relative group/img"
-                >
-                  <img
-                    src={layer.imageUrl}
-                    alt={layer.label}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
+                <CoverImageLayer layer={layer} />
               )}
 
               {layer.type === 'shape' && (

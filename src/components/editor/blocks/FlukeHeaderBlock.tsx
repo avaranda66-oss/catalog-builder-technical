@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { Upload, Plus, Trash2 } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
+import { useAssetStore } from '../../../stores/useAssetStore';
+import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 
 interface FlukeHeaderBlockProps {
   block: ContentBlock;
@@ -16,6 +18,8 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
 }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
+  const displayUrl = useResolvedAssetUrl(block.assetId, block.legacyUrl || block.imageUrl);
 
   const custom = block.customData || {};
   const highlights: string[] = custom.highlights || [
@@ -84,10 +88,12 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const { readImageAsLocalDataUrl } = await import('../../../services/local-image.service');
-    const imageUrl = await readImageAsLocalDataUrl(file);
-    if (imageUrl) {
-      updateBlock(pageId, block.id, { imageUrl });
+    const res = await uploadAndLinkAsset(file, {
+      role: 'front',
+      caption: block.title || 'Foto do Instrumento'
+    });
+    if (res.success && res.assetId) {
+      updateBlock(pageId, block.id, { assetId: res.assetId });
     }
   };
 
@@ -157,7 +163,7 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
           <div className="w-full h-40 rounded-none overflow-hidden bg-slate-900 border border-slate-300 flex items-center justify-center p-2 relative group">
             <img
               src={
-                block.imageUrl ||
+                displayUrl ||
                 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80'
               }
               alt="Instrumento Metrológico"

@@ -4,6 +4,7 @@ import { useLibraryStore } from './stores/useLibraryStore';
 import { useCatalogStore } from './stores/useCatalogStore';
 import { useMediaStore } from './stores/useMediaStore';
 import { useTemplateStore } from './stores/useTemplateStore';
+import { useAssetStore } from './stores/useAssetStore';
 import { Navbar } from './components/common/Navbar';
 import { EditorView } from './components/editor/EditorView';
 import { LibraryView } from './components/library/LibraryView';
@@ -73,11 +74,15 @@ export const App: React.FC = () => {
       void loadLatestCatalog();
       void loadAssets();
       void loadTemplates();
+      void useAssetStore.getState().loadWorkspaceAssets();
     }
 
-    // 2. Sincronização em Tempo Real Segura com Status Callback
+    // 2. Assinatura Realtime Unificada de Assets Corporativos (Single Channel por Sessão)
+    const unsubAssetRealtime = useAssetStore.getState().initRealtimeSubscription();
+
+    // 3. Sincronização em Tempo Real Segura com Status Callback
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) return () => unsubAssetRealtime();
 
     const clientId = typeof window !== 'undefined' && window.sessionStorage
       ? window.sessionStorage.getItem('cb_client_instance_id') || 'client'
@@ -154,6 +159,7 @@ export const App: React.FC = () => {
         userId,
         timestamp: new Date().toISOString()
       });
+      unsubAssetRealtime();
       void supabase.removeChannel(channel);
       if (rawChannel) {
         void supabase.removeChannel(rawChannel);
