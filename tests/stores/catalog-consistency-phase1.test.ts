@@ -257,7 +257,12 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
 
     await handleCatalogRealtimeEvent({
       eventType: 'UPDATE',
-      new: { id: catalogUUID, version: 8, name: remoteCatalogV8.title }
+      new: {
+        id: catalogUUID,
+        version: 8,
+        name: remoteCatalogV8.title,
+        brand: remoteCatalogV8
+      }
     });
 
     const state = useCatalogStore.getState();
@@ -489,7 +494,8 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
       inFlightSave: {
         catalogId: catalogUUID,
         expectedVersion: 7,
-        targetVersion: 8
+        targetVersion: 8,
+        capturedRevision: 0
       },
       isSaving: true,
       syncStatus: 'saving'
