@@ -189,7 +189,7 @@ export interface CatalogTranslationMeta {
   glossaryVersion?: string;
   translatedAt?: string;
   coverage?: number;
-  layoutQaStatus?: 'passed' | 'warning' | 'error';
+  layoutQaStatus?: 'pending' | 'passed' | 'warning' | 'error';
   humanEdited?: boolean;
 }
 
@@ -351,7 +351,7 @@ export const CatalogTranslationMetaSchema = z.object({
   glossaryVersion: z.string().optional(),
   translatedAt: z.string().datetime().or(z.string()).optional(),
   coverage: z.number().min(0).max(100).optional(),
-  layoutQaStatus: z.enum(['passed', 'warning', 'error']).optional(),
+  layoutQaStatus: z.enum(['pending', 'passed', 'warning', 'error']).optional(),
   humanEdited: z.boolean().optional()
 });
 

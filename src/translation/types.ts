@@ -180,7 +180,7 @@ export interface LayoutIssue {
 export interface LayoutQaResult {
   hasIssues: boolean;
   issues: LayoutIssue[];
-  status: 'passed' | 'warning' | 'error';
+  status: 'pending' | 'passed' | 'warning' | 'error';
   auditedAt: string;
 }
 

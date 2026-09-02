@@ -105,13 +105,22 @@ export class FontManager {
 
     if (fontConfig?.cssUrl && !loadedFontUrls.has(fontConfig.cssUrl)) {
       try {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = fontConfig.cssUrl;
-        document.head.appendChild(link);
-        loadedFontUrls.add(fontConfig.cssUrl);
+        await new Promise<void>((resolve) => {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = fontConfig.cssUrl!;
+          link.onload = () => {
+            loadedFontUrls.add(fontConfig.cssUrl!);
+            resolve();
+          };
+          link.onerror = () => {
+            // Se falhar o download remoto, não trava o pipeline
+            resolve();
+          };
+          document.head.appendChild(link);
+        });
       } catch {
-        // Ignora silenciosamente falha de injeção em ambientes restritos
+        // Fallback gracioso
       }
     }
 
@@ -119,7 +128,7 @@ export class FontManager {
       try {
         await document.fonts.ready;
       } catch {
-        // Prossegue mesmo se document.fonts.ready falhar
+        // Prossegue
       }
     }
 

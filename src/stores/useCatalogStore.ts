@@ -228,6 +228,7 @@ interface CatalogState {
   flushCatalog: (catalogId?: string) => Promise<SaveResult>;
   handleTemplateFlushAck: (templateId: string, confirmedVersion: number, error?: string) => void;
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
+  createTranslatedCatalogVersion: (translatedCatalog: Catalog) => Promise<{ success: boolean; catalogId?: string; error?: string }>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
@@ -1681,6 +1682,118 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       updateCanonicalUrlCatalogId(newId);
     }
     return result;
+  },
+
+  createTranslatedCatalogVersion: async (
+    translatedCatalog: Catalog
+  ): Promise<{ success: boolean; catalogId?: string; error?: string }> => {
+    try {
+      // 1. Verificação Estrita de Source Drift antes de criar/salvar
+      const meta = translatedCatalog.translationMeta;
+      if (meta?.sourceCatalogId && meta?.sourceCatalogVersion !== undefined && meta?.sourceContentHash) {
+        let currentSource: Catalog | null = null;
+        try {
+          const res = await SupabaseService.getCatalog(meta.sourceCatalogId);
+          if (res.success && res.data) {
+            currentSource = res.data;
+          }
+        } catch {
+          // Fallback para memória local
+        }
+        if (!currentSource) {
+          const { savedCatalogs } = get();
+          currentSource = savedCatalogs.find((c) => c.id === meta.sourceCatalogId) || null;
+        }
+
+        if (currentSource) {
+          const { FullCatalogTranslationService } = await import('../translation/full-catalog-translation.service');
+          const hasDrift = await FullCatalogTranslationService.verifySourceDrift(
+            currentSource,
+            meta.sourceCatalogVersion,
+            meta.sourceContentHash
+          );
+
+          if (hasDrift) {
+            console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o catálogo original foi alterado concorrentemente.');
+            return {
+              success: false,
+              error: 'O catálogo original foi modificado durante o processo de tradução. A versão traduzida não pode ser salva para evitar inconsistências (SOURCE_CHANGED_DURING_TRANSLATION).'
+            };
+          }
+        }
+      }
+
+      // 2. Criação da nova entidade com novo UUID
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+
+      const newCatalogToSave: Catalog = {
+        ...structuredClone(translatedCatalog),
+        id: newId,
+        version: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 3. Persistência real na nuvem via SupabaseService
+      const saveRes = await SupabaseService.saveCatalog(newCatalogToSave, 0, 'Criação de versão traduzida');
+      if (!saveRes.success || !saveRes.data) {
+        return {
+          success: false,
+          error: saveRes.error || 'Não foi possível salvar a versão traduzida na nuvem.'
+        };
+      }
+
+      const confirmedCatalog: Catalog = {
+        ...newCatalogToSave,
+        version: saveRes.data.version || 1,
+        updatedAt: saveRes.data.updated_at || new Date().toISOString()
+      };
+
+      // 4. Atualização segura do StorageService local
+      await StorageService.saveCatalog(confirmedCatalog);
+      StorageService.setActiveCatalogId(newId);
+
+      // 5. Atualização atômica do Zustand State e Contexto do Editor
+      debugSetCatalog('createTranslatedCatalogVersion', get().currentCatalog, confirmedCatalog);
+      set((state) => ({
+        currentCatalog: confirmedCatalog,
+        savedCatalogs: [confirmedCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
+        editorContext: { kind: 'catalog', catalogId: newId },
+        activePageIndex: 0,
+        selectedBlockId: null,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
+        isDirty: false,
+        isSaving: false,
+        syncStatus: 'synced',
+        syncError: null,
+        lastSavedAt: new Date().toISOString()
+      }));
+
+      // 6. Atualiza URL Canônica
+      updateCanonicalUrlCatalogId(newId);
+
+      // 7. Conecta presença em background se disponível
+      try {
+        const { usePresenceStore } = await import('./usePresenceStore');
+        usePresenceStore.getState().initializePresence(newId, 1, undefined, 'catalog');
+      } catch (e) {
+        console.warn('Erro ao conectar presença na versão traduzida:', e);
+      }
+
+      return {
+        success: true,
+        catalogId: newId
+      };
+    } catch (err: any) {
+      console.error('Erro ao criar versão traduzida:', err);
+      return {
+        success: false,
+        error: err?.message || 'Erro inesperado ao salvar versão traduzida.'
+      };
+    }
   },
 
   handleRealtimeTemplateChange: (payload) => {

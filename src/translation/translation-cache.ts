@@ -4,6 +4,8 @@
 // Invalidação determinística via SHA-256 hash de conteúdo + metadata de modelo/glossário.
 
 import { PrintableTextNode, TranslationCacheEntry } from './types';
+import { Catalog } from '@/domain/catalog.schema';
+import { PrintableTextRegistry } from './printable-text.registry';
 
 const DB_NAME = 'presys_translation_cache_v1';
 const STORE_NAME = 'translation_entries';
@@ -73,7 +75,8 @@ export async function computeNodeHash(params: {
  * Calcula o hash SHA-256 consolidado de todo o conteúdo imprimível de um catálogo.
  * Usado para detectar Source Drift durante a execução da tradução.
  */
-export async function computeCatalogContentHash(nodes: PrintableTextNode[]): Promise<string> {
+export async function computeCatalogContentHash(input: PrintableTextNode[] | Catalog): Promise<string> {
+  const nodes = Array.isArray(input) ? input : PrintableTextRegistry.extractCatalogNodes(input);
   const sortedPayload = nodes
     .filter((n) => n.policy === 'translate' || n.policy === 'system')
     .map((n) => `${n.id}:${normalizeSourceText(n.sourceText)}`)

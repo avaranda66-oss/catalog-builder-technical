@@ -2,7 +2,7 @@
 // Modal Principal do Translation Center (Fase 2C.2: Full Catalog Translation Engine)
 // Fluxo: Seleção de Idioma -> BYOK -> Tradução Completa em Lote -> Revisão Humana -> Layout QA -> Criar Versão Independente
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Globe,
@@ -25,6 +25,7 @@ import { useCatalogStore } from '@/stores/useCatalogStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { LanguageRegistry } from '@/translation/language.registry';
 import { CredentialStorageMode } from '@/translation/types';
+import { CleanA4Document } from '../export/CleanA4Document';
 
 export const TranslationCenterModal: React.FC = () => {
   const {
@@ -51,11 +52,13 @@ export const TranslationCenterModal: React.FC = () => {
     refreshCoverage,
     startFullTranslation,
     cancelTranslation,
-    updateReviewItem
+    updateReviewItem,
+    runLayoutQa
   } = useTranslationStore();
 
   const currentCatalog = useCatalogStore((state) => state.currentCatalog);
   const userId = useAuthStore((state) => state.userId);
+  const qaContainerRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -63,6 +66,7 @@ export const TranslationCenterModal: React.FC = () => {
   const [reviewFilter, setReviewFilter] = useState<'all' | 'edited' | 'system' | 'headings'>('all');
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -72,6 +76,13 @@ export const TranslationCenterModal: React.FC = () => {
       }
     }
   }, [isModalOpen, userId, currentCatalog]);
+
+  // Executa Layout QA real assim que o preview estiver montado
+  useEffect(() => {
+    if (activeStep === 'review' && previewCatalog && qaContainerRef.current) {
+      runLayoutQa(qaContainerRef.current);
+    }
+  }, [activeStep, previewCatalog, targetLocale]);
 
   if (!isModalOpen) return null;
 
@@ -98,6 +109,7 @@ export const TranslationCenterModal: React.FC = () => {
   const handleStartTranslation = async () => {
     const activeUserId = userId || useAuthStore.getState().userId;
     if (!currentCatalog || !activeUserId) return;
+    setSaveErrorMessage(null);
     await startFullTranslation(currentCatalog, activeUserId);
   };
 
@@ -105,28 +117,24 @@ export const TranslationCenterModal: React.FC = () => {
     if (!previewCatalog || !currentCatalog) return;
     setIsSavingVersion(true);
     setSaveSuccessMessage(null);
+    setSaveErrorMessage(null);
 
     try {
-      // 1. Gera um novo catálogo com novo UUID preservando o original 100% intacto
-      const newCatalogId = crypto.randomUUID();
-      const localizedCatalog = {
-        ...previewCatalog,
-        id: newCatalogId,
-        title: `${currentCatalog.title} — ${selectedLang?.nativeName || targetLocale}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        version: 1
-      };
+      // Cria a nova versão persistida na nuvem via action oficial do CatalogStore
+      const result = await useCatalogStore.getState().createTranslatedCatalogVersion(previewCatalog);
 
-      // 2. Persiste o catálogo traduzido como novo documento independente
-      useCatalogStore.setState({
-        currentCatalog: localizedCatalog
-      });
+      if (!result.success) {
+        setSaveErrorMessage(result.error || 'Não foi possível salvar a versão traduzida na nuvem.');
+        return;
+      }
 
-      setSaveSuccessMessage(`Nova versão localizada criada com sucesso! (UUID: ${newCatalogId.substring(0, 8)}...)`);
+      setSaveSuccessMessage(
+        `Nova versão localizada criada e salva na nuvem com sucesso! (ID: ${result.catalogId?.substring(0, 8)}...)`
+      );
       setActiveStep('complete');
     } catch (err: any) {
       console.error('Falha ao criar versão traduzida:', err);
+      setSaveErrorMessage(err?.message || 'Erro inesperado ao salvar versão traduzida.');
     } finally {
       setIsSavingVersion(false);
     }
@@ -517,6 +525,13 @@ export const TranslationCenterModal: React.FC = () => {
           {/* STEP 4: LAYOUT QA & CRIAÇÃO DE VERSÃO */}
           {activeStep === 'layout_qa' && (
             <div className="space-y-4">
+              {/* Container de QA offscreen para auditoria real do CleanA4Document */}
+              {previewCatalog && (
+                <div ref={qaContainerRef} style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, pointerEvents: 'none' }}>
+                  <CleanA4Document document={previewCatalog} />
+                </div>
+              )}
+
               <div className="p-4 bg-white border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono flex items-center gap-1.5">
@@ -541,18 +556,44 @@ export const TranslationCenterModal: React.FC = () => {
                   </div>
                   <div className="p-2.5 bg-slate-50 border border-slate-200">
                     <span className="block text-slate-500 text-[10px]">Status do Layout QA</span>
-                    <span className="font-bold text-emerald-700">0 Erros Críticos</span>
+                    {!layoutQaResult ? (
+                      <span className="font-bold text-slate-500 flex items-center justify-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Auditando...
+                      </span>
+                    ) : layoutQaResult.status === 'passed' ? (
+                      <span className="font-bold text-emerald-700">PASS (0 Erros)</span>
+                    ) : layoutQaResult.status === 'warning' ? (
+                      <span className="font-bold text-amber-700">{layoutQaResult.issues.length} Avisos</span>
+                    ) : (
+                      <span className="font-bold text-rose-700">
+                        {layoutQaResult.issues.filter((i) => i.severity === 'error').length} Erros Críticos
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 {layoutQaResult?.issues && layoutQaResult.issues.length > 0 && (
-                  <div className="space-y-1.5 pt-2">
-                    <span className="text-xs font-bold text-amber-700">Avisos de Ajuste Editorial:</span>
+                  <div className="space-y-1.5 pt-2 max-h-48 overflow-y-auto">
+                    <span className="text-xs font-bold text-amber-700">Avisos e Observações de Layout:</span>
                     {layoutQaResult.issues.map((iss) => (
-                      <div key={iss.id} className="p-2 bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                      <div
+                        key={iss.id}
+                        className={`p-2 border text-xs ${
+                          iss.severity === 'error'
+                            ? 'bg-rose-50 border-rose-200 text-rose-800 font-bold'
+                            : 'bg-amber-50 border-amber-200 text-amber-800'
+                        }`}
+                      >
                         {iss.message}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {saveErrorMessage && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{saveErrorMessage}</span>
                   </div>
                 )}
               </div>
@@ -564,13 +605,13 @@ export const TranslationCenterModal: React.FC = () => {
                     Pronto para criar a versão em {selectedLang?.nativeName}?
                   </h4>
                   <p className="text-[11px] text-emerald-700">
-                    O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será criado.
+                    O catálogo original permanece 100% inalterado. Um novo catálogo independente com UUID próprio será persistido na nuvem.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleCreateVersion}
-                  disabled={isSavingVersion}
+                  disabled={isSavingVersion || layoutQaResult?.status === 'error'}
                   className="px-5 py-2.5 text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all"
                 >
                   {isSavingVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

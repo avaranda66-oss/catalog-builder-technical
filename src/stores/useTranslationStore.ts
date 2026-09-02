@@ -20,6 +20,7 @@ import { FullCatalogTranslationService } from '@/translation/full-catalog-transl
 import { TranslationApplierRegistry } from '@/translation/translation-applier.registry';
 import { TranslationLayoutAuditor } from '@/translation/layout-qa.auditor';
 import { PrintableTextRegistry } from '@/translation/printable-text.registry';
+import { FontManager } from '@/translation/font-manager';
 
 export type TranslationWorkflowStep = 'config' | 'progress' | 'review' | 'layout_qa' | 'complete';
 
@@ -358,10 +359,17 @@ export const useTranslationStore = create<TranslationState>((set, get) => ({
     });
   },
 
-  runLayoutQa: (rootElement) => {
-    const { targetLocale } = get();
+  runLayoutQa: async (rootElement: HTMLElement | Document): Promise<LayoutQaResult> => {
+    const { targetLocale, previewCatalog } = get();
+    await FontManager.ensureFontsLoadedForLocale(targetLocale);
     const result = TranslationLayoutAuditor.auditLayout(rootElement, targetLocale);
+
+    if (previewCatalog && previewCatalog.translationMeta) {
+      previewCatalog.translationMeta.layoutQaStatus = result.status;
+    }
+
     set({ layoutQaResult: result });
+    return result;
   },
 
   resetWorkflow: () => {

@@ -84,9 +84,18 @@ export class TranslationLayoutAuditor {
       }
 
       // Verificação RTL: Presença de grandeza técnica com símbolos que requerem isolamento bidi
-      if (isRtl && /^[A-Z0-9\-–+]+\s*(bar|°C|mA|Vdc|VAC|FE|mm|%)?$/i.test(text)) {
+      if (isRtl && /([0-9]+\s*(bar|°C|mA|Vdc|VAC|FE|mm|%|FS)|[A-Z0-9]+-[A-Z0-9]+)/i.test(text)) {
         if (!htmlEl.closest('bdi') && htmlEl.getAttribute('dir') !== 'ltr') {
-          // Apenas registra aviso informativo se não estiver explicitamente isolado
+          issues.push({
+            id: `rtl_bidi_${nodeId || field || text.substring(0, 10)}`,
+            type: 'RTL_WARNING',
+            pageId,
+            blockId,
+            nodeId: nodeId || undefined,
+            severity: 'warning',
+            message: `Código/grandeza técnica "${text}" em documento RTL sem isolamento bidi (<bdi> ou dir="ltr").`,
+            snippet: text
+          });
         }
       }
     });

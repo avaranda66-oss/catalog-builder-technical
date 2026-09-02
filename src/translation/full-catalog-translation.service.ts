@@ -145,6 +145,10 @@ export class FullCatalogTranslationService {
         const cachedEntry = await TranslationMemoryCache.get(userId, nodeHash);
         if (cachedEntry && cachedEntry.translatedText) {
           resultsMap.set(node.id, cachedEntry.translatedText);
+          if (node.id.startsWith('sys_')) {
+            const sysKey = node.id.replace(/^sys_/, '');
+            localizedSystemStrings[sysKey] = cachedEntry.translatedText;
+          }
           cacheHits++;
           continue;
         }
@@ -236,8 +240,39 @@ export class FullCatalogTranslationService {
           );
         }
 
+        const rawTranslations = translationsResponse.translations;
+
+        // Validação Estrita 1: Contagem exata de nós
+        if (rawTranslations.length !== chunk.length) {
+          throw new TranslationError(
+            'TRANSLATION_INVALID_RESPONSE',
+            `Contagem de nós divergente na resposta do provedor no lote ${cIdx + 1}: esperado ${chunk.length}, recebido ${rawTranslations.length}.`
+          );
+        }
+
+        // Validação Estrita 2: Detecção de duplicados
+        const returnedIds = rawTranslations.map((t: any) => t.id);
+        const uniqueReturnedIds = new Set(returnedIds);
+        if (uniqueReturnedIds.size !== returnedIds.length) {
+          throw new TranslationError(
+            'TRANSLATION_INVALID_RESPONSE',
+            `IDs duplicados detectados na resposta do provedor no lote ${cIdx + 1}.`
+          );
+        }
+
+        // Validação Estrita 3: IDs desconhecidos ou extras
+        const expectedIds = new Set(chunk.map((c) => c.node.id));
+        for (const rId of returnedIds) {
+          if (!expectedIds.has(rId)) {
+            throw new TranslationError(
+              'TRANSLATION_INVALID_RESPONSE',
+              `ID desconhecido ou extra retornado pelo provedor no lote ${cIdx + 1}: "${rId}".`
+            );
+          }
+        }
+
         const respMap = new Map<string, string>();
-        translationsResponse.translations.forEach((t: TranslationResponseNode) => {
+        rawTranslations.forEach((t: TranslationResponseNode) => {
           if (t.id && typeof t.translatedText === 'string') {
             respMap.set(t.id, t.translatedText);
           }
@@ -312,6 +347,14 @@ export class FullCatalogTranslationService {
       localizedSystemStrings
     );
 
+    // Fail-Closed: Se algum nó traduzível ficou sem aplicação, interrompe imediatamente
+    if (applierResult.unappliedCount > 0) {
+      throw new TranslationError(
+        'TRANSLATION_INVALID_RESPONSE',
+        `Falha de integridade: ${applierResult.unappliedCount} nós não foram aplicados ao documento: ${applierResult.unappliedNodeIds.join(', ')}`
+      );
+    }
+
     const translatedCatalog = applierResult.translatedCatalog;
 
     // Atualiza metadados formais de tradução
@@ -327,14 +370,14 @@ export class FullCatalogTranslationService {
       glossaryVersion: DEFAULT_GLOSSARY_VERSION,
       translatedAt: new Date().toISOString(),
       coverage: 100,
-      layoutQaStatus: 'passed'
+      layoutQaStatus: 'pending'
     };
 
-    // 8. Auditoria Preliminar de Layout QA
+    // 8. Estado Inicial de Layout QA (Aguardando Renderização Real do A4)
     const layoutQa = {
       hasIssues: false,
       issues: [],
-      status: 'passed' as const,
+      status: 'pending' as const,
       auditedAt: new Date().toISOString()
     };
 

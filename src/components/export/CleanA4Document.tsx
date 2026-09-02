@@ -38,6 +38,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
   const direction = FontManager.getDirectionForLocale(locale);
   const fontFamily = FontManager.getFontFamilyForLocale(locale);
 
+  React.useEffect(() => {
+    FontManager.ensureFontsLoadedForLocale(locale);
+  }, [locale]);
+
   const resolveSystemString = (key: string): string => {
     if (catalog.localizedSystemStrings && catalog.localizedSystemStrings[key]) {
       return catalog.localizedSystemStrings[key];
