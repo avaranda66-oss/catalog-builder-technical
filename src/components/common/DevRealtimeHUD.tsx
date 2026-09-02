@@ -11,6 +11,7 @@ export const DevRealtimeHUD: React.FC = () => {
 
   const {
     currentCatalog,
+    activePageIndex,
     localRevision,
     lastAcknowledgedLocalRevision,
     isDirty,
@@ -43,7 +44,6 @@ export const DevRealtimeHUD: React.FC = () => {
     );
   }
 
-  const activePageIndex = useCatalogStore((s) => s.activePageIndex);
   const totalBlocks = currentCatalog?.pages?.reduce((acc, p) => acc + (p.blocks?.length || 0), 0) ?? 0;
   const activePageBlocks = currentCatalog?.pages?.[activePageIndex]?.blocks?.length ?? 0;
   const clientId = typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem('cb_client_instance_id') || 'init' : 'none';
