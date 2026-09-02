@@ -407,18 +407,36 @@ export class SupabaseService {
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
     try {
-      const { data, error } = await supabase.rpc('save_product_v3', {
+      // 1. Tenta save_product_v4 (diff automático server-side)
+      const { data, error } = await supabase.rpc('save_product_v4', {
+        p_product: product,
+        p_expected_version: expectedVersion,
+        p_changes: fieldKey ? { field_key: fieldKey } : null,
+        p_summary: summary || 'Atualização de produto'
+      });
+
+      if (!error) {
+        return { success: true, data };
+      }
+
+      if (error.code === '40001' || error.message.includes('Conflito')) {
+        return { success: false, conflict: true, error: error.message };
+      }
+
+      // 2. Fallback para save_product_v3 caso v4 não esteja disponível
+      const v3Res = await supabase.rpc('save_product_v3', {
         p_product: product,
         p_expected_version: expectedVersion,
         p_field_key: fieldKey || null,
         p_summary: summary || 'Atualização de produto'
       });
 
-      if (error) {
-        const isConflict = error.code === '40001' || error.message.includes('Conflito');
-        return { success: false, conflict: isConflict, error: error.message };
+      if (v3Res.error) {
+        const isConflict = v3Res.error.code === '40001' || v3Res.error.message.includes('Conflito');
+        return { success: false, conflict: isConflict, error: v3Res.error.message };
       }
-      return { success: true, data };
+
+      return { success: true, data: v3Res.data };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao salvar produto' };
     }

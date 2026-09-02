@@ -34,8 +34,13 @@ describe('Auth gate and limited collaborator interface', () => {
   });
 
   it('renders the Library in read-only mode for an editor', async () => {
+    vi.spyOn(useLibraryStore.getState(), 'loadWorkspace').mockImplementation(async () => {});
+    vi.spyOn(useLibraryStore.getState(), 'initRealtimeSubscription').mockReturnValue(() => {});
+
     useAuthStore.setState({ status: 'authenticated', role: 'editor', email: 'editor@example.test', errorMessage: null });
-    useLibraryStore.setState({ selectedFamily: useLibraryStore.getState().products[0].family });
+    const targetFamily = useLibraryStore.getState().products[0].family;
+    useLibraryStore.setState({ selectedFamily: targetFamily });
+    
     const container = document.createElement('div');
     const root = createRoot(container);
 

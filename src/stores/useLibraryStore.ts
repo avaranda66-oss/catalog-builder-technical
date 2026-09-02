@@ -15,6 +15,14 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 
 export type SyncStatus = 'synced' | 'dirty' | 'saving' | 'conflict' | 'error' | 'offline';
 
+export interface PendingProductEdit {
+  productId: string;
+  latestProductSnapshot: Product;
+  expectedVersion: number;
+  changedFields: Set<string>;
+  timestamp: number;
+}
+
 interface LibraryState {
   products: Product[];
   families: ProductFamily[];
@@ -51,7 +59,7 @@ interface LibraryState {
   
   // CRUD de Colunas
   getColumnsForFamily: (family: string) => LibraryColumn[];
-  addFamilyColumn: (familyIdOrName: string, fieldKey: string, label: string, fieldType?: string) => Promise<{ success: boolean; error?: string }>;
+  addFamilyColumn: (familyIdOrName: string, fieldKey: string, label: string, fieldType?: string) => Promise<{ success: boolean; data?: ProductFamilyField; error?: string }>;
   renameFamilyColumn: (fieldId: string, familyIdOrName: string, newLabel: string) => Promise<{ success: boolean; error?: string }>;
   removeFamilyColumn: (fieldId: string, familyIdOrName: string, fieldKey?: string) => Promise<{ success: boolean; error?: string }>;
   
@@ -70,14 +78,39 @@ interface LibraryState {
   resetToInitial: () => void;
 }
 
+// 1. Identidade de Sessão Única e Estável por Aba
+function getStableLibraryClientId(): string {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    let id = window.sessionStorage.getItem('cb_client_instance_id');
+    if (!id) {
+      id = 'client_' + Math.random().toString(36).slice(2, 9);
+      window.sessionStorage.setItem('cb_client_instance_id', id);
+    }
+    return id;
+  }
+  return 'client_' + Math.random().toString(36).slice(2, 9);
+}
+
+const libraryClientInstanceId = getStableLibraryClientId();
+
+// 2. Fila de Edições Consolidada por Produto
 let debounceTimer: any = null;
-const pendingCellEdits = new Map<string, { product: Product; expectedVersion: number; fieldKey: string; timestamp: number }>();
+const pendingProductEdits = new Map<string, PendingProductEdit>();
+let isFlushingEdits = false;
+let hasPendingSubsequentFlush = false;
+
 let libraryRealtimeChannel: RealtimeChannel | null = null;
 let libraryPresenceChannel: RealtimeChannel | null = null;
 
-const DEFAULT_FALLBACK_COLUMNS: LibraryColumn[] = [
-  { key: 'code', label: 'Código', visible: true, width: 110, isSystem: true },
-  { key: 'model', label: 'Modelo', visible: true, width: 130, isSystem: true },
+// 3. Colunas Estruturais Obrigatórias de Todo Produto
+export const CORE_PRODUCT_COLUMNS: LibraryColumn[] = [
+  { key: 'code', label: 'Código', visible: true, width: 110, isSystem: true, isCustom: false },
+  { key: 'model', label: 'Modelo', visible: true, width: 130, isSystem: true, isCustom: false }
+];
+
+export const DEFAULT_FALLBACK_COLUMNS: LibraryColumn[] = [
+  { key: 'code', label: 'Código', visible: true, width: 110, isSystem: true, isCustom: false },
+  { key: 'model', label: 'Modelo', visible: true, width: 130, isSystem: true, isCustom: false },
   { key: 'range', label: 'Faixa de Medição', visible: true, width: 130, isCustom: false },
   { key: 'unit', label: 'Unidade', visible: true, width: 70, isCustom: false },
   { key: 'accuracy', label: 'Exatidão', visible: true, width: 100, isCustom: false },
@@ -119,7 +152,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const actorName = user.email ? user.email.split('@')[0] : 'Colaborador';
       void libraryPresenceChannel.track({
         userId: user.userId || 'anon',
-        clientInstanceId: 'client_' + Math.random().toString(36).slice(2, 9),
+        clientInstanceId: libraryClientInstanceId,
         userName: actorName,
         userEmail: user.email || '',
         familyId: famObj.id,
@@ -139,82 +172,137 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     
     void libraryPresenceChannel.track({
       userId: user.userId || 'anon',
-      clientInstanceId: 'client_' + Math.random().toString(36).slice(2, 9),
+      clientInstanceId: libraryClientInstanceId,
       userName: actorName,
       userEmail: user.email || '',
-      familyId: currentFam?.id,
-      productId: productId || undefined,
-      columnKey: columnKey || undefined,
+      familyId: currentFam?.id || null,
+      productId: productId || null,
+      columnKey: columnKey || null,
       activity: isEditing ? 'editing' : 'viewing',
       lastSeenAt: Date.now()
     });
   },
 
-  getColumnsForFamily: (family) => {
-    const { families, familyFields } = get();
-    const famObj = families.find(f => f.name === family || f.slug === family || f.id === family);
-    const fields = famObj ? (familyFields[famObj.id] || familyFields[famObj.name]) : familyFields[family];
-    
-    if (fields && fields.length > 0) {
-      return fields.map(fld => ({
-        id: fld.id,
-        key: fld.field_key,
-        label: fld.label,
-        fieldType: (fld.field_type as any) || 'text',
-        unit: fld.unit,
-        visible: fld.visible,
-        width: fld.width,
-        isCustom: !fld.is_system,
-        isSystem: fld.is_system,
-        sortOrder: fld.sort_order
-      }));
-    }
+  createFamily: async (name, description = '') => {
+    const tempId = 'fam_' + Date.now();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const tempFam: ProductFamily = {
+      id: tempId,
+      name,
+      slug,
+      description,
+      sort_order: get().families.length + 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    return DEFAULT_FALLBACK_COLUMNS;
-  },
+    const previousFamilies = get().families;
+    set((state) => ({
+      families: [...state.families, tempFam],
+      selectedFamily: name,
+      syncStatus: 'saving'
+    }));
 
-  createFamily: async (name, description) => {
     const res = await SupabaseService.saveProductFamily({ name, description });
     if (res.success && res.data) {
-      const created: ProductFamily = res.data;
+      const confirmed: ProductFamily = res.data;
       set((state) => ({
-        families: [...state.families, created],
-        selectedFamily: created.name
+        families: state.families.map(f => f.id === tempId ? confirmed : f),
+        selectedFamily: confirmed.name,
+        syncStatus: 'synced',
+        syncError: null
       }));
-      return { success: true, data: created };
+      return { success: true, data: confirmed };
     }
-    return { success: false, error: res.error };
+
+    // Rollback em caso de falha no servidor
+    set({
+      families: previousFamilies,
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao criar família no servidor'
+    });
+    return { success: false, error: res.error || 'Falha ao salvar família no servidor' };
   },
 
   renameFamily: async (familyId, newName) => {
+    const previousFamilies = get().families;
+    set((state) => ({
+      families: state.families.map(f => f.id === familyId ? { ...f, name: newName } : f),
+      syncStatus: 'saving'
+    }));
+
     const res = await SupabaseService.saveProductFamily({ id: familyId, name: newName });
     if (res.success && res.data) {
-      set((state) => ({
-        families: state.families.map(f => f.id === familyId ? { ...f, name: newName } : f)
-      }));
+      set({ syncStatus: 'synced', syncError: null });
       return { success: true };
     }
-    return { success: false, error: res.error };
+
+    set({
+      families: previousFamilies,
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao renomear família'
+    });
+    return { success: false, error: res.error || 'Falha ao renomear família no servidor' };
   },
 
   deleteFamily: async (familyId) => {
+    const previousFamilies = get().families;
+    set((state) => ({
+      families: state.families.filter(f => f.id !== familyId),
+      syncStatus: 'saving'
+    }));
+
     const res = await SupabaseService.deleteProductFamily(familyId);
     if (res.success) {
-      set((state) => {
-        const remaining = state.families.filter(f => f.id !== familyId);
-        return {
-          families: remaining,
-          selectedFamily: remaining[0]?.name || 'Geral'
-        };
-      });
+      set({ syncStatus: 'synced', syncError: null });
       return { success: true };
     }
-    return { success: false, error: res.error };
+
+    set({
+      families: previousFamilies,
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao excluir família'
+    });
+    return { success: false, error: res.error || 'Falha ao excluir família no servidor' };
+  },
+
+  getColumnsForFamily: (family: string) => {
+    const famObj = get().families.find(f => f.name === family || f.slug === family || f.id === family);
+    const familyKey = famObj?.id || family;
+    const customFields = get().familyFields[familyKey] || (famObj ? get().familyFields[famObj.name] : []) || [];
+    
+    const familyCols: LibraryColumn[] = customFields.map(f => ({
+      id: f.id,
+      key: f.field_key,
+      label: f.label,
+      visible: f.visible,
+      width: f.width || 130,
+      isSystem: f.is_system,
+      isCustom: !f.is_system,
+      fieldType: (f.field_type as any) || 'text'
+    }));
+
+    // Se já existem campos customizados persistidos para a família:
+    // Garante que Código e Modelo NUNCA desapareçam
+    if (familyCols.length > 0) {
+      const coreKeys = new Set(CORE_PRODUCT_COLUMNS.map(c => c.key));
+      const nonCoreFamilyCols = familyCols.filter(c => !coreKeys.has(c.key));
+      return [...CORE_PRODUCT_COLUMNS, ...nonCoreFamilyCols];
+    }
+
+    // Se é uma das famílias padrão iniciais de demonstração
+    if (family === 'Transmissores de Pressão Relativa' || family === 'Transmissores de Pressão Diferencial' || family === 'Válvulas de Controle' || family === 'Transmissores de Temperatura') {
+      return DEFAULT_FALLBACK_COLUMNS;
+    }
+
+    // Nova família vazia: retorna obrigatoriamente as colunas universais (Código + Modelo)
+    return [...CORE_PRODUCT_COLUMNS];
   },
 
   addFamilyColumn: async (familyIdOrName, fieldKey, label, fieldType = 'text') => {
     const famObj = get().families.find(f => f.id === familyIdOrName || f.name === familyIdOrName || f.slug === familyIdOrName);
     const familyKey = famObj?.id || familyIdOrName;
+    const previousFields = get().familyFields[familyKey] || [];
     const tempFieldId = 'col_' + Date.now();
     
     const newField: ProductFamilyField = {
@@ -224,12 +312,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       label,
       field_type: fieldType,
       unit: null,
-      sort_order: (get().familyFields[familyKey]?.length || 0) + 1,
+      sort_order: previousFields.length + 1,
       width: 130,
       visible: true,
       is_system: false
     };
 
+    // Atualização otimista local
     set((state) => {
       const existing = state.familyFields[familyKey] || [];
       const updated = existing.some(f => f.field_key === fieldKey) ? existing : [...existing, newField];
@@ -237,55 +326,64 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         familyFields: {
           ...state.familyFields,
           [familyKey]: updated,
-          ...(famObj ? { [famObj.name]: updated } : {}),
-          ...(familyIdOrName !== familyKey ? { [familyIdOrName]: updated } : {})
-        }
+          ...(famObj ? { [famObj.name]: updated } : {})
+        },
+        syncStatus: 'saving'
       };
     });
 
-    try {
-      const res = await SupabaseService.saveFamilyField({
-        family_id: famObj?.id || familyKey,
-        field_key: fieldKey,
-        label,
-        field_type: fieldType,
-        sort_order: newField.sort_order,
-        width: 130,
-        visible: true,
-        is_system: false
-      });
+    const res = await SupabaseService.saveFamilyField({
+      family_id: famObj?.id || familyKey,
+      field_key: fieldKey,
+      label,
+      field_type: fieldType,
+      sort_order: newField.sort_order,
+      width: 130,
+      visible: true,
+      is_system: false
+    });
 
-      if (res.success && res.data) {
-        const confirmed: ProductFamilyField = res.data;
-        set((state) => {
-          const existing = state.familyFields[familyKey] || [];
-          const updated = existing.map(f => f.id === tempFieldId ? confirmed : f);
-          return {
-            familyFields: {
-              ...state.familyFields,
-              [familyKey]: updated,
-              ...(famObj ? { [famObj.name]: updated } : {})
-            }
-          };
-        });
-        return { success: true };
-      }
-    } catch {
-      // Offline fallback: already updated in state
+    if (res.success && res.data) {
+      const confirmed: ProductFamilyField = res.data;
+      set((state) => {
+        const existing = state.familyFields[familyKey] || [];
+        const updated = existing.map(f => f.id === tempFieldId ? confirmed : f);
+        return {
+          familyFields: {
+            ...state.familyFields,
+            [familyKey]: updated,
+            ...(famObj ? { [famObj.name]: updated } : {})
+          },
+          syncStatus: 'synced',
+          syncError: null
+        };
+      });
+      return { success: true, data: confirmed };
     }
-    return { success: true };
+
+    // Rollback em caso de erro no servidor
+    set((state) => ({
+      familyFields: {
+        ...state.familyFields,
+        [familyKey]: previousFields,
+        ...(famObj ? { [famObj.name]: previousFields } : {})
+      },
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao salvar coluna no servidor'
+    }));
+    return { success: false, error: res.error || 'Falha ao salvar coluna no servidor' };
   },
 
   renameFamilyColumn: async (fieldIdOrFamily, familyOrFieldKey, newLabel) => {
-    // Suporta assinatura (fieldId, familyId, newLabel) e (family, fieldKey, newLabel)
     let familyKey = fieldIdOrFamily;
     let targetKey = familyOrFieldKey;
     let labelVal = newLabel;
 
     if (newLabel === undefined) {
-      // Chamado com 2 args ou reordenação
       labelVal = familyOrFieldKey;
     }
+
+    const previousFields = { ...get().familyFields };
 
     set((state) => {
       const newFields = { ...state.familyFields };
@@ -297,45 +395,57 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           return f;
         });
       }
-      return { familyFields: newFields };
+      return { familyFields: newFields, syncStatus: 'saving' };
     });
 
-    try {
-      await SupabaseService.saveFamilyField({ id: fieldIdOrFamily, label: labelVal });
-    } catch {
-      // Ignora erro em offline
+    const res = await SupabaseService.saveFamilyField({ id: fieldIdOrFamily, label: labelVal });
+    if (res.success) {
+      set({ syncStatus: 'synced', syncError: null });
+      return { success: true };
     }
-    return { success: true };
+
+    // Rollback em caso de falha no servidor
+    set({
+      familyFields: previousFields,
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao renomear coluna no servidor'
+    });
+    return { success: false, error: res.error || 'Falha ao renomear coluna no servidor' };
   },
 
   removeFamilyColumn: async (fieldIdOrFamily, familyOrFieldKey, fieldKey) => {
     const targetKey = fieldKey || familyOrFieldKey;
     const targetId = fieldIdOrFamily;
+    const previousFields = { ...get().familyFields };
 
     set((state) => {
       const newFields = { ...state.familyFields };
       for (const [fKey, list] of Object.entries(newFields)) {
         newFields[fKey] = list.filter(f => f.id !== targetId && f.field_key !== targetKey && f.id !== targetKey);
       }
-      return { familyFields: newFields };
+      return { familyFields: newFields, syncStatus: 'saving' };
     });
 
-    try {
-      await SupabaseService.deleteFamilyField(targetId);
-    } catch {
-      // Ignora erro em offline
+    const res = await SupabaseService.deleteFamilyField(targetId);
+    if (res.success) {
+      set({ syncStatus: 'synced', syncError: null });
+      return { success: true };
     }
-    return { success: true };
+
+    // Rollback em caso de falha no servidor
+    set({
+      familyFields: previousFields,
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao excluir coluna no servidor'
+    });
+    return { success: false, error: res.error || 'Falha ao excluir coluna no servidor' };
   },
 
   addProduct: async (productData) => {
-    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'prod-' + Date.now();
-    const famObj = get().families.find(f => f.name === productData.family || f.slug === productData.family);
-    
+    const tempId = 'prod_' + Date.now();
     const newProduct: Product = {
       ...productData,
       id: tempId,
-      family_id: famObj?.id || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1
@@ -365,33 +475,56 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
       set((state) => ({
         products: state.products.map(p => p.id === tempId ? confirmed : p),
-        syncStatus: 'synced'
+        syncStatus: 'synced',
+        syncError: null
       }));
       void StorageService.saveProducts(get().products);
       return { success: true, data: confirmed };
-    } else {
-      set({ syncStatus: 'error', syncError: res.error || 'Erro ao criar produto' });
-      return { success: false, error: res.error };
     }
+
+    // Rollback se falhar no servidor
+    set((state) => ({
+      products: state.products.filter(p => p.id !== tempId),
+      syncStatus: 'error',
+      syncError: res.error || 'Erro ao salvar produto no servidor'
+    }));
+    return { success: false, error: res.error || 'Falha ao salvar produto no servidor' };
   },
 
   updateProduct: async (id, updates) => {
     const current = get().products.find(p => p.id === id);
     if (!current) return;
 
-    const updatedProd: Product = { ...current, ...updates, updatedAt: new Date().toISOString() };
+    const updatedProd: Product = {
+      ...current,
+      ...updates,
+      specs: {
+        ...current.specs,
+        ...(updates.specs || {})
+      },
+      updatedAt: new Date().toISOString()
+    };
+
     set((state) => ({
       products: state.products.map(p => p.id === id ? updatedProd : p),
       isDirty: true,
-      syncStatus: 'dirty'
+      syncStatus: 'dirty',
+      syncError: null
     }));
 
-    pendingCellEdits.set(id, {
-      product: updatedProd,
-      expectedVersion: current.version || 1,
-      fieldKey: '',
-      timestamp: Date.now()
-    });
+    const existingPending = pendingProductEdits.get(id);
+    if (existingPending) {
+      existingPending.latestProductSnapshot = updatedProd;
+      existingPending.timestamp = Date.now();
+    } else {
+      pendingProductEdits.set(id, {
+        productId: id,
+        latestProductSnapshot: updatedProd,
+        expectedVersion: current.version || 1,
+        changedFields: new Set(Object.keys(updates)),
+        timestamp: Date.now()
+      });
+    }
 
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
@@ -425,12 +558,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       syncError: null
     }));
 
-    pendingCellEdits.set(`${productId}:${fieldKey}`, {
-      product: updatedProd,
-      expectedVersion: currentProd.version || 1,
-      fieldKey,
-      timestamp: Date.now()
-    });
+    // Consolida na fila por PRODUTO (evitando auto-conflito de expectedVersion)
+    const existingPending = pendingProductEdits.get(productId);
+    if (existingPending) {
+      existingPending.latestProductSnapshot = updatedProd;
+      existingPending.changedFields.add(fieldKey);
+      existingPending.timestamp = Date.now();
+    } else {
+      pendingProductEdits.set(productId, {
+        productId,
+        latestProductSnapshot: updatedProd,
+        expectedVersion: currentProd.version || 1,
+        changedFields: new Set([fieldKey]),
+        timestamp: Date.now()
+      });
+    }
 
     if (immediateFlush) {
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -445,35 +587,44 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   flushLibraryEdits: async () => {
-    if (pendingCellEdits.size === 0) {
+    if (pendingProductEdits.size === 0) {
       set({ isDirty: false, syncStatus: 'synced' });
       return true;
     }
 
+    if (isFlushingEdits) {
+      hasPendingSubsequentFlush = true;
+      return true;
+    }
+
+    isFlushingEdits = true;
     set({ isSaving: true, syncStatus: 'saving' });
-    const editsToFlush = Array.from(pendingCellEdits.entries());
-    pendingCellEdits.clear();
+
+    // Extrai o snapshot consolidado de cada produto editado
+    const batch = Array.from(pendingProductEdits.entries());
+    pendingProductEdits.clear();
 
     let allSuccess = true;
-    for (const [, edit] of editsToFlush) {
+    for (const [prodId, edit] of batch) {
+      const changedFieldNames = Array.from(edit.changedFields).join(', ');
       const res = await SupabaseService.saveProduct(
-        edit.product,
+        edit.latestProductSnapshot,
         edit.expectedVersion,
-        edit.fieldKey,
-        `Edição do campo ${edit.fieldKey || 'especificação'}`
+        Array.from(edit.changedFields)[0],
+        `Edição em ${edit.latestProductSnapshot.model}: ${changedFieldNames}`
       );
 
       if (res.success && res.data) {
         const nextVersion = res.data.version || (edit.expectedVersion + 1);
         set((state) => ({
-          products: state.products.map(p => p.id === edit.product.id ? { ...p, version: nextVersion } : p)
+          products: state.products.map(p => p.id === prodId ? { ...p, version: nextVersion } : p)
         }));
       } else {
         allSuccess = false;
         if (res.conflict) {
           set({
             syncStatus: 'conflict',
-            syncError: `Conflito no produto ${edit.product.model}: alterado em outro dispositivo.`
+            syncError: `Conflito no produto ${edit.latestProductSnapshot.model}: alterado em outro dispositivo.`
           });
         } else {
           set({
@@ -484,13 +635,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       }
     }
 
+    isFlushingEdits = false;
     set({
       isSaving: false,
-      isDirty: !allSuccess,
+      isDirty: !allSuccess || pendingProductEdits.size > 0,
       syncStatus: allSuccess ? 'synced' : (get().syncStatus === 'conflict' ? 'conflict' : 'error')
     });
 
     void StorageService.saveProducts(get().products);
+
+    if (hasPendingSubsequentFlush || pendingProductEdits.size > 0) {
+      hasPendingSubsequentFlush = false;
+      return await get().flushLibraryEdits();
+    }
+
     return allSuccess;
   },
 
@@ -504,22 +662,23 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
     const res = await SupabaseService.deleteProduct(id);
     if (res.success) {
-      set({ isSaving: false, syncStatus: 'synced' });
+      set({ isSaving: false, syncStatus: 'synced', syncError: null });
       void StorageService.saveProducts(get().products);
       return { success: true };
     } else {
+      // Rollback se falhar no servidor
       set({
         products: previousProducts,
         isSaving: false,
         syncStatus: 'error',
-        syncError: res.error || 'Erro ao excluir produto do servidor'
+        syncError: res.error || 'Erro ao excluir produto no servidor'
       });
       return { success: false, error: res.error };
     }
   },
 
   getProduct: (id) => {
-    return get().products.find((p) => p.id === id);
+    return get().products.find(p => p.id === id);
   },
 
   loadWorkspace: async () => {
@@ -528,56 +687,59 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       if (res.success && res.data) {
         const { families = [], fields = [], products = [], events = [] } = res.data;
         
-        // Mapear campos por família
         const fieldMap: Record<string, ProductFamilyField[]> = {};
         fields.forEach((fld: any) => {
-          if (!fieldMap[fld.family_id]) fieldMap[fld.family_id] = [];
-          fieldMap[fld.family_id].push(fld);
+          const fid = fld.family_id;
+          if (!fieldMap[fid]) fieldMap[fid] = [];
+          fieldMap[fid].push(fld);
+          
+          const parentFam = families.find((f: any) => f.id === fid);
+          if (parentFam) {
+            if (!fieldMap[parentFam.name]) fieldMap[parentFam.name] = [];
+            fieldMap[parentFam.name].push(fld);
+          }
         });
 
-        // Mapear produtos
-        const remoteProducts: Product[] = products.map((rp: any) => {
-          const specData = rp.data?.specs || rp.data || {};
-          return {
-            id: rp.id,
-            family_id: rp.family_id,
-            code: rp.sku,
-            model: rp.name,
-            family: rp.family || 'Geral',
-            description: rp.data?.description || rp.name,
-            specs: specData,
-            imageUrl: rp.data?.imageUrl || '',
-            version: rp.version || 1,
-            createdAt: rp.created_at,
-            updatedAt: rp.updated_at
-          };
-        });
+        const remoteProducts: Product[] = products.map((rp: any) => ({
+          id: rp.id,
+          family_id: rp.family_id,
+          code: rp.sku,
+          model: rp.name,
+          family: rp.family || 'Geral',
+          description: rp.data?.description || rp.name,
+          specs: rp.data?.specs || rp.data || {},
+          imageUrl: rp.data?.imageUrl || '',
+          version: rp.version || 1,
+          createdAt: rp.created_at,
+          updatedAt: rp.updated_at
+        }));
 
         const activeFam = families[0]?.name || get().selectedFamily || 'Transmissores de Pressão Relativa';
 
+        // EMPTY CLOUD É VÁLIDO: se o servidor respondeu com sucesso, mantém exatamente os produtos do cloud (mesmo se vazio)
         set({
           families,
           familyFields: fieldMap,
-          products: remoteProducts.length > 0 ? remoteProducts : INITIAL_PRODUCTS,
+          products: remoteProducts,
           changeEvents: events,
           selectedFamily: activeFam,
           syncStatus: 'synced',
           syncError: null
         });
 
-        void StorageService.saveProducts(remoteProducts.length > 0 ? remoteProducts : INITIAL_PRODUCTS);
+        void StorageService.saveProducts(remoteProducts);
         return;
       }
     } catch (e) {
-      console.warn('Fallback para cache local de produtos:', e);
+      console.warn('Falha na consulta cloud da biblioteca, usando cache:', e);
     }
 
+    // Fallback OFFLINE somente em caso de falha de conexão com Supabase
     const saved = await StorageService.loadProducts();
     if (saved && saved.length > 0) {
-      set({ products: saved, syncStatus: 'offline' });
+      set({ products: saved, syncStatus: 'offline', syncError: 'Modo Offline: exibindo cache local' });
     } else {
-      await StorageService.saveProducts(INITIAL_PRODUCTS);
-      set({ products: INITIAL_PRODUCTS, syncStatus: 'offline' });
+      set({ products: INITIAL_PRODUCTS, syncStatus: 'offline', syncError: 'Modo Offline: dados de demonstração' });
     }
   },
 
@@ -618,31 +780,28 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           }
 
           if (eventType === 'UPDATE') {
-            const updated = state.products.map(p => {
-              if (p.id !== newRec.id) return p;
-              // Se tiver edição pendente local deste produto, não sobrescreve
-              if (pendingCellEdits.has(p.id) || Array.from(pendingCellEdits.keys()).some(k => k.startsWith(p.id))) {
-                return p;
+            const updated: Product = {
+              id: newRec.id,
+              family_id: newRec.family_id,
+              code: newRec.sku,
+              model: newRec.name,
+              family: newRec.family || 'Geral',
+              description: newRec.data?.description || newRec.name,
+              specs: newRec.data?.specs || newRec.data || {},
+              imageUrl: newRec.data?.imageUrl || '',
+              version: newRec.version || 1,
+              createdAt: newRec.created_at,
+              updatedAt: newRec.updated_at
+            };
+
+            const editorName = newRec.updated_by ? 'Colaborador' : 'Servidor';
+            return {
+              products: state.products.map(p => p.id === newRec.id ? updated : p),
+              recentEditedCells: {
+                ...state.recentEditedCells,
+                [newRec.id]: { editorName, timestamp: Date.now() }
               }
-              return {
-                ...p,
-                family_id: newRec.family_id,
-                code: newRec.sku,
-                model: newRec.name,
-                family: newRec.family || 'Geral',
-                description: newRec.data?.description || newRec.name,
-                specs: newRec.data?.specs || newRec.data || {},
-                imageUrl: newRec.data?.imageUrl || '',
-                version: newRec.version || 1,
-                updatedAt: newRec.updated_at
-              };
-            });
-
-            // Registra highlight recente
-            const recent = { ...state.recentEditedCells };
-            recent[newRec.id] = { editorName: 'Outro colaborador', timestamp: Date.now() };
-
-            return { products: updated, recentEditedCells: recent };
+            };
           }
 
           if (eventType === 'DELETE') {
@@ -707,9 +866,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       })
       .subscribe();
 
-    // 2. Canal de Presença da Biblioteca
+    // 2. Canal de Presença com Chave de Sessão Estável (userId:clientInstanceId)
+    const currentUserId = useAuthStore.getState().userId || 'anon';
     libraryPresenceChannel = supabase.channel('presence:library', {
-      config: { presence: { key: (useAuthStore.getState().userId || 'anon') + ':' + Math.random().toString(36).slice(2, 7) } }
+      config: { presence: { key: `${currentUserId}:${libraryClientInstanceId}` } }
     });
 
     libraryPresenceChannel.on('presence', { event: 'sync' }, () => {
@@ -722,11 +882,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           if (p.productId && p.columnKey) {
             const cellKey = `${p.productId}:${p.columnKey}`;
             if (!newCellPresence[cellKey]) newCellPresence[cellKey] = [];
-            newCellPresence[cellKey].push(p);
+            // Deduplica presença por userId e clientInstanceId
+            if (!newCellPresence[cellKey].some(item => item.clientInstanceId === p.clientInstanceId)) {
+              newCellPresence[cellKey].push(p);
+            }
           }
           if (p.familyId) {
             if (!newFamilyPresence[p.familyId]) newFamilyPresence[p.familyId] = [];
-            newFamilyPresence[p.familyId].push(p);
+            if (!newFamilyPresence[p.familyId].some(item => item.clientInstanceId === p.clientInstanceId)) {
+              newFamilyPresence[p.familyId].push(p);
+            }
           }
         });
       });
@@ -749,10 +914,3 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ products: INITIAL_PRODUCTS, syncStatus: 'synced' });
   }
 }));
-
-if (typeof window !== 'undefined') {
-  const isDebugE2E = import.meta.env.DEV || (new URLSearchParams(window.location.search).get('debugE2E') === '1' && window.sessionStorage.getItem('e2e_allowed') === '1');
-  if (isDebugE2E) {
-    (window as any).useLibraryStore = useLibraryStore;
-  }
-}

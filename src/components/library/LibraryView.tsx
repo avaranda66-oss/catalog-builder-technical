@@ -11,7 +11,9 @@ import {
   Clock,
   Users,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Pencil
 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { Product } from '../../domain/product.schema';
@@ -134,25 +136,36 @@ export const LibraryView: React.FC = () => {
   const handleConfirmAddColumn = async () => {
     if (!newColumnLabel.trim()) return;
     const key = `spec_${Date.now()}`;
-    await addFamilyColumn(currentFamily, key, newColumnLabel.trim());
-    setNewColumnLabel('');
-    setIsAddingColumn(false);
+    const res = await addFamilyColumn(currentFamily, key, newColumnLabel.trim());
+    if (res.success) {
+      setNewColumnLabel('');
+      setIsAddingColumn(false);
+    } else {
+      alert(res.error || 'Erro ao criar coluna no servidor');
+    }
   };
 
   // Renomear Coluna
   const handleConfirmRenameColumn = async () => {
     if (!editingColKey || !editingColLabel.trim()) return;
     const targetCol = columnsForFamily.find(c => c.key === editingColKey);
-    await renameFamilyColumn(targetCol?.id || '', currentFamily, editingColLabel.trim());
-    setEditingColKey(null);
-    setEditingColLabel('');
+    const res = await renameFamilyColumn(targetCol?.id || '', currentFamily, editingColLabel.trim());
+    if (res.success) {
+      setEditingColKey(null);
+      setEditingColLabel('');
+    } else {
+      alert(res.error || 'Erro ao renomear coluna no servidor');
+    }
   };
 
   // Excluir Coluna
   const handleDeleteColumn = async (col: any) => {
-    if (columnsForFamily.length <= 1) return;
-    if (confirm(`Deseja realmente excluir a coluna "${col.label}"?`)) {
-      await removeFamilyColumn(col.id || '', currentFamily, col.key);
+    if (col.isSystem) return;
+    if (confirm(`Deseja realmente excluir a coluna "${col.label}"?\n\nOs valores preenchidos nesta especificação serão excluídos do banco de dados.`)) {
+      const res = await removeFamilyColumn(col.id || '', currentFamily, col.key);
+      if (!res.success) {
+        alert(res.error || 'Erro ao excluir coluna no servidor');
+      }
     }
   };
 
@@ -380,8 +393,8 @@ export const LibraryView: React.FC = () => {
               {columnsForFamily.map((col) => (
                 <th
                   key={col.key}
-                  style={{ width: col.width ? `${col.width}px` : 'auto' }}
-                  className="p-2 border-r border-slate-300 text-slate-800 group relative truncate hover:bg-slate-200/50 transition-colors"
+                  style={{ width: col.width ? `${col.width}px` : 'auto', minWidth: '120px' }}
+                  className="p-2 border-r border-slate-300 text-slate-800 group relative hover:bg-slate-200/50 transition-colors"
                 >
                   {editingColKey === col.key ? (
                     <div className="flex items-center gap-1">
@@ -393,34 +406,41 @@ export const LibraryView: React.FC = () => {
                         autoFocus
                         onKeyDown={(e) => e.key === 'Enter' && void handleConfirmRenameColumn()}
                       />
-                      <button onClick={() => void handleConfirmRenameColumn()} className="p-0.5 text-emerald-600 hover:text-emerald-800">
+                      <button onClick={() => void handleConfirmRenameColumn()} className="p-0.5 text-emerald-600 hover:text-emerald-800" title="Confirmar">
                         <Check className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => setEditingColKey(null)} className="p-0.5 text-rose-600 hover:text-rose-800">
+                      <button onClick={() => setEditingColKey(null)} className="p-0.5 text-rose-600 hover:text-rose-800" title="Cancelar">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="truncate" title={col.label}>{col.label}</span>
-                      {isAdmin && col.isCustom && (
-                        <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 bg-slate-200 px-1 py-0.5 rounded">
-                          <button
-                            onClick={() => { setEditingColKey(col.key); setEditingColLabel(col.label); }}
-                            className="p-0.5 text-slate-500 hover:text-[#003366]"
-                            title="Renomear coluna"
-                          >
-                            <span className="text-[10px] font-mono">ren</span>
-                          </button>
-                          <button
-                            onClick={() => void handleDeleteColumn(col)}
-                            className="p-0.5 text-slate-500 hover:text-rose-600"
-                            title="Excluir coluna"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
+                    <div className="flex items-center justify-between pr-7">
+                      <span className="truncate block font-bold" title={col.label}>{col.label}</span>
+                      {col.isSystem && (
+                        <span className="text-slate-400 shrink-0" title="Campo obrigatório universal">
+                          <Lock className="w-3 h-3" />
+                        </span>
                       )}
+                    </div>
+                  )}
+
+                  {/* Ações de Coluna em Overlay Absoluto (Zero Layout Shift / Zero Jitter) */}
+                  {!editingColKey && isAdmin && col.isCustom && (
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-slate-200/95 backdrop-blur-2xs px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-2xs">
+                      <button
+                        onClick={() => { setEditingColKey(col.key); setEditingColLabel(col.label); }}
+                        className="p-1 text-slate-600 hover:text-[#003366] rounded hover:bg-white transition-colors"
+                        title="Renomear coluna"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => void handleDeleteColumn(col)}
+                        className="p-1 text-slate-600 hover:text-rose-600 rounded hover:bg-white transition-colors"
+                        title="Excluir coluna"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   )}
                 </th>

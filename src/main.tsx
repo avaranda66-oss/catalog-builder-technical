@@ -8,7 +8,7 @@ import { useLibraryStore } from './stores/useLibraryStore';
 import { useUIStore } from './stores/useUIStore';
 
 if (typeof window !== 'undefined') {
-  const isDebugE2E = import.meta.env.DEV || new URLSearchParams(window.location.search).get('debugE2E') === '1' || (typeof window.sessionStorage !== 'undefined' && window.sessionStorage.getItem('e2e_allowed') === '1');
+  const isDebugE2E = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true';
   if (isDebugE2E) {
     (window as any).useCatalogStore = useCatalogStore;
     (window as any).useAuthStore = useAuthStore;
