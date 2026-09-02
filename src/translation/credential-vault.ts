@@ -1,43 +1,124 @@
+// src/translation/credential-vault.ts
+// Cofre BYOK seguro para chaves pessoais de API
+// Modo 'session': estritamente em memória volátil (limpo no logout).
+// Modo 'remember': cifrado via WebCrypto API com chave AES-GCM (256-bit) aleatória por dispositivo.
+// Zero persistência global, zero chaves no localStorage.
+
 import { TranslationCredential, TranslationProviderId, StoredCredentialMetadata } from './types';
 
-const DB_NAME = 'presys_catalog_vault_v1';
-const STORE_NAME = 'personal_credentials';
+const DB_NAME = 'presys_catalog_vault_v4';
+const STORE_CREDENTIALS = 'personal_credentials';
+const STORE_DEVICE_KEYS = 'device_keys';
 
-class WebCryptoHelper {
-  private static readonly SALT = new Uint8Array([112, 114, 101, 115, 121, 115, 95, 99, 97, 116, 97, 108, 111, 103, 50, 54]);
+// In-Memory Storage (Isolado e limpo a cada reset de sessão)
+const sessionMemoryVault = new Map<string, TranslationCredential>(); // key: `${userId}:${provider}`
 
-  private static async getEncryptionKey(userId: string): Promise<CryptoKey> {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(`presys_vault_device_salt_${userId}`),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
+// Fallback de persistência de dispositivo para ambientes sem IndexedDB (ex: Node/SSR/Unit Tests)
+const deviceDbFallback = {
+  credentials: new Map<string, any>(),
+  deviceKeys: new Map<string, any>()
+};
 
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: this.SALT,
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
+export class PersonalCredentialVault {
+  private static async openDB(): Promise<IDBDatabase | null> {
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_CREDENTIALS)) {
+          db.createObjectStore(STORE_CREDENTIALS, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_DEVICE_KEYS)) {
+          db.createObjectStore(STORE_DEVICE_KEYS, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
   }
 
-  static async encrypt(plainText: string, userId: string): Promise<{ cipherText: string; iv: string }> {
-    const key = await this.getEncryptionKey(userId);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+  /**
+   * Obtém ou gera uma chave criptográfica AES-GCM (256-bit) aleatória no dispositivo para o usuário.
+   */
+  private static async getOrCreateDeviceKey(db: IDBDatabase | null, keyId: string): Promise<CryptoKey | null> {
+    // 1. Tenta recuperar do IndexedDB ou fallback
+    let existingJwk: any = null;
+
+    if (db) {
+      const existingRecord: any = await new Promise((resolve) => {
+        const tx = db.transaction(STORE_DEVICE_KEYS, 'readonly');
+        const req = tx.objectStore(STORE_DEVICE_KEYS).get(keyId);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+      existingJwk = existingRecord?.jwk;
+    } else {
+      existingJwk = deviceDbFallback.deviceKeys.get(keyId)?.jwk;
+    }
+
+    if (existingJwk) {
+      try {
+        return await crypto.subtle.importKey(
+          'jwk',
+          existingJwk,
+          'AES-GCM',
+          true,
+          ['encrypt', 'decrypt']
+        );
+      } catch (err) {
+        console.warn('[PersonalCredentialVault] Falha ao importar chave do dispositivo:', err);
+      }
+    }
+
+    // 2. Se não existir, gera uma nova chave aleatória no dispositivo
+    try {
+      const newKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+
+      const jwk = await crypto.subtle.exportKey('jwk', newKey);
+
+      if (db) {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORE_DEVICE_KEYS, 'readwrite');
+          tx.objectStore(STORE_DEVICE_KEYS).put({ id: keyId, jwk });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } else {
+        deviceDbFallback.deviceKeys.set(keyId, { id: keyId, jwk });
+      }
+
+      return newKey;
+    } catch (err) {
+      console.warn('[PersonalCredentialVault] Falha ao gerar chave de dispositivo:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Cifra o texto plano utilizando a CryptoKey do dispositivo com IV aleatório de 96 bits.
+   */
+  private static async encryptWithDeviceKey(
+    db: IDBDatabase | null,
+    keyId: string,
+    plainText: string
+  ): Promise<{ cipherText: string; iv: string } | null> {
+    const cryptoKey = await this.getOrCreateDeviceKey(db, keyId);
+    if (!cryptoKey) return null;
+
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV aleatório novo por criptografia
     const encoded = new TextEncoder().encode(plainText);
 
     const cipherBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
-      key,
+      cryptoKey,
       encoded
     );
 
@@ -47,44 +128,42 @@ class WebCryptoHelper {
     };
   }
 
-  static async decrypt(cipherTextHex: string, ivHex: string, userId: string): Promise<string> {
-    const key = await this.getEncryptionKey(userId);
-    const iv = new Uint8Array(ivHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
-    const cipherBuffer = new Uint8Array(cipherTextHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
+  /**
+   * Decifra o texto cifrado utilizando a CryptoKey do dispositivo e o IV armazenado.
+   */
+  private static async decryptWithDeviceKey(
+    db: IDBDatabase | null,
+    keyId: string,
+    cipherTextHex: string,
+    ivHex: string
+  ): Promise<string | null> {
+    const cryptoKey = await this.getOrCreateDeviceKey(db, keyId);
+    if (!cryptoKey) return null;
 
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      cipherBuffer
-    );
+    const ivMatches = ivHex.match(/.{1,2}/g);
+    const cipherMatches = cipherTextHex.match(/.{1,2}/g);
+    if (!ivMatches || !cipherMatches) return null;
 
-    return new TextDecoder().decode(decryptedBuffer);
-  }
-}
+    const iv = new Uint8Array(ivMatches.map((byte) => parseInt(byte, 16)));
+    const cipherBuffer = new Uint8Array(cipherMatches.map((byte) => parseInt(byte, 16)));
 
-// In-Memory Storage (Isolado e limpo a cada reset de sessão)
-const sessionMemoryVault = new Map<string, TranslationCredential>(); // key: `${userId}:${provider}`
+    try {
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        cryptoKey,
+        cipherBuffer
+      );
 
-export class PersonalCredentialVault {
-  private static async openDB(): Promise<IDBDatabase | null> {
-    if (typeof indexedDB === 'undefined') return null;
-
-    return new Promise((resolve) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' }); // id: `${userId}:${provider}`
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-    });
+      return new TextDecoder().decode(decryptedBuffer);
+    } catch (err) {
+      console.warn('[PersonalCredentialVault] Falha na decifração:', err);
+      return null;
+    }
   }
 
   /**
    * Salva uma credencial para o usuário autenticado.
-   * Se for 'session', grava apenas em memória. Se for 'remember', grava cifrado no IndexedDB.
+   * Se for 'session', grava apenas em memória volátil. Se for 'remember', grava cifrado no IndexedDB.
    */
   static async saveCredential(userId: string, credential: TranslationCredential): Promise<void> {
     if (!userId || !credential.apiKey) return;
@@ -95,8 +174,8 @@ export class PersonalCredentialVault {
     if (credential.storageMode === 'remember') {
       try {
         const db = await this.openDB();
-        if (db) {
-          const encrypted = await WebCryptoHelper.encrypt(credential.apiKey, userId);
+        const encrypted = await this.encryptWithDeviceKey(db, key, credential.apiKey);
+        if (encrypted) {
           const record = {
             id: key,
             userId,
@@ -108,15 +187,23 @@ export class PersonalCredentialVault {
             validatedAt: credential.validatedAt || new Date().toISOString()
           };
 
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put(record);
+          if (db) {
+            await new Promise<void>((resolve, reject) => {
+              const tx = db.transaction(STORE_CREDENTIALS, 'readwrite');
+              tx.objectStore(STORE_CREDENTIALS).put(record);
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => reject(tx.error);
+            });
+          } else {
+            deviceDbFallback.credentials.set(key, record);
+          }
         }
       } catch (err) {
-        console.warn('[CredentialVault] Falha ao persistir credencial cifrada no IndexedDB:', err);
+        console.warn('[PersonalCredentialVault] Falha ao persistir credencial cifrada no dispositivo:', err);
       }
     } else {
       // Se era 'session', garante que remove qualquer registro anterior do IndexedDB
-      await this.removeFromIndexedDB(userId, credential.provider);
+      await this.removeFromDeviceStorage(userId, credential.provider);
     }
   }
 
@@ -141,20 +228,26 @@ export class PersonalCredentialVault {
     // 2. Se não estiver em memória, tenta recuperar do IndexedDB cifrado
     try {
       const db = await this.openDB();
-      if (!db) return null;
+      let record: any = null;
 
-      const record: any = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-      });
+      if (db) {
+        record = await new Promise((resolve) => {
+          const tx = db.transaction(STORE_CREDENTIALS, 'readonly');
+          const req = tx.objectStore(STORE_CREDENTIALS).get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+      } else {
+        record = deviceDbFallback.credentials.get(key) || null;
+      }
 
       if (!record || record.userId !== userId) {
         return null;
       }
 
-      const decryptedApiKey = await WebCryptoHelper.decrypt(record.cipherText, record.iv, userId);
+      const decryptedApiKey = await this.decryptWithDeviceKey(db, key, record.cipherText, record.iv);
+      if (!decryptedApiKey) return null;
+
       const cred: TranslationCredential = {
         provider: record.provider,
         apiKey: decryptedApiKey,
@@ -167,7 +260,7 @@ export class PersonalCredentialVault {
       sessionMemoryVault.set(key, cred);
       return cred;
     } catch (err) {
-      console.warn('[CredentialVault] Erro ao descriptografar credencial local:', err);
+      console.warn('[PersonalCredentialVault] Erro ao descriptografar credencial local:', err);
       return null;
     }
   }
@@ -198,25 +291,34 @@ export class PersonalCredentialVault {
     if (!userId) return;
     const key = `${userId}:${provider}`;
     sessionMemoryVault.delete(key);
-    await this.removeFromIndexedDB(userId, provider);
+    await this.removeFromDeviceStorage(userId, provider);
   }
 
   /**
-   * Limpa TODAS as credenciais descriptografadas da memória em caso de logout ou troca de usuário.
+   * Limpa estritamente a memória volátil (chamado no logout ou reset de sessão).
    */
   static clearSessionMemory(): void {
     sessionMemoryVault.clear();
   }
 
-  private static async removeFromIndexedDB(userId: string, provider: TranslationProviderId): Promise<void> {
+  private static async removeFromDeviceStorage(userId: string, provider: TranslationProviderId): Promise<void> {
+    const key = `${userId}:${provider}`;
+    deviceDbFallback.credentials.delete(key);
+    deviceDbFallback.deviceKeys.delete(key);
+
     try {
       const db = await this.openDB();
       if (!db) return;
-      const key = `${userId}:${provider}`;
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).delete(key);
+
+      await new Promise<void>((resolve) => {
+        const tx = db.transaction([STORE_CREDENTIALS, STORE_DEVICE_KEYS], 'readwrite');
+        tx.objectStore(STORE_CREDENTIALS).delete(key);
+        tx.objectStore(STORE_DEVICE_KEYS).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
     } catch {
-      // Ignora erro de remoção no IndexedDB
+      // Ignora erro em remoção local
     }
   }
 }

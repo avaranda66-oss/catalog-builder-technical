@@ -68,6 +68,7 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
       {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -96,10 +97,10 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
         {segments.map((seg, idx) => (
           <React.Fragment key={seg.id}>
             <div className="bg-slate-800 border border-slate-700 px-2 py-1 text-center shrink-0">
-              <span className="font-bold text-blue-300 block text-[10px]">{seg.code}</span>
-              <span className="text-[8px] text-slate-400 block truncate max-w-[80px]">{seg.name}</span>
+              <span className="font-bold text-blue-300 block text-[10px]" data-printable-field={`segment:${seg.id}:code`} data-printable-policy="protect">{seg.code}</span>
+              <span className="text-[8px] text-slate-400 block truncate max-w-[80px]" data-printable-field={`segment:${seg.id}:name`}>{seg.name}</span>
             </div>
-            {idx < segments.length - 1 && <span className="text-slate-500 font-bold px-0.5 select-none">-</span>}
+            {idx < segments.length - 1 && <span className="text-slate-500 font-bold px-0.5 select-none" data-printable-policy="protect">-</span>}
           </React.Fragment>
         ))}
       </div>
@@ -110,6 +111,8 @@ export const OrderingCodesBlock: React.FC<OrderingCodesBlockProps> = ({
           <div key={seg.id} className="p-2 border border-slate-200 bg-slate-50 rounded-none text-[10px] relative group">
             <div className="flex items-center justify-between mb-1 pb-1 border-b border-slate-200">
               <span
+                data-printable-field={`segment:${seg.id}:code`}
+                data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleSegmentCodeBlur(seg.id, e.currentTarget.innerText)}

@@ -77,6 +77,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
       {/* Header Técnico da Tabela */}
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
         <h3
+          data-printable-field="title"
           contentEditable={!isExport}
           suppressContentEditableWarning
           onBlur={handleTitleBlur}

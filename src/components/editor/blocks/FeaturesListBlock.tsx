@@ -54,6 +54,7 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
       {/* Header Técnico */}
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-2">
         <h3
+          data-printable-field="title"
           contentEditable
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
@@ -84,10 +85,11 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
             key={item.id}
             className="flex items-start gap-2 p-2 bg-slate-50 border border-slate-200 rounded-none hover:border-slate-400 transition-colors group relative"
           >
-            <span className="text-[#003366] font-bold text-xs shrink-0 mt-0.5 select-none">■</span>
+            <span className="text-[#003366] font-bold text-xs shrink-0 mt-0.5 select-none" data-printable-policy="protect">■</span>
 
             <div className="flex-1 min-w-0 pr-4">
               <h4
+                data-printable-field={`feature:${item.id}:title`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleItemTitleBlur(item.id, e.currentTarget.innerText)}
@@ -96,6 +98,7 @@ export const FeaturesListBlock: React.FC<FeaturesListBlockProps> = ({ block, pag
                 {item.title}
               </h4>
               <p
+                data-printable-field={`feature:${item.id}:desc`}
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleItemDescBlur(item.id, e.currentTarget.innerText)}

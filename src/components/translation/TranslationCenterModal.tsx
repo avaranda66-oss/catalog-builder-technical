@@ -412,7 +412,7 @@ export const TranslationCenterModal: React.FC = () => {
                           <div>
                             <div className="text-xs font-bold text-slate-900">Lembrar neste dispositivo</div>
                             <div className="text-[11px] text-slate-500">
-                              Cifrada via Web Crypto (AES-GCM) no IndexedDB isolada para seu usuário.
+                              Chave protegida neste dispositivo e isolada por usuário no uso normal da aplicação.
                             </div>
                           </div>
                         </label>
@@ -445,11 +445,11 @@ export const TranslationCenterModal: React.FC = () => {
                 </div>
                 <p>
                   Esta aplicação opera sob o modelo <strong>BYOK estrito (Zero Chave Global)</strong>. Sua chave de
-                  API nunca é gravada em bancos de dados do servidor, catálogos compartilhados ou logs públicos.
+                  API nunca é gravada em bancos de dados do servidor, catálogos compartilhados ou logs.
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  * Nota de integridade: Esta chave fica protegida neste perfil do navegador. Pessoas com controle
-                  técnico completo deste navegador/dispositivo podem possuir meios de acessar dados locais.
+                  * Nota de segurança: Chave protegida neste dispositivo e isolada por usuário no uso normal da aplicação.
+                  O envio ocorre em trânsito seguro exclusivamente para o gateway autorizado da Edge Function.
                 </p>
               </div>
             </div>

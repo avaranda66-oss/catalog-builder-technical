@@ -1,3 +1,7 @@
+// src/services/translation.service.ts
+// Serviço de tradução do Catalog Builder: roteamento exclusivo via Supabase Edge Function Gateway
+// Zero chamadas diretas do browser para o Google Gemini — BYOK em trânsito seguro.
+
 import {
   TranslationCredential,
   TranslationResponse,
@@ -5,6 +9,7 @@ import {
   PrintableTextNode
 } from '@/translation/types';
 import { TechnicalTokenProtector } from '@/translation/token-protector';
+import { getSupabase } from './supabase.service';
 
 export interface TranslationSampleResult {
   id: string;
@@ -14,10 +19,8 @@ export interface TranslationSampleResult {
 }
 
 export class TranslationService {
-  private static readonly DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-
   /**
-   * Testa a validade da chave do usuário através de uma chamada mínima (teste de 1 token).
+   * Testa a validade da chave do usuário através do gateway seguro da Edge Function.
    * Não altera catálogo nem consome quota excessiva.
    */
   static async testConnection(credential: TranslationCredential): Promise<{ success: boolean; model: string; error?: string }> {
@@ -45,11 +48,11 @@ export class TranslationService {
       if (res && res.size > 0) {
         return {
           success: true,
-          model: credential.model || this.DEFAULT_GEMINI_MODEL
+          model: 'gemini-2.5-flash'
         };
       }
 
-      throw new TranslationError('TRANSLATION_INVALID_RESPONSE', 'Resposta de teste inválida do provedor.');
+      throw new TranslationError('TRANSLATION_INVALID_RESPONSE', 'Resposta de teste inválida do gateway de tradução.');
     } catch (err: any) {
       if (err instanceof TranslationError) {
         throw err;
@@ -60,7 +63,7 @@ export class TranslationService {
 
   /**
    * Executa a tradução de uma amostra controlada de nós imprimíveis com proteção de tokens.
-   * Não muta o catálogo original.
+   * Não muta o catálogo original. Roteado exclusivamente pela Edge Function.
    */
   static async translateSampleNodes(
     nodes: PrintableTextNode[],
@@ -97,7 +100,8 @@ export class TranslationService {
   }
 
   /**
-   * Executa a chamada estruturada de tradução com proteção e restauração de tokens.
+   * Executa a chamada estruturada de tradução através do gateway exclusivo da Edge Function.
+   * Aplica proteção determinística e restauração rigorosa de tokens técnicos.
    */
   private static async executeTranslation(
     nodes: PrintableTextNode[],
@@ -116,10 +120,52 @@ export class TranslationService {
       };
     });
 
-    // 2. Executa a chamada com o provedor configurado
-    const rawResponse = await this.callGeminiDirect(payloadNodes, targetLocale, credential, sourceLocale);
+    // 2. Invoca EXCLUSIVAMENTE o gateway da Edge Function
+    const supabase = getSupabase();
+    if (!supabase || typeof (supabase as any).functions?.invoke !== 'function') {
+      throw new TranslationError('PROVIDER_UNAVAILABLE', 'Cliente Supabase não inicializado ou indisponível.');
+    }
 
-    // 4. Validação estrita da resposta estruturada
+    let responseData: any;
+    try {
+      const { data, error } = await (supabase as any).functions.invoke('translation-provider-v1', {
+        body: {
+          provider: credential.provider || 'gemini',
+          apiKey: credential.apiKey.trim(),
+          sourceLocale,
+          targetLocale,
+          nodes: payloadNodes
+        }
+      });
+
+      if (error) {
+        // Tenta ler o corpo estruturado de erro sanitizado da Edge Function
+        let edgeError = 'PROVIDER_UNAVAILABLE';
+        let edgeMessage = error.message || 'Erro no gateway de tradução.';
+
+        if (error.context && typeof error.context.json === 'function') {
+          try {
+            const errJson = await error.context.json();
+            if (errJson.error) edgeError = errJson.error;
+            if (errJson.message) edgeMessage = errJson.message;
+          } catch {
+            // Context parsing fallback
+          }
+        }
+
+        throw new TranslationError(edgeError as any, edgeMessage);
+      }
+
+      responseData = data;
+    } catch (err: any) {
+      if (err instanceof TranslationError) {
+        throw err;
+      }
+      throw new TranslationError('PROVIDER_UNAVAILABLE', `Falha ao contactar gateway de tradução: ${err?.message || 'Erro de rede'}`);
+    }
+
+    // 3. Validação estrita da resposta estruturada
+    const rawResponse = responseData as TranslationResponse;
     if (!rawResponse || !Array.isArray(rawResponse.translations)) {
       throw new TranslationError('TRANSLATION_INVALID_RESPONSE', 'Resposta do provedor não contém o array de traduções esperado.');
     }
@@ -145,86 +191,5 @@ export class TranslationService {
     }
 
     return resultMap;
-  }
-
-  /**
-   * Chamada direta segura à API do Google Gemini com saída estritamente estruturada em JSON.
-   */
-  private static async callGeminiDirect(
-    nodes: Array<{ id: string; text: string }>,
-    targetLocale: string,
-    credential: TranslationCredential,
-    sourceLocale: string
-  ): Promise<TranslationResponse> {
-    const model = credential.model || this.DEFAULT_GEMINI_MODEL;
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(credential.apiKey.trim())}`;
-
-    const systemInstruction = `You are the professional technical catalog translator for PRESYS Instruments.
-Translate the provided text nodes from ${sourceLocale} to ${targetLocale}.
-Strict rules:
-1. Preserve all placeholders like [[TECH_001]], [[TECH_002]] EXACTLY as they are. Do not translate, rename, or omit them.
-2. Provide high precision metrological translation appropriate for engineering datasheets and technical catalogs.
-3. Return ONLY a valid JSON object matching this schema:
-{"translations": [{"id": "node_id", "translatedText": "translated text with placeholders intact"}]}`;
-
-    const prompt = JSON.stringify(nodes, null, 2);
-
-    const body = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${systemInstruction}\n\nNodes to translate:\n${prompt}` }]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.1
-      }
-    };
-
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-    } catch (err: any) {
-      throw new TranslationError('PROVIDER_UNAVAILABLE', `Não foi possível conectar ao provedor Gemini: ${err?.message}`);
-    }
-
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 400 || status === 401 || status === 403) {
-        throw new TranslationError('CREDENTIAL_INVALID', 'Chave de API do Gemini inválida ou não autorizada.');
-      } else if (status === 429) {
-        throw new TranslationError('PROVIDER_RATE_LIMIT', 'Limite de requisições excedido no provedor Gemini. Aguarde alguns instantes.');
-      } else {
-        throw new TranslationError('PROVIDER_UNAVAILABLE', `Erro no serviço Gemini (HTTP ${status}).`);
-      }
-    }
-
-    const json = await response.json();
-    const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!candidateText) {
-      throw new TranslationError('TRANSLATION_INVALID_RESPONSE', 'O provedor retornou uma resposta vazia.');
-    }
-
-    try {
-      const parsed = JSON.parse(candidateText);
-      if (parsed.translations && Array.isArray(parsed.translations)) {
-        return parsed as TranslationResponse;
-      }
-      // Trata caso onde retornou array direto
-      if (Array.isArray(parsed)) {
-        return { translations: parsed };
-      }
-      throw new Error('Schema incompatível');
-    } catch {
-      throw new TranslationError('TRANSLATION_INVALID_RESPONSE', 'Falha ao analisar a resposta JSON do provedor Gemini.');
-    }
   }
 }

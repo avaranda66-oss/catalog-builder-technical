@@ -95,11 +95,11 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span
+                      data-printable-field={`col:${col.key}`}
                       contentEditable={isEditable && Boolean(onRenameColumn)}
                       suppressContentEditableWarning
                       onBlur={(e) => onRenameColumn?.(col.key, e.currentTarget.innerText.trim())}
-                      className="outline-none focus:bg-amber-100 rounded-none px-0.5 block cursor-text flex-1"
-                      title="Clique para editar o cabeçalho"
+                      className="outline-none focus:bg-white/20 px-1 rounded-none select-text cursor-text"
                     >
                       {col.label}
                     </span>
@@ -145,6 +145,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                     return (
                       <td
                         key={col.key}
+                        data-printable-field={`cell:${row.id}:${col.key}`}
                         className="py-1.5 px-2.5 border-r border-slate-200 last:border-r-0 align-middle"
                       >
                         <TechnicalCell

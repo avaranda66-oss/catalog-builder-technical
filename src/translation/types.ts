@@ -13,7 +13,7 @@ export type PrintableTextKind =
   | 'ordering_description'
   | 'system';
 
-export type TranslationPolicy = 'translate' | 'protect' | 'system';
+export type TranslationPolicy = 'translate' | 'protect' | 'system' | 'keep_source';
 
 export interface PrintableTextNode {
   /** Identificador estável e determinístico do nó de texto (ex: p1_b_hero_title) */

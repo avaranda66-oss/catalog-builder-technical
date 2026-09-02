@@ -72,6 +72,15 @@ export class PrintableTextRegistry {
   }
 
   /**
+   * Extrai nós de um único bloco usando o extrator registrado.
+   */
+  static extractBlockNodes(block: ContentBlock, pageId = 'p1', pageNumber = 1): PrintableTextNode[] {
+    const extractor = this.extractors.get(block.type);
+    if (!extractor) return [];
+    return extractor(block, pageId, pageNumber);
+  }
+
+  /**
    * Extrai 100% dos nós de texto imprimíveis de um catálogo estruturado.
    */
   static extractCatalogNodes(catalog: Catalog): PrintableTextNode[] {

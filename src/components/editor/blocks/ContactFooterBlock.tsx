@@ -48,6 +48,8 @@ export const ContactFooterBlock: React.FC<ContactFooterBlockProps> = ({
           <div className="flex items-center gap-1.5 font-bold text-white tracking-wide">
             <Building2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span
+              data-printable-field="companyName"
+              data-printable-policy="protect"
               contentEditable
               suppressContentEditableWarning
               onBlur={(e) => handleFieldBlur('companyName', e.currentTarget.innerText)}
@@ -60,6 +62,7 @@ export const ContactFooterBlock: React.FC<ContactFooterBlockProps> = ({
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
             <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
             <span
+              data-printable-field="address"
               contentEditable
               suppressContentEditableWarning
               onBlur={(e) => handleFieldBlur('address', e.currentTarget.innerText)}
@@ -75,6 +78,8 @@ export const ContactFooterBlock: React.FC<ContactFooterBlockProps> = ({
             <div className="flex items-center gap-1">
               <Phone className="w-3 h-3 text-blue-400 shrink-0" />
               <span
+                data-printable-field="phone"
+                data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleFieldBlur('phone', e.currentTarget.innerText)}
@@ -89,6 +94,8 @@ export const ContactFooterBlock: React.FC<ContactFooterBlockProps> = ({
             <div className="flex items-center gap-1">
               <Mail className="w-3 h-3 text-blue-400 shrink-0" />
               <span
+                data-printable-field="email"
+                data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleFieldBlur('email', e.currentTarget.innerText)}
@@ -103,6 +110,8 @@ export const ContactFooterBlock: React.FC<ContactFooterBlockProps> = ({
             <div className="flex items-center gap-1">
               <Globe className="w-3 h-3 text-blue-400 shrink-0" />
               <span
+                data-printable-field="website"
+                data-printable-policy="protect"
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => handleFieldBlur('website', e.currentTarget.innerText)}

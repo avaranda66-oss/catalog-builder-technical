@@ -32,6 +32,7 @@ import { BottomHeaderBlock } from './blocks/BottomHeaderBlock';
 import { MatrixSpecTableBlock } from './blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from './blocks/SoftwareConnectivityBlock';
 import { BlockHoverTooltip, HoverTooltipItem, TooltipPosition } from './BlockHoverTooltip';
+import { PrintStringRegistry } from '../../translation/print-strings.registry';
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData: Omit<ContentBlock, 'id'>;
@@ -910,8 +911,19 @@ export const A4Canvas: React.FC = () => {
               {/* Cabeçalho Técnico da Folha (Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
                 <div className="flex items-center justify-between pb-2 border-b border-slate-300 text-[10px] text-slate-400 font-mono flex-shrink-0">
-                  <span className="font-semibold text-slate-600">PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO</span>
-                  <span>PAGE {page.pageNumber} OF {currentCatalog.pages.length}</span>
+                  <span className="font-semibold text-slate-600" data-printable-policy="protect">
+                    PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO
+                  </span>
+                  <span>
+                    <span data-print-string-key="page_label">
+                      {PrintStringRegistry.get('page_label', currentCatalog.locale || 'pt-BR')}
+                    </span>{' '}
+                    {page.pageNumber}{' '}
+                    <span data-print-string-key="of_label">
+                      {PrintStringRegistry.get('of_label', currentCatalog.locale || 'pt-BR')}
+                    </span>{' '}
+                    {currentCatalog.pages.length}
+                  </span>
                 </div>
               )}
 
@@ -936,6 +948,8 @@ export const A4Canvas: React.FC = () => {
                   return (
                     <div
                       key={block.id}
+                      data-block-id={block.id}
+                      data-block-type={block.type}
                       onClick={() => {
                         setActivePageIndex(pageIndex);
                       }}

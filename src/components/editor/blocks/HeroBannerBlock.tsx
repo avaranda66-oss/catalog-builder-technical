@@ -71,6 +71,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
         <div className="md:col-span-8 space-y-2">
           {block.badgeText && (
             <span
+              data-printable-field="badgeText"
               contentEditable
               suppressContentEditableWarning
               onBlur={handleBadgeBlur}
@@ -81,6 +82,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
           )}
 
           <h2
+            data-printable-field="title"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
@@ -90,6 +92,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
           </h2>
 
           <p
+            data-printable-field="subtitle"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleSubtitleBlur}
@@ -139,6 +142,7 @@ export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
           </div>
 
           <p
+            data-printable-field="imageCaption"
             contentEditable
             suppressContentEditableWarning
             onBlur={handleCaptionBlur}
