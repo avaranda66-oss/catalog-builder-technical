@@ -781,4 +781,162 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
       expect(finalState.syncStatus).toBe('synced');
     });
   });
+
+  // =========================================================================
+  // TEST 27: TOCTOU em refreshCatalog (Edição durante o await loadWorkspace)
+  // =========================================================================
+  it('TEST 27: Edição local durante o await de refreshCatalog não é sobrescrita pelo retorno da requisição', async () => {
+    let resolveWorkspace: (val: any) => void;
+    const workspacePromise = new Promise((resolve) => {
+      resolveWorkspace = resolve;
+    });
+
+    vi.spyOn(SupabaseService, 'listWorkspace').mockImplementationOnce(async () => {
+      await workspacePromise;
+      return {
+        success: true,
+        data: {
+          catalogs: [
+            {
+              id: catalogUUID,
+              name: 'Snapshot Remoto Antigo',
+              status: 'published',
+              version: 8,
+              brand: { title: 'Snapshot Remoto Antigo', pages: baseCatalog.pages },
+              created_at: '',
+              updated_at: ''
+            }
+          ],
+          products: [],
+          templates: [],
+          userRole: 'admin'
+        }
+      };
+    });
+
+    // 1. Inicia refreshCatalog quando o estado está clean
+    const refreshPromise = useCatalogStore.getState().refreshCatalog(catalogUUID);
+
+    // 2. Durante o await da requisição de rede, o usuário faz uma mutação local
+    useCatalogStore.getState().addPage('custom');
+
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(2);
+    expect(useCatalogStore.getState().isDirty).toBe(true);
+
+    // 3. A requisição de rede retorna o snapshot
+    resolveWorkspace!({ success: true });
+    await refreshPromise;
+
+    // 4. TOCTOU Guard deve ter bloqueado a aplicação do snapshot: a página custom continua intacta
+    const finalState = useCatalogStore.getState();
+    expect(finalState.currentCatalog?.pages.length).toBe(2);
+    expect(finalState.currentCatalog?.title).toBe(baseCatalog.title); // Não virou 'Snapshot Remoto Antigo'
+  });
+
+  // =========================================================================
+  // TEST 28: Realtime payload ativo completo não chama loadWorkspace (Zero RPC)
+  // =========================================================================
+  it('TEST 28: Evento Realtime no catálogo ativo com brand completo não dispara listWorkspace', async () => {
+    const listSpy = vi.spyOn(SupabaseService, 'listWorkspace');
+
+    const updatedRemote: Catalog = {
+      ...baseCatalog,
+      title: 'PRESYS TA-25N Atualizado Instantaneamente',
+      version: 8
+    };
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 8,
+        name: updatedRemote.title,
+        brand: updatedRemote
+      }
+    });
+
+    const state = useCatalogStore.getState();
+    expect(state.currentCatalog?.title).toBe('PRESYS TA-25N Atualizado Instantaneamente');
+    expect(state.currentCatalog?.version).toBe(8);
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // TEST 29: Realtime em outro catálogo não altera o documento atualmente aberto
+  // =========================================================================
+  it('TEST 29: Evento Realtime em outro catálogo B atualiza a lista de salvos sem tocar no catálogo ativo A', async () => {
+    const otherId = 'b2222222-2222-4222-8222-222222222222';
+    const otherCatalog = {
+      id: otherId,
+      name: 'PRESYS TA-50N Remoto',
+      version: 3,
+      brand: { title: 'PRESYS TA-50N Remoto', pages: [] }
+    };
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: otherCatalog
+    });
+
+    const state = useCatalogStore.getState();
+    // Catálogo A (ativo) permanece 100% inalterado
+    expect(state.currentCatalog?.id).toBe(catalogUUID);
+    expect(state.currentCatalog?.title).toBe(baseCatalog.title);
+
+    // savedCatalogs contém o catálogo B atualizado
+    const savedB = state.savedCatalogs.find((c) => c.id === otherId);
+    expect(savedB).toBeDefined();
+    expect(savedB?.title).toBe('PRESYS TA-50N Remoto');
+  });
+
+  // =========================================================================
+  // TEST 30: Payload duplicado/stale não altera currentCatalog
+  // =========================================================================
+  it('TEST 30: Evento Realtime com versão igual ou menor (v7 <= v7) é descartado sem alterações', async () => {
+    const applySpy = vi.spyOn(useCatalogStore.getState(), 'refreshCatalog');
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 7, // Igual à versão local já confirmada
+        name: 'Tentativa de sobrescrita defasada'
+      }
+    });
+
+    expect(applySpy).not.toHaveBeenCalled();
+    expect(useCatalogStore.getState().currentCatalog?.title).toBe(baseCatalog.title);
+  });
+
+  // =========================================================================
+  // TEST 31: Edição local rápida + self ACK + eco nunca reduz páginas
+  // =========================================================================
+  it('TEST 31: Sequência de mutação rápida, salvamento, ACK e eco de WebSocket nunca reduz o número de páginas', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+      success: true,
+      data: { id: catalogUUID, version: 8 }
+    });
+
+    // 1. Adiciona folha 2
+    useCatalogStore.getState().addPage('technical');
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(2);
+
+    // 2. Adiciona folha 3 imediatamente
+    useCatalogStore.getState().addPage('technical');
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(3);
+
+    // 3. Simula eco de WebSocket do primeiro save (v8)
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 8,
+        name: baseCatalog.title,
+        brand: { title: baseCatalog.title, pages: baseCatalog.pages } // Apenas 1 página no payload defasado
+      }
+    });
+
+    // Páginas continuam 3
+    expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(3);
+  });
 });

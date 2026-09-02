@@ -13,6 +13,7 @@ import { useAuthStore } from './stores/useAuthStore';
 
 import { getSupabase } from './services/supabase.service';
 import { handleCatalogRealtimeEvent } from './services/realtime.service';
+import { DevRealtimeHUD } from './components/common/DevRealtimeHUD';
 
 export const App: React.FC = () => {
   const { activeTab } = useUIStore();
@@ -35,7 +36,7 @@ export const App: React.FC = () => {
     void loadLatestCatalog();
     void loadAssets();
 
-    // Sincronização em Tempo Real Segura (FASE 1F & 1.1)
+    // Sincronização em Tempo Real Segura com Status Callback (FASE 1.2B)
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -55,7 +56,10 @@ export const App: React.FC = () => {
           void loadProducts();
         }
       )
-      .subscribe();
+      .subscribe((realtimeStatus, error) => {
+        console.log('[PRESYS REALTIME STATUS]', realtimeStatus, error);
+        useCatalogStore.setState({ realtimeStatus });
+      });
 
     return () => {
       void supabase.removeChannel(channel);
@@ -99,6 +103,7 @@ export const App: React.FC = () => {
       </main>
 
       <MediaGalleryModal />
+      <DevRealtimeHUD />
     </div>
   );
 };

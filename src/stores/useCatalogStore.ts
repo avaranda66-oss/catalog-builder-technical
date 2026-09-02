@@ -823,11 +823,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   refreshCatalog: async (id: string) => {
-    const { isDirty, isSaving, localRevision, lastAcknowledgedLocalRevision, currentCatalog } = get();
+    const stateAtStart = get();
+    const catalogIdAtStart = stateAtStart.currentCatalog?.id;
+    const revisionAtStart = stateAtStart.localRevision;
+    const versionAtStart = stateAtStart.currentCatalog?.version ?? 0;
 
-    // REGRA DE SEGURANÇA 1.2: NÃO substitui currentCatalog se houver edições locais pendentes
-    if (isDirty || isSaving || localRevision > lastAcknowledgedLocalRevision) {
-      console.warn(`🛡️ [SAFETY GUARD] refreshCatalog(${id}) bloqueado para proteger alterações locais não sincronizadas.`);
+    // Guard inicial antes da chamada assíncrona
+    if (
+      stateAtStart.isDirty ||
+      stateAtStart.isSaving ||
+      stateAtStart.localRevision > stateAtStart.lastAcknowledgedLocalRevision
+    ) {
+      console.warn(`🛡️ [SAFETY GUARD] refreshCatalog(${id}) bloqueado no início para proteger alterações locais.`);
       set({
         syncStatus: 'conflict',
         syncError: 'Alteração remota detectada enquanto você editava. Suas alterações locais foram mantidas.'
@@ -837,7 +844,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     const workspaceRes = await get().loadWorkspace();
     const targetRemote = workspaceRes.catalogs.find((c) => c.id === id);
-    if (targetRemote && currentCatalog && targetRemote.id === currentCatalog.id) {
+
+    // TOCTOU GUARD PÓS-AWAIT: Relê o estado em memória imediatamente antes de qualquer set()
+    const currentState = get();
+    const currentCatalog = currentState.currentCatalog;
+
+    if (
+      targetRemote &&
+      currentCatalog &&
+      currentCatalog.id === catalogIdAtStart &&
+      currentState.localRevision === revisionAtStart &&
+      !currentState.isDirty &&
+      !currentState.isSaving &&
+      currentState.localRevision <= currentState.lastAcknowledgedLocalRevision &&
+      targetRemote.version > versionAtStart
+    ) {
       debugSetCatalog('refreshCatalog:SafeApply', currentCatalog, targetRemote);
       set({
         currentCatalog: targetRemote,
@@ -847,6 +868,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         syncStatus: 'synced',
         syncError: null
       });
+    } else {
+      console.warn(`🛡️ [TOCTOU GUARD] refreshCatalog(${id}) bloqueado pós-await: mutação local durante requisição ou snapshot defasado.`);
+      if (currentState.isDirty || currentState.localRevision > revisionAtStart) {
+        set({
+          syncStatus: 'conflict',
+          syncError: 'Edição local em andamento durante atualização remota. Suas alterações foram preservadas.'
+        });
+      }
     }
   },
 

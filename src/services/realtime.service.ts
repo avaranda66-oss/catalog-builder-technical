@@ -20,7 +20,7 @@ export interface RealtimePayload {
 /**
  * Processador de eventos Supabase Realtime para a tabela 'catalogs'.
  * Aplica atualizações remotas instantaneamente a partir do payload WAL (REPLICA IDENTITY FULL)
- * com salvaguarda estrita contra stale snapshot restore.
+ * com salvaguarda estrita contra stale snapshot restore e zero requisições HTTP redundantes.
  */
 export async function handleCatalogRealtimeEvent(
   payload: RealtimePayload,
@@ -40,24 +40,44 @@ export async function handleCatalogRealtimeEvent(
   const currentCatalog = state.currentCatalog;
   const inFlight = state.inFlightSave;
 
-  // 1. Atualiza lista de workspace em segundo plano
-  void state.loadWorkspace();
-
-  // 2. Se for um DELETE no catálogo atualmente aberto
+  // 1. Se for um DELETE no catálogo atualmente aberto
   if (payload.eventType === 'DELETE' && changedId === currentCatalog?.id) {
     store.setState({
       syncStatus: 'conflict',
       syncError: 'Este catálogo foi excluído no servidor por outro administrador.'
     });
+    void state.loadWorkspace();
     return;
   }
 
-  // 3. Se a alteração for em OUTRO catálogo diferente do que estou editando -> NUNCA toca no currentCatalog
+  // 2. Se a alteração for em OUTRO catálogo diferente do que estou editando -> Atualiza lista salva sem tocar no currentCatalog
   if (currentCatalog && changedId !== currentCatalog.id) {
+    if (payload.new && payload.new.id) {
+      const brandData = typeof payload.new.brand === 'object' && payload.new.brand !== null ? payload.new.brand : {};
+      const updatedItem: Catalog = {
+        id: payload.new.id,
+        title: payload.new.name || brandData.title || 'Catálogo Técnico',
+        subtitle: brandData.subtitle || '',
+        themeId: brandData.themeId || 'default-technical',
+        pages: Array.isArray(brandData.pages) ? brandData.pages : [],
+        version: Number(payload.new.version) || 1,
+        createdAt: brandData.createdAt || payload.new.created_at || new Date().toISOString(),
+        updatedAt: payload.new.updated_at || new Date().toISOString()
+      };
+
+      const existingIndex = state.savedCatalogs.findIndex((c) => c.id === changedId);
+      const nextSaved = existingIndex >= 0
+        ? state.savedCatalogs.map((c) => (c.id === changedId ? updatedItem : c))
+        : [...state.savedCatalogs, updatedItem];
+
+      store.setState({ savedCatalogs: nextSaved });
+    } else {
+      void state.loadWorkspace();
+    }
     return;
   }
 
-  // 4. Se a alteração for no MESMO catálogo atualmente aberto:
+  // 3. Se a alteração for no MESMO catálogo atualmente aberto:
   if (currentCatalog && changedId === currentCatalog.id) {
     const remoteVersion = Number(payload.new?.version) || 0;
     const currentVersion = currentCatalog.version || 0;
@@ -106,8 +126,11 @@ export async function handleCatalogRealtimeEvent(
 
         debugSetCatalog('handleCatalogRealtimeEvent:InstantApply', currentCatalog, updatedCatalog);
 
+        const nextSaved = state.savedCatalogs.map((c) => (c.id === changedId ? updatedCatalog : c));
+
         store.setState({
           currentCatalog: updatedCatalog,
+          savedCatalogs: nextSaved,
           isDirty: false,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
