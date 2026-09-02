@@ -2,16 +2,17 @@
 // Inspector Contextual do Card Filho (Fase 3A.2)
 // Permite editar Título, Corpo, Badge e Ênfase Técnica com garantia de mutação imutável por child.id.
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   FileEdit,
   Sparkles,
-  Info
+  Trash2
 } from 'lucide-react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import { updateStructuralChildById } from '@/domain/canvas-layout.engine';
 import { useCatalogStore } from '@/stores/useCatalogStore';
+import { CorporateIcon, CorporateIconPicker, getCorporateIcon } from '@/components/icons';
 import { InspectorGroup } from './components/InspectorGroup';
 import { InspectorField } from './components/InspectorField';
 import { InspectorTextInput } from './components/InspectorTextInput';
@@ -32,6 +33,7 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
   onBackToSection
 }) => {
   const updateBlock = useCatalogStore((state) => state.updateBlock);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const rawStructuralData = sectionBlock.structuralData;
   const card = rawStructuralData?.children?.find((c) => c.id === cardId);
@@ -47,12 +49,32 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
     title?: string;
     body?: string;
     badge?: string;
+    iconId?: string;
     emphasis?: 'normal' | 'highlight' | 'informative' | 'technical';
   }) => {
     const { data, found } = updateStructuralChildById(rawStructuralData, cardId, patch);
     if (found) {
       updateBlock(pageId, sectionBlock.id, { structuralData: data });
     }
+  };
+
+  const handleSelectIcon = (iconId: string) => {
+    handleCardUpdate({ iconId });
+  };
+
+  const handleClearIcon = () => {
+    const child = rawStructuralData?.children?.find((c) => c.id === cardId);
+    if (!child) return;
+    const { iconId: _removed, ...clearedChild } = child;
+    const newChildren = rawStructuralData.children.map((c) =>
+      c.id === cardId ? clearedChild : c
+    );
+    updateBlock(pageId, sectionBlock.id, {
+      structuralData: {
+        ...rawStructuralData,
+        children: newChildren
+      }
+    });
   };
 
   return (
@@ -129,14 +151,64 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
         </InspectorField>
       </InspectorGroup>
 
-      {/* 3. GRUPO ÍCONE DO CARD (READ-ONLY CORPORATIVO) */}
-      <div className="p-2.5 bg-slate-100/70 border border-slate-200 rounded-lg flex items-start gap-2">
-        <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-        <div className="text-[10px] text-slate-600 leading-snug">
-          <span className="font-bold text-slate-700 block">Ícone do Card</span>
-          Será configurado na Biblioteca de Ícones Corporativa (Fase 3A.3).
+      {/* 3. GRUPO ÍCONE DO CARD */}
+      <InspectorGroup
+        title="Ícone do Card"
+        icon={<Sparkles className="w-3.5 h-3.5" />}
+        description="Símbolo Semântico"
+      >
+        <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="flex items-center gap-2 min-w-0">
+            {card.iconId ? (
+              <>
+                <div className="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-[#003366] shrink-0">
+                  <CorporateIcon iconId={card.iconId} size="sm" />
+                </div>
+                <div className="truncate">
+                  <span className="text-xs font-semibold text-slate-800 block truncate">
+                    {getCorporateIcon(card.iconId)?.label || card.iconId}
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-400 block truncate">
+                    {card.iconId}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-slate-400 italic">Nenhum ícone selecionado</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen(true)}
+              className="px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-blue-50 border border-blue-300 rounded-md transition-all cursor-pointer"
+            >
+              {card.iconId ? 'Alterar' : 'Selecionar'}
+            </button>
+            {card.iconId && (
+              <button
+                type="button"
+                onClick={handleClearIcon}
+                title="Remover ícone do card"
+                aria-label="Remover ícone do card"
+                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </InspectorGroup>
+
+      <CorporateIconPicker
+        isOpen={isPickerOpen}
+        currentIconId={card.iconId}
+        onSelect={handleSelectIcon}
+        onClear={handleClearIcon}
+        onClose={() => setIsPickerOpen(false)}
+        title="Ícone do Card Estrutural"
+      />
     </div>
   );
 };

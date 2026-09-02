@@ -5,6 +5,7 @@
 import React from 'react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import { SPACING_MM_MAP } from '@/domain/canvas-layout.schema';
+import { CorporateIcon } from '@/components/icons';
 
 interface StructuralSectionBlockProps {
   block: ContentBlock;
@@ -131,6 +132,15 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
       {hasHeader && (
         <div className={`mb-2.5 pb-1.5 border-b border-slate-200/80 flex items-center justify-between ${alignContentClass}`}>
           <div className="flex items-center gap-2">
+            {block.structuralData?.iconId && (
+              <CorporateIcon
+                iconId={block.structuralData.iconId}
+                size="md"
+                context="section"
+                isExport={isExport}
+                className="text-[#003366] shrink-0"
+              />
+            )}
             {block.title?.trim() && (
               <h3
                 className="font-bold text-slate-900 text-xs tracking-wide uppercase font-mono"
@@ -177,17 +187,29 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
 
           // Mapeamento determinístico de Ênfase do Card
           let emphasisClass = 'bg-white border border-slate-200';
+          let iconColorClass = 'text-slate-600';
+
           if (child.emphasis === 'highlight') {
             emphasisClass = 'bg-white border border-blue-200 border-t-2 border-t-[#003366] shadow-xs';
+            iconColorClass = 'text-[#003366]';
           } else if (child.emphasis === 'informative') {
             emphasisClass = 'bg-sky-50/70 border border-sky-200';
+            iconColorClass = 'text-sky-700';
           } else if (child.emphasis === 'technical') {
             emphasisClass = 'bg-slate-50 border border-slate-300 font-mono';
+            iconColorClass = 'text-slate-700';
           }
 
           const cardSelectionClass = isCardSelected
             ? 'ring-2 ring-blue-600 ring-offset-1 shadow-sm'
             : '';
+
+          const iconAlignmentClass =
+            layout.align === 'center'
+              ? 'justify-center'
+              : layout.align === 'right'
+              ? 'justify-end'
+              : 'justify-start';
 
           return (
             <div
@@ -205,9 +227,9 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
               style={{ padding: currentDensity.cardPad }}
             >
               <div className={alignContentClass}>
-                {/* Badge do Card (Sem impressão textual de iconId) */}
+                {/* Badge do Card */}
                 {child.badge?.trim() && (
-                  <div className={`flex items-center mb-1 ${layout.align === 'center' ? 'justify-center' : layout.align === 'right' ? 'justify-end' : 'justify-end'}`}>
+                  <div className={`flex items-center mb-1 ${iconAlignmentClass}`}>
                     <span
                       className="text-[8px] font-bold text-slate-500 uppercase font-mono bg-slate-100 px-1 py-0.2 rounded"
                       data-printable-node-id={`b${block.id}_card_${child.id}_badge`}
@@ -215,6 +237,19 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
                     >
                       {child.badge}
                     </span>
+                  </div>
+                )}
+
+                {/* Ícone Semântico do Card */}
+                {child.iconId && (
+                  <div className={`flex items-center mb-1.5 ${iconAlignmentClass}`}>
+                    <CorporateIcon
+                      iconId={child.iconId}
+                      size="sm"
+                      context="card"
+                      isExport={isExport}
+                      className={iconColorClass}
+                    />
                   </div>
                 )}
 

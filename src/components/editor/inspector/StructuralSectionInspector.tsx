@@ -2,14 +2,15 @@
 // Inspector Contextual da Seção Estrutural (Fase 3A.2)
 // Permite editar Conteúdo, Layout e Aparência com garantia de zero controles fakes e validação atômica.
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutGrid,
   Palette,
   FileText,
   Layers,
   ChevronRight,
-  Info
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/domain/canvas-layout.schema';
 import { updateStructuralLayout } from '@/domain/canvas-layout.engine';
 import { useCatalogStore } from '@/stores/useCatalogStore';
+import { CorporateIcon, CorporateIconPicker, getCorporateIcon } from '@/components/icons';
 import { InspectorGroup } from './components/InspectorGroup';
 import { InspectorField } from './components/InspectorField';
 import { InspectorTextInput } from './components/InspectorTextInput';
@@ -75,6 +77,27 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
     if (mode === 'fill') {
       handleLayoutUpdate({ widthMode: 'fill' });
     }
+  };
+
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  // Handlers de mutação de ícone semântico corporativo (Fase 3A.3)
+  const handleSelectIcon = (iconId: string) => {
+    if (!rawStructuralData) return;
+    updateBlock(pageId, sectionBlock.id, {
+      structuralData: {
+        ...rawStructuralData,
+        iconId
+      }
+    });
+  };
+
+  const handleClearIcon = () => {
+    if (!rawStructuralData) return;
+    const { iconId: _removed, ...rest } = rawStructuralData;
+    updateBlock(pageId, sectionBlock.id, {
+      structuralData: rest as any
+    });
   };
 
   return (
@@ -308,14 +331,64 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
         </div>
       </InspectorGroup>
 
-      {/* 4. GRUPO ÍCONE DA SEÇÃO (READ-ONLY CORPORATIVO) */}
-      <div className="p-2.5 bg-slate-100/70 border border-slate-200 rounded-lg flex items-start gap-2">
-        <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-        <div className="text-[10px] text-slate-600 leading-snug">
-          <span className="font-bold text-slate-700 block">Ícone da Seção</span>
-          Será configurado na Biblioteca de Ícones Corporativa (Fase 3A.3).
+      {/* 4. GRUPO ÍCONE DA SEÇÃO */}
+      <InspectorGroup
+        title="Ícone da Seção"
+        icon={<Sparkles className="w-3.5 h-3.5" />}
+        description="Símbolo Semântico"
+      >
+        <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="flex items-center gap-2 min-w-0">
+            {rawStructuralData?.iconId ? (
+              <>
+                <div className="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-[#003366] shrink-0">
+                  <CorporateIcon iconId={rawStructuralData.iconId} size="md" />
+                </div>
+                <div className="truncate">
+                  <span className="text-xs font-semibold text-slate-800 block truncate">
+                    {getCorporateIcon(rawStructuralData.iconId)?.label || rawStructuralData.iconId}
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-400 block truncate">
+                    {rawStructuralData.iconId}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-slate-400 italic">Nenhum ícone selecionado</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen(true)}
+              className="px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-blue-50 border border-blue-300 rounded-md transition-all cursor-pointer"
+            >
+              {rawStructuralData?.iconId ? 'Alterar' : 'Selecionar'}
+            </button>
+            {rawStructuralData?.iconId && (
+              <button
+                type="button"
+                onClick={handleClearIcon}
+                title="Remover ícone da seção"
+                aria-label="Remover ícone da seção"
+                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </InspectorGroup>
+
+      <CorporateIconPicker
+        isOpen={isPickerOpen}
+        currentIconId={rawStructuralData?.iconId}
+        onSelect={handleSelectIcon}
+        onClear={handleClearIcon}
+        onClose={() => setIsPickerOpen(false)}
+        title="Ícone da Seção Estrutural"
+      />
 
       {/* 5. NAVEGAÇÃO DE CARDS FILHOS */}
       {children.length > 0 && (
