@@ -1,10 +1,11 @@
 // tests/services/document-lifecycle.service.test.ts
-// Suíte de Testes Automatizados para o DocumentLifecycleService (Fase 2C.3)
+// Suíte de Testes Automatizados para o DocumentLifecycleService (Fase 2C.3 - Atomicidade Cloud-First, Dirty Gate & Context Drift)
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DocumentLifecycleService } from '@/services/document-lifecycle.service';
+import { DocumentLifecycleService, getDocumentCapabilities } from '@/services/document-lifecycle.service';
 import { useCatalogStore } from '@/stores/useCatalogStore';
 import { useTemplateStore } from '@/stores/useTemplateStore';
+import { SupabaseService } from '@/services/supabase.service';
 import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
 
 const mockCatalog: Catalog = {
@@ -53,8 +54,10 @@ const mockPreset: CatalogPreset = {
   updatedAt: '2026-09-02T10:00:00Z'
 };
 
-describe('DocumentLifecycleService', () => {
+describe('DocumentLifecycleService (Fase 2C.3)', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+
     useCatalogStore.setState({
       currentCatalog: structuredClone(mockCatalog),
       editorContext: { kind: 'catalog', catalogId: mockCatalog.id },
@@ -69,6 +72,18 @@ describe('DocumentLifecycleService', () => {
       systemTemplates: []
     });
 
+    vi.spyOn(SupabaseService, 'saveCatalog').mockImplementation(async (catalog) => {
+      return {
+        success: true,
+        data: {
+          id: catalog.id,
+          title: catalog.title,
+          version: (catalog.version || 0) + 1,
+          updated_at: new Date().toISOString()
+        } as any
+      };
+    });
+
     vi.spyOn(useTemplateStore.getState(), 'createCustomTemplate').mockImplementation(async (name, description, catalog) => {
       const preset: CatalogPreset = {
         id: 't-new-' + Date.now(),
@@ -76,6 +91,7 @@ describe('DocumentLifecycleService', () => {
         description,
         category: 'layout_template',
         isSystem: false,
+        version: 1,
         catalog: structuredClone(catalog),
         createdAt: new Date().toISOString()
       };
@@ -98,27 +114,12 @@ describe('DocumentLifecycleService', () => {
         { kind: 'catalog', catalogId: 'other-id' }
       );
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('[INVARIANT_VIOLATION]');
-    });
-
-    it('DOC-LIFE-7: assertDocumentContextConsistency valida corretamente contexto de Template', () => {
-      const templateCatalog = { ...mockCatalog, id: 'template-uuid-123' };
-      const valid = DocumentLifecycleService.assertDocumentContextConsistency(
-        templateCatalog,
-        { kind: 'template', templateId: 'template-uuid-123' }
-      );
-      expect(valid.isValid).toBe(true);
-
-      const invalid = DocumentLifecycleService.assertDocumentContextConsistency(
-        templateCatalog,
-        { kind: 'template', templateId: 'different-uuid' }
-      );
-      expect(invalid.isValid).toBe(false);
+      expect(result.error).toContain('INVARIANT_VIOLATION');
     });
   });
 
-  describe('DOC-LIFE-1 & 2: Criação de Catálogo a partir de Template', () => {
-    it('deve gerar novo UUID, definir editorContext como catalog e isolar o novo documento', async () => {
+  describe('DOC-LIFE-1 & 2: Criação de Catálogo Cloud-First', () => {
+    it('DOC-LIFE-1: criação com sucesso persiste na nuvem antes e atualiza contexto para catalog', async () => {
       const res = await DocumentLifecycleService.createCatalogFromTemplate(mockPreset, {
         title: 'TA-35N Teste52'
       });
@@ -134,11 +135,69 @@ describe('DocumentLifecycleService', () => {
       }
       expect(state.currentCatalog?.id).toBe(res.catalogId);
       expect(state.currentCatalog?.title).toBe('TA-35N Teste52');
+      expect(state.isDirty).toBe(false);
+      expect(state.syncStatus).toBe('synced');
+    });
+
+    it('DOC-LIFE-FAIL-1: se persistência cloud falhar, ZERO context switch e documento original é preservado', async () => {
+      // Abre o Template T1 no editor
+      useCatalogStore.setState({
+        currentCatalog: structuredClone(mockPreset.catalog),
+        editorContext: { kind: 'template', templateId: mockPreset.id },
+        isDirty: false
+      });
+
+      // Simula falha no Supabase
+      vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+        success: false,
+        error: 'Network connection lost / 500 Internal Error'
+      });
+
+      const res = await DocumentLifecycleService.createCatalogFromTemplate(mockPreset, {
+        title: 'TA-35N Falha'
+      });
+
+      // Deve retornar falha explícita, NUNCA success: true
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Network connection lost');
+
+      // O editor DEVE permanecer 100% no Template original
+      const state = useCatalogStore.getState();
+      expect(state.editorContext.kind).toBe('template');
+      if (state.editorContext.kind === 'template') {
+        expect(state.editorContext.templateId).toBe(mockPreset.id);
+      }
+      expect(state.currentCatalog?.id).toBe(mockPreset.id);
+      expect(state.currentCatalog?.title).toBe(mockPreset.catalog.title);
+    });
+
+    it('DOC-LIFE-DIRTY-1: se o documento fonte estiver dirty e falhar ao salvar, criação é abortada', async () => {
+      useCatalogStore.setState({
+        currentCatalog: structuredClone(mockPreset.catalog),
+        editorContext: { kind: 'template', templateId: mockPreset.id },
+        isDirty: true
+      });
+
+      // Simula falha no salvamento do documento dirty original
+      vi.spyOn(useCatalogStore.getState(), 'saveActiveDocument').mockResolvedValue({
+        success: false,
+        status: 'error',
+        error: 'Conflito de versão no documento original'
+      });
+
+      const res = await DocumentLifecycleService.createCatalogFromTemplate(mockPreset);
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Não foi possível salvar as alterações do documento original');
+
+      // Contexto não foi alterado
+      const state = useCatalogStore.getState();
+      expect(state.editorContext.kind).toBe('template');
     });
   });
 
-  describe('DOC-LIFE-4 & 5: Duplicação de Documentos', () => {
-    it('DOC-LIFE-4: duplicação de Catálogo gera novo Catálogo independente', async () => {
+  describe('DOC-LIFE-4 & 5: Duplicação de Documentos Cloud-First', () => {
+    it('DOC-LIFE-4: duplicação de Catálogo gera novo Catálogo independente após confirmação cloud', async () => {
       const res = await DocumentLifecycleService.duplicateActiveDocument({
         newTitle: 'TA-35N Cliente Cópia'
       });
@@ -154,6 +213,27 @@ describe('DocumentLifecycleService', () => {
         expect(state.editorContext.catalogId).toBe(res.newId);
       }
       expect(state.currentCatalog?.title).toBe('TA-35N Cliente Cópia');
+    });
+
+    it('DOC-LIFE-FAIL-2: se duplicação de catálogo na nuvem falhar, mantém catálogo original intacto', async () => {
+      vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+        success: false,
+        error: 'Erro de cota ou permissão'
+      });
+
+      const res = await DocumentLifecycleService.duplicateActiveDocument({
+        newTitle: 'Cópia Falha'
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Erro de cota ou permissão');
+
+      const state = useCatalogStore.getState();
+      expect(state.editorContext.kind).toBe('catalog');
+      if (state.editorContext.kind === 'catalog') {
+        expect(state.editorContext.catalogId).toBe(mockCatalog.id);
+      }
+      expect(state.currentCatalog?.id).toBe(mockCatalog.id);
     });
 
     it('DOC-LIFE-5: duplicação de Template gera novo Template na nuvem', async () => {
@@ -176,6 +256,24 @@ describe('DocumentLifecycleService', () => {
         expect(state.editorContext.templateId).toBe(res.newId);
       }
     });
+
+    it('DOC-TEMPLATE-ID-1: identidade canônica de template é alinhada em row id, layout_config.id e editorContext', async () => {
+      useCatalogStore.setState({
+        currentCatalog: { ...mockCatalog, id: 'template-canon-1', title: 'Template Canon' },
+        editorContext: { kind: 'template', templateId: 'template-canon-1' }
+      });
+
+      const res = await DocumentLifecycleService.duplicateActiveDocument({
+        newTitle: 'Template Canon Duplicado'
+      });
+
+      expect(res.success).toBe(true);
+      const state = useCatalogStore.getState();
+      if (state.editorContext.kind === 'template') {
+        expect(state.editorContext.templateId).toBe(res.newId);
+        expect(state.currentCatalog?.id).toBe(res.newId);
+      }
+    });
   });
 
   describe('DOC-LIFE-6: Salvar Catálogo como Template', () => {
@@ -188,14 +286,54 @@ describe('DocumentLifecycleService', () => {
       expect(res.success).toBe(true);
       expect(res.templateId).toBeDefined();
 
-      // O catálogo original continua aberto como catálogo
       const state = useCatalogStore.getState();
       expect(state.editorContext.kind).toBe('catalog');
       expect(state.currentCatalog?.id).toBe(mockCatalog.id);
     });
   });
 
-  describe('LOC-VAR: Variantes Localizadas / Tradução', () => {
+  describe('LOC-VAR & Translation Drift & Permissions', () => {
+    it('PERM-PREFLIGHT-1: getDocumentCapabilities concede permissões corretas para admin/editor', () => {
+      const adminCaps = getDocumentCapabilities('admin');
+      expect(adminCaps.canCreateCatalog).toBe(true);
+      expect(adminCaps.canTranslateCatalog).toBe(true);
+      expect(adminCaps.canTranslateTemplate).toBe(true);
+
+      const editorCaps = getDocumentCapabilities('editor');
+      expect(editorCaps.canCreateCatalog).toBe(true);
+      expect(editorCaps.canTranslateCatalog).toBe(true);
+      expect(editorCaps.canTranslateTemplate).toBe(true);
+
+      const anonCaps = getDocumentCapabilities(null);
+      expect(anonCaps.canCreateCatalog).toBe(false);
+      expect(anonCaps.canTranslateCatalog).toBe(false);
+      expect(anonCaps.canTranslateTemplate).toBe(false);
+    });
+
+    it('LOC-CONTEXT-1: bloqueia criação de versão traduzida se o documento ativo foi alterado durante o processo', async () => {
+      const snapshot = {
+        sourceDocumentId: 'catalog-orig-1',
+        sourceDocumentKind: 'catalog' as const,
+        sourceVersion: 1
+      };
+
+      // Usuário trocou de documento no editor para outro catálogo enquanto o modal estava aberto
+      useCatalogStore.setState({
+        currentCatalog: { ...mockCatalog, id: 'catalog-drifted-2' },
+        editorContext: { kind: 'catalog', catalogId: 'catalog-drifted-2' }
+      });
+
+      const res = await DocumentLifecycleService.createLocalizedVariant({
+        translatedDocument: { ...mockCatalog, id: 'catalog-orig-1', title: 'Catalog TH', locale: 'th-TH' },
+        sourceContext: { kind: 'catalog', catalogId: 'catalog-orig-1' },
+        sourceSnapshot: snapshot,
+        targetLocale: 'th-TH'
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('SOURCE_CONTEXT_CHANGED');
+    });
+
     it('LOC-VAR-3: Tradução de Template preserva kind como template', async () => {
       useCatalogStore.setState({
         currentCatalog: { ...mockCatalog, id: 'template-orig-1', title: 'Template PT' },

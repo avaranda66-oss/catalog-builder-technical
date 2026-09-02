@@ -26,7 +26,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { LanguageRegistry } from '@/translation/language.registry';
 import { CredentialStorageMode } from '@/translation/types';
 import { FontManager } from '@/translation/font-manager';
-import { DocumentLifecycleService } from '@/services/document-lifecycle.service';
+import { DocumentLifecycleService, getDocumentCapabilities, TranslationSourceSnapshot } from '@/services/document-lifecycle.service';
 import { CleanA4Document } from '../export/CleanA4Document';
 
 export const TranslationCenterModal: React.FC = () => {
@@ -62,6 +62,9 @@ export const TranslationCenterModal: React.FC = () => {
   const editorContext = useCatalogStore((state) => state.editorContext);
   const isTemplateMode = editorContext?.kind === 'template';
   const userId = useAuthStore((state) => state.userId);
+  const role = useAuthStore((state) => state.role);
+  const capabilities = getDocumentCapabilities(role);
+  const canTranslateCurrent = isTemplateMode ? capabilities.canTranslateTemplate : capabilities.canTranslateCatalog;
   const qaContainerRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,6 +75,7 @@ export const TranslationCenterModal: React.FC = () => {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [confirmWarnings, setConfirmWarnings] = useState(false);
+  const [sourceSnapshot, setSourceSnapshot] = useState<TranslationSourceSnapshot | null>(null);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -152,7 +156,42 @@ export const TranslationCenterModal: React.FC = () => {
     const activeUserId = userId || useAuthStore.getState().userId;
     if (!currentCatalog || !activeUserId) return;
     setSaveErrorMessage(null);
-    await startFullTranslation(currentCatalog, activeUserId);
+
+    // 1. Verificação Preflight de Permissão
+    const activeRole = useAuthStore.getState().role;
+    const activeCaps = getDocumentCapabilities(activeRole);
+    const canTranslate = isTemplateMode ? activeCaps.canTranslateTemplate : activeCaps.canTranslateCatalog;
+    if (!canTranslate) {
+      setSaveErrorMessage(`Acesso negado: Perfil "${activeRole || 'não autenticado'}" não possui permissão para traduzir ${isTemplateMode ? 'templates' : 'catálogos'}.`);
+      return;
+    }
+
+    // 2. DIRTY GATE: Se o documento possui alterações pendentes, salva antes de iniciar a tradução
+    const { isDirty, syncStatus } = useCatalogStore.getState();
+    if (isDirty || syncStatus !== 'synced') {
+      const saveRes = await DocumentLifecycleService.saveActiveDocument();
+      if (!saveRes.success) {
+        setSaveErrorMessage(`Não foi possível salvar as alterações do documento original antes de iniciar a tradução: ${saveRes.error || 'Erro de persistência'}. A tradução não foi iniciada.`);
+        return;
+      }
+    }
+
+    // 3. Captura o documento confirmado com versão definitiva e snapshot de integridade
+    const confirmedCatalog = useCatalogStore.getState().currentCatalog;
+    if (!confirmedCatalog) {
+      setSaveErrorMessage('Erro interno: documento fonte não encontrado após salvamento.');
+      return;
+    }
+
+    const snapshot: TranslationSourceSnapshot = {
+      sourceDocumentId: confirmedCatalog.id,
+      sourceDocumentKind: isTemplateMode ? 'template' : 'catalog',
+      sourceVersion: confirmedCatalog.version
+    };
+    setSourceSnapshot(snapshot);
+
+    // 4. Inicia a tradução sobre o snapshot confirmado
+    await startFullTranslation(confirmedCatalog, activeUserId);
   };
 
   const handleCreateVersion = async () => {
@@ -165,6 +204,7 @@ export const TranslationCenterModal: React.FC = () => {
       const result = await DocumentLifecycleService.createLocalizedVariant({
         translatedDocument: previewCatalog,
         sourceContext: editorContext,
+        sourceSnapshot: sourceSnapshot || undefined,
         targetLocale
       });
 
@@ -470,15 +510,24 @@ export const TranslationCenterModal: React.FC = () => {
                   )}
                 </div>
 
+                {!canTranslateCurrent && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Acesso Restrito: Seu perfil de usuário ({role || 'não autenticado'}) não possui permissão para criar e salvar versões traduzidas na nuvem. Apenas administradores e editores podem executar traduções oficiais.
+                    </span>
+                  </div>
+                )}
+
                 {/* Botão de Ação Primária */}
                 <button
                   type="button"
                   onClick={handleStartTranslation}
-                  disabled={!credentialMeta?.isValid || isTranslating}
+                  disabled={!canTranslateCurrent || !credentialMeta?.isValid || isTranslating}
                   className="w-full py-3 text-xs font-bold bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs transition-all"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Traduzir Catálogo para {selectedLang?.nativeName || targetLocale}</span>
+                  <span>Traduzir {isTemplateMode ? 'Template' : 'Catálogo'} para {selectedLang?.nativeName || targetLocale}</span>
                 </button>
               </div>
             </div>

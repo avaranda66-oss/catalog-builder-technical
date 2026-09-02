@@ -5,12 +5,49 @@ import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
 import { EditorDocumentContext, useCatalogStore } from '@/stores/useCatalogStore';
 import { useTemplateStore } from '@/stores/useTemplateStore';
 import { StorageService } from './storage.service';
+import { SupabaseService } from './supabase.service';
 
 export interface DocumentContextInvariantResult {
   isValid: boolean;
   expectedId?: string;
   actualId?: string;
   error?: string;
+}
+
+export interface DocumentCapabilities {
+  canCreateCatalog: boolean;
+  canCreateTemplate: boolean;
+  canUpdateCatalog: boolean;
+  canUpdateTemplate: boolean;
+  canDuplicateCatalog: boolean;
+  canDuplicateTemplate: boolean;
+  canTranslateCatalog: boolean;
+  canTranslateTemplate: boolean;
+}
+
+export interface TranslationSourceSnapshot {
+  sourceDocumentId: string;
+  sourceDocumentKind: 'catalog' | 'template';
+  sourceVersion: number;
+  sourceContentHash?: string;
+}
+
+/**
+ * Deriva as permissões/capabilities ativas com base na role do usuário autenticado no Supabase.
+ * Exige 'admin' ou 'editor' para ações persistentes na nuvem.
+ */
+export function getDocumentCapabilities(userRole: string | null | undefined): DocumentCapabilities {
+  const isAuthorized = userRole === 'admin' || userRole === 'editor';
+  return {
+    canCreateCatalog: isAuthorized,
+    canCreateTemplate: isAuthorized,
+    canUpdateCatalog: isAuthorized,
+    canUpdateTemplate: isAuthorized,
+    canDuplicateCatalog: isAuthorized,
+    canDuplicateTemplate: isAuthorized,
+    canTranslateCatalog: isAuthorized,
+    canTranslateTemplate: isAuthorized
+  };
 }
 
 export class DocumentLifecycleService {
@@ -75,7 +112,7 @@ export class DocumentLifecycleService {
   /**
    * Salva o documento ativo delegando exclusivamente para a autoridade correta (Catálogo vs Template).
    */
-  static async saveActiveDocument(): Promise<{ success: boolean; error?: string }> {
+  static async saveActiveDocument(): Promise<{ success: boolean; version?: number; error?: string }> {
     const { currentCatalog, editorContext } = useCatalogStore.getState();
     if (!currentCatalog) {
       return { success: false, error: 'Nenhum documento ativo para salvar.' };
@@ -92,20 +129,34 @@ export class DocumentLifecycleService {
 
   /**
    * Cria um novo Catálogo independente a partir de um Template ou Preset oficial.
-   * Transação completa: Flush de dirty state -> Geração de novo UUID -> Persistência -> Troca atômica de contexto -> Sincronização de URL.
+   * CLOUD-FIRST: Monta entidade em memória -> Persiste na Nuvem -> Aguarda Confirmação -> Troca Contexto.
+   * Se a persistência falhar: ZERO context switch. O documento original permanece ativo e intacto.
    */
   static async createCatalogFromTemplate(
     templateOrPreset: CatalogPreset | Catalog,
     options?: { title?: string }
   ): Promise<{ success: boolean; catalogId?: string; error?: string }> {
     try {
-      // 1. Flush de segurança se houver alterações no documento anterior
-      const { isDirty } = useCatalogStore.getState();
-      if (isDirty) {
-        await useCatalogStore.getState().saveActiveDocument();
+      const { currentCatalog, editorContext, isDirty } = useCatalogStore.getState();
+
+      // 1. Invariante de consistência prévia
+      const invariant = this.assertDocumentContextConsistency(currentCatalog, editorContext);
+      if (!invariant.isValid) {
+        return { success: false, error: invariant.error };
       }
 
-      // 2. Extração do layout base
+      // 2. Flush de segurança: Se o documento fonte possui alterações, exige confirmação prévia
+      if (isDirty) {
+        const saveSourceRes = await useCatalogStore.getState().saveActiveDocument();
+        if (!saveSourceRes.success) {
+          return {
+            success: false,
+            error: `Não foi possível salvar as alterações do documento original antes de derivar o novo catálogo: ${saveSourceRes.error || 'Erro de persistência'}`
+          };
+        }
+      }
+
+      // 3. Extração do layout base
       const sourceCatalog: Catalog = 'catalog' in templateOrPreset && templateOrPreset.catalog
         ? templateOrPreset.catalog
         : (templateOrPreset as Catalog);
@@ -119,8 +170,8 @@ export class DocumentLifecycleService {
         || ('name' in templateOrPreset ? templateOrPreset.name : '')
         || 'Novo Catálogo Técnico';
 
-      // 3. Montagem da nova entidade Catálogo independente
-      const newCatalog: Catalog = {
+      // 4. Montagem da entidade candidata em memória (sem alterar o estado global do editor)
+      const candidateCatalog: Catalog = {
         ...structuredClone(sourceCatalog),
         id: newId,
         title: resolvedTitle,
@@ -131,37 +182,49 @@ export class DocumentLifecycleService {
         updatedAt: new Date().toISOString()
       };
 
-      // 4. Persistência local inicial
-      await StorageService.saveCatalog(newCatalog);
+      // 5. PERSISTÊNCIA CLOUD-FIRST: Envia para o Supabase ANTES de trocar o contexto do editor
+      const cloudRes = await SupabaseService.saveCatalog(candidateCatalog, 0);
+      if (!cloudRes.success || !cloudRes.data) {
+        console.error('[DocumentLifecycleService] Falha ao persistir catálogo na nuvem. Contexto do editor mantido inalterado:', cloudRes.error);
+        return {
+          success: false,
+          error: cloudRes.error || 'Falha ao persistir novo catálogo no servidor.'
+        };
+      }
+
+      // 6. Confirmação autoritativa da nuvem recebida com sucesso
+      const confirmedCatalog: Catalog = {
+        ...candidateCatalog,
+        version: Number(cloudRes.data.version) || 1,
+        updatedAt: cloudRes.data.updated_at || new Date().toISOString()
+      };
+
+      // 7. Persistência no armazenamento local seguro
+      await StorageService.saveCatalog(confirmedCatalog);
       StorageService.setActiveCatalogId(newId);
 
-      // 5. Atualização atômica do estado do editor
+      // 8. Troca atômica do estado do editor e contexto
       useCatalogStore.setState((state) => ({
-        currentCatalog: newCatalog,
-        savedCatalogs: [newCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
+        currentCatalog: confirmedCatalog,
+        savedCatalogs: [confirmedCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
         editorContext: { kind: 'catalog', catalogId: newId },
         activePageIndex: 0,
         selectedBlockId: null,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
-        isDirty: true,
-        syncStatus: 'dirty',
-        syncError: null
+        isDirty: false,
+        syncStatus: 'synced',
+        syncError: null,
+        lastSavedAt: new Date().toISOString()
       }));
 
-      // 6. Atualização imediata da URL
+      // 9. Atualização imediata da URL canônica
       this.syncBrowserUrl({ kind: 'catalog', catalogId: newId });
-
-      // 7. Persistência imediata na nuvem via CAS
-      const saveRes = await useCatalogStore.getState().saveCurrentCatalog();
-      if (!saveRes.success) {
-        console.warn('[DocumentLifecycleService] Criação local bem-sucedida, mas pendente de sincronização cloud:', saveRes.error);
-      }
 
       return { success: true, catalogId: newId };
     } catch (err: any) {
       console.error('[DocumentLifecycleService] Falha ao criar catálogo a partir de template:', err);
-      return { success: false, error: err?.message || 'Erro ao criar catálogo a partir do template.' };
+      return { success: false, error: err?.message || 'Erro inesperado ao criar catálogo a partir do template.' };
     }
   }
 
@@ -175,6 +238,23 @@ export class DocumentLifecycleService {
     try {
       if (!options.name.trim()) {
         return { success: false, error: 'O nome do template é obrigatório.' };
+      }
+
+      const { currentCatalog, editorContext, isDirty } = useCatalogStore.getState();
+      const invariant = this.assertDocumentContextConsistency(currentCatalog, editorContext);
+      if (!invariant.isValid) {
+        return { success: false, error: invariant.error };
+      }
+
+      // Se o catálogo ativo está dirty, salva antes de gerar o template
+      if (isDirty) {
+        const saveRes = await useCatalogStore.getState().saveActiveDocument();
+        if (!saveRes.success) {
+          return {
+            success: false,
+            error: `Não foi possível salvar as alterações do catálogo antes de criar o template: ${saveRes.error || 'Erro de persistência'}`
+          };
+        }
       }
 
       const res = await useTemplateStore.getState().createCustomTemplate(
@@ -196,6 +276,8 @@ export class DocumentLifecycleService {
 
   /**
    * Duplica o documento ativo no mesmo domínio (Template -> Novo Template; Catálogo -> Novo Catálogo).
+   * CLOUD-FIRST: Persiste a cópia na nuvem antes de realizar a troca de contexto.
+   * Se falhar: O documento original continua aberto com zero efeitos colaterais.
    */
   static async duplicateActiveDocument(options?: { newTitle?: string }): Promise<{
     success: boolean;
@@ -203,9 +285,25 @@ export class DocumentLifecycleService {
     documentKind?: 'catalog' | 'template';
     error?: string;
   }> {
-    const { currentCatalog, editorContext } = useCatalogStore.getState();
+    const { currentCatalog, editorContext, isDirty } = useCatalogStore.getState();
     if (!currentCatalog) {
       return { success: false, error: 'Nenhum documento ativo para duplicar.' };
+    }
+
+    const invariant = this.assertDocumentContextConsistency(currentCatalog, editorContext);
+    if (!invariant.isValid) {
+      return { success: false, error: invariant.error };
+    }
+
+    // Flush de segurança se documento atual estiver dirty
+    if (isDirty) {
+      const saveRes = await useCatalogStore.getState().saveActiveDocument();
+      if (!saveRes.success) {
+        return {
+          success: false,
+          error: `Não foi possível salvar as alterações do documento antes de duplicar: ${saveRes.error || 'Erro de persistência'}`
+        };
+      }
     }
 
     try {
@@ -216,7 +314,7 @@ export class DocumentLifecycleService {
       const duplicatedTitle = options?.newTitle?.trim() || `${currentCatalog.title} (Cópia)`;
 
       if (editorContext.kind === 'template') {
-        // Duplicação de Template -> Novo Template
+        // Duplicação de Template -> Novo Template (Cloud-First via useTemplateStore)
         const res = await useTemplateStore.getState().createCustomTemplate(
           duplicatedTitle,
           `Cópia do template ${currentCatalog.title}`,
@@ -227,28 +325,30 @@ export class DocumentLifecycleService {
           return { success: false, error: res.error || 'Erro ao duplicar template na nuvem.' };
         }
 
+        const confirmedTemplateId = res.data.id;
         const newTemplateCatalog: Catalog = {
           ...structuredClone(currentCatalog),
-          id: res.data.id,
+          id: confirmedTemplateId,
           title: duplicatedTitle,
-          version: 1,
+          version: res.data.version || 1,
           updatedAt: new Date().toISOString()
         };
 
         useCatalogStore.setState({
           currentCatalog: newTemplateCatalog,
-          editorContext: { kind: 'template', templateId: res.data.id },
+          editorContext: { kind: 'template', templateId: confirmedTemplateId },
           isDirty: false,
           syncStatus: 'synced',
+          syncError: null,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0
         });
 
-        this.syncBrowserUrl({ kind: 'template', templateId: res.data.id });
-        return { success: true, newId: res.data.id, documentKind: 'template' };
+        this.syncBrowserUrl({ kind: 'template', templateId: confirmedTemplateId });
+        return { success: true, newId: confirmedTemplateId, documentKind: 'template' };
       } else {
-        // Duplicação de Catálogo -> Novo Catálogo
-        const duplicatedCatalog: Catalog = {
+        // Duplicação de Catálogo -> Novo Catálogo (Cloud-First via SupabaseService)
+        const candidateCatalog: Catalog = {
           ...structuredClone(currentCatalog),
           id: newId,
           title: duplicatedTitle,
@@ -257,28 +357,36 @@ export class DocumentLifecycleService {
           updatedAt: new Date().toISOString()
         };
 
-        await StorageService.saveCatalog(duplicatedCatalog);
+        const cloudRes = await SupabaseService.saveCatalog(candidateCatalog, 0);
+        if (!cloudRes.success || !cloudRes.data) {
+          return {
+            success: false,
+            error: cloudRes.error || 'Falha ao duplicar catálogo na nuvem.'
+          };
+        }
+
+        const confirmedCatalog: Catalog = {
+          ...candidateCatalog,
+          version: Number(cloudRes.data.version) || 1,
+          updatedAt: cloudRes.data.updated_at || new Date().toISOString()
+        };
+
+        await StorageService.saveCatalog(confirmedCatalog);
         StorageService.setActiveCatalogId(newId);
 
         useCatalogStore.setState((state) => ({
-          currentCatalog: duplicatedCatalog,
-          savedCatalogs: [duplicatedCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
+          currentCatalog: confirmedCatalog,
+          savedCatalogs: [confirmedCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
           editorContext: { kind: 'catalog', catalogId: newId },
-          isDirty: true,
-          syncStatus: 'dirty',
+          isDirty: false,
+          syncStatus: 'synced',
+          syncError: null,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0
         }));
 
         this.syncBrowserUrl({ kind: 'catalog', catalogId: newId });
-
-        const saveRes = await useCatalogStore.getState().saveCurrentCatalog();
-        return {
-          success: true,
-          newId,
-          documentKind: 'catalog',
-          error: saveRes.success ? undefined : saveRes.error
-        };
+        return { success: true, newId, documentKind: 'catalog' };
       }
     } catch (err: any) {
       console.error('[DocumentLifecycleService] Falha ao duplicar documento:', err);
@@ -290,13 +398,27 @@ export class DocumentLifecycleService {
    * Cria uma variante localizada independente a partir do documento ativo.
    * Se fonte for Template -> Salva novo Template traduzido na nuvem via RPC create_translated_template_v1.
    * Se fonte for Catálogo -> Salva novo Catálogo traduzido na nuvem via RPC create_translated_catalog_v1.
+   * Inclui verificação de drift de contexto da tradução.
    */
   static async createLocalizedVariant(params: {
     translatedDocument: Catalog;
     sourceContext: EditorDocumentContext;
+    sourceSnapshot?: TranslationSourceSnapshot;
     targetLocale?: string;
   }): Promise<{ success: boolean; newId?: string; documentKind?: 'catalog' | 'template'; error?: string }> {
-    const { translatedDocument, sourceContext } = params;
+    const { translatedDocument, sourceContext, sourceSnapshot } = params;
+
+    // Verificação de Drift de Contexto
+    if (sourceSnapshot) {
+      const activeContext = useCatalogStore.getState().editorContext;
+      const activeId = activeContext.kind === 'catalog' ? activeContext.catalogId : activeContext.templateId;
+      if (activeContext.kind !== sourceSnapshot.sourceDocumentKind || activeId !== sourceSnapshot.sourceDocumentId) {
+        return {
+          success: false,
+          error: 'SOURCE_CONTEXT_CHANGED: O documento ativo foi trocado durante o processo de tradução. A criação foi cancelada por segurança.'
+        };
+      }
+    }
 
     if (sourceContext.kind === 'template') {
       return await useCatalogStore.getState().createTranslatedTemplateVersion(translatedDocument);
