@@ -271,7 +271,7 @@ describe('FASE 3A.5A — A4 Physical Geometry, Content Box & Fixed Width Suite',
       const result = updateStructuralLayout(fixedData, patch);
       expect(result.layout.widthMode).toBe('fixed');
       expect(result.layout.fixedWidthMm).toBe(150);
-      expect((result.layout as any)[expectedField]).toBe(expectedValue);
+      expect(result.layout[expectedField as keyof typeof result.layout]).toBe(expectedValue);
     }
   });
 

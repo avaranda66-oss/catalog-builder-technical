@@ -20,6 +20,11 @@ import {
   duplicateStructuralChildById,
   removeStructuralChildById,
   moveStructuralChild,
+  moveStructuralChildToIndex,
+  moveStructuralSectionOnBlocks,
+  updateStructuralLayout,
+  A4LayoutEngine,
+  getPageContentBox,
   CreateCardOptions
 } from '../domain/canvas-layout.engine';
 import {
@@ -216,6 +221,10 @@ interface CatalogState {
   duplicateStructuralChild: (pageId: string, sectionId: string, childId: string) => void;
   removeStructuralChild: (pageId: string, sectionId: string, childId: string) => void;
   moveStructuralChild: (pageId: string, sectionId: string, childId: string, direction: 'up' | 'down') => void;
+  reorderStructuralChild: (pageId: string, sectionId: string, childId: string, targetIndex: number) => void;
+  setStructuralSectionFixedWidth: (pageId: string, sectionId: string, widthMm: number) => void;
+  moveStructuralSectionOnPage: (pageId: string, sectionId: string, direction: 'up' | 'down') => void;
+  reorderStructuralSectionOnPage: (pageId: string, sectionId: string, targetIndex: number) => void;
 
   // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
   commitDocumentMutation: (
@@ -901,6 +910,137 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         targetId: sectionId,
         targetPageId: pageId,
         summary: `Reordenado card ${childId} (${direction}) na seção ${sectionId}`
+      }
+    );
+  },
+
+  reorderStructuralChild: (pageId, sectionId, childId, targetIndex) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    const { data: updatedData, found, moved } = moveStructuralChildToIndex(
+      sectionBlock.structuralData,
+      childId,
+      targetIndex
+    );
+
+    if (!found || !moved) {
+      return;
+    }
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        const b = p?.blocks?.find((blk) => blk.id === sectionId);
+        if (b) {
+          b.structuralData = updatedData;
+        }
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Reordenado card ${childId} para o índice ${targetIndex} na seção ${sectionId}`
+      }
+    );
+  },
+
+  setStructuralSectionFixedWidth: (pageId, sectionId, widthMm) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    // Fail-closed: só aplica se o bloco já estiver em fixed
+    if (sectionBlock.structuralData.layout.widthMode !== 'fixed') {
+      return;
+    }
+
+    const contentBox = getPageContentBox();
+    const availableWidthMm = contentBox.availableWidthMm;
+
+    // Fail-closed: largura deve ser positiva e <= availableWidthMm
+    if (isNaN(widthMm) || widthMm <= 0 || widthMm > availableWidthMm) {
+      return;
+    }
+
+    // Se já for igual (dentro da tolerância canônica), no-op (zero mutation)
+    const currentFixed = sectionBlock.structuralData.layout.fixedWidthMm;
+    if (currentFixed !== undefined && Math.abs(currentFixed - widthMm) < 0.0001) {
+      return;
+    }
+
+    try {
+      const updatedData = updateStructuralLayout(sectionBlock.structuralData, {
+        fixedWidthMm: widthMm
+      });
+
+      const validation = A4LayoutEngine.validateSection(updatedData, { availableWidthMm });
+      if (!validation.valid) {
+        return;
+      }
+
+      get().commitDocumentMutation(
+        (draft) => {
+          const p = draft.pages.find((pg) => pg.id === pageId);
+          const b = p?.blocks?.find((blk) => blk.id === sectionId);
+          if (b) {
+            b.structuralData = updatedData;
+          }
+        },
+        'UPDATE_BLOCK',
+        {
+          targetId: sectionId,
+          targetPageId: pageId,
+          summary: `Definida largura fixa da seção ${sectionId} para ${widthMm} mm`
+        }
+      );
+    } catch {
+      // Fail-closed
+    }
+  },
+
+  moveStructuralSectionOnPage: (pageId, sectionId, direction) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    if (!page || !page.blocks) return;
+
+    const currentIndex = page.blocks.findIndex((b) => b.id === sectionId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    get().reorderStructuralSectionOnPage(pageId, sectionId, targetIndex);
+  },
+
+  reorderStructuralSectionOnPage: (pageId, sectionId, targetIndex) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    if (!page || !page.blocks) return;
+
+    const { blocks: updatedBlocks, found, moved } = moveStructuralSectionOnBlocks(
+      page.blocks,
+      sectionId,
+      targetIndex
+    );
+
+    if (!found || !moved) {
+      return;
+    }
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        if (p) {
+          p.blocks = updatedBlocks;
+        }
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Reordenada seção estrutural ${sectionId} para o índice ${targetIndex}`
       }
     );
   },

@@ -14,6 +14,7 @@ import {
   Copy,
   ArrowUp,
   ArrowDown,
+  GripVertical,
   X,
   AlertTriangle
 } from 'lucide-react';
@@ -52,6 +53,7 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
   const duplicateStructuralChild = useCatalogStore((state) => state.duplicateStructuralChild);
   const removeStructuralChild = useCatalogStore((state) => state.removeStructuralChild);
   const moveStructuralChild = useCatalogStore((state) => state.moveStructuralChild);
+  const reorderStructuralChild = useCatalogStore((state) => state.reorderStructuralChild);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -113,6 +115,16 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
       return;
     }
     handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: newVal });
+  };
+
+  // Restaurar padrão: volta ao default da factory (Fill)
+  const handleResetToDefault = () => {
+    handleLayoutUpdate({ widthMode: 'fill', fixedWidthMm: undefined });
+  };
+
+  // Usar largura máxima: define fixedWidthMm igual à largura útil máxima da página
+  const handleResetToMaxAvailable = () => {
+    handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: maxAvailableMm });
   };
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -221,6 +233,30 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             onChange={handleWidthModeChange}
           />
         </InspectorField>
+
+        {/* Ações Explícitas de Reset e Largura Máxima (Fase 3A.5B) */}
+        <div className="flex items-center gap-1.5 pt-1">
+          <button
+            type="button"
+            onClick={handleResetToDefault}
+            className="flex-1 px-2 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-colors text-center cursor-pointer"
+            title="Restaurar padrão da fábrica (Preencher largura)"
+            aria-label="Restaurar padrão da fábrica (Preencher largura)"
+          >
+            Restaurar padrão
+          </button>
+          {layout.widthMode === 'fixed' && (
+            <button
+              type="button"
+              onClick={handleResetToMaxAvailable}
+              className="flex-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors text-center cursor-pointer"
+              title={`Ajustar largura para ${maxAvailableMm} mm`}
+              aria-label="Usar largura máxima da página"
+            >
+              Usar largura máxima
+            </button>
+          )}
+        </div>
 
         {layout.widthMode === 'fixed' && (
           <div className="space-y-2">
@@ -483,8 +519,41 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
               {children.map((child, idx) => (
                 <div
                   key={child.id}
+                  data-card-id={child.id}
                   className="flex items-center justify-between p-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-300 rounded-md transition-all group"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    try {
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (!raw) return;
+                      const data = JSON.parse(raw);
+                      if (data.type === 'structural_card' && data.childId !== child.id) {
+                        reorderStructuralChild(pageId, sectionBlock.id, data.childId, idx);
+                      }
+                    } catch {
+                      // Fail-closed
+                    }
+                  }}
                 >
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        'application/json',
+                        JSON.stringify({ type: 'structural_card', childId: child.id, fromIndex: idx })
+                      );
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    className="p-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 rounded shrink-0 mr-1"
+                    title="Arrastar para reordenar card"
+                    aria-label="Arrastar para reordenar card"
+                  >
+                    <GripVertical className="w-3 h-3" />
+                  </div>
                   <button
                     type="button"
                     onClick={() => onSelectCard(child.id)}

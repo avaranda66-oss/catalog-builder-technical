@@ -32,6 +32,7 @@ import { BottomHeaderBlock } from './blocks/BottomHeaderBlock';
 import { MatrixSpecTableBlock } from './blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from './blocks/SoftwareConnectivityBlock';
 import { StructuralSectionBlock } from './blocks/StructuralSectionBlock';
+import { StructuralSectionInteractionFrame } from './frames/StructuralSectionInteractionFrame';
 import { BlockHoverTooltip, HoverTooltipItem, TooltipPosition } from './BlockHoverTooltip';
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
@@ -971,7 +972,7 @@ export const A4Canvas: React.FC = () => {
                     : 'space-y-3'
                 }`}
               >
-                {(page.blocks || []).map((block) => {
+                {(page.blocks || []).map((block, blockIndex) => {
                   const isSelected = block.id === selectedBlockId;
                   const remoteOnBlock = getParticipantsOnBlock(block.id);
                   const hasRemote = remoteOnBlock.length > 0;
@@ -1039,9 +1040,12 @@ export const A4Canvas: React.FC = () => {
                         <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={isSelected} />
                       )}
                       {block.type === 'structural_section' && (
-                        <StructuralSectionBlock
+                        <StructuralSectionInteractionFrame
                           block={block}
                           pageId={page.id}
+                          pageIndex={pageIndex}
+                          blockIndex={blockIndex}
+                          totalBlocks={page.blocks?.length || 0}
                           isSelected={isSelected}
                           selectedChildId={isSelected ? selectedChildId : null}
                           onSelectSection={() => {
@@ -1052,7 +1056,6 @@ export const A4Canvas: React.FC = () => {
                             setActivePageIndex(pageIndex);
                             selectEditorElement({ blockId: block.id, childId });
                           }}
-                          isExport={false}
                         />
                       )}
                       {block.type === 'hero_banner' && (

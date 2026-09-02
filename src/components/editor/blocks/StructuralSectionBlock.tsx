@@ -15,6 +15,7 @@ interface StructuralSectionBlockProps {
   onSelectSection?: () => void;
   onSelectCard?: (childId: string) => void;
   isExport?: boolean;
+  previewWidthMm?: number;
 }
 
 export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
@@ -23,7 +24,8 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
   selectedChildId = null,
   onSelectSection,
   onSelectCard,
-  isExport = false
+  isExport = false,
+  previewWidthMm
 }) => {
   const data = block.structuralData;
   const layout = data?.layout || {
@@ -92,10 +94,11 @@ export const StructuralSectionBlock: React.FC<StructuralSectionBlockProps> = ({
   const alignContentClass =
     layout.align === 'center' ? 'text-center' : layout.align === 'right' ? 'text-right' : 'text-left';
 
-  // Largura determinística (Fill vs Fixed em mm)
+  // Largura determinística (Fill vs Fixed em mm com suporte a override transitório de preview)
+  const effectiveWidthMm = previewWidthMm ?? layout.fixedWidthMm;
   const widthStyle: React.CSSProperties =
-    layout.widthMode === 'fixed' && layout.fixedWidthMm && layout.fixedWidthMm > 0
-      ? { width: `${layout.fixedWidthMm}mm`, maxWidth: '100%' }
+    layout.widthMode === 'fixed' && effectiveWidthMm && effectiveWidthMm > 0
+      ? { width: `${effectiveWidthMm}mm`, maxWidth: '100%' }
       : { width: '100%' };
 
   // Grid vs Stack

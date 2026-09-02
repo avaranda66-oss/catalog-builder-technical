@@ -34,6 +34,17 @@ export type {
   PageContentBox
 } from './page-geometry';
 
+export {
+  calculateSnappedResizeWidthMm,
+  moveStructuralChildToIndex,
+  moveStructuralSectionOnBlocks
+} from './structural-interaction';
+export type {
+  ResizeCalculationParams,
+  MoveChildResult,
+  MoveSectionResult
+} from './structural-interaction';
+
 // ============================================================================
 // 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
 // ============================================================================
