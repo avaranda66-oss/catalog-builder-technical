@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Printer, Download, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Catalog } from '../../domain/catalog.schema';
-import { useCatalogStore } from '../../stores/useCatalogStore';
 import { SupabaseService } from '../../services/supabase.service';
 import { PDFService } from '../../services/pdf.service';
 import { CleanA4Document } from './CleanA4Document';
 
 export const PrintDocumentView: React.FC = () => {
-  const { currentCatalog } = useCatalogStore();
   const [documentToRender, setDocumentToRender] = useState<Catalog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReadyForPrint, setIsReadyForPrint] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isExportingDirect, setIsExportingDirect] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -18,52 +17,67 @@ export const PrintDocumentView: React.FC = () => {
   useEffect(() => {
     const loadDocument = async () => {
       setIsLoading(true);
+      setErrorMessage(null);
       const urlParams = new URLSearchParams(window.location.search);
       const catalogId = urlParams.get('catalog');
       const templateId = urlParams.get('template');
+      const requestedVersionStr = urlParams.get('version');
+      const requestedVersion = requestedVersionStr ? parseInt(requestedVersionStr, 10) : null;
 
-      // 1. Usa o catálogo ativo em memória se corresponder ao ID
-      if (currentCatalog && (!catalogId || currentCatalog.id === catalogId)) {
-        setDocumentToRender(currentCatalog);
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Caso contrário, carrega do Supabase ou savedCatalogs
-      if (catalogId) {
-        const saved = useCatalogStore.getState().savedCatalogs.find((c) => c.id === catalogId);
-        if (saved) {
-          setDocumentToRender(saved);
-          setIsLoading(false);
-          return;
-        }
-      }
-
+      // 1. Exportação de Template: Carrega snapshot confirmado do Supabase
       if (templateId) {
         const res = await SupabaseService.getTemplate(templateId);
         if (res.success && res.data) {
           const preset = res.data;
+          const serverVer = preset.version || 1;
+          if (requestedVersion !== null && serverVer !== requestedVersion) {
+            setErrorMessage(`A versão solicitada (v${requestedVersion}) ainda não está disponível para exportação (servidor: v${serverVer}).`);
+            setIsLoading(false);
+            return;
+          }
           const templateCatalog: Catalog = {
             ...preset.catalog,
             id: preset.id,
             title: preset.name,
-            version: preset.version || 1
+            version: serverVer
           };
           setDocumentToRender(templateCatalog);
+          setIsLoading(false);
+          return;
+        } else {
+          setErrorMessage(res.error || 'Falha ao carregar template confirmado do servidor.');
           setIsLoading(false);
           return;
         }
       }
 
-      // Fallback para currentCatalog
-      if (currentCatalog) {
-        setDocumentToRender(currentCatalog);
+      // 2. Exportação de Catálogo: Carrega snapshot confirmado do Supabase
+      if (catalogId) {
+        const res = await SupabaseService.getCatalog(catalogId);
+        if (res.success && res.data) {
+          const cat = res.data;
+          const serverVer = cat.version || 1;
+          if (requestedVersion !== null && serverVer !== requestedVersion) {
+            setErrorMessage(`A versão solicitada (v${requestedVersion}) ainda não está disponível para exportação (servidor: v${serverVer}).`);
+            setIsLoading(false);
+            return;
+          }
+          setDocumentToRender(cat);
+          setIsLoading(false);
+          return;
+        } else {
+          setErrorMessage(res.error || 'Falha ao carregar catálogo confirmado do servidor.');
+          setIsLoading(false);
+          return;
+        }
       }
+
+      setErrorMessage('Nenhum identificador de documento (catalog ou template) foi especificado na rota de impressão.');
       setIsLoading(false);
     };
 
     void loadDocument();
-  }, [currentCatalog]);
+  }, []);
 
   // Aguarda carregamento de fontes e imagens para garantir fidelidade vetorial absoluta
   useEffect(() => {
@@ -150,11 +164,11 @@ export const PrintDocumentView: React.FC = () => {
     );
   }
 
-  if (!documentToRender) {
+  if (errorMessage || !documentToRender) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-mono text-xs p-6 text-center">
         <AlertCircle className="w-8 h-8 text-amber-400 mb-3" />
-        <span className="font-bold text-sm">Nenhum documento encontrado para exportação.</span>
+        <span className="font-bold text-sm max-w-md">{errorMessage || 'Nenhum documento encontrado para exportação.'}</span>
         <button
           onClick={handleReturnToEditor}
           className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-none font-sans font-bold text-xs"
@@ -164,6 +178,8 @@ export const PrintDocumentView: React.FC = () => {
       </div>
     );
   }
+
+  const isDebugPrint = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugPrint') === '1';
 
   return (
     <div className="min-h-screen bg-slate-800 text-slate-900 print:bg-white print:m-0 print:p-0">
@@ -190,6 +206,19 @@ export const PrintDocumentView: React.FC = () => {
           </div>
         </div>
 
+        {isDebugPrint && (
+          <div className="bg-amber-950/80 border border-amber-500/50 text-amber-300 px-3 py-1 text-[10px] font-mono flex items-center gap-2">
+            <span className="font-bold">DEBUG PRINT:</span>
+            <span>Doc: {documentToRender.id}</span>
+            <span>•</span>
+            <span>v{documentToRender.version || 1}</span>
+            <span>•</span>
+            <span>Server Pages: {documentToRender.pages.length}</span>
+            <span>•</span>
+            <span>Rendered Pages: {documentToRender.pages.length}</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2.5">
           {statusMessage && (
             <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-700 px-2 py-1 flex items-center gap-1.5">
@@ -204,7 +233,7 @@ export const PrintDocumentView: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-none text-xs font-mono font-bold transition-colors disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5 text-blue-400" />
-            <span>{isExportingDirect ? 'Compilando Ultra-HD...' : 'Baixar .PDF Direto'}</span>
+            <span>{isExportingDirect ? 'Compilando...' : 'PDF de Compatibilidade (Raster)'}</span>
           </button>
 
           <button
@@ -213,24 +242,29 @@ export const PrintDocumentView: React.FC = () => {
             className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded-none text-xs font-mono font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Imprimir / Salvar PDF Vetorial</span>
+            <span>Gerar PDF de Alta Qualidade (A4)</span>
           </button>
         </div>
       </header>
 
       {/* Área de Visualização e Renderização Limpa */}
-      <main ref={containerRef} className="py-8 print:p-0 flex flex-col items-center gap-8 print:gap-0">
+      <main ref={containerRef} className="py-8 print:p-0 flex flex-col items-center gap-8 print:gap-0 print:block">
         <CleanA4Document document={documentToRender} />
       </main>
 
-      {/* Estilos Globais de Impressão A4 Estrita */}
+      {/* Estilos Globais de Impressão A4 Estrita e Paginação Multipage */}
       <style>{`
         @page {
           size: A4 portrait;
           margin: 0;
         }
         @media print {
-          html, body {
+          html, body, #root {
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
@@ -240,19 +274,44 @@ export const PrintDocumentView: React.FC = () => {
           .no-print {
             display: none !important;
           }
-          .clean-export-root {
+          main {
+            display: block !important;
+            width: auto !important;
+            height: auto !important;
+            overflow: visible !important;
             margin: 0 !important;
             padding: 0 !important;
           }
+          .clean-export-root {
+            display: block !important;
+            width: 210mm !important;
+            height: auto !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
           .clean-export-page {
+            display: block !important;
             box-shadow: none !important;
             margin: 0 !important;
+            padding: 0 !important;
             width: 210mm !important;
             min-height: 297mm !important;
             height: 297mm !important;
             max-height: 297mm !important;
-            page-break-after: always !important;
+            box-sizing: border-box !important;
+            break-before: auto !important;
             break-after: page !important;
+            break-inside: avoid !important;
+            page-break-before: auto !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            overflow: hidden !important;
+            position: relative !important;
+          }
+          .clean-export-page:last-child {
+            break-after: auto !important;
+            page-break-after: auto !important;
           }
         }
       `}</style>

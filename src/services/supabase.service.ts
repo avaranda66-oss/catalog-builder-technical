@@ -126,6 +126,37 @@ export class SupabaseService {
     }
   }
 
+  static async getCatalog(id: string): Promise<{ success: boolean; data?: Catalog; error?: string }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase
+        .from('catalogs')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      if (!data) return { success: false, error: 'Catálogo não encontrado' };
+
+      const catalogData = (data.brand && data.brand.pages) ? data.brand : (data.brand?.catalog || data);
+      const catalog: Catalog = {
+        id: data.id,
+        title: data.name || catalogData.title || 'Catálogo Sem Título',
+        subtitle: catalogData.subtitle,
+        themeId: catalogData.themeId || 'default-technical',
+        pages: catalogData.pages || [],
+        version: data.version || 1,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+      return { success: true, data: catalog };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao carregar catálogo do servidor' };
+    }
+  }
+
   static async deleteCatalog(catalogId: string): Promise<{ success: boolean; error?: string }> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };

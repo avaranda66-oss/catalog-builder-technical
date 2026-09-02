@@ -51,7 +51,7 @@ export const ExportPDFModal: React.FC = () => {
     setIsExporting(false);
     if (result.success) {
       setIsSuccess(true);
-      setExportMessage(`Arquivo "${fileName}" compilado com sucesso em Ultra-HD!`);
+      setExportMessage(`Arquivo "${fileName}" compilado com sucesso!`);
     } else {
       setIsSuccess(false);
       setExportMessage(result.message || 'Falha ao compilar o arquivo PDF.');
@@ -61,14 +61,21 @@ export const ExportPDFModal: React.FC = () => {
   const handleOpenCleanPrintView = async () => {
     if (isConflict) {
       setIsSuccess(false);
-      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de imprimir.');
+      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de exportar.');
       return;
     }
 
-    await saveActiveDocument();
+    const saveRes = await saveActiveDocument();
+    if (!saveRes.success && saveRes.status === 'conflict') {
+      setIsSuccess(false);
+      setExportMessage('Conflito detectado ao salvar. Resolva o conflito antes de gerar o PDF.');
+      return;
+    }
+
     setExportPDFModalOpen(false);
 
-    const printUrl = `/?print=1&${isTemplate ? `template=${docId}` : `catalog=${docId}`}&version=${docVersion}`;
+    const confirmedVer = (useCatalogStore.getState().currentCatalog?.version) || docVersion;
+    const printUrl = `/?print=1&${isTemplate ? `template=${docId}` : `catalog=${docId}`}&version=${confirmedVer}`;
     window.open(printUrl, '_blank');
   };
 
@@ -121,28 +128,28 @@ export const ExportPDFModal: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Opção 1: Impressão Nativa Vetorial A4 Limpa */}
+            {/* Opção 1: Impressão Nativa Vetorial A4 Limpa (Primary) */}
             <div 
               onClick={handleOpenCleanPrintView}
-              className={`p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-200 hover:border-blue-400 cursor-pointer transition-all flex flex-col justify-between group ${
+              className={`p-3 bg-blue-50/60 hover:bg-blue-50 border-2 border-[#003366] cursor-pointer transition-all flex flex-col justify-between group ${
                 isConflict ? 'opacity-50 pointer-events-none' : ''
               }`}
             >
               <div>
                 <div className="flex items-center gap-1.5 text-[#003366] font-bold text-xs font-mono">
                   <Printer className="w-3.5 h-3.5" />
-                  <span>PDF Vetorial (Nativo A4)</span>
+                  <span>Gerar PDF de Alta Qualidade</span>
                 </div>
                 <p className="text-[10.5px] text-slate-600 mt-1.5 leading-relaxed">
-                  Abre a rota limpa de exportação: textos 100% vetoriais, zero ferramentas de edição, fidelidade tipográfica máxima.
+                  Exportador editorial isolado: renderização vetorial nativa Chromium, tipografia exata e zero botões de edição.
                 </p>
               </div>
               <span className="mt-2 text-[10px] font-bold text-[#003366] group-hover:underline flex items-center gap-1">
-                Abrir Visualização &rarr;
+                Abrir Visualização & Impressão &rarr;
               </span>
             </div>
 
-            {/* Opção 2: Download Direto Ultra-HD */}
+            {/* Opção 2: Download Direto Raster (Fallback) */}
             <div 
               onClick={handleDownloadPDF}
               className={`p-3 bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-slate-400 cursor-pointer transition-all flex flex-col justify-between group ${
@@ -150,16 +157,16 @@ export const ExportPDFModal: React.FC = () => {
               }`}
             >
               <div>
-                <div className="flex items-center gap-1.5 text-slate-900 font-bold text-xs font-mono">
-                  <Download className="w-3.5 h-3.5 text-[#003366]" />
-                  <span>Download .PDF Direto</span>
+                <div className="flex items-center gap-1.5 text-slate-800 font-bold text-xs font-mono">
+                  <Download className="w-3.5 h-3.5 text-slate-600" />
+                  <span>PDF de Compatibilidade (Raster)</span>
                 </div>
                 <p className="text-[10.5px] text-slate-600 mt-1.5 leading-relaxed">
-                  Compila e descarrega o arquivo <code className="text-[9px] bg-slate-200 px-1">.pdf</code> em Ultra-HD 350+ DPI com metadados PRESYS em 1 clique.
+                  Compilação via canvas para ambientes legados ou salvamento direto sem diálogo de impressão.
                 </p>
               </div>
-              <span className="mt-2 text-[10px] font-bold text-slate-800 group-hover:underline flex items-center gap-1">
-                {isExporting ? 'Compilando Ultra-HD...' : 'Baixar Arquivo PDF &rarr;'}
+              <span className="mt-2 text-[10px] font-bold text-slate-700 group-hover:underline flex items-center gap-1">
+                {isExporting ? 'Compilando arquivo...' : 'Download Direto &rarr;'}
               </span>
             </div>
           </div>

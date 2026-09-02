@@ -153,7 +153,7 @@ export const TechnicalCell: React.FC<TechnicalCellProps> = ({
         </span>
       )}
 
-      {divergence && onRestoreDivergence && (
+      {isEditable && divergence && onRestoreDivergence && (
         <DivergenceBadge divergence={divergence} onRestore={onRestoreDivergence} />
       )}
     </div>
