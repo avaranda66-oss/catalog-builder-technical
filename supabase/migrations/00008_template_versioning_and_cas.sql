@@ -1,5 +1,5 @@
--- Migration 00008: Template Versioning, Updated Timestamp and CAS RPC
--- Objetivo: Suportar edição e versionamento seguro de templates corporativos compartilhados
+-- Migration 00008: Template Versioning, Updated Timestamp and CAS RPC (Hardened)
+-- Objetivo: Suportar edição e versionamento seguro de templates corporativos compartilhados com CAS atômico e FOR UPDATE
 
 ALTER TABLE public.templates
 ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
@@ -10,7 +10,7 @@ ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.templates
 ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES auth.users(id);
 
--- RPC: save_template_v1 com CAS (Compare-And-Swap) estrito
+-- RPC: save_template_v1 com CAS (Compare-And-Swap) estrito, Row Lock e Validação de Role
 CREATE OR REPLACE FUNCTION public.save_template_v1(
   p_template_id UUID,
   p_expected_version INTEGER,
@@ -21,21 +21,45 @@ CREATE OR REPLACE FUNCTION public.save_template_v1(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
+  v_actor UUID := auth.uid();
+  v_role public.user_role := public.team_role();
   v_current_version INTEGER;
   v_next_version INTEGER;
   v_result RECORD;
   v_design_tokens JSONB;
 BEGIN
-  -- 1. Verifica se o template existe
-  SELECT version, design_tokens INTO v_current_version, v_design_tokens
+  -- 1. Verificação Estrita de Autenticação e Permissão (somente admin / editor autenticado)
+  IF v_actor IS NULL OR v_role IS NULL OR v_role NOT IN ('admin', 'editor') THEN
+    RAISE EXCEPTION 'Sem permissão de acesso para salvar templates corporativos.' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_template_id IS NULL THEN
+    RAISE EXCEPTION 'ID do template não informado.' USING ERRCODE = '22023';
+  END IF;
+
+  -- 2. Seleção com Row Lock Atômico (FOR UPDATE)
+  SELECT version, design_tokens
+  INTO v_current_version, v_design_tokens
   FROM public.templates
-  WHERE id = p_template_id;
+  WHERE id = p_template_id
+  FOR UPDATE;
 
   IF NOT FOUND THEN
-    -- Inserção de novo template
+    -- Inserção de novo template se expected_version for 0 ou 1
+    IF p_expected_version IS NOT NULL AND p_expected_version > 1 THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'conflict', true,
+        'errorCode', '40001',
+        'error', format('Conflito de Criação: versão esperada %s informada para template inexistente.', p_expected_version),
+        'serverVersion', 0,
+        'expectedVersion', p_expected_version
+      );
+    END IF;
+
     v_next_version := 1;
     v_design_tokens := jsonb_build_object(
       'category', 'layout_template',
@@ -64,7 +88,7 @@ BEGIN
       v_next_version,
       now(),
       now(),
-      auth.uid()
+      v_actor
     )
     RETURNING * INTO v_result;
 
@@ -74,19 +98,19 @@ BEGIN
     );
   END IF;
 
-  -- 2. CAS: Valida expected version contra a versão atual
-  IF p_expected_version > 0 AND v_current_version <> p_expected_version THEN
+  -- 3. CAS Atômico: Valida expected version sob row lock
+  IF p_expected_version IS NULL OR p_expected_version <= 0 OR v_current_version <> p_expected_version THEN
     RETURN jsonb_build_object(
       'success', false,
       'conflict', true,
       'errorCode', '40001',
-      'error', 'Conflito de concorrência: o template foi modificado em outro dispositivo.',
+      'error', format('Conflito de Concorrência: o template foi modificado em outro dispositivo (Versão esperada: %s, Versão no servidor: %s).', p_expected_version, v_current_version),
       'serverVersion', v_current_version,
       'expectedVersion', p_expected_version
     );
   END IF;
 
-  -- 3. Atualização atômica e incremento de versão
+  -- 4. Atualização atômica e incremento de versão sob row lock
   v_next_version := v_current_version + 1;
 
   IF p_description IS NOT NULL THEN
@@ -100,7 +124,7 @@ BEGIN
     design_tokens = v_design_tokens,
     version = v_next_version,
     updated_at = now(),
-    updated_by = auth.uid()
+    updated_by = v_actor
   WHERE id = p_template_id
   RETURNING * INTO v_result;
 
@@ -111,4 +135,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.save_template_v1 TO authenticated, anon;
+-- Permissões Estritas: REVOGAR DE PUBLIC E ANON, CONCEDER APENAS PARA AUTHENTICATED
+REVOKE ALL ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) TO authenticated;

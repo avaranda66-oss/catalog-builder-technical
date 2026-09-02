@@ -184,7 +184,7 @@ export class SupabaseService {
 
       const { data, error } = await supabase
         .from('templates')
-        .upsert(payload)
+        .insert(payload)
         .select()
         .single();
 
@@ -224,7 +224,7 @@ export class SupabaseService {
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
     try {
-      // 1. Tenta RPC save_template_v1 (com CAS e atomicidade)
+      // 1. Executa RPC save_template_v1 (com CAS estrito, row lock e validação de role)
       const { data: rpcData, error: rpcError } = await supabase.rpc('save_template_v1', {
         p_template_id: templateId,
         p_expected_version: expectedVersion,
@@ -233,7 +233,23 @@ export class SupabaseService {
         p_description: description
       });
 
-      if (!rpcError && rpcData) {
+      if (rpcError) {
+        if (rpcError.code === '42501' || rpcError.message?.includes('permissão') || rpcError.message?.includes('permission')) {
+          return {
+            success: false,
+            error: 'Permissão negada: somente administradores ou editores autorizados podem salvar templates corporativos.'
+          };
+        }
+        if (rpcError.code === '42883' || rpcError.message?.includes('does not exist')) {
+          return {
+            success: false,
+            error: 'TEMPLATE_SCHEMA_NOT_READY: Atualização do banco necessária para editar templates.'
+          };
+        }
+        return { success: false, error: rpcError.message };
+      }
+
+      if (rpcData) {
         if (rpcData.conflict || rpcData.errorCode === '40001') {
           return {
             success: false,
@@ -245,31 +261,15 @@ export class SupabaseService {
         if (rpcData.success && rpcData.data) {
           return { success: true, data: templateRowToCatalogPreset(rpcData.data) };
         }
+        if (!rpcData.success) {
+          return { success: false, error: rpcData.error || 'Erro desconhecido na gravação do template.' };
+        }
       }
 
-      // 2. Fallback: update direto na tabela caso a migration ainda não esteja no cluster
-      const updatePayload: any = {
-        layout_config: catalog,
-        name: name || catalog.title,
-        updated_at: new Date().toISOString()
+      return {
+        success: false,
+        error: 'TEMPLATE_SCHEMA_NOT_READY: Resposta inesperada da função de versionamento de template.'
       };
-      if (description) {
-        updatePayload.design_tokens = {
-          category: 'layout_template',
-          description,
-          isSystem: false
-        };
-      }
-
-      const { data, error } = await supabase
-        .from('templates')
-        .update(updatePayload)
-        .eq('id', templateId)
-        .select()
-        .single();
-
-      if (error) return { success: false, error: error.message };
-      return { success: true, data: templateRowToCatalogPreset(data) };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao atualizar template no servidor' };
     }

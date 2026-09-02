@@ -70,8 +70,16 @@ class PresenceServiceClass {
   private activeChannel: RealtimeChannel | null = null;
   private currentTrackPayload: ParticipantSession | null = null;
 
-  public getActiveCatalogId(): string | null {
+  public getActiveDocumentTarget(): DocumentPresenceTarget | null {
+    return this.activeTarget;
+  }
+
+  public getActiveDocumentId(): string | null {
     return this.activeTarget?.id || null;
+  }
+
+  public getActiveCatalogId(): string | null {
+    return this.activeTarget?.kind === 'catalog' ? this.activeTarget.id : null;
   }
 
   public getCurrentSession(): ParticipantSession | null {
@@ -120,7 +128,7 @@ class PresenceServiceClass {
       avatarText,
       documentKind: target.kind,
       documentId: target.id,
-      catalogId: target.id,
+      catalogId: target.kind === 'catalog' ? target.id : undefined,
       pageId: initialPageId,
       pageNumber: initialPageNumber,
       blockId: null,

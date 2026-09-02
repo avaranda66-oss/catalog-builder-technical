@@ -260,10 +260,24 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (editorContext.kind === 'catalog') {
       return await get().flushCatalog(editorContext.catalogId || currentCatalog?.id);
     } else if (editorContext.kind === 'template') {
-      const res = await useTemplateStore.getState().flushTemplate(editorContext.templateId);
-      if (res.success) {
+      const templateId = editorContext.templateId || currentCatalog?.id;
+      if (!templateId) {
+        return { success: false, status: 'error', error: 'ID do template ausente' };
+      }
+      if (currentCatalog) {
+        await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, currentCatalog.version);
+      }
+      const res = await useTemplateStore.getState().flushTemplate(templateId);
+      if (res.success && res.data) {
+        const confirmedVersion = res.data.version || (currentCatalog?.version ? currentCatalog.version + 1 : 1);
+        if (get().currentCatalog) {
+          get().setCurrentCatalog({
+            ...get().currentCatalog!,
+            version: confirmedVersion
+          }, false);
+        }
         set({ isDirty: false, syncStatus: 'synced', syncError: null });
-        return { success: true, status: 'synced', version: res.data?.version };
+        return { success: true, status: 'synced', version: confirmedVersion };
       }
       return {
         success: false,
@@ -826,8 +840,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (editorContext?.kind === 'template') {
       const templateId = editorContext.templateId || currentCatalog.id;
       const expectedVer = currentCatalog.version ?? 1;
-      await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer);
-      return { success: true, status: 'synced', version: expectedVer };
+      set({ isSaving: true, syncStatus: 'saving', isDirty: true });
+      void useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer);
+      return { success: true, status: 'saving', version: expectedVer };
     }
 
     const queue = getCatalogQueue(currentCatalog.id);
