@@ -1,6 +1,7 @@
 import React from 'react';
 import { TechnicalMarker } from './TechnicalMarker';
 import { TechnicalMarkerType, DEFAULT_MARKER_LEGENDS } from './table-tokens';
+import { usePrintLocalization } from '../../translation/PrintLocalizationContext';
 
 export interface TableLegendConfig {
   showLegend: boolean;
@@ -28,14 +29,26 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
   onUpdateLegendTitle,
   isEditable = true
 }) => {
+  const { resolveSystemString } = usePrintLocalization();
+
   if (config && config.showLegend === false) return null;
 
+  // Se config?.title foi customizado e não é a chave placeholder/default, usa o customizado.
+  // Caso contrário, resolve 'legend_title' a partir da localização do documento.
+  const isDefaultTitle = !config?.title || config.title === 'LEGEND:' || config.title === 'LEGENDA METROLÓGICA:';
+  const displayTitle = isDefaultTitle
+    ? resolveSystemString('legend_title', 'LEGEND:')
+    : config!.title!;
+
+  // Se config?.items foi fornecido pelo usuário (customizado), usa ele.
+  // Caso contrário, resolve cada marcador dinamicamente no idioma do documento.
   const items =
-    config?.items ||
-    activeMarkers.map((type) => ({
-      type,
-      label: DEFAULT_MARKER_LEGENDS[type] || type
-    }));
+    config?.items && config.items.length > 0
+      ? config.items
+      : activeMarkers.map((type) => ({
+          type,
+          label: resolveSystemString(`legend_${type}`, DEFAULT_MARKER_LEGENDS[type] || type)
+        }));
 
   if (items.length === 0) return null;
 
@@ -43,6 +56,7 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
     <div className={`pt-1.5 pb-1 px-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600 font-mono select-none ${className}`}>
       <span
         data-print-string-key="legend_title"
+        data-printable-policy={isDefaultTitle ? 'system' : 'translate'}
         contentEditable={isEditable}
         suppressContentEditableWarning
         onBlur={(e) => {
@@ -54,7 +68,7 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
           isEditable ? 'outline-none focus:bg-amber-100 hover:bg-slate-100 px-0.5 cursor-text' : ''
         }`}
       >
-        {config?.title || 'LEGEND:'}
+        {displayTitle}
       </span>
 
       {items.map((item, idx) => (
@@ -62,6 +76,7 @@ export const TechnicalLegend: React.FC<TechnicalLegendProps> = ({
           <TechnicalMarker type={item.type} size={10} color="#003366" />
           <span
             data-print-string-key={`legend_${item.type}`}
+            data-printable-policy={config?.items ? 'translate' : 'system'}
             contentEditable={isEditable}
             suppressContentEditableWarning
             onBlur={(e) => {

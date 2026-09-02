@@ -3,6 +3,7 @@
 
 import { ContentBlock, TableColumnConfig, CatalogTableRow } from '@/domain/catalog.schema';
 import { PrintableTextNode } from '../types';
+import { TechnicalTokenProtector } from '../token-protector';
 
 export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
   const nodes: PrintableTextNode[] = [];
@@ -19,6 +20,25 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
       kind: 'heading',
       policy: 'translate',
       source: { blockType: block.type, field: 'title' }
+    });
+  }
+
+  // Grupos Superiores de Colunas (columnGroups)
+  const rawColGroups = (block as any).columnGroups || block.customData?.columnGroups;
+  if (Array.isArray(rawColGroups)) {
+    rawColGroups.forEach((grp: any, gIdx: number) => {
+      if (grp && typeof grp === 'object' && grp.title && String(grp.title).trim()) {
+        nodes.push({
+          id: `p${pageNumber}_b${block.id}_colgroup_${grp.id || gIdx}_title`,
+          pageId,
+          blockId: block.id,
+          path: `columnGroups[${gIdx}].title`,
+          sourceText: String(grp.title).trim(),
+          kind: 'table_header',
+          policy: 'translate',
+          source: { blockType: block.type, field: `columnGroups[${gIdx}].title` }
+        });
+      }
     });
   }
 
@@ -97,14 +117,16 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
       if (row.localOverrides && typeof row.localOverrides === 'object' && !Array.isArray(row.localOverrides)) {
         Object.entries(row.localOverrides).forEach(([key, val]) => {
           if (typeof val === 'string' && val.trim() && !key.endsWith('Id') && !key.endsWith('id')) {
+            const strVal = val.trim();
+            const isMixed = TechnicalTokenProtector.isMixedValue(strVal);
             nodes.push({
               id: `p${pageNumber}_b${block.id}_row_${row.id || rIdx}_ov_${key}`,
               pageId,
               blockId: block.id,
               path: `tableRows[${rIdx}].localOverrides.${key}`,
-              sourceText: val.trim(),
+              sourceText: strVal,
               kind: 'table_cell',
-              policy: 'translate',
+              policy: isMixed ? 'translate' : 'protect',
               source: { blockType: block.type, field: `row_${row.id || rIdx}_ov_${key}` }
             });
           }
@@ -122,6 +144,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
 
     matrixCols.forEach((col: any, idx: number) => {
       if (col !== undefined && String(col).trim()) {
+        const isParamCol = idx === 0;
         nodes.push({
           id: `p${pageNumber}_b${block.id}_col_${idx}`,
           pageId,
@@ -129,7 +152,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
           path: `customData.columns[${idx}]`,
           sourceText: String(col).trim(),
           kind: 'table_header',
-          policy: 'protect',
+          policy: isParamCol ? 'translate' : 'protect',
           source: { blockType: block.type, field: `columns[${idx}]` }
         });
       }
@@ -164,7 +187,8 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
           row.values.forEach((val: any, vIdx: number) => {
             if (val !== undefined && String(val).trim()) {
               const strVal = String(val).trim();
-              const isBullet = ['■', '□', '—', '-', '•'].includes(strVal);
+              const isBullet = ['■', '□', '●', '○', '—', '-', '•', '*', '**'].includes(strVal);
+              const isMixed = TechnicalTokenProtector.isMixedValue(strVal);
               nodes.push({
                 id: `p${pageNumber}_b${block.id}_row_${rIdx}_val_${vIdx}`,
                 pageId,
@@ -172,7 +196,7 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
                 path: `customData.rows[${rIdx}].values[${vIdx}]`,
                 sourceText: strVal,
                 kind: 'table_cell',
-                policy: 'protect',
+                policy: isMixed ? 'translate' : 'protect',
                 renderExpectation: isBullet ? 'optional' : 'required',
                 source: { blockType: block.type, field: `rows[${rIdx}].values[${vIdx}]` }
               });
@@ -199,6 +223,100 @@ export function extractTableBlocks(block: ContentBlock, pageId: string, pageNumb
         }
       });
     }
+  }
+
+  // Legenda customizada editorial (se presente e customizada pelo usuário)
+  const customData = block.customData || {};
+  if (customData.legendConfig && typeof customData.legendConfig === 'object') {
+    if (customData.legendConfig.title && String(customData.legendConfig.title).trim()) {
+      const lTitle = String(customData.legendConfig.title).trim();
+      if (lTitle !== 'LEGEND:' && lTitle !== 'LEGENDA METROLÓGICA:') {
+        nodes.push({
+          id: `p${pageNumber}_b${block.id}_legend_title`,
+          pageId,
+          blockId: block.id,
+          path: 'customData.legendConfig.title',
+          sourceText: lTitle,
+          kind: 'caption',
+          policy: 'translate',
+          source: { blockType: block.type, field: 'legendConfig.title' }
+        });
+      }
+    }
+    if (Array.isArray(customData.legendConfig.items)) {
+      customData.legendConfig.items.forEach((item: any, iIdx: number) => {
+        if (item && typeof item === 'object' && item.label && String(item.label).trim()) {
+          nodes.push({
+            id: `p${pageNumber}_b${block.id}_legend_item_${item.type || iIdx}`,
+            pageId,
+            blockId: block.id,
+            path: `customData.legendConfig.items[${iIdx}].label`,
+            sourceText: String(item.label).trim(),
+            kind: 'caption',
+            policy: 'translate',
+            source: { blockType: block.type, field: `legendConfig.items[${iIdx}].label` }
+          });
+        }
+      });
+    }
+  } else {
+    if (customData.legendTitle && String(customData.legendTitle).trim()) {
+      const lTitle = String(customData.legendTitle).trim();
+      if (lTitle !== 'LEGEND:' && lTitle !== 'LEGENDA METROLÓGICA:') {
+        nodes.push({
+          id: `p${pageNumber}_b${block.id}_legend_title`,
+          pageId,
+          blockId: block.id,
+          path: 'customData.legendTitle',
+          sourceText: lTitle,
+          kind: 'caption',
+          policy: 'translate',
+          source: { blockType: block.type, field: 'legendTitle' }
+        });
+      }
+    }
+    if (customData.legendLabels && typeof customData.legendLabels === 'object') {
+      Object.entries(customData.legendLabels).forEach(([mType, mLabel]) => {
+        if (typeof mLabel === 'string' && mLabel.trim()) {
+          nodes.push({
+            id: `p${pageNumber}_b${block.id}_legend_label_${mType}`,
+            pageId,
+            blockId: block.id,
+            path: `customData.legendLabels.${mType}`,
+            sourceText: mLabel.trim(),
+            kind: 'caption',
+            policy: 'translate',
+            source: { blockType: block.type, field: `legendLabels.${mType}` }
+          });
+        }
+      });
+    }
+  }
+
+  // Footnote / Caption editorial visível
+  if (typeof customData.caption === 'string' && customData.caption.trim()) {
+    nodes.push({
+      id: `p${pageNumber}_b${block.id}_caption`,
+      pageId,
+      blockId: block.id,
+      path: 'customData.caption',
+      sourceText: customData.caption.trim(),
+      kind: 'caption',
+      policy: 'translate',
+      source: { blockType: block.type, field: 'caption' }
+    });
+  }
+  if (typeof customData.footnote === 'string' && customData.footnote.trim()) {
+    nodes.push({
+      id: `p${pageNumber}_b${block.id}_footnote`,
+      pageId,
+      blockId: block.id,
+      path: 'customData.footnote',
+      sourceText: customData.footnote.trim(),
+      kind: 'caption',
+      policy: 'translate',
+      source: { blockType: block.type, field: 'footnote' }
+    });
   }
 
   return nodes;

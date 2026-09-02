@@ -33,6 +33,7 @@ import { MatrixSpecTableBlock } from './blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from './blocks/SoftwareConnectivityBlock';
 import { BlockHoverTooltip, HoverTooltipItem, TooltipPosition } from './BlockHoverTooltip';
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
+import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData: Omit<ContentBlock, 'id'>;
@@ -641,10 +642,11 @@ export const A4Canvas: React.FC = () => {
   ];
 
   return (
-    <div
-      ref={scrollContainerRef}
-      id="canvas-scroll-container"
-      className="flex-1 min-h-0 h-full overflow-y-auto p-8 flex flex-col items-center bg-[#E2E8F0] space-y-10 scroll-smooth select-none relative a4-canvas-scroll-area"
+    <PrintLocalizationProvider locale={currentCatalog?.locale || 'pt-BR'} localizedSystemStrings={currentCatalog?.localizedSystemStrings}>
+      <div
+        ref={scrollContainerRef}
+        id="canvas-scroll-container"
+        className="flex-1 min-h-0 h-full overflow-y-auto p-8 flex flex-col items-center bg-[#E2E8F0] space-y-10 scroll-smooth select-none relative a4-canvas-scroll-area"
       onClick={() => {
         setSelectedBlockId(null);
         setActiveDropdown(null);
@@ -1097,5 +1099,6 @@ export const A4Canvas: React.FC = () => {
         </button>
       </div>
     </div>
+    </PrintLocalizationProvider>
   );
 };

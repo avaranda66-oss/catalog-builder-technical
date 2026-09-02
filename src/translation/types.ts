@@ -108,6 +108,15 @@ export interface CoverageAuditResult {
   isComplete: boolean;
 }
 
+export interface PrintableLocalizationMetrics {
+  printableMappingPercent: number;
+  translationAppliedPercent: number;
+  systemLocalizationPercent: number;
+  protectedIntegrityPercent: number;
+  unclassifiedPrintableCount: number;
+  isFullyLocalized: boolean;
+}
+
 export type TranslationErrorCode =
   | 'CREDENTIAL_REQUIRED'
   | 'CREDENTIAL_INVALID'

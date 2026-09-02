@@ -4,6 +4,7 @@ import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { TechnicalCell } from '../../technical-table/TechnicalCell';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
+import { TechnicalTokenProtector } from '../../../translation/token-protector';
 
 interface MatrixSpecTableBlockProps {
   block: ContentBlock;
@@ -178,7 +179,7 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
                   <div className="flex items-center justify-between gap-1">
                     <span
                       data-printable-field={`col_${idx}`}
-                      data-printable-policy="protect"
+                      data-printable-policy={idx === 0 ? 'translate' : 'protect'}
                       contentEditable
                       suppressContentEditableWarning
                       onBlur={(e) => handleUpdateColumnName(idx, e.currentTarget.innerText)}
@@ -230,7 +231,7 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
                   <td
                     key={vIdx}
                     data-printable-field={`row_${rIdx}_val_${vIdx}`}
-                    data-printable-policy="protect"
+                    data-printable-policy={TechnicalTokenProtector.isMixedValue(val) ? 'translate' : 'protect'}
                     className="py-1.5 px-2.5 border-r border-slate-200 last:border-r-0 text-center align-middle"
                   >
                     <TechnicalCell
@@ -262,7 +263,7 @@ export const MatrixSpecTableBlock: React.FC<MatrixSpecTableBlockProps> = ({
       </div>
 
       {/* Legenda Técnica */}
-      <TechnicalLegend />
+      <TechnicalLegend config={custom.legendConfig} />
 
       {/* Rodapé de Ações do Editor */}
       <div className="mt-1.5 flex items-center justify-end no-print" data-editor-action="true">

@@ -108,3 +108,35 @@ A esteira de Tradução e Ciclo de Vida está oficialmente **ENCERRADA**.
 A próxima frente será iniciada exclusivamente sob novo comando:
 
 👉 **CANVAS 3A — Structural Canvas, Inspector & Corporate Icon Registry**
+
+---
+
+## 6. Post-Closure Localization Completeness Hotfix (Hotfix 1)
+
+**Data:** 02/09/2026  
+**Status:** ✅ APLICADO E VALIDADO  
+
+### Contexto
+A infraestrutura 2C (banco de dados, autenticação, RPCs, round-trip cloud e lifecycle) já estava concluída e validada em produção.  
+Este hotfix corrigiu estritamente uma lacuna de classificação e renderização de textos imprimíveis em tabelas e legendas:
+
+1. **Cabeçalho de Matriz (`matrix_spec_table`)**:
+   - `col_0` ("Parâmetro / Modelo") reclassificado de `protect` para `translate` no extrator (`table.extractor.ts`) e no renderer (`MatrixSpecTableBlock.tsx`).
+   - Colunas de modelo (`TA-35N`, `PCON-Y18`, etc.) mantidas rigorosamente como `protect`.
+2. **Resolução de Legendas Técnicas (`TechnicalLegend`)**:
+   - Criado `PrintLocalizationProvider` compartilhado entre o Canvas e o CleanA4Document.
+   - Legendas padrão institucionais (`legend_title`, `legend_filled_square`, `legend_empty_square`, `legend_filled_circle`, `legend_empty_circle`, `legend_asterisk`, `legend_double_asterisk`, `legend_dash`) agora resolvem dinamicamente a partir do idioma do documento em `SYSTEM_PRINT_STRINGS` (com traduções completas para EN, FR, TH, ES, DE, RU, ZH, AR).
+   - Legendas personalizadas pelo usuário continuam classificadas como `translate`.
+3. **Grupos de Colunas (`columnGroups`)**:
+   - Títulos de grupos de colunas registrados no extrator e aplicados no `TranslationApplierRegistry` com policy `translate`.
+4. **Valores Mistos (Conectores Linguísticos + Grandezas Metrológicas)**:
+   - Células como `"0 a 70 bar"` não congelam mais o conector linguístico em português.
+   - Padrão 3 do `TechnicalTokenProtector` refatorado para evitar que unidades como Ampere (`A`) em regex case-insensitive engulam a preposição linguística `" a "`.
+   - Adicionado Padrão 6 para números isolados/assinados (`0`, `-0.9`), preservando 100% de integridade metrológica enquanto o conector linguístico é traduzido (`"0 to 70 bar"`, `"0 à 70 bar"`, `"0 ถึง 70 bar"`).
+5. **Métricas de Completude Estritas**:
+   - Printable Mapping: 100%
+   - Translation Applied: 100%
+   - System Localization: 100%
+   - Protected Integrity: 100%
+   - Unclassified printable: 0
+

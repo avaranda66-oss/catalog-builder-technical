@@ -24,6 +24,7 @@ import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivity
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { FontManager } from '../../translation/font-manager';
 import { applyBidiIsolationToElement } from '../../translation/bidi-helper';
+import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
@@ -55,13 +56,14 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
   };
 
   return (
-    <div
-      ref={containerRef}
-      lang={locale}
-      dir={direction}
-      className={`clean-export-root ${className}`}
-      style={{ fontFamily }}
-    >
+    <PrintLocalizationProvider locale={locale} localizedSystemStrings={catalog.localizedSystemStrings}>
+      <div
+        ref={containerRef}
+        lang={locale}
+        dir={direction}
+        className={`clean-export-root ${className}`}
+        style={{ fontFamily }}
+      >
       {catalog.pages.map((page: CatalogPage, index: number) => {
         const isSingleFullCover =
           page.blocks?.length === 1 && page.blocks[0].type === 'full_page_cover';
@@ -186,6 +188,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
           </div>
         );
       })}
-    </div>
+      </div>
+    </PrintLocalizationProvider>
   );
 };

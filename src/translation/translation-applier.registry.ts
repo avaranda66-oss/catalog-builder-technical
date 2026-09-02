@@ -8,6 +8,22 @@ import { PrintStringRegistry } from './print-strings.registry';
 
 export class TranslationApplierRegistry {
   /**
+   * Helper unificado de aplicação que aceita Array de nós ou Map de traduções.
+   */
+  static apply(
+    sourceCatalog: Catalog,
+    translations: Array<{ id: string; text: string }> | Map<string, string>,
+    targetLocale: string,
+    localizedSystemStrings?: Record<string, string>
+  ): TranslationApplierResult {
+    const map =
+      translations instanceof Map
+        ? translations
+        : new Map<string, string>(translations.map((t) => [t.id, t.text]));
+    return this.applyTranslations(sourceCatalog, map, targetLocale, localizedSystemStrings);
+  }
+
+  /**
    * Aplica um mapa completo de traduções (NodeId -> Texto Traduzido) sobre um clone do catálogo.
    * Garante idempotência e imutabilidade do catálogo de origem.
    */
@@ -670,7 +686,71 @@ export class TranslationApplierRegistry {
               }
             }
 
-            // 10. Generic Description em customData (outros blocos)
+            // 10. Grupos Superiores de Colunas (columnGroups)
+            const rawColGroups = (block as any).columnGroups || block.customData?.columnGroups;
+            if (Array.isArray(rawColGroups)) {
+              rawColGroups.forEach((grp: any, gIdx: number) => {
+                const grpKey = `p${pageNumber}_b${blockId}_colgroup_${grp.id || gIdx}_title`;
+                if (transMap.has(grpKey)) {
+                  grp.title = transMap.get(grpKey)!;
+                  appliedCount++;
+                  appliedNodeIds.add(grpKey);
+                }
+              });
+            }
+
+            // 11. Legenda Customizada e Metadados Editoriais em customData
+            if (block.customData && typeof block.customData === 'object') {
+              const custom = block.customData;
+              const legTitleKey = `p${pageNumber}_b${blockId}_legend_title`;
+              if (transMap.has(legTitleKey)) {
+                if (custom.legendConfig && typeof custom.legendConfig === 'object') {
+                  custom.legendConfig.title = transMap.get(legTitleKey)!;
+                } else {
+                  custom.legendTitle = transMap.get(legTitleKey)!;
+                }
+                appliedCount++;
+                appliedNodeIds.add(legTitleKey);
+              }
+
+              if (custom.legendConfig && Array.isArray(custom.legendConfig.items)) {
+                custom.legendConfig.items.forEach((item: any, iIdx: number) => {
+                  const itemKey = `p${pageNumber}_b${blockId}_legend_item_${item.type || iIdx}`;
+                  if (transMap.has(itemKey)) {
+                    item.label = transMap.get(itemKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(itemKey);
+                  }
+                });
+              }
+
+              if (custom.legendLabels && typeof custom.legendLabels === 'object') {
+                Object.keys(custom.legendLabels).forEach((mType) => {
+                  const lblKey = `p${pageNumber}_b${blockId}_legend_label_${mType}`;
+                  if (transMap.has(lblKey)) {
+                    custom.legendLabels[mType] = transMap.get(lblKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(lblKey);
+                  }
+                });
+              }
+
+              const capKey = `p${pageNumber}_b${blockId}_caption`;
+              if (transMap.has(capKey)) {
+                custom.caption = transMap.get(capKey)!;
+                appliedCount++;
+                appliedNodeIds.add(capKey);
+              }
+
+              const footKey = `p${pageNumber}_b${blockId}_footnote`;
+              if (transMap.has(footKey)) {
+                custom.footnote = transMap.get(footKey)!;
+                appliedCount++;
+                appliedNodeIds.add(footKey);
+              }
+            }
+
+            // 12. Generic Description em customData (outros blocos)
             if (block.type !== 'fluke_header' && block.customData && typeof block.customData === 'object') {
               if (transMap.has(`p${pageNumber}_b${blockId}_description`)) {
                 block.customData.description = transMap.get(`p${pageNumber}_b${blockId}_description`)!;

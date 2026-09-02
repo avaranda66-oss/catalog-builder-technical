@@ -192,7 +192,14 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
     defaultText: 'LEGENDA METROLÓGICA:',
     description: 'Título da legenda da tabela de especificações',
     translations: {
-      'en-US': 'LEGEND:'
+      'en-US': 'LEGEND:',
+      'fr-FR': 'LÉGENDE :',
+      'es-ES': 'LEYENDA METROLÓGICA:',
+      'de-DE': 'LEGENDE:',
+      'th-TH': 'คำอธิบายสัญลักษณ์:',
+      'ru-RU': 'УСЛОВНЫЕ ОБОЗНАЧЕНИЯ:',
+      'zh-CN': '图例：',
+      'ar-SA': 'دليل الرموز:'
     }
   },
   legend_filled_square: {
@@ -200,7 +207,14 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
     defaultText: 'Item de série incluído na configuração padrão',
     description: 'Item de legenda para quadrado preenchido',
     translations: {
-      'en-US': 'Included in standard configuration'
+      'en-US': 'Included in standard configuration',
+      'fr-FR': 'Inclus dans la configuration standard',
+      'es-ES': 'Incluido en la configuración estándar',
+      'de-DE': 'In Standardkonfiguration enthalten',
+      'th-TH': 'รวมอยู่ในการกำหนดค่ามาตรฐาน',
+      'ru-RU': 'Входит в стандартную конфигурацию',
+      'zh-CN': '包含在标准配置中',
+      'ar-SA': 'مضمّن في التكوين القياسي'
     }
   },
   legend_empty_square: {
@@ -208,7 +222,44 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
     defaultText: 'Item opcional disponível sob encomenda',
     description: 'Item de legenda para quadrado vazio',
     translations: {
-      'en-US': 'Optional / available upon request'
+      'en-US': 'Optional / available upon request',
+      'fr-FR': 'Optionnel / disponible sur demande',
+      'es-ES': 'Opcional / disponible bajo pedido',
+      'de-DE': 'Optional / auf Anfrage erhältlich',
+      'th-TH': 'ตัวเลือกเพิ่มเติม / มีให้ตามคำขอ',
+      'ru-RU': 'Опция / доступно по запросу',
+      'zh-CN': '可选 / 按需提供',
+      'ar-SA': 'اختياري / متاح عند الطلب'
+    }
+  },
+  legend_filled_circle: {
+    key: 'legend_filled_circle',
+    defaultText: 'Função suportada nativamente',
+    description: 'Item de legenda para círculo preenchido',
+    translations: {
+      'en-US': 'Natively supported function',
+      'fr-FR': 'Fonction prise en charge nativement',
+      'es-ES': 'Función admitida de forma nativa',
+      'de-DE': 'Nativ unterstützte Funktion',
+      'th-TH': 'ฟังก์ชันที่รองรับตามมาตรฐาน',
+      'ru-RU': 'Встроенная функция',
+      'zh-CN': '原生支持功能',
+      'ar-SA': 'وظيفة مدعومة أصلياً'
+    }
+  },
+  legend_empty_circle: {
+    key: 'legend_empty_circle',
+    defaultText: 'Recurso opcional sob demanda',
+    description: 'Item de legenda para círculo vazio',
+    translations: {
+      'en-US': 'Optional feature on demand',
+      'fr-FR': 'Fonctionnalité optionnelle sur demande',
+      'es-ES': 'Característica opcional bajo demanda',
+      'de-DE': 'Optionale Funktion auf Anfrage',
+      'th-TH': 'คุณลักษณะทางเลือกตามสั่ง',
+      'ru-RU': 'Опциональная функция по запросу',
+      'zh-CN': '按需可选特性',
+      'ar-SA': 'ميزة اختيارية عند الطلب'
     }
   },
   legend_asterisk: {
@@ -216,7 +267,29 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
     defaultText: 'Consultar nota técnica de rodapé (*)',
     description: 'Item de legenda para asterisco',
     translations: {
-      'en-US': 'Refer to technical footnote (*)'
+      'en-US': 'Refer to technical footnote (*)',
+      'fr-FR': 'Consulter la note technique de bas de page (*)',
+      'es-ES': 'Consultar nota técnica al pie (*)',
+      'de-DE': 'Siehe technische Fußnote (*)',
+      'th-TH': 'อ้างอิงเชิงอรรถทางเทคนิค (*)',
+      'ru-RU': 'См. техническую сноску (*)',
+      'zh-CN': '参见技术脚注 (*)',
+      'ar-SA': 'راجع الحاشية الفنية (*)'
+    }
+  },
+  legend_double_asterisk: {
+    key: 'legend_double_asterisk',
+    defaultText: 'Disponível apenas sob calibração especial (**)',
+    description: 'Item de legenda para duplo asterisco',
+    translations: {
+      'en-US': 'Available only under special calibration (**)',
+      'fr-FR': 'Disponible uniquement sous étalonnage spécial (**)',
+      'es-ES': 'Disponible sólo bajo calibración especial (**)',
+      'de-DE': 'Nur unter Sonderkalibrierung verfügbar (**)',
+      'th-TH': 'ใช้ได้เฉพาะภายใต้การสอบเทียบพิเศษเท่านั้น (**)',
+      'ru-RU': 'Доступно только при специальной калибровке (**)',
+      'zh-CN': '仅在特殊校准下可用 (**)',
+      'ar-SA': 'متاح فقط تحت معايرة خاصة (**)'
     }
   },
   legend_dash: {
@@ -224,7 +297,14 @@ export const SYSTEM_PRINT_STRINGS: Record<string, PrintStringDefinition> = {
     defaultText: 'Não aplicável para este modelo',
     description: 'Item de legenda para traço',
     translations: {
-      'en-US': 'Not applicable for this model'
+      'en-US': 'Not applicable for this model',
+      'fr-FR': 'Non applicable pour ce modèle',
+      'es-ES': 'No aplicable para este modelo',
+      'de-DE': 'Für dieses Modell nicht zutreffend',
+      'th-TH': 'ใช้ไม่ได้กับรุ่นนี้',
+      'ru-RU': 'Не применимо для этой модели',
+      'zh-CN': '不适用于此型号',
+      'ar-SA': 'غير منطبق على هذا الطراز'
     }
   }
 };

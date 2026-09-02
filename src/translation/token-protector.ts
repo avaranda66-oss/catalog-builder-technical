@@ -14,16 +14,69 @@ export class TechnicalTokenProtector {
     // 2. Normas e certificações industriais
     /\b(ISO\/IEC\s*17025|ISO\s*9001|IP6[5-8]|NEMA\s*\w+|HART\s*\d*|Modbus(\s*RTU|\s*TCP)?|Profibus|FOUNDATION\s*Fieldbus|Ethernet|USB|RS-?485|RS-?232|Bluetooth|Wi-?Fi)\b/gi,
 
-    // 3. Medições numéricas individuais com unidades metrológicas (ex: -25 °C, +155 °C, 140 °C, 100 bar, 4-20 mA)
-    /([+-]?\d+(?:[.,]\d+)?\s*(?:°C|°F|K|bar|mbar|psi|kPa|MPa|Pa|mA|mV|Vcc|Vca|Vac|Vdc|V|A|W|Hz|kHz|MHz|% FS|% FE|FS|ppm|Ω|kΩ|MΩ))\b/gi,
+    // 3a. Medições com unidades metrológicas multi-caractere (case-insensitive: bar, psi, kPa, Vdc, etc.)
+    /([+-]?\d+(?:[.,]\d+)?\s*(?:°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vcc|Vca|Vac|Vdc|Hz|kHz|MHz|% FS|% FE|FS|ppm|Ω|kΩ|MΩ))\b/gi,
+
+    // 3b. Medições com unidades de caractere único (case-sensitive estrito: A, V, W, K — evita colisão com a preposição linguística 'a')
+    /([+-]?\d+(?:[.,]\d+)?\s*(?:[AVWK]))\b/g,
 
     // 4. Incertezas e exatidão (ex: ±0.075% FS, ±0.1 °C, ±0.05 °C)
     /(±\s*\d+(?:[.,]\d+)?\s*(?:% FS|% FE|%|°C|°F|K|bar|psi|ppm|mA|mV|V)?)/gi,
 
     // 5. Conexões de processo e roscas padronizadas (ex: 1/2" NPT, 1/4" BSP, M20x1.5)
     /(\b\d+\/\d+["”]?\s*(?:NPT|BSP|BSPT|GAS|UNF|G\d*)\b)/gi,
-    /(\bM\d+x\d+(?:[.,]\d+)?\b)/gi
+    /(\bM\d+x\d+(?:[.,]\d+)?\b)/gi,
+
+    // 6. Números isolados ou com sinal em faixas metrológicas (ex: 0, -0.9, +10)
+    /(?:^|(?<=\s))[+-]?\d+(?:[.,]\d+)?(?=\s|$|[.,;:!])/g
   ];
+
+  /**
+   * Determina se um valor de célula técnica é misto (linguagem natural + números/unidades),
+   * como "0 a 70 bar", "-0.9 a 40 bar", "sob encomenda", etc.
+   * Valores puramente simbólicos (■, □, —) ou códigos/números com unidades isoladas (±0.025% FE)
+   * são classificados como 'protect'.
+   */
+  static isMixedValue(text: string): boolean {
+    if (!text || typeof text !== 'string') return false;
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+
+    // Símbolos técnicos puros
+    if (['■', '□', '●', '○', '—', '-', '•', '*', '**'].includes(trimmed)) {
+      return false;
+    }
+
+    // Se for pura medição com unidade ou pura incerteza sem conectores de linguagem natural
+    // ex: "±0.025% FE", "< 0.003% FE", "24Vdc", "IP67"
+    const pureTechnicalOnly = /^(?:±|<|>|<=|>=|~)?\s*[+-]?\d+(?:[.,]\d+)?\s*(?:°C|°F|K|bar|mbar|psi|kPa|MPa|Pa|mA|mV|Vcc|Vca|Vac|Vdc|V|A|W|Hz|kHz|MHz|% FS|% FE|%|FS|ppm|Ω|kΩ|MΩ)?$/i;
+    if (pureTechnicalOnly.test(trimmed)) {
+      return false;
+    }
+
+    // Se contém conectores linguísticos comuns em faixas metrológicas (ex: " a ", " até ", " to ", " à ", " de ")
+    const linguisticConnector = /\b(a|até|de|em|com|sem|ou|e|to|from|and|or|with|without|à|au|et|ou|jusqu'à)\b/i;
+    if (linguisticConnector.test(trimmed)) {
+      return true;
+    }
+
+    // Se contém palavras alfabéticas comuns (não unidades ou códigos padrão)
+    const words = trimmed.match(/[a-zA-ZÀ-ÿ]{2,}/g);
+    if (words) {
+      const knownTechnicalWords = new Set([
+        'HART', 'MODBUS', 'PROFIBUS', 'ETHERNET', 'BLUETOOTH', 'WIFI',
+        'NPT', 'BSP', 'BSPT', 'GAS', 'UNF', 'NEMA', 'ISO', 'IEC', 'RBC',
+        'FE', 'FS', 'PCON', 'ISOPLAN', 'PRESYS', 'BAR', 'PSI', 'KPA', 'MPA', 'PA',
+        'MA', 'MV', 'VDC', 'VAC', 'VCC', 'HZ', 'KHZ', 'MHZ', 'PPM'
+      ]);
+      const hasNaturalWord = words.some((w) => !knownTechnicalWords.has(w.toUpperCase()));
+      if (hasNaturalWord) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   /**
    * Alias de conveniência para protectTokens.
