@@ -9,13 +9,15 @@ import { TableVisualFamily } from '../../technical-table/table-tokens';
 interface CustomTableBlockProps {
   block: ContentBlock;
   pageId: string;
-  isSelected: boolean;
+  isSelected?: boolean;
+  isExport?: boolean;
 }
 
 export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   block,
   pageId,
-  isSelected
+  isSelected,
+  isExport
 }) => {
   const { updateBlock, setSelectedBlockId, updateCellOverride } = useCatalogStore();
   const { getProduct } = useLibraryStore();
@@ -34,15 +36,18 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   const family: TableVisualFamily = (block.customData?.tableFamily as TableVisualFamily) || 'monochrome';
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
+    if (isExport) return;
     updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
   };
 
   const handleColumnLabelBlur = (colKey: string, newLabel: string) => {
+    if (isExport) return;
     const updated = columns.map((c) => (c.key === colKey ? { ...c, label: newLabel } : c));
     updateBlock(pageId, block.id, { tableColumns: updated });
   };
 
   const handleAddColumn = () => {
+    if (isExport) return;
     const customKey = `col_${Date.now()}`;
     const newCol: TableColumnConfig = {
       key: customKey,
@@ -54,11 +59,12 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   };
 
   const handleRemoveColumn = (colKey: string) => {
-    if (columns.length <= 1) return;
+    if (isExport || columns.length <= 1) return;
     updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
   };
 
   const handleAddRow = () => {
+    if (isExport) return;
     const newRow: CatalogTableRow = {
       id: `crow-${Date.now()}`,
       localOverrides: {
@@ -71,23 +77,25 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   };
 
   const handleRemoveRow = (rowId: string) => {
+    if (isExport) return;
     updateBlock(pageId, block.id, { tableRows: rows.filter((r) => r.id !== rowId) });
   };
 
   return (
     <div
       onClick={(e) => {
+        if (isExport) return;
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
       className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
-        isSelected ? 'ring-2 ring-blue-600' : 'hover:border-slate-400'
+        isSelected && !isExport ? 'ring-2 ring-blue-600' : isExport ? 'shadow-none' : 'hover:border-slate-400'
       }`}
     >
       {/* Header Técnico */}
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
         <h3
-          contentEditable
+          contentEditable={!isExport}
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
           className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
@@ -96,19 +104,21 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
           <span>{block.title || 'TABELA PERSONALIZADA DE ESPECIFICAÇÕES'}</span>
         </h3>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAddColumn();
-          }}
-          className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
-          data-editor-action="true"
-          title="Adicionar coluna"
-        >
-          <Columns className="w-3 h-3" />
-          <span>+ Coluna</span>
-        </button>
+        {!isExport && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddColumn();
+            }}
+            className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
+            data-editor-action="true"
+            title="Adicionar coluna"
+          >
+            <Columns className="w-3 h-3" />
+            <span>+ Coluna</span>
+          </button>
+        )}
       </div>
 
       {/* Motor Unificado de Tabela */}
@@ -117,7 +127,7 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
         rows={rows}
         getProduct={getProduct}
         family={family}
-        isEditable={true}
+        isEditable={!isExport}
         onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
         onRemoveRow={handleRemoveRow}
         onRemoveColumn={handleRemoveColumn}
@@ -125,19 +135,21 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
       />
 
       {/* Rodapé de Ações do Editor */}
-      <div className="mt-1.5 flex items-center justify-end no-print" data-editor-action="true">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAddRow();
-          }}
-          className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#003366] hover:bg-[#002244] px-2.5 py-1 rounded-none transition-colors"
-        >
-          <Plus className="w-3 h-3" />
-          <span>+ Inserir Linha</span>
-        </button>
-      </div>
+      {!isExport && (
+        <div className="mt-1.5 flex items-center justify-end no-print" data-editor-action="true">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddRow();
+            }}
+            className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#003366] hover:bg-[#002244] px-2.5 py-1 rounded-none transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Inserir Linha</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

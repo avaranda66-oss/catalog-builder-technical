@@ -148,6 +148,17 @@ export type MutationKind =
   | 'EDIT_TEXT'
   | 'LOAD_PRESET'
   | 'CREATE_COPY'
+  | 'ADD_TABLE_ROW'
+  | 'REMOVE_TABLE_ROW'
+  | 'UPDATE_TABLE_CELL'
+  | 'RESTORE_TABLE_CELL'
+  | 'ADD_TABLE_COLUMN'
+  | 'REMOVE_TABLE_COLUMN'
+  | 'RENAME_TABLE_COLUMN'
+  | 'UPDATE_LEGEND'
+  | 'UPDATE_FEATURE'
+  | 'UPDATE_ORDERING_CODE'
+  | 'UPDATE_CANVAS_LAYER'
   | 'MANUAL_EDIT';
 
 export interface MutationMetadata {
@@ -155,6 +166,8 @@ export interface MutationMetadata {
   clientInstanceId: string;
   targetId?: string; // blockId or pageId
   targetPageId?: string;
+  targetRowId?: string;
+  fieldKey?: string;
   summary: string;
   timestamp: string;
 }

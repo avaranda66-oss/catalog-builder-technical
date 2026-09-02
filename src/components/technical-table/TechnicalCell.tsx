@@ -99,21 +99,25 @@ export const TechnicalCell: React.FC<TechnicalCellProps> = ({
     <div className={`relative flex items-center gap-1 w-full ${alignClass} ${className}`}>
       {markerType ? (
         <div className="inline-flex items-center gap-1 group/marker">
-          <button
-            type="button"
-            onClick={handleCycleMarker}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setShowPicker(!showPicker);
-            }}
-            className={`p-0.5 rounded-none transition-transform select-none ${
-              isEditable ? 'cursor-pointer hover:scale-125' : ''
-            }`}
-            title={isEditable ? 'Clique para alternar (ou botão direito para escolher)' : undefined}
-          >
-            <TechnicalMarker type={markerType} size={11} color="#003366" />
-          </button>
+          {isEditable ? (
+            <button
+              type="button"
+              onClick={handleCycleMarker}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowPicker(!showPicker);
+              }}
+              className="p-0.5 rounded-none transition-transform select-none cursor-pointer hover:scale-125"
+              title="Clique para alternar (ou botão direito para escolher)"
+            >
+              <TechnicalMarker type={markerType} size={11} color="#003366" />
+            </button>
+          ) : (
+            <span className="p-0.5 select-none inline-flex items-center">
+              <TechnicalMarker type={markerType} size={11} color="#003366" />
+            </span>
+          )}
 
           {/* Mini Seletor de Marcadores */}
           {showPicker && isEditable && (

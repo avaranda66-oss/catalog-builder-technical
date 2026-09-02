@@ -2,8 +2,12 @@ import { create } from 'zustand';
 import {
   Catalog,
   ContentBlock,
-  generateUniqueCatalogTitle,
+  CatalogPage,
+  CatalogTableRow,
+  TableColumnConfig,
   MutationMetadata,
+  MutationKind,
+  generateUniqueCatalogTitle,
   analyzeCatalogStructuralDelta,
   EditorDocumentContext
 } from '../domain/catalog.schema';
@@ -185,11 +189,26 @@ interface CatalogState {
   updateBlock: (pageId: string, blockId: string, updates: Partial<ContentBlock>) => void;
   removeBlock: (pageId: string, blockId: string) => void;
 
-  // Manipulação de Linhas e Overrides Locais em Tabelas
+  // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
+  commitDocumentMutation: (
+    updater: (draft: Catalog) => Catalog | void,
+    mutationKind: MutationKind,
+    details?: {
+      targetId?: string;
+      targetPageId?: string;
+      targetRowId?: string;
+      fieldKey?: string;
+      summary?: string;
+    }
+  ) => void;
   updateCellOverride: (blockId: string, rowId: string, fieldKey: string, value: string) => void;
   restoreCellToLibrary: (blockId: string, rowId: string, fieldKey: string) => void;
   addRowToTable: (blockId: string, productRefId: string) => void;
   removeRowFromTable: (blockId: string, rowId: string) => void;
+  addTableColumn: (blockId: string, column: TableColumnConfig) => void;
+  removeTableColumn: (blockId: string, columnKey: string) => void;
+  renameTableColumn: (blockId: string, columnKey: string, newLabel: string) => void;
+  updateTableColumn: (blockId: string, columnKey: string, updates: Partial<TableColumnConfig>) => void;
 
   // Persistência & Fila Single-Flight com Retorno Explícito de Resultado
   saveCurrentCatalog: () => Promise<SaveResult>;
@@ -207,6 +226,7 @@ interface CatalogState {
   openTemplateForEditing: (templateId: string) => Promise<void>;
   saveActiveDocument: () => Promise<SaveResult>;
   flushCatalog: (catalogId?: string) => Promise<SaveResult>;
+  handleTemplateFlushAck: (templateId: string, confirmedVersion: number, error?: string) => void;
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
@@ -258,31 +278,56 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   saveActiveDocument: async (): Promise<SaveResult> => {
     const { editorContext, currentCatalog } = get();
+    if (!currentCatalog) return { success: false, status: 'error', error: 'Nenhum documento ativo' };
+
     if (editorContext.kind === 'catalog') {
       return await get().flushCatalog(editorContext.catalogId || currentCatalog?.id);
     } else if (editorContext.kind === 'template') {
-      const templateId = editorContext.templateId || currentCatalog?.id;
+      const templateId = editorContext.templateId || currentCatalog.id;
       if (!templateId) {
         return { success: false, status: 'error', error: 'ID do template ausente' };
       }
       if (currentCatalog) {
-        await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, currentCatalog.version, currentCatalog.title);
+        await useTemplateStore.getState().updateCustomTemplate(
+          templateId,
+          currentCatalog,
+          currentCatalog.version,
+          currentCatalog.title
+        );
       }
       const res = await useTemplateStore.getState().flushTemplate(templateId);
       if (res.success && res.data) {
-        const confirmedVersion = res.data.version || (currentCatalog?.version ? currentCatalog.version + 1 : 1);
+        const confirmedVersion = res.data.version || (currentCatalog.version ? currentCatalog.version + 1 : 1);
         if (get().currentCatalog) {
           get().setCurrentCatalog({
             ...get().currentCatalog!,
             version: confirmedVersion
           }, false);
         }
-        set({ isDirty: false, syncStatus: 'synced', syncError: null });
+        set({
+          isDirty: false,
+          isSaving: false,
+          syncStatus: 'synced',
+          syncError: null,
+          serverSavedAt: new Date().toISOString(),
+          lastSavedAt: new Date().toISOString(),
+          lastAcknowledgedLocalRevision: get().localRevision
+        });
         return { success: true, status: 'synced', version: confirmedVersion };
       }
+      if (res.conflict) {
+        set({ isDirty: true, isSaving: false, syncStatus: 'conflict', syncError: res.error });
+        return {
+          success: false,
+          status: 'conflict',
+          errorCode: '40001',
+          error: res.error
+        };
+      }
+      set({ isDirty: true, isSaving: false, syncStatus: 'error', syncError: res.error });
       return {
         success: false,
-        status: res.conflict ? 'conflict' : 'error',
+        status: 'error',
         error: res.error
       };
     }
@@ -402,450 +447,382 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION E METADATA
   // =========================================================================
 
-  addPage: (type = 'technical') => {
-    const { currentCatalog, localRevision } = get();
+  // =========================================================================
+  // FASE P0.4: PIPELINE UNIFICADO DE MUTAÇÃO DOCUMENTAL (UNIVERSAL PERSISTENCE)
+  // =========================================================================
+
+  commitDocumentMutation: (updater, mutationKind, details) => {
+    const { currentCatalog, localRevision, editorContext } = get();
     if (!currentCatalog) return;
 
+    const draft = structuredClone(currentCatalog);
+    const updated = updater(draft) || draft;
+    updated.updatedAt = new Date().toISOString();
+
+    const nextRev = localRevision + 1;
+    const clientId = getClientInstanceId();
+    const mutation: MutationMetadata = {
+      kind: mutationKind,
+      clientInstanceId: clientId,
+      targetId: details?.targetId,
+      targetPageId: details?.targetPageId,
+      targetRowId: details?.targetRowId,
+      fieldKey: details?.fieldKey,
+      summary: details?.summary || `Mutation ${mutationKind} on ${currentCatalog.id}`,
+      timestamp: new Date().toISOString()
+    };
+
+    updated.lastMutation = mutation;
+
+    const isDebug = typeof window !== 'undefined' && (
+      new URLSearchParams(window.location.search).get('debugRealtime') === '1' ||
+      import.meta.env.DEV
+    );
+
+    if (isDebug) {
+      console.log('[MUTATION]', {
+        kind: mutationKind,
+        documentKind: editorContext.kind,
+        documentId: currentCatalog.id,
+        revision: nextRev,
+        pageId: details?.targetPageId,
+        blockId: details?.targetId,
+        rowId: details?.targetRowId,
+        fieldKey: details?.fieldKey,
+        summary: mutation.summary
+      });
+    }
+
+    debugSetCatalog(mutationKind, currentCatalog, updated, { localRevision: nextRev });
+
+    set({
+      currentCatalog: updated,
+      localRevision: nextRev,
+      lastMutation: mutation,
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+
+    void get().saveCurrentCatalog();
+  },
+
+  addPage: (type = 'technical') => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return;
     const newPageNumber = currentCatalog.pages.length + 1;
-    const newPage = {
-      id: `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    const newPageId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newPage: CatalogPage = {
+      id: newPageId,
       pageNumber: newPageNumber,
       pageType: type,
       title: `Folha ${newPageNumber}`,
       blocks: []
     };
 
-    const updatedCatalog: Catalog = {
-      ...currentCatalog,
-      pages: [...currentCatalog.pages, newPage],
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'ADD_PAGE',
-      clientInstanceId: getClientInstanceId(),
-      targetId: newPage.id,
-      summary: `Adicionada Folha ${newPageNumber} (${type})`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('addPage', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      activePageIndex: currentCatalog.pages.length,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        draft.pages.push(newPage);
+      },
+      'ADD_PAGE',
+      { targetId: newPageId, summary: `Adicionada Folha ${newPageNumber} (${type})` }
+    );
+    set({ activePageIndex: currentCatalog.pages.length });
   },
 
   removePage: (pageId) => {
-    const { currentCatalog, activePageIndex, localRevision } = get();
+    const { currentCatalog, activePageIndex } = get();
     if (!currentCatalog || currentCatalog.pages.length <= 1) return;
 
-    const updatedPages = currentCatalog.pages
-      .filter((p) => p.id !== pageId)
-      .map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-
-    const updatedCatalog: Catalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextIndex = Math.min(activePageIndex, updatedPages.length - 1);
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'REMOVE_PAGE',
-      clientInstanceId: getClientInstanceId(),
-      targetId: pageId,
-      summary: `Removida página ${pageId}`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('removePage', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      activePageIndex: nextIndex,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        draft.pages = draft.pages
+          .filter((p) => p.id !== pageId)
+          .map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
+      },
+      'REMOVE_PAGE',
+      { targetId: pageId, summary: `Removida página ${pageId}` }
+    );
+    const updatedCount = get().currentCatalog?.pages.length || 1;
+    set({ activePageIndex: Math.min(activePageIndex, updatedCount - 1) });
   },
 
   reorderPages: (fromIndex, toIndex) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const pages = [...currentCatalog.pages];
-    const [moved] = pages.splice(fromIndex, 1);
-    pages.splice(toIndex, 0, moved);
-
-    const reorderedPages = pages.map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-    const updatedCatalog: Catalog = {
-      ...currentCatalog,
-      pages: reorderedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'REORDER_PAGES',
-      clientInstanceId: getClientInstanceId(),
-      summary: `Reordenadas páginas da posição ${fromIndex + 1} para ${toIndex + 1}`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('reorderPages', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      activePageIndex: toIndex,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        const pages = [...draft.pages];
+        const [moved] = pages.splice(fromIndex, 1);
+        pages.splice(toIndex, 0, moved);
+        draft.pages = pages.map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
+      },
+      'REORDER_PAGES',
+      { summary: `Reordenadas páginas da posição ${fromIndex + 1} para ${toIndex + 1}` }
+    );
+    set({ activePageIndex: toIndex });
   },
 
   setPageTitle: (pageId, title) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const updatedPages = currentCatalog.pages.map((p) =>
-      p.id === pageId ? { ...p, title } : p
+    get().commitDocumentMutation(
+      (draft) => {
+        draft.pages = draft.pages.map((p) => (p.id === pageId ? { ...p, title } : p));
+      },
+      'EDIT_TEXT',
+      { targetId: pageId, summary: `Título da página ${pageId} alterado para "${title}"` }
     );
-
-    const updatedCatalog = { ...currentCatalog, pages: updatedPages, updatedAt: new Date().toISOString() };
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'EDIT_TEXT',
-      clientInstanceId: getClientInstanceId(),
-      targetId: pageId,
-      summary: `Título da página ${pageId} alterado para "${title}"`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('setPageTitle', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
   },
 
   addBlock: (pageId, blockData) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
+    const newBlockId = `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newBlock: ContentBlock = {
       ...blockData,
-      id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      id: newBlockId
     };
 
-    const updatedPages = currentCatalog.pages.map((p) =>
-      p.id === pageId ? { ...p, blocks: [...(p.blocks || []), newBlock] } : p
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = [...(page.blocks || []), newBlock];
+        }
+      },
+      'ADD_BLOCK',
+      { targetId: newBlockId, targetPageId: pageId, summary: `Adicionado bloco ${newBlock.type} "${newBlock.title || ''}" à página ${pageId}` }
     );
-
-    const updatedCatalog: Catalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'ADD_BLOCK',
-      clientInstanceId: getClientInstanceId(),
-      targetId: newBlock.id,
-      targetPageId: pageId,
-      summary: `Adicionado bloco ${newBlock.type} "${newBlock.title || ''}" à página ${pageId}`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('addBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      selectedBlockId: newBlock.id,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    set({ selectedBlockId: newBlockId });
   },
 
   updateBlock: (pageId, blockId, updates) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const updatedPages = currentCatalog.pages.map((p) => {
-      if (p.id !== pageId) return p;
-      return {
-        ...p,
-        blocks: (p.blocks || []).map((b) => (b.id === blockId ? { ...b, ...updates } : b))
-      };
-    });
-
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'UPDATE_BLOCK',
-      clientInstanceId: getClientInstanceId(),
-      targetId: blockId,
-      targetPageId: pageId,
-      summary: `Atualizado bloco ${blockId} na página ${pageId}`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('updateBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = (page.blocks || []).map((b) => (b.id === blockId ? { ...b, ...updates } : b));
+        }
+      },
+      'UPDATE_BLOCK',
+      { targetId: blockId, targetPageId: pageId, summary: `Atualizado bloco ${blockId} na página ${pageId}` }
+    );
   },
 
   removeBlock: (pageId, blockId) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const updatedPages = currentCatalog.pages.map((p) => {
-      if (p.id !== pageId) return p;
-      return {
-        ...p,
-        blocks: (p.blocks || []).filter((b) => b.id !== blockId)
-      };
-    });
-
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    const mutation: MutationMetadata = {
-      kind: 'REMOVE_BLOCK',
-      clientInstanceId: getClientInstanceId(),
-      targetId: blockId,
-      targetPageId: pageId,
-      summary: `Removido bloco ${blockId} da página ${pageId}`,
-      timestamp: new Date().toISOString()
-    };
-
-    debugSetCatalog('removeBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      selectedBlockId: null,
-      localRevision: nextRev,
-      lastMutation: mutation,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = (page.blocks || []).filter((b) => b.id !== blockId);
+        }
+      },
+      'REMOVE_BLOCK',
+      { targetId: blockId, targetPageId: pageId, summary: `Removido bloco ${blockId} da página ${pageId}` }
+    );
+    set({ selectedBlockId: null });
   },
 
   updateCellOverride: (blockId, rowId, fieldKey, value) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const updatedPages = currentCatalog.pages.map((p) => ({
-      ...p,
-      blocks: (p.blocks || []).map((b) => {
-        if (b.id !== blockId || !b.tableRows) return b;
-        return {
-          ...b,
-          tableRows: b.tableRows.map((r) => {
-            if (r.id !== rowId) return r;
-            return {
-              ...r,
-              localOverrides: {
-                ...(r.localOverrides || {}),
-                [fieldKey]: value
-              }
-            };
-          })
-        };
-      })
-    }));
-
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    debugSetCatalog('updateCellOverride', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.map((r) => {
+              if (r.id !== rowId) return r;
+              return {
+                ...r,
+                localOverrides: {
+                  ...(r.localOverrides || {}),
+                  [fieldKey]: value
+                }
+              };
+            });
+            break;
+          }
+        }
+      },
+      'UPDATE_TABLE_CELL',
+      { targetId: blockId, targetRowId: rowId, fieldKey, summary: `Override na célula [row=${rowId}, col=${fieldKey}] alterado para "${value}"` }
+    );
   },
 
   restoreCellToLibrary: (blockId, rowId, fieldKey) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const updatedPages = currentCatalog.pages.map((p) => ({
-      ...p,
-      blocks: (p.blocks || []).map((b) => {
-        if (b.id !== blockId || !b.tableRows) return b;
-        return {
-          ...b,
-          tableRows: b.tableRows.map((r) => {
-            if (r.id !== rowId || !r.localOverrides) return r;
-            const updatedOverrides = { ...r.localOverrides };
-            delete updatedOverrides[fieldKey];
-            return {
-              ...r,
-              localOverrides: updatedOverrides
-            };
-          })
-        };
-      })
-    }));
-
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    debugSetCatalog('restoreCellToLibrary', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.map((r) => {
+              if (r.id !== rowId || !r.localOverrides) return r;
+              const updatedOverrides = { ...r.localOverrides };
+              delete updatedOverrides[fieldKey];
+              return {
+                ...r,
+                localOverrides: updatedOverrides
+              };
+            });
+            break;
+          }
+        }
+      },
+      'RESTORE_TABLE_CELL',
+      { targetId: blockId, targetRowId: rowId, fieldKey, summary: `Célula [row=${rowId}, col=${fieldKey}] restaurada para o padrão` }
+    );
   },
 
   addRowToTable: (blockId, productRefId) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
-
-    const newRow = {
-      id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      productRefId,
-      localOverrides: {},
-      customNotes: '',
-      order: 0
-    };
-
-    const updatedPages = currentCatalog.pages.map((p) => ({
-      ...p,
-      blocks: (p.blocks || []).map((b) => {
-        if (b.id !== blockId) return b;
-        const currentRows = b.tableRows || [];
-        return {
-          ...b,
-          tableRows: [...currentRows, { ...newRow, order: currentRows.length }]
-        };
-      })
-    }));
-
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
-
-    const nextRev = localRevision + 1;
-    debugSetCatalog('addRowToTable', currentCatalog, updatedCatalog, { localRevision: nextRev });
-
-    set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      isDirty: true,
-      syncStatus: 'dirty'
-    });
-    void get().saveCurrentCatalog();
+    const rowId = `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block) {
+            const currentRows = block.tableRows || [];
+            const newRow: CatalogTableRow = {
+              id: rowId,
+              productRefId,
+              localOverrides: {},
+              customNotes: '',
+              order: currentRows.length
+            };
+            block.tableRows = [...currentRows, newRow];
+            break;
+          }
+        }
+      },
+      'ADD_TABLE_ROW',
+      { targetId: blockId, targetRowId: rowId, summary: `Adicionado produto ${productRefId} (row: ${rowId}) ao bloco ${blockId}` }
+    );
   },
 
   removeRowFromTable: (blockId, rowId) => {
-    const { currentCatalog, localRevision } = get();
-    if (!currentCatalog) return;
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.filter((r) => r.id !== rowId);
+            break;
+          }
+        }
+      },
+      'REMOVE_TABLE_ROW',
+      { targetId: blockId, targetRowId: rowId, summary: `Removida linha ${rowId} do bloco ${blockId}` }
+    );
+  },
 
-    const updatedPages = currentCatalog.pages.map((p) => ({
-      ...p,
-      blocks: (p.blocks || []).map((b) => {
-        if (b.id !== blockId || !b.tableRows) return b;
-        return {
-          ...b,
-          tableRows: b.tableRows.filter((r) => r.id !== rowId)
-        };
-      })
-    }));
+  addTableColumn: (blockId, column) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block) {
+            block.tableColumns = [...(block.tableColumns || []), column];
+            break;
+          }
+        }
+      },
+      'ADD_TABLE_COLUMN',
+      { targetId: blockId, fieldKey: column.key, summary: `Adicionada coluna "${column.label}" ao bloco ${blockId}` }
+    );
+  },
 
-    const updatedCatalog = {
-      ...currentCatalog,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString()
-    };
+  removeTableColumn: (blockId, columnKey) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableColumns) {
+            block.tableColumns = block.tableColumns.filter((c) => c.key !== columnKey);
+            break;
+          }
+        }
+      },
+      'REMOVE_TABLE_COLUMN',
+      { targetId: blockId, fieldKey: columnKey, summary: `Removida coluna "${columnKey}" do bloco ${blockId}` }
+    );
+  },
 
-    const nextRev = localRevision + 1;
-    debugSetCatalog('removeRowFromTable', currentCatalog, updatedCatalog, { localRevision: nextRev });
+  renameTableColumn: (blockId, columnKey, newLabel) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableColumns) {
+            block.tableColumns = block.tableColumns.map((c) =>
+              c.key === columnKey ? { ...c, label: newLabel } : c
+            );
+            break;
+          }
+        }
+      },
+      'RENAME_TABLE_COLUMN',
+      { targetId: blockId, fieldKey: columnKey, summary: `Coluna "${columnKey}" renomeada para "${newLabel}" no bloco ${blockId}` }
+    );
+  },
 
+  updateTableColumn: (blockId, columnKey, updates) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableColumns) {
+            block.tableColumns = block.tableColumns.map((c) =>
+              c.key === columnKey ? { ...c, ...updates } : c
+            );
+            break;
+          }
+        }
+      },
+      'UPDATE_BLOCK',
+      { targetId: blockId, fieldKey: columnKey, summary: `Coluna "${columnKey}" atualizada no bloco ${blockId}` }
+    );
+  },
+
+  handleTemplateFlushAck: (templateId: string, confirmedVersion: number, error?: string) => {
+    const { editorContext, currentCatalog } = get();
+    if (editorContext.kind !== 'template' || !currentCatalog) return;
+    if (editorContext.templateId !== templateId && currentCatalog.id !== templateId) return;
+
+    if (error) {
+      set({ isSaving: false, syncStatus: 'error', syncError: error });
+      return;
+    }
+
+    const nextCatalog = { ...currentCatalog, version: confirmedVersion };
     set({
-      currentCatalog: updatedCatalog,
-      localRevision: nextRev,
-      isDirty: true,
-      syncStatus: 'dirty'
+      currentCatalog: nextCatalog,
+      isSaving: false,
+      isDirty: false,
+      syncStatus: 'synced',
+      syncError: null,
+      serverSavedAt: new Date().toISOString(),
+      lastSavedAt: new Date().toISOString(),
+      lastAcknowledgedLocalRevision: get().localRevision
     });
-    void get().saveCurrentCatalog();
   },
 
   // =========================================================================
-  // FASE 1.4: FILA PER-CATALOG, SAVE AS NEW, FLUSH & REVISION ACK
+  // FASE P0.4: FILA SINGLE-FLIGHT UNIFICADA PARA CATALOG E TEMPLATE
   // =========================================================================
 
   saveCurrentCatalog: async (): Promise<SaveResult> => {
     const { currentCatalog, editorContext } = get();
     if (!currentCatalog) {
-      return { success: false, status: 'error', error: 'Nenhum catálogo ativo para salvar.' };
+      return { success: false, status: 'error', error: 'Nenhum documento ativo para salvar.' };
     }
 
-    // REGRA DE DOMÍNIO FASE 1.5: Se o documento for TEMPLATE, ZERO escritas na tabela catalogs
-    if (editorContext?.kind === 'template') {
+    // MODO TEMPLATE: Agendamento de persistência debounced no TemplateStore
+    if (editorContext.kind === 'template') {
       const templateId = editorContext.templateId || currentCatalog.id;
       const expectedVer = currentCatalog.version ?? 1;
       set({ isSaving: true, syncStatus: 'saving', isDirty: true });
-      void useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer, currentCatalog.title);
+      void useTemplateStore.getState().updateCustomTemplate(
+        templateId,
+        currentCatalog,
+        expectedVer,
+        currentCatalog.title
+      );
       return { success: true, status: 'saving', version: expectedVer };
     }
 
+    // MODO CATÁLOGO: Fila Single-Flight por catálogo
     const queue = getCatalogQueue(currentCatalog.id);
 
     if (queue.isSaving) {
@@ -857,6 +834,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
 
     queue.isSaving = true;
+
+    // Watchdog Timer de 10s para garantir que saving nunca trave
+    let watchdogTimer: any = null;
+    const watchdogPromise = new Promise<{ timeout: boolean }>((resolve) => {
+      watchdogTimer = setTimeout(() => {
+        resolve({ timeout: true });
+      }, 10000);
+    });
+
     const savePromise = (async () => {
       let finalResult: SaveResult = { success: false, status: 'saving' };
       try {
@@ -881,7 +867,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             }
           });
 
-          // 1. Salva em Cache Local (IndexedDB / localStorage backup)
+          // 1. Salva em Cache Local
           try {
             await StorageService.cacheCatalog(catalogSnapshot);
             set({ cachedAt: new Date().toISOString() });
@@ -895,16 +881,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             ? `[client=${clientId}] [kind=${mutation.kind}] [target=${mutation.targetId || 'all'}] ${mutation.summary}`
             : `[client=${clientId}] [kind=MANUAL_EDIT] [target=all] Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`;
 
-          console.log('[CATALOG SAVE ORIGIN]', {
-            clientInstanceId: clientId,
-            catalogId: catalogSnapshot.id,
-            expectedVersion,
-            localRevision: capturedRevision,
-            mutationKind: mutation?.kind || 'MANUAL_EDIT',
-            mutationSummary: mutation?.summary || 'Salvamento de catálogo',
-            pageStructure: getCatalogStructuralFingerprint(catalogSnapshot),
-            timestamp: new Date().toISOString()
-          });
+          const isDebug = typeof window !== 'undefined' && (
+            new URLSearchParams(window.location.search).get('debugRealtime') === '1' ||
+            import.meta.env.DEV
+          );
+
+          if (isDebug) {
+            console.log('[SAVE SCHEDULED]', {
+              documentKind: 'catalog',
+              documentId: catalogSnapshot.id,
+              expectedVersion,
+              capturedRevision,
+              mutationKind: mutation?.kind || 'MANUAL_EDIT'
+            });
+          }
 
           const payloadToSend: Catalog = {
             ...catalogSnapshot,
@@ -916,7 +906,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             }
           };
 
-          // 2. Envia para o Supabase via save_catalog_v3 com expectedVersion estrito
           const remoteRes = await SupabaseService.saveCatalog(
             payloadToSend,
             expectedVersion,
@@ -927,7 +916,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
             const nowIso = new Date().toISOString();
 
-            // REGRA DE SEGURANÇA: Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente!
+            if (isDebug) {
+              console.log('[SAVE ACK]', {
+                documentKind: 'catalog',
+                documentId: catalogSnapshot.id,
+                confirmedVersion,
+                capturedRevision
+              });
+            }
+
             const activeCurrent = get().currentCatalog;
             if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
               const nextCatalog = { ...activeCurrent, version: confirmedVersion };
@@ -947,10 +944,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               version: confirmedVersion
             };
 
-            // Verifica se ocorreram novas edições locais enquanto o save estava em voo
             const currentRev = get().localRevision;
             if (currentRev === capturedRevision && !queue.hasPending) {
-              set({ isDirty: false, syncStatus: 'synced', syncError: null });
+              set({ isDirty: false, syncStatus: 'synced', syncError: null, isSaving: false });
               break;
             }
           } else if (remoteRes.conflict || remoteRes.errorCode === '40001') {
@@ -963,7 +959,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             set({
               syncStatus: 'conflict',
               syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
-              isDirty: true
+              isDirty: true,
+              isSaving: false
             });
             break;
           } else if (remoteRes.errorCode === '23505') {
@@ -976,7 +973,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             set({
               syncStatus: 'error',
               syncError: 'Já existe um catálogo com este título no servidor. Altere o nome.',
-              isDirty: true
+              isDirty: true,
+              isSaving: false
             });
             break;
           } else if (remoteRes.errorCode === '22023') {
@@ -989,7 +987,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             set({
               syncStatus: 'error',
               syncError: 'Erro de validação: verifique a estrutura do catálogo.',
-              isDirty: true
+              isDirty: true,
+              isSaving: false
             });
             break;
           } else if (remoteRes.errorCode === '42501') {
@@ -1002,7 +1001,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             set({
               syncStatus: 'error',
               syncError: 'Permissão negada: sessão expirada ou perfil sem acesso.',
-              isDirty: true
+              isDirty: true,
+              isSaving: false
             });
             break;
           } else if (remoteRes.errorCode === 'CLIENT_OFFLINE' || remoteRes.errorCode === 'NETWORK_ERROR') {
@@ -1014,7 +1014,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             };
             set({
               syncStatus: 'offline',
-              syncError: 'Operando em modo offline. Alterações salvas no cache local.'
+              syncError: 'Operando em modo offline. Alterações salvas no cache local.',
+              isSaving: false
             });
             break;
           } else {
@@ -1026,12 +1027,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             };
             set({
               syncStatus: 'error',
-              syncError: remoteRes.error || 'Erro ao salvar no servidor.'
+              syncError: remoteRes.error || 'Erro ao salvar no servidor.',
+              isDirty: true,
+              isSaving: false
             });
             break;
           }
         }
       } finally {
+        if (watchdogTimer) clearTimeout(watchdogTimer);
         queue.isSaving = false;
         queue.inFlightPromise = null;
         set({ isSaving: false, inFlightSave: null });
@@ -1039,7 +1043,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return finalResult;
     })();
 
-    queue.inFlightPromise = savePromise;
+    queue.inFlightPromise = Promise.race([savePromise, watchdogPromise.then((wd) => {
+      if (wd && (wd as any).timeout) {
+        set({ isSaving: false, syncStatus: 'error', syncError: 'Tempo limite de salvamento excedido (watchdog 10s).' });
+        return { success: false, status: 'error' as const, error: 'Tempo limite de salvamento excedido.' };
+      }
+      return savePromise;
+    })]);
+
     return savePromise;
   },
 
@@ -1703,3 +1714,31 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
   }
 }));
+
+// Subscrição unidirecional para sincronizar ACK de flush do TemplateStore sem dependência circular
+useTemplateStore.subscribe((templateState, prevTemplateState) => {
+  if (prevTemplateState.syncStatus === 'saving' && templateState.syncStatus === 'synced') {
+    const activeCtx = useCatalogStore.getState().editorContext;
+    if (activeCtx.kind === 'template') {
+      const activeCat = useCatalogStore.getState().currentCatalog;
+      const matching = templateState.customTemplates.find(
+        (t) => t.id === activeCtx.templateId || t.id === activeCat?.id
+      );
+      if (matching && activeCat) {
+        useCatalogStore.getState().handleTemplateFlushAck(
+          matching.id,
+          matching.version || (activeCat.version ? activeCat.version + 1 : 1)
+        );
+      }
+    }
+  } else if (prevTemplateState.syncStatus === 'saving' && templateState.syncStatus === 'conflict') {
+    const activeCtx = useCatalogStore.getState().editorContext;
+    if (activeCtx.kind === 'template') {
+      useCatalogStore.setState({
+        isSaving: false,
+        syncStatus: 'conflict',
+        syncError: templateState.syncError || 'Conflito detectado no salvamento do template.'
+      });
+    }
+  }
+});

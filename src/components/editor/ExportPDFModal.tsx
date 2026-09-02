@@ -6,20 +6,41 @@ import { PDFService } from '../../services/pdf.service';
 
 export const ExportPDFModal: React.FC = () => {
   const { isExportPDFModalOpen, setExportPDFModalOpen } = useUIStore();
-  const { currentCatalog } = useCatalogStore();
+  const { currentCatalog, syncStatus, editorContext, saveActiveDocument } = useCatalogStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(true);
 
   if (!isExportPDFModalOpen || !currentCatalog) return null;
 
+  const isConflict = syncStatus === 'conflict';
+  const isTemplate = editorContext.kind === 'template';
+  const docId = isTemplate ? (editorContext.templateId || currentCatalog.id) : currentCatalog.id;
+  const docVersion = currentCatalog.version || 1;
+
   const handleDownloadPDF = async () => {
+    if (isConflict) {
+      setIsSuccess(false);
+      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de exportar.');
+      return;
+    }
+
     setIsExporting(true);
     setExportMessage(null);
 
-    const safeTitle = (currentCatalog.title || 'PRESYS_Catalog')
-      .replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${safeTitle}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    // 1. Garante que o documento está salvo e sincronizado
+    const saveRes = await saveActiveDocument();
+    if (!saveRes.success && saveRes.status === 'conflict') {
+      setIsExporting(false);
+      setIsSuccess(false);
+      setExportMessage('Conflito detectado ao salvar. Resolva o conflito antes de gerar o PDF.');
+      return;
+    }
+
+    const safeTitle = (currentCatalog.title || 'PRESYS_Catalog').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const versionStr = `v${currentCatalog.version || 1}`;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const fileName = `${safeTitle}_${versionStr}_${dateStr}.pdf`;
 
     const result = await PDFService.exportToPDF('.a4-page-container', {
       fileName,
@@ -30,18 +51,25 @@ export const ExportPDFModal: React.FC = () => {
     setIsExporting(false);
     if (result.success) {
       setIsSuccess(true);
-      setExportMessage(`Arquivo "${fileName}" gerado com sucesso em Ultra-HD!`);
+      setExportMessage(`Arquivo "${fileName}" compilado com sucesso em Ultra-HD!`);
     } else {
       setIsSuccess(false);
-      setExportMessage(result.message || 'Falha ao gerar o arquivo PDF.');
+      setExportMessage(result.message || 'Falha ao compilar o arquivo PDF.');
     }
   };
 
-  const handleNativePrint = () => {
+  const handleOpenCleanPrintView = async () => {
+    if (isConflict) {
+      setIsSuccess(false);
+      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de imprimir.');
+      return;
+    }
+
+    await saveActiveDocument();
     setExportPDFModalOpen(false);
-    setTimeout(() => {
-      PDFService.printNative();
-    }, 150);
+
+    const printUrl = `/?print=1&${isTemplate ? `template=${docId}` : `catalog=${docId}`}&version=${docVersion}`;
+    window.open(printUrl, '_blank');
   };
 
   return (
@@ -57,7 +85,7 @@ export const ExportPDFModal: React.FC = () => {
                 Exportar Catálogo Técnico para PDF
               </h2>
               <p className="text-[10px] text-slate-500 font-mono">
-                Padrão Gráfico de Alta Fidelidade (A4 210mm × 297mm)
+                Padrão Gráfico Editorial A4 (210mm × 297mm)
               </p>
             </div>
           </div>
@@ -70,10 +98,21 @@ export const ExportPDFModal: React.FC = () => {
         </div>
 
         <div className="mt-4 space-y-3.5 text-xs text-slate-600">
+          {isConflict && (
+            <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 font-mono text-[11px] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Conflito ativo: uma nova versão foi gravada por outro usuário. Sincronize antes de exportar.</span>
+            </div>
+          )}
+
           <div className="p-3 bg-slate-50 border border-slate-300 rounded-none space-y-1 font-mono text-[11px]">
             <div className="flex justify-between">
-              <span className="text-slate-500">Catálogo:</span>
+              <span className="text-slate-500">Documento:</span>
               <span className="font-semibold text-slate-800 truncate max-w-xs">{currentCatalog.title}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Versão / Tipo:</span>
+              <span className="font-semibold text-slate-800">v{docVersion} • {isTemplate ? 'Template de Layout' : 'Catálogo de Produção'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Páginas:</span>
@@ -82,29 +121,33 @@ export const ExportPDFModal: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Opção 1: Impressão Nativa Vetorial */}
+            {/* Opção 1: Impressão Nativa Vetorial A4 Limpa */}
             <div 
-              onClick={handleNativePrint}
-              className="p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-200 hover:border-blue-400 cursor-pointer transition-all flex flex-col justify-between group"
+              onClick={handleOpenCleanPrintView}
+              className={`p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-200 hover:border-blue-400 cursor-pointer transition-all flex flex-col justify-between group ${
+                isConflict ? 'opacity-50 pointer-events-none' : ''
+              }`}
             >
               <div>
                 <div className="flex items-center gap-1.5 text-[#003366] font-bold text-xs font-mono">
                   <Printer className="w-3.5 h-3.5" />
-                  <span>PDF Vetorial (Nativo)</span>
+                  <span>PDF Vetorial (Nativo A4)</span>
                 </div>
                 <p className="text-[10.5px] text-slate-600 mt-1.5 leading-relaxed">
-                  Qualidade máxima de impressão: textos 100% vetoriais nítidos em qualquer zoom e imagens em resolução total original.
+                  Abre a rota limpa de exportação: textos 100% vetoriais, zero ferramentas de edição, fidelidade tipográfica máxima.
                 </p>
               </div>
               <span className="mt-2 text-[10px] font-bold text-[#003366] group-hover:underline flex items-center gap-1">
-                Imprimir / Salvar Vetorial &rarr;
+                Abrir Visualização &rarr;
               </span>
             </div>
 
             {/* Opção 2: Download Direto Ultra-HD */}
             <div 
               onClick={handleDownloadPDF}
-              className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-slate-400 cursor-pointer transition-all flex flex-col justify-between group"
+              className={`p-3 bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-slate-400 cursor-pointer transition-all flex flex-col justify-between group ${
+                isConflict ? 'opacity-50 pointer-events-none' : ''
+              }`}
             >
               <div>
                 <div className="flex items-center gap-1.5 text-slate-900 font-bold text-xs font-mono">
@@ -112,11 +155,11 @@ export const ExportPDFModal: React.FC = () => {
                   <span>Download .PDF Direto</span>
                 </div>
                 <p className="text-[10.5px] text-slate-600 mt-1.5 leading-relaxed">
-                  Gera e baixa o arquivo <code className="text-[9px] bg-slate-200 px-1">.pdf</code> compilado em Ultra-HD 350+ DPI com 1 clique.
+                  Compila e descarrega o arquivo <code className="text-[9px] bg-slate-200 px-1">.pdf</code> em Ultra-HD 350+ DPI com metadados PRESYS em 1 clique.
                 </p>
               </div>
               <span className="mt-2 text-[10px] font-bold text-slate-800 group-hover:underline flex items-center gap-1">
-                {isExporting ? 'Processando Ultra-HD...' : 'Baixar Arquivo PDF &rarr;'}
+                {isExporting ? 'Compilando Ultra-HD...' : 'Baixar Arquivo PDF &rarr;'}
               </span>
             </div>
           </div>

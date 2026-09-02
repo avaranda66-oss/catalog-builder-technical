@@ -10,6 +10,7 @@ import { LibraryView } from './components/library/LibraryView';
 import { PublicationsView } from './components/publications/PublicationsView';
 import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
+import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
 
 import { getSupabase } from './services/supabase.service';
@@ -174,6 +175,15 @@ export const App: React.FC = () => {
         </section>
       </main>
     );
+  }
+
+  const isPrintRoute = typeof window !== 'undefined' && (
+    window.location.pathname === '/print' ||
+    new URLSearchParams(window.location.search).get('print') === '1'
+  );
+
+  if (isPrintRoute) {
+    return <PrintDocumentView />;
   }
 
   return (

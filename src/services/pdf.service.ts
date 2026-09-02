@@ -141,6 +141,14 @@ export class PDFService {
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       }
 
+      pdf.setProperties({
+        title: options.fileName?.replace(/\.pdf$/i, '') || 'Catálogo Técnico PRESYS',
+        subject: 'Especificações Técnicas de Instrumentação e Calibração',
+        author: 'PRESYS Instrumentos e Sistemas',
+        keywords: 'PRESYS, Calibração, Instrumentação, Catálogo Técnico, PCON',
+        creator: 'PRESYS Catalog Studio'
+      });
+
       const fileName = options.fileName || `PRESYS_Catalog_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fileName);
 
@@ -148,7 +156,7 @@ export class PDFService {
       return { success: true, blob };
     } catch (err: any) {
       console.error('Error generating PDF:', err);
-      return { success: false, message: err.message || 'Falha ao gerar o arquivo PDF.' };
+      return { success: false, message: err.message || 'Erro desconhecido ao gerar PDF.' };
     } finally {
       document.body.classList.remove('pdf-export-mode');
     }
