@@ -41,11 +41,595 @@ import {
   createStructuralSectionFromPreset
 } from '../../domain/structural-presets';
 import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
+import { A4DocumentFooter } from '../shared/A4DocumentFooter';
+import { useVerticalOverflowGuard } from './hooks/useVerticalOverflowGuard';
+import { OverflowWarningBanner } from './overflow/OverflowWarningBanner';
+import { detectMixedFullPageCover } from '../../domain/overflow-guard';
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData?: Omit<ContentBlock, 'id'>;
   presetId?: string;
 }
+
+interface EditorA4PageItemProps {
+  page: CatalogPage;
+  pageIndex: number;
+  currentCatalog: any;
+  isAutoFit: boolean;
+  onToggleAutoFit: () => void;
+  isMenuOpenForThisPage: boolean;
+  activeDropdown: 'headers' | 'tables' | 'structures' | null;
+  onOpenDropdown: (dropdown: 'headers' | 'tables' | 'structures') => void;
+  onSelectMenuOption: (option: BlockMenuOption) => void;
+  onRemovePage: () => void;
+  canRemovePage: boolean;
+  selectedBlockId: string | null;
+  selectedChildId: string | null;
+  onSelectEditorElement: (payload: { blockId: string | null; childId: string | null }) => void;
+  onSetActivePageIndex: (index: number) => void;
+  getParticipantsOnBlock: (blockId: string) => any[];
+  reorderStructuralSectionOnPage: (pageId: string, sectionId: string, targetIndex: number) => void;
+  setHoveredTooltip: (item: HoverTooltipItem | null) => void;
+  setTooltipPos: (pos: TooltipPosition | null) => void;
+  headerOptions: BlockMenuOption[];
+  tableOptions: BlockMenuOption[];
+  structureOptions: BlockMenuOption[];
+}
+
+const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
+  page,
+  pageIndex,
+  currentCatalog,
+  isAutoFit,
+  onToggleAutoFit,
+  isMenuOpenForThisPage,
+  activeDropdown,
+  onOpenDropdown,
+  onSelectMenuOption,
+  onRemovePage,
+  canRemovePage,
+  selectedBlockId,
+  selectedChildId,
+  onSelectEditorElement,
+  onSetActivePageIndex,
+  getParticipantsOnBlock,
+  reorderStructuralSectionOnPage,
+  setHoveredTooltip,
+  setTooltipPos,
+  headerOptions,
+  tableOptions,
+  structureOptions
+}) => {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const blockCount = (page.blocks || []).length;
+  const isSingleFullCover = blockCount === 1 && page.blocks[0]?.type === 'full_page_cover';
+  const hasMixedFullCover = detectMixedFullPageCover(page.blocks);
+
+  const overflowGuard = useVerticalOverflowGuard({
+    pageId: page.id,
+    viewportRef,
+    contentRef,
+    locale: currentCatalog.locale || 'pt-BR',
+    blocksCount: blockCount,
+    isSingleFullCover,
+    hasMixedFullCover
+  });
+
+  return (
+    <div
+      id={`page-container-${page.id}`}
+      data-page-index={pageIndex}
+      data-page-id={page.id}
+      className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0"
+    >
+      {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip (Oculta na Impressão) */}
+      <div
+        className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative no-print"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="px-2 py-0.5 bg-[#003366] text-white rounded text-[10px] font-mono font-bold">
+            FOLHA {page.pageNumber} DE {currentCatalog.pages.length}
+          </span>
+          <span className="text-xs font-bold text-slate-800">
+            {page.title || `Página ${page.pageNumber}`}
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            (210 mm × 297 mm)
+          </span>
+        </div>
+
+        {/* Botões Centrais Rápidos com Dropdown List e Tooltips de Preview */}
+        <div className="flex items-center gap-1.5">
+          {/* 1. Menu Capas & Headers */}
+          <div className="relative">
+            <button
+              onClick={() => onOpenDropdown('headers')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
+                isMenuOpenForThisPage && activeDropdown === 'headers'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-blue-700" />
+              <span>+ Capas & Headers</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {isMenuOpenForThisPage && activeDropdown === 'headers' && (
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
+                <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
+                  Capas e Cabeçalhos (Passe o mouse para preview)
+                </div>
+                {headerOptions.map((opt) => (
+                  <div
+                    key={opt.id}
+                    onClick={() => onSelectMenuOption(opt)}
+                    onMouseEnter={(e) => {
+                      const rowRect = e.currentTarget.getBoundingClientRect();
+                      const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
+                      setTooltipPos({
+                        x: dropdownMenu ? dropdownMenu.right : rowRect.right,
+                        y: rowRect.top,
+                        menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
+                      });
+                      setHoveredTooltip(opt);
+                    }}
+                    onMouseLeave={() => setHoveredTooltip(null)}
+                    className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 pr-1">
+                      <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
+                        {opt.title}
+                      </p>
+                      <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
+                    </div>
+                    <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
+                      {opt.badge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Menu Tabelas Técnicas */}
+          <div className="relative">
+            <button
+              onClick={() => onOpenDropdown('tables')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
+                isMenuOpenForThisPage && activeDropdown === 'tables'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5 text-[#003366]" />
+              <span>+ Tabelas</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {isMenuOpenForThisPage && activeDropdown === 'tables' && (
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
+                <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
+                  Tabelas Metrológicas (Passe o mouse para preview)
+                </div>
+                {tableOptions.map((opt) => (
+                  <div
+                    key={opt.id}
+                    onClick={() => onSelectMenuOption(opt)}
+                    onMouseEnter={(e) => {
+                      const rowRect = e.currentTarget.getBoundingClientRect();
+                      const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
+                      setTooltipPos({
+                        x: dropdownMenu ? dropdownMenu.right : rowRect.right,
+                        y: rowRect.top,
+                        menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
+                      });
+                      setHoveredTooltip(opt);
+                    }}
+                    onMouseLeave={() => setHoveredTooltip(null)}
+                    className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 pr-1">
+                      <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
+                        {opt.title}
+                      </p>
+                      <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
+                    </div>
+                    <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
+                      {opt.badge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Menu Estruturas & Destaques */}
+          <div className="relative">
+            <button
+              onClick={() => onOpenDropdown('structures')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
+                isMenuOpenForThisPage && activeDropdown === 'structures'
+                  ? 'bg-[#003366] text-white border-[#003366]'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-700" />
+              <span>+ Estruturas</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {isMenuOpenForThisPage && activeDropdown === 'structures' && (
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
+                <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
+                  Estruturas & Recursos (Passe o mouse para preview)
+                </div>
+                {structureOptions.map((opt) => (
+                  <div
+                    key={opt.id}
+                    onClick={() => onSelectMenuOption(opt)}
+                    onMouseEnter={(e) => {
+                      const rowRect = e.currentTarget.getBoundingClientRect();
+                      const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
+                      setTooltipPos({
+                        x: dropdownMenu ? dropdownMenu.right : rowRect.right,
+                        y: rowRect.top,
+                        menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
+                      });
+                      setHoveredTooltip(opt);
+                    }}
+                    onMouseLeave={() => setHoveredTooltip(null)}
+                    className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 pr-1">
+                      <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
+                        {opt.title}
+                      </p>
+                      <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
+                    </div>
+                    <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
+                      {opt.badge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Alternador de Preenchimento Inteligente A4 */}
+          <button
+            onClick={onToggleAutoFit}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-none border transition-colors shadow-2xs ${
+              isAutoFit
+                ? 'bg-blue-50 text-blue-900 border-blue-300'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+            title="Adjusts vertical spacing to fill the 297mm A4 sheet harmoniously"
+          >
+            <Maximize2 className="w-3 h-3 text-[#003366]" />
+            <span>{isAutoFit ? 'Auto-Fit Active' : 'Auto-Fit Off'}</span>
+          </button>
+
+          {/* Excluir Folha */}
+          {canRemovePage && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemovePage();
+              }}
+              className="p-1 text-slate-400 hover:text-red-600 rounded-none transition-colors ml-1"
+              title="Delete this A4 page"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Régua Milimétrica Superior (Oculta na Impressão) */}
+      <div className="w-[794px] h-3.5 bg-slate-200 border-l border-r border-t border-slate-300 flex items-center justify-between px-2 text-[8px] font-mono text-slate-500 select-none no-print">
+        <span>0 mm</span>
+        <span>50 mm</span>
+        <span>100 mm</span>
+        <span>150 mm</span>
+        <span>210 mm (A4 Width)</span>
+      </div>
+
+      {/* Cabeçalho Técnico da Folha (Editor-only chrome / Posicionado FORA da folha física para não roubar altura) */}
+      {!isSingleFullCover && (
+        <div className="w-[794px] no-print editor-only flex items-center justify-between pb-1 text-[10px] text-slate-400 font-mono flex-shrink-0 select-none">
+          <span className="font-semibold text-slate-600">
+            PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO
+          </span>
+          <span>
+            <span data-print-string-key="page_label">
+              {PrintStringRegistry.get('page_label', currentCatalog.locale || 'pt-BR')}
+            </span>{' '}
+            {page.pageNumber}{' '}
+            <span data-print-string-key="of_label">
+              {PrintStringRegistry.get('of_label', currentCatalog.locale || 'pt-BR')}
+            </span>{' '}
+            {currentCatalog.pages.length}
+          </span>
+        </div>
+      )}
+
+      {/* Folha A4 WYSIWYG Milimétrica (1123px x 794px) */}
+      <div
+        className="a4-page-container flex flex-col relative"
+        style={{ padding: getCanonicalPagePaddingCss(isSingleFullCover) }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSetActivePageIndex(pageIndex);
+          onSelectEditorElement({ blockId: null, childId: null });
+        }}
+      >
+        {/* Banner de Diagnóstico de Overflow / Capa Mista (Editor-Only / Não entra em BlockFlowContent) */}
+        <OverflowWarningBanner result={overflowGuard} />
+
+        {/* Viewport Documental Canônico (Fase 3A.5C) */}
+        <div
+          data-a4-block-flow-viewport
+          ref={viewportRef}
+          className="flex-1 min-h-0 relative overflow-hidden flex flex-col"
+        >
+          {/* Drop Slot no topo da lista de blocos (Overlay Absoluto, 0px in-flow) */}
+          <div
+            data-testid="block-flow-drop-slot-0"
+            data-drop-slot-index={0}
+            className="absolute top-0 left-0 right-0 h-4 z-30 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 pointer-events-auto"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              try {
+                const raw = e.dataTransfer.getData('application/json');
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                if (data.type === 'structural_section' && data.pageId === page.id) {
+                  reorderStructuralSectionOnPage(page.id, data.sectionId, 0);
+                }
+              } catch {
+                // Fail-closed
+              }
+            }}
+          />
+
+          {/* Conteúdo em Altura Natural (BlockFlowContent - SEM py-3, gap canônico space-y-3) */}
+          <div
+            data-a4-block-flow-content
+            ref={contentRef}
+            className={`flex flex-col space-y-3 ${
+              isSingleFullCover ? 'p-0 h-full w-full space-y-0' : 'h-auto min-h-full'
+            } ${
+              isAutoFit && !isSingleFullCover && blockCount > 1 ? 'justify-between' : ''
+            }`}
+          >
+            {(page.blocks || []).map((block, blockIndex) => {
+              const isSelected = block.id === selectedBlockId;
+              const remoteOnBlock = getParticipantsOnBlock(block.id);
+              const hasRemote = remoteOnBlock.length > 0;
+              const primaryRemote = remoteOnBlock[0];
+
+              return (
+                <div
+                  key={block.id}
+                  data-block-id={block.id}
+                  data-block-type={block.type}
+                  data-block-index={blockIndex}
+                  onClick={() => {
+                    onSetActivePageIndex(pageIndex);
+                    onSelectEditorElement({ blockId: block.id, childId: null });
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    try {
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (!raw) return;
+                      const data = JSON.parse(raw);
+                      if (data.type === 'structural_section' && data.pageId === page.id && data.sectionId !== block.id) {
+                        reorderStructuralSectionOnPage(page.id, data.sectionId, blockIndex);
+                      }
+                    } catch {
+                      // Fail-closed
+                    }
+                  }}
+                  className={`relative ${
+                    isSingleFullCover
+                      ? 'h-full w-full'
+                      : isAutoFit && blockCount === 1
+                      ? 'my-auto'
+                      : ''
+                  }`}
+                  style={
+                    hasRemote
+                      ? {
+                          outline: `2px dashed ${primaryRemote.color}`,
+                          outlineOffset: '2px'
+                        }
+                      : undefined
+                  }
+                >
+                  {/* Overlay de Presença e Awareness do Bloco (Oculto no PDF / Editor-Only) */}
+                  {hasRemote && (
+                    <div
+                      className="no-print editor-only absolute -top-3.5 right-3 z-30 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold text-white shadow-md pointer-events-auto transition-all duration-150 cursor-default"
+                      style={{ backgroundColor: primaryRemote.color }}
+                      title={
+                        remoteOnBlock.length > 1
+                          ? remoteOnBlock.map((r) => `${r.displayLabel} (${r.activity === 'editing' ? 'editando' : 'aqui'})`).join(', ')
+                          : `${primaryRemote.displayLabel} (${primaryRemote.activity === 'editing' ? 'editando' : 'aqui'})`
+                      }
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      <span>
+                        {primaryRemote.displayLabel}{' '}
+                        {primaryRemote.activity === 'editing' ? 'editando' : 'aqui'}
+                      </span>
+                      {remoteOnBlock.length > 1 && (
+                        <span className="bg-black/25 px-1.5 py-0.2 rounded-full text-[8.5px]">
+                          +{remoteOnBlock.length - 1}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {block.type === 'full_page_cover' && (
+                    <FullPageCoverBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'bottom_header' && (
+                    <BottomHeaderBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'matrix_spec_table' && (
+                    <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'software_connectivity' && (
+                    <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'structural_section' && (
+                    <StructuralSectionInteractionFrame
+                      block={block}
+                      pageId={page.id}
+                      pageIndex={pageIndex}
+                      blockIndex={blockIndex}
+                      totalBlocks={page.blocks?.length || 0}
+                      isSelected={isSelected}
+                      selectedChildId={isSelected ? selectedChildId : null}
+                      onSelectSection={() => {
+                        onSetActivePageIndex(pageIndex);
+                        onSelectEditorElement({ blockId: block.id, childId: null });
+                      }}
+                      onSelectCard={(childId) => {
+                        onSetActivePageIndex(pageIndex);
+                        onSelectEditorElement({ blockId: block.id, childId });
+                      }}
+                    />
+                  )}
+                  {block.type === 'hero_banner' && (
+                    <HeroBannerBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'additel_two_col_hero' && (
+                    <AdditelTwoColBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'fluke_header' && (
+                    <FlukeHeaderBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'inserts_visual' && (
+                    <InsertsVisualBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'multi_mode_calibrator' && (
+                    <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'features_list' && (
+                    <FeaturesListBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'table' && (
+                    <TechnicalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'electrical_table' && (
+                    <ElectricalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'accessories_table' && (
+                    <AccessoriesTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'ordering_codes' && (
+                    <OrderingCodesBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'image_gallery' && (
+                    <ImageGalleryBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'contact_footer' && (
+                    <ContactFooterBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'custom_table' && (
+                    <CustomTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'text' && (
+                    <TextBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'image' && (
+                    <ImageBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                  {block.type === 'box' && (
+                    <BoxBlock block={block} pageId={page.id} isSelected={isSelected} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Drop Slot no final da lista de blocos da página (Overlay Absoluto, 0px in-flow) */}
+          {page.blocks && page.blocks.length > 0 && (
+            <div
+              data-testid="block-flow-drop-slot-end"
+              data-drop-slot-index={page.blocks.length}
+              className="absolute bottom-0 left-0 right-0 h-4 z-30 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 pointer-events-auto"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                try {
+                  const raw = e.dataTransfer.getData('application/json');
+                  if (!raw) return;
+                  const data = JSON.parse(raw);
+                  if (data.type === 'structural_section' && data.pageId === page.id) {
+                    reorderStructuralSectionOnPage(page.id, data.sectionId, page.blocks.length - 1);
+                  }
+                } catch {
+                  // Fail-closed
+                }
+              }}
+            />
+          )}
+
+          {/* Linha Visual de Limite Físico (Cutoff Guideline ancorada na boundary inferior da viewport) */}
+          {overflowGuard.overflowY && (
+            <div
+              data-testid="a4-overflow-cutoff-line"
+              className="absolute left-0 right-0 bottom-0 border-b-2 border-dashed border-red-500/80 pointer-events-none z-20 no-print editor-only"
+            />
+          )}
+
+          {/* Placeholder de Página Vazia (Fase 3A.5C: não participa da medição de overflow) */}
+          {(!page.blocks || page.blocks.length === 0) && (
+            <div
+              onClick={() => {
+                onOpenDropdown('headers');
+              }}
+              className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center"
+            >
+              <Plus className="w-8 h-8 mb-2 text-[#003366]" />
+              <span className="font-bold text-slate-800 text-sm">This A4 page is empty</span>
+              <span className="text-[11px] text-slate-500 mt-1">
+                Use '+ Covers', '+ Tables' or '+ Blocks' in the toolbar to insert elements.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Rodapé Técnico Compartilhado (Oculto se for Capa Full Page) */}
+        {!isSingleFullCover && (
+          <A4DocumentFooter
+            locale={currentCatalog.locale || 'pt-BR'}
+            pageNumber={page.pageNumber || pageIndex + 1}
+            localizedSystemStrings={currentCatalog.localizedSystemStrings}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const A4Canvas: React.FC = () => {
   const {
@@ -697,514 +1281,37 @@ export const A4Canvas: React.FC = () => {
 
       {currentCatalog.pages.map((page: CatalogPage, pageIndex: number) => {
         const isAutoFit = autoFitPages[page.id] ?? true;
-        const blockCount = (page.blocks || []).length;
-        const isSingleFullCover = blockCount === 1 && page.blocks[0]?.type === 'full_page_cover';
         const isMenuOpenForThisPage = activeMenuPageId === page.id;
 
         return (
-          <div
+          <EditorA4PageItem
             key={page.id}
-            id={`page-container-${page.id}`}
-            data-page-index={pageIndex}
-            data-page-id={page.id}
-            className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0"
-          >
-            {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip (Oculta na Impressão) */}
-            <div
-              className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative no-print"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="px-2 py-0.5 bg-[#003366] text-white rounded text-[10px] font-mono font-bold">
-                  FOLHA {page.pageNumber} DE {currentCatalog.pages.length}
-                </span>
-                <span className="text-xs font-bold text-slate-800">
-                  {page.title || `Página ${page.pageNumber}`}
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  (210 mm × 297 mm)
-                </span>
-              </div>
-
-              {/* Botões Centrais Rápidos com Dropdown List e Tooltips de Preview */}
-              <div className="flex items-center gap-1.5">
-                {/* 1. Menu Capas & Headers */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setActiveMenuPageId(page.id);
-                      setActiveDropdown(activeDropdown === 'headers' && isMenuOpenForThisPage ? null : 'headers');
-                    }}
-                    className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
-                      isMenuOpenForThisPage && activeDropdown === 'headers'
-                        ? 'bg-[#003366] text-white border-[#003366]'
-                        : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
-                    }`}
-                  >
-                    <Building2 className="w-3.5 h-3.5 text-blue-700" />
-                    <span>+ Capas & Headers</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400" />
-                  </button>
-
-                  {isMenuOpenForThisPage && activeDropdown === 'headers' && (
-                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
-                      <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
-                        Capas e Cabeçalhos (Passe o mouse para preview)
-                      </div>
-                      {HEADER_OPTIONS.map((opt) => (
-                        <div
-                          key={opt.id}
-                          onClick={() => handleSelectMenuOption(page.id, opt)}
-                          onMouseEnter={(e) => {
-                            const rowRect = e.currentTarget.getBoundingClientRect();
-                            const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
-                            setTooltipPos({
-                              x: dropdownMenu ? dropdownMenu.right : rowRect.right,
-                              y: rowRect.top,
-                              menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
-                            });
-                            setHoveredTooltip(opt);
-                          }}
-                          onMouseLeave={() => setHoveredTooltip(null)}
-                          className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
-                        >
-                          <div className="min-w-0 pr-1">
-                            <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
-                              {opt.title}
-                            </p>
-                            <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
-                          </div>
-                          <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
-                            {opt.badge}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Menu Tabelas Técnicas */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setActiveMenuPageId(page.id);
-                      setActiveDropdown(activeDropdown === 'tables' && isMenuOpenForThisPage ? null : 'tables');
-                    }}
-                    className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
-                      isMenuOpenForThisPage && activeDropdown === 'tables'
-                        ? 'bg-[#003366] text-white border-[#003366]'
-                        : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
-                    }`}
-                  >
-                    <TableIcon className="w-3.5 h-3.5 text-[#003366]" />
-                    <span>+ Tabelas</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400" />
-                  </button>
-
-                  {isMenuOpenForThisPage && activeDropdown === 'tables' && (
-                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
-                      <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
-                        Tabelas Metrológicas (Passe o mouse para preview)
-                      </div>
-                      {TABLE_OPTIONS.map((opt) => (
-                        <div
-                          key={opt.id}
-                          onClick={() => handleSelectMenuOption(page.id, opt)}
-                          onMouseEnter={(e) => {
-                            const rowRect = e.currentTarget.getBoundingClientRect();
-                            const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
-                            setTooltipPos({
-                              x: dropdownMenu ? dropdownMenu.right : rowRect.right,
-                              y: rowRect.top,
-                              menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
-                            });
-                            setHoveredTooltip(opt);
-                          }}
-                          onMouseLeave={() => setHoveredTooltip(null)}
-                          className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
-                        >
-                          <div className="min-w-0 pr-1">
-                            <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
-                              {opt.title}
-                            </p>
-                            <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
-                          </div>
-                          <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
-                            {opt.badge}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Menu Estruturas & Destaques */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setActiveMenuPageId(page.id);
-                      setActiveDropdown(activeDropdown === 'structures' && isMenuOpenForThisPage ? null : 'structures');
-                    }}
-                    className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
-                      isMenuOpenForThisPage && activeDropdown === 'structures'
-                        ? 'bg-[#003366] text-white border-[#003366]'
-                        : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
-                    }`}
-                  >
-                    <Layers className="w-3.5 h-3.5 text-purple-700" />
-                    <span>+ Estruturas</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400" />
-                  </button>
-
-                  {isMenuOpenForThisPage && activeDropdown === 'structures' && (
-                    <div className="absolute left-0 top-full mt-1.5 w-72 bg-white border-2 border-[#003366] rounded-xl shadow-2xl p-1.5 z-50 space-y-1 text-left animate-in fade-in zoom-in-95">
-                      <div className="p-1 text-[9px] font-bold text-slate-400 uppercase font-mono border-b border-slate-100">
-                        Estruturas & Recursos (Passe o mouse para preview)
-                      </div>
-                      {STRUCTURE_OPTIONS.map((opt) => (
-                        <div
-                          key={opt.id}
-                          onClick={() => handleSelectMenuOption(page.id, opt)}
-                          onMouseEnter={(e) => {
-                            const rowRect = e.currentTarget.getBoundingClientRect();
-                            const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
-                            setTooltipPos({
-                              x: dropdownMenu ? dropdownMenu.right : rowRect.right,
-                              y: rowRect.top,
-                              menuLeft: dropdownMenu ? dropdownMenu.left : rowRect.left
-                            });
-                            setHoveredTooltip(opt);
-                          }}
-                          onMouseLeave={() => setHoveredTooltip(null)}
-                          className="p-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors flex items-center justify-between group"
-                        >
-                          <div className="min-w-0 pr-1">
-                            <p className="font-bold text-slate-900 text-xs group-hover:text-[#003366] truncate">
-                              {opt.title}
-                            </p>
-                            <p className="text-[10px] text-slate-500 line-clamp-1">{opt.description}</p>
-                          </div>
-                          <span className="text-[8px] bg-blue-100 text-[#003366] font-bold px-1.5 py-0.5 rounded font-mono shrink-0">
-                            {opt.badge}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Alternador de Preenchimento Inteligente A4 */}
-                <button
-                  onClick={() => handleToggleAutoFit(page.id)}
-                  className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-none border transition-colors shadow-2xs ${
-                    isAutoFit
-                      ? 'bg-blue-50 text-blue-900 border-blue-300'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                  title="Adjusts vertical spacing to fill the 297mm A4 sheet harmoniously"
-                >
-                  <Maximize2 className="w-3 h-3 text-[#003366]" />
-                  <span>{isAutoFit ? 'Auto-Fit Active' : 'Auto-Fit Off'}</span>
-                </button>
-
-                {/* Excluir Folha */}
-                {currentCatalog.pages.length > 1 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removePage(page.id);
-                    }}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded-none transition-colors ml-1"
-                    title="Delete this A4 page"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Régua Milimétrica Superior (Oculta na Impressão) */}
-            <div className="w-[794px] h-3.5 bg-slate-200 border-l border-r border-t border-slate-300 flex items-center justify-between px-2 text-[8px] font-mono text-slate-500 select-none no-print">
-              <span>0 mm</span>
-              <span>50 mm</span>
-              <span>100 mm</span>
-              <span>150 mm</span>
-              <span>210 mm (A4 Width)</span>
-            </div>
-
-            {/* Folha A4 WYSIWYG Milimétrica com Suporte a Preenchimento Integral */}
-            <div
-              className={`a4-page-container flex flex-col ${isAutoFit && !isSingleFullCover ? 'justify-between' : ''}`}
-              style={{ padding: getCanonicalPagePaddingCss(isSingleFullCover) }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setActivePageIndex(pageIndex);
-                selectEditorElement({ blockId: null, childId: null });
-              }}
-            >
-              {/* Cabeçalho Técnico da Folha (Editor-only chrome / Oculto se for Capa Full Page) */}
-              {!isSingleFullCover && (
-                <div className="no-print editor-only flex items-center justify-between pb-2 border-b border-slate-300 text-[10px] text-slate-400 font-mono flex-shrink-0">
-                  <span className="font-semibold text-slate-600">
-                    PRESYS INSTRUMENTS & SYSTEMS — CATALOG STUDIO
-                  </span>
-                  <span>
-                    <span data-print-string-key="page_label">
-                      {PrintStringRegistry.get('page_label', currentCatalog.locale || 'pt-BR')}
-                    </span>{' '}
-                    {page.pageNumber}{' '}
-                    <span data-print-string-key="of_label">
-                      {PrintStringRegistry.get('of_label', currentCatalog.locale || 'pt-BR')}
-                    </span>{' '}
-                    {currentCatalog.pages.length}
-                  </span>
-                </div>
-              )}
-
-              {/* Área de Conteúdo com Distribuição Inteligente de Altura */}
-              <div
-                className={`flex-1 ${
-                  isSingleFullCover ? 'p-0 h-full w-full' : 'py-3'
-                } flex flex-col ${
-                  isAutoFit && !isSingleFullCover && blockCount > 1
-                    ? 'justify-between space-y-4'
-                    : isSingleFullCover
-                    ? 'space-y-0'
-                    : 'space-y-3'
-                }`}
-              >
-                {/* Drop Slot no topo da lista de blocos da página (Fase 3A.5B.1) */}
-                <div
-                  data-testid="block-flow-drop-slot-0"
-                  data-drop-slot-index={0}
-                  className="h-1.5 -my-1 w-full no-print editor-only"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    try {
-                      const raw = e.dataTransfer.getData('application/json');
-                      if (!raw) return;
-                      const data = JSON.parse(raw);
-                      if (data.type === 'structural_section' && data.pageId === page.id) {
-                        reorderStructuralSectionOnPage(page.id, data.sectionId, 0);
-                      }
-                    } catch {
-                      // Fail-closed
-                    }
-                  }}
-                />
-
-                {(page.blocks || []).map((block, blockIndex) => {
-                  const isSelected = block.id === selectedBlockId;
-                  const remoteOnBlock = getParticipantsOnBlock(block.id);
-                  const hasRemote = remoteOnBlock.length > 0;
-                  const primaryRemote = remoteOnBlock[0];
-
-                  return (
-                    <div
-                      key={block.id}
-                      data-block-id={block.id}
-                      data-block-type={block.type}
-                      data-block-index={blockIndex}
-                      onClick={() => {
-                        setActivePageIndex(pageIndex);
-                        selectEditorElement({ blockId: block.id, childId: null });
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        try {
-                          const raw = e.dataTransfer.getData('application/json');
-                          if (!raw) return;
-                          const data = JSON.parse(raw);
-                          if (data.type === 'structural_section' && data.pageId === page.id && data.sectionId !== block.id) {
-                            reorderStructuralSectionOnPage(page.id, data.sectionId, blockIndex);
-                          }
-                        } catch {
-                          // Fail-closed
-                        }
-                      }}
-                      className={`relative ${
-                        isSingleFullCover
-                          ? 'h-full w-full'
-                          : isAutoFit && blockCount === 1
-                          ? 'my-auto'
-                          : ''
-                      }`}
-                      style={
-                        hasRemote
-                          ? {
-                              outline: `2px dashed ${primaryRemote.color}`,
-                              outlineOffset: '2px'
-                            }
-                          : undefined
-                      }
-                    >
-                      {/* Overlay de Presença e Awareness do Bloco (Oculto no PDF / Editor-Only) */}
-                      {hasRemote && (
-                        <div
-                          className="no-print editor-only absolute -top-3.5 right-3 z-30 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-bold text-white shadow-md pointer-events-auto transition-all duration-150 cursor-default"
-                          style={{ backgroundColor: primaryRemote.color }}
-                          title={
-                            remoteOnBlock.length > 1
-                              ? remoteOnBlock.map((r) => `${r.displayLabel} (${r.activity === 'editing' ? 'editando' : 'aqui'})`).join(', ')
-                              : `${primaryRemote.displayLabel} (${primaryRemote.activity === 'editing' ? 'editando' : 'aqui'})`
-                          }
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                          <span>
-                            {primaryRemote.displayLabel}{' '}
-                            {primaryRemote.activity === 'editing' ? 'editando' : 'aqui'}
-                          </span>
-                          {remoteOnBlock.length > 1 && (
-                            <span className="bg-black/25 px-1.5 py-0.2 rounded-full text-[8.5px]">
-                              +{remoteOnBlock.length - 1}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {block.type === 'full_page_cover' && (
-                        <FullPageCoverBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'bottom_header' && (
-                        <BottomHeaderBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'matrix_spec_table' && (
-                        <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'software_connectivity' && (
-                        <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'structural_section' && (
-                        <StructuralSectionInteractionFrame
-                          block={block}
-                          pageId={page.id}
-                          pageIndex={pageIndex}
-                          blockIndex={blockIndex}
-                          totalBlocks={page.blocks?.length || 0}
-                          isSelected={isSelected}
-                          selectedChildId={isSelected ? selectedChildId : null}
-                          onSelectSection={() => {
-                            setActivePageIndex(pageIndex);
-                            selectEditorElement({ blockId: block.id, childId: null });
-                          }}
-                          onSelectCard={(childId) => {
-                            setActivePageIndex(pageIndex);
-                            selectEditorElement({ blockId: block.id, childId });
-                          }}
-                        />
-                      )}
-                      {block.type === 'hero_banner' && (
-                        <HeroBannerBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'additel_two_col_hero' && (
-                        <AdditelTwoColBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'fluke_header' && (
-                        <FlukeHeaderBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'inserts_visual' && (
-                        <InsertsVisualBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'multi_mode_calibrator' && (
-                        <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'features_list' && (
-                        <FeaturesListBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'table' && (
-                        <TechnicalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'electrical_table' && (
-                        <ElectricalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'accessories_table' && (
-                        <AccessoriesTableBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'ordering_codes' && (
-                        <OrderingCodesBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'image_gallery' && (
-                        <ImageGalleryBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'contact_footer' && (
-                        <ContactFooterBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'custom_table' && (
-                        <CustomTableBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'text' && (
-                        <TextBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'image' && (
-                        <ImageBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                      {block.type === 'box' && (
-                        <BoxBlock block={block} pageId={page.id} isSelected={isSelected} />
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Drop Slot no final da lista de blocos da página (Fase 3A.5B.1) */}
-                {page.blocks && page.blocks.length > 0 && (
-                  <div
-                    data-testid="block-flow-drop-slot-end"
-                    data-drop-slot-index={page.blocks.length}
-                    className="h-1.5 -my-1 w-full no-print editor-only"
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      try {
-                        const raw = e.dataTransfer.getData('application/json');
-                        if (!raw) return;
-                        const data = JSON.parse(raw);
-                        if (data.type === 'structural_section' && data.pageId === page.id) {
-                          reorderStructuralSectionOnPage(page.id, data.sectionId, page.blocks.length - 1);
-                        }
-                      } catch {
-                        // Fail-closed
-                      }
-                    }}
-                  />
-                )}
-
-                {(!page.blocks || page.blocks.length === 0) && (
-                  <div
-                    onClick={() => {
-                      setActiveMenuPageId(page.id);
-                      setActiveDropdown('headers');
-                    }}
-                    className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center"
-                  >
-                    <Plus className="w-8 h-8 mb-2 text-[#003366]" />
-                    <span className="font-bold text-slate-800 text-sm">This A4 page is empty</span>
-                    <span className="text-[11px] text-slate-500 mt-1">
-                      Use '+ Covers', '+ Tables' or '+ Blocks' in the toolbar to insert elements.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Rodapé Técnico da Folha (Oculto se for Capa Full Page) */}
-              {!isSingleFullCover && (
-                <div className="pt-2 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-400 font-mono flex-shrink-0">
-                  <span>PRESYS Instruments & Systems — Specifications subject to change without notice</span>
-                  <span>Page {page.pageNumber}</span>
-                </div>
-              )}
-            </div>
-          </div>
+            page={page}
+            pageIndex={pageIndex}
+            currentCatalog={currentCatalog}
+            isAutoFit={isAutoFit}
+            onToggleAutoFit={() => handleToggleAutoFit(page.id)}
+            isMenuOpenForThisPage={isMenuOpenForThisPage}
+            activeDropdown={activeDropdown}
+            onOpenDropdown={(dropdown) => {
+              setActiveMenuPageId(page.id);
+              setActiveDropdown(activeDropdown === dropdown && isMenuOpenForThisPage ? null : dropdown);
+            }}
+            onSelectMenuOption={(opt) => handleSelectMenuOption(page.id, opt)}
+            onRemovePage={() => removePage(page.id)}
+            canRemovePage={currentCatalog.pages.length > 1}
+            selectedBlockId={selectedBlockId}
+            selectedChildId={selectedChildId}
+            onSelectEditorElement={selectEditorElement}
+            onSetActivePageIndex={setActivePageIndex}
+            getParticipantsOnBlock={getParticipantsOnBlock}
+            reorderStructuralSectionOnPage={reorderStructuralSectionOnPage}
+            setHoveredTooltip={setHoveredTooltip}
+            setTooltipPos={setTooltipPos}
+            headerOptions={HEADER_OPTIONS}
+            tableOptions={TABLE_OPTIONS}
+            structureOptions={STRUCTURE_OPTIONS}
+          />
         );
       })}
 

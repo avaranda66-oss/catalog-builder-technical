@@ -22,11 +22,11 @@ import { MatrixSpecTableBlock } from '../editor/blocks/MatrixSpecTableBlock';
 import { SoftwareConnectivityBlock } from '../editor/blocks/SoftwareConnectivityBlock';
 import { StructuralSectionBlock } from '../editor/blocks/StructuralSectionBlock';
 
-import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { FontManager } from '../../translation/font-manager';
 import { applyBidiIsolationToElement } from '../../translation/bidi-helper';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
 import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
+import { A4DocumentFooter } from '../shared/A4DocumentFooter';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
@@ -49,13 +49,6 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
   if (!catalog || !catalog.pages || catalog.pages.length === 0) {
     return null;
   }
-
-  const resolveSystemString = (key: string): string => {
-    if (catalog.localizedSystemStrings && catalog.localizedSystemStrings[key]) {
-      return catalog.localizedSystemStrings[key];
-    }
-    return PrintStringRegistry.get(key as any, locale);
-  };
 
   return (
     <PrintLocalizationProvider locale={locale} localizedSystemStrings={catalog.localizedSystemStrings}>
@@ -100,96 +93,99 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                 padding: getCanonicalPagePaddingCss(isSingleFullCover)
               }}
             >
-              {/* Conteúdo Editorial da Página */}
-              <div className="flex-1 space-y-3 flex flex-col min-h-0 overflow-hidden">
-                {page.blocks?.map((block) => (
-                  <div
-                    key={block.id}
-                    data-block-id={block.id}
-                    data-block-type={block.type}
-                    className="export-block-wrapper relative"
-                    style={{ zIndex: block.position?.zIndex || 1 }}
-                  >
-                    {block.type === 'full_page_cover' && (
-                      <FullPageCoverBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'bottom_header' && (
-                      <BottomHeaderBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'matrix_spec_table' && (
-                      <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'software_connectivity' && (
-                      <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'structural_section' && (
-                      <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
-                    )}
-                    {block.type === 'hero_banner' && (
-                      <HeroBannerBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'additel_two_col_hero' && (
-                      <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'fluke_header' && (
-                      <FlukeHeaderBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'inserts_visual' && (
-                      <InsertsVisualBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'multi_mode_calibrator' && (
-                      <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'features_list' && (
-                      <FeaturesListBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {(block.type === 'table' || block.type === 'specs_table') && (
-                      <TechnicalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
-                    )}
-                    {block.type === 'electrical_table' && (
-                      <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'accessories_table' && (
-                      <AccessoriesTableBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'ordering_codes' && (
-                      <OrderingCodesBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'image_gallery' && (
-                      <ImageGalleryBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'contact_footer' && (
-                      <ContactFooterBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'custom_table' && (
-                      <CustomTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
-                    )}
-                    {block.type === 'text' && (
-                      <TextBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
-                    )}
-                    {block.type === 'image' && (
-                      <ImageBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                    {block.type === 'box' && (
-                      <BoxBlock block={block} pageId={page.id} isSelected={false} />
-                    )}
-                  </div>
-                ))}
+              {/* Viewport Documental Canônico (Fase 3A.5C) */}
+              <div
+                data-a4-block-flow-viewport
+                className="flex-1 min-h-0 relative overflow-hidden"
+              >
+                {/* Conteúdo Editorial da Página em Altura Natural */}
+                <div
+                  data-a4-block-flow-content
+                  className="space-y-3 flex flex-col h-auto min-h-full"
+                >
+                  {page.blocks?.map((block) => (
+                    <div
+                      key={block.id}
+                      data-block-id={block.id}
+                      data-block-type={block.type}
+                      className="export-block-wrapper relative"
+                      style={{ zIndex: block.position?.zIndex || 1 }}
+                    >
+                      {block.type === 'full_page_cover' && (
+                        <FullPageCoverBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'bottom_header' && (
+                        <BottomHeaderBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'matrix_spec_table' && (
+                        <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'software_connectivity' && (
+                        <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'structural_section' && (
+                        <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                      )}
+                      {block.type === 'hero_banner' && (
+                        <HeroBannerBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'additel_two_col_hero' && (
+                        <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'fluke_header' && (
+                        <FlukeHeaderBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'inserts_visual' && (
+                        <InsertsVisualBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'multi_mode_calibrator' && (
+                        <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'features_list' && (
+                        <FeaturesListBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {(block.type === 'table' || block.type === 'specs_table') && (
+                        <TechnicalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                      )}
+                      {block.type === 'electrical_table' && (
+                        <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'accessories_table' && (
+                        <AccessoriesTableBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'ordering_codes' && (
+                        <OrderingCodesBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'image_gallery' && (
+                        <ImageGalleryBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'contact_footer' && (
+                        <ContactFooterBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'custom_table' && (
+                        <CustomTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                      )}
+                      {block.type === 'text' && (
+                        <TextBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                      )}
+                      {block.type === 'image' && (
+                        <ImageBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                      {block.type === 'box' && (
+                        <BoxBlock block={block} pageId={page.id} isSelected={false} />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Rodapé Técnico Editorial da Folha (Oculto se for Capa Full Page) */}
+              {/* Rodapé Técnico Editorial Compartilhado (Oculto se for Capa Full Page) */}
               {!isSingleFullCover && (
-                <div className="pt-2 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-400 font-mono flex-shrink-0">
-                  <span data-print-string-key="company_brand_footer">
-                    {resolveSystemString('company_brand_footer')}
-                  </span>
-                  <span>
-                    <span data-print-string-key="page_label">
-                      {resolveSystemString('page_label')}
-                    </span>{' '}
-                    {page.pageNumber || index + 1}
-                  </span>
-                </div>
+                <A4DocumentFooter
+                  locale={locale}
+                  pageNumber={page.pageNumber || index + 1}
+                  localizedSystemStrings={catalog.localizedSystemStrings}
+                />
               )}
             </div>
           </div>
