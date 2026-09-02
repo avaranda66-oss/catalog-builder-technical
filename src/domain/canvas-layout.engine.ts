@@ -9,6 +9,7 @@ import {
   StructuralLayoutConfigSchema,
   SPACING_MM_MAP
 } from './canvas-layout.schema';
+import type { Catalog, ContentBlock } from './catalog.schema';
 
 // ============================================================================
 // 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
@@ -285,4 +286,51 @@ export function updateStructuralLayout(
     ...structuralData,
     layout: validatedLayout
   };
+}
+
+/**
+ * Resolve a seleção atômica de elementos do editor contra a estrutura do catálogo.
+ * Garante as invariantes de integridade (Fase 3A.2B):
+ * 1. blockId nulo ou catálogo nulo -> { selectedBlockId: null, selectedChildId: null }
+ * 2. blockId inexistente no catálogo -> { selectedBlockId: null, selectedChildId: null }
+ * 3. blockId para bloco legado (não structural_section) -> { selectedBlockId: blockId, selectedChildId: null }
+ * 4. blockId para structural_section:
+ *    - Se childId existir em structuralData.children -> { selectedBlockId: blockId, selectedChildId: childId }
+ *    - Se childId for nulo ou não existir em children -> { selectedBlockId: blockId, selectedChildId: null }
+ */
+export function resolveEditorSelection(
+  catalog: Catalog | null,
+  blockId: string | null,
+  childId?: string | null
+): { selectedBlockId: string | null; selectedChildId: string | null } {
+  if (!catalog || !blockId) {
+    return { selectedBlockId: null, selectedChildId: null };
+  }
+
+  // Localiza o bloco dentro de qualquer página do catálogo
+  let targetBlock: ContentBlock | null = null;
+  for (const page of catalog.pages || []) {
+    const found = page.blocks?.find((b) => b.id === blockId);
+    if (found) {
+      targetBlock = found;
+      break;
+    }
+  }
+
+  // Se o blockId não existe no documento ativo, reseta ambas as seleções
+  if (!targetBlock) {
+    return { selectedBlockId: null, selectedChildId: null };
+  }
+
+  // Bloco legado: nunca possui childId
+  if (targetBlock.type !== 'structural_section') {
+    return { selectedBlockId: blockId, selectedChildId: null };
+  }
+
+  // Seção estrutural: valida existência estrita do childId
+  if (childId && targetBlock.structuralData?.children?.some((c) => c.id === childId)) {
+    return { selectedBlockId: blockId, selectedChildId: childId };
+  }
+
+  return { selectedBlockId: blockId, selectedChildId: null };
 }

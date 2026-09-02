@@ -2,7 +2,7 @@
 // Inspector Contextual da Seção Estrutural (Fase 3A.2)
 // Permite editar Conteúdo, Layout e Aparência com garantia de zero controles fakes e validação atômica.
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   LayoutGrid,
   Palette,
@@ -54,18 +54,6 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
 
   const children = rawStructuralData?.children || [];
 
-  // Estado local para fixedWidthMm permitindo validação atômica antes do commit
-  const [fixedWidthDraft, setFixedWidthDraft] = useState<string>(
-    layout.fixedWidthMm ? String(layout.fixedWidthMm) : '150'
-  );
-  const [fixedWidthError, setFixedWidthError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (layout.fixedWidthMm) {
-      setFixedWidthDraft(String(layout.fixedWidthMm));
-    }
-  }, [layout.fixedWidthMm]);
-
   // Handler de atualização de propriedades diretas de ContentBlock (title, subtitle, badgeText)
   const handleContentUpdate = (patch: Partial<ContentBlock>) => {
     updateBlock(pageId, sectionBlock.id, patch);
@@ -82,39 +70,11 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
     }
   };
 
-  // Transição segura de widthMode para fixed sem estado inválido intermediário
+  // Transição segura de widthMode: criação/edição de largura fixa fica diferida até Fase 3A.5 (A4 Guards)
   const handleWidthModeChange = (mode: 'fill' | 'fixed') => {
     if (mode === 'fill') {
-      setFixedWidthError(null);
       handleLayoutUpdate({ widthMode: 'fill' });
-    } else {
-      const parsed = parseFloat(fixedWidthDraft);
-      if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 210) {
-        // Inicializa com 150mm seguro se o draft for inválido
-        setFixedWidthDraft('150');
-        setFixedWidthError(null);
-        handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: 150 });
-      } else {
-        setFixedWidthError(null);
-        handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: parsed });
-      }
     }
-  };
-
-  const handleFixedWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setFixedWidthDraft(val);
-    const parsed = parseFloat(val);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setFixedWidthError('Largura deve ser maior que 0 mm.');
-      return;
-    }
-    if (parsed > 210) {
-      setFixedWidthError('Largura excede o limite da folha A4 (210 mm).');
-      return;
-    }
-    setFixedWidthError(null);
-    handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: parsed });
   };
 
   return (
@@ -187,33 +147,30 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
           />
         </InspectorField>
 
-        <InspectorField label="Largura da Seção">
+        <InspectorField
+          label="Largura da Seção"
+          hint="Largura fixa estará disponível com o controle de dimensões da página."
+        >
           <InspectorSegmentedControl
             options={[
-              { value: 'fill', label: 'Preencher (100%)' },
-              { value: 'fixed', label: 'Fixa (mm)' }
+              { value: 'fill', label: 'Preencher largura' },
+              { value: 'fixed', label: 'Fixa (mm)', disabled: true }
             ]}
             value={layout.widthMode}
             onChange={handleWidthModeChange}
           />
         </InspectorField>
 
-        {layout.widthMode === 'fixed' && (
-          <InspectorField
-            label="Largura Fixa (mm)"
-            hint="Máx: 210 mm"
-            error={fixedWidthError}
-          >
-            <InspectorTextInput
-              type="number"
-              min={10}
-              max={210}
-              step={1}
-              value={fixedWidthDraft}
-              onChange={handleFixedWidthChange}
-              hasError={Boolean(fixedWidthError)}
-            />
-          </InspectorField>
+        {layout.widthMode === 'fixed' && layout.fixedWidthMm && (
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-700">
+            <div className="font-semibold text-slate-800 flex items-center justify-between">
+              <span>Largura fixa atual:</span>
+              <span className="font-mono text-[#003366] font-bold">{layout.fixedWidthMm} mm</span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Configuração física preservada em modo somente-leitura.
+            </p>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-2">

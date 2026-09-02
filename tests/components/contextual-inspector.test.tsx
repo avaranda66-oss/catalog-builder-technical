@@ -83,6 +83,28 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
     }
   };
 
+  const mockStructuralBlock2: ContentBlock = {
+    id: 'block-sec-2',
+    type: 'structural_section',
+    title: 'SEGUNDA SEÇÃO ESTRUTURAL',
+    structuralData: {
+      version: 1,
+      layout: {
+        mode: 'grid',
+        columns: 2,
+        widthMode: 'fill',
+        gap: 'md',
+        padding: 'md',
+        density: 'normal',
+        align: 'left',
+        background: 'soft',
+        border: 'subtle',
+        radius: 'sm'
+      },
+      children: []
+    }
+  };
+
   const mockLegacyBlock: ContentBlock = {
     id: 'block-legacy-1',
     type: 'text',
@@ -101,7 +123,7 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       {
         id: 'page-1',
         pageNumber: 1,
-        blocks: [mockStructuralBlock, mockLegacyBlock]
+        blocks: [mockStructuralBlock, mockStructuralBlock2, mockLegacyBlock]
       }
     ]
   };
@@ -199,11 +221,15 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
     expect(state.selectedChildId).toBeNull();
   });
 
-  it('INSPECTOR-SEL-8: stale child selecionado que deixa de existir faz self-heal para o Section Inspector', () => {
+  it('INSPECTOR-SEL-8: stale child selecionado que deixa de existir faz self-heal e garante selectedChildId nulo no store', () => {
     const store = useCatalogStore.getState();
     // Aponta para um childId que não existe no bloco
     const nonexistentChildId = '99999999-9999-4999-8999-999999999999';
     store.selectEditorElement({ blockId: 'block-sec-1', childId: nonexistentChildId });
+
+    // CAN-01: o store agora valida contra o catálogo ativo e descarta o child inválido na fonte
+    expect(useCatalogStore.getState().selectedBlockId).toBe('block-sec-1');
+    expect(useCatalogStore.getState().selectedChildId).toBe(null);
 
     const container = document.createElement('div');
     const root = createRoot(container);
@@ -212,7 +238,7 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       root.render(<PropertiesPanel />);
     });
 
-    // O PropertiesPanel identifica que o child não existe e renderiza o StructuralSectionInspector
+    // O PropertiesPanel identifica a seleção da seção e renderiza o StructuralSectionInspector
     expect(container.textContent).toContain('Conteúdo da Seção');
     expect(container.textContent).toContain('Layout da Seção');
     const input = container.querySelector('input') as HTMLInputElement;
@@ -221,6 +247,31 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it('INSPECTOR-SEL-9: seleção de bloco legado com childId arbitrário resulta em selectedChildId nulo', () => {
+    const store = useCatalogStore.getState();
+    // 'block-legacy-1' é bloco legado ('text')
+    store.selectEditorElement({ blockId: 'block-legacy-1', childId: 'arbitrary-child-uuid' });
+
+    expect(useCatalogStore.getState().selectedBlockId).toBe('block-legacy-1');
+    expect(useCatalogStore.getState().selectedChildId).toBe(null);
+
+    // Testando também setSelectedChildId direto com bloco legado ativo
+    store.setSelectedChildId('another-child-uuid');
+    expect(useCatalogStore.getState().selectedChildId).toBe(null);
+  });
+
+  it('INSPECTOR-SEL-10: blockId inexistente no documento resulta em seleção consistente (ambos nulos)', () => {
+    const store = useCatalogStore.getState();
+    store.selectEditorElement({ blockId: 'nonexistent-block-uuid', childId: 'any-child' });
+
+    expect(useCatalogStore.getState().selectedBlockId).toBe(null);
+    expect(useCatalogStore.getState().selectedChildId).toBe(null);
+
+    store.setSelectedBlockId('invalid-block-uuid');
+    expect(useCatalogStore.getState().selectedBlockId).toBe(null);
+    expect(useCatalogStore.getState().selectedChildId).toBe(null);
   });
 
   // ==========================================================================
@@ -652,6 +703,146 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
     expect(textContent).not.toContain('[network]');
     expect(textContent).not.toContain('[database]');
     expect(textContent).not.toContain('[usb]');
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  // ==========================================================================
+  // 6. TESTES DE LARGURA E UX DEPRECATION (INSPECTOR-WIDTH-1..4 - FASE 3A.2B)
+  // ==========================================================================
+
+  it('INSPECTOR-WIDTH-1: novo documento fill não possui fallback de 150mm no inspector', () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={mockStructuralBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // Garante que a string '150' não existe no HTML renderizado
+    expect(container.textContent).not.toContain('150');
+    expect(mockStructuralBlock.structuralData?.layout.fixedWidthMm).toBeUndefined();
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('INSPECTOR-WIDTH-2: opção de largura Fixa está desabilitada para novas edições na UI', () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={mockStructuralBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // Encontra o botão "Fixa (mm)" e comprova que está disabled
+    const buttons = Array.from(container.querySelectorAll('button'));
+    const fixedButton = buttons.find((b) => b.textContent?.includes('Fixa'));
+    expect(fixedButton).toBeDefined();
+    expect(fixedButton?.disabled).toBe(true);
+
+    // O hint explicativo informa a disponibilização com controle de dimensões da página
+    expect(container.textContent).toContain(
+      'Largura fixa estará disponível com o controle de dimensões da página.'
+    );
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('INSPECTOR-WIDTH-3: documento existente com fixedWidthMm=160 mantém render e exibe modo somente-leitura', () => {
+    const existingFixedBlock: ContentBlock = {
+      ...mockStructuralBlock,
+      id: 'block-sec-fixed',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        layout: {
+          ...mockStructuralBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 160
+        }
+      }
+    };
+
+    // 1. Renderer A4 mantém 160mm fielmente
+    const renderContainer = document.createElement('div');
+    const renderRoot = createRoot(renderContainer);
+
+    act(() => {
+      renderRoot.render(
+        <StructuralSectionBlock
+          block={existingFixedBlock}
+          pageId="page-1"
+          isExport={true}
+        />
+      );
+    });
+
+    const blockDiv = renderContainer.querySelector('.structural-section-block') as HTMLElement;
+    expect(blockDiv.style.width).toBe('160mm');
+
+    act(() => {
+      renderRoot.unmount();
+    });
+
+    // 2. Inspector mostra valor read-only sem destruir os dados
+    const inspectorContainer = document.createElement('div');
+    const inspectorRoot = createRoot(inspectorContainer);
+
+    act(() => {
+      inspectorRoot.render(
+        <StructuralSectionInspector
+          sectionBlock={existingFixedBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    expect(inspectorContainer.textContent).toContain('Largura fixa atual:');
+    expect(inspectorContainer.textContent).toContain('160 mm');
+    expect(inspectorContainer.textContent).toContain(
+      'Configuração física preservada em modo somente-leitura.'
+    );
+
+    act(() => {
+      inspectorRoot.unmount();
+    });
+  });
+
+  it('INSPECTOR-WIDTH-4: nenhum max=210 arbitrário é apresentado como content box authority', () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={mockStructuralBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // Não existe input number com max=210 nem hint "Máx: 210 mm"
+    expect(container.textContent).not.toContain('Máx: 210 mm');
+    expect(container.querySelector('input[type="number"]')).toBeNull();
 
     act(() => {
       root.unmount();

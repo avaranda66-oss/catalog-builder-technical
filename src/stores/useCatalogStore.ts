@@ -10,7 +10,8 @@ import {
   MutationKind,
   generateUniqueCatalogTitle,
   analyzeCatalogStructuralDelta,
-  EditorDocumentContext
+  EditorDocumentContext,
+  resolveEditorSelection
 } from '../domain/catalog.schema';
 import { StorageService } from '../services/storage.service';
 import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
@@ -452,10 +453,25 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   setActivePageIndex: (activePageIndex) => set({ activePageIndex }),
-  setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId, selectedChildId: null }),
-  setSelectedChildId: (selectedChildId) => set({ selectedChildId }),
-  selectEditorElement: ({ blockId, childId = null }) =>
-    set({ selectedBlockId: blockId, selectedChildId: blockId ? childId : null }),
+  setSelectedBlockId: (selectedBlockId) => {
+    const { currentCatalog } = get();
+    const resolved = resolveEditorSelection(currentCatalog, selectedBlockId, null);
+    set(resolved);
+  },
+  setSelectedChildId: (selectedChildId) => {
+    if (!selectedChildId) {
+      set({ selectedChildId: null });
+      return;
+    }
+    const { currentCatalog, selectedBlockId } = get();
+    const resolved = resolveEditorSelection(currentCatalog, selectedBlockId, selectedChildId);
+    set({ selectedChildId: resolved.selectedChildId });
+  },
+  selectEditorElement: ({ blockId, childId = null }) => {
+    const { currentCatalog } = get();
+    const resolved = resolveEditorSelection(currentCatalog, blockId, childId);
+    set(resolved);
+  },
 
   // =========================================================================
   // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION E METADATA
