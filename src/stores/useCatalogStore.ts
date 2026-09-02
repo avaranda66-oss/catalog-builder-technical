@@ -266,7 +266,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         return { success: false, status: 'error', error: 'ID do template ausente' };
       }
       if (currentCatalog) {
-        await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, currentCatalog.version);
+        await useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, currentCatalog.version, currentCatalog.title);
       }
       const res = await useTemplateStore.getState().flushTemplate(templateId);
       if (res.success && res.data) {
@@ -842,7 +842,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       const templateId = editorContext.templateId || currentCatalog.id;
       const expectedVer = currentCatalog.version ?? 1;
       set({ isSaving: true, syncStatus: 'saving', isDirty: true });
-      void useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer);
+      void useTemplateStore.getState().updateCustomTemplate(templateId, currentCatalog, expectedVer, currentCatalog.title);
       return { success: true, status: 'saving', version: expectedVer };
     }
 

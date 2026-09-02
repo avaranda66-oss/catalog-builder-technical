@@ -330,17 +330,18 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
   const designTokens = typeof row.design_tokens === 'object' && row.design_tokens !== null ? row.design_tokens : {};
   const layoutConfig = typeof row.layout_config === 'object' && row.layout_config !== null ? row.layout_config : {};
   const version = typeof row.version === 'number' ? row.version : (layoutConfig.version || 1);
+  const resolvedName = row.name || layoutConfig.title || 'Template Sem Nome';
 
   return {
     id: row.id,
-    name: row.name || 'Template Sem Nome',
+    name: resolvedName,
     description: designTokens.description || row.description || 'Modelo de layout customizado.',
     category: designTokens.category || 'layout_template',
     isSystem: row.is_system ?? false,
     version,
-    catalog: layoutConfig.pages ? { ...layoutConfig, version } : {
+    catalog: layoutConfig.pages ? { ...layoutConfig, title: resolvedName, version } : {
       id: row.id,
-      title: row.name,
+      title: resolvedName,
       subtitle: '',
       themeId: 'default-technical',
       pages: [],
