@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RotateCcw, FileText, Layers, Crop } from 'lucide-react';
+import { RotateCcw, FileText, Layers, Crop, Save, Copy, FilePlus, AlertTriangle } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { PageThumbnailList } from './PageThumbnailList';
 import { A4Canvas } from './A4Canvas';
@@ -29,8 +29,8 @@ export const EditorView: React.FC = () => {
   if (!currentCatalog) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-12 bg-slate-50">
-        <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-slate-200 shadow-xl text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mx-auto">
+        <div className="max-w-md w-full bg-white p-8 rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-presys-navy flex items-center justify-center mx-auto">
             <FileText className="w-6 h-6" />
           </div>
           <h2 className="text-base font-bold text-slate-900">Iniciar Novo Catálogo Técnico</h2>
@@ -39,7 +39,7 @@ export const EditorView: React.FC = () => {
           </p>
           <button
             onClick={() => setIsPresetModalOpen(true)}
-            className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-presys-navy hover:bg-presys-dark text-white rounded-md text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-2"
           >
             <Layers className="w-4 h-4" />
             <span>Escolher Modelo / Preset Industrial</span>
@@ -58,15 +58,16 @@ export const EditorView: React.FC = () => {
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Banner de Conflito e Atualização Remota */}
       {syncStatus === 'conflict' && (
-        <div className="bg-amber-500 text-slate-950 px-6 py-2 flex items-center justify-between font-medium text-xs shadow-sm border-b border-amber-600 z-20">
+        <div className="bg-amber-500 text-slate-950 px-6 py-2 flex items-center justify-between font-medium text-xs shadow-2xs border-b border-amber-600 z-20">
           <div className="flex items-center gap-2">
-            <span className="font-bold">⚠️ Atualização remota aguardando resolução:</span>
+            <AlertTriangle className="w-4 h-4 text-slate-950 shrink-0" />
+            <span className="font-bold">Atualização remota aguardando resolução:</span>
             <span>{syncError || 'Uma alteração remota não pôde ser aplicada automaticamente para preservar seu conteúdo.'}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => void useCatalogStore.getState().resolveConflictReloadServer()}
-              className="px-2.5 py-1 bg-slate-900 text-white rounded text-xs font-bold hover:bg-slate-800 transition-colors"
+              className="px-2.5 py-1 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800 transition-colors"
             >
               Usar versão do servidor
             </button>
@@ -76,7 +77,7 @@ export const EditorView: React.FC = () => {
                   void useCatalogStore.getState().resolveConflictKeepLocal();
                 }
               }}
-              className="px-2.5 py-1 bg-white border border-slate-400 text-slate-900 rounded text-xs font-bold hover:bg-slate-100 transition-colors"
+              className="px-2.5 py-1 bg-white border border-slate-400 text-slate-900 rounded text-xs font-semibold hover:bg-slate-100 transition-colors"
             >
               Manter minhas alterações
             </button>
@@ -85,15 +86,15 @@ export const EditorView: React.FC = () => {
       )}
 
       {/* Sub-Barra do Catálogo Fixa e Contextual */}
-      <div className="bg-slate-50 border-b border-slate-200 px-6 py-2 flex items-center justify-between flex-shrink-0 relative z-30 shadow-2xs no-print">
+      <div className="bg-white border-b border-slate-200 px-6 py-2 flex items-center justify-between flex-shrink-0 relative z-30 shadow-2xs no-print">
         <div className="flex items-center gap-2.5 flex-1 max-w-xl">
-          {/* Badge Visual do Tipo de Documento */}
+          {/* Tag Discreta do Tipo de Documento */}
           {isTemplateMode ? (
-            <span className="px-2 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 rounded font-bold text-[10px] uppercase tracking-wider shrink-0 shadow-2xs">
+            <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-300 rounded font-semibold text-[10px] uppercase tracking-wider shrink-0">
               TEMPLATE
             </span>
           ) : (
-            <span className="px-2 py-0.5 bg-blue-100 text-[#003366] border border-blue-300 rounded font-bold text-[10px] uppercase tracking-wider shrink-0 shadow-2xs">
+            <span className="px-2 py-0.5 bg-slate-100 text-presys-navy border border-slate-300 rounded font-semibold text-[10px] uppercase tracking-wider shrink-0">
               CATÁLOGO
             </span>
           )}
@@ -106,60 +107,57 @@ export const EditorView: React.FC = () => {
               void saveActiveDocument();
             }}
             placeholder={isTemplateMode ? 'Nome do Template...' : 'Título do Catálogo...'}
-            className="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 focus:ring-1 focus:ring-brand-500 flex-1 min-w-0"
+            className="px-2.5 py-1 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-presys-blue rounded font-semibold text-xs text-slate-900 focus:ring-1 focus:ring-presys-blue flex-1 min-w-0 transition-colors"
           />
 
           {/* Status de Sincronização e Salvamento na Nuvem */}
           <div className="shrink-0 flex items-center">
             {syncStatus === 'saving' && (
-              <span className="flex items-center gap-1.5 text-[10.5px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                 Salvando...
               </span>
             )}
             {syncStatus === 'synced' && !isDirty && (
-              <span className="flex items-center gap-1.5 text-[10.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
                 Salvo (v{currentCatalog.version})
               </span>
             )}
             {isDirty && syncStatus !== 'saving' && (
-              <span className="flex items-center gap-1.5 text-[10.5px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
                 Alterações pendentes
               </span>
             )}
             {syncStatus === 'offline' && (
-              <span className="flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
                 Offline
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {/* Barra de Presença e Colaboradores em Tempo Real */}
           <CollaboratorPresenceBar />
 
-          <div className="h-4 w-px bg-slate-250 mx-0.5" />
+          <div className="h-4 w-px bg-slate-200 mx-0.5" />
 
           {/* Botão Contextual de Salvar Documento Ativo (Flush / Ctrl+S) */}
           <button
             onClick={async () => {
               const res = await saveActiveDocument();
               if (res.success) {
-                console.log(`[MANUAL SAVE] ${isTemplateMode ? 'Template' : 'Catálogo'} "${currentCatalog.title}" confirmado na nuvem v${res.version}.`);
+                console.log(`[SAVE] ${isTemplateMode ? 'Template' : 'Catálogo'} "${currentCatalog.title}" confirmado na nuvem v${res.version}.`);
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-xs ${
-              isTemplateMode
-                ? 'bg-purple-900 text-white hover:bg-purple-950 border border-purple-950'
-                : 'bg-[#003366] text-white hover:bg-[#002244] border border-[#002244]'
-            }`}
-            title={`Salva as alterações de ${isTemplateMode ? 'deste template' : 'deste catálogo'} imediatamente na nuvem (Ctrl+S / Autosave ativo)`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors shadow-2xs bg-presys-navy text-white hover:bg-presys-dark border border-presys-dark"
+            title={`Salvar alterações na nuvem (Ctrl+S / Autosave ativo)`}
           >
-            <span>{isTemplateMode ? '💾 Salvar Template' : '💾 Salvar Catálogo'}</span>
+            <Save className="w-3.5 h-3.5" />
+            <span>Salvar agora</span>
           </button>
 
           {/* Botão Contextual de Duplicação / Criação */}
@@ -177,13 +175,14 @@ export const EditorView: React.FC = () => {
                 useCatalogStore.getState().setEditorContext({ kind: 'catalog', catalogId: newId });
                 const res = await useCatalogStore.getState().saveCurrentCatalog();
                 if (res.success) {
-                  alert(`Novo Catálogo "${newCat.title}" criado a partir do template com sucesso!`);
+                  alert(`Novo Catálogo "${newCat.title}" criado a partir do template com sucesso.`);
                 }
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded text-xs font-semibold transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
               title="Cria um novo catálogo independente a partir deste template"
             >
-              <span>📄 Criar Catálogo</span>
+              <FilePlus className="w-3.5 h-3.5 text-slate-500" />
+              <span>Criar Catálogo</span>
             </button>
           ) : (
             <button
@@ -194,37 +193,38 @@ export const EditorView: React.FC = () => {
                 if (newTitle && newTitle.trim()) {
                   const res = await useCatalogStore.getState().saveAsNewCatalog(newTitle.trim());
                   if (res.success && res.status === 'synced') {
-                    alert(`Catálogo "${newTitle.trim()}" duplicado e salvo na nuvem com sucesso!`);
+                    alert(`Catálogo "${newTitle.trim()}" duplicado e salvo na nuvem com sucesso.`);
                   } else {
                     alert(`Aviso: Erro ao duplicar catálogo (${res.error || 'erro'}).`);
                   }
                 }
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded text-xs font-semibold transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
               title="Duplica o conteúdo atual em um novo catálogo independente"
             >
-              <span>➕ Duplicar Catálogo</span>
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span>Duplicar</span>
             </button>
           )}
 
           {/* Botão de Importar / Recortar PDF */}
           <button
             onClick={() => setIsPDFImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 rounded text-xs font-semibold transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
             title="Importe páginas completas ou recorte gráficos e tabelas de PDFs existentes"
           >
-            <Crop className="w-3.5 h-3.5 text-amber-600" />
+            <Crop className="w-3.5 h-3.5 text-slate-500" />
             <span>Recortar PDF</span>
           </button>
 
           {/* Botão de Catálogos & Templates */}
           <button
             onClick={() => setIsPresetModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#003366] hover:bg-blue-100 border border-blue-200 rounded text-xs font-bold transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 text-slate-800 hover:bg-slate-100 border border-slate-300 rounded-md text-xs font-medium transition-colors shadow-2xs"
             title="Modelos Oficiais, Esqueletos e Meus Templates Corporativos"
           >
-            <Layers className="w-3.5 h-3.5 text-[#003366]" />
-            <span>Catálogos & Templates</span>
+            <Layers className="w-3.5 h-3.5 text-slate-600" />
+            <span>Modelos & Templates</span>
           </button>
 
           <button
@@ -233,10 +233,10 @@ export const EditorView: React.FC = () => {
                 createCatalogFromPreset();
               }
             }}
-            className="flex items-center gap-1 px-2 py-1.5 bg-white text-slate-500 hover:text-slate-800 border border-slate-200 rounded text-[11px] font-medium transition-colors shadow-2xs"
+            className="flex items-center gap-1 px-2 py-1.5 bg-white text-slate-500 hover:text-slate-800 border border-slate-200 rounded-md text-[11px] font-medium transition-colors shadow-2xs"
             title="Recarregar catálogo padrão original"
           >
-            <RotateCcw className="w-3 h-3" />
+            <RotateCcw className="w-3 h-3 text-slate-400" />
             <span>Resetar</span>
           </button>
         </div>

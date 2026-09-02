@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getSupabase } from '../../services/supabase.service';
@@ -143,9 +144,10 @@ export const DevRealtimeHUD: React.FC = () => {
           </button>
           <button
             onClick={() => setIsVisible(false)}
-            className="text-slate-400 hover:text-white px-1 text-xs"
+            className="text-slate-400 hover:text-white p-1 text-xs"
+            title="Fechar painel de diagnóstico"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -220,7 +222,7 @@ export const DevRealtimeHUD: React.FC = () => {
             className="px-2 py-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 rounded text-[9px] font-bold transition-colors shadow-sm flex-shrink-0"
             title="Executa supabase.auth.refreshSession() oficial para teste de integridade da sessão"
           >
-            {isRefreshingAuth ? 'Renovando...' : '⚡ Forçar renovação de sessão'}
+            {isRefreshingAuth ? 'Renovando...' : 'Forçar renovação de sessão'}
           </button>
         </div>
       </div>

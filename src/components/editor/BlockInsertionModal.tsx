@@ -126,9 +126,9 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
               [ Foto ]
             </div>
             <div className="space-y-0.5 text-[7px] text-slate-700 flex-1">
-              <p>✓ Geração até 100 bar</p>
-              <p>✓ Exatidão 0.01% FE</p>
-              <p>✓ Protocolo HART 7</p>
+              <p>• Geração até 100 bar</p>
+              <p>• Exatidão 0.01% FE</p>
+              <p>• Protocolo HART 7</p>
             </div>
           </div>
         </div>
@@ -291,7 +291,7 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
       previewRenderer: () => (
         <div className="w-full h-24 bg-white rounded-lg p-1.5 border border-slate-300 text-[8px]">
           <div className="bg-amber-50 text-amber-900 border border-amber-200 p-0.5 rounded font-bold text-[7.5px] mb-1">
-            ⚡ SINAIS ELÉTRICOS & LOOP
+            SINAIS ELÉTRICOS & LOOP
           </div>
           <table className="w-full text-left text-[7px]">
             <tr className="bg-slate-50 font-bold border-b">
@@ -328,7 +328,7 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
       previewRenderer: () => (
         <div className="w-full h-24 bg-white rounded-lg p-1.5 border border-slate-300 text-[8px]">
           <div className="bg-emerald-50 text-emerald-900 border border-emerald-200 p-0.5 rounded font-bold text-[7.5px] mb-1">
-            📦 ACESSÓRIOS & KITS
+            ACESSÓRIOS & KITS
           </div>
           <table className="w-full text-left text-[7px]">
             <tr className="bg-slate-50 font-bold border-b">
@@ -397,19 +397,19 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
           <span className="font-bold text-[#003366] text-[7.5px]">SISTEMA MULTIFUNÇÃO (4 MODOS)</span>
           <div className="grid grid-cols-4 gap-1 py-0.5">
             <div className="p-1 bg-slate-50 rounded border text-center">
-              <span className="block text-[8px]">🔥</span>
+              <span className="block text-[8px] font-bold text-slate-600">M1</span>
               <span className="font-bold block text-[6.5px]">Bloco Seco</span>
             </div>
             <div className="p-1 bg-slate-50 rounded border text-center">
-              <span className="block text-[8px]">💧</span>
+              <span className="block text-[8px] font-bold text-slate-600">M2</span>
               <span className="font-bold block text-[6.5px]">Banho Líq.</span>
             </div>
             <div className="p-1 bg-slate-50 rounded border text-center">
-              <span className="block text-[8px]">📈</span>
+              <span className="block text-[8px] font-bold text-slate-600">M3</span>
               <span className="font-bold block text-[6.5px]">Superfície</span>
             </div>
             <div className="p-1 bg-slate-50 rounded border text-center">
-              <span className="block text-[8px]">🎯</span>
+              <span className="block text-[8px] font-bold text-slate-600">M4</span>
               <span className="font-bold block text-[6.5px]">Blackbody</span>
             </div>
           </div>
@@ -522,9 +522,9 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
       previewRenderer: () => (
         <div className="w-full h-24 bg-white rounded-lg p-2 border border-slate-300 text-[7.5px] space-y-1">
           <span className="font-bold text-[#003366] text-[8px] block">RECURSOS TÉCNICOS</span>
-          <p className="text-slate-700">✓ Bomba elétrica interna de velocidade variável</p>
-          <p className="text-slate-700">✓ Duplo canal de medição de pressão</p>
-          <p className="text-slate-700">✓ Controle metrológico em malha fechada</p>
+          <p className="text-slate-700">• Bomba elétrica interna de velocidade variável</p>
+          <p className="text-slate-700">• Duplo canal de medição de pressão</p>
+          <p className="text-slate-700">• Controle metrológico em malha fechada</p>
         </div>
       )
     },

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { CatalogPreset, Catalog } from '../domain/catalog.schema';
 import { SYSTEM_PRESETS } from '../data/presets';
 import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
-import { useCatalogStore } from './useCatalogStore';
 
 export interface TemplateState {
   customTemplates: CatalogPreset[];
@@ -168,14 +167,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     description?: string
   ) => {
     const existing = get().customTemplates.find((t) => t.id === templateId);
-    const currentEditorVersion = useCatalogStore.getState().currentCatalog?.id === templateId
-      ? useCatalogStore.getState().currentCatalog?.version
-      : undefined;
-    const version = Math.max(
-      expectedVersion || 1,
-      currentEditorVersion || 1,
-      existing?.version || 1
-    );
+    const version = Math.max(expectedVersion || 1, existing?.version || 1);
     const queue = getOrCreateTemplateQueue(templateId, version);
 
     // REGRA DE AUTORIDADE (Item 7): expectedVersion da queue NUNCA pode diminuir!
@@ -185,7 +177,6 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     queue.pendingDescription = description;
 
     set({ syncStatus: 'saving', syncError: null });
-    useCatalogStore.setState({ isDirty: true, syncStatus: 'saving' });
 
     if (queue.debounceTimer) {
       clearTimeout(queue.debounceTimer);
@@ -252,21 +243,6 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
           syncStatus: 'synced',
           syncError: null
         });
-
-        // REGRA CRÍTICA (Item 6): Se o template estiver aberto no editor ativo, atualiza currentCatalog.version
-        const catalogStore = useCatalogStore.getState();
-        if (
-          catalogStore.editorContext?.kind === 'template' &&
-          catalogStore.editorContext.templateId === targetId &&
-          catalogStore.currentCatalog
-        ) {
-          const nextCatalog = {
-            ...catalogStore.currentCatalog,
-            version: confirmedVersion
-          };
-          catalogStore.setCurrentCatalog(nextCatalog, false);
-          useCatalogStore.setState({ isDirty: false, syncStatus: 'synced', syncError: null });
-        }
 
         if (typeof window !== 'undefined') {
           localStorage.setItem('cb_custom_presets', JSON.stringify(updatedList));
@@ -365,36 +341,6 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
       if (!updated.isSystem) {
         const nextList = get().customTemplates.map((t) => (t.id === updated.id ? updated : t));
         set({ customTemplates: nextList });
-
-        // REALTIME TEMPLATE ATIVO (Item 10)
-        const catalogStore = useCatalogStore.getState();
-        const isEditingThisTemplate =
-          catalogStore.editorContext?.kind === 'template' &&
-          catalogStore.editorContext.templateId === updated.id;
-
-        if (isEditingThisTemplate && catalogStore.currentCatalog) {
-          const isLocalDirty = catalogStore.isDirty || catalogStore.localRevision > catalogStore.lastAcknowledgedLocalRevision;
-          const currentVer = catalogStore.currentCatalog.version || 0;
-          const remoteVer = updated.version || 0;
-
-          if (remoteVer > currentVer) {
-            if (!isLocalDirty) {
-              // Cliente limpo: aplica a nova versão remota
-              const remoteCatalog = structuredClone(updated.catalog);
-              remoteCatalog.id = updated.id;
-              remoteCatalog.title = updated.name;
-              remoteCatalog.version = remoteVer;
-              catalogStore.setCurrentCatalog(remoteCatalog, false);
-              useCatalogStore.setState({ syncStatus: 'synced', syncError: null });
-            } else {
-              // Cliente dirty: sinaliza conflito
-              useCatalogStore.setState({
-                syncStatus: 'conflict',
-                syncError: 'Uma nova versão deste template foi publicada por outro usuário enquanto você editava. Suas alterações locais foram mantidas.'
-              });
-            }
-          }
-        }
       }
     } else if (eventType === 'DELETE' && payload.old?.id) {
       const nextList = get().customTemplates.filter((t) => t.id !== payload.old.id);

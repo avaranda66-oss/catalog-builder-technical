@@ -19,6 +19,13 @@ export default {
           700: '#0369a1',
           900: '#0c4a6e',
         },
+        presys: {
+          navy: '#003366',
+          dark: '#002244',
+          blue: '#004b93',
+          teal: '#008080',
+          light: '#f0f4f8',
+        },
         divergence: {
           50: '#fffbeb',
           100: '#fef3c7',

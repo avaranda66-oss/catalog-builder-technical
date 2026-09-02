@@ -129,11 +129,15 @@ export const LibraryView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white select-none overflow-hidden text-xs">
-      <div className="border-b border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[11px] text-emerald-900 flex items-center justify-between">
-        <span>
-          🟢 Sincronização em nuvem ativa via Supabase: {isAdmin ? 'Produtos e especificações oficiais são sincronizados e compartilhados entre administradores.' : 'Como Colaborador, a Biblioteca oficial está em modo somente-leitura.'}
+      <div className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-700 flex items-center justify-between">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          Sincronização em nuvem ativa via Supabase: {isAdmin ? 'Produtos e especificações oficiais são sincronizados e compartilhados entre administradores.' : 'Como Colaborador, a Biblioteca oficial está em modo somente-leitura.'}
         </span>
-        <span className="text-[10px] text-emerald-700 font-mono font-semibold">● Sincronizado</span>
+        <span className="text-[10px] text-slate-600 font-mono font-medium flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Sincronizado
+        </span>
       </div>
       {/* 1. Barra de Fórmulas / Célula Ativa Estilo Excel */}
       <div className="h-9 bg-[#f8fafc] border-b border-slate-300 px-3 flex items-center justify-between shrink-0 gap-3">

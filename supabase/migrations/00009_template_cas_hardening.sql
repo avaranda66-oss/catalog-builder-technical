@@ -1,16 +1,6 @@
--- Migration 00008: Template Versioning, Updated Timestamp and CAS RPC
--- Objetivo: Suportar edição e versionamento seguro de templates corporativos compartilhados com CAS
+-- Migration 00009: Template CAS Hardening (FOR UPDATE, Role Validation, Search Path & Permission Hardening)
+-- Objetivo: Garantir atomicidade estrita de CAS via Row Lock (FOR UPDATE) e restringir execução da RPC a usuários autenticados com role autorizada.
 
-ALTER TABLE public.templates
-ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
-
-ALTER TABLE public.templates
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
-
-ALTER TABLE public.templates
-ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES auth.users(id);
-
--- RPC: save_template_v1 com CAS (Compare-And-Swap) estrito
 CREATE OR REPLACE FUNCTION public.save_template_v1(
   p_template_id UUID,
   p_expected_version INTEGER,
@@ -21,24 +11,34 @@ CREATE OR REPLACE FUNCTION public.save_template_v1(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
+  v_actor UUID := auth.uid();
+  v_role public.user_role := public.team_role();
   v_current_version INTEGER;
   v_next_version INTEGER;
   v_result RECORD;
   v_design_tokens JSONB;
 BEGIN
+  -- 1. Verificação Estrita de Autenticação e Permissão (somente admin / editor autenticado)
+  IF v_actor IS NULL OR v_role IS NULL OR v_role NOT IN ('admin', 'editor') THEN
+    RAISE EXCEPTION 'Sem permissão de acesso para salvar templates corporativos.' USING ERRCODE = '42501';
+  END IF;
+
   IF p_template_id IS NULL THEN
     RAISE EXCEPTION 'ID do template não informado.' USING ERRCODE = '22023';
   END IF;
 
+  -- 2. Seleção com Row Lock Atômico (FOR UPDATE)
   SELECT version, design_tokens
   INTO v_current_version, v_design_tokens
   FROM public.templates
-  WHERE id = p_template_id;
+  WHERE id = p_template_id
+  FOR UPDATE;
 
   IF NOT FOUND THEN
+    -- Inserção de novo template se expected_version for 0 ou 1
     IF p_expected_version IS NOT NULL AND p_expected_version > 1 THEN
       RETURN jsonb_build_object(
         'success', false,
@@ -78,7 +78,7 @@ BEGIN
       v_next_version,
       now(),
       now(),
-      auth.uid()
+      v_actor
     )
     RETURNING * INTO v_result;
 
@@ -88,6 +88,7 @@ BEGIN
     );
   END IF;
 
+  -- 3. CAS Atômico: Valida expected version sob row lock
   IF p_expected_version IS NULL OR p_expected_version <= 0 OR v_current_version <> p_expected_version THEN
     RETURN jsonb_build_object(
       'success', false,
@@ -99,6 +100,7 @@ BEGIN
     );
   END IF;
 
+  -- 4. Atualização atômica e incremento de versão sob row lock
   v_next_version := v_current_version + 1;
 
   IF p_description IS NOT NULL THEN
@@ -112,7 +114,7 @@ BEGIN
     design_tokens = v_design_tokens,
     version = v_next_version,
     updated_at = now(),
-    updated_by = auth.uid()
+    updated_by = v_actor
   WHERE id = p_template_id
   RETURNING * INTO v_result;
 
@@ -123,4 +125,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.save_template_v1 TO authenticated, anon;
+-- Permissões Estritas: REVOGAR DE PUBLIC E ANON, CONCEDER APENAS PARA AUTHENTICATED
+REVOKE ALL ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.save_template_v1(UUID, INTEGER, JSONB, TEXT, TEXT) TO authenticated;

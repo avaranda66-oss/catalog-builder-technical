@@ -8,7 +8,7 @@ import {
   EditorDocumentContext
 } from '../domain/catalog.schema';
 import { StorageService } from '../services/storage.service';
-import { SupabaseService } from '../services/supabase.service';
+import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
 import { useTemplateStore } from './useTemplateStore';
 import { SYSTEM_PRESETS } from '../data/presets';
 
@@ -211,6 +211,7 @@ interface CatalogState {
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
+  handleRealtimeTemplateChange: (payload: { eventType: string; new?: any; old?: any }) => void;
 }
 
 // Controle de Fila por Catálogo (Per-Catalog Save Queue)
@@ -1669,5 +1670,36 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       updateCanonicalUrlCatalogId(newId);
     }
     return result;
+  },
+
+  handleRealtimeTemplateChange: (payload) => {
+    const { editorContext, currentCatalog, isDirty, localRevision, lastAcknowledgedLocalRevision } = get();
+    if (editorContext.kind !== 'template' || !currentCatalog) return;
+
+    const changedId = payload.new?.id || payload.old?.id;
+    if (changedId !== editorContext.templateId && changedId !== currentCatalog.id) return;
+
+    if (payload.eventType === 'UPDATE' && payload.new) {
+      const updatedPreset = templateRowToCatalogPreset(payload.new);
+      const remoteVer = updatedPreset.version || 0;
+      const currentVer = currentCatalog.version || 0;
+
+      if (remoteVer > currentVer) {
+        const isLocalDirty = isDirty || localRevision > lastAcknowledgedLocalRevision;
+        if (!isLocalDirty) {
+          const remoteCatalog = structuredClone(updatedPreset.catalog);
+          remoteCatalog.id = updatedPreset.id;
+          remoteCatalog.title = updatedPreset.name;
+          remoteCatalog.version = remoteVer;
+          get().setCurrentCatalog(remoteCatalog, false);
+          set({ syncStatus: 'synced', syncError: null });
+        } else {
+          set({
+            syncStatus: 'conflict',
+            syncError: 'Uma nova versão deste template foi publicada por outro usuário enquanto você editava. Suas alterações locais foram mantidas.'
+          });
+        }
+      }
+    }
   }
 }));

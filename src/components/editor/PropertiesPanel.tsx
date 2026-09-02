@@ -23,7 +23,9 @@ import {
   AlignLeft,
   AlignCenter,
   SlidersHorizontal,
-  Minus
+  Minus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
@@ -820,7 +822,7 @@ export const PropertiesPanel: React.FC = () => {
                         onClick={() => {
                           const newMode: CalibratorModeItem = {
                             id: `mode-${Date.now()}`,
-                            badge: '⚡',
+                            badge: 'MODO',
                             title: `${modes.length + 1}. Novo Modo`,
                             desc: 'Descrição técnica da aplicação.'
                           };
@@ -1614,7 +1616,7 @@ export const PropertiesPanel: React.FC = () => {
                                     className={`p-1 text-xs rounded-none ${layer.visible !== false ? 'text-blue-600 bg-blue-50' : 'text-slate-400 bg-slate-100'}`}
                                     title={layer.visible !== false ? 'Ocultar elemento' : 'Exibir elemento'}
                                   >
-                                    {layer.visible !== false ? '👁️' : '🚫'}
+                                    {layer.visible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                                   </button>
                                   <button
                                     type="button"

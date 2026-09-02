@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2, Loader2 } from 'lucide-react';
+import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2, Loader2, Pencil, FilePlus, Plus } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useTemplateStore } from '../../stores/useTemplateStore';
 import { SYSTEM_PRESETS } from '../../data/presets';
@@ -158,11 +158,11 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
             onClick={() => { setActiveTab('custom'); setMessage(null); }}
             className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ${
               activeTab === 'custom'
-                ? 'border-amber-500 text-amber-900'
+                ? 'border-presys-navy text-presys-navy'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Bookmark className="w-4 h-4 text-amber-500" />
+            <Bookmark className="w-4 h-4 text-slate-600" />
             <span>Meus Templates Nuvem ({customTemplates.length})</span>
           </button>
 
@@ -170,12 +170,12 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
             onClick={() => { setActiveTab('save'); setMessage(null); }}
             className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ml-auto ${
               activeTab === 'save'
-                ? 'border-[#003366] text-[#003366]'
+                ? 'border-presys-navy text-presys-navy'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Save className="w-4 h-4 text-slate-600" />
-            <span>➕ Criar Template</span>
+            <Plus className="w-4 h-4 text-slate-600" />
+            <span>Criar Template</span>
           </button>
         </div>
 
@@ -228,7 +228,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
                     <button
                       onClick={() => void handleApplyPreset(preset)}
-                      className="mt-4 w-full py-2 bg-[#003366] group-hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                      className="mt-4 w-full py-2 bg-presys-navy group-hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
                     >
                       <span>Criar cópia editável deste catálogo</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -309,10 +309,10 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                 </div>
               ) : customTemplates.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
-                  <Bookmark className="w-12 h-12 mx-auto mb-2 opacity-40 text-amber-500" />
+                  <Bookmark className="w-12 h-12 mx-auto mb-2 opacity-40 text-slate-400" />
                   <p className="text-xs font-medium text-slate-600">Nenhum template personalizado salvo na nuvem</p>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Você pode salvar a estrutura do catálogo ativo a qualquer momento na aba "➕ Criar Template".
+                    Você pode salvar a estrutura do catálogo ativo a qualquer momento na aba "Criar Template".
                   </p>
                 </div>
               ) : (
@@ -320,11 +320,11 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                   {customTemplates.map((preset) => (
                     <div
                       key={preset.id}
-                      className="bg-white border border-slate-200 hover:border-purple-400 rounded-xl p-4 shadow-sm flex flex-col justify-between"
+                      className="bg-white border border-slate-200 hover:border-slate-400 rounded-xl p-4 shadow-sm flex flex-col justify-between"
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded font-semibold text-[10px] uppercase">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-semibold text-[10px] uppercase">
                             Template Corporativo v{preset.version || 1}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
@@ -343,10 +343,11 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                               await useCatalogStore.getState().openTemplateForEditing(preset.id);
                               onClose();
                             }}
-                            className="flex-1 py-1.5 bg-purple-900 hover:bg-purple-950 text-white rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                            className="flex-1 py-1.5 bg-presys-navy hover:bg-presys-dark text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                             title="Abre o template original para edição e sincronização direta"
                           >
-                            <span>✏️ Editar Template</span>
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Editar Template</span>
                           </button>
 
                           {/* 2. CRIAR NOVO CATÁLOGO A PARTIR DO TEMPLATE (CLONE INDEPENDENTE) */}
@@ -355,7 +356,8 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                             className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                             title="Cria um novo catálogo de produto independente a partir deste modelo"
                           >
-                            <span>📄 Criar Catálogo</span>
+                            <FilePlus className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Criar Catálogo</span>
                           </button>
 
                           {/* 3. EXCLUIR */}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, FileText, Crop, Plus, ArrowLeft, ArrowRight, Check, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, Upload, FileText, Crop, Plus, ArrowLeft, ArrowRight, Check, ZoomIn, ZoomOut, Info } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
@@ -382,9 +382,9 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
             <div className="text-xs text-slate-500">
               {isSnipping ? (
-                <span>
-                  💡 <strong>Dica:</strong> Clique e arraste o mouse sobre a área que deseja recortar (ex: tabela,
-                  gráfico ou diagrama).
+                <span className="flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span><strong>Dica:</strong> Clique e arraste o mouse sobre a área que deseja recortar (ex: tabela, gráfico ou diagrama).</span>
                 </span>
               ) : (
                 <span>Visualizando página {currentPage}. Escolha entre adicionar a folha inteira ou recortar partes.</span>

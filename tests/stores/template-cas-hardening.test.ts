@@ -339,6 +339,11 @@ describe('FASE 2A.1B — Template CAS Hardening & Production Acceptance Suite', 
       new: updatedTemplateRow,
       old: undefined
     });
+    useCatalogStore.getState().handleRealtimeTemplateChange({
+      eventType: 'UPDATE',
+      new: updatedTemplateRow,
+      old: undefined
+    });
 
     expect(useCatalogStore.getState().currentCatalog?.title).toBe('teste56 Atualizado Remotamente');
     expect(useCatalogStore.getState().currentCatalog?.version).toBe(6);
@@ -373,6 +378,11 @@ describe('FASE 2A.1B — Template CAS Hardening & Production Acceptance Suite', 
     };
 
     useTemplateStore.getState().handleRealtimeTemplateEvent({
+      eventType: 'UPDATE',
+      new: updatedTemplateRow,
+      old: undefined
+    });
+    useCatalogStore.getState().handleRealtimeTemplateChange({
       eventType: 'UPDATE',
       new: updatedTemplateRow,
       old: undefined

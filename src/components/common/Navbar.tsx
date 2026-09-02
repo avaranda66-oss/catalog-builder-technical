@@ -11,9 +11,10 @@ import {
   Globe,
   Sparkles,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle,
+  LogOut
 } from 'lucide-react';
-import { LogOut } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useMediaStore } from '../../stores/useMediaStore';
@@ -23,11 +24,11 @@ import { BackupModal } from './BackupModal';
 import { useAuthStore } from '../../stores/useAuthStore';
 
 const TRANSLATION_LANGUAGES = [
-  { code: 'en', label: 'English (US)', flag: '🇺🇸' },
-  { code: 'fr', label: 'French (Français)', flag: '🇫🇷' },
-  { code: 'es', label: 'Spanish (Español)', flag: '🇪🇸' },
-  { code: 'de', label: 'German (Deutsch)', flag: '🇩🇪' },
-  { code: 'pt', label: 'Portuguese (Português)', flag: '🇧🇷' }
+  { code: 'en', label: 'English (US)', flag: 'EN' },
+  { code: 'fr', label: 'French (Français)', flag: 'FR' },
+  { code: 'es', label: 'Spanish (Español)', flag: 'ES' },
+  { code: 'de', label: 'German (Deutsch)', flag: 'DE' },
+  { code: 'pt', label: 'Portuguese (Português)', flag: 'PT' }
 ];
 
 export const Navbar: React.FC = () => {
@@ -167,8 +168,8 @@ export const Navbar: React.FC = () => {
           )}
           {syncStatus === 'conflict' && (
             <div className="flex items-center gap-1.5 text-red-700 bg-red-50 border-red-200 font-bold" title={syncError || 'Conflito de concorrência detectado'}>
-              <span className="w-2 h-2 rounded-full bg-red-600" />
-              <span>⚠️ Conflito de Versão:</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+              <span>Conflito de Versão:</span>
               <button
                 onClick={() => void useCatalogStore.getState().resolveConflictReloadServer()}
                 className="underline text-[10px] text-blue-800 hover:text-blue-950 font-semibold"

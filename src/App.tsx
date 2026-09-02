@@ -103,6 +103,7 @@ export const App: React.FC = () => {
         { event: '*', schema: 'public', table: 'templates' },
         (payload) => {
           handleRealtimeTemplateEvent(payload as any);
+          useCatalogStore.getState().handleRealtimeTemplateChange(payload as any);
         }
       )
       .subscribe((realtimeStatus, error) => {
