@@ -9,6 +9,7 @@ import { ExportPDFModal } from './ExportPDFModal';
 import { AIAssistantDrawer } from '../ai/AIAssistantDrawer';
 import { PresetModal } from './PresetModal';
 import { PDFImportModal } from './PDFImportModal';
+import { generateUniqueCatalogTitle } from '../../domain/catalog.schema';
 
 export const EditorView: React.FC = () => {
   const { currentCatalog, setCurrentCatalog, createCatalogFromPreset } = useCatalogStore();
