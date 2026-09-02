@@ -12,6 +12,7 @@ import { LoginView } from './components/auth/LoginView';
 import { useAuthStore } from './stores/useAuthStore';
 
 import { getSupabase } from './services/supabase.service';
+import { handleCatalogRealtimeEvent } from './services/realtime.service';
 
 export const App: React.FC = () => {
   const { activeTab } = useUIStore();
@@ -34,7 +35,7 @@ export const App: React.FC = () => {
     void loadLatestCatalog();
     void loadAssets();
 
-    // Sincronização em Tempo Real Segura (FASE 1F)
+    // Sincronização em Tempo Real Segura (FASE 1F & 1.1)
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -44,36 +45,7 @@ export const App: React.FC = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'catalogs' },
         (payload) => {
-          const changedId = (payload.new as any)?.id || (payload.old as any)?.id;
-          const { currentCatalog, syncStatus, isSaving, loadWorkspace, refreshCatalog } = useCatalogStore.getState();
-
-          // Atualiza lista em segundo plano sem trocar o documento ativo
-          void loadWorkspace();
-
-          if (payload.eventType === 'DELETE' && changedId === currentCatalog?.id) {
-            useCatalogStore.setState({
-              syncStatus: 'conflict',
-              syncError: 'Este catálogo foi excluído no servidor por outro administrador.'
-            });
-            return;
-          }
-
-          // Se a alteração foi em OUTRO catálogo, não toca no currentCatalog
-          if (changedId && currentCatalog && changedId !== currentCatalog.id) {
-            return;
-          }
-
-          // Se a alteração foi no catálogo ativo
-          if (changedId && currentCatalog && changedId === currentCatalog.id) {
-            if (syncStatus !== 'dirty' && !isSaving) {
-              void refreshCatalog(currentCatalog.id);
-            } else {
-              useCatalogStore.setState({
-                syncStatus: 'conflict',
-                syncError: 'Alteração remota detectada neste catálogo. Suas edições locais foram preservadas.'
-              });
-            }
-          }
+          void handleCatalogRealtimeEvent(payload as any);
         }
       )
       .on(

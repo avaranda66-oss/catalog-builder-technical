@@ -168,13 +168,24 @@ export const Navbar: React.FC = () => {
           {syncStatus === 'conflict' && (
             <div className="flex items-center gap-1.5 text-red-700 bg-red-50 border-red-200 font-bold" title={syncError || 'Conflito de concorrência detectado'}>
               <span className="w-2 h-2 rounded-full bg-red-600" />
-              <span>⚠️ Conflito de Versão</span>
+              <span>⚠️ Conflito de Versão:</span>
               <button
-                onClick={() => void useCatalogStore.getState().resolveConflictKeepLocal()}
-                className="ml-1 underline text-[10px] text-red-800 hover:text-red-950"
-                title="Forçar envio das alterações locais"
+                onClick={() => void useCatalogStore.getState().resolveConflictReloadServer()}
+                className="underline text-[10px] text-blue-800 hover:text-blue-950 font-semibold"
+                title="Recarrega o documento com a versão mais recente do servidor"
               >
-                [Forçar Envio]
+                [Usar versão do servidor]
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('A versão remota no servidor será substituída pelas suas alterações locais. Deseja continuar?')) {
+                    void useCatalogStore.getState().resolveConflictKeepLocal();
+                  }
+                }}
+                className="underline text-[10px] text-red-800 hover:text-red-950 font-semibold"
+                title="Substitui a versão remota pelas edições locais atuais"
+              >
+                [Manter minhas alterações]
               </button>
             </div>
           )}

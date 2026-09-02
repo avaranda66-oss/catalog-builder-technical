@@ -104,9 +104,9 @@ export class SupabaseService {
     catalog: Partial<Catalog>,
     expectedVersion?: number,
     summary?: string
-  ): Promise<{ success: boolean; data?: any; conflict?: boolean; error?: string }> {
+  ): Promise<{ success: boolean; data?: any; conflict?: boolean; errorCode?: string; error?: string }> {
     const supabase = getSupabase();
-    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+    if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
 
     try {
       const { data, error } = await supabase.rpc('save_catalog_v3', {
@@ -117,12 +117,12 @@ export class SupabaseService {
 
       if (error) {
         const isConflict = error.code === '40001' || error.message?.includes('Conflito');
-        return { success: false, conflict: isConflict, error: error.message };
+        return { success: false, conflict: isConflict, errorCode: error.code, error: error.message };
       }
 
       return { success: true, data };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao salvar catálogo' };
+      return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao salvar catálogo' };
     }
   }
 

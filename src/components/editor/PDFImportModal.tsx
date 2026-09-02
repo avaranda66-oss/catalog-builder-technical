@@ -158,9 +158,9 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
     setCurrentCatalog({
       ...currentCatalog,
       pages: [...currentCatalog.pages, newPage],
-      updatedAt: new Date().toISOString(),
-      version: currentCatalog.version + 1
+      updatedAt: new Date().toISOString()
     });
+    void useCatalogStore.getState().saveCurrentCatalog();
 
     alert(`Página ${currentPage} importada com sucesso para o catálogo!`);
     onClose();

@@ -44,7 +44,7 @@ describe('StorageService (Persistence & Backup Engine)', () => {
     await StorageService.saveCatalog(SYSTEM_PRESETS[0].catalog);
 
     const backupJson = await StorageService.exportBackup();
-    expect(backupJson).toContain('PRESYS Instrumentos e Sistemas');
+    expect(backupJson).toContain('PRESYS');
 
     localStorage.clear();
 

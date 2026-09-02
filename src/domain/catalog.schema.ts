@@ -284,3 +284,20 @@ export const CatalogPresetSchema = z.object({
   catalog: CatalogSchema,
   createdAt: z.string().datetime().or(z.string())
 });
+
+export function generateUniqueCatalogTitle(baseTitle: string, existingTitles: string[]): string {
+  const titleSet = new Set(existingTitles.map((t) => t.trim().toLowerCase()));
+  if (!titleSet.has(baseTitle.trim().toLowerCase())) {
+    return baseTitle;
+  }
+  const cleanBase = baseTitle.replace(/ \(Cópia( \d+)?\)$/, '');
+  let candidate = `${cleanBase} (Cópia)`;
+  if (!titleSet.has(candidate.toLowerCase())) {
+    return candidate;
+  }
+  let index = 2;
+  while (titleSet.has(`${cleanBase} (Cópia ${index})`.toLowerCase())) {
+    index++;
+  }
+  return `${cleanBase} (Cópia ${index})`;
+}

@@ -28,6 +28,21 @@ function getDB() {
 }
 
 export class StorageService {
+  // --- Preferência de Navegação (Active Catalog ID) ---
+  static getActiveCatalogId(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('cb_active_catalog_id');
+  }
+
+  static setActiveCatalogId(id: string | null): void {
+    if (typeof window === 'undefined') return;
+    if (id) {
+      localStorage.setItem('cb_active_catalog_id', id);
+    } else {
+      localStorage.removeItem('cb_active_catalog_id');
+    }
+  }
+
   // --- Produtos ---
   static async saveProducts(products: Product[]): Promise<void> {
     try {
@@ -67,8 +82,8 @@ export class StorageService {
     return [];
   }
 
-  // --- Catálogos ---
-  static async saveCatalog(catalog: Catalog): Promise<void> {
+  // --- Catálogos (Cache de Conteúdo — NÃO altera cb_active_catalog_id) ---
+  static async cacheCatalog(catalog: Catalog): Promise<void> {
     try {
       const db = await getDB();
       if (db) {
@@ -76,16 +91,20 @@ export class StorageService {
       } else {
         localStorage.setItem(`cb_catalog_${catalog.id}`, JSON.stringify(catalog));
       }
-      localStorage.setItem('cb_active_catalog_id', catalog.id);
     } catch (err) {
-      console.warn('Fallback para localStorage em saveCatalog:', err);
+      console.warn('Fallback para localStorage em cacheCatalog:', err);
       localStorage.setItem(`cb_catalog_${catalog.id}`, JSON.stringify(catalog));
     }
   }
 
+  // Alias para retrocompatibilidade
+  static async saveCatalog(catalog: Catalog): Promise<void> {
+    await this.cacheCatalog(catalog);
+  }
+
   static async loadCatalog(id?: string): Promise<Catalog | null> {
     try {
-      const targetId = id || (typeof window !== 'undefined' ? localStorage.getItem('cb_active_catalog_id') : null);
+      const targetId = id || this.getActiveCatalogId();
 
       const db = await getDB();
       if (db) {
@@ -145,8 +164,8 @@ export class StorageService {
         await db.delete('catalogs', id);
       }
       localStorage.removeItem(`cb_catalog_${id}`);
-      if (localStorage.getItem('cb_active_catalog_id') === id) {
-        localStorage.removeItem('cb_active_catalog_id');
+      if (this.getActiveCatalogId() === id) {
+        this.setActiveCatalogId(null);
       }
     } catch (err) {
       console.error('Erro ao deletar catálogo:', err);
@@ -158,29 +177,40 @@ export class StorageService {
     const products = await this.loadProducts();
     const catalogs = await this.loadAllCatalogs();
     const backupData = {
-      version: 1,
-      brand: 'PRESYS Instrumentos e Sistemas',
+      version: '1.0',
       exportedAt: new Date().toISOString(),
       products,
-      catalogs
+      catalogs,
+      familyColumns: localStorage.getItem('cb_family_columns')
+        ? JSON.parse(localStorage.getItem('cb_family_columns')!)
+        : undefined,
+      customPresets: localStorage.getItem('cb_custom_presets')
+        ? JSON.parse(localStorage.getItem('cb_custom_presets')!)
+        : undefined
     };
     return JSON.stringify(backupData, null, 2);
   }
 
-  static async importBackup(jsonString: string): Promise<{ success: boolean; message: string }> {
+  static async importBackup(jsonString: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const parsed = JSON.parse(jsonString);
-      if (parsed.products && Array.isArray(parsed.products)) {
-        await this.saveProducts(parsed.products);
+      const data = JSON.parse(jsonString);
+      if (data.products && Array.isArray(data.products)) {
+        await this.saveProducts(data.products);
       }
-      if (parsed.catalogs && Array.isArray(parsed.catalogs)) {
-        for (const cat of parsed.catalogs) {
-          await this.saveCatalog(cat);
+      if (data.catalogs && Array.isArray(data.catalogs)) {
+        for (const cat of data.catalogs) {
+          await this.cacheCatalog(cat);
         }
       }
-      return { success: true, message: 'Backup importado com sucesso!' };
+      if (data.familyColumns) {
+        localStorage.setItem('cb_family_columns', JSON.stringify(data.familyColumns));
+      }
+      if (data.customPresets) {
+        localStorage.setItem('cb_custom_presets', JSON.stringify(data.customPresets));
+      }
+      return { success: true };
     } catch (err: any) {
-      return { success: false, message: `Falha ao importar backup: ${err.message}` };
+      return { success: false, error: err.message };
     }
   }
 }

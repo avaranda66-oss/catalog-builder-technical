@@ -49,18 +49,20 @@ export const EditorView: React.FC = () => {
           <input
             type="text"
             value={currentCatalog.title}
-            onChange={(e) =>
-              setCurrentCatalog({ ...currentCatalog, title: e.target.value })
-            }
+            onChange={(e) => {
+              setCurrentCatalog({ ...currentCatalog, title: e.target.value });
+              void useCatalogStore.getState().saveCurrentCatalog();
+            }}
             placeholder="Título do Catálogo..."
             className="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-xs text-slate-900 focus:ring-1 focus:ring-brand-500 flex-1"
           />
           <input
             type="text"
             value={currentCatalog.subtitle || ''}
-            onChange={(e) =>
-              setCurrentCatalog({ ...currentCatalog, subtitle: e.target.value })
-            }
+            onChange={(e) => {
+              setCurrentCatalog({ ...currentCatalog, subtitle: e.target.value });
+              void useCatalogStore.getState().saveCurrentCatalog();
+            }}
             placeholder="Subtítulo descritivo..."
             className="px-2.5 py-1 bg-white border border-slate-300 rounded text-xs text-slate-600 focus:ring-1 focus:ring-brand-500 flex-1"
           />
@@ -78,8 +80,10 @@ export const EditorView: React.FC = () => {
 
           {/* Botão de Salvar Como Novo Catálogo */}
           <button
-            onClick={() => {
-              const newTitle = prompt('Digite o nome para este novo catálogo:', `${currentCatalog.title} (Cópia)`);
+            onClick={async () => {
+              const savedList = useCatalogStore.getState().savedCatalogs;
+              const defaultTitle = generateUniqueCatalogTitle(`${currentCatalog.title} (Cópia)`, savedList.map((c) => c.title));
+              const newTitle = prompt('Digite o nome para este novo catálogo:', defaultTitle);
               if (newTitle && newTitle.trim()) {
                 const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
                 const cloned = {
@@ -90,8 +94,14 @@ export const EditorView: React.FC = () => {
                   updatedAt: new Date().toISOString()
                 };
                 useCatalogStore.getState().setCurrentCatalog(cloned);
-                void useCatalogStore.getState().saveCurrentCatalog();
-                alert(`Catálogo "${newTitle}" criado e salvo na nuvem com sucesso!`);
+                const res = await useCatalogStore.getState().saveCurrentCatalog();
+                if (res.success && res.status === 'synced') {
+                  alert(`Catálogo "${newTitle.trim()}" criado e salvo na nuvem com sucesso!`);
+                } else if (res.status === 'conflict') {
+                  alert(`Não foi possível salvar na nuvem: conflito de versão detectado.`);
+                } else {
+                  alert(`Aviso: Catálogo criado localmente, mas não foi sincronizado na nuvem (${res.error || 'erro'}).`);
+                }
               }
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 rounded text-xs font-semibold transition-colors shadow-2xs"

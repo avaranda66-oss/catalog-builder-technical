@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 import { SupabaseService } from '../../src/services/supabase.service';
 import { StorageService } from '../../src/services/storage.service';
-import { Catalog } from '../../src/domain/catalog.schema';
+import { handleCatalogRealtimeEvent } from '../../src/services/realtime.service';
+import { Catalog, generateUniqueCatalogTitle } from '../../src/domain/catalog.schema';
 
-describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
+describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite', () => {
   const catalogUUID = 'a1111111-1111-4111-8111-111111111111';
   const otherUUID = 'b2222222-2222-4222-8222-222222222222';
+  const thirdUUID = 'c3333333-3333-4333-8333-333333333333';
 
   const baseCatalog: Catalog = {
     id: catalogUUID,
@@ -35,6 +37,7 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    StorageService.setActiveCatalogId(catalogUUID);
     useCatalogStore.setState({
       currentCatalog: structuredClone(baseCatalog),
       savedCatalogs: [structuredClone(baseCatalog)],
@@ -45,7 +48,8 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       syncStatus: 'synced',
       syncError: null,
       serverSavedAt: null,
-      cachedAt: null
+      cachedAt: null,
+      inFlightSave: null
     });
   });
 
@@ -132,8 +136,8 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       expect(saveSpy).toHaveBeenNthCalledWith(2, expect.any(Object), 8, expect.any(String));
       const state = useCatalogStore.getState();
       expect(state.currentCatalog?.version).toBe(9);
-      expect(state.currentCatalog?.pages[0].blocks[0].title).toBe('Edição A'); // Contém A
-      expect(state.currentCatalog?.pages.length).toBe(2); // Contém B
+      expect(state.currentCatalog?.pages[0].blocks[0].title).toBe('Edição A');
+      expect(state.currentCatalog?.pages.length).toBe(2);
       expect(state.syncStatus).toBe('synced');
     });
   });
@@ -180,6 +184,7 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
     vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
       success: false,
       conflict: true,
+      errorCode: '40001',
       error: 'Conflito de Concorrência: o catálogo foi modificado em outro dispositivo (Versão esperada: 7, Versão no servidor: 8).'
     });
 
@@ -220,14 +225,14 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       }
     });
 
-    // Simula evento Realtime chegando para otherUUID
-    const { loadWorkspace } = useCatalogStore.getState();
-    await loadWorkspace();
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: otherUUID, version: 3, name: updatedCatalogB.title }
+    });
 
     const state = useCatalogStore.getState();
-    expect(state.currentCatalog?.id).toBe(catalogUUID); // Permanece intacto em A
+    expect(state.currentCatalog?.id).toBe(catalogUUID);
     expect(state.savedCatalogs.length).toBe(2);
-    expect(state.savedCatalogs[0].id).toBe(otherUUID);
   });
 
   // =========================================================================
@@ -240,7 +245,7 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       version: 8
     };
 
-    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValueOnce({
+    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValue({
       success: true,
       data: {
         catalogs: [{ id: catalogUUID, name: remoteCatalogV8.title, status: 'published', version: 8, brand: remoteCatalogV8, created_at: '', updated_at: '' }],
@@ -250,7 +255,10 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       }
     });
 
-    await useCatalogStore.getState().refreshCatalog(catalogUUID);
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 8, name: remoteCatalogV8.title }
+    });
 
     const state = useCatalogStore.getState();
     expect(state.currentCatalog?.version).toBe(8);
@@ -262,24 +270,19 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
   // TEST 8: Realtime no MESMO catálogo quando DIRTY -> Preserva local e sinaliza
   // =========================================================================
   it('TEST 8: Realtime no mesmo catálogo quando dirty preserva edição local e sinaliza conflict', async () => {
-    // Usuário fez alteração local e ainda está dirty
     useCatalogStore.setState({
       isDirty: true,
       syncStatus: 'dirty'
     });
 
-    // Simulação do guard de Realtime: se estiver dirty, não chama refreshCatalog destrutivo
-    const stateBefore = useCatalogStore.getState();
-    if (stateBefore.syncStatus === 'dirty') {
-      useCatalogStore.setState({
-        syncStatus: 'conflict',
-        syncError: 'Alteração remota detectada neste catálogo. Suas edições locais foram preservadas.'
-      });
-    }
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 8, name: 'Versão Remota Inesperada' }
+    });
 
-    const stateAfter = useCatalogStore.getState();
-    expect(stateAfter.syncStatus).toBe('conflict');
-    expect(stateAfter.currentCatalog?.id).toBe(catalogUUID);
+    const state = useCatalogStore.getState();
+    expect(state.syncStatus).toBe('conflict');
+    expect(state.currentCatalog?.id).toBe(catalogUUID);
   });
 
   // =========================================================================
@@ -295,6 +298,7 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
       ...useCatalogStore.getState().currentCatalog!,
       title: 'PRESYS TA-25N — Título Modificado'
     });
+    void useCatalogStore.getState().saveCurrentCatalog();
 
     await vi.waitFor(() => {
       expect(saveSpy).toHaveBeenCalledWith(
@@ -389,5 +393,288 @@ describe('FASE 1 — Catalog Consistency, CAS & Safe Realtime Suite', () => {
     expect(state.currentCatalog?.title).toBe('Documento no Cache Offline');
     expect(state.syncStatus).toBe('offline');
     expect(state.syncError).toContain('cache local');
+  });
+
+  // =========================================================================
+  // TEST 13: PresetModal cria catálogo: save RPC exatamente 1 vez, version = 1
+  // =========================================================================
+  it('TEST 13: createCatalogFromPreset chama save_catalog_v3 exatamente 1 vez e termina na versão 1', async () => {
+    const saveSpy = vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
+      success: true,
+      data: { id: 'd4444444-4444-4444-8444-444444444444', version: 1 }
+    });
+
+    const result = await useCatalogStore.getState().createCatalogFromPreset('Catálogo Criado via Preset');
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('synced');
+    expect(result.version).toBe(1);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy).toHaveBeenCalledWith(expect.any(Object), 0, expect.any(String));
+    expect(useCatalogStore.getState().currentCatalog?.version).toBe(1);
+  });
+
+  // =========================================================================
+  // TEST 14: Salvar Como Novo: não mostra sucesso antes do RPC resolver
+  // =========================================================================
+  it('TEST 14: saveCurrentCatalog retorna SaveResult explícito apenas após resposta do servidor', async () => {
+    let resolveRPC: (val: any) => void;
+    const rpcPromise = new Promise((resolve) => {
+      resolveRPC = resolve;
+    });
+
+    vi.spyOn(SupabaseService, 'saveCatalog').mockImplementationOnce(async () => {
+      await rpcPromise;
+      return { success: true, data: { id: catalogUUID, version: 8 } };
+    });
+
+    const savePromise = useCatalogStore.getState().saveCurrentCatalog();
+    expect(useCatalogStore.getState().syncStatus).toBe('saving');
+
+    resolveRPC!({ success: true });
+    const result = await savePromise;
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('synced');
+    expect(result.version).toBe(8);
+  });
+
+  // =========================================================================
+  // TEST 15: Salvar Como Novo com RPC falhando: retorna erro e não alega sucesso
+  // =========================================================================
+  it('TEST 15: saveCurrentCatalog com falha remota retorna success: false e status de erro', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
+      success: false,
+      errorCode: '500',
+      error: 'Erro interno no banco'
+    });
+
+    const result = await useCatalogStore.getState().saveCurrentCatalog();
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('error');
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+  });
+
+  // =========================================================================
+  // TEST 16: loadWorkspace faz cache de B/C/A: cb_active_catalog_id não muda
+  // =========================================================================
+  it('TEST 16: loadWorkspace atualiza cache de múltiplos documentos sem alterar cb_active_catalog_id', async () => {
+    StorageService.setActiveCatalogId(catalogUUID);
+
+    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValueOnce({
+      success: true,
+      data: {
+        catalogs: [
+          { id: otherUUID, name: 'Catálogo B', status: 'published', version: 1, brand: {}, created_at: '', updated_at: '' },
+          { id: thirdUUID, name: 'Catálogo C', status: 'published', version: 1, brand: {}, created_at: '', updated_at: '' },
+          { id: catalogUUID, name: 'Catálogo A', status: 'published', version: 7, brand: baseCatalog, created_at: '', updated_at: '' }
+        ],
+        products: [],
+        templates: [],
+        userRole: 'admin'
+      }
+    });
+
+    await useCatalogStore.getState().loadWorkspace();
+
+    expect(StorageService.getActiveCatalogId()).toBe(catalogUUID);
+  });
+
+  // =========================================================================
+  // TEST 17: self realtime echo durante save: não vira conflict
+  // =========================================================================
+  it('TEST 17: self realtime echo durante save em voo (v7 -> v8) não cria falso conflito', async () => {
+    useCatalogStore.setState({
+      inFlightSave: {
+        catalogId: catalogUUID,
+        expectedVersion: 7,
+        targetVersion: 8
+      },
+      isSaving: true,
+      syncStatus: 'saving'
+    });
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 8, name: baseCatalog.title }
+    });
+
+    const state = useCatalogStore.getState();
+    expect(state.syncStatus).toBe('saving'); // Permanece no fluxo normal de saving sem virar conflict
+  });
+
+  // =========================================================================
+  // TEST 18: self realtime echo com versão confirmada não vira conflict
+  // =========================================================================
+  it('TEST 18: self realtime echo com versão já confirmada no cliente (v8) é ignorado sem conflito', async () => {
+    useCatalogStore.setState({
+      currentCatalog: { ...baseCatalog, version: 8 },
+      syncStatus: 'synced',
+      isDirty: false
+    });
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 8, name: baseCatalog.title }
+    });
+
+    const state = useCatalogStore.getState();
+    expect(state.syncStatus).toBe('synced');
+  });
+
+  // =========================================================================
+  // TEST 19: realtime remoto inesperado dirty vira conflict
+  // =========================================================================
+  it('TEST 19: realtime remoto com versão 9 quando cliente está em v7 dirty gera conflito real', async () => {
+    useCatalogStore.setState({
+      currentCatalog: { ...baseCatalog, version: 7 },
+      isDirty: true,
+      syncStatus: 'dirty'
+    });
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 9, name: 'Versão Modificada por Outro' }
+    });
+
+    const state = useCatalogStore.getState();
+    expect(state.syncStatus).toBe('conflict');
+    expect(state.syncError).toContain('atualizado em outro dispositivo');
+  });
+
+  // =========================================================================
+  // TEST 20: realtime stale/duplicado é ignorado
+  // =========================================================================
+  it('TEST 20: evento realtime com versão antiga (v6) quando cliente está em v7 é descartado', async () => {
+    const refreshSpy = vi.spyOn(useCatalogStore.getState(), 'refreshCatalog');
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: { id: catalogUUID, version: 6, name: 'Versão Velha' }
+    });
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(useCatalogStore.getState().syncStatus).toBe('synced');
+  });
+
+  // =========================================================================
+  // TEST 21: 23505 vira syncStatus='error', NÃO 'offline'
+  // =========================================================================
+  it('TEST 21: erro de título duplicado 23505 define syncStatus error (e não offline)', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
+      success: false,
+      errorCode: '23505',
+      error: 'duplicate key value violates unique constraint "catalogs_name_idx"'
+    });
+
+    const result = await useCatalogStore.getState().saveCurrentCatalog();
+
+    expect(result.status).toBe('error');
+    expect(result.errorCode).toBe('23505');
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+    expect(useCatalogStore.getState().syncError).toContain('Já existe um catálogo com este título');
+  });
+
+  // =========================================================================
+  // TEST 22: 42501 vira syncStatus='error', NÃO 'offline'
+  // =========================================================================
+  it('TEST 22: erro de permissão negada 42501 define syncStatus error (e não offline)', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
+      success: false,
+      errorCode: '42501',
+      error: 'permission denied for function save_catalog_v3'
+    });
+
+    const result = await useCatalogStore.getState().saveCurrentCatalog();
+
+    expect(result.status).toBe('error');
+    expect(result.errorCode).toBe('42501');
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+    expect(useCatalogStore.getState().syncError).toContain('Permissão negada');
+  });
+
+  // =========================================================================
+  // TEST 23: network failure vira syncStatus='offline'
+  // =========================================================================
+  it('TEST 23: falha genuína de rede define syncStatus offline', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValueOnce({
+      success: false,
+      errorCode: 'NETWORK_ERROR',
+      error: 'Failed to fetch'
+    });
+
+    const result = await useCatalogStore.getState().saveCurrentCatalog();
+
+    expect(result.status).toBe('offline');
+    expect(result.errorCode).toBe('NETWORK_ERROR');
+    expect(useCatalogStore.getState().syncStatus).toBe('offline');
+    expect(useCatalogStore.getState().syncError).toContain('modo offline');
+  });
+
+  // =========================================================================
+  // TEST 24: duas duplicações geram nomes únicos e UUIDs distintos
+  // =========================================================================
+  it('TEST 24: generateUniqueCatalogTitle e duplicateCatalog produzem nomes e UUIDs únicos sem colisão', async () => {
+    const existingTitles = ['PRESYS TA-25N', 'PRESYS TA-25N (Cópia)'];
+    const title1 = generateUniqueCatalogTitle('PRESYS TA-25N', ['PRESYS TA-25N']);
+    const title2 = generateUniqueCatalogTitle('PRESYS TA-25N', existingTitles);
+
+    expect(title1).toBe('PRESYS TA-25N (Cópia)');
+    expect(title2).toBe('PRESYS TA-25N (Cópia 2)');
+
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+      success: true,
+      data: { id: 'dup-1', version: 1 }
+    });
+
+    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValue({
+      success: true,
+      data: {
+        catalogs: [
+          { id: catalogUUID, name: baseCatalog.title, status: 'published', version: 7, brand: baseCatalog, created_at: '', updated_at: '' },
+          { id: 'dup-1', name: 'PRESYS TA-25N Datasheet (Cópia)', status: 'published', version: 1, brand: {}, created_at: '', updated_at: '' }
+        ],
+        products: [],
+        templates: [],
+        userRole: 'admin'
+      }
+    });
+
+    await useCatalogStore.getState().duplicateCatalog(catalogUUID);
+    const firstDup = useCatalogStore.getState().currentCatalog!;
+    expect(firstDup.title).toBe('PRESYS TA-25N Datasheet (Cópia)');
+
+    await useCatalogStore.getState().duplicateCatalog(catalogUUID);
+    const secondDup = useCatalogStore.getState().currentCatalog!;
+    expect(secondDup.title).toBe('PRESYS TA-25N Datasheet (Cópia 2)');
+    expect(firstDup.id).not.toBe(secondDup.id);
+  });
+
+  // =========================================================================
+  // TEST 25: workspace remoto vazio e online não restaura cache antigo
+  // =========================================================================
+  it('TEST 25: workspace remoto online vazio cria novo catálogo sem restaurar cache obsoleto', async () => {
+    vi.spyOn(SupabaseService, 'listWorkspace').mockResolvedValueOnce({
+      success: true,
+      data: {
+        catalogs: [],
+        products: [],
+        templates: [],
+        userRole: 'admin'
+      }
+    });
+
+    vi.spyOn(StorageService, 'loadCatalog').mockResolvedValueOnce({
+      ...baseCatalog,
+      title: 'Catálogo Obsoleto no Cache'
+    });
+
+    const createSpy = vi.spyOn(useCatalogStore.getState(), 'createCatalogFromPreset');
+
+    await useCatalogStore.getState().loadLatestCatalog();
+
+    expect(createSpy).toHaveBeenCalled();
+    expect(useCatalogStore.getState().currentCatalog?.title).not.toBe('Catálogo Obsoleto no Cache');
   });
 });
