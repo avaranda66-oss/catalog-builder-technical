@@ -6,8 +6,11 @@ import { useCatalogStore } from './stores/useCatalogStore';
 import { useAuthStore } from './stores/useAuthStore';
 
 if (typeof window !== 'undefined') {
-  (window as any).useCatalogStore = useCatalogStore;
-  (window as any).useAuthStore = useAuthStore;
+  const isDebug = import.meta.env.DEV || new URLSearchParams(window.location.search).get('debugRealtime') === '1';
+  if (isDebug) {
+    (window as any).useCatalogStore = useCatalogStore;
+    (window as any).useAuthStore = useAuthStore;
+  }
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

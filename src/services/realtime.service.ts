@@ -1,5 +1,5 @@
 import { useCatalogStore, debugSetCatalog } from '../stores/useCatalogStore';
-import { Catalog } from '../domain/catalog.schema';
+import { Catalog, analyzeCatalogStructuralDelta } from '../domain/catalog.schema';
 
 export interface RealtimePayload {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE' | string;
@@ -110,7 +110,7 @@ export async function handleCatalogRealtimeEvent(
     } else {
       console.log('[REALTIME] Aplicando atualização remota instantânea v' + remoteVersion + ' no catálogo ' + changedId);
 
-      // Se payload.new possui brand completo via REPLICA IDENTITY FULL, atualiza instantaneamente
+      // Se payload.new possui brand completo via REPLICA IDENTITY FULL, analisa delta e atualiza
       if (payload.new && payload.new.brand && typeof payload.new.brand === 'object') {
         const brandData = payload.new.brand;
         const updatedCatalog: Catalog = {
@@ -120,9 +120,54 @@ export async function handleCatalogRealtimeEvent(
           themeId: brandData.themeId || currentCatalog.themeId || 'default-technical',
           pages: Array.isArray(brandData.pages) ? brandData.pages : currentCatalog.pages,
           version: remoteVersion,
+          lastMutation: brandData.lastMutation,
           createdAt: brandData.createdAt || currentCatalog.createdAt || new Date().toISOString(),
           updatedAt: payload.new.updated_at || new Date().toISOString()
         };
+
+        // Análise Defensiva de Delta Estrutural: Bloqueia snapshots que removem blocos sem REMOVE_BLOCK
+        const structuralDelta = analyzeCatalogStructuralDelta(currentCatalog, updatedCatalog);
+        if (structuralDelta.removedBlocks.length > 0) {
+          const remoteMutation = brandData.lastMutation || updatedCatalog.lastMutation;
+          const isLegitimateBlockRemoval =
+            remoteMutation?.kind === 'REMOVE_BLOCK' &&
+            remoteMutation?.targetId &&
+            structuralDelta.removedBlocks.some((rb) => rb.blockId === remoteMutation.targetId);
+
+          if (!isLegitimateBlockRemoval) {
+            console.warn('🚨 [DEFENSIVE GUARD] Realtime rejeitou snapshot destrutivo sem evidência de REMOVE_BLOCK:', {
+              delta: structuralDelta,
+              remoteMutation,
+              remoteVersion
+            });
+            store.setState({
+              syncStatus: 'conflict',
+              syncError: 'Uma atualização remota removeria conteúdo deste catálogo. O conteúdo local foi preservado até confirmação.'
+            });
+            return;
+          }
+        }
+
+        if (structuralDelta.removedPages.length > 0) {
+          const remoteMutation = brandData.lastMutation || updatedCatalog.lastMutation;
+          const isLegitimatePageRemoval =
+            remoteMutation?.kind === 'REMOVE_PAGE' &&
+            remoteMutation?.targetId &&
+            structuralDelta.removedPages.includes(remoteMutation.targetId);
+
+          if (!isLegitimatePageRemoval) {
+            console.warn('🚨 [DEFENSIVE GUARD] Realtime rejeitou snapshot com remoção não justificada de páginas:', {
+              delta: structuralDelta,
+              remoteMutation,
+              remoteVersion
+            });
+            store.setState({
+              syncStatus: 'conflict',
+              syncError: 'Uma atualização remota removeria conteúdo deste catálogo. O conteúdo local foi preservado até confirmação.'
+            });
+            return;
+          }
+        }
 
         debugSetCatalog('handleCatalogRealtimeEvent:InstantApply', currentCatalog, updatedCatalog);
 

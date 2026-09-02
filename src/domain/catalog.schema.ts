@@ -134,6 +134,30 @@ export interface CatalogPage {
   blocks: ContentBlock[];
 }
 
+export type MutationKind =
+  | 'ADD_BLOCK'
+  | 'REMOVE_BLOCK'
+  | 'UPDATE_BLOCK'
+  | 'REORDER_BLOCKS'
+  | 'ADD_PAGE'
+  | 'REMOVE_PAGE'
+  | 'REORDER_PAGES'
+  | 'SET_TITLE'
+  | 'SET_SUBTITLE'
+  | 'SET_THEME'
+  | 'EDIT_TEXT'
+  | 'LOAD_PRESET'
+  | 'MANUAL_EDIT';
+
+export interface MutationMetadata {
+  kind: MutationKind;
+  clientInstanceId: string;
+  targetId?: string; // blockId or pageId
+  targetPageId?: string;
+  summary: string;
+  timestamp: string;
+}
+
 export interface Catalog {
   id: string;
   title: string;
@@ -143,6 +167,7 @@ export interface Catalog {
   createdAt: string;
   updatedAt: string;
   version: number;
+  lastMutation?: MutationMetadata;
 }
 
 export interface CatalogPreset {
@@ -300,4 +325,85 @@ export function generateUniqueCatalogTitle(baseTitle: string, existingTitles: st
     index++;
   }
   return `${cleanBase} (Cópia ${index})`;
+}
+
+export interface StructuralDelta {
+  hasChanges: boolean;
+  removedPages: string[];
+  addedPages: string[];
+  removedBlocks: Array<{ pageId: string; blockId: string; blockType?: string }>;
+  addedBlocks: Array<{ pageId: string; blockId: string; blockType?: string }>;
+  changedBlocks: Array<{ pageId: string; blockId: string }>;
+}
+
+export function analyzeCatalogStructuralDelta(
+  local: Catalog | null,
+  remote: Catalog | null
+): StructuralDelta {
+  if (!local || !remote) {
+    return {
+      hasChanges: true,
+      removedPages: [],
+      addedPages: [],
+      removedBlocks: [],
+      addedBlocks: [],
+      changedBlocks: []
+    };
+  }
+
+  const localPages = local.pages || [];
+  const remotePages = remote.pages || [];
+
+  const localPageIds = new Set(localPages.map((p) => p.id));
+  const remotePageIds = new Set(remotePages.map((p) => p.id));
+
+  const removedPages = localPages.filter((p) => !remotePageIds.has(p.id)).map((p) => p.id);
+  const addedPages = remotePages.filter((p) => !localPageIds.has(p.id)).map((p) => p.id);
+
+  const removedBlocks: Array<{ pageId: string; blockId: string; blockType?: string }> = [];
+  const addedBlocks: Array<{ pageId: string; blockId: string; blockType?: string }> = [];
+  const changedBlocks: Array<{ pageId: string; blockId: string }> = [];
+
+  for (const localPage of localPages) {
+    const remotePage = remotePages.find((p) => p.id === localPage.id);
+    if (!remotePage) continue;
+
+    const localBlocks = localPage.blocks || [];
+    const remoteBlocks = remotePage.blocks || [];
+    const remoteBlockMap = new Map(remoteBlocks.map((b) => [b.id, b]));
+    const localBlockMap = new Map(localBlocks.map((b) => [b.id, b]));
+
+    for (const lb of localBlocks) {
+      if (!remoteBlockMap.has(lb.id)) {
+        removedBlocks.push({ pageId: localPage.id, blockId: lb.id, blockType: lb.type });
+      } else {
+        const rb = remoteBlockMap.get(lb.id)!;
+        if (JSON.stringify(lb) !== JSON.stringify(rb)) {
+          changedBlocks.push({ pageId: localPage.id, blockId: lb.id });
+        }
+      }
+    }
+
+    for (const rb of remoteBlocks) {
+      if (!localBlockMap.has(rb.id)) {
+        addedBlocks.push({ pageId: localPage.id, blockId: rb.id, blockType: rb.type });
+      }
+    }
+  }
+
+  const hasChanges =
+    removedPages.length > 0 ||
+    addedPages.length > 0 ||
+    removedBlocks.length > 0 ||
+    addedBlocks.length > 0 ||
+    changedBlocks.length > 0;
+
+  return {
+    hasChanges,
+    removedPages,
+    addedPages,
+    removedBlocks,
+    addedBlocks,
+    changedBlocks
+  };
 }

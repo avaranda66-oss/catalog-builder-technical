@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { Catalog, ContentBlock, generateUniqueCatalogTitle } from '../domain/catalog.schema';
+import {
+  Catalog,
+  ContentBlock,
+  generateUniqueCatalogTitle,
+  MutationMetadata,
+  analyzeCatalogStructuralDelta
+} from '../domain/catalog.schema';
 import { StorageService } from '../services/storage.service';
 import { SupabaseService } from '../services/supabase.service';
 import { SYSTEM_PRESETS } from '../data/presets';
@@ -124,6 +130,7 @@ interface CatalogState {
   isDirty: boolean;
   localRevision: number;
   lastAcknowledgedLocalRevision: number;
+  lastMutation: MutationMetadata | null;
   syncStatus: SyncStatus;
   syncError: string | null;
   serverSavedAt: string | null;
@@ -185,6 +192,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   isDirty: false,
   localRevision: 0,
   lastAcknowledgedLocalRevision: 0,
+  lastMutation: null,
   syncStatus: 'synced',
   syncError: null,
   serverSavedAt: null,
@@ -201,10 +209,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const prev = get().currentCatalog;
     debugSetCatalog('setCurrentCatalog', prev, nextCatalog, { markDirty });
     const nextRev = markDirty ? get().localRevision + 1 : get().localRevision;
+    const mutation: MutationMetadata | null = markDirty
+      ? {
+          kind: 'MANUAL_EDIT',
+          clientInstanceId: getClientInstanceId(),
+          summary: `Catálogo alterado para "${nextCatalog.title}"`,
+          timestamp: new Date().toISOString()
+        }
+      : null;
 
     set({
       currentCatalog: nextCatalog,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: markDirty,
       syncStatus: markDirty ? 'dirty' : 'synced'
     });
@@ -214,7 +231,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId }),
 
   // =========================================================================
-  // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION
+  // FASE 1A & 1.2: MUTAÇÕES LOCAIS COM INCREMENTO DE LOCAL REVISION E METADATA
   // =========================================================================
 
   addPage: (type = 'technical') => {
@@ -237,12 +254,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'ADD_PAGE',
+      clientInstanceId: getClientInstanceId(),
+      targetId: newPage.id,
+      summary: `Adicionada Folha ${newPageNumber} (${type})`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('addPage', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: currentCatalog.pages.length,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -265,12 +291,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     const nextIndex = Math.min(activePageIndex, updatedPages.length - 1);
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'REMOVE_PAGE',
+      clientInstanceId: getClientInstanceId(),
+      targetId: pageId,
+      summary: `Removida página ${pageId}`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('removePage', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: nextIndex,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -293,12 +328,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'REORDER_PAGES',
+      clientInstanceId: getClientInstanceId(),
+      summary: `Reordenadas páginas da posição ${fromIndex + 1} para ${toIndex + 1}`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('reorderPages', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       activePageIndex: toIndex,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -315,11 +358,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     const updatedCatalog = { ...currentCatalog, pages: updatedPages, updatedAt: new Date().toISOString() };
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'EDIT_TEXT',
+      clientInstanceId: getClientInstanceId(),
+      targetId: pageId,
+      summary: `Título da página ${pageId} alterado para "${title}"`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('setPageTitle', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -346,12 +398,22 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'ADD_BLOCK',
+      clientInstanceId: getClientInstanceId(),
+      targetId: newBlock.id,
+      targetPageId: pageId,
+      summary: `Adicionado bloco ${newBlock.type} "${newBlock.title || ''}" à página ${pageId}`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('addBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       selectedBlockId: newBlock.id,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -377,11 +439,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'UPDATE_BLOCK',
+      clientInstanceId: getClientInstanceId(),
+      targetId: blockId,
+      targetPageId: pageId,
+      summary: `Atualizado bloco ${blockId} na página ${pageId}`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('updateBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -407,12 +479,22 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     const nextRev = localRevision + 1;
+    const mutation: MutationMetadata = {
+      kind: 'REMOVE_BLOCK',
+      clientInstanceId: getClientInstanceId(),
+      targetId: blockId,
+      targetPageId: pageId,
+      summary: `Removido bloco ${blockId} da página ${pageId}`,
+      timestamp: new Date().toISOString()
+    };
+
     debugSetCatalog('removeBlock', currentCatalog, updatedCatalog, { localRevision: nextRev });
 
     set({
       currentCatalog: updatedCatalog,
       selectedBlockId: null,
       localRevision: nextRev,
+      lastMutation: mutation,
       isDirty: true,
       syncStatus: 'dirty'
     });
@@ -626,11 +708,38 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           console.warn('Erro ao atualizar cache local:', storageErr);
         }
 
+        const mutation = get().lastMutation;
+        const clientId = getClientInstanceId();
+        const summaryText = mutation
+          ? `[client=${clientId}] [kind=${mutation.kind}] [target=${mutation.targetId || 'all'}] ${mutation.summary}`
+          : `[client=${clientId}] [kind=MANUAL_EDIT] [target=all] Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`;
+
+        console.log('[CATALOG SAVE ORIGIN]', {
+          clientInstanceId: clientId,
+          catalogId: catalogSnapshot.id,
+          expectedVersion,
+          localRevision: capturedRevision,
+          mutationKind: mutation?.kind || 'MANUAL_EDIT',
+          mutationSummary: mutation?.summary || 'Salvamento de catálogo',
+          pageStructure: getCatalogStructuralFingerprint(catalogSnapshot),
+          timestamp: new Date().toISOString()
+        });
+
+        const payloadToSend: Catalog = {
+          ...catalogSnapshot,
+          lastMutation: mutation || {
+            kind: 'MANUAL_EDIT',
+            clientInstanceId: clientId,
+            summary: 'Salvamento de catálogo',
+            timestamp: new Date().toISOString()
+          }
+        };
+
         // 2. Envia para o Supabase via save_catalog_v3 com expectedVersion estrito
         const remoteRes = await SupabaseService.saveCatalog(
-          catalogSnapshot,
+          payloadToSend,
           expectedVersion,
-          `Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`
+          summaryText
         );
 
         if (remoteRes.success && remoteRes.data) {
@@ -921,6 +1030,48 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       currentState.localRevision <= currentState.lastAcknowledgedLocalRevision &&
       targetRemote.version > versionAtStart
     ) {
+      // Análise Defensiva de Delta Estrutural contra perda injustificada de blocos
+      const delta = analyzeCatalogStructuralDelta(currentCatalog, targetRemote);
+      if (delta.removedBlocks.length > 0) {
+        const remoteMutation = targetRemote.lastMutation;
+        const isLegitimateBlockRemoval =
+          remoteMutation?.kind === 'REMOVE_BLOCK' &&
+          remoteMutation?.targetId &&
+          delta.removedBlocks.some((rb) => rb.blockId === remoteMutation.targetId);
+
+        if (!isLegitimateBlockRemoval) {
+          console.warn('🚨 [DEFENSIVE GUARD] refreshCatalog rejeitou snapshot destrutivo sem evidência de REMOVE_BLOCK:', {
+            delta,
+            remoteMutation
+          });
+          set({
+            syncStatus: 'conflict',
+            syncError: 'Uma atualização remota removeria conteúdo deste catálogo. O conteúdo local foi preservado até confirmação.'
+          });
+          return;
+        }
+      }
+
+      if (delta.removedPages.length > 0) {
+        const remoteMutation = targetRemote.lastMutation;
+        const isLegitimatePageRemoval =
+          remoteMutation?.kind === 'REMOVE_PAGE' &&
+          remoteMutation?.targetId &&
+          delta.removedPages.includes(remoteMutation.targetId);
+
+        if (!isLegitimatePageRemoval) {
+          console.warn('🚨 [DEFENSIVE GUARD] refreshCatalog rejeitou snapshot com remoção não justificada de páginas:', {
+            delta,
+            remoteMutation
+          });
+          set({
+            syncStatus: 'conflict',
+            syncError: 'Uma atualização remota removeria conteúdo deste catálogo. O conteúdo local foi preservado até confirmação.'
+          });
+          return;
+        }
+      }
+
       debugSetCatalog('refreshCatalog:SafeApply', currentCatalog, targetRemote);
       set({
         currentCatalog: targetRemote,

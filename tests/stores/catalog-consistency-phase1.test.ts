@@ -1076,9 +1076,16 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
           {
             id: baseCatalog.pages[0].id,
             pageNumber: 1,
-            blocks: [{ id: 'b-remote-1', type: 'hero_banner', title: 'Banner Remoto' }]
+            blocks: [{ id: 'block-1', type: 'hero_banner', title: 'Banner Remoto' }]
           }
-        ]
+        ],
+        lastMutation: {
+          kind: 'UPDATE_BLOCK',
+          clientInstanceId: 'client-remote',
+          targetId: 'block-1',
+          summary: 'Atualizado bloco para Banner Remoto',
+          timestamp: new Date().toISOString()
+        }
       }
     };
 
@@ -1147,5 +1154,89 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
     const updatedBlock = state.currentCatalog?.pages[0].blocks.find((b) => b.id === initialBlockId);
     expect(updatedBlock?.title).toBe('REALTIME-COVER-A-001');
     expect(state.currentCatalog?.pages[0].blocks.length).toBe(1);
+  });
+
+  // =========================================================================
+  // TEST 39: Remoção legítima de bloco entre navegadores (REMOVE_BLOCK metadata)
+  // =========================================================================
+  it('TEST 39: Remoção legítima de bloco com metadata REMOVE_BLOCK é aplicada com sucesso no outro navegador', async () => {
+    const pageId = baseCatalog.pages[0].id;
+    const blockIdToRemove = baseCatalog.pages[0].blocks[0].id;
+
+    const legitimateRemovalPayload = {
+      id: catalogUUID,
+      version: 8,
+      name: baseCatalog.title,
+      brand: {
+        title: baseCatalog.title,
+        pages: [
+          {
+            id: pageId,
+            pageNumber: 1,
+            blocks: [] // Bloco removido intencionalmente
+          }
+        ],
+        lastMutation: {
+          kind: 'REMOVE_BLOCK',
+          clientInstanceId: 'client-A',
+          targetId: blockIdToRemove,
+          targetPageId: pageId,
+          summary: `Removido bloco ${blockIdToRemove}`,
+          timestamp: new Date().toISOString()
+        }
+      }
+    };
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: legitimateRemovalPayload
+    });
+
+    const state = useCatalogStore.getState();
+    // Bloco foi legitimamente removido no cliente B
+    expect(state.currentCatalog?.pages[0].blocks.length).toBe(0);
+    expect(state.currentCatalog?.version).toBe(8);
+    expect(state.syncStatus).toBe('synced');
+  });
+
+  // =========================================================================
+  // TEST 40: Snapshot suspeito sem justificativa é REJEITADO (Prevenção de Perda)
+  // =========================================================================
+  it('TEST 40: Snapshot remoto suspeito que remove blocos sem metadata REMOVE_BLOCK é REJEITADO e preserva blocos locais', async () => {
+    const pageId = baseCatalog.pages[0].id;
+
+    const suspiciousPayload = {
+      id: catalogUUID,
+      version: 8,
+      name: baseCatalog.title,
+      brand: {
+        title: baseCatalog.title,
+        pages: [
+          {
+            id: pageId,
+            pageNumber: 1,
+            blocks: [] // Snapshot corrompido / vazio sem justificativa
+          }
+        ],
+        lastMutation: {
+          kind: 'MANUAL_EDIT', // Sem evidência de REMOVE_BLOCK
+          clientInstanceId: 'unknown-client',
+          summary: 'Edição genérica'
+        }
+      }
+    };
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: suspiciousPayload
+    });
+
+    const state = useCatalogStore.getState();
+    // DEFENSIVE GATE: Bloco local B1 é PRESERVADO!
+    expect(state.currentCatalog?.pages[0].blocks.length).toBe(1);
+    expect(state.currentCatalog?.pages[0].blocks[0].id).toBe('block-1');
+    // Estado entra em conflito explícito com alerta ao usuário
+    expect(state.syncStatus).toBe('conflict');
+    expect(state.syncError).toContain('Uma atualização remota removeria conteúdo deste catálogo');
   });
 });
