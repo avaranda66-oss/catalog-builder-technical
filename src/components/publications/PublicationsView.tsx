@@ -69,9 +69,29 @@ export const PublicationsView: React.FC = () => {
     setIsExporting(true);
     setExportStatus(null);
 
-    const safeTitle = (currentCatalog.title || 'Catalogo_Presys')
+    // 1. Garante que qualquer alteração pendente foi confirmada na nuvem antes do PDF
+    const flushRes = await useCatalogStore.getState().flushCatalog(currentCatalog.id);
+    if (!flushRes.success && flushRes.status !== 'offline') {
+      setIsExporting(false);
+      setExportStatus({
+        success: false,
+        message: `Não foi possível confirmar a última versão na nuvem antes de exportar (${flushRes.error || 'erro de rede'}).`
+      });
+      return;
+    }
+
+    const currentConfirmed = useCatalogStore.getState().currentCatalog || currentCatalog;
+    console.log('[PDF EXPORT METADATA]', {
+      catalogId: currentConfirmed.id,
+      catalogVersion: currentConfirmed.version,
+      catalogTitle: currentConfirmed.title,
+      pagesCount: currentConfirmed.pages.length,
+      timestamp: new Date().toISOString()
+    });
+
+    const safeTitle = (currentConfirmed.title || 'Catalogo_Presys')
       .replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${safeTitle}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const fileName = `${safeTitle}_v${currentConfirmed.version}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
     const result = await PDFService.exportToPDF('.a4-page-container', {
       fileName,
@@ -111,9 +131,12 @@ export const PublicationsView: React.FC = () => {
                   Preflight Active
                 </span>
               </h1>
-              <p className="text-xs text-slate-500">
-                Technical document management, metrological data verification, and direct high-resolution PDF export
-              </p>
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="text-xs text-slate-500">Documento Ativo:</span>
+                <span className="text-xs font-mono font-bold text-[#003366] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                  {currentCatalog.title} (ID: {currentCatalog.id.slice(0, 8)}... | v{currentCatalog.version})
+                </span>
+              </div>
             </div>
           </div>
         </div>

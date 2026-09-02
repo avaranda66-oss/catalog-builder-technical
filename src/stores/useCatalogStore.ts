@@ -187,15 +187,31 @@ interface CatalogState {
   loadCatalogById: (id: string) => Promise<void>;
   duplicateCatalog: (id: string) => Promise<SaveResult | null>;
   deleteCatalog: (id: string) => Promise<void>;
+  saveAsNewCatalog: (newTitle: string) => Promise<SaveResult & { newCatalogId?: string }>;
+  flushCatalog: (catalogId?: string) => Promise<SaveResult>;
   createCatalogFromPreset: (name?: string, presetId?: string) => Promise<SaveResult>;
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
 }
 
-// Controle de Fila Single-Flight em nível de módulo
-let isSaveInFlight = false;
-let hasPendingSave = false;
+// Controle de Fila por Catálogo (Per-Catalog Save Queue)
+interface CatalogSaveQueue {
+  isSaving: boolean;
+  hasPending: boolean;
+  inFlightPromise: Promise<SaveResult> | null;
+}
+
+const catalogSaveQueues = new Map<string, CatalogSaveQueue>();
+
+function getCatalogQueue(catalogId: string): CatalogSaveQueue {
+  let q = catalogSaveQueues.get(catalogId);
+  if (!q) {
+    q = { isSaving: false, hasPending: false, inFlightPromise: null };
+    catalogSaveQueues.set(catalogId, q);
+  }
+  return q;
+}
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
   currentCatalog: null,
@@ -693,7 +709,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   // =========================================================================
-  // FASE 1B, 1C & 1.2: FILA SINGLE-FLIGHT, REVISION ACK & NUNCA RESTAURAR SNAPSHOT ANTIGO
+  // FASE 1.4: FILA PER-CATALOG, SAVE AS NEW, FLUSH & REVISION ACK
   // =========================================================================
 
   saveCurrentCatalog: async (): Promise<SaveResult> => {
@@ -702,196 +718,321 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo para salvar.' };
     }
 
-    if (isSaveInFlight) {
-      hasPendingSave = true;
+    const queue = getCatalogQueue(currentCatalog.id);
+
+    if (queue.isSaving) {
+      queue.hasPending = true;
+      if (queue.inFlightPromise) {
+        return queue.inFlightPromise;
+      }
       return { success: true, status: 'saving' };
     }
 
-    isSaveInFlight = true;
-    let finalResult: SaveResult = { success: false, status: 'saving' };
+    queue.isSaving = true;
+    const savePromise = (async () => {
+      let finalResult: SaveResult = { success: false, status: 'saving' };
+      try {
+        while (true) {
+          queue.hasPending = false;
+          const catalogSnapshot = get().currentCatalog;
+          if (!catalogSnapshot || catalogSnapshot.id !== currentCatalog.id) break;
 
-    try {
-      while (true) {
-        hasPendingSave = false;
-        const catalogSnapshot = get().currentCatalog;
-        if (!catalogSnapshot) break;
+          const capturedRevision = get().localRevision;
+          const expectedVersion = catalogSnapshot.version ?? 0;
+          const targetVersion = expectedVersion === 0 ? 1 : expectedVersion + 1;
 
-        const capturedRevision = get().localRevision;
-        const expectedVersion = catalogSnapshot.version ?? 0;
-        const targetVersion = expectedVersion === 0 ? 1 : expectedVersion + 1;
+          set({
+            isSaving: true,
+            syncStatus: 'saving',
+            syncError: null,
+            inFlightSave: {
+              catalogId: catalogSnapshot.id,
+              expectedVersion,
+              targetVersion,
+              capturedRevision
+            }
+          });
 
-        // Rastreia voo para resolução de eco do Realtime e controle de revisão
-        set({
-          isSaving: true,
-          syncStatus: 'saving',
-          syncError: null,
-          inFlightSave: {
+          // 1. Salva em Cache Local (IndexedDB / localStorage backup)
+          try {
+            await StorageService.cacheCatalog(catalogSnapshot);
+            set({ cachedAt: new Date().toISOString() });
+          } catch (storageErr) {
+            console.warn('Erro ao atualizar cache local:', storageErr);
+          }
+
+          const mutation = get().lastMutation;
+          const clientId = getClientInstanceId();
+          const summaryText = mutation
+            ? `[client=${clientId}] [kind=${mutation.kind}] [target=${mutation.targetId || 'all'}] ${mutation.summary}`
+            : `[client=${clientId}] [kind=MANUAL_EDIT] [target=all] Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`;
+
+          console.log('[CATALOG SAVE ORIGIN]', {
+            clientInstanceId: clientId,
             catalogId: catalogSnapshot.id,
             expectedVersion,
-            targetVersion,
-            capturedRevision
-          }
-        });
-
-        // 1. Salva em Cache Local (IndexedDB / localStorage backup)
-        try {
-          await StorageService.cacheCatalog(catalogSnapshot);
-          set({ cachedAt: new Date().toISOString() });
-        } catch (storageErr) {
-          console.warn('Erro ao atualizar cache local:', storageErr);
-        }
-
-        const mutation = get().lastMutation;
-        const clientId = getClientInstanceId();
-        const summaryText = mutation
-          ? `[client=${clientId}] [kind=${mutation.kind}] [target=${mutation.targetId || 'all'}] ${mutation.summary}`
-          : `[client=${clientId}] [kind=MANUAL_EDIT] [target=all] Salvamento de "${catalogSnapshot.title}" (rev: ${capturedRevision})`;
-
-        console.log('[CATALOG SAVE ORIGIN]', {
-          clientInstanceId: clientId,
-          catalogId: catalogSnapshot.id,
-          expectedVersion,
-          localRevision: capturedRevision,
-          mutationKind: mutation?.kind || 'MANUAL_EDIT',
-          mutationSummary: mutation?.summary || 'Salvamento de catálogo',
-          pageStructure: getCatalogStructuralFingerprint(catalogSnapshot),
-          timestamp: new Date().toISOString()
-        });
-
-        const payloadToSend: Catalog = {
-          ...catalogSnapshot,
-          lastMutation: mutation || {
-            kind: 'MANUAL_EDIT',
-            clientInstanceId: clientId,
-            summary: 'Salvamento de catálogo',
+            localRevision: capturedRevision,
+            mutationKind: mutation?.kind || 'MANUAL_EDIT',
+            mutationSummary: mutation?.summary || 'Salvamento de catálogo',
+            pageStructure: getCatalogStructuralFingerprint(catalogSnapshot),
             timestamp: new Date().toISOString()
-          }
-        };
+          });
 
-        // 2. Envia para o Supabase via save_catalog_v3 com expectedVersion estrito
-        const remoteRes = await SupabaseService.saveCatalog(
-          payloadToSend,
-          expectedVersion,
-          summaryText
-        );
-
-        if (remoteRes.success && remoteRes.data) {
-          const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
-          const nowIso = new Date().toISOString();
-
-          // REGRA DE SEGURANÇA 1.2: Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente!
-          // NUNCA restaura um snapshot antigo de páginas/blocos sobre o estado ativo!
-          const activeCurrent = get().currentCatalog;
-          if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
-            const nextCatalog = { ...activeCurrent, version: confirmedVersion };
-            debugSetCatalog('saveCurrentCatalog:ACK', activeCurrent, nextCatalog, { confirmedVersion, capturedRevision });
-
-            set({
-              currentCatalog: nextCatalog,
-              serverSavedAt: nowIso,
-              lastSavedAt: nowIso,
-              lastAcknowledgedLocalRevision: capturedRevision
-            });
-          }
-
-          finalResult = {
-            success: true,
-            status: 'synced',
-            version: confirmedVersion
+          const payloadToSend: Catalog = {
+            ...catalogSnapshot,
+            lastMutation: mutation || {
+              kind: 'MANUAL_EDIT',
+              clientInstanceId: clientId,
+              summary: 'Salvamento de catálogo',
+              timestamp: new Date().toISOString()
+            }
           };
 
-          // Verifica se ocorreram novas edições locais enquanto o save estava em voo
-          const currentRev = get().localRevision;
-          if (currentRev === capturedRevision && !hasPendingSave) {
-            set({ isDirty: false, syncStatus: 'synced', syncError: null });
+          // 2. Envia para o Supabase via save_catalog_v3 com expectedVersion estrito
+          const remoteRes = await SupabaseService.saveCatalog(
+            payloadToSend,
+            expectedVersion,
+            summaryText
+          );
+
+          if (remoteRes.success && remoteRes.data) {
+            const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
+            const nowIso = new Date().toISOString();
+
+            // REGRA DE SEGURANÇA: Atualiza EXCLUSIVAMENTE a version confirmada sobre o estado corrente!
+            const activeCurrent = get().currentCatalog;
+            if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
+              const nextCatalog = { ...activeCurrent, version: confirmedVersion };
+              debugSetCatalog('saveCurrentCatalog:ACK', activeCurrent, nextCatalog, { confirmedVersion, capturedRevision });
+
+              set({
+                currentCatalog: nextCatalog,
+                serverSavedAt: nowIso,
+                lastSavedAt: nowIso,
+                lastAcknowledgedLocalRevision: capturedRevision
+              });
+            }
+
+            finalResult = {
+              success: true,
+              status: 'synced',
+              version: confirmedVersion
+            };
+
+            // Verifica se ocorreram novas edições locais enquanto o save estava em voo
+            const currentRev = get().localRevision;
+            if (currentRev === capturedRevision && !queue.hasPending) {
+              set({ isDirty: false, syncStatus: 'synced', syncError: null });
+              break;
+            }
+          } else if (remoteRes.conflict || remoteRes.errorCode === '40001') {
+            finalResult = {
+              success: false,
+              status: 'conflict',
+              errorCode: '40001',
+              error: remoteRes.error || 'Este catálogo foi atualizado em outro dispositivo.'
+            };
+            set({
+              syncStatus: 'conflict',
+              syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
+              isDirty: true
+            });
+            break;
+          } else if (remoteRes.errorCode === '23505') {
+            finalResult = {
+              success: false,
+              status: 'error',
+              errorCode: '23505',
+              error: 'Já existe um catálogo com este título no servidor.'
+            };
+            set({
+              syncStatus: 'error',
+              syncError: 'Já existe um catálogo com este título no servidor. Altere o nome.',
+              isDirty: true
+            });
+            break;
+          } else if (remoteRes.errorCode === '22023') {
+            finalResult = {
+              success: false,
+              status: 'error',
+              errorCode: '22023',
+              error: remoteRes.error || 'Payload de catálogo inválido.'
+            };
+            set({
+              syncStatus: 'error',
+              syncError: 'Erro de validação: verifique a estrutura do catálogo.',
+              isDirty: true
+            });
+            break;
+          } else if (remoteRes.errorCode === '42501') {
+            finalResult = {
+              success: false,
+              status: 'error',
+              errorCode: '42501',
+              error: 'Permissão negada para salvar catálogo.'
+            };
+            set({
+              syncStatus: 'error',
+              syncError: 'Permissão negada: sessão expirada ou perfil sem acesso.',
+              isDirty: true
+            });
+            break;
+          } else if (remoteRes.errorCode === 'CLIENT_OFFLINE' || remoteRes.errorCode === 'NETWORK_ERROR') {
+            finalResult = {
+              success: false,
+              status: 'offline',
+              errorCode: remoteRes.errorCode,
+              error: remoteRes.error || 'Sem conexão com a nuvem.'
+            };
+            set({
+              syncStatus: 'offline',
+              syncError: 'Operando em modo offline. Alterações salvas no cache local.'
+            });
+            break;
+          } else {
+            finalResult = {
+              success: false,
+              status: 'error',
+              errorCode: remoteRes.errorCode || 'UNKNOWN_ERROR',
+              error: remoteRes.error || 'Erro ao salvar no servidor.'
+            };
+            set({
+              syncStatus: 'error',
+              syncError: remoteRes.error || 'Erro ao salvar no servidor.'
+            });
             break;
           }
-          // Se currentRev > capturedRevision, continua o loop imediatamente para salvar as novas edições
-        } else if (remoteRes.conflict || remoteRes.errorCode === '40001') {
-          // FASE 1C: Conflito Real 40001
-          finalResult = {
-            success: false,
-            status: 'conflict',
-            errorCode: '40001',
-            error: remoteRes.error || 'Este catálogo foi atualizado em outro dispositivo.'
-          };
-          set({
-            syncStatus: 'conflict',
-            syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
-            isDirty: true
-          });
-          break;
-        } else if (remoteRes.errorCode === '23505') {
-          finalResult = {
-            success: false,
-            status: 'error',
-            errorCode: '23505',
-            error: 'Já existe um catálogo com este título no servidor.'
-          };
-          set({
-            syncStatus: 'error',
-            syncError: 'Já existe um catálogo com este título no servidor. Altere o nome.',
-            isDirty: true
-          });
-          break;
-        } else if (remoteRes.errorCode === '22023') {
-          finalResult = {
-            success: false,
-            status: 'error',
-            errorCode: '22023',
-            error: remoteRes.error || 'Payload de catálogo inválido.'
-          };
-          set({
-            syncStatus: 'error',
-            syncError: 'Erro de validação: verifique a estrutura do catálogo.',
-            isDirty: true
-          });
-          break;
-        } else if (remoteRes.errorCode === '42501') {
-          finalResult = {
-            success: false,
-            status: 'error',
-            errorCode: '42501',
-            error: 'Permissão negada para salvar catálogo.'
-          };
-          set({
-            syncStatus: 'error',
-            syncError: 'Permissão negada: sessão expirada ou perfil sem acesso.',
-            isDirty: true
-          });
-          break;
-        } else if (remoteRes.errorCode === 'CLIENT_OFFLINE' || remoteRes.errorCode === 'NETWORK_ERROR') {
-          finalResult = {
-            success: false,
-            status: 'offline',
-            errorCode: remoteRes.errorCode,
-            error: remoteRes.error || 'Sem conexão com a nuvem.'
-          };
-          set({
-            syncStatus: 'offline',
-            syncError: 'Operando em modo offline. Alterações salvas no cache local.'
-          });
-          break;
-        } else {
-          finalResult = {
-            success: false,
-            status: 'error',
-            errorCode: remoteRes.errorCode || 'UNKNOWN_ERROR',
-            error: remoteRes.error || 'Erro ao salvar no servidor.'
-          };
-          set({
-            syncStatus: 'error',
-            syncError: remoteRes.error || 'Erro ao salvar no servidor.'
-          });
-          break;
         }
+      } finally {
+        queue.isSaving = false;
+        queue.inFlightPromise = null;
+        set({ isSaving: false, inFlightSave: null });
       }
-    } finally {
-      isSaveInFlight = false;
-      set({ isSaving: false, inFlightSave: null });
+      return finalResult;
+    })();
+
+    queue.inFlightPromise = savePromise;
+    return savePromise;
+  },
+
+  flushCatalog: async (catalogId?: string): Promise<SaveResult> => {
+    const targetId = catalogId || get().currentCatalog?.id;
+    if (!targetId) {
+      return { success: false, status: 'error', error: 'Nenhum catálogo ativo para flush.' };
     }
 
-    return finalResult;
+    const queue = getCatalogQueue(targetId);
+    if (queue.isSaving && queue.inFlightPromise) {
+      await queue.inFlightPromise;
+    }
+
+    const current = get();
+    if (
+      current.currentCatalog &&
+      current.currentCatalog.id === targetId &&
+      (current.isDirty || current.localRevision > current.lastAcknowledgedLocalRevision)
+    ) {
+      return await get().saveCurrentCatalog();
+    }
+
+    return {
+      success: true,
+      status: 'synced',
+      version: current.currentCatalog?.version
+    };
+  },
+
+  saveAsNewCatalog: async (newTitle: string): Promise<SaveResult & { newCatalogId?: string }> => {
+    const { currentCatalog, savedCatalogs } = get();
+    if (!currentCatalog) {
+      return { success: false, status: 'error', error: 'Nenhum catálogo ativo para duplicar/salvar como novo.' };
+    }
+
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) {
+      return { success: false, status: 'error', error: 'O título do novo catálogo não pode ser vazio.' };
+    }
+
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+
+    const newCatalog: Catalog = {
+      ...structuredClone(currentCatalog),
+      id: newId,
+      title: trimmedTitle,
+      version: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastMutation: {
+        kind: 'CREATE_COPY',
+        clientInstanceId: getClientInstanceId(),
+        summary: `Criado como novo catálogo "${trimmedTitle}"`,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    set({ isSaving: true, syncStatus: 'saving', syncError: null });
+
+    const summaryText = `[client=${getClientInstanceId()}] [kind=CREATE_COPY] Salvar como novo catálogo "${trimmedTitle}"`;
+    const remoteRes = await SupabaseService.saveCatalog(newCatalog, 0, summaryText);
+
+    if (remoteRes.success && remoteRes.data) {
+      const confirmedVersion = Number(remoteRes.data.version) || 1;
+      const createdCatalog: Catalog = {
+        ...newCatalog,
+        version: confirmedVersion
+      };
+
+      const updatedSavedList = [
+        createdCatalog,
+        ...savedCatalogs.filter((c) => c.id !== newId)
+      ];
+
+      debugSetCatalog('saveAsNewCatalog', currentCatalog, createdCatalog);
+      set({
+        currentCatalog: createdCatalog,
+        savedCatalogs: updatedSavedList,
+        activePageIndex: 0,
+        selectedBlockId: null,
+        isDirty: false,
+        isSaving: false,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0,
+        inFlightSave: null,
+        syncStatus: 'synced',
+        syncError: null,
+        serverSavedAt: new Date().toISOString(),
+        lastSavedAt: new Date().toISOString()
+      });
+
+      StorageService.setActiveCatalogId(newId);
+      updateCanonicalUrlCatalogId(newId);
+      try {
+        await StorageService.cacheCatalog(createdCatalog);
+      } catch (e) {
+        console.warn('Erro ao salvar cache:', e);
+      }
+
+      return {
+        success: true,
+        status: 'synced',
+        version: confirmedVersion,
+        newCatalogId: newId
+      };
+    } else {
+      set({
+        isSaving: false,
+        syncStatus: 'error',
+        syncError: remoteRes.error || 'Erro ao salvar como novo catálogo na nuvem.'
+      });
+      return {
+        success: false,
+        status: 'error',
+        errorCode: remoteRes.errorCode,
+        error: remoteRes.error || 'Erro ao salvar como novo catálogo.'
+      };
+    }
   },
 
   resolveConflictKeepLocal: async (): Promise<SaveResult> => {

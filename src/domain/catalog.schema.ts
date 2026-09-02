@@ -147,6 +147,7 @@ export type MutationKind =
   | 'SET_THEME'
   | 'EDIT_TEXT'
   | 'LOAD_PRESET'
+  | 'CREATE_COPY'
   | 'MANUAL_EDIT';
 
 export interface MutationMetadata {

@@ -42,22 +42,33 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
     (p) => p.category === 'official_product_catalog'
   );
 
-  const handleApplyPreset = (preset: CatalogPreset) => {
+  const handleApplyPreset = async (preset: CatalogPreset) => {
     const isTemplate = preset.category === 'layout_template';
     const actionLabel = isTemplate
-      ? `Carregar o esqueleto de layout "${preset.name}"? As páginas atuais serão substituídas pela estrutura em branco deste modelo.`
-      : `Carregar o catálogo oficial "${preset.name}" com todos os dados técnicos e fotos reais pré-configurados?`;
+      ? `Criar um novo catálogo a partir do esqueleto de layout "${preset.name}"?`
+      : `Criar uma cópia editável do catálogo "${preset.name}"?`;
 
     if (confirm(actionLabel)) {
       const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
       const newCatalog: Catalog = {
         ...structuredClone(preset.catalog),
         id: newId,
+        title: preset.name,
         updatedAt: new Date().toISOString(),
-        version: 0
+        createdAt: new Date().toISOString(),
+        version: 0,
+        lastMutation: {
+          kind: 'CREATE_COPY',
+          clientInstanceId: typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem('cb_client_instance_id') || 'client' : 'client',
+          summary: `Criado a partir do preset "${preset.name}"`,
+          timestamp: new Date().toISOString()
+        }
       };
       setCurrentCatalog(newCatalog);
-      void saveCurrentCatalog();
+      const res = await saveCurrentCatalog();
+      if (res.success) {
+        void useCatalogStore.getState().loadWorkspace();
+      }
       onClose();
     }
   };
@@ -88,99 +99,97 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#003366] text-white rounded-lg">
-              <Layers className="w-5 h-5" />
+        {/* Header do Modal */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#003366] text-white rounded-lg flex items-center justify-center">
+              <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Central de Estruturas & Catálogos de Produtos
-              </h2>
-              <p className="text-[11px] text-slate-500 font-mono">
-                Diferencie entre <strong>Esqueletos em Branco</strong> (templates sem produto) e <strong>Catálogos Prontos</strong> (com dados oficiais)
+              <h2 className="text-base font-bold text-slate-900">Catálogos Oficiais & Esqueletos de Estrutura</h2>
+              <p className="text-xs text-slate-500">
+                Selecione um catálogo oficial pronto com fotos reais ou comece por uma estrutura em branco
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Abas Superiores de Navegação */}
-        <div className="grid grid-cols-4 border-b border-slate-200 bg-slate-100/70 p-1.5 gap-1.5 text-xs font-semibold">
-          {/* Aba 1: Catálogos Oficiais Prontos */}
+        {/* Feedback / Mensagens de Alerta */}
+        {message && (
+          <div className="mx-6 mt-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{message}</span>
+          </div>
+        )}
+
+        {/* Abas de Navegação */}
+        <div className="flex border-b border-slate-200 px-6 gap-2 pt-2 bg-slate-50/50">
           <button
             onClick={() => { setActiveTab('official_catalogs'); setMessage(null); }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ${
               activeTab === 'official_catalogs'
-                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-emerald-600 text-emerald-800'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Package className="w-4 h-4 text-emerald-600" />
-            <span>📦 Catálogos Prontos ({officialCatalogs.length})</span>
+            <span>Catálogos Oficiais da Linha ({officialCatalogs.length})</span>
           </button>
 
-          {/* Aba 2: Templates de Estrutura em Branco */}
           <button
             onClick={() => { setActiveTab('layout_templates'); setMessage(null); }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ${
               activeTab === 'layout_templates'
-                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-blue-600 text-blue-800'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <LayoutTemplate className="w-4 h-4 text-blue-600" />
-            <span>🏗️ Templates em Branco ({layoutTemplates.length})</span>
+            <span>Templates em Branco ({layoutTemplates.length})</span>
           </button>
 
-          {/* Aba 3: Meus Templates Salvos */}
           <button
             onClick={() => { setActiveTab('custom'); setMessage(null); }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ${
               activeTab === 'custom'
-                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-amber-500 text-amber-900'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Bookmark className="w-4 h-4 text-amber-600" />
-            <span>💾 Meus Templates ({customTemplates.length})</span>
+            <Bookmark className="w-4 h-4 text-amber-500" />
+            <span>Meus Templates Nuvem ({customTemplates.length})</span>
           </button>
 
-          {/* Aba 4: Salvar Atual como Template */}
           <button
             onClick={() => { setActiveTab('save'); setMessage(null); }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ml-auto ${
               activeTab === 'save'
-                ? 'bg-white text-[#003366] shadow-sm font-bold border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'border-[#003366] text-[#003366]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Save className="w-4 h-4 text-slate-600" />
-            <span>➕ Salvar Catálogo Atual</span>
+            <span>Salvar Catálogo Atual</span>
           </button>
         </div>
 
         {/* Conteúdo das Abas */}
-        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
-          {message && (
-            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>{message}</span>
-            </div>
-          )}
-
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* ========================================================================= */}
-          {/* ABA 1: CATÁLOGOS OFICIAIS PRONTOS (COM DADOS E FOTOS REAIS) */}
+          {/* ABA 1: CATÁLOGOS OFICIAIS COMPLETOS (PRESYS OFICIAL COM DADOS REAIS) */}
           {/* ========================================================================= */}
           {activeTab === 'official_catalogs' && (
             <div className="space-y-4">
               <div className="bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl flex items-start gap-2 text-xs text-emerald-900">
                 <Package className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <strong>Catálogos de Produtos Oficiais Prontos:</strong> Estes documentos já vêm 100% populados com fotos reais de laboratório, especificações completas de engenharia (manuais PRESYS EM0314-01 / EM0291-04), tabelas de bornes e códigos de inserts.
+                  <strong>Catálogos Técnicos Oficiais Prontos:</strong> Cada modelo abaixo já contém todas as fotos reais, especificações de engenharia, tabelas de precisão e códigos de encomenda configurados no padrão corporativo da PRESYS.
                 </div>
               </div>
 
@@ -194,7 +203,7 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold text-[10px] tracking-wide uppercase flex items-center gap-1">
                           <Package className="w-3 h-3" />
-                          Produto Oficial
+                          Catálogo Oficial
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">
                           {preset.catalog.pages.length} página(s) A4
@@ -218,10 +227,10 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                     </div>
 
                     <button
-                      onClick={() => handleApplyPreset(preset)}
+                      onClick={() => void handleApplyPreset(preset)}
                       className="mt-4 w-full py-2 bg-slate-900 group-hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
                     >
-                      <span>Abrir este Catálogo Completo</span>
+                      <span>Criar cópia editável deste catálogo</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -276,10 +285,10 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
                     </div>
 
                     <button
-                      onClick={() => handleApplyPreset(preset)}
+                      onClick={() => void handleApplyPreset(preset)}
                       className="mt-4 w-full py-2 bg-slate-900 group-hover:bg-blue-600 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
                     >
-                      <span>Usar este Esqueleto de Layout</span>
+                      <span>Criar catálogo a partir deste esqueleto</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -328,10 +337,10 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
                       <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100">
                         <button
-                          onClick={() => handleApplyPreset(preset)}
+                          onClick={() => void handleApplyPreset(preset)}
                           className="flex-1 py-1.5 bg-slate-900 hover:bg-amber-600 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
                         >
-                          <span>Carregar</span>
+                          <span>Criar catálogo a partir deste template</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                         <button

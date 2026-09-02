@@ -98,38 +98,34 @@ export const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão de Salvar no Supabase / Nuvem */}
+          {/* Botão de Salvar no Supabase / Nuvem (Flush explícito) */}
           <button
-            onClick={() => void useCatalogStore.getState().saveCurrentCatalog()}
+            onClick={async () => {
+              const res = await useCatalogStore.getState().flushCatalog(currentCatalog.id);
+              if (res.success) {
+                console.log(`[MANUAL SAVE] Catálogo "${currentCatalog.title}" confirmado na nuvem v${res.version}.`);
+              }
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#003366] text-white hover:bg-[#002244] border border-[#002244] rounded text-xs font-bold transition-colors shadow-xs"
             title="Salva o catálogo atual imediatamente no banco Supabase na nuvem"
           >
             <span>💾 Salvar Catálogo (Nuvem)</span>
           </button>
 
-          {/* Botão de Salvar Como Novo Catálogo */}
+          {/* Botão de Salvar Como Novo Catálogo (Operação de Domínio Pura) */}
           <button
             onClick={async () => {
               const savedList = useCatalogStore.getState().savedCatalogs;
               const defaultTitle = generateUniqueCatalogTitle(`${currentCatalog.title} (Cópia)`, savedList.map((c) => c.title));
               const newTitle = prompt('Digite o nome para este novo catálogo:', defaultTitle);
               if (newTitle && newTitle.trim()) {
-                const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-                const cloned = {
-                  ...structuredClone(currentCatalog),
-                  id: newId,
-                  title: newTitle.trim(),
-                  version: 0,
-                  updatedAt: new Date().toISOString()
-                };
-                useCatalogStore.getState().setCurrentCatalog(cloned);
-                const res = await useCatalogStore.getState().saveCurrentCatalog();
+                const res = await useCatalogStore.getState().saveAsNewCatalog(newTitle.trim());
                 if (res.success && res.status === 'synced') {
                   alert(`Catálogo "${newTitle.trim()}" criado e salvo na nuvem com sucesso!`);
                 } else if (res.status === 'conflict') {
                   alert(`Não foi possível salvar na nuvem: conflito de versão detectado.`);
                 } else {
-                  alert(`Aviso: Catálogo criado localmente, mas não foi sincronizado na nuvem (${res.error || 'erro'}).`);
+                  alert(`Aviso: Erro ao criar catálogo na nuvem (${res.error || 'erro'}).`);
                 }
               }
             }}
