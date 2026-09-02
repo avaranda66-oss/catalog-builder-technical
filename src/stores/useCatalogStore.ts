@@ -10,9 +10,21 @@ import {
   MutationKind,
   generateUniqueCatalogTitle,
   analyzeCatalogStructuralDelta,
-  EditorDocumentContext,
-  resolveEditorSelection
+  EditorDocumentContext
 } from '../domain/catalog.schema';
+import {
+  resolveEditorSelection,
+  duplicateStructuralSectionBlock,
+  appendStructuralChild,
+  duplicateStructuralChildById,
+  removeStructuralChildById,
+  moveStructuralChild,
+  CreateCardOptions
+} from '../domain/canvas-layout.engine';
+import {
+  getStructuralSectionPreset,
+  createStructuralSectionFromPreset
+} from '../domain/structural-presets';
 import { StorageService } from '../services/storage.service';
 import { SupabaseService, templateRowToCatalogPreset } from '../services/supabase.service';
 import { useTemplateStore } from './useTemplateStore';
@@ -195,6 +207,14 @@ interface CatalogState {
   addBlock: (pageId: string, block: Omit<ContentBlock, 'id'>) => void;
   updateBlock: (pageId: string, blockId: string, updates: Partial<ContentBlock>) => void;
   removeBlock: (pageId: string, blockId: string) => void;
+
+  // Ciclo de Vida de Seções e Cards Estruturais (Fase 3A.4)
+  insertStructuralSection: (pageId: string, presetId: string) => void;
+  duplicateStructuralSection: (pageId: string, sectionId: string) => void;
+  addStructuralChild: (pageId: string, sectionId: string, cardOptions?: CreateCardOptions) => void;
+  duplicateStructuralChild: (pageId: string, sectionId: string, childId: string) => void;
+  removeStructuralChild: (pageId: string, sectionId: string, childId: string) => void;
+  moveStructuralChild: (pageId: string, sectionId: string, childId: string, direction: 'up' | 'down') => void;
 
   // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
   commitDocumentMutation: (
@@ -634,6 +654,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   removeBlock: (pageId, blockId) => {
+    // Invariant-safe selection transition (Fase 3A.4):
+    // Se o bloco a ser removido for o atualmente selecionado, limpa a seleção PRIMEIRO.
+    // O estado intermediário em que o bloco ainda existe no documento mas a seleção já é nula é 100% válido.
+    // Se outro bloco estiver selecionado, preserva a seleção existente.
+    const { selectedBlockId } = get();
+    if (selectedBlockId === blockId) {
+      set({ selectedBlockId: null, selectedChildId: null });
+    }
+
     get().commitDocumentMutation(
       (draft) => {
         const page = draft.pages.find((p) => p.id === pageId);
@@ -644,7 +673,211 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       'REMOVE_BLOCK',
       { targetId: blockId, targetPageId: pageId, summary: `Removido bloco ${blockId} da página ${pageId}` }
     );
-    set({ selectedBlockId: null, selectedChildId: null });
+  },
+
+  insertStructuralSection: (pageId, presetId) => {
+    const preset = getStructuralSectionPreset(presetId);
+    if (!preset) {
+      // Fail-closed (Fase 3A.4): preset desconhecido aborta sem mutação, dirty ou incremento de versão
+      return;
+    }
+
+    const { currentCatalog } = get();
+    const sectionBlock = createStructuralSectionFromPreset(presetId, currentCatalog?.locale);
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = [...(page.blocks || []), sectionBlock];
+        }
+      },
+      'ADD_BLOCK',
+      {
+        targetId: sectionBlock.id,
+        targetPageId: pageId,
+        summary: `Adicionada seção estrutural "${sectionBlock.title || preset.label}" à página ${pageId}`
+      }
+    );
+
+    // Seleciona o novo bloco estrutural preservando rigorosamente seu UUID RFC 4122 v4
+    set({ selectedBlockId: sectionBlock.id, selectedChildId: null });
+  },
+
+  duplicateStructuralSection: (pageId, sectionId) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const targetBlock = page?.blocks?.find((b) => b.id === sectionId);
+    // Escopo fechado 3A.4: apenas structural_section pode ser duplicada aqui (fail-closed se outro tipo)
+    if (!page || !targetBlock || targetBlock.type !== 'structural_section') {
+      return;
+    }
+
+    const duplicatedBlock = duplicateStructuralSectionBlock(targetBlock);
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        if (p && p.blocks) {
+          const index = p.blocks.findIndex((b) => b.id === sectionId);
+          if (index !== -1) {
+            p.blocks.splice(index + 1, 0, duplicatedBlock);
+          } else {
+            p.blocks.push(duplicatedBlock);
+          }
+        }
+      },
+      'ADD_BLOCK',
+      {
+        targetId: duplicatedBlock.id,
+        targetPageId: pageId,
+        summary: `Duplicada seção estrutural "${targetBlock.title || ''}" na página ${pageId}`
+      }
+    );
+
+    set({ selectedBlockId: duplicatedBlock.id, selectedChildId: null });
+  },
+
+  addStructuralChild: (pageId, sectionId, cardOptions) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    const { data: updatedStructuralData, createdChild } = appendStructuralChild(
+      sectionBlock.structuralData,
+      cardOptions
+    );
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        const b = p?.blocks?.find((blk) => blk.id === sectionId);
+        if (b) {
+          b.structuralData = updatedStructuralData;
+        }
+      },
+      'UPDATE_BLOCK',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Adicionado card "${createdChild.title || 'Sem título'}" na seção ${sectionId}`
+      }
+    );
+
+    // Auto-seleciona o card recém-criado
+    set({ selectedBlockId: sectionId, selectedChildId: createdChild.id });
+  },
+
+  duplicateStructuralChild: (pageId, sectionId, childId) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    const { data: updatedStructuralData, found, createdChild } = duplicateStructuralChildById(
+      sectionBlock.structuralData,
+      childId
+    );
+
+    if (!found || !createdChild) {
+      return;
+    }
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        const b = p?.blocks?.find((blk) => blk.id === sectionId);
+        if (b) {
+          b.structuralData = updatedStructuralData;
+        }
+      },
+      'UPDATE_BLOCK',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Duplicado card ${childId} na seção ${sectionId}`
+      }
+    );
+
+    // Auto-seleciona o clone recém-criado
+    set({ selectedBlockId: sectionId, selectedChildId: createdChild.id });
+  },
+
+  removeStructuralChild: (pageId, sectionId, childId) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    // Invariant-safe selection transition (Fase 3A.4):
+    // Se o card a ser removido for o atualmente selecionado, transita a seleção para a seção pai PRIMEIRO.
+    // Estado intermediário: o documento ainda possui o card, e a seleção já aponta para a seção pai (100% válido).
+    const { selectedBlockId, selectedChildId } = get();
+    if (selectedBlockId === sectionId && selectedChildId === childId) {
+      set({ selectedChildId: null });
+    }
+
+    const { data: updatedStructuralData, found, removedChild } = removeStructuralChildById(
+      sectionBlock.structuralData,
+      childId
+    );
+
+    if (!found) {
+      return;
+    }
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        const b = p?.blocks?.find((blk) => blk.id === sectionId);
+        if (b) {
+          b.structuralData = updatedStructuralData;
+        }
+      },
+      'UPDATE_BLOCK',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Removido card "${removedChild?.title || childId}" da seção ${sectionId}`
+      }
+    );
+  },
+
+  moveStructuralChild: (pageId, sectionId, childId, direction) => {
+    const page = get().currentCatalog?.pages.find((p) => p.id === pageId);
+    const sectionBlock = page?.blocks?.find((b) => b.id === sectionId);
+    if (!sectionBlock || sectionBlock.type !== 'structural_section' || !sectionBlock.structuralData) {
+      return;
+    }
+
+    const { data: updatedStructuralData, found, moved } = moveStructuralChild(
+      sectionBlock.structuralData,
+      childId,
+      direction
+    );
+
+    if (!found || !moved) {
+      return;
+    }
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const p = draft.pages.find((pg) => pg.id === pageId);
+        const b = p?.blocks?.find((blk) => blk.id === sectionId);
+        if (b) {
+          b.structuralData = updatedStructuralData;
+        }
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: sectionId,
+        targetPageId: pageId,
+        summary: `Reordenado card ${childId} (${direction}) na seção ${sectionId}`
+      }
+    );
   },
 
   updateCellOverride: (blockId, rowId, fieldKey, value) => {

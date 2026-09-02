@@ -13,7 +13,8 @@ import {
   CircleDot,
   Grid3X3,
   Laptop,
-  LayoutTemplate
+  LayoutTemplate,
+  LayoutGrid
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { ContentBlock } from '../../domain/catalog.schema';
@@ -34,6 +35,11 @@ import { SoftwareConnectivityBlock } from './blocks/SoftwareConnectivityBlock';
 import { ImageGalleryBlock } from './blocks/ImageGalleryBlock';
 import { FeaturesListBlock } from './blocks/FeaturesListBlock';
 import { ContactFooterBlock } from './blocks/ContactFooterBlock';
+import { StructuralSectionBlock } from './blocks/StructuralSectionBlock';
+import {
+  STRUCTURAL_SECTION_PRESETS,
+  createStructuralSectionFromPreset
+} from '../../domain/structural-presets';
 
 export interface SidebarBlockOption {
   id: string;
@@ -43,12 +49,13 @@ export interface SidebarBlockOption {
   badge: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-  blockData: Omit<ContentBlock, 'id'>;
+  blockData?: Omit<ContentBlock, 'id'>;
+  presetId?: string;
   renderPreview: () => React.ReactNode;
 }
 
 export const SidebarBlockLibrary: React.FC = () => {
-  const { currentCatalog, activePageIndex, addBlock } = useCatalogStore();
+  const { currentCatalog, activePageIndex, addBlock, insertStructuralSection } = useCatalogStore();
   const [activeCategory, setActiveCategory] = useState<'all' | 'headers' | 'tables' | 'structures'>('all');
   const [search, setSearch] = useState('');
   const [hoveredItem, setHoveredItem] = useState<SidebarBlockOption | null>(null);
@@ -60,9 +67,13 @@ export const SidebarBlockLibrary: React.FC = () => {
   const targetPageId = activePage?.id;
   const pageNumber = activePage?.pageNumber || 1;
 
-  const handleInsert = (blockData: Omit<ContentBlock, 'id'>) => {
+  const handleInsert = (option: SidebarBlockOption) => {
     if (!targetPageId) return;
-    addBlock(targetPageId, blockData as any);
+    if (option.presetId) {
+      insertStructuralSection(targetPageId, option.presetId);
+    } else if (option.blockData) {
+      addBlock(targetPageId, option.blockData as any);
+    }
   };
 
   const BLOCK_ITEMS: SidebarBlockOption[] = [
@@ -526,7 +537,25 @@ export const SidebarBlockLibrary: React.FC = () => {
           isSelected={false}
         />
       )
-    }
+    },
+    // Presets Estruturais Canônicos (Fase 3A.4)
+    ...STRUCTURAL_SECTION_PRESETS.map((preset) => ({
+      id: `item-${preset.id}`,
+      title: preset.label,
+      category: 'structures' as const,
+      categoryLabel: 'Seção Estrutural',
+      badge: preset.badge || 'Estrutural',
+      description: preset.description,
+      icon: LayoutGrid,
+      presetId: preset.id,
+      renderPreview: () => (
+        <StructuralSectionBlock
+          block={createStructuralSectionFromPreset(preset.id, 'pt-BR')}
+          pageId="prev-page"
+          isSelected={false}
+        />
+      )
+    }))
   ];
 
   const filtered = BLOCK_ITEMS.filter((item) => {
@@ -620,7 +649,7 @@ export const SidebarBlockLibrary: React.FC = () => {
           return (
             <div
               key={item.id}
-              onClick={() => handleInsert(item.blockData)}
+              onClick={() => handleInsert(item)}
               onMouseEnter={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setTooltipPos({ x: rect.right, y: rect.top });

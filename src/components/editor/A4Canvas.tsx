@@ -35,9 +35,14 @@ import { StructuralSectionBlock } from './blocks/StructuralSectionBlock';
 import { BlockHoverTooltip, HoverTooltipItem, TooltipPosition } from './BlockHoverTooltip';
 import { PrintStringRegistry } from '../../translation/print-strings.registry';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
+import {
+  STRUCTURAL_SECTION_PRESETS,
+  createStructuralSectionFromPreset
+} from '../../domain/structural-presets';
 
 interface BlockMenuOption extends HoverTooltipItem {
-  blockData: Omit<ContentBlock, 'id'>;
+  blockData?: Omit<ContentBlock, 'id'>;
+  presetId?: string;
 }
 
 export const A4Canvas: React.FC = () => {
@@ -49,6 +54,7 @@ export const A4Canvas: React.FC = () => {
     selectEditorElement,
     setActivePageIndex,
     addBlock,
+    insertStructuralSection,
     addPage,
     removePage
   } = useCatalogStore();
@@ -194,8 +200,12 @@ export const A4Canvas: React.FC = () => {
 
   if (!currentCatalog || currentCatalog.pages.length === 0) return null;
 
-  const handleAddBlock = (pageId: string, blockData: Omit<ContentBlock, 'id'>) => {
-    addBlock(pageId, blockData as any);
+  const handleSelectMenuOption = (pageId: string, opt: BlockMenuOption) => {
+    if (opt.presetId) {
+      insertStructuralSection(pageId, opt.presetId);
+    } else if (opt.blockData) {
+      addBlock(pageId, opt.blockData as any);
+    }
     setActiveDropdown(null);
     setActiveMenuPageId(null);
     setHoveredTooltip(null);
@@ -641,7 +651,23 @@ export const A4Canvas: React.FC = () => {
           isSelected={false}
         />
       )
-    }
+    },
+    // Presets Estruturais Canônicos (Fase 3A.4)
+    ...STRUCTURAL_SECTION_PRESETS.map((preset) => ({
+      id: preset.id,
+      title: preset.label,
+      categoryLabel: 'Seção Estrutural',
+      badge: preset.badge || 'Estrutural',
+      description: preset.description,
+      presetId: preset.id,
+      renderPreview: () => (
+        <StructuralSectionBlock
+          block={createStructuralSectionFromPreset(preset.id, 'pt-BR')}
+          pageId="prev-page"
+          isSelected={false}
+        />
+      )
+    }))
   ];
 
   return (
@@ -725,7 +751,7 @@ export const A4Canvas: React.FC = () => {
                       {HEADER_OPTIONS.map((opt) => (
                         <div
                           key={opt.id}
-                          onClick={() => handleAddBlock(page.id, opt.blockData)}
+                          onClick={() => handleSelectMenuOption(page.id, opt)}
                           onMouseEnter={(e) => {
                             const rowRect = e.currentTarget.getBoundingClientRect();
                             const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
@@ -780,7 +806,7 @@ export const A4Canvas: React.FC = () => {
                       {TABLE_OPTIONS.map((opt) => (
                         <div
                           key={opt.id}
-                          onClick={() => handleAddBlock(page.id, opt.blockData)}
+                          onClick={() => handleSelectMenuOption(page.id, opt)}
                           onMouseEnter={(e) => {
                             const rowRect = e.currentTarget.getBoundingClientRect();
                             const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
@@ -835,7 +861,7 @@ export const A4Canvas: React.FC = () => {
                       {STRUCTURE_OPTIONS.map((opt) => (
                         <div
                           key={opt.id}
-                          onClick={() => handleAddBlock(page.id, opt.blockData)}
+                          onClick={() => handleSelectMenuOption(page.id, opt)}
                           onMouseEnter={(e) => {
                             const rowRect = e.currentTarget.getBoundingClientRect();
                             const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();

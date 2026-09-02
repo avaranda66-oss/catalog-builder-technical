@@ -8,9 +8,13 @@ import {
   Palette,
   FileText,
   Layers,
-  ChevronRight,
   Sparkles,
-  Trash2
+  Trash2,
+  Plus,
+  Copy,
+  ArrowUp,
+  ArrowDown,
+  X
 } from 'lucide-react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import {
@@ -39,6 +43,12 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
   onSelectCard
 }) => {
   const updateBlock = useCatalogStore((state) => state.updateBlock);
+  const addStructuralChild = useCatalogStore((state) => state.addStructuralChild);
+  const duplicateStructuralChild = useCatalogStore((state) => state.duplicateStructuralChild);
+  const removeStructuralChild = useCatalogStore((state) => state.removeStructuralChild);
+  const moveStructuralChild = useCatalogStore((state) => state.moveStructuralChild);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const rawStructuralData = sectionBlock.structuralData;
   const layout = rawStructuralData?.layout || {
@@ -392,37 +402,127 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
         title="Ícone da Seção Estrutural"
       />
 
-      {/* 5. NAVEGAÇÃO DE CARDS FILHOS */}
-      {children.length > 0 && (
-        <InspectorGroup
-          title={`Cards Filhos (${children.length})`}
-          icon={<Layers className="w-3.5 h-3.5" />}
-          description="Clique para Inspecionar"
-        >
-          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-            {children.map((child, idx) => (
-              <button
-                key={child.id}
-                type="button"
-                onClick={() => onSelectCard(child.id)}
-                className="w-full text-left p-2 bg-white hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-md transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="truncate min-w-0 pr-2">
-                  <div className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-900">
-                    {child.title || `Card ${idx + 1}`}
+      {/* 5. GERENCIAMENTO DE CARDS FILHOS */}
+      <InspectorGroup
+        title={`Cards Filhos (${children.length})`}
+        icon={<Layers className="w-3.5 h-3.5" />}
+        description="Reordene, duplique ou edite"
+      >
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => addStructuralChild(pageId, sectionBlock.id)}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-50/70 hover:bg-blue-100 text-[#003366] text-xs font-semibold rounded-md border border-blue-200 transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Adicionar Card</span>
+          </button>
+
+          {children.length === 0 ? (
+            <div className="text-center py-3 text-xs text-slate-400 italic bg-slate-50 rounded border border-dashed border-slate-200">
+              Nenhum card configurado. Clique acima para adicionar.
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+              {children.map((child, idx) => (
+                <div
+                  key={child.id}
+                  className="flex items-center justify-between p-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-300 rounded-md transition-all group"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectCard(child.id)}
+                    className="flex-1 text-left min-w-0 pr-2 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {child.iconId && (
+                      <span className="shrink-0 text-slate-500">
+                        <CorporateIcon iconId={child.iconId} size={14} />
+                      </span>
+                    )}
+                    <div className="truncate">
+                      <div className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-900">
+                        {child.title || `Card ${idx + 1}`}
+                      </div>
+                      {child.badge && (
+                        <span className="text-[8.5px] font-mono font-bold text-slate-500 uppercase">
+                          {child.badge}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveStructuralChild(pageId, sectionBlock.id, child.id, 'up')}
+                      disabled={idx === 0}
+                      title="Mover para cima"
+                      aria-label="Mover card para cima"
+                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-all cursor-pointer"
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveStructuralChild(pageId, sectionBlock.id, child.id, 'down')}
+                      disabled={idx === children.length - 1}
+                      title="Mover para baixo"
+                      aria-label="Mover card para baixo"
+                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-all cursor-pointer"
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => duplicateStructuralChild(pageId, sectionBlock.id, child.id)}
+                      title="Duplicar card"
+                      aria-label="Duplicar card"
+                      className="p-1 text-slate-400 hover:text-blue-600 rounded transition-all cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                    {confirmDeleteId === child.id ? (
+                      <div className="flex items-center gap-0.5 bg-rose-50 p-0.5 rounded border border-rose-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            removeStructuralChild(pageId, sectionBlock.id, child.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          title="Confirmar exclusão"
+                          aria-label="Confirmar exclusão"
+                          className="px-1 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-100 rounded cursor-pointer"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          title="Cancelar"
+                          aria-label="Cancelar exclusão"
+                          className="p-0.5 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(child.id)}
+                        title="Excluir card"
+                        aria-label="Excluir card"
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition-all cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
-                  {child.badge && (
-                    <span className="text-[8.5px] font-mono font-bold text-slate-500 uppercase">
-                      {child.badge}
-                    </span>
-                  )}
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-700 shrink-0" />
-              </button>
-            ))}
-          </div>
-        </InspectorGroup>
-      )}
+              ))}
+            </div>
+          )}
+        </div>
+      </InspectorGroup>
     </div>
   );
 };

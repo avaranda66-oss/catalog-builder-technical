@@ -103,11 +103,25 @@ export type StructuralElement = StructuralCardData;
 // 4. Dados Estruturais da Seção (ContentBlock.title/subtitle/badgeText Reutilizados)
 // ============================================================================
 
-export const StructuralSectionDataSchema = z.object({
+export const BaseStructuralSectionDataSchema = z.object({
   version: z.literal(1).default(1),
   iconId: z.string().optional(),
   layout: StructuralLayoutConfigSchema.default(() => StructuralLayoutConfigSchema.parse({})),
   children: z.array(StructuralCardDataSchema).default([])
+});
+
+export const StructuralSectionDataSchema = BaseStructuralSectionDataSchema.superRefine((data, ctx) => {
+  const seenIds = new Set<string>();
+  data.children.forEach((child, index) => {
+    if (seenIds.has(child.id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['children', index, 'id'],
+        message: `ID de card duplicado detectado na seção: ${child.id}`
+      });
+    }
+    seenIds.add(child.id);
+  });
 });
 
 export type StructuralSectionData = z.infer<typeof StructuralSectionDataSchema>;

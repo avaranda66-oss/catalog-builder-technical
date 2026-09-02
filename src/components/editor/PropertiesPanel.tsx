@@ -26,7 +26,8 @@ import {
   Minus,
   Eye,
   EyeOff,
-  LayoutGrid
+  LayoutGrid,
+  Copy
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
@@ -53,6 +54,7 @@ export const PropertiesPanel: React.FC = () => {
     selectEditorElement,
     updateBlock: rawUpdateBlock,
     removeBlock,
+    duplicateStructuralSection,
     setPageTitle
   } = useCatalogStore();
   const { openGallery } = useMediaStore();
@@ -203,13 +205,28 @@ export const PropertiesPanel: React.FC = () => {
           <span>Propriedades do Elemento</span>
         </span>
         {selectedBlock && (
-          <button
-            onClick={() => removeBlock(blockPageId, selectedBlock.id)}
-            className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors"
-            title="Excluir elemento selecionado"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {selectedBlock.type === 'structural_section' && (
+              <button
+                type="button"
+                onClick={() => duplicateStructuralSection(blockPageId, selectedBlock.id)}
+                className="text-slate-500 hover:text-blue-700 hover:bg-blue-50 p-1 rounded transition-colors cursor-pointer"
+                title="Duplicar seção estrutural"
+                aria-label="Duplicar seção estrutural"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => removeBlock(blockPageId, selectedBlock.id)}
+              className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors cursor-pointer"
+              title="Excluir elemento selecionado"
+              aria-label="Excluir elemento selecionado"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </div>
 

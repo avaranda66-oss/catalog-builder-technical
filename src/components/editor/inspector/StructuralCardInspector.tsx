@@ -7,7 +7,9 @@ import {
   ArrowLeft,
   FileEdit,
   Sparkles,
-  Trash2
+  Trash2,
+  Copy,
+  X
 } from 'lucide-react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import { updateStructuralChildById } from '@/domain/canvas-layout.engine';
@@ -33,7 +35,11 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
   onBackToSection
 }) => {
   const updateBlock = useCatalogStore((state) => state.updateBlock);
+  const duplicateStructuralChild = useCatalogStore((state) => state.duplicateStructuralChild);
+  const removeStructuralChild = useCatalogStore((state) => state.removeStructuralChild);
+
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const rawStructuralData = sectionBlock.structuralData;
   const card = rawStructuralData?.children?.find((c) => c.id === cardId);
@@ -67,16 +73,64 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
 
   return (
     <div className="space-y-4">
-      {/* Botão de retorno e Breadcrumb de Contexto */}
+      {/* Botão de retorno e Breadcrumb de Contexto com Ações do Card */}
       <div className="pb-2 border-b border-slate-200">
-        <button
-          type="button"
-          onClick={onBackToSection}
-          className="flex items-center gap-1 text-xs font-semibold text-[#003366] hover:text-blue-900 transition-colors cursor-pointer py-1"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Voltar para Seção</span>
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToSection}
+            className="flex items-center gap-1 text-xs font-semibold text-[#003366] hover:text-blue-900 transition-colors cursor-pointer py-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Voltar para Seção</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => duplicateStructuralChild(pageId, sectionBlock.id, card.id)}
+              title="Duplicar este card"
+              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded transition-all cursor-pointer"
+            >
+              <Copy className="w-3 h-3" />
+              <span>Duplicar</span>
+            </button>
+
+            {confirmDelete ? (
+              <div className="flex items-center gap-0.5 bg-rose-50 p-0.5 rounded border border-rose-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    removeStructuralChild(pageId, sectionBlock.id, card.id);
+                  }}
+                  title="Confirmar exclusão"
+                  className="px-1.5 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-100 rounded cursor-pointer"
+                >
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  title="Cancelar"
+                  className="p-0.5 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                title="Excluir este card"
+                className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Excluir</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mt-1">
           <div className="text-[10px] font-mono text-slate-500 uppercase">
             Seção: {sectionBlock.title || 'Seção Estrutural'}

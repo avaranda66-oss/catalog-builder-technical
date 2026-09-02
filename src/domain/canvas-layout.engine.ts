@@ -7,6 +7,8 @@ import {
   StructuralCardData,
   StructuralLayoutConfig,
   StructuralLayoutConfigSchema,
+  StructuralCardDataSchema,
+  StructuralSectionDataSchema,
   SPACING_MM_MAP
 } from './canvas-layout.schema';
 import type { Catalog, ContentBlock } from './catalog.schema';
@@ -86,13 +88,14 @@ export function duplicateStructuralSectionBlock<T extends { id: string; type: st
 
   let clonedStructuralData: StructuralSectionData | undefined = undefined;
   if (block.structuralData) {
-    clonedStructuralData = {
+    const rawCloned = {
       ...block.structuralData,
       layout: { ...block.structuralData.layout },
       children: Array.isArray(block.structuralData.children)
         ? block.structuralData.children.map((child) => duplicateStructuralElement(child))
         : []
     };
+    clonedStructuralData = StructuralSectionDataSchema.parse(rawCloned);
   }
 
   return {
@@ -333,4 +336,235 @@ export function resolveEditorSelection(
   }
 
   return { selectedBlockId: blockId, selectedChildId: null };
+}
+
+// ============================================================================
+// 8. Factories Canônicas de Criação (Geração Interna Estrita de Stable IDs)
+// ============================================================================
+
+export interface CreateCardOptions {
+  title?: string;
+  body?: string;
+  badge?: string;
+  iconId?: string;
+  emphasis?: 'normal' | 'highlight' | 'informative' | 'technical';
+}
+
+/**
+ * Cria um elemento feature_card com novo UUID RFC 4122 v4 gerado internamente.
+ * A API pública NÃO aceita ID externo; qualquer tentativa de injeção runtime via cast é ignorada.
+ * Por padrão, campos de texto printable nascem vazios para evitar vazamento de locale.
+ */
+export function createStructuralFeatureCard(options?: CreateCardOptions): StructuralCardData {
+  const freshId = generateStableId();
+
+  return StructuralCardDataSchema.parse({
+    id: freshId,
+    type: 'feature_card',
+    title: options?.title ?? '',
+    body: options?.body ?? '',
+    emphasis: options?.emphasis ?? 'normal',
+    badge: options?.badge?.trim() || undefined,
+    iconId: options?.iconId?.trim() || undefined
+  });
+}
+
+export interface CreateSectionOptions {
+  title?: string;
+  subtitle?: string;
+  badgeText?: string;
+  iconId?: string;
+  layout?: Partial<StructuralLayoutConfig>;
+  cards?: CreateCardOptions[];
+}
+
+/**
+ * Cria um ContentBlock do tipo structural_section com novo UUID RFC 4122 v4 gerado internamente.
+ * A API pública NÃO aceita ID externo nem cards materializados com IDs próprios.
+ * Cada card template em options.cards gera uma nova instância via createStructuralFeatureCard.
+ */
+export function createStructuralSectionBlock(options?: CreateSectionOptions): ContentBlock {
+  const freshBlockId = generateStableId();
+
+  const layout = StructuralLayoutConfigSchema.parse({
+    mode: 'grid',
+    columns: 4,
+    widthMode: 'fill',
+    gap: 'sm',
+    padding: 'md',
+    density: 'normal',
+    align: 'left',
+    background: 'soft',
+    border: 'subtle',
+    radius: 'sm',
+    ...(options?.layout || {})
+  });
+
+  const children = (options?.cards || []).map((cardOptions) =>
+    createStructuralFeatureCard(cardOptions)
+  );
+
+  return {
+    id: freshBlockId,
+    type: 'structural_section',
+    title: options?.title ?? '',
+    subtitle: options?.subtitle ?? '',
+    badgeText: options?.badgeText ?? '',
+    structuralData: StructuralSectionDataSchema.parse({
+      version: 1,
+      iconId: options?.iconId?.trim() || undefined,
+      layout,
+      children
+    })
+  };
+}
+
+// ============================================================================
+// 9. Helpers de Ciclo de Vida de Cards (Fail-Closed, ID-First, Schema Validado)
+// ============================================================================
+
+/**
+ * Adiciona um novo card ao final de structuralData.children.
+ * Retorna o structuralData atualizado e o card criado com seu novo UUID.
+ */
+export function appendStructuralChild(
+  structuralData: StructuralSectionData,
+  cardOptions?: CreateCardOptions
+): { data: StructuralSectionData; createdChild: StructuralCardData } {
+  const newCard = createStructuralFeatureCard(cardOptions);
+  const updatedData: StructuralSectionData = {
+    ...structuralData,
+    children: [...structuralData.children, newCard]
+  };
+
+  return {
+    data: StructuralSectionDataSchema.parse(updatedData),
+    createdChild: newCard
+  };
+}
+
+/**
+ * Insere um novo card imediatamente após o card identificado por targetChildId.
+ * Contrato Fail-Closed: Se targetChildId não existir, retorna found: false sem mutar dados (NÃO faz append silencioso).
+ */
+export function insertStructuralChildAfter(
+  structuralData: StructuralSectionData,
+  targetChildId: string,
+  cardOptions?: CreateCardOptions
+): { data: StructuralSectionData; found: boolean; createdChild?: StructuralCardData } {
+  const targetIndex = structuralData.children.findIndex((c) => c.id === targetChildId);
+  if (targetIndex === -1) {
+    return { data: structuralData, found: false };
+  }
+
+  const newCard = createStructuralFeatureCard(cardOptions);
+  const newChildren = [...structuralData.children];
+  newChildren.splice(targetIndex + 1, 0, newCard);
+
+  const updatedData: StructuralSectionData = {
+    ...structuralData,
+    children: newChildren
+  };
+
+  return {
+    data: StructuralSectionDataSchema.parse(updatedData),
+    found: true,
+    createdChild: newCard
+  };
+}
+
+/**
+ * Duplica um card existente por seu childId gerando um novo UUID estável.
+ * Insere a cópia imediatamente após o card original.
+ * Contrato Fail-Closed: Se childId não existir, retorna found: false sem mutar dados (NÃO cria card).
+ */
+export function duplicateStructuralChildById(
+  structuralData: StructuralSectionData,
+  childId: string
+): { data: StructuralSectionData; found: boolean; createdChild?: StructuralCardData } {
+  const targetIndex = structuralData.children.findIndex((c) => c.id === childId);
+  if (targetIndex === -1) {
+    return { data: structuralData, found: false };
+  }
+
+  const targetCard = structuralData.children[targetIndex];
+  const clonedCard = duplicateStructuralElement(targetCard);
+
+  const newChildren = [...structuralData.children];
+  newChildren.splice(targetIndex + 1, 0, clonedCard);
+
+  const updatedData: StructuralSectionData = {
+    ...structuralData,
+    children: newChildren
+  };
+
+  return {
+    data: StructuralSectionDataSchema.parse(updatedData),
+    found: true,
+    createdChild: clonedCard
+  };
+}
+
+/**
+ * Remove um card por seu childId.
+ * Contrato Fail-Closed: Se childId não existir, retorna found: false sem mutar dados.
+ */
+export function removeStructuralChildById(
+  structuralData: StructuralSectionData,
+  childId: string
+): { data: StructuralSectionData; found: boolean; removedChild?: StructuralCardData } {
+  const targetIndex = structuralData.children.findIndex((c) => c.id === childId);
+  if (targetIndex === -1) {
+    return { data: structuralData, found: false };
+  }
+
+  const removedCard = structuralData.children[targetIndex];
+  const updatedData: StructuralSectionData = {
+    ...structuralData,
+    children: structuralData.children.filter((c) => c.id !== childId)
+  };
+
+  return {
+    data: StructuralSectionDataSchema.parse(updatedData),
+    found: true,
+    removedChild: removedCard
+  };
+}
+
+/**
+ * Reordena um card por seu childId na direção 'up' ou 'down'.
+ * Contrato Fail-Closed:
+ * - Se childId não existir: retorna { data, found: false, moved: false }.
+ * - Se estiver no limite (ex: 'up' no primeiro ou 'down' no último): retorna { data, found: true, moved: false }.
+ * - Caso contrário: permuta as posições preservando 100% dos IDs e retorna { data, found: true, moved: true }.
+ */
+export function moveStructuralChild(
+  structuralData: StructuralSectionData,
+  childId: string,
+  direction: 'up' | 'down'
+): { data: StructuralSectionData; found: boolean; moved: boolean } {
+  const index = structuralData.children.findIndex((c) => c.id === childId);
+  if (index === -1) {
+    return { data: structuralData, found: false, moved: false };
+  }
+
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= structuralData.children.length) {
+    return { data: structuralData, found: true, moved: false };
+  }
+
+  const newChildren = [...structuralData.children];
+  const [targetChild] = newChildren.splice(index, 1);
+  newChildren.splice(targetIndex, 0, targetChild);
+
+  const updatedData: StructuralSectionData = {
+    ...structuralData,
+    children: newChildren
+  };
+
+  return {
+    data: StructuralSectionDataSchema.parse(updatedData),
+    found: true,
+    moved: true
+  };
 }
