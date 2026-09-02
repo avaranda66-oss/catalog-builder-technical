@@ -2,13 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { getSupabase, SupabaseService, getLatestTranslationAuthDiagnostic, TranslationAuthDiagnostic } from '../../services/supabase.service';
+import {
+  getSupabase,
+  SupabaseService,
+  subscribeTranslationDiagnostics,
+  TranslationAuthDiagnostic,
+  LastTranslationRpc
+} from '../../services/supabase.service';
 
 export const DevRealtimeHUD: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
   const [authDiag, setAuthDiag] = useState<TranslationAuthDiagnostic | null>(null);
+  const [lastRpc, setLastRpc] = useState<LastTranslationRpc | null>(null);
   const [isRefreshingDiag, setIsRefreshingDiag] = useState(false);
 
   const refreshAuthDiag = async () => {
@@ -22,11 +29,12 @@ export const DevRealtimeHUD: React.FC = () => {
   };
 
   useEffect(() => {
-    const existing = getLatestTranslationAuthDiagnostic();
-    if (existing) {
-      setAuthDiag(existing);
-    }
-  }, [isVisible]);
+    const unsubscribe = subscribeTranslationDiagnostics(({ authDiagnostic, lastTranslationRpc }) => {
+      if (authDiagnostic) setAuthDiag(authDiagnostic);
+      setLastRpc(lastTranslationRpc);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const {
     currentCatalog,
@@ -89,7 +97,8 @@ export const DevRealtimeHUD: React.FC = () => {
       realtimeStatus,
       clientInstanceId: clientId,
       buildCommit: buildSha,
-      authTranslationDiagnostic: authDiag || getLatestTranslationAuthDiagnostic()
+      authTranslationDiagnostic: authDiag,
+      lastTranslationRpc: lastRpc
     };
 
     navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(() => {
@@ -232,10 +241,10 @@ export const DevRealtimeHUD: React.FC = () => {
           </div>
         )}
 
-        {/* Seção DEV: Diagnóstico Seguro de Autenticação para Tradução */}
+        {/* Seção DEV: Diagnóstico Seguro de Autenticação */}
         <div className="border-t border-slate-800/90 pt-1.5 mt-1 space-y-1">
           <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider flex items-center justify-between">
-            <span>Auth Translation Diagnostic</span>
+            <span>Auth Probe</span>
             <button
               onClick={refreshAuthDiag}
               disabled={isRefreshingDiag}
@@ -252,12 +261,30 @@ export const DevRealtimeHUD: React.FC = () => {
             <div>Auth Probe: <span className={authDiag?.probeAuthenticated ? 'text-emerald-400 font-bold' : 'text-rose-400'}>{authDiag?.probeAuthenticated ? 'YES' : 'NO'}</span></div>
             <div>Probe Role: <span className="font-bold text-amber-300">{authDiag?.probeRole || 'null'}</span></div>
             <div className="col-span-2 truncate">Project Ref: <span className="text-slate-400">{authDiag?.projectRef || 'unknown'}</span></div>
-            {authDiag?.lastRpcName && (
-              <div className="col-span-2 text-rose-300 text-[9px] truncate">
-                Last RPC: {authDiag.lastRpcName} ({authDiag.lastRpcStatus})
-              </div>
+          </div>
+        </div>
+
+        {/* Seção DEV: Última Execução RPC de Tradução */}
+        <div className="border-t border-slate-800/90 pt-1.5 mt-1 space-y-1">
+          <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider flex items-center justify-between">
+            <span>Last Translation RPC</span>
+            {lastRpc && (
+              <span className={`px-1 rounded text-[8px] font-bold ${lastRpc.success ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}`}>
+                {lastRpc.success ? 'PASS' : 'FAIL'} ({lastRpc.code})
+              </span>
             )}
           </div>
+          {lastRpc ? (
+            <div className="text-[9px] text-slate-300 space-y-0.5 bg-slate-950/60 p-1 rounded border border-slate-800">
+              <div className="truncate font-mono text-cyan-300">{lastRpc.name}</div>
+              <div className="text-slate-400 text-[8px]">{new Date(lastRpc.timestamp).toLocaleTimeString()}</div>
+              <div className={lastRpc.success ? 'text-emerald-300' : 'text-rose-300'}>{lastRpc.message}</div>
+              {lastRpc.details && <div className="text-slate-400 text-[8px] italic truncate">{lastRpc.details}</div>}
+              {lastRpc.hint && <div className="text-amber-300/80 text-[8px] truncate">Hint: {lastRpc.hint}</div>}
+            </div>
+          ) : (
+            <div className="text-[9px] text-slate-500 italic">Nenhuma chamada traduzida nesta sessão ainda.</div>
+          )}
         </div>
 
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">

@@ -16,15 +16,63 @@ export interface TranslationAuthDiagnostic {
   probeAuthenticated: boolean;
   probeRole: string | null;
   projectRef: string;
-  lastRpcName?: string;
-  lastRpcStatus?: string;
-  lastRpcError?: string;
+}
+
+export interface LastTranslationRpc {
+  name: string;
+  timestamp: string;
+  success: boolean;
+  code: string;
+  message: string;
+  details?: string;
+  hint?: string;
 }
 
 let latestTranslationAuthDiagnostic: TranslationAuthDiagnostic | null = null;
+let latestTranslationRpc: LastTranslationRpc | null = null;
+
+type TranslationDiagnosticsListener = (data: {
+  authDiagnostic: TranslationAuthDiagnostic | null;
+  lastTranslationRpc: LastTranslationRpc | null;
+}) => void;
+
+const translationDiagnosticsListeners = new Set<TranslationDiagnosticsListener>();
+
+export function subscribeTranslationDiagnostics(listener: TranslationDiagnosticsListener): () => void {
+  translationDiagnosticsListeners.add(listener);
+  listener({
+    authDiagnostic: latestTranslationAuthDiagnostic,
+    lastTranslationRpc: latestTranslationRpc
+  });
+  return () => {
+    translationDiagnosticsListeners.delete(listener);
+  };
+}
+
+function notifyTranslationDiagnostics() {
+  for (const listener of translationDiagnosticsListeners) {
+    try {
+      listener({
+        authDiagnostic: latestTranslationAuthDiagnostic,
+        lastTranslationRpc: latestTranslationRpc
+      });
+    } catch {
+      // Ignora erro em listener do HUD
+    }
+  }
+}
+
+export function recordTranslationRpcResult(rpc: LastTranslationRpc) {
+  latestTranslationRpc = rpc;
+  notifyTranslationDiagnostics();
+}
 
 export function getLatestTranslationAuthDiagnostic(): TranslationAuthDiagnostic | null {
   return latestTranslationAuthDiagnostic;
+}
+
+export function getLatestTranslationRpc(): LastTranslationRpc | null {
+  return latestTranslationRpc;
 }
 
 export function getSupabase(): SupabaseClient | null {
@@ -263,12 +311,27 @@ export class SupabaseService {
     summary?: string
   ): Promise<{ success: boolean; data?: any; conflict?: boolean; errorCode?: string; error?: string }> {
     const supabase = getSupabase();
-    if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
+    if (!supabase) {
+      recordTranslationRpcResult({
+        name: 'create_translated_catalog_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: 'CLIENT_OFFLINE',
+        message: 'Supabase não inicializado'
+      });
+      return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
+    }
 
     // Validação estrita e atômica da sessão corporativa no servidor
     const authValidation = await this.ensureAuthenticatedCorporateSession();
     if (!authValidation.success) {
-      void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', authValidation.errorCode, authValidation.error);
+      recordTranslationRpcResult({
+        name: 'create_translated_catalog_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: authValidation.errorCode || 'AUTH_SESSION_INVALID',
+        message: authValidation.error || 'Sem permissão de acesso.'
+      });
       return {
         success: false,
         errorCode: authValidation.errorCode || 'AUTH_SESSION_INVALID',
@@ -285,9 +348,15 @@ export class SupabaseService {
       });
 
       if (error) {
-        if (error.code === '42501' || error.message?.includes('permissão')) {
-          void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', error.code, error.message);
-        }
+        recordTranslationRpcResult({
+          name: 'create_translated_catalog_v1',
+          timestamp: new Date().toISOString(),
+          success: false,
+          code: error.code || 'RPC_ERROR',
+          message: error.message || 'Erro ao criar versão traduzida',
+          details: error.details,
+          hint: error.hint
+        });
 
         const isConflict =
           error.code === '40001' ||
@@ -296,9 +365,23 @@ export class SupabaseService {
         return { success: false, conflict: isConflict, errorCode: error.code || 'RPC_ERROR', error: error.message };
       }
 
-      void this.diagnoseCurrentTranslationAuth('create_translated_catalog_v1', 'SUCCESS_200');
+      recordTranslationRpcResult({
+        name: 'create_translated_catalog_v1',
+        timestamp: new Date().toISOString(),
+        success: true,
+        code: '200_OK',
+        message: 'Catálogo traduzido criado com sucesso no servidor'
+      });
+
       return { success: true, data };
     } catch (err: any) {
+      recordTranslationRpcResult({
+        name: 'create_translated_catalog_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: err.message || 'Erro ao criar versão traduzida'
+      });
       return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar versão traduzida' };
     }
   }
@@ -310,12 +393,27 @@ export class SupabaseService {
     summary?: string
   ): Promise<{ success: boolean; data?: any; conflict?: boolean; errorCode?: string; error?: string }> {
     const supabase = getSupabase();
-    if (!supabase) return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
+    if (!supabase) {
+      recordTranslationRpcResult({
+        name: 'create_translated_template_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: 'CLIENT_OFFLINE',
+        message: 'Supabase não inicializado'
+      });
+      return { success: false, errorCode: 'CLIENT_OFFLINE', error: 'Supabase não inicializado' };
+    }
 
     // Validação estrita e atômica da sessão corporativa no servidor
     const authValidation = await this.ensureAuthenticatedCorporateSession();
     if (!authValidation.success) {
-      void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', authValidation.errorCode, authValidation.error);
+      recordTranslationRpcResult({
+        name: 'create_translated_template_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: authValidation.errorCode || 'AUTH_SESSION_INVALID',
+        message: authValidation.error || 'Sem permissão de acesso.'
+      });
       return {
         success: false,
         errorCode: authValidation.errorCode || 'AUTH_SESSION_INVALID',
@@ -332,9 +430,15 @@ export class SupabaseService {
       });
 
       if (error) {
-        if (error.code === '42501' || error.message?.includes('permissão')) {
-          void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', error.code, error.message);
-        }
+        recordTranslationRpcResult({
+          name: 'create_translated_template_v1',
+          timestamp: new Date().toISOString(),
+          success: false,
+          code: error.code || 'RPC_ERROR',
+          message: error.message || 'Erro ao criar template traduzido',
+          details: error.details,
+          hint: error.hint
+        });
 
         const isConflict =
           error.code === '40001' ||
@@ -343,18 +447,28 @@ export class SupabaseService {
         return { success: false, conflict: isConflict, errorCode: error.code || 'RPC_ERROR', error: error.message };
       }
 
-      void this.diagnoseCurrentTranslationAuth('create_translated_template_v1', 'SUCCESS_200');
+      recordTranslationRpcResult({
+        name: 'create_translated_template_v1',
+        timestamp: new Date().toISOString(),
+        success: true,
+        code: '200_OK',
+        message: 'Template traduzido criado com sucesso no servidor'
+      });
+
       return { success: true, data };
     } catch (err: any) {
+      recordTranslationRpcResult({
+        name: 'create_translated_template_v1',
+        timestamp: new Date().toISOString(),
+        success: false,
+        code: 'NETWORK_ERROR',
+        message: err.message || 'Erro ao criar template traduzido'
+      });
       return { success: false, errorCode: 'NETWORK_ERROR', error: err.message || 'Erro ao criar template traduzido' };
     }
   }
 
-  static async diagnoseCurrentTranslationAuth(
-    lastRpcName?: string,
-    lastRpcStatus?: string,
-    lastRpcError?: string
-  ): Promise<TranslationAuthDiagnostic> {
+  static async diagnoseCurrentTranslationAuth(): Promise<TranslationAuthDiagnostic> {
     let resolvedProjectRef = 'unknown';
     try {
       if (supabaseUrl) {
@@ -374,12 +488,10 @@ export class SupabaseService {
         teamRole: null,
         probeAuthenticated: false,
         probeRole: null,
-        projectRef: resolvedProjectRef,
-        lastRpcName,
-        lastRpcStatus: lastRpcStatus || 'CLIENT_OFFLINE',
-        lastRpcError: lastRpcError || 'Supabase não inicializado'
+        projectRef: resolvedProjectRef
       };
       latestTranslationAuthDiagnostic = diag;
+      notifyTranslationDiagnostics();
       return diag;
     }
 
@@ -403,18 +515,16 @@ export class SupabaseService {
       teamRole: (roleData as any) || null,
       probeAuthenticated: !!probeData?.authenticated,
       probeRole: probeData?.role || null,
-      projectRef: resolvedProjectRef,
-      lastRpcName,
-      lastRpcStatus: lastRpcStatus || (probeData?.authenticated ? 'AUTH_OK' : 'UNAUTHENTICATED'),
-      lastRpcError
+      projectRef: resolvedProjectRef
     };
 
     latestTranslationAuthDiagnostic = diag;
+    notifyTranslationDiagnostics();
     return diag;
   }
 
   static async runTranslationAuthForensicCheck(): Promise<TranslationAuthDiagnostic> {
-    return this.diagnoseCurrentTranslationAuth('forensic_manual_probe', 'RUNNING');
+    return this.diagnoseCurrentTranslationAuth();
   }
 
   static async getCatalog(id: string): Promise<{ success: boolean; data?: Catalog; error?: string }> {
