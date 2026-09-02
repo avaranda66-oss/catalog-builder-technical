@@ -266,3 +266,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ status: 'loading', errorMessage: null, ...resetIdentity() });
   }
 }));
+
+if (typeof window !== 'undefined') {
+  (window as any).useAuthStore = useAuthStore;
+}
