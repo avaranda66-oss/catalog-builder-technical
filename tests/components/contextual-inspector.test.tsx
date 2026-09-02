@@ -22,6 +22,7 @@ import { PropertiesPanel } from '../../src/components/editor/PropertiesPanel';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
 import { PrintableTextRegistry } from '../../src/translation/printable-text.registry';
 import { RendererParityAuditor } from '../../src/translation/renderer-parity.auditor';
+import { getPageContentBox } from '../../src/domain/page-geometry';
 
 describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -837,6 +838,142 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
     // Não existe input number com max=210 nem hint "Máx: 210 mm"
     expect(container.textContent).not.toContain('Máx: 210 mm');
     expect(container.querySelector('input[type="number"]')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('WIDTH-TOGGLE-1: alternância Fixed -> Fill remove fixedWidthMm; Fill -> Fixed inicializa com availableWidthMm canônico (não ressuscita 215)', () => {
+    const legacyOversizedBlock: ContentBlock = {
+      ...mockStructuralBlock,
+      id: 'block-sec-oversized',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        layout: {
+          ...mockStructuralBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 215 // Documento legado oversized
+        }
+      }
+    };
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        ...mockCatalog,
+        pages: [
+          {
+            ...mockCatalog.pages[0],
+            blocks: [legacyOversizedBlock]
+          }
+        ]
+      }
+    });
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={legacyOversizedBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // 1. No load: documento legado preservado com 215mm e aviso exibido
+    expect(container.textContent).toContain('Aviso de Geometria');
+    const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(numInput.value).toBe('215');
+
+    // 2. Usuário escolhe Fill
+    const buttons = Array.from(container.querySelectorAll('button'));
+    const fillButton = buttons.find((b) => b.textContent?.includes('Preencher'));
+    expect(fillButton).toBeDefined();
+
+    act(() => {
+      fillButton?.click();
+    });
+
+    // Verifica que no catálogo o layout agora tem widthMode='fill' e fixedWidthMm é undefined/ausente
+    const stateAfterFill = useCatalogStore.getState();
+    const updatedBlockAfterFill = stateAfterFill.currentCatalog?.pages[0].blocks[0];
+    expect(updatedBlockAfterFill?.structuralData?.layout.widthMode).toBe('fill');
+    expect(updatedBlockAfterFill?.structuralData?.layout.fixedWidthMm).toBeUndefined();
+
+    // Round-trip JSON comprova que fixedWidthMm não persiste artificialmente no JSON quando Fill
+    const serializedJson = JSON.stringify(updatedBlockAfterFill?.structuralData?.layout);
+    expect(serializedJson).not.toContain('fixedWidthMm');
+
+    // 3. Re-renderiza o Inspector com o bloco atualizado após Fill
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={updatedBlockAfterFill!}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    // 4. Usuário volta para Fixed
+    const buttonsAfterFill = Array.from(container.querySelectorAll('button'));
+    const fixedButton = buttonsAfterFill.find((b) => b.textContent?.includes('Fixa'));
+    expect(fixedButton).toBeDefined();
+
+    act(() => {
+      fixedButton?.click();
+    });
+
+    // Verifica que o catálogo recebeu exatamente availableWidthMm (193.0666) e NÃO ressuscitou 215
+    const stateAfterFixed = useCatalogStore.getState();
+    const updatedBlockAfterFixed = stateAfterFixed.currentCatalog?.pages[0].blocks[0];
+    const canonicalWidth = getPageContentBox().availableWidthMm;
+
+    expect(updatedBlockAfterFixed?.structuralData?.layout.widthMode).toBe('fixed');
+    expect(updatedBlockAfterFixed?.structuralData?.layout.fixedWidthMm).toBe(canonicalWidth);
+    expect(updatedBlockAfterFixed?.structuralData?.layout.fixedWidthMm).not.toBe(215);
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('WIDTH-INPUT-1: input de dimensão fixa possui step="any" e não impõe stepMismatch no valor canônico', () => {
+    const fixedBlock: ContentBlock = {
+      ...mockStructuralBlock,
+      id: 'block-sec-canonical',
+      structuralData: {
+        ...mockStructuralBlock.structuralData!,
+        layout: {
+          ...mockStructuralBlock.structuralData!.layout,
+          widthMode: 'fixed',
+          fixedWidthMm: 193.0666
+        }
+      }
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <StructuralSectionInspector
+          sectionBlock={fixedBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(numInput).not.toBeNull();
+    expect(numInput.step).toBe('any');
+    expect(numInput.value).toBe('193.0666');
+    // Validade nativa do HTML input (zero stepMismatch)
+    expect(numInput.validity?.stepMismatch).toBe(false);
 
     act(() => {
       root.unmount();

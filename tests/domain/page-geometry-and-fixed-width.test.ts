@@ -6,7 +6,11 @@ import {
   getCanonicalPagePaddingCss
 } from '../../src/domain/page-geometry';
 import { mmToPx, pxToMm } from '../../src/domain/physical-units';
-import { A4LayoutEngine } from '../../src/domain/canvas-layout.engine';
+import {
+  A4LayoutEngine,
+  A4_PAGE_WIDTH_MM,
+  A4_PAGE_HEIGHT_MM
+} from '../../src/domain/canvas-layout.engine';
 import { StructuralSectionData } from '../../src/domain/canvas-layout.schema';
 
 describe('FASE 3A.5A — A4 Physical Geometry, Content Box & Fixed Width Suite', () => {
@@ -54,6 +58,13 @@ describe('FASE 3A.5A — A4 Physical Geometry, Content Box & Fixed Width Suite',
     expect((pageGeometryExports as any).FOOTER_HEIGHT_PX).toBeUndefined();
     expect((pageGeometryExports as any).FOOTER_HEIGHT_MM).toBeUndefined();
     expect((pageGeometryExports as any).BlockFlowViewport).toBeUndefined();
+  });
+
+  it('A4-GEO-SSOT-1: Constantes legadas A4 no canvas-layout.engine derivam estritamente da autoridade canônica (SSOT)', () => {
+    expect(A4_PAGE_WIDTH_MM).toBe(CANONICAL_A4_GEOMETRY.pageWidthMm);
+    expect(A4_PAGE_HEIGHT_MM).toBe(CANONICAL_A4_GEOMETRY.pageHeightMm);
+    expect(A4_PAGE_WIDTH_MM).toBe(210);
+    expect(A4_PAGE_HEIGHT_MM).toBe(297);
   });
 
   // ==========================================================================
@@ -186,6 +197,24 @@ describe('FASE 3A.5A — A4 Physical Geometry, Content Box & Fixed Width Suite',
     expect(alignMap.left).toBe('mr-auto text-left');
     expect(alignMap.center).toBe('mx-auto text-center');
     expect(alignMap.right).toBe('ml-auto text-right');
+  });
+
+  it('WIDTH-INPUT-1: Valor canônico derivado (193.0666 mm) é suportado no motor sem grid ou snap restritivo', () => {
+    const contentBox = getPageContentBox();
+    const exactMm = contentBox.availableWidthMm; // 193.0666
+    expect(exactMm).toBe(193.0666);
+
+    const section: StructuralSectionData = {
+      ...sampleSectionData,
+      layout: {
+        ...sampleSectionData.layout,
+        widthMode: 'fixed',
+        fixedWidthMm: exactMm
+      }
+    };
+    const result = A4LayoutEngine.validateSection(section, { availableWidthMm: contentBox.availableWidthMm });
+    expect(result.valid).toBe(true);
+    expect(result.issues).toHaveLength(0);
   });
 
   // ==========================================================================

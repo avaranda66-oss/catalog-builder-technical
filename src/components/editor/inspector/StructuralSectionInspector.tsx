@@ -14,7 +14,8 @@ import {
   Copy,
   ArrowUp,
   ArrowDown,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { ContentBlock } from '@/domain/catalog.schema';
 import {
@@ -95,15 +96,14 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
     : null;
   const outsideSafeWidthIssue = validationResult?.issues.find((i) => i.code === 'OUTSIDE_SAFE_WIDTH');
 
-  // Transição segura de widthMode: fill -> fixed usa EXATAMENTE availableWidthMm da geometria canônica
+  // Transição segura de widthMode (Fase 3A.5A.1):
+  // FIXED -> FILL: descarta explicitamente fixedWidthMm da configuração ativa
+  // FILL -> FIXED: SEMPRE inicializa com exatamente maxAvailableMm (sem reutilizar stale width)
   const handleWidthModeChange = (mode: 'fill' | 'fixed') => {
     if (mode === 'fill') {
-      handleLayoutUpdate({ widthMode: 'fill' });
+      handleLayoutUpdate({ widthMode: 'fill', fixedWidthMm: undefined });
     } else if (mode === 'fixed') {
-      const initialWidthMm = layout.fixedWidthMm && layout.fixedWidthMm > 0
-        ? layout.fixedWidthMm
-        : maxAvailableMm;
-      handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: initialWidthMm });
+      handleLayoutUpdate({ widthMode: 'fixed', fixedWidthMm: maxAvailableMm });
     }
   };
 
@@ -233,7 +233,7 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
                   type="number"
                   min={0.1}
                   max={maxAvailableMm}
-                  step={0.5}
+                  step="any"
                   value={layout.fixedWidthMm ?? maxAvailableMm}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
@@ -248,9 +248,10 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             </InspectorField>
 
             {outsideSafeWidthIssue && (
-              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900" role="alert">
-                <div className="font-bold flex items-center gap-1 text-amber-800">
-                  <span>⚠️ Aviso de Geometria:</span>
+              <div className="no-print p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-900" role="alert">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Aviso de Geometria</span>
                 </div>
                 <p className="mt-0.5 text-[10.5px]">
                   {outsideSafeWidthIssue.message}

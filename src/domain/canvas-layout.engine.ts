@@ -18,11 +18,16 @@ import type { Catalog, ContentBlock } from './catalog.schema';
 // ============================================================================
 
 export { mmToPx, pxToMm } from './physical-units';
-export {
+import {
   CANONICAL_A4_GEOMETRY,
   getPageContentBox,
   getCanonicalPagePaddingCss
 } from './page-geometry';
+export {
+  CANONICAL_A4_GEOMETRY,
+  getPageContentBox,
+  getCanonicalPagePaddingCss
+};
 export type {
   A4PageGeometry,
   PageMarginsMm,
@@ -33,8 +38,8 @@ export type {
 // 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
 // ============================================================================
 
-export const A4_PAGE_WIDTH_MM = 210;
-export const A4_PAGE_HEIGHT_MM = 297;
+export const A4_PAGE_WIDTH_MM = CANONICAL_A4_GEOMETRY.pageWidthMm;
+export const A4_PAGE_HEIGHT_MM = CANONICAL_A4_GEOMETRY.pageHeightMm;
 
 
 // ============================================================================
@@ -282,10 +287,15 @@ export function updateStructuralLayout(
   structuralData: StructuralSectionData,
   layoutUpdates: Partial<StructuralLayoutConfig>
 ): StructuralSectionData {
-  const mergedLayout = {
+  const mergedLayout: Record<string, any> = {
     ...structuralData.layout,
     ...layoutUpdates
   };
+
+  // Se o modo for alterado para 'fill' ou fixedWidthMm for explicitamente undefined, remove fixedWidthMm
+  if (mergedLayout.widthMode === 'fill' || layoutUpdates.fixedWidthMm === undefined) {
+    delete mergedLayout.fixedWidthMm;
+  }
 
   // Validação estrita via Zod schema (impede fixedWidthMm <= 0 quando fixed)
   const validatedLayout = StructuralLayoutConfigSchema.parse(mergedLayout);
