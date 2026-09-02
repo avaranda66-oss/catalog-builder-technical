@@ -163,7 +163,14 @@ export class SupabaseService {
       if (sessionRes.data?.session?.expires_at) {
         const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
         if (isExpiringSoon) {
-          await supabase.auth.refreshSession();
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData.session) {
+            return {
+              success: false,
+              errorCode: 'AUTH_SESSION_INVALID',
+              error: 'Sessão de autenticação expirada ou inválida. Por favor, revalide seu acesso no servidor.'
+            };
+          }
         }
       }
 
@@ -202,7 +209,14 @@ export class SupabaseService {
       if (sessionRes.data?.session?.expires_at) {
         const isExpiringSoon = sessionRes.data.session.expires_at - Date.now() / 1000 < 60;
         if (isExpiringSoon) {
-          await supabase.auth.refreshSession();
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData.session) {
+            return {
+              success: false,
+              errorCode: 'AUTH_SESSION_INVALID',
+              error: 'Sessão de autenticação expirada ou inválida. Por favor, revalide seu acesso no servidor.'
+            };
+          }
         }
       }
 
@@ -238,6 +252,15 @@ export class SupabaseService {
     probeResult?: any;
     probeError?: string;
   }> {
+    let resolvedProjectRef = 'unknown';
+    try {
+      if (supabaseUrl) {
+        resolvedProjectRef = new URL(supabaseUrl).hostname.split('.')[0] || 'unknown';
+      }
+    } catch {
+      resolvedProjectRef = 'invalid-url';
+    }
+
     const supabase = getSupabase();
     if (!supabase) {
       return {
@@ -246,7 +269,7 @@ export class SupabaseService {
         teamRole: null,
         authStoreRole: null,
         authStoreUserMatchesSession: false,
-        supabaseProjectRef: 'bjxqvrpbigwgabwbhtqa'
+        supabaseProjectRef: resolvedProjectRef
       };
     }
 
