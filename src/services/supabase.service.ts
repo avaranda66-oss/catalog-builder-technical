@@ -63,6 +63,29 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Obtém o role verificado diretamente do servidor PostgreSQL (RPC team_role).
+   * Garante paridade de autorização entre React e Supabase.
+   */
+  static async getServerTeamRole(): Promise<{
+    success: boolean;
+    role: 'admin' | 'editor' | 'viewer' | null;
+    error?: string;
+  }> {
+    const supabase = getSupabase();
+    if (!supabase) return { success: false, role: null, error: 'Supabase não inicializado' };
+
+    try {
+      const { data, error } = await supabase.rpc('team_role');
+      if (error) {
+        return { success: false, role: null, error: error.message };
+      }
+      return { success: true, role: (data as any) || null };
+    } catch (err: any) {
+      return { success: false, role: null, error: err?.message || 'Erro de conexão' };
+    }
+  }
+
   static async listWorkspace(): Promise<{ success: boolean; data?: WorkspaceData; error?: string }> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };

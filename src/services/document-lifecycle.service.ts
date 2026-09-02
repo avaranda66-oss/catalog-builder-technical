@@ -52,6 +52,33 @@ export function getDocumentCapabilities(userRole: string | null | undefined): Do
 
 export class DocumentLifecycleService {
   /**
+   * Obtém as capacidades de documento autorizadas diretamente pelo servidor PostgreSQL (Server Authoritative Preflight).
+   * Elimina divergências entre o role local e o team_role() da RPC.
+   */
+  static async getServerCapabilities(): Promise<{
+    success: boolean;
+    role: 'admin' | 'editor' | 'viewer' | null;
+    capabilities: DocumentCapabilities;
+    error?: string;
+  }> {
+    const roleRes = await SupabaseService.getServerTeamRole();
+    if (!roleRes.success || !roleRes.role) {
+      return {
+        success: false,
+        role: null,
+        capabilities: getDocumentCapabilities(null),
+        error: roleRes.error || 'Sessão não autorizada no servidor.'
+      };
+    }
+
+    return {
+      success: true,
+      role: roleRes.role,
+      capabilities: getDocumentCapabilities(roleRes.role)
+    };
+  }
+
+  /**
    * Valida o invariante estrito de consistência entre o documento ativo e o contexto do editor.
    * CATALOG: currentCatalog.id === editorContext.catalogId
    * TEMPLATE: currentCatalog.id === editorContext.templateId

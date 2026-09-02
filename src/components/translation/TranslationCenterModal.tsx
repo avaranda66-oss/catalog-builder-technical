@@ -27,7 +27,12 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { LanguageRegistry } from '@/translation/language.registry';
 import { CredentialStorageMode } from '@/translation/types';
 import { FontManager } from '@/translation/font-manager';
-import { DocumentLifecycleService, getDocumentCapabilities, TranslationSourceSnapshot } from '@/services/document-lifecycle.service';
+import {
+  DocumentLifecycleService,
+  DocumentCapabilities,
+  getDocumentCapabilities,
+  TranslationSourceSnapshot
+} from '@/services/document-lifecycle.service';
 import { CleanA4Document } from '../export/CleanA4Document';
 
 export const TranslationCenterModal: React.FC = () => {
@@ -64,9 +69,14 @@ export const TranslationCenterModal: React.FC = () => {
   const isTemplateMode = editorContext?.kind === 'template';
   const userId = useAuthStore((state) => state.userId);
   const role = useAuthStore((state) => state.role);
-  const capabilities = getDocumentCapabilities(role);
-  const canTranslateCurrent = isTemplateMode ? capabilities.canTranslateTemplate : capabilities.canTranslateCatalog;
   const qaContainerRef = useRef<HTMLDivElement>(null);
+
+  const [serverCaps, setServerCaps] = useState<DocumentCapabilities | null>(null);
+  const [isCheckingServerCaps, setIsCheckingServerCaps] = useState(false);
+  const [serverRole, setServerRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
+
+  const activeCapabilities = serverCaps || getDocumentCapabilities(role);
+  const canTranslateCurrent = isTemplateMode ? activeCapabilities.canTranslateTemplate : activeCapabilities.canTranslateCatalog;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -81,9 +91,32 @@ export const TranslationCenterModal: React.FC = () => {
   const [fontErrorMessage, setFontErrorMessage] = useState<string | null>(null);
   const [fontDetails, setFontDetails] = useState<{ primaryFont: string; script: string; source: string } | null>(null);
 
+  const fetchServerCapabilities = async () => {
+    setIsCheckingServerCaps(true);
+    try {
+      const res = await DocumentLifecycleService.getServerCapabilities();
+      if (res.success && res.role) {
+        setServerCaps(res.capabilities);
+        setServerRole(res.role);
+        if (useAuthStore.getState().role !== res.role) {
+          useAuthStore.setState({ role: res.role as any });
+        }
+      } else {
+        setServerCaps(getDocumentCapabilities(null));
+        setServerRole(null);
+      }
+    } catch {
+      setServerCaps(getDocumentCapabilities(null));
+      setServerRole(null);
+    } finally {
+      setIsCheckingServerCaps(false);
+    }
+  };
+
   useEffect(() => {
     if (isModalOpen) {
       refreshCoverage(currentCatalog);
+      void fetchServerCapabilities();
       if (userId) {
         loadCredentialStatus(userId);
       }
@@ -183,12 +216,11 @@ export const TranslationCenterModal: React.FC = () => {
     if (!currentCatalog || !activeUserId) return;
     setSaveErrorMessage(null);
 
-    // 1. Verificação Preflight de Permissão
-    const activeRole = useAuthStore.getState().role;
-    const activeCaps = getDocumentCapabilities(activeRole);
-    const canTranslate = isTemplateMode ? activeCaps.canTranslateTemplate : activeCaps.canTranslateCatalog;
+    // 1. Verificação Preflight de Permissão com o Servidor
+    const serverRes = await DocumentLifecycleService.getServerCapabilities();
+    const canTranslate = isTemplateMode ? serverRes.capabilities.canTranslateTemplate : serverRes.capabilities.canTranslateCatalog;
     if (!canTranslate) {
-      setSaveErrorMessage(`Acesso negado: Perfil "${activeRole || 'não autenticado'}" não possui permissão para traduzir ${isTemplateMode ? 'templates' : 'catálogos'}.`);
+      setSaveErrorMessage(`Acesso negado: Perfil "${serverRes.role || role || 'não autenticado'}" não possui permissão para traduzir ${isTemplateMode ? 'templates' : 'catálogos'}.`);
       return;
     }
 
@@ -575,11 +607,22 @@ export const TranslationCenterModal: React.FC = () => {
                 </div>
 
                 {!canTranslateCurrent && (
-                  <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      Acesso Restrito: Seu perfil de usuário ({role || 'não autenticado'}) não possui permissão para criar e salvar versões traduzidas na nuvem. Apenas administradores e editores podem executar traduções oficiais.
-                    </span>
+                  <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        Acesso Restrito: Seu perfil no servidor ({serverRole || role || 'não autenticado'}) não possui permissão para criar e salvar versões traduzidas na nuvem. Apenas administradores e editores podem executar traduções oficiais.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchServerCapabilities}
+                      disabled={isCheckingServerCaps}
+                      className="px-3 py-1 bg-amber-700 text-white hover:bg-amber-800 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isCheckingServerCaps ? 'animate-spin' : ''}`} />
+                      <span>Revalidar permissão no servidor</span>
+                    </button>
                   </div>
                 )}
 
@@ -860,9 +903,25 @@ export const TranslationCenterModal: React.FC = () => {
                 )}
 
                 {saveErrorMessage && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>{saveErrorMessage}</span>
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{saveErrorMessage}</span>
+                    </div>
+                    {(saveErrorMessage.includes('permissão') || saveErrorMessage.includes('42501')) && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await fetchServerCapabilities();
+                          setSaveErrorMessage(null);
+                        }}
+                        disabled={isCheckingServerCaps}
+                        className="px-3 py-1 bg-rose-700 text-white hover:bg-rose-800 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingServerCaps ? 'animate-spin' : ''}`} />
+                        <span>Revalidar Acesso no Servidor</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
