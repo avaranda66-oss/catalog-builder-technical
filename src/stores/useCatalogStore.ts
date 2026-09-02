@@ -21,7 +21,42 @@ export interface InFlightSaveInfo {
   capturedRevision: number;
 }
 
-// Helper de Diagnóstico e Rastreamento de Estado
+// Client Instance ID persistente na sessão do navegador
+export function getClientInstanceId(): string {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    let id = window.sessionStorage.getItem('cb_client_instance_id');
+    if (!id) {
+      id = 'client_' + Math.random().toString(36).slice(2, 9);
+      window.sessionStorage.setItem('cb_client_instance_id', id);
+    }
+    return id;
+  }
+  return 'client_node';
+}
+
+// Estrutura de Fingerprint Estrutural do Catálogo (Páginas e Blocos)
+export interface CatalogStructuralFingerprint {
+  pagesCount: number;
+  totalBlocks: number;
+  pages: Array<{ pageId: string; pageNumber: number; blockCount: number; blockIds: string[]; blockTypes: string[] }>;
+}
+
+export function getCatalogStructuralFingerprint(cat: Catalog | null): CatalogStructuralFingerprint {
+  if (!cat || !cat.pages) return { pagesCount: 0, totalBlocks: 0, pages: [] };
+  return {
+    pagesCount: cat.pages.length,
+    totalBlocks: cat.pages.reduce((acc, p) => acc + (p.blocks?.length || 0), 0),
+    pages: cat.pages.map((p, idx) => ({
+      pageId: p.id,
+      pageNumber: p.pageNumber ?? (idx + 1),
+      blockCount: p.blocks?.length || 0,
+      blockIds: (p.blocks || []).map((b) => b.id),
+      blockTypes: (p.blocks || []).map((b) => b.type)
+    }))
+  };
+}
+
+// Helper de Diagnóstico e Rastreamento de Estado com Fingerprint de Blocos
 export function debugSetCatalog(
   source: string,
   previous: Catalog | null,
@@ -30,14 +65,19 @@ export function debugSetCatalog(
 ) {
   const prevCount = previous?.pages?.length ?? 0;
   const nextCount = next?.pages?.length ?? 0;
+  const prevBlocksTotal = previous?.pages?.reduce((acc, p) => acc + (p.blocks?.length || 0), 0) ?? 0;
+  const nextBlocksTotal = next?.pages?.reduce((acc, p) => acc + (p.blocks?.length || 0), 0) ?? 0;
+  const clientId = getClientInstanceId();
 
-  console.log(`[DEBUG-CATALOG-STATE] [${source}]`, {
+  console.log(`[DEBUG-CATALOG-STATE] [${source}] [${clientId}]`, {
     timestamp: new Date().toISOString(),
     id: next?.id,
     prevVersion: previous?.version,
     nextVersion: next?.version,
     prevPagesCount: prevCount,
     nextPagesCount: nextCount,
+    prevBlocksTotal,
+    nextBlocksTotal,
     prevTitle: previous?.title,
     nextTitle: next?.title,
     ...extra
@@ -49,6 +89,28 @@ export function debugSetCatalog(
       nextCatalog: next
     });
     console.trace();
+  }
+
+  // Verificação de Perda de Blocos em Páginas Existentes
+  if (previous && next) {
+    for (const prevPage of previous.pages) {
+      const nextPage = next.pages.find((p) => p.id === prevPage.id);
+      if (nextPage) {
+        const prevBlockList = prevPage.blocks || [];
+        const nextBlockList = nextPage.blocks || [];
+        if (nextBlockList.length < prevBlockList.length) {
+          const nextIds = new Set(nextBlockList.map((b) => b.id));
+          const droppedBlocks = prevBlockList.filter((b) => !nextIds.has(b.id));
+          console.warn(`🚨 [BLOCKS DROPPED] Source "${source}" reduziu blocos na página ${prevPage.id} de ${prevBlockList.length} para ${nextBlockList.length}!`, {
+            pageId: prevPage.id,
+            droppedBlocks,
+            prevBlocks: prevBlockList,
+            nextBlocks: nextBlockList
+          });
+          console.trace();
+        }
+      }
+    }
   }
 }
 

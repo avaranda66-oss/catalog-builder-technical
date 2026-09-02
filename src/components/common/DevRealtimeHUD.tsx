@@ -37,6 +37,10 @@ export const DevRealtimeHUD: React.FC = () => {
     );
   }
 
+  const totalBlocks = currentCatalog?.pages?.reduce((acc, p) => acc + (p.blocks?.length || 0), 0) ?? 0;
+  const activePageBlocks = currentCatalog?.pages?.[useCatalogStore.getState().activePageIndex]?.blocks?.length ?? 0;
+  const clientId = typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem('cb_client_instance_id') || 'init' : 'none';
+
   return (
     <aside
       aria-label="DEV Realtime HUD"
@@ -66,8 +70,8 @@ export const DevRealtimeHUD: React.FC = () => {
         </div>
 
         <div>
-          <span className="text-slate-400">pages.length:</span>{' '}
-          <span className="text-purple-300 font-bold">{currentCatalog?.pages?.length ?? 0}</span>
+          <span className="text-slate-400">pages / blocks:</span>{' '}
+          <span className="text-purple-300 font-bold">{currentCatalog?.pages?.length ?? 0}p / {totalBlocks}b</span>
         </div>
         <div>
           <span className="text-slate-400">syncStatus:</span>{' '}
@@ -94,6 +98,10 @@ export const DevRealtimeHUD: React.FC = () => {
           <span className={`font-bold ${realtimeStatus === 'SUBSCRIBED' ? 'text-emerald-400' : 'text-red-400'}`}>
             {realtimeStatus}
           </span>
+        </div>
+
+        <div className="col-span-2 text-[9px] text-slate-400 bg-slate-900/60 p-1 rounded border border-slate-800">
+          Client: <span className="text-cyan-300">{clientId}</span> | Page {useCatalogStore.getState().activePageIndex + 1} ({activePageBlocks} blocks)
         </div>
 
         {inFlightSave && (

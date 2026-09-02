@@ -939,4 +939,213 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
     // Páginas continuam 3
     expect(useCatalogStore.getState().currentCatalog?.pages.length).toBe(3);
   });
+
+  // =========================================================================
+  // TEST 32: addBlock persiste bloco no payload enviado e preserva após ACK
+  // =========================================================================
+  it('TEST 32: addBlock adiciona bloco à página, envia na RPC save_catalog_v3 e mantém após ACK', async () => {
+    let capturedPayload: any = null;
+    vi.spyOn(SupabaseService, 'saveCatalog').mockImplementation(async (cat) => {
+      capturedPayload = cat;
+      return { success: true, data: { id: catalogUUID, version: 8 } };
+    });
+
+    const pageId = baseCatalog.pages[0].id;
+    useCatalogStore.getState().addBlock(pageId, {
+      type: 'hero_banner',
+      title: 'PRESYS TA-25N — Banner Teste',
+      subtitle: 'Calibrador Industrial'
+    });
+
+    await vi.waitFor(() => {
+      expect(capturedPayload).not.toBeNull();
+    });
+
+    const state = useCatalogStore.getState();
+    const blocks = state.currentCatalog?.pages[0].blocks || [];
+    expect(blocks.length).toBe(2);
+    expect(blocks[1].title).toBe('PRESYS TA-25N — Banner Teste');
+
+    // Verifica que o payload enviado à RPC continha o bloco
+    const payloadBlocks = capturedPayload.pages[0].blocks || [];
+    expect(payloadBlocks.length).toBe(2);
+    expect(payloadBlocks[1].title).toBe('PRESYS TA-25N — Banner Teste');
+  });
+
+  // =========================================================================
+  // TEST 33: Snapshot remoto defasado na mesma página não remove blocos locais
+  // =========================================================================
+  it('TEST 33: Snapshot remoto defasado com blocos vazios na mesma página não elimina bloco recém-adicionado', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockReturnValue(new Promise(() => {})); // Em voo eterno
+
+    const pageId = baseCatalog.pages[0].id;
+    useCatalogStore.getState().addBlock(pageId, {
+      type: 'table',
+      title: 'Tabela de Especificações'
+    });
+
+    // Simula evento remoto com versão anterior e blocos vazios
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 6, // Versão defasada
+        name: baseCatalog.title,
+        brand: { title: baseCatalog.title, pages: [{ id: pageId, pageNumber: 1, blocks: [] }] }
+      }
+    });
+
+    const state = useCatalogStore.getState();
+    const blocks = state.currentCatalog?.pages[0].blocks || [];
+    expect(blocks.length).toBe(2);
+    expect(blocks[1].title).toBe('Tabela de Especificações');
+  });
+
+  // =========================================================================
+  // TEST 34: Eco de Realtime após addBlock preserva o bloco adicionado
+  // =========================================================================
+  it('TEST 34: Eco do próprio salvamento (Realtime UPDATE) após addBlock preserva o bloco', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+      success: true,
+      data: { id: catalogUUID, version: 8 }
+    });
+
+    const pageId = baseCatalog.pages[0].id;
+    useCatalogStore.getState().addBlock(pageId, {
+      type: 'features_list',
+      title: 'Destaques Metrológicos'
+    });
+
+    // Simula eco de Realtime com targetVersion 8
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: {
+        id: catalogUUID,
+        version: 8,
+        name: baseCatalog.title
+      }
+    });
+
+    const state = useCatalogStore.getState();
+    const blocks = state.currentCatalog?.pages[0].blocks || [];
+    expect(blocks.length).toBe(2);
+    expect(blocks[1].title).toBe('Destaques Metrológicos');
+  });
+
+  // =========================================================================
+  // TEST 35: Invariante do navegador ocioso (Zero saves sem mutação do usuário)
+  // =========================================================================
+  it('TEST 35: Navegador ocioso (clean state) realiza ZERO chamadas a save_catalog_v3 por tempo indefinido', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveSpy = vi.spyOn(SupabaseService, 'saveCatalog');
+
+      // Estado inicial: limpo e sincronizado
+      useCatalogStore.setState({
+        syncStatus: 'synced',
+        isDirty: false,
+        isSaving: false,
+        localRevision: 0,
+        lastAcknowledgedLocalRevision: 0
+      });
+
+      // Simula passagem de tempo de 60 segundos
+      vi.advanceTimersByTime(60000);
+
+      expect(saveSpy).not.toHaveBeenCalled();
+      expect(useCatalogStore.getState().isDirty).toBe(false);
+      expect(useCatalogStore.getState().syncStatus).toBe('synced');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // =========================================================================
+  // TEST 36: Aplicação de evento remoto não dispara save reflexivo (zero feedback loop)
+  // =========================================================================
+  it('TEST 36: Recepção de evento remoto atualiza o catálogo local sem disparar save reflexivo de volta ao servidor', async () => {
+    const saveSpy = vi.spyOn(SupabaseService, 'saveCatalog');
+
+    const remotePayload = {
+      id: catalogUUID,
+      version: 8,
+      name: 'PRESYS TA-25N — Atualizado Remotamente',
+      brand: {
+        title: 'PRESYS TA-25N — Atualizado Remotamente',
+        pages: [
+          {
+            id: baseCatalog.pages[0].id,
+            pageNumber: 1,
+            blocks: [{ id: 'b-remote-1', type: 'hero_banner', title: 'Banner Remoto' }]
+          }
+        ]
+      }
+    };
+
+    await handleCatalogRealtimeEvent({
+      eventType: 'UPDATE',
+      new: remotePayload
+    });
+
+    const state = useCatalogStore.getState();
+    expect(state.currentCatalog?.title).toBe('PRESYS TA-25N — Atualizado Remotamente');
+    expect(state.currentCatalog?.pages[0].blocks[0].title).toBe('Banner Remoto');
+    expect(state.isDirty).toBe(false);
+    expect(state.syncStatus).toBe('synced');
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // TEST 37: Coexistência de múltiplos blocos e integridade estrutural
+  // =========================================================================
+  it('TEST 37: Inserção de múltiplos blocos coexiste harmonicamente sem sobrescrita ou perda mútua', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+      success: true,
+      data: { id: catalogUUID, version: 8 }
+    });
+
+    const pageId = baseCatalog.pages[0].id;
+
+    // 1. Adiciona bloco de capa
+    useCatalogStore.getState().addBlock(pageId, {
+      type: 'full_page_cover',
+      title: 'TA-25N Capa'
+    });
+
+    // 2. Adiciona tabela técnica
+    useCatalogStore.getState().addBlock(pageId, {
+      type: 'table',
+      title: 'Especificações Técnicas'
+    });
+
+    const state = useCatalogStore.getState();
+    const blocks = state.currentCatalog?.pages[0].blocks || [];
+    // 1 inicial + 2 adicionados = 3 blocos
+    expect(blocks.length).toBe(3);
+    expect(blocks[1].type).toBe('full_page_cover');
+    expect(blocks[2].type).toBe('table');
+  });
+
+  // =========================================================================
+  // TEST 38: Edição de texto de bloco via updateBlock preserva bloco e título
+  // =========================================================================
+  it('TEST 38: Edição de título de bloco via updateBlock altera o bloco e persiste com sucesso', async () => {
+    vi.spyOn(SupabaseService, 'saveCatalog').mockResolvedValue({
+      success: true,
+      data: { id: catalogUUID, version: 8 }
+    });
+
+    const pageId = baseCatalog.pages[0].id;
+    const initialBlockId = baseCatalog.pages[0].blocks[0].id;
+
+    // Edita o título do bloco inicial para 'REALTIME-COVER-A-001' (como na UI PropertiesPanel)
+    useCatalogStore.getState().updateBlock(pageId, initialBlockId, {
+      title: 'REALTIME-COVER-A-001'
+    });
+
+    const state = useCatalogStore.getState();
+    const updatedBlock = state.currentCatalog?.pages[0].blocks.find((b) => b.id === initialBlockId);
+    expect(updatedBlock?.title).toBe('REALTIME-COVER-A-001');
+    expect(state.currentCatalog?.pages[0].blocks.length).toBe(1);
+  });
 });
