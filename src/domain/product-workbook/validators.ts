@@ -31,16 +31,18 @@ export function isValidBcp47LanguageTag(tag: string): boolean {
 }
 
 /**
- * ISO-8601 string regular expression for calendar dates and timestamps (PIM.W2C.3).
- * Accepts: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm:ss...' with strictly validated hour [00-23],
- * minute [00-59], second [00-59], optional millisecond fraction (1-3 digits) and optional timezone.
+ * ISO-8601 string regular expression for calendar dates and timestamps (PIM.W2C.4).
+ * Accepts: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm:ss...' with strictly validated year [0001-9999],
+ * hour [00-23], minute [00-59], second [00-59], optional millisecond fraction (1-3 digits)
+ * and optional timezone (Z or displacement in range [+-]00:00 to [+-]15:59).
  */
 export const ISO_DATE_REGEX =
-  /^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$/;
+  /^(000[1-9]|00[1-9]\d|0[1-9]\d{2}|[1-9]\d{3})-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-](0\d|1[0-5]):?[0-5]\d)?)?$/;
 
 /**
  * Validates whether a string is a well-formed, parseable ISO-8601 date/timestamp
- * with strict calendar validity (leap years, days per month, hours/minutes/seconds).
+ * with strict calendar validity (leap years, days per month, hours/minutes/seconds)
+ * and Gregorian AD range (year 0001-9999, timezone displacement <= 15:59).
  */
 export function isValidIsoDate(dateStr: string): boolean {
   if (typeof dateStr !== 'string') return false;
@@ -54,6 +56,7 @@ export function isValidIsoDate(dateStr: string): boolean {
   const month = parseInt(match[2], 10);
   const day = parseInt(match[3], 10);
 
+  if (year < 1 || year > 9999) return false;
   if (month < 1 || month > 12) return false;
 
   const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
@@ -69,6 +72,14 @@ export function isValidIsoDate(dateStr: string): boolean {
     if (hours < 0 || hours > 23) return false;
     if (minutes < 0 || minutes > 59) return false;
     if (seconds < 0 || seconds > 59) return false;
+  }
+
+  // Timezone displacement check (if present, displacement hour must be <= 15)
+  const tzMatch = trimmed.match(/([+-])(\d{2}):?(\d{2})$/);
+  if (tzMatch) {
+    const tzHours = parseInt(tzMatch[2], 10);
+    const tzMinutes = parseInt(tzMatch[3], 10);
+    if (tzHours > 15 || (tzHours === 15 && tzMinutes > 59)) return false;
   }
 
   const parsed = Date.parse(trimmed);

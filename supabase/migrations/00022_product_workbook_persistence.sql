@@ -670,18 +670,30 @@ BEGIN
         END IF;
     END IF;
 
-    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível e não pode ser nulo - PIM.W2C.2/PIM.W2C.3)
+    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível e não pode ser nulo - PIM.W2C.2/PIM.W2C.3/PIM.W2C.4)
     IF (p_document ? 'publicationDate') THEN
         IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string'
            OR (p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')
-           OR NOT ((p_document->>'publicationDate') ~ '^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$') THEN
+           OR NOT ((p_document->>'publicationDate') ~ '^(000[1-9]|00[1-9]\d|0[1-9]\d{2}|[1-9]\d{3})-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-](0\d|1[0-5]):?[0-5]\d)?)?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" não é uma data ISO-8601 válida.', (p_document->>'publicationDate')
+                USING ERRCODE = '22023';
+        END IF;
+
+        -- Guard explícito para rejeitar ano 0000 (PIM.W2C.4)
+        IF (p_document->>'publicationDate') ~ '^0000' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" possui ano 0000 inválido.', (p_document->>'publicationDate')
                 USING ERRCODE = '22023';
         END IF;
 
         -- Guard explícito para rejeitar hora 24:00 (PostgreSQL normalizaria para o dia seguinte em ::timestamptz) (PIM.W2C.3)
         IF (p_document->>'publicationDate') ~* 'T24:' THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" possui hora 24:00 inválida.', (p_document->>'publicationDate')
+                USING ERRCODE = '22023';
+        END IF;
+
+        -- Guard explícito para timezone displacement > 15:59 (PIM.W2C.4)
+        IF (p_document->>'publicationDate') ~ '[+-](1[6-9]|2[0-9]):?[0-9]{2}$' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" possui timezone displacement fora do intervalo permitido [+-]15:59.', (p_document->>'publicationDate')
                 USING ERRCODE = '22023';
         END IF;
 

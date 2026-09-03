@@ -678,7 +678,7 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
   // =========================================================================
   describe('PIM.W2C.1 — ISO Date Grammar & Parseability Parity', () => {
     it('PIM-W2C1-DATE-SQL-PARITY: migration SQL valida regex canônica e parseabilidade com timestamptz sem erro bruto', () => {
-      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^\\d{4}-\\d{2}-\\d{2}(T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,3})?(Z|[+-]([01]\\d|2[0-3]):?[0-5]\\d)?)?$'");
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^(000[1-9]|00[1-9]\\d|0[1-9]\\d{2}|[1-9]\\d{3})-\\d{2}-\\d{2}(T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,3})?(Z|[+-](0\\d|1[0-5]):?[0-5]\\d)?)?$'");
       expect(migrationSql).toContain("(p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')");
       expect(migrationSql).toContain('(p_document->>\'publicationDate\')::timestamptz');
       expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_DATE');
@@ -1111,12 +1111,18 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
     // Reproduz fielmente a semântica de guards SQL da migration 00022
     // -----------------------------------------------------------------------
     function validateSqlPublicationDateContract(dateStr: string): { valid: boolean; error?: string } {
-      const sqlIsoRegex = /^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$/;
+      const sqlIsoRegex = /^(000[1-9]|00[1-9]\d|0[1-9]\d{2}|[1-9]\d{3})-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-](0\d|1[0-5]):?[0-5]\d)?)?$/;
       if (dateStr.trim() !== dateStr || !sqlIsoRegex.test(dateStr)) {
         return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE' };
       }
+      if (/^0000/.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_YEAR0' };
+      }
       if (/T24:/i.test(dateStr)) {
         return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_HOUR24' };
+      }
+      if (/[+-](1[6-9]|2[0-9]):?[0-9]{2}$/.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_TZ_OUT_OF_RANGE' };
       }
       return { valid: true };
     }
@@ -1345,6 +1351,233 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
               title: 'Doc',
               documentType: 'manual',
               externalUrl: url
+            })
+          ).toThrow();
+        }
+      }
+    });
+  });
+
+  // =========================================================================
+  // PIM.W2C.4: FINAL TEMPORAL DOMAIN ↔ POSTGRESQL PARITY (TZ 15:59 & YEAR ZERO)
+  // =========================================================================
+  describe('PIM.W2C.4 — Final Temporal Domain ↔ PostgreSQL Parity Suite', () => {
+    // -----------------------------------------------------------------------
+    // Helper de simulação fiel da validação temporal PL/pgSQL
+    // -----------------------------------------------------------------------
+    function validateSqlTemporalDate(dateStr: string): { valid: boolean; error?: string } {
+      const sqlIsoRegex = /^(000[1-9]|00[1-9]\d|0[1-9]\d{2}|[1-9]\d{3})-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-](0\d|1[0-5]):?[0-5]\d)?)?$/;
+      if (dateStr.trim() !== dateStr || !sqlIsoRegex.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE' };
+      }
+      if (/^0000/.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_YEAR0' };
+      }
+      if (/T24:/i.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_HOUR24' };
+      }
+      if (/[+-](1[6-9]|2[0-9]):?[0-9]{2}$/.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_TZ_OUT_OF_RANGE' };
+      }
+      // Simulação do PERFORM (p_document->>'publicationDate')::timestamptz
+      // PostgreSQL timestamptz valida calendário gregoriano (mês 1-12, dias do mês, anos bissextos)
+      const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_PARSE' };
+      const y = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const d = parseInt(match[3], 10);
+      if (m < 1 || m > 12) return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_PARSE' };
+      const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+      const daysInMonth = [0, 31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (d < 1 || d > daysInMonth[m]) return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_PARSE' };
+
+      return { valid: true };
+    }
+
+    // -----------------------------------------------------------------------
+    // BLOCKER 1: Timezone Displacement Parity (00:00 até 15:59)
+    // -----------------------------------------------------------------------
+    it('W2C4-TZ-OFFSET-PARITY: aceita Z e offsets [+-]00:00 até [+-]15:59, rejeita >= [+-]16:00', () => {
+      const acceptedOffsets = [
+        '2026-05-15T12:00:00Z',
+        '2026-05-15T12:00:00+00:00',
+        '2026-05-15T12:00:00-00:00',
+        '2026-05-15T12:00:00+14:00',
+        '2026-05-15T12:00:00-14:00',
+        '2026-05-15T12:00:00+15:00',
+        '2026-05-15T12:00:00-15:00',
+        '2026-05-15T12:00:00+15:59',
+        '2026-05-15T12:00:00-15:59',
+        '2026-05-15T12:00:00+1559',
+        '2026-05-15T12:00:00-1559'
+      ];
+
+      for (const validTz of acceptedOffsets) {
+        expect(isValidIsoDate(validTz)).toBe(true);
+        expect(validateSqlTemporalDate(validTz).valid).toBe(true);
+        const doc = parseSourceDocument({
+          id: 'doc-valid-tz',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: validTz
+        });
+        expect(doc.publicationDate).toBe(validTz);
+      }
+
+      const rejectedOffsets = [
+        '2026-05-15T12:00:00+16:00',
+        '2026-05-15T12:00:00-16:00',
+        '2026-05-15T12:00:00+1600',
+        '2026-05-15T12:00:00-1600',
+        '2026-05-15T12:00:00+23:59',
+        '2026-05-15T12:00:00-23:59',
+        '2026-05-15T12:00:00+24:00'
+      ];
+
+      for (const invalidTz of rejectedOffsets) {
+        expect(isValidIsoDate(invalidTz)).toBe(false);
+        expect(validateSqlTemporalDate(invalidTz).valid).toBe(false);
+        expect(() =>
+          parseSourceDocument({
+            id: 'doc-invalid-tz',
+            title: 'Doc',
+            documentType: 'manual',
+            publicationDate: invalidTz
+          })
+        ).toThrow();
+      }
+
+      // Verificação da presença de guard e regex no SQL da migration
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '[+-](1[6-9]|2[0-9]):?[0-9]{2}$'");
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER 2: Year Zero Parity (0001 até 9999)
+    // -----------------------------------------------------------------------
+    it('W2C4-YEAR-ZERO-PARITY: rejeita ano 0000, aceita anos 0001 até 9999', () => {
+      // 0000-01-01 -> inválido
+      expect(isValidIsoDate('0000-01-01')).toBe(false);
+      expect(validateSqlTemporalDate('0000-01-01').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-y0',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '0000-01-01'
+        })
+      ).toThrow();
+
+      // Anos válidos
+      const validYears = [
+        '0001-01-01',
+        '0099-12-31',
+        '2026-05-15',
+        '9999-12-31'
+      ];
+
+      for (const validDate of validYears) {
+        expect(isValidIsoDate(validDate)).toBe(true);
+        expect(validateSqlTemporalDate(validDate).valid).toBe(true);
+        const doc = parseSourceDocument({
+          id: 'doc-valid-year',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: validDate
+        });
+        expect(doc.publicationDate).toBe(validDate);
+      }
+
+      // Verificação da presença do guard de ano 0000 no SQL da migration
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^0000'");
+    });
+
+    // -----------------------------------------------------------------------
+    // FINAL TEMPORAL MATRIX: Cobertura Completa de Paridade Canônica
+    // -----------------------------------------------------------------------
+    it('W2C4-FINAL-TEMPORAL-MATRIX: validação da matriz completa de ano, mês, dia, leap, tempo, fração e timezone', () => {
+      const fullMatrix: { category: string; input: string; expected: boolean }[] = [
+        // YEAR
+        { category: 'YEAR', input: '0000-01-01', expected: false },
+        { category: 'YEAR', input: '0001-01-01', expected: true },
+        { category: 'YEAR', input: '0099-12-31', expected: true },
+        { category: 'YEAR', input: '2024-06-15', expected: true },
+        { category: 'YEAR', input: '9999-12-31', expected: true },
+
+        // MONTH
+        { category: 'MONTH', input: '2026-00-15', expected: false },
+        { category: 'MONTH', input: '2026-01-15', expected: true },
+        { category: 'MONTH', input: '2026-12-15', expected: true },
+        { category: 'MONTH', input: '2026-13-01', expected: false },
+
+        // DAY
+        { category: 'DAY', input: '2026-05-00', expected: false },
+        { category: 'DAY', input: '2026-05-01', expected: true },
+        { category: 'DAY', input: '2026-02-28', expected: true },
+        { category: 'DAY', input: '2026-01-29', expected: true },
+        { category: 'DAY', input: '2026-04-30', expected: true },
+        { category: 'DAY', input: '2026-05-31', expected: true },
+        { category: 'DAY', input: '2026-05-32', expected: false },
+        { category: 'DAY', input: '2026-04-31', expected: false }, // Abril tem 30 dias
+
+        // LEAP
+        { category: 'LEAP', input: '2024-02-29', expected: true },
+        { category: 'LEAP', input: '2025-02-29', expected: false },
+
+        // TIME
+        { category: 'TIME', input: '2026-05-15T00:00:00Z', expected: true },
+        { category: 'TIME', input: '2026-05-15T23:59:59Z', expected: true },
+        { category: 'TIME', input: '2026-05-15T24:00:00Z', expected: false },
+        { category: 'TIME', input: '2026-05-15T23:60:00Z', expected: false },
+        { category: 'TIME', input: '2026-05-15T23:59:60Z', expected: false },
+
+        // FRACTION
+        { category: 'FRACTION', input: '2026-05-15T12:00:00.1Z', expected: true },
+        { category: 'FRACTION', input: '2026-05-15T12:00:00.12Z', expected: true },
+        { category: 'FRACTION', input: '2026-05-15T12:00:00.123Z', expected: true },
+        { category: 'FRACTION', input: '2026-05-15T12:00:00.1234Z', expected: false },
+
+        // TIMEZONE
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00Z', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00+00:00', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00-03:00', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00-0300', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00+15:59', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00-15:59', expected: true },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00+16:00', expected: false },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00-16:00', expected: false },
+        { category: 'TIMEZONE', input: '2026-05-15T12:00:00+23:59', expected: false }
+      ];
+
+      for (const { category, input, expected } of fullMatrix) {
+        const domainResult = isValidIsoDate(input);
+        const sqlResult = validateSqlTemporalDate(input).valid;
+
+        expect(
+          domainResult,
+          `[${category}] domain acceptance mismatch for "${input}"`
+        ).toBe(expected);
+
+        expect(
+          sqlResult,
+          `[${category}] SQL acceptance mismatch for "${input}"`
+        ).toBe(expected);
+
+        if (expected) {
+          expect(
+            parseSourceDocument({
+              id: 'doc-matrix-valid',
+              title: 'Doc',
+              documentType: 'manual',
+              publicationDate: input
+            }).publicationDate
+          ).toBe(input);
+        } else {
+          expect(() =>
+            parseSourceDocument({
+              id: 'doc-matrix-invalid',
+              title: 'Doc',
+              documentType: 'manual',
+              publicationDate: input
             })
           ).toThrow();
         }
