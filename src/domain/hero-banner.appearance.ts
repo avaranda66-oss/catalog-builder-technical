@@ -1,5 +1,5 @@
 // src/domain/hero-banner.appearance.ts
-// Contrato puro de domínio para paletas visuais e gradientes do Hero Banner (CORE.E5B).
+// Contrato puro de domínio para paletas visuais e gradientes do Hero Banner (CORE.E5B / CORE.E5B.1).
 // Zero dependências de React, Zustand ou Supabase.
 
 export type HeroPaletteId =
@@ -13,11 +13,14 @@ export type HeroPaletteId =
   | 'ruby'
   | 'presys_yellow';
 
+export type HeroForegroundTone = 'light' | 'dark';
+
 export interface HeroPaletteDefinition {
   readonly id: HeroPaletteId;
   readonly label: string;
   readonly className: string;
   readonly hex: string;
+  readonly foregroundTone: HeroForegroundTone;
 }
 
 export const HERO_PALETTES: readonly HeroPaletteDefinition[] = [
@@ -25,55 +28,64 @@ export const HERO_PALETTES: readonly HeroPaletteDefinition[] = [
     id: 'presys_navy_solid',
     label: 'Azul Presys Sólido (Padrão)',
     className: 'bg-[#001f3f]',
-    hex: '#001f3f'
+    hex: '#001f3f',
+    foregroundTone: 'light'
   },
   {
     id: 'presys_industrial',
     label: 'Azul Presys Industrial',
     className: 'bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900',
-    hex: '#003366'
+    hex: '#003366',
+    foregroundTone: 'light'
   },
   {
     id: 'navy_corporate',
     label: 'Azul Marinho Corporativo',
     className: 'bg-gradient-to-br from-blue-950 via-indigo-950 to-slate-900',
-    hex: '#1E3A8A'
+    hex: '#1E3A8A',
+    foregroundTone: 'light'
   },
   {
     id: 'obsidian',
     label: 'Obsidiana / Preto Puro',
     className: 'bg-gradient-to-b from-black via-zinc-950 to-black',
-    hex: '#09090B'
+    hex: '#09090B',
+    foregroundTone: 'light'
   },
   {
     id: 'graphite',
     label: 'Grafite Técnico',
     className: 'bg-gradient-to-br from-zinc-900 via-neutral-900 to-stone-900',
-    hex: '#27272A'
+    hex: '#27272A',
+    foregroundTone: 'light'
   },
   {
     id: 'steel',
     label: 'Aço Escuro Metrológico',
     className: 'bg-gradient-to-br from-slate-800 via-slate-900 to-zinc-900',
-    hex: '#334155'
+    hex: '#334155',
+    foregroundTone: 'light'
   },
   {
     id: 'emerald',
     label: 'Esmeralda Metrologia',
     className: 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900',
-    hex: '#065F46'
+    hex: '#065F46',
+    foregroundTone: 'light'
   },
   {
     id: 'ruby',
     label: 'Vinho / Rubi Industrial',
     className: 'bg-gradient-to-br from-slate-900 via-rose-950 to-slate-900',
-    hex: '#881337'
+    hex: '#881337',
+    foregroundTone: 'light'
   },
   {
     id: 'presys_yellow',
     label: 'Amarelo Presys Calibration',
     className: 'bg-[#FFC20E]',
-    hex: '#FFC20E'
+    hex: '#FFC20E',
+    foregroundTone: 'dark'
   }
 ];
 
@@ -126,6 +138,23 @@ export function resolveHeroPaletteId(block: HeroAppearanceTarget | null | undefi
     return found.id;
   }
   return 'legacy_custom';
+}
+
+/**
+ * Resolve o tom de contraste/foreground do Hero Banner (CORE.E5B.1):
+ * - Deriva semanticamente de foregroundTone da paleta ativa.
+ * - Para presys_yellow (#FFC20E), retorna 'dark'.
+ * - Para paletas escuras e gradientes legados ('legacy_custom'), preserva o fallback histórico 'light'.
+ */
+export function resolveHeroForegroundTone(block: HeroAppearanceTarget | null | undefined): HeroForegroundTone {
+  const paletteId = resolveHeroPaletteId(block);
+  if (paletteId !== 'legacy_custom') {
+    const palette = HERO_PALETTES.find((p) => p.id === paletteId);
+    if (palette) {
+      return palette.foregroundTone;
+    }
+  }
+  return 'light';
 }
 
 export interface HeroPalettePatch {

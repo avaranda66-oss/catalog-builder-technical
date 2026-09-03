@@ -1,17 +1,18 @@
 // tests/domain/hero-banner-appearance.test.ts
-// Testes unitários para o contrato de domínio de aparência do Hero Banner (CORE.E5B).
+// Testes unitários para o contrato de domínio de aparência e contraste do Hero Banner (CORE.E5B / CORE.E5B.1).
 
 import { describe, it, expect } from 'vitest';
 import {
   HERO_PALETTES,
   resolveHeroPaletteClass,
   resolveHeroPaletteId,
+  resolveHeroForegroundTone,
   setHeroPalette
 } from '../../src/domain/hero-banner.appearance';
 import { ElementCapabilityRegistry } from '../../src/domain/capabilities/element-capability.registry';
 import { CAPABILITY_IDS } from '../../src/domain/capabilities/capability.ids';
 
-describe('Hero Banner Appearance Domain Engine (CORE.E5B)', () => {
+describe('Hero Banner Appearance Domain Engine (CORE.E5B / CORE.E5B.1)', () => {
   it('HERO-PALETTE-1: Hero sem style.gradient mantém aparência default histórica', () => {
     expect(resolveHeroPaletteClass(null)).toBe('bg-[#001f3f]');
     expect(resolveHeroPaletteClass({})).toBe('bg-[#001f3f]');
@@ -72,5 +73,43 @@ describe('Hero Banner Appearance Domain Engine (CORE.E5B)', () => {
     const domainOptionValues = HERO_PALETTES.map((p) => p.id);
 
     expect(registryOptionValues).toEqual(domainOptionValues);
+  });
+
+  // ==========================================================================
+  // CORE.E5B.1: CONTRAST CONTRACT
+  // ==========================================================================
+  it('HERO-CONTRAST-1: presys_yellow deriva foregroundTone dark', () => {
+    const yellowBlock = {
+      style: { gradient: 'bg-[#FFC20E]' }
+    };
+    expect(resolveHeroForegroundTone(yellowBlock)).toBe('dark');
+  });
+
+  it('HERO-CONTRAST-2: presys_navy_solid deriva foregroundTone light', () => {
+    const navyBlock = {
+      style: { gradient: 'bg-[#001f3f]' }
+    };
+    expect(resolveHeroForegroundTone(navyBlock)).toBe('light');
+
+    // Default sem style.gradient também é light
+    expect(resolveHeroForegroundTone({})).toBe('light');
+  });
+
+  it('HERO-CONTRAST-3: todas as palettes canônicas possuem foregroundTone definido', () => {
+    for (const palette of HERO_PALETTES) {
+      expect(['light', 'dark']).toContain(palette.foregroundTone);
+      if (palette.id === 'presys_yellow') {
+        expect(palette.foregroundTone).toBe('dark');
+      } else {
+        expect(palette.foregroundTone).toBe('light');
+      }
+    }
+  });
+
+  it('HERO-CONTRAST-4: legacy_custom preserva fallback histórico light', () => {
+    const legacyUnknown = {
+      style: { gradient: 'bg-gradient-to-r from-purple-800 to-indigo-900' }
+    };
+    expect(resolveHeroForegroundTone(legacyUnknown)).toBe('light');
   });
 });

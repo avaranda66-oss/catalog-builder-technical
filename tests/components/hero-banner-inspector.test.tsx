@@ -500,4 +500,36 @@ describe('HeroBannerInspector & HeroBannerBlock (CORE.E5B)', () => {
     expect(badgeNode?.sourceText).toBe('PRESYS — INSTRUMENTAÇÃO INDUSTRIAL');
     expect(captionNode?.sourceText).toBe('Figura Destaque — Estação PCON');
   });
+
+  // ==========================================================================
+  // 12. HERO-CONTRAST-5: EDITOR E CLEANA4 USAM A MESMA DERIVED APPEARANCE
+  // ==========================================================================
+  it('HERO-CONTRAST-5: Editor e CleanA4 aplicam as classes de contraste escuro para presys_yellow', () => {
+    const yellowHero: ContentBlock = {
+      ...sampleHeroBlock,
+      id: 'block-hero-yellow',
+      style: { gradient: 'bg-[#FFC20E]' }
+    };
+
+    // 1. Editor
+    act(() => {
+      root!.render(<HeroBannerBlock block={yellowHero} pageId="page-1" isExport={false} />);
+    });
+    const editorEl = container.firstElementChild as HTMLElement;
+    expect(editorEl.className).toContain('text-slate-900');
+    expect(editorEl.className).toContain('bg-[#FFC20E]');
+    const editorTitle = container.querySelector('h2');
+    expect(editorTitle?.className).toContain('text-slate-950');
+
+    // 2. CleanA4 / Export
+    act(() => {
+      root!.render(<HeroBannerBlock block={yellowHero} pageId="page-1" isExport={true} />);
+    });
+    const exportEl = container.firstElementChild as HTMLElement;
+    expect(exportEl.className).toContain('text-slate-900');
+    expect(exportEl.className).toContain('bg-[#FFC20E]');
+    const exportTitle = container.querySelector('h2');
+    expect(exportTitle?.className).toContain('text-slate-950');
+  });
 });
+
