@@ -1,7 +1,10 @@
 // src/domain/product-workbook/operations.ts
-// Pure immutable domain operations for Technical Knowledge Workbooks (PIM.W1).
+// Pure immutable domain operations for Technical Knowledge Workbooks (PIM.W1 / PIM.W1.2).
 // Enforces fail-closed invariants: no duplicate keys, strict foreign key existence,
 // and safe state transitions.
+// IMPORTANT (PIM.W1.2): ProductWorkbook.revision represents the authoritative persisted/server revision
+// used for optimistic concurrency (CAS). Pure domain edit operations strictly PRESERVE this revision.
+// Dirty state or local mutation tracking belongs to the editing/store layer, not the canonical workbook.
 // Zero explicit any.
 
 import {
@@ -88,7 +91,7 @@ export function addModule(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     modules: [...workbook.modules, newModule]
   };
 }
@@ -114,7 +117,7 @@ export function renameModuleLabel(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     modules: updatedModules
   };
 }
@@ -135,7 +138,7 @@ export function removeModule(workbook: ProductWorkbook, moduleId: string): Produ
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     modules: workbook.modules.filter((m) => m.id !== moduleId),
     data: updatedData
   };
@@ -204,7 +207,7 @@ export function addDatum(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     modules: updatedModules,
     data: {
       ...workbook.data,
@@ -238,7 +241,7 @@ export function updateDatumValue(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     data: {
       ...workbook.data,
       [datumId]: updatedDatum
@@ -271,7 +274,7 @@ export function attachEvidence(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     data: {
       ...workbook.data,
       [datumId]: updatedDatum
@@ -313,7 +316,7 @@ export function setCanonicalDecision(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     data: {
       ...workbook.data,
       [datumId]: updatedDatum
@@ -356,7 +359,7 @@ export function approveDatum(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     data: {
       ...workbook.data,
       [datumId]: updatedDatum
@@ -389,7 +392,7 @@ export function deprecateDatum(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     data: {
       ...workbook.data,
       [datumId]: updatedDatum
@@ -428,7 +431,7 @@ export function createOverride(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     overrides: {
       ...workbook.overrides,
       [override.targetSemanticKey]: override
@@ -467,7 +470,7 @@ export function removeOverride(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     overrides: updatedOverrides
   };
 }
@@ -508,7 +511,7 @@ export function createSavedView(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     savedViews: [...(workbook.savedViews ?? []), view]
   };
 }
@@ -560,7 +563,7 @@ export function updateSavedView(
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     savedViews: updatedViews
   };
 }
@@ -577,7 +580,7 @@ export function deleteSavedView(workbook: ProductWorkbook, viewId: string): Prod
 
   return {
     ...workbook,
-    revision: workbook.revision + 1,
+    revision: workbook.revision,
     savedViews: filtered
   };
 }

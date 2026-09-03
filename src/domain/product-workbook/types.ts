@@ -304,7 +304,12 @@ export interface ProductWorkbook {
   readonly id: string;
   readonly schemaVersion: 1;
   readonly owner: WorkbookOwner;
-  readonly revision: number; // Integer >= 0 for CAS concurrency tracking
+  /**
+   * Persisted/server revision used for optimistic concurrency (CAS).
+   * Represents the authoritative version of the last known persisted workbook.
+   * Pure domain mutations preserve this value; only persistence authorities increment it.
+   */
+  readonly revision: number;
   readonly modules: readonly TechnicalModule[];
   readonly data: Readonly<Record<string, TechnicalDatum>>; // Keyed by datum ID
   readonly overrides?: Readonly<Record<string, InheritedDatumOverride>>; // Keyed by targetSemanticKey
@@ -352,7 +357,11 @@ export type ResolutionPolicy =
  */
 export interface ResolvedProductKnowledge {
   readonly productId: string;
+  /** Persisted revision of the product workbook. */
+  readonly productRevision: number;
   readonly familyId?: string;
+  /** Persisted revision of the family workbook, if applicable. */
+  readonly familyRevision?: number;
   readonly modules: readonly TechnicalModule[];
   readonly effectiveData: ReadonlyMap<string, EffectiveDatum>; // Keyed by semanticKey
   readonly suppressedKeys: readonly string[];
@@ -370,6 +379,7 @@ export interface KnowledgeFactSnapshot {
   readonly origin: DatumOrigin;
   readonly sourceCount: number;
   readonly sourceSummaries: readonly string[];
+  /** Persisted/server revision of the originating workbook where this fact was persisted. */
   readonly revision: number;
   readonly hasConflict: boolean;
   readonly candidateValues?: readonly TechnicalValue[];
@@ -380,6 +390,8 @@ export interface KnowledgeFactSnapshot {
  */
 export interface KnowledgeSnapshot {
   readonly productId: string;
+  /** Persisted revision of the product workbook from which this snapshot was generated. */
+  readonly productRevision: number;
   readonly generatedAt: string;
   readonly facts: ReadonlyMap<string, KnowledgeFactSnapshot>;
   readonly conflictingFacts: readonly KnowledgeFactSnapshot[];

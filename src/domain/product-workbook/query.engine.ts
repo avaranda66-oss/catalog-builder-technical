@@ -64,7 +64,10 @@ export function getProductKnowledgeSnapshot(params: {
       origin: effective.origin,
       sourceCount: datum.evidence.length,
       sourceSummaries,
-      revision: 1,
+      revision:
+        effective.origin === 'family'
+          ? (effectiveKnowledge.familyRevision ?? effectiveKnowledge.productRevision)
+          : effectiveKnowledge.productRevision,
       hasConflict,
       candidateValues: conflictReport.distinctObservedValues
     };
@@ -100,6 +103,7 @@ export function getProductKnowledgeSnapshot(params: {
 
   return {
     productId: effectiveKnowledge.productId,
+    productRevision: effectiveKnowledge.productRevision,
     generatedAt: new Date().toISOString(),
     facts,
     conflictingFacts,

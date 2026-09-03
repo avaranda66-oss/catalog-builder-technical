@@ -84,8 +84,8 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
   // =========================================================================
   // IMMUTABILITY-1: Todas as operações preservam o objeto original intacto
   // =========================================================================
-  it('IMMUTABILITY-1: addDatum incrementa revision e não muta a instância anterior', () => {
-    let wbOriginal = createWorkbook({ owner: { kind: 'product', id: 'p1' } });
+  it('IMMUTABILITY-1: addDatum preserva o objeto original intacto e mantém revision inalterada', () => {
+    let wbOriginal = createWorkbook({ owner: { kind: 'product', id: 'p1' }, revision: 5 });
     wbOriginal = addModule(wbOriginal, { id: 'm1', semanticKey: 'spec.mod', label: 'Mod', kind: 'key_value', order: 1 });
     const revisionBefore = wbOriginal.revision;
 
@@ -98,7 +98,8 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       status: 'approved'
     });
 
-    expect(wbModified.revision).toBe(revisionBefore + 1);
+    expect(wbModified.revision).toBe(revisionBefore); // Revision persistida do servidor preservada!
+    expect(wbModified.revision).toBe(5);
     expect(Object.keys(wbOriginal.data).length).toBe(0); // Original permaneceu vazio!
     expect(Object.keys(wbModified.data).length).toBe(1);
   });
@@ -206,10 +207,10 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
   // =========================================================================
   // OPERATIONS-INVARIANT: Toda operação preserva validateProductWorkbook.valid === true
   // =========================================================================
-  it('OPERATIONS-INVARIANT: sucessão de operações preserva integridade e valid === true em cada etapa', () => {
-    // 1. Criação
-    let wb = createWorkbook({ owner: { kind: 'product', id: 'prod-op-test' } });
-    expect(wb.revision).toBe(0);
+  it('OPERATIONS-INVARIANT: sucessão de operações preserva integridade e valid === true em cada etapa mantendo revision do servidor', () => {
+    // 1. Criação com revision persistida 10
+    let wb = createWorkbook({ owner: { kind: 'product', id: 'prod-op-test' }, revision: 10 });
+    expect(wb.revision).toBe(10);
 
     // 2. Adiciona módulo
     wb = addModule(wb, {
@@ -219,7 +220,7 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       kind: 'key_value',
       order: 1
     });
-    expect(wb.revision).toBe(1);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 3. Adiciona datum
     wb = addDatum(
@@ -234,7 +235,7 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       },
       'd-freq'
     );
-    expect(wb.revision).toBe(2);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 4. Anexa evidência
     wb = attachEvidence(wb, 'd-freq', {
@@ -243,7 +244,7 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       page: 12,
       observedValue: { type: 'quantity', amount: 400, unit: 'MHz' }
     });
-    expect(wb.revision).toBe(3);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 5. Aplica decisão canônica
     wb = setCanonicalDecision(wb, 'd-freq', {
@@ -252,11 +253,11 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       rationale: 'Confirmado no datasheet oficial do microcontrolador.',
       decidedAt: '2026-08-10T14:30:00Z'
     });
-    expect(wb.revision).toBe(4);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 6. Aprova o dado
     wb = approveDatum(wb, 'd-freq', 'engineer-user');
-    expect(wb.revision).toBe(5);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 7. Cria visão salva
     wb = createSavedView(wb, {
@@ -264,11 +265,11 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
       name: 'Resumo Geral',
       datumKeys: ['hardware.processor.freq']
     });
-    expect(wb.revision).toBe(6);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // 8. Renomeia módulo
     wb = renameModuleLabel(wb, 'mod-specs', 'Hardware Principal');
-    expect(wb.revision).toBe(7);
+    expect(wb.revision).toBe(10); // Preserva 10!
 
     // Invariante de validação estrita preservada
     const validation = validateProductWorkbook(wb);

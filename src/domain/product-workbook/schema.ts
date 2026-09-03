@@ -333,7 +333,11 @@ export const ProductWorkbookSchema = z.object({
   id: z.string().min(1, 'ID do workbook é obrigatório'),
   schemaVersion: z.literal(1),
   owner: WorkbookOwnerSchema,
-  revision: z.number().int().nonnegative('Revisão deve ser um inteiro >= 0'),
+  /**
+   * Persisted/server revision used for optimistic concurrency (CAS).
+   * Pure domain mutations preserve this value; only persistence authorities increment it.
+   */
+  revision: z.number().int().nonnegative('Revisão persistida do servidor deve ser um inteiro >= 0'),
   modules: z.array(TechnicalModuleSchema).default([]),
   data: z.record(TechnicalDatumSchema).default({}),
   overrides: z.record(InheritedDatumOverrideSchema).optional(),

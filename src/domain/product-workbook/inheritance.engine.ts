@@ -187,7 +187,9 @@ export function resolveEffectiveProductKnowledge(params: {
 
   return {
     productId,
+    productRevision: productWorkbook.revision,
     familyId,
+    familyRevision: familyWorkbook?.revision,
     modules: sortedModules,
     effectiveData,
     suppressedKeys,
