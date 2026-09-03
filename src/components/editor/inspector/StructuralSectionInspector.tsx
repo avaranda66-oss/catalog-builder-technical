@@ -1,6 +1,6 @@
 // src/components/editor/inspector/StructuralSectionInspector.tsx
-// Inspector Contextual da Seção Estrutural (Fase 3A.2)
-// Permite editar Conteúdo, Layout e Aparência com garantia de zero controles fakes e validação atômica.
+// Inspector Contextual da Seção Estrutural (Fase 3A.2 / Migrado para Primitives CORE.E3).
+// Organizado em categorias canônicas (Conteúdo, Layout, Aparência, Cards) com disclosures independentes e semântica acessível.
 
 import React, { useState } from 'react';
 import {
@@ -8,7 +8,6 @@ import {
   Palette,
   FileText,
   Layers,
-  Sparkles,
   Trash2,
   Plus,
   Copy,
@@ -30,12 +29,16 @@ import {
 } from '@/domain/canvas-layout.engine';
 import { useCatalogStore } from '@/stores/useCatalogStore';
 import { CorporateIcon, CorporateIconPicker, getCorporateIcon } from '@/components/icons';
-import { InspectorGroup } from './components/InspectorGroup';
-import { InspectorField } from './components/InspectorField';
-import { InspectorTextInput } from './components/InspectorTextInput';
-import { InspectorTextArea } from './components/InspectorTextArea';
-import { InspectorSelect } from './components/InspectorSelect';
-import { InspectorSegmentedControl } from './components/InspectorSegmentedControl';
+import {
+  InspectorSection,
+  InspectorField,
+  InspectorTextInput,
+  InspectorTextArea,
+  InspectorSelect,
+  InspectorSegmentedControl,
+  InspectorDimensionInput,
+  InspectorActionRow
+} from './components';
 
 interface StructuralSectionInspectorProps {
   sectionBlock: ContentBlock;
@@ -151,12 +154,13 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
   };
 
   return (
-    <div className="space-y-4">
-      {/* 1. GRUPO CONTEÚDO */}
-      <InspectorGroup
+    <div className="space-y-3">
+      {/* 1. SEÇÃO CONTEÚDO */}
+      <InspectorSection
         title="Conteúdo da Seção"
         icon={<FileText className="w-3.5 h-3.5" />}
-        description="Textos da Seção"
+        description="Textos e Ícone"
+        defaultOpen={true}
       >
         <InspectorField label="Título Principal">
           <InspectorTextInput
@@ -182,13 +186,69 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             placeholder="Ex: PADRÃO INDUSTRIAL"
           />
         </InspectorField>
-      </InspectorGroup>
 
-      {/* 2. GRUPO LAYOUT */}
-      <InspectorGroup
+        {/* Ícone Semântico da Seção */}
+        <InspectorField label="Ícone da Seção" hint="Símbolo Semântico">
+          <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-md">
+            <div className="flex items-center gap-2 min-w-0">
+              {rawStructuralData?.iconId ? (
+                <>
+                  <div className="w-6 h-6 rounded bg-blue-50 border border-blue-200 flex items-center justify-center text-[#003366] shrink-0">
+                    <CorporateIcon iconId={rawStructuralData.iconId} size="sm" />
+                  </div>
+                  <div className="truncate">
+                    <span className="text-xs font-semibold text-slate-800 block truncate">
+                      {getCorporateIcon(rawStructuralData.iconId)?.label || rawStructuralData.iconId}
+                    </span>
+                    <span className="text-[9px] font-mono text-slate-400 block truncate">
+                      {rawStructuralData.iconId}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <span className="text-xs text-slate-400 italic">Nenhum ícone selecionado</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsPickerOpen(true)}
+                className="px-2 py-0.5 text-xs font-semibold text-[#003366] hover:bg-blue-50 border border-blue-300 rounded transition-all cursor-pointer"
+              >
+                {rawStructuralData?.iconId ? 'Alterar' : 'Selecionar'}
+              </button>
+              {rawStructuralData?.iconId && (
+                <button
+                  type="button"
+                  onClick={handleClearIcon}
+                  title="Remover ícone da seção"
+                  aria-label="Remover ícone da seção"
+                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </InspectorField>
+      </InspectorSection>
+
+      <CorporateIconPicker
+        isOpen={isPickerOpen}
+        currentIconId={rawStructuralData?.iconId}
+        onSelect={handleSelectIcon}
+        onClear={handleClearIcon}
+        onClose={() => setIsPickerOpen(false)}
+        title="Ícone da Seção Estrutural"
+      />
+
+      {/* 2. SEÇÃO LAYOUT */}
+      <InspectorSection
         title="Layout da Seção"
         icon={<LayoutGrid className="w-3.5 h-3.5" />}
         description="Distribuição e Grid"
+        defaultOpen={true}
       >
         <InspectorField label="Modo de Disposição">
           <InspectorSegmentedControl
@@ -234,29 +294,29 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
           />
         </InspectorField>
 
-        {/* Ações Explícitas de Reset e Largura Máxima (Fase 3A.5B) */}
-        <div className="flex items-center gap-1.5 pt-1">
-          <button
-            type="button"
-            onClick={handleResetToDefault}
-            className="flex-1 px-2 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-colors text-center cursor-pointer"
-            title="Restaurar padrão da fábrica (Preencher largura)"
-            aria-label="Restaurar padrão da fábrica (Preencher largura)"
-          >
-            Restaurar padrão
-          </button>
-          {layout.widthMode === 'fixed' && (
-            <button
-              type="button"
-              onClick={handleResetToMaxAvailable}
-              className="flex-1 px-2 py-1 text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors text-center cursor-pointer"
-              title={`Ajustar largura para ${maxAvailableMm} mm`}
-              aria-label="Usar largura máxima da página"
-            >
-              Usar largura máxima
-            </button>
-          )}
-        </div>
+        {/* Ações Explícitas de Reset e Largura Máxima (Fase 3A.5B / InspectorActionRow CORE.E3) */}
+        <InspectorActionRow
+          actions={[
+            {
+              label: 'Restaurar padrão',
+              onClick: handleResetToDefault,
+              variant: 'default',
+              title: 'Restaurar padrão da fábrica (Preencher largura)',
+              'aria-label': 'Restaurar padrão da fábrica (Preencher largura)'
+            },
+            ...(layout.widthMode === 'fixed'
+              ? [
+                  {
+                    label: 'Usar largura máxima',
+                    onClick: handleResetToMaxAvailable,
+                    variant: 'primary' as const,
+                    title: `Ajustar largura para ${maxAvailableMm} mm`,
+                    'aria-label': 'Usar largura máxima da página'
+                  }
+                ]
+              : [])
+          ]}
+        />
 
         {layout.widthMode === 'fixed' && (
           <div className="space-y-2">
@@ -264,23 +324,14 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
               label="Dimensão Fixa (mm)"
               hint={`0 < mm <= ${maxAvailableMm}`}
             >
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0.1}
-                  max={maxAvailableMm}
-                  step="any"
-                  value={layout.fixedWidthMm ?? maxAvailableMm}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) {
-                      handleFixedWidthChange(val);
-                    }
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#003366] focus:border-[#003366]"
-                />
-                <span className="text-xs font-mono font-semibold text-slate-500 shrink-0">mm</span>
-              </div>
+              <InspectorDimensionInput
+                unit="mm"
+                min={0.1}
+                max={maxAvailableMm}
+                step="any"
+                value={layout.fixedWidthMm ?? maxAvailableMm}
+                onChange={handleFixedWidthChange}
+              />
             </InspectorField>
 
             {outsideSafeWidthIssue && (
@@ -369,13 +420,14 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             />
           </InspectorField>
         </div>
-      </InspectorGroup>
+      </InspectorSection>
 
-      {/* 3. GRUPO APARÊNCIA */}
-      <InspectorGroup
+      {/* 3. SEÇÃO APARÊNCIA */}
+      <InspectorSection
         title="Aparência Visual"
         icon={<Palette className="w-3.5 h-3.5" />}
         description="Fundo e Bordas"
+        defaultOpen={false}
       >
         <InspectorField label="Fundo da Seção">
           <InspectorSelect
@@ -433,72 +485,15 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             />
           </InspectorField>
         </div>
-      </InspectorGroup>
+      </InspectorSection>
 
-      {/* 4. GRUPO ÍCONE DA SEÇÃO */}
-      <InspectorGroup
-        title="Ícone da Seção"
-        icon={<Sparkles className="w-3.5 h-3.5" />}
-        description="Símbolo Semântico"
-      >
-        <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-          <div className="flex items-center gap-2 min-w-0">
-            {rawStructuralData?.iconId ? (
-              <>
-                <div className="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-[#003366] shrink-0">
-                  <CorporateIcon iconId={rawStructuralData.iconId} size="md" />
-                </div>
-                <div className="truncate">
-                  <span className="text-xs font-semibold text-slate-800 block truncate">
-                    {getCorporateIcon(rawStructuralData.iconId)?.label || rawStructuralData.iconId}
-                  </span>
-                  <span className="text-[9px] font-mono text-slate-400 block truncate">
-                    {rawStructuralData.iconId}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <span className="text-xs text-slate-400 italic">Nenhum ícone selecionado</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsPickerOpen(true)}
-              className="px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-blue-50 border border-blue-300 rounded-md transition-all cursor-pointer"
-            >
-              {rawStructuralData?.iconId ? 'Alterar' : 'Selecionar'}
-            </button>
-            {rawStructuralData?.iconId && (
-              <button
-                type="button"
-                onClick={handleClearIcon}
-                title="Remover ícone da seção"
-                aria-label="Remover ícone da seção"
-                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </InspectorGroup>
-
-      <CorporateIconPicker
-        isOpen={isPickerOpen}
-        currentIconId={rawStructuralData?.iconId}
-        onSelect={handleSelectIcon}
-        onClear={handleClearIcon}
-        onClose={() => setIsPickerOpen(false)}
-        title="Ícone da Seção Estrutural"
-      />
-
-      {/* 5. GERENCIAMENTO DE CARDS FILHOS */}
-      <InspectorGroup
-        title={`Cards Filhos (${children.length})`}
+      {/* 4. SEÇÃO CARDS FILHOS */}
+      <InspectorSection
+        title="Cards Filhos"
+        badge={children.length}
         icon={<Layers className="w-3.5 h-3.5" />}
         description="Reordene, duplique ou edite"
+        defaultOpen={true}
       >
         <div className="space-y-2">
           <button
@@ -658,7 +653,7 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
             </div>
           )}
         </div>
-      </InspectorGroup>
+      </InspectorSection>
     </div>
   );
 };

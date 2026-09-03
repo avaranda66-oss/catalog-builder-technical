@@ -1,6 +1,6 @@
 // src/components/editor/inspector/StructuralCardInspector.tsx
-// Inspector Contextual do Card Filho (Fase 3A.2)
-// Permite editar Título, Corpo, Badge e Ênfase Técnica com garantia de mutação imutável por child.id.
+// Inspector Contextual do Card Filho (Fase 3A.2 / Migrado para Primitives CORE.E3).
+// Permite editar Título, Corpo, Badge, Ênfase Técnica e Ícone Semântico com garantia de mutação imutável por child.id.
 
 import React, { useState } from 'react';
 import {
@@ -15,11 +15,13 @@ import { ContentBlock } from '@/domain/catalog.schema';
 import { updateStructuralChildById } from '@/domain/canvas-layout.engine';
 import { useCatalogStore } from '@/stores/useCatalogStore';
 import { CorporateIcon, CorporateIconPicker, getCorporateIcon } from '@/components/icons';
-import { InspectorGroup } from './components/InspectorGroup';
-import { InspectorField } from './components/InspectorField';
-import { InspectorTextInput } from './components/InspectorTextInput';
-import { InspectorTextArea } from './components/InspectorTextArea';
-import { InspectorSegmentedControl } from './components/InspectorSegmentedControl';
+import {
+  InspectorSection,
+  InspectorField,
+  InspectorTextInput,
+  InspectorTextArea,
+  InspectorSegmentedControl
+} from './components';
 
 interface StructuralCardInspectorProps {
   sectionBlock: ContentBlock;
@@ -72,7 +74,7 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Botão de retorno e Breadcrumb de Contexto com Ações do Card */}
       <div className="pb-2 border-b border-slate-200">
         <div className="flex items-center justify-between">
@@ -141,11 +143,12 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
         </div>
       </div>
 
-      {/* 1. GRUPO CONTEÚDO DO CARD */}
-      <InspectorGroup
+      {/* 1. SEÇÃO CONTEÚDO DO CARD */}
+      <InspectorSection
         title="Conteúdo do Card"
         icon={<FileEdit className="w-3.5 h-3.5" />}
         description="Textos Técnicos"
+        defaultOpen={true}
       >
         <InspectorField label="Título do Card">
           <InspectorTextInput
@@ -171,13 +174,14 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
             placeholder="Ex: OPCIONAL"
           />
         </InspectorField>
-      </InspectorGroup>
+      </InspectorSection>
 
-      {/* 2. GRUPO ÊNFASE SEMÂNTICA */}
-      <InspectorGroup
+      {/* 2. SEÇÃO ÊNFASE VISUAL */}
+      <InspectorSection
         title="Ênfase Visual"
         icon={<Sparkles className="w-3.5 h-3.5" />}
         description="Variante do Card"
+        defaultOpen={true}
       >
         <InspectorField label="Estilo de Destaque">
           <InspectorSegmentedControl
@@ -191,13 +195,14 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
             onChange={(val) => handleCardUpdate({ emphasis: val })}
           />
         </InspectorField>
-      </InspectorGroup>
+      </InspectorSection>
 
-      {/* 3. GRUPO ÍCONE DO CARD */}
-      <InspectorGroup
+      {/* 3. SEÇÃO ÍCONE DO CARD */}
+      <InspectorSection
         title="Ícone do Card"
         icon={<Sparkles className="w-3.5 h-3.5" />}
         description="Símbolo Semântico"
+        defaultOpen={false}
       >
         <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
           <div className="flex items-center gap-2 min-w-0">
@@ -241,7 +246,7 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
             )}
           </div>
         </div>
-      </InspectorGroup>
+      </InspectorSection>
 
       <CorporateIconPicker
         isOpen={isPickerOpen}
