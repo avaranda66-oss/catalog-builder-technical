@@ -55,27 +55,11 @@ describe('Primary Image Domain Engine (CORE.E5A)', () => {
       imageUrl: undefined,
       legacyUrl: undefined
     });
-
-    // Funciona passando (block, assetId)
-    const patchWithBlock = setPrimaryImageAsset({}, 'asset-novo-456');
-    expect(patchWithBlock).toEqual({
-      assetId: 'asset-novo-456',
-      imageUrl: undefined,
-      legacyUrl: undefined
-    });
   });
 
   it('IMG-SOURCE-5: setPrimaryImageUrl limpa assetId e legacyUrl', () => {
     const patch = setPrimaryImageUrl('https://externa.com/foto.png');
     expect(patch).toEqual({
-      assetId: undefined,
-      imageUrl: 'https://externa.com/foto.png',
-      legacyUrl: undefined
-    });
-
-    // Funciona passando (block, url)
-    const patchWithBlock = setPrimaryImageUrl({}, 'https://externa.com/foto.png');
-    expect(patchWithBlock).toEqual({
       assetId: undefined,
       imageUrl: 'https://externa.com/foto.png',
       legacyUrl: undefined

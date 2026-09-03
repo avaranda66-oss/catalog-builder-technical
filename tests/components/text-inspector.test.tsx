@@ -1,5 +1,5 @@
 // tests/components/text-inspector.test.tsx
-// Testes unitários e de integração para TextInspector e TextBlock (CORE.E5A).
+// Testes unitários e de integração para TextInspector e Safe TextBlock (CORE.E5A.1).
 
 import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
@@ -11,7 +11,7 @@ import { TextBlock } from '../../src/components/editor/blocks/TextBlock';
 import { PropertiesPanel } from '../../src/components/editor/PropertiesPanel';
 import { extractTextAndBoxBlocks } from '../../src/translation/block-extractors/text.extractor';
 
-describe('TextInspector & TextBlock (CORE.E5A)', () => {
+describe('TextInspector & Safe TextBlock (CORE.E5A.1)', () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
 
@@ -73,7 +73,7 @@ describe('TextInspector & TextBlock (CORE.E5A)', () => {
   };
 
   // ==========================================================================
-  // 1. TEXT-INSPECTOR-1: PROPERTIESPANEL MONTA O NOVO TEXTINSPECTOR
+  // 1. TEXT-INSPECTOR-1: PROPERTIESPANEL MONTA O TEXTINSPECTOR
   // ==========================================================================
   it('TEXT-INSPECTOR-1: PropertiesPanel monta TextInspector ao selecionar bloco tipo text', () => {
     act(() => {
@@ -127,53 +127,147 @@ describe('TextInspector & TextBlock (CORE.E5A)', () => {
   });
 
   // ==========================================================================
-  // 4. TEXT-RENDER-1: BLUR SEM MUDANÇA GERA ZERO UPDATEBLOCK
+  // 4. TEXT-NO-MUTATION-1: TEXTBLOCK NO CANVAS GERA ZERO UPDATEBLOCK
   // ==========================================================================
-  it('TEXT-RENDER-1: blur no TextBlock sem alteração de texto gera ZERO mutações', () => {
+  it('TEXT-NO-MUTATION-1: TextBlock não é contentEditable e interações de canvas geram ZERO mutações', () => {
+    const updateBlockSpy = vi.fn();
+    const setSelectedBlockIdSpy = vi.fn();
+    useCatalogStore.setState({
+      updateBlock: updateBlockSpy,
+      setSelectedBlockId: setSelectedBlockIdSpy
+    });
+
+    act(() => {
+      root!.render(<TextBlock block={sampleTextBlock} pageId="page-1" isSelected={false} />);
+    });
+
+    // contentEditable não deve existir no DOM
+    const editable = container.querySelector('[contenteditable="true"]');
+    expect(editable).toBeNull();
+
+    const blockEl = container.firstElementChild as HTMLElement;
+    expect(blockEl).not.toBeNull();
+
+    // Clicar seleciona o bloco mas gera ZERO updateBlock
+    act(() => {
+      blockEl.click();
+    });
+    expect(setSelectedBlockIdSpy).toHaveBeenCalledWith('block-text-1');
+    expect(updateBlockSpy).toHaveBeenCalledTimes(0);
+
+    // Focus e blur no elemento não disparam updateBlock
+    act(() => {
+      blockEl.dispatchEvent(new Event('focus', { bubbles: true }));
+      blockEl.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(0);
+  });
+
+  // ==========================================================================
+  // 5. TEXT-MARKUP-1: PRESERVAÇÃO DE SOURCE E RENDER DE HEADING H1
+  // ==========================================================================
+  it('TEXT-MARKUP-1: # Título Técnico renderiza H1 e preserva source intacta sem mutação', () => {
     const updateBlockSpy = vi.fn();
     useCatalogStore.setState({ updateBlock: updateBlockSpy });
 
+    const headingBlock: ContentBlock = {
+      id: 'block-h1',
+      type: 'text',
+      textContent: '# Especificações Técnicas de Pressão'
+    };
+
     act(() => {
-      root!.render(<TextBlock block={sampleTextBlock} pageId="page-1" isSelected={true} />);
+      root!.render(<TextBlock block={headingBlock} pageId="page-1" isSelected={true} />);
     });
 
-    const editable = container.querySelector('[contenteditable="true"]') as HTMLDivElement;
-    expect(editable).not.toBeNull();
+    const h1 = container.querySelector('h1');
+    expect(h1).not.toBeNull();
+    expect(h1?.textContent).toBe('Especificações Técnicas de Pressão');
+    expect(h1?.className).toContain('text-2xl font-bold');
 
-    // Blur sem alterar innerText
+    // Interações não mutam o bloco
+    const blockEl = container.firstElementChild as HTMLElement;
     act(() => {
-      editable.dispatchEvent(new Event('blur', { bubbles: true }));
+      blockEl.click();
     });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(0);
+    expect(headingBlock.textContent).toBe('# Especificações Técnicas de Pressão');
+  });
+
+  // ==========================================================================
+  // 6. TEXT-MARKUP-2: HEADINGS H2 E H3 COM ZERO MUTAÇÃO
+  // ==========================================================================
+  it('TEXT-MARKUP-2: ## Subtítulo e ### Seção renderizam H2 e H3 com zero mutação', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    const multiHeadingBlock: ContentBlock = {
+      id: 'block-h23',
+      type: 'text',
+      textContent: '## Calibração Primária\n### Faixa de Operação\nTexto explicativo complementar.'
+    };
+
+    act(() => {
+      root!.render(<TextBlock block={multiHeadingBlock} pageId="page-1" isSelected={false} />);
+    });
+
+    const h2 = container.querySelector('h2');
+    expect(h2).not.toBeNull();
+    expect(h2?.textContent).toBe('Calibração Primária');
+    expect(h2?.className).toContain('text-xl font-bold');
+
+    const h3 = container.querySelector('h3');
+    expect(h3).not.toBeNull();
+    expect(h3?.textContent).toBe('Faixa de Operação');
+    expect(h3?.className).toContain('text-base font-semibold');
+
+    const p = container.querySelector('p');
+    expect(p).not.toBeNull();
+    expect(p?.textContent).toBe('Texto explicativo complementar.');
 
     expect(updateBlockSpy).toHaveBeenCalledTimes(0);
   });
 
-  it('TEXT-RENDER-2: blur no TextBlock com alteração comita novo texto', () => {
-    const updateBlockSpy = vi.fn();
-    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+  // ==========================================================================
+  // 7. TEXT-SAFE-1: RAW HTML É RENDERIZADO COMO TEXTO LITERAL (SEM ELEMENTO <img>)
+  // ==========================================================================
+  it('TEXT-SAFE-1: <img src=x onerror=alert(1)> é texto literal e nenhum elemento img é criado no DOM', () => {
+    const xssBlock: ContentBlock = {
+      id: 'block-xss-img',
+      type: 'text',
+      textContent: '<img src=x onerror=alert(1)>'
+    };
 
     act(() => {
-      root!.render(<TextBlock block={sampleTextBlock} pageId="page-1" isSelected={true} />);
+      root!.render(<TextBlock block={xssBlock} pageId="page-1" />);
     });
 
-    const editable = container.querySelector('[contenteditable="true"]') as HTMLDivElement;
-    expect(editable).not.toBeNull();
-
-    act(() => {
-      editable.innerText = 'Texto digitado inline no canvas.';
-      editable.textContent = 'Texto digitado inline no canvas.';
-      editable.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      editable.dispatchEvent(new Event('blur', { bubbles: true }));
-    });
-
-    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
-    expect(updateBlockSpy).toHaveBeenCalledWith('page-1', 'block-text-1', {
-      textContent: 'Texto digitado inline no canvas.'
-    });
+    const imgEl = container.querySelector('img');
+    expect(imgEl).toBeNull();
+    expect(container.textContent).toContain('<img src=x onerror=alert(1)>');
   });
 
   // ==========================================================================
-  // 5. TEXT-PRINT-1: PLACEHOLDER DO EDITOR NÃO APARECE NO CLEANA4/PDF
+  // 8. TEXT-SAFE-2: RAW SCRIPT É RENDERIZADO COMO TEXTO LITERAL (SEM ELEMENTO <script>)
+  // ==========================================================================
+  it('TEXT-SAFE-2: <script>alert(1)</script> é texto literal e nenhum script é criado no DOM', () => {
+    const xssScriptBlock: ContentBlock = {
+      id: 'block-xss-script',
+      type: 'text',
+      textContent: '<script>alert(1)</script>'
+    };
+
+    act(() => {
+      root!.render(<TextBlock block={xssScriptBlock} pageId="page-1" />);
+    });
+
+    const scriptEl = container.querySelector('script');
+    expect(scriptEl).toBeNull();
+    expect(container.textContent).toContain('<script>alert(1)</script>');
+  });
+
+  // ==========================================================================
+  // 9. TEXT-PRINT-1: PLACEHOLDER DO EDITOR NÃO APARECE NO CLEANA4/PDF
   // ==========================================================================
   it('TEXT-PRINT-1: placeholder "Digite o texto aqui..." não aparece quando isExport=true', () => {
     const emptyTextBlock: ContentBlock = {
@@ -197,7 +291,39 @@ describe('TextInspector & TextBlock (CORE.E5A)', () => {
   });
 
   // ==========================================================================
-  // 6. TEXT-I18N-1: TEXTCONTENT É EXTRAÍVEL E APLICÁVEL PELA TRADUÇÃO
+  // 10. TEXT-PRINT-PARITY-1: PARIDADE DOCUMENTAL ENTRE EDITOR E CLEANA4
+  // ==========================================================================
+  it('TEXT-PRINT-PARITY-1: Editor e CleanA4 renderizam a mesma estrutura documental', () => {
+    const docBlock: ContentBlock = {
+      id: 'block-doc-parity',
+      type: 'text',
+      textContent: '# Sensor de Alta Precisão\nLinha A de especificação\nLinha B com tolerância'
+    };
+
+    // 1. Editor
+    act(() => {
+      root!.render(<TextBlock block={docBlock} pageId="page-1" isExport={false} isSelected={true} />);
+    });
+    const editorH1 = container.querySelector('h1')?.textContent;
+    const editorParas = Array.from(container.querySelectorAll('p')).map((p) => p.textContent);
+
+    // 2. Export / CleanA4
+    act(() => {
+      root!.render(<TextBlock block={docBlock} pageId="page-1" isExport={true} isSelected={false} />);
+    });
+    const exportH1 = container.querySelector('h1')?.textContent;
+    const exportParas = Array.from(container.querySelectorAll('p')).map((p) => p.textContent);
+
+    expect(exportH1).toBe(editorH1);
+    expect(exportParas).toEqual(editorParas);
+    // Export não tem anéis ou cursores de edição
+    const exportBlockEl = container.firstElementChild as HTMLElement;
+    expect(exportBlockEl.className).toContain('shadow-none');
+    expect(exportBlockEl.className).not.toContain('cursor-pointer');
+  });
+
+  // ==========================================================================
+  // 11. TEXT-I18N-1: TEXTCONTENT É EXTRAÍVEL E APLICÁVEL PELA TRADUÇÃO
   // ==========================================================================
   it('TEXT-I18N-1: textContent é extraído como nó de tradução com policy translate', () => {
     const nodes = extractTextAndBoxBlocks(sampleTextBlock, 'page-1', 1);

@@ -53,22 +53,22 @@ export const ImageInspector: React.FC<ImageInspectorProps> = ({ block, pageId })
       return;
     }
     lastCommittedUrlRef.current = trimmed;
-    const patch = setPrimaryImageUrl(block, trimmed);
+    const patch = setPrimaryImageUrl(trimmed);
     updateBlock(pageId, block.id, patch);
   };
 
   const handleSelectAsset = (assetId: string) => {
-    const patch = setPrimaryImageAsset(block, assetId);
+    const patch = setPrimaryImageAsset(assetId);
     updateBlock(pageId, block.id, patch);
   };
 
   const handleSelectDirectUrl = (url: string) => {
-    const patch = setPrimaryImageUrl(block, url);
+    const patch = setPrimaryImageUrl(url);
     updateBlock(pageId, block.id, patch);
   };
 
   const handleRemove = () => {
-    const patch = removePrimaryImage(block);
+    const patch = removePrimaryImage();
     updateBlock(pageId, block.id, patch);
   };
 

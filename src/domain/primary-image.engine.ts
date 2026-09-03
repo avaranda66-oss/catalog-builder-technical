@@ -50,10 +50,7 @@ export function resolvePrimaryImageSource(block: PrimaryImageTarget | null | und
 /**
  * Define um asset do acervo/upload como autoridade primária e anula URLs e fallbacks legados.
  */
-export function setPrimaryImageAsset(assetId: string): PrimaryImagePatch;
-export function setPrimaryImageAsset(block: unknown, assetId: string): PrimaryImagePatch;
-export function setPrimaryImageAsset(first: unknown, second?: string): PrimaryImagePatch {
-  const assetId = typeof second === 'string' ? second : typeof first === 'string' ? first : '';
+export function setPrimaryImageAsset(assetId: string): PrimaryImagePatch {
   return {
     assetId: assetId.trim() || undefined,
     imageUrl: undefined,
@@ -64,10 +61,7 @@ export function setPrimaryImageAsset(first: unknown, second?: string): PrimaryIm
 /**
  * Define uma URL externa explícita como autoridade primária e anula assetId e fallbacks legados.
  */
-export function setPrimaryImageUrl(url: string): PrimaryImagePatch;
-export function setPrimaryImageUrl(block: unknown, url: string): PrimaryImagePatch;
-export function setPrimaryImageUrl(first: unknown, second?: string): PrimaryImagePatch {
-  const url = typeof second === 'string' ? second : typeof first === 'string' ? first : '';
+export function setPrimaryImageUrl(url: string): PrimaryImagePatch {
   return {
     assetId: undefined,
     imageUrl: url.trim() || undefined,
@@ -78,7 +72,7 @@ export function setPrimaryImageUrl(first: unknown, second?: string): PrimaryImag
 /**
  * Remove a imagem primária, limpando todas as fontes (assetId, imageUrl, legacyUrl).
  */
-export function removePrimaryImage(_block?: unknown): PrimaryImagePatch {
+export function removePrimaryImage(): PrimaryImagePatch {
   return {
     assetId: undefined,
     imageUrl: undefined,
