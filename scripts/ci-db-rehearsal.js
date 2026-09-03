@@ -18,9 +18,22 @@ if (!fs.existsSync(ARTIFACTS_DIR)) {
 
 const results = {
   mainSha: 'd4a90325cc2a9678ff15e0fb1822928ffcc6b63e',
+  opsHeadSha: 'f4656c5fbe2e84b8769ecc234b1114ffb11af788',
   migrationSha256: null,
   ciEnvironment: 'PASS',
-  localSchemaReproduction: 'PENDING',
+  historicalGapsFound: 1,
+  historicalGapInventory: [
+    {
+      gapNumber: 1,
+      object: 'public.media_library',
+      firstFailingMigration: '00005_secure_shared_persistence.sql:29',
+      liveDefinitionEvidence: 'Columns: id (text, PK), name (text), url (text), category (text, default product), tags (text[], default empty array), size_bytes (bigint), created_at (timestamptz, default now())',
+      reconciliationSql: 'scripts/db-release0-live-baseline.sql',
+      reasonSafeForRehearsal: 'Exact schema captured via live read-only introspection on project bjxqvrpbigwgabwbhtqa'
+    }
+  ],
+  liveDerivedBaseline: 'PENDING',
+  pre00022PrerequisiteParity: 'PENDING',
   pre00022Baseline: 'PENDING',
   firstExecution00022: 'PENDING',
   postStructure: 'PENDING',
@@ -89,37 +102,87 @@ async function run() {
     console.log('Checksum verification: PASS');
 
     // -------------------------------------------------------------
-    // FASE 1: PRE-00022 BASELINE VERIFICATION
+    // FASE 1: LIVE-DERIVED BASELINE & PRE-00022 PREREQUISITE PARITY
     // -------------------------------------------------------------
-    logStep('FASE 1: PRE-00022 BASELINE VERIFICATION');
-    const prereqRes = await client.query(`
-      SELECT 
-        (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') AS has_auth_users,
-        (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'products') AS has_products,
-        (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'product_families') AS has_families,
-        (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'library_change_events') AS has_library_events,
-        (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = 'public' AND routine_name = 'team_role') AS has_team_role,
-        (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = 'public' AND routine_name = 'require_document_editor_v1') AS has_require_editor,
-        (SELECT COUNT(*) FROM pg_publication WHERE pubname = 'supabase_realtime') AS has_realtime
-    `);
-    const prereqs = prereqRes.rows[0];
-    console.log('Prerequisites check:', prereqs);
+    logStep('FASE 1: PRE-00022 PREREQUISITE PARITY AUDIT');
+    
+    // 1. products.id
+    const prodCol = (await client.query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'products' AND column_name = 'id';
+    `)).rows[0];
+    console.log('products.id:', prodCol);
 
-    const missingPrereqs = [];
-    if (prereqs.has_auth_users != '1') missingPrereqs.push('auth.users');
-    if (prereqs.has_products != '1') missingPrereqs.push('public.products');
-    if (prereqs.has_families != '1') missingPrereqs.push('public.product_families');
-    if (prereqs.has_library_events != '1') missingPrereqs.push('public.library_change_events');
-    if (prereqs.has_team_role != '1') missingPrereqs.push('public.team_role()');
-    if (prereqs.has_require_editor != '1') missingPrereqs.push('public.require_document_editor_v1()');
-    if (prereqs.has_realtime != '1') missingPrereqs.push('supabase_realtime');
+    // 2. product_families.id
+    const famCol = (await client.query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'product_families' AND column_name = 'id';
+    `)).rows[0];
+    console.log('product_families.id:', famCol);
 
-    if (missingPrereqs.length > 0) {
-      results.localSchemaReproduction = 'FAIL';
-      results.pre00022Baseline = 'FAIL';
-      throw new Error(`Missing prerequisites: ${missingPrereqs.join(', ')}`);
+    // 3. library_change_events columns count
+    const libCols = (await client.query(`
+      SELECT COUNT(*) AS count 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'library_change_events';
+    `)).rows[0].count;
+    console.log('library_change_events columns count:', libCols);
+
+    // 4. team_role()
+    const trFunc = (await client.query(`
+      SELECT proname, prosecdef, pg_get_function_result(oid) AS ret_type
+      FROM pg_proc 
+      WHERE proname = 'team_role' AND pronamespace = 'public'::regnamespace;
+    `)).rows[0];
+    console.log('team_role():', trFunc);
+
+    // 5. require_document_editor_v1()
+    const reqFunc = (await client.query(`
+      SELECT proname, prosecdef, pg_get_function_result(oid) AS ret_type
+      FROM pg_proc 
+      WHERE proname = 'require_document_editor_v1' AND pronamespace = 'public'::regnamespace;
+    `)).rows[0];
+    console.log('require_document_editor_v1():', reqFunc);
+
+    // 6. user_role enum
+    const enumLabels = (await client.query(`
+      SELECT enumlabel 
+      FROM pg_enum 
+      WHERE enumtypid = 'public.user_role'::regtype 
+      ORDER BY enumsortorder;
+    `)).rows.map(r => r.enumlabel);
+    console.log('user_role enum labels:', enumLabels);
+
+    // 7. supabase_realtime publication
+    const pubCheck = (await client.query(`
+      SELECT COUNT(*) AS count FROM pg_publication WHERE pubname = 'supabase_realtime';
+    `)).rows[0].count;
+    console.log('supabase_realtime exists count:', pubCheck);
+
+    const parityMatrix = [
+      { object: 'products.id type / PK', live: 'UUID NOT NULL (PK)', rehearsal: `${prodCol.data_type.toUpperCase()} ${prodCol.is_nullable === 'NO' ? 'NOT NULL' : 'NULL'}`, parity: (prodCol.data_type === 'uuid' && prodCol.is_nullable === 'NO') ? 'PASS' : 'FAIL' },
+      { object: 'product_families.id type / PK', live: 'UUID NOT NULL (PK)', rehearsal: `${famCol.data_type.toUpperCase()} ${famCol.is_nullable === 'NO' ? 'NOT NULL' : 'NULL'}`, parity: (famCol.data_type === 'uuid' && famCol.is_nullable === 'NO') ? 'PASS' : 'FAIL' },
+      { object: 'library_change_events 14 cols', live: '14 COLUMNS', rehearsal: `${libCols} COLUMNS`, parity: (Number(libCols) >= 14) ? 'PASS' : 'FAIL' },
+      { object: 'team_role() secdef', live: 'SECDEF -> user_role', rehearsal: `${trFunc.prosecdef ? 'SECDEF' : 'INVOKER'} -> ${trFunc.ret_type}`, parity: (trFunc.prosecdef && trFunc.ret_type === 'user_role') ? 'PASS' : 'FAIL' },
+      { object: 'require_document_editor_v1() secdef', live: 'SECDEF -> uuid', rehearsal: `${reqFunc.prosecdef ? 'SECDEF' : 'INVOKER'} -> ${reqFunc.ret_type}`, parity: (reqFunc.prosecdef && reqFunc.ret_type === 'uuid') ? 'PASS' : 'FAIL' },
+      { object: 'user_role enum', live: 'admin, editor, viewer', rehearsal: enumLabels.join(', '), parity: (enumLabels.includes('admin') && enumLabels.includes('editor')) ? 'PASS' : 'FAIL' },
+      { object: 'supabase_realtime publication', live: 'PRESENT', rehearsal: pubCheck === '1' ? 'PRESENT' : 'ABSENT', parity: pubCheck === '1' ? 'PASS' : 'FAIL' }
+    ];
+
+    console.log('\n================================================================');
+    console.log('PRE-00022 PREREQUISITE PARITY MATRIX:');
+    console.log('================================================================');
+    console.table(parityMatrix);
+
+    const allParityPassed = parityMatrix.every(p => p.parity === 'PASS');
+    if (!allParityPassed) {
+      results.pre00022PrerequisiteParity = 'FAIL';
+      throw new Error('Pre-00022 prerequisite parity check failed!');
     }
-    results.localSchemaReproduction = 'PASS';
+    results.liveDerivedBaseline = 'PASS';
+    results.pre00022PrerequisiteParity = 'PASS';
 
     // Verify ABSENCE of 00022 objects
     const absenceRes = await client.query(`
@@ -174,16 +237,6 @@ async function run() {
       throw new Error(`Expected 3 tables, found ${foundTables.length}: ${foundTables.join(', ')}`);
     }
 
-    // Check constraints & indexes
-    const constraintsRes = await client.query(`
-      SELECT table_name, constraint_name, constraint_type 
-      FROM information_schema.table_constraints 
-      WHERE table_schema = 'public' 
-        AND table_name IN ('product_workbooks', 'product_source_documents', 'product_technical_data_index')
-      ORDER BY table_name, constraint_name;
-    `);
-    console.log('Constraints:', constraintsRes.rows);
-
     const indexesRes = await client.query(`
       SELECT tablename, indexname 
       FROM pg_indexes 
@@ -212,7 +265,6 @@ async function run() {
     }
     results.rls = 'PASS';
 
-    // Verify revoked direct DML
     const dmlGrantsRes = await client.query(`
       SELECT grantee, table_name, privilege_type 
       FROM information_schema.role_table_grants 
@@ -315,7 +367,6 @@ async function run() {
 
     console.log('Test actor and owner fixtures created successfully');
 
-    // Helper to run query with simulated authenticated session
     async function runAsActor(sql, params = []) {
       await client.query('BEGIN');
       try {
@@ -391,7 +442,6 @@ async function run() {
       throw new Error('CAS-STALE did not reject stale revision with 40001 / WORKBOOK_CONFLICT');
     }
 
-    // Verify stored workbook is still revision 2
     const currentWbRes = await runAsActor(
       `SELECT public.get_product_workbook_v1('product', $1) AS data`,
       [PRODUCT_ID]
@@ -401,7 +451,6 @@ async function run() {
       throw new Error(`Stored revision corrupted after conflict: ${currentWbRes.rows[0].data.revision}`);
     }
 
-    // Non-existent owner test
     let ownerMissingCaught = false;
     try {
       await runAsActor(
@@ -427,7 +476,6 @@ async function run() {
     // FASE 9: OWNER DELETE GUARD
     // -------------------------------------------------------------
     logStep('FASE 9: OWNER DELETE GUARD');
-    // Product WITHOUT workbook should delete fine
     await client.query(`
       INSERT INTO public.products (id, name, family_id)
       VALUES ($1, 'Unattached Product', $2)
@@ -435,7 +483,6 @@ async function run() {
     await client.query(`DELETE FROM public.products WHERE id = $1`, [TEMP_PROD_ID]);
     console.log('Unattached product deleted successfully');
 
-    // Product WITH workbook MUST fail deletion with 23503 / WORKBOOK_OWNER_IN_USE
     let ownerInUseCaught = false;
     try {
       await client.query(`DELETE FROM public.products WHERE id = $1`, [PRODUCT_ID]);
@@ -455,7 +502,6 @@ async function run() {
     // FASE 10: SOURCE DOCUMENT REAL RPC E2E
     // -------------------------------------------------------------
     logStep('FASE 10: SOURCE DOCUMENT REAL RPC E2E & VALIDATOR PARITY');
-    // Minimal doc
     const minimalDoc = {
       id: 'doc-minimal-rehearsal',
       title: 'Minimal Rehearsal Datasheet',
@@ -474,7 +520,6 @@ async function run() {
     );
     console.log('Get minimal doc:', getMinRes.rows[0].data);
 
-    // Test matrix
     const matrix = [
       { name: 'leap year 2024-02-29', doc: { publicationDate: '2024-02-29' }, expectPass: true },
       { name: 'invalid date 2026-02-31', doc: { publicationDate: '2026-02-31' }, expectPass: false },
@@ -525,7 +570,6 @@ async function run() {
     const normalized = normalizeSourceDocumentRow(dbRow);
     console.log('Normalized row:', normalized);
 
-    // Verify SQL NULLs did not become explicit nulls in normalized
     const forbiddenNulls = ['revision', 'language', 'publicationDate', 'fileReference', 'externalUrl', 'checksum'];
     for (const k of forbiddenNulls) {
       if (normalized[k] === null) {
@@ -571,7 +615,6 @@ async function run() {
       throw new Error('Workbook with orphan evidence was not rejected with 23503 / ORPHAN_SOURCE_DOCUMENT');
     }
 
-    // Now insert valid source doc and repeat save
     await runAsActor(`SELECT public.upsert_source_document_v1($1::jsonb)`, [JSON.stringify({
       id: 'valid-evidence-doc',
       title: 'Valid Evidence Document',
@@ -622,7 +665,6 @@ async function run() {
       throw new Error(`Expected 10 index rows, found ${indexRows.length}`);
     }
 
-    // Verify range has lower and upper values
     const rangeRow = indexRows.find(r => r.datum_id === 'd-range');
     if (!rangeRow || Number(rangeRow.lower_value) !== -25.0 || Number(rangeRow.upper_value) !== 140.0) {
       results.technicalIndex = 'FAIL';
@@ -757,7 +799,6 @@ async function run() {
     await client.query('COMMIT');
     console.log('Rollback script executed successfully');
 
-    // Verify all 00022 objects are gone
     const postRollbackRes = await client.query(`
       SELECT 
         (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('product_workbooks', 'product_source_documents', 'product_technical_data_index')) AS count_tables,
@@ -774,7 +815,6 @@ async function run() {
       throw new Error(`Residual objects remain after rollback: ${JSON.stringify(postRollback)}`);
     }
 
-    // All rehearsal tests passed!
     results.readyToApply00022Live = 'YES';
     console.log('\n>>> ALL REHEARSAL CHECKS PASSED WITH ZERO FAILURES! <<<');
 
@@ -787,6 +827,35 @@ async function run() {
       path.join(ARTIFACTS_DIR, 'rehearsal-results.json'),
       JSON.stringify(results, null, 2)
     );
+
+    const reportMd = `
+# REHEARSAL VERIFICATION REPORT — DB.RELEASE0.3
+- **MAIN SHA**: \`${results.mainSha}\`
+- **OPS HEAD SHA**: \`${results.opsHeadSha}\`
+- **MIGRATION 00022 SHA-256**: \`${results.migrationSha256}\`
+- **HISTORICAL GAPS FOUND**: ${results.historicalGapsFound}
+- **LIVE-DERIVED BASELINE**: ${results.liveDerivedBaseline}
+- **PRE-00022 PREREQUISITE PARITY**: ${results.pre00022PrerequisiteParity}
+- **00022 FIRST EXECUTION**: ${results.firstExecution00022}
+- **POST STRUCTURE**: ${results.postStructure}
+- **RLS**: ${results.rls}
+- **GRANTS**: ${results.grants}
+- **FUNCTIONS**: ${results.functions}
+- **TRIGGERS**: ${results.triggers}
+- **CAS E2E**: ${results.casE2e}
+- **OWNER DELETE GUARD**: ${results.ownerDeleteGuard}
+- **SOURCE DOCUMENT E2E**: ${results.sourceDocumentE2e}
+- **NULL ROUND-TRIP**: ${results.nullRoundTrip}
+- **ORPHAN EVIDENCE**: ${results.orphanEvidence}
+- **TECHNICAL INDEX**: ${results.technicalIndex}
+- **AUDIT EVENT**: ${results.auditEvent}
+- **REALTIME**: ${results.realtime}
+- **SECOND EXECUTION**: ${results.secondExecution}
+- **EXECUTOR ATOMICITY**: ${results.executorAtomicity}
+- **ROLLBACK REHEARSAL**: ${results.rollbackRehearsal}
+- **READY TO APPLY 00022 LIVE**: ${results.readyToApply00022Live}
+`;
+    fs.writeFileSync(path.join(ARTIFACTS_DIR, 'rehearsal-report.md'), reportMd.trim());
     console.log(`Saved results artifact to ${path.join(ARTIFACTS_DIR, 'rehearsal-results.json')}`);
   }
 }

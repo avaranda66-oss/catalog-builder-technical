@@ -39,19 +39,37 @@ jobs:
           echo "=== SUPABASE CLI VERSION ==="
           npx supabase --version
 
-      - name: Setup Migration Boundary (Isolate Target Migration 00022)
+      - name: Setup Migration Boundary (Isolate Target 00022 and Historical 00005-00021)
         run: |
-          mkdir -p target_migration
+          mkdir -p target_migration pending_migrations
+          # 1. Isolate target migration 00022
           cp supabase/migrations/00022_product_workbook_persistence.sql target_migration/00022_product_workbook_persistence.sql
           rm supabase/migrations/00022_product_workbook_persistence.sql
-          echo "Active baseline migrations:"
+          # 2. Isolate migrations 00005 through 00021 so initial stack starts on 00001-00004
+          mv supabase/migrations/0000[5-9]* pending_migrations/ || true
+          mv supabase/migrations/0001* pending_migrations/ || true
+          mv supabase/migrations/0002* pending_migrations/ || true
+          echo "Active initial baseline migrations (00001-00004):"
           ls -la supabase/migrations/
 
-      - name: Start Disposable Supabase Stack (Baseline up to 00021)
+      - name: Start Disposable Supabase Stack (Base 00001 - 00004)
         run: |
           npx supabase start
           echo "=== SUPABASE STATUS ==="
           npx supabase status
+
+      - name: Apply Live-Derived Rehearsal Baseline Bridge
+        run: |
+          echo "Applying live-derived baseline bridge (media_library)..."
+          node -e "import pg from 'pg'; import fs from 'fs'; const c = new pg.Client({ connectionString: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' }); await c.connect(); await c.query(fs.readFileSync('scripts/db-release0-live-baseline.sql', 'utf8')); await c.end(); console.log('Live-derived baseline bridge applied successfully');"
+
+      - name: Apply Remaining Historical Migrations (00005 - 00021)
+        run: |
+          echo "Restoring historical migrations 00005-00021..."
+          mv pending_migrations/*.sql supabase/migrations/
+          ls -la supabase/migrations/
+          echo "Applying pending migrations via supabase migration up..."
+          npx supabase migration up --local
 
       - name: Restore Target Migration 00022 for Rehearsal Execution
         run: |
