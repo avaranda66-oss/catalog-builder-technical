@@ -606,12 +606,24 @@ DECLARE
     v_saved public.product_source_documents;
     v_meta_key TEXT;
     v_meta_val JSONB;
+    v_doc_key TEXT;
 BEGIN
     -- 1. Validação estrutural de objeto
     IF p_document IS NULL OR jsonb_typeof(p_document) IS DISTINCT FROM 'object' THEN
         RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_PAYLOAD: p_document deve ser um objeto JSON.'
             USING ERRCODE = '22023';
     END IF;
+
+    -- 1.1 Validação de Chaves Desconhecidas (Schema Estrito / Paridade com Zod .strict() - PIM.W2C.2)
+    FOR v_doc_key IN SELECT jsonb_object_keys(p_document) LOOP
+        IF v_doc_key NOT IN (
+            'id', 'title', 'documentType', 'revision', 'language',
+            'publicationDate', 'fileReference', 'externalUrl', 'checksum', 'metadata'
+        ) THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_UNKNOWN_KEY: Chave desconhecida "%" não é permitida em SourceDocument.', v_doc_key
+                USING ERRCODE = '22023';
+        END IF;
+    END LOOP;
 
     -- 2. Validação de ID
     IF NOT (p_document ? 'id') OR jsonb_typeof(p_document->'id') IS DISTINCT FROM 'string' OR trim(p_document->>'id') = '' THEN
@@ -637,26 +649,28 @@ BEGIN
     END IF;
     v_doc_type := p_document->>'documentType';
 
-    -- 5. Validação de revision (opcional; se presente deve ser string)
-    IF (p_document ? 'revision') AND p_document->'revision' IS NOT NULL AND jsonb_typeof(p_document->'revision') IS DISTINCT FROM 'string' THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_REVISION: revision deve ser string.'
-            USING ERRCODE = '22023';
+    -- 5. Validação de revision (opcional; se presente deve ser string e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'revision') THEN
+        IF jsonb_typeof(p_document->'revision') IS DISTINCT FROM 'string' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_REVISION: revision deve ser string e não pode ser nulo.'
+                USING ERRCODE = '22023';
+        END IF;
     END IF;
 
-    -- 6. Validação de language (opcional; se presente deve ser tag BCP-47 válida estritamente alinhada com o domínio)
-    IF (p_document ? 'language') AND p_document->'language' IS NOT NULL THEN
+    -- 6. Validação de language (opcional; se presente deve ser tag BCP-47 válida e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'language') THEN
         IF jsonb_typeof(p_document->'language') IS DISTINCT FROM 'string'
            OR (p_document->>'language') IS DISTINCT FROM trim(p_document->>'language')
            OR length(p_document->>'language') < 2
            OR length(p_document->>'language') > 35
            OR NOT ((p_document->>'language') ~* '^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?$') THEN
-            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_LANGUAGE: language "%" não é uma tag BCP-47 válida.', (p_document->>'language')
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_LANGUAGE: language "%" deve ser string BCP-47 válida e não pode ser nulo.', (p_document->>'language')
                 USING ERRCODE = '22023';
         END IF;
     END IF;
 
-    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível estritamente alinhada com o domínio)
-    IF (p_document ? 'publicationDate') AND p_document->'publicationDate' IS NOT NULL THEN
+    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'publicationDate') THEN
         IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string'
            OR (p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')
            OR NOT ((p_document->>'publicationDate') ~ '^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?)?$') THEN
@@ -673,32 +687,36 @@ BEGIN
         END;
     END IF;
 
-    -- 8. Validação de fileReference (opcional; se presente deve ser string)
-    IF (p_document ? 'fileReference') AND p_document->'fileReference' IS NOT NULL AND jsonb_typeof(p_document->'fileReference') IS DISTINCT FROM 'string' THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_FILE: fileReference deve ser string.'
-            USING ERRCODE = '22023';
+    -- 8. Validação de fileReference (opcional; se presente deve ser string e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'fileReference') THEN
+        IF jsonb_typeof(p_document->'fileReference') IS DISTINCT FROM 'string' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_FILE: fileReference deve ser string e não pode ser nulo.'
+                USING ERRCODE = '22023';
+        END IF;
     END IF;
 
-    -- 9. Validação de externalUrl (opcional; se presente deve ser URL HTTP ou HTTPS válida)
-    IF (p_document ? 'externalUrl') AND p_document->'externalUrl' IS NOT NULL THEN
+    -- 9. Validação de externalUrl (opcional; se presente deve ser URL HTTP ou HTTPS canônica e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'externalUrl') THEN
         IF jsonb_typeof(p_document->'externalUrl') IS DISTINCT FROM 'string'
            OR (p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')
-           OR NOT ((p_document->>'externalUrl') ~* '^https?://[^\s/$.?#].[^\s]*$') THEN
+           OR NOT ((p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\d{1,5})?(/[^\s]*)?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl "%" não é uma URL HTTP/HTTPS válida.', (p_document->>'externalUrl')
                 USING ERRCODE = '22023';
         END IF;
     END IF;
 
-    -- 10. Validação de checksum (opcional; se presente deve ser string)
-    IF (p_document ? 'checksum') AND p_document->'checksum' IS NOT NULL AND jsonb_typeof(p_document->'checksum') IS DISTINCT FROM 'string' THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_CHECKSUM: checksum deve ser string.'
-            USING ERRCODE = '22023';
+    -- 10. Validação de checksum (opcional; se presente deve ser string e não pode ser nulo - PIM.W2C.2)
+    IF (p_document ? 'checksum') THEN
+        IF jsonb_typeof(p_document->'checksum') IS DISTINCT FROM 'string' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_CHECKSUM: checksum deve ser string e não pode ser nulo.'
+                USING ERRCODE = '22023';
+        END IF;
     END IF;
 
-    -- 11. Validação de metadata (opcional; deve ser object e TODOS os valores devem ser strings)
-    IF (p_document ? 'metadata') AND p_document->'metadata' IS NOT NULL THEN
+    -- 11. Validação de metadata (opcional; deve ser object e não pode ser nulo, e TODOS os valores devem ser strings - PIM.W2C.2)
+    IF (p_document ? 'metadata') THEN
         IF jsonb_typeof(p_document->'metadata') IS DISTINCT FROM 'object' THEN
-            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_METADATA: metadata deve ser um objeto JSON.'
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_METADATA: metadata deve ser um objeto JSON e não pode ser nulo.'
                 USING ERRCODE = '22023';
         END IF;
 

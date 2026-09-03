@@ -38,14 +38,63 @@ export const ISO_DATE_REGEX =
   /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 /**
- * Validates whether a string is a well-formed, parseable ISO-8601 date/timestamp.
+ * Validates whether a string is a well-formed, parseable ISO-8601 date/timestamp
+ * with strict calendar validity (leap years, days per month, hours/minutes/seconds).
  */
 export function isValidIsoDate(dateStr: string): boolean {
   if (typeof dateStr !== 'string') return false;
   const trimmed = dateStr.trim();
   if (trimmed !== dateStr || !ISO_DATE_REGEX.test(trimmed)) return false;
+
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2}))?/);
+  if (!match) return false;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+
+  if (month < 1 || month > 12) return false;
+
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const maxDaysPerMonth = [0, 31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  if (day < 1 || day > maxDaysPerMonth[month]) return false;
+
+  if (match[4] !== undefined) {
+    const hours = parseInt(match[4], 10);
+    const minutes = parseInt(match[5], 10);
+    const seconds = parseInt(match[6], 10);
+
+    if (hours < 0 || hours > 23) return false;
+    if (minutes < 0 || minutes > 59) return false;
+    if (seconds < 0 || seconds > 59) return false;
+  }
+
   const parsed = Date.parse(trimmed);
   return !Number.isNaN(parsed);
+}
+
+/**
+ * Regex canônica para URLs HTTP ou HTTPS compartilhada entre domínio e SQL (PIM.W2C.2).
+ * Aceita protocolo http:// ou https://, host estruturado (FQDN com TLD >= 2 letras, localhost ou IPv4 válido),
+ * porta opcional e caminho/query/hash opcionais sem whitespace.
+ */
+export const CANONICAL_HTTP_URL_REGEX =
+  /^https?:\/\/(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\d{1,5})?(\/[^\s]*)?$/i;
+
+/**
+ * Valida se uma string é uma URL HTTP ou HTTPS canônica válida (PIM.W2C.2).
+ */
+export function isValidHttpUrl(url: string): boolean {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (trimmed !== url || !CANONICAL_HTTP_URL_REGEX.test(trimmed)) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /**

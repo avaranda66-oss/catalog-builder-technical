@@ -15,6 +15,7 @@ import {
   validateProductKnowledgeBundle,
   isValidBcp47LanguageTag,
   isValidIsoDate,
+  isValidHttpUrl,
   WorkbookValidationOptions
 } from './validators';
 
@@ -182,22 +183,14 @@ export const SourceDocumentTypeSchema = z.enum([
 ]);
 
 /**
- * Schema para URLs externas HTTP ou HTTPS (PIM.W2C.1).
- * Rejeita explicitamente espaços leading/trailing e protocolos proibidos (ftp:, file:, javascript: etc).
+ * Schema para URLs externas HTTP ou HTTPS (PIM.W2C.1 / PIM.W2C.2).
+ * Rejeita explicitamente espaços leading/trailing, portas inválidas, hosts malformados e protocolos proibidos.
  */
 export const HttpUrlSchema = z
   .string()
-  .refine((url) => url.trim() === url, 'externalUrl não pode conter espaços no início ou fim')
   .refine(
-    (url) => {
-      try {
-        const parsed = new URL(url);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-      } catch {
-        return false;
-      }
-    },
-    'externalUrl deve utilizar exclusivamente protocolo HTTP ou HTTPS'
+    isValidHttpUrl,
+    'externalUrl deve utilizar exclusivamente protocolo HTTP ou HTTPS e ter formato de URL canônica válido'
   );
 
 export const SourceDocumentSchema = z.object({

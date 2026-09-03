@@ -98,20 +98,47 @@ function trimString(val: string): string {
 }
 
 /**
- * Normaliza campos retornados do PostgreSQL (snake_case) para o formato do domínio (camelCase),
- * caso a função SQL retorne diretamente a linha da tabela.
+ * Normaliza campos retornados do PostgreSQL (snake_case) para o formato do domínio (camelCase).
+ * Converte explicitamente SQL NULLs para ausência de chave (undefined), garantindo round-trip
+ * com o schema de domínio estrito (PIM.W2C.2).
  */
-function normalizeSourceDocumentRow(row: Record<string, unknown>): Record<string, unknown> {
-  return {
+export function normalizeSourceDocumentRow(row: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {
     id: row.id,
     title: row.title,
     documentType: row.document_type ?? row.documentType,
-    revision: row.revision,
-    language: row.language,
-    publicationDate: row.publication_date ?? row.publicationDate,
-    fileReference: row.file_reference ?? row.fileReference,
-    externalUrl: row.external_url ?? row.externalUrl,
-    checksum: row.checksum,
-    metadata: row.metadata ?? {}
+    metadata: (row.metadata !== null && typeof row.metadata === 'object') ? row.metadata : {}
   };
+
+  const revision = row.revision;
+  if (revision !== null && revision !== undefined) {
+    normalized.revision = revision;
+  }
+
+  const language = row.language;
+  if (language !== null && language !== undefined) {
+    normalized.language = language;
+  }
+
+  const publicationDate = row.publication_date ?? row.publicationDate;
+  if (publicationDate !== null && publicationDate !== undefined) {
+    normalized.publicationDate = publicationDate;
+  }
+
+  const fileReference = row.file_reference ?? row.fileReference;
+  if (fileReference !== null && fileReference !== undefined) {
+    normalized.fileReference = fileReference;
+  }
+
+  const externalUrl = row.external_url ?? row.externalUrl;
+  if (externalUrl !== null && externalUrl !== undefined) {
+    normalized.externalUrl = externalUrl;
+  }
+
+  const checksum = row.checksum;
+  if (checksum !== null && checksum !== undefined) {
+    normalized.checksum = checksum;
+  }
+
+  return normalized;
 }

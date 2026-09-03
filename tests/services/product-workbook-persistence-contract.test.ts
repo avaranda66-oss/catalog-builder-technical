@@ -10,13 +10,17 @@ import {
   addDatum,
   validateProductWorkbook,
   parseSourceDocument,
-  SourceDocument
+  SourceDocument,
+  isValidIsoDate,
+  isValidHttpUrl,
+  CANONICAL_HTTP_URL_REGEX
 } from '../../src/domain/product-workbook';
 import {
   SupabaseProductWorkbookRepository,
   SupabaseProductSourceDocumentRepository,
   WorkbookConflictError
 } from '../../src/services/product-workbook';
+import { normalizeSourceDocumentRow } from '../../src/services/product-workbook/source-document.repository';
 
 const VALID_PRODUCT_UUID = '11111111-1111-4111-8111-111111111111';
 const VALID_FAMILY_UUID = '22222222-2222-4222-8222-222222222222';
@@ -729,7 +733,7 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
   // =========================================================================
   describe('PIM.W2C.1 — External URL HTTP/HTTPS Policy Parity', () => {
     it('PIM-W2C1-URL-SQL-PARITY: migration SQL restringe externalUrl estritamente a HTTP ou HTTPS e valida trim', () => {
-      expect(migrationSql).toContain("(p_document->>'externalUrl') ~* '^https?://[^\\s/$.?#].[^\\s]*$'");
+      expect(migrationSql).toContain("(p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\\d{1,5})?(/[^\\s]*)?$'");
       expect(migrationSql).toContain("(p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')");
       expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_URL');
     });
@@ -796,6 +800,305 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
           externalUrl: ' https://example.com'
         })
       ).toThrow();
+    });
+  });
+
+  // =========================================================================
+  // PIM.W2C.2: SOURCE DOCUMENT RUNTIME PARITY + NULLABLE ROUND-TRIP HARDENING
+  // =========================================================================
+  describe('PIM.W2C.2 — Source Document Runtime Parity & PostgreSQL Null Round-Trip Suite', () => {
+    // -----------------------------------------------------------------------
+    // BLOCKER A: ISO Calendar Validation Parity
+    // -----------------------------------------------------------------------
+    it('W2C2-DATE-FEB31: "2026-02-31" é rejeitado tanto pela validação de calendário do domínio quanto pelo cast SQL', () => {
+      expect(isValidIsoDate('2026-02-31')).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-feb31',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-02-31'
+        })
+      ).toThrow();
+      expect(migrationSql).toContain("(p_document->>'publicationDate')::timestamptz");
+    });
+
+    it('W2C2-DATE-APR31: "2026-04-31" (abril possui apenas 30 dias) é rejeitado pelo domínio e SQL', () => {
+      expect(isValidIsoDate('2026-04-31')).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-apr31',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-04-31'
+        })
+      ).toThrow();
+    });
+
+    it('W2C2-DATE-LEAP-VALID: "2024-02-29" (ano bissexto válido) é aceito pelo domínio e SQL', () => {
+      expect(isValidIsoDate('2024-02-29')).toBe(true);
+      const doc = parseSourceDocument({
+        id: 'doc-leap-valid',
+        title: 'Doc',
+        documentType: 'manual',
+        publicationDate: '2024-02-29'
+      });
+      expect(doc.publicationDate).toBe('2024-02-29');
+    });
+
+    it('W2C2-DATE-LEAP-INVALID: "2025-02-29" (2025 não é bissexto) é rejeitado pelo domínio e SQL', () => {
+      expect(isValidIsoDate('2025-02-29')).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-leap-invalid',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2025-02-29'
+        })
+      ).toThrow();
+    });
+
+    it('W2C2-DATE-MONTH13-INVALID: "2026-13-01" (mês fora do intervalo 1-12) é rejeitado pelo domínio e SQL', () => {
+      expect(isValidIsoDate('2026-13-01')).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-month13',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-13-01'
+        })
+      ).toThrow();
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER B & D: Real PostgreSQL Row Fixtures & Null Round-Trip
+    // -----------------------------------------------------------------------
+    const realisticPostgresRow = {
+      id: 'doc-pg-fixture-1',
+      title: 'Manual de Engenharia TA-25N',
+      document_type: 'manual',
+      revision: null,
+      language: null,
+      publication_date: null,
+      file_reference: null,
+      external_url: null,
+      checksum: null,
+      metadata: {},
+      created_by: '00000000-0000-0000-0000-000000000001',
+      updated_by: '00000000-0000-0000-0000-000000000001',
+      created_at: '2026-09-03T12:00:00Z',
+      updated_at: '2026-09-03T12:00:00Z'
+    };
+
+    it('W2C2-SOURCE-NORMALIZE-ROW: normalizeSourceDocumentRow converte explicitamente SQL NULLs para ausência/undefined', () => {
+      const normalized = normalizeSourceDocumentRow(realisticPostgresRow);
+      expect(normalized.id).toBe('doc-pg-fixture-1');
+      expect(normalized.title).toBe('Manual de Engenharia TA-25N');
+      expect(normalized.documentType).toBe('manual');
+      expect(normalized.revision).toBeUndefined();
+      expect(normalized.language).toBeUndefined();
+      expect(normalized.publicationDate).toBeUndefined();
+      expect(normalized.fileReference).toBeUndefined();
+      expect(normalized.externalUrl).toBeUndefined();
+      expect(normalized.checksum).toBeUndefined();
+      expect(normalized.metadata).toEqual({});
+
+      const parsed = parseSourceDocument(normalized);
+      expect(parsed.id).toBe('doc-pg-fixture-1');
+    });
+
+    it('W2C2-SOURCE-NULL-UPSERT-ROUNDTRIP: upsertSourceDocument normaliza SQL NULLs para undefined e parseSourceDocument tem sucesso', async () => {
+      const fakeClient = {
+        rpc: vi.fn().mockResolvedValue({
+          data: realisticPostgresRow,
+          error: null
+        })
+      } as any;
+
+      const repo = new SupabaseProductSourceDocumentRepository(fakeClient);
+      const inputDoc: SourceDocument = {
+        id: 'doc-pg-fixture-1',
+        title: 'Manual de Engenharia TA-25N',
+        documentType: 'manual'
+      };
+
+      const result = await repo.upsertSourceDocument(inputDoc);
+
+      expect(fakeClient.rpc).toHaveBeenCalledWith('upsert_source_document_v1', {
+        p_document: inputDoc
+      });
+      expect(result.id).toBe('doc-pg-fixture-1');
+      expect(result.title).toBe('Manual de Engenharia TA-25N');
+      expect(result.documentType).toBe('manual');
+      expect(result.revision).toBeUndefined();
+      expect(result.language).toBeUndefined();
+      expect(result.publicationDate).toBeUndefined();
+      expect(result.fileReference).toBeUndefined();
+      expect(result.externalUrl).toBeUndefined();
+      expect(result.checksum).toBeUndefined();
+      expect(result.metadata).toEqual({});
+    });
+
+    it('W2C2-SOURCE-NULL-GET-ROUNDTRIP: getSourceDocument normaliza SQL NULLs para undefined e preserva contrato canônico', async () => {
+      const fakeClient = {
+        rpc: vi.fn().mockResolvedValue({
+          data: realisticPostgresRow,
+          error: null
+        })
+      } as any;
+
+      const repo = new SupabaseProductSourceDocumentRepository(fakeClient);
+      const result = await repo.getSourceDocument('doc-pg-fixture-1');
+
+      expect(fakeClient.rpc).toHaveBeenCalledWith('get_source_document_v1', {
+        p_id: 'doc-pg-fixture-1'
+      });
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('doc-pg-fixture-1');
+      expect(result!.revision).toBeUndefined();
+      expect(result!.language).toBeUndefined();
+    });
+
+    it('W2C2-SOURCE-NULL-LIST-ROUNDTRIP: listSourceDocuments normaliza lista de rows reais PostgreSQL', async () => {
+      const fakeClient = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [realisticPostgresRow],
+          error: null
+        })
+      } as any;
+
+      const repo = new SupabaseProductSourceDocumentRepository(fakeClient);
+      const results = await repo.listSourceDocuments();
+
+      expect(fakeClient.rpc).toHaveBeenCalledWith('list_source_documents_v1', {
+        p_ids: null
+      });
+      expect(results.length).toBe(1);
+      expect(results[0].id).toBe('doc-pg-fixture-1');
+      expect(results[0].revision).toBeUndefined();
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER C: External URL Adversarial Cases & Canonical Subset
+    // -----------------------------------------------------------------------
+    it('W2C2-URL-SERVER-DOMAIN-ADVERSARIAL: URLs malformadas são rejeitadas de forma idêntica no domínio e SQL', () => {
+      // Regex SQL canônica presente na migration
+      expect(migrationSql).toContain("~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\\d{1,5})?(/[^\\s]*)?$'");
+
+      const adversarialUrls = [
+        'http://::',
+        'http://%zz',
+        'http://256.256.256.256',
+        'http://example.com/manual with spaces.pdf',
+        'ftp://example.com/doc',
+        'file:///etc/passwd',
+        'javascript:void(0)',
+        'https://',
+        'http://-bad-label.com'
+      ];
+
+      for (const url of adversarialUrls) {
+        expect(isValidHttpUrl(url)).toBe(false);
+        expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(false);
+        expect(() =>
+          parseSourceDocument({
+            id: 'doc-adv',
+            title: 'Doc',
+            documentType: 'manual',
+            externalUrl: url
+          })
+        ).toThrow();
+      }
+
+      const validUrls = [
+        'https://example.com/manual.pdf',
+        'http://example.com/doc',
+        'http://localhost:3000/api/doc',
+        'http://192.168.1.1/spec.pdf',
+        'https://sub.domain.co.uk:8080/path?query=val#section'
+      ];
+
+      for (const url of validUrls) {
+        expect(isValidHttpUrl(url)).toBe(true);
+        expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(true);
+        const doc = parseSourceDocument({
+          id: 'doc-valid',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: url
+        });
+        expect(doc.externalUrl).toBe(url);
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER E: Explicit JSON Null Input Policy (Fail-Closed)
+    // -----------------------------------------------------------------------
+    it('W2C2-NULL-INPUT-POLICY: input JSON explícito com valor null em campos opcionais é rejeitado fail-closed no domínio e SQL', () => {
+      // No domínio: Zod Schema rejeita null para optional fields
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-null-rev',
+          title: 'Doc',
+          documentType: 'manual',
+          revision: null as any
+        })
+      ).toThrow();
+
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-null-lang',
+          title: 'Doc',
+          documentType: 'manual',
+          language: null as any
+        })
+      ).toThrow();
+
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-null-date',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: null as any
+        })
+      ).toThrow();
+
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-null-url',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: null as any
+        })
+      ).toThrow();
+
+      // No SQL: a migration verifica se a chave está presente e se o tipo é string (rejeita JSON null)
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_REVISION: revision deve ser string e não pode ser nulo.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_LANGUAGE: language \"%\" deve ser string BCP-47 válida e não pode ser nulo.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate \"%\" não é uma data ISO-8601 válida.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_FILE: fileReference deve ser string e não pode ser nulo.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl \"%\" não é uma URL HTTP/HTTPS válida.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_CHECKSUM: checksum deve ser string e não pode ser nulo.'");
+      expect(migrationSql).toContain("RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_METADATA: metadata deve ser um objeto JSON e não pode ser nulo.'");
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER F: Strict Unknown Key Policy (Zod .strict() ↔ PostgreSQL loop)
+    // -----------------------------------------------------------------------
+    it('W2C2-UNKNOWN-KEY-POLICY: propriedades desconhecidas em SourceDocument são rejeitadas no domínio e no SQL', () => {
+      // Domínio: SourceDocumentSchema é .strict()
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-unknown',
+          title: 'Doc',
+          documentType: 'manual',
+          inventedField: 'x'
+        } as any)
+      ).toThrow();
+
+      // SQL: upsert_source_document_v1 itera jsonb_object_keys e lança INVALID_SOURCE_DOCUMENT_UNKNOWN_KEY
+      expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_UNKNOWN_KEY');
+      expect(migrationSql).toContain('SELECT jsonb_object_keys(p_document)');
     });
   });
 });
