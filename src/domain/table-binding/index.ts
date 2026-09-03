@@ -4,3 +4,4 @@
 export * from './table-datum.types';
 export * from './legacy-product-field.resolver';
 export * from './product-workbook-datum.resolver';
+export * from './default-fields';

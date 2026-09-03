@@ -45,18 +45,7 @@ import { MultiModeCalibratorInspector } from './inspector/MultiModeCalibratorIns
 import { SoftwareConnectivityInspector } from './inspector/SoftwareConnectivityInspector';
 import { ImageGalleryInspector } from './inspector/ImageGalleryInspector';
 import { SpecsTableInspector } from './inspector/SpecsTableInspector';
-
-export const AVAILABLE_DEFAULT_FIELDS = [
-  { key: 'code', label: 'Código' },
-  { key: 'model', label: 'Modelo' },
-  { key: 'family', label: 'Família' },
-  { key: 'range', label: 'Faixa de Medição' },
-  { key: 'unit', label: 'Unidade' },
-  { key: 'accuracy', label: 'Precisão / Exatidão' },
-  { key: 'output', label: 'Sinal Saída' },
-  { key: 'powerSupply', label: 'Alimentação' },
-  { key: 'processConnection', label: 'Conexão Processo' }
-];
+import { AVAILABLE_DEFAULT_FIELDS } from '../../domain/table-binding';
 
 export const PropertiesPanel: React.FC = () => {
   const {

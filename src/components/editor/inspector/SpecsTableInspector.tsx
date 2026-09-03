@@ -25,10 +25,9 @@ import {
   LegacyBridgeCommandContext,
   LegacyTableCoordinateBridge
 } from '../../../domain/table-core';
-import { resolveLegacyProductField } from '../../../domain/table-binding';
+import { resolveLegacyProductField, AVAILABLE_DEFAULT_FIELDS } from '../../../domain/table-binding';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
-import { AVAILABLE_DEFAULT_FIELDS } from '../PropertiesPanel';
 
 export interface SpecsTableInspectorProps {
   block: ContentBlock;
