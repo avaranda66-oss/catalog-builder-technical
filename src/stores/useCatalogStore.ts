@@ -6,6 +6,7 @@ import {
   BlockType,
   CatalogPage,
   CatalogTableRow,
+  CatalogCellBinding,
   TableColumnConfig,
   MutationMetadata,
   MutationKind,
@@ -257,7 +258,11 @@ interface CatalogState {
   updateCellOverride: (blockId: string, rowId: string, fieldKey: string, value: string) => void;
   restoreCellToLibrary: (blockId: string, rowId: string, fieldKey: string) => void;
   addRowToTable: (blockId: string, productRefId: string) => void;
+  addManualRowToTable: (blockId: string, initialValues?: Record<string, string>) => string;
   removeRowFromTable: (blockId: string, rowId: string) => void;
+  setTableCellBinding: (blockId: string, rowId: string, colKey: string, binding: CatalogCellBinding) => void;
+  unlinkTableCell: (blockId: string, rowId: string, colKey: string, policy: 'keep_value' | 'clear', resolvedValue?: string) => void;
+  unlinkTableRow: (blockId: string, rowId: string, policy: 'keep_value' | 'clear', resolvedValues?: Record<string, string>) => void;
   addTableColumn: (blockId: string, column: TableColumnConfig) => void;
   removeTableColumn: (blockId: string, columnKey: string) => void;
   renameTableColumn: (blockId: string, columnKey: string, newLabel: string) => void;
@@ -1275,6 +1280,125 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       },
       'ADD_TABLE_ROW',
       { targetId: blockId, targetRowId: rowId, summary: `Adicionado produto ${productRefId} (row: ${rowId}) ao bloco ${blockId}` }
+    );
+  },
+
+  addManualRowToTable: (blockId, initialValues) => {
+    const rowId = `row-manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block) {
+            const currentRows = block.tableRows || [];
+            const newRow: CatalogTableRow = {
+              id: rowId,
+              productRefId: undefined, // 100% manual, zero fake productRefId
+              localOverrides: initialValues ? { ...initialValues } : {},
+              cellBindings: {},
+              customNotes: '',
+              order: currentRows.length
+            };
+            block.tableRows = [...currentRows, newRow];
+            break;
+          }
+        }
+      },
+      'ADD_TABLE_ROW',
+      { targetId: blockId, targetRowId: rowId, summary: `Adicionada linha manual (row: ${rowId}) ao bloco ${blockId}` }
+    );
+    return rowId;
+  },
+
+  setTableCellBinding: (blockId, rowId, colKey, binding) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.map((r) => {
+              if (r.id !== rowId) return r;
+              return {
+                ...r,
+                cellBindings: {
+                  ...(r.cellBindings || {}),
+                  [colKey]: binding
+                }
+              };
+            });
+            break;
+          }
+        }
+      },
+      'UPDATE_TABLE_CELL',
+      { targetId: blockId, targetRowId: rowId, fieldKey: colKey, summary: `Vínculo da célula [row=${rowId}, col=${colKey}] atualizado para ${binding.semanticKey}` }
+    );
+  },
+
+  unlinkTableCell: (blockId, rowId, colKey, policy, resolvedValue) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.map((r) => {
+              if (r.id !== rowId) return r;
+              const updatedBindings = { ...(r.cellBindings || {}) };
+              delete updatedBindings[colKey];
+
+              const updatedOverrides = { ...(r.localOverrides || {}) };
+              if (policy === 'keep_value') {
+                if (resolvedValue !== undefined) {
+                  updatedOverrides[colKey] = resolvedValue;
+                }
+              } else {
+                delete updatedOverrides[colKey];
+              }
+
+              return {
+                ...r,
+                localOverrides: updatedOverrides,
+                cellBindings: updatedBindings
+              };
+            });
+            break;
+          }
+        }
+      },
+      'UPDATE_TABLE_CELL',
+      { targetId: blockId, targetRowId: rowId, fieldKey: colKey, summary: `Célula [row=${rowId}, col=${colKey}] desvinculada (${policy})` }
+    );
+  },
+
+  unlinkTableRow: (blockId, rowId, policy, resolvedValues) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block && block.tableRows) {
+            block.tableRows = block.tableRows.map((r) => {
+              if (r.id !== rowId) return r;
+              let updatedOverrides: Record<string, string> = {};
+              if (policy === 'keep_value') {
+                updatedOverrides = {
+                  ...(r.localOverrides || {}),
+                  ...(resolvedValues || {})
+                };
+              }
+
+              return {
+                ...r,
+                productRefId: undefined, // desvincula linha da biblioteca
+                localOverrides: updatedOverrides,
+                cellBindings: {} // limpa bindings
+              };
+            });
+            break;
+          }
+        }
+      },
+      'UPDATE_TABLE_CELL',
+      { targetId: blockId, targetRowId: rowId, summary: `Linha [row=${rowId}] desvinculada da fonte (${policy})` }
     );
   },
 

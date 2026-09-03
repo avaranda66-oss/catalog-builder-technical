@@ -8,7 +8,7 @@ export type TableSchemaVersion = 1;
 export type TableHorizontalAlign = 'left' | 'center' | 'right';
 export type TableVerticalAlign = 'top' | 'middle' | 'bottom';
 
-export type TableRowKind = 'header' | 'data' | 'footer' | 'divider';
+export type TableRowKind = 'header' | 'data' | 'footer' | 'divider' | 'section';
 
 /**
  * Tokens semânticos fechados de cor para estilização e apresentação de tabelas.
@@ -112,6 +112,42 @@ export interface TableCellAssetRefContent {
   altText?: string;
   targetWidthMm?: number;
   targetHeightMm?: number;
+  fit?: 'contain' | 'cover';
+  align?: TableHorizontalAlign;
+  paddingMm?: number;
+}
+
+export interface TableCellRangeContent {
+  kind: 'range';
+  lower?: number;
+  upper?: number;
+  unit?: string;
+  lowerInclusive?: boolean;
+  upperInclusive?: boolean;
+  prefix?: string; // ex: 'ca.', 'ambiente a'
+}
+
+export interface TableCellBooleanContent {
+  kind: 'boolean';
+  value: boolean;
+  format?: 'yes_no' | 'sim_nao' | 'check_cross' | 'dot' | 'badge';
+}
+
+export interface TableCellEnumContent {
+  kind: 'enum';
+  code: string;
+  label?: string;
+}
+
+export interface TableCellTechnicalTokenContent {
+  kind: 'technical_token';
+  token: string;
+  category?: string;
+}
+
+export interface TableCellUnknownContent {
+  kind: 'unknown';
+  reason?: string;
 }
 
 /**
@@ -123,7 +159,12 @@ export type TableCellLiteralContent =
   | TableCellNumberContent
   | TableCellValueUnitContent
   | TableCellBadgeContent
-  | TableCellAssetRefContent;
+  | TableCellAssetRefContent
+  | TableCellRangeContent
+  | TableCellBooleanContent
+  | TableCellEnumContent
+  | TableCellTechnicalTokenContent
+  | TableCellUnknownContent;
 
 export type TableBindingMode = 'live' | 'snapshot' | 'review_required';
 
@@ -137,6 +178,8 @@ export type TableCellBoundContent =
       productId: string;
       datumKey: string;
       moduleKey?: string;
+      datasetId?: string;
+      sourceRevision?: number;
       bindingMode: 'live' | 'review_required';
       snapshot?: TableCellLiteralContent;
     }
@@ -145,6 +188,8 @@ export type TableCellBoundContent =
       productId: string;
       datumKey: string;
       moduleKey?: string;
+      datasetId?: string;
+      sourceRevision?: number;
       bindingMode: 'snapshot';
       snapshot: TableCellLiteralContent;
     };
@@ -162,6 +207,9 @@ export interface TableCellStyleOverride {
   verticalAlign?: TableVerticalAlign;
   textColorToken?: TableColorToken;
   backgroundColorToken?: TableColorToken;
+  borderEmphasis?: 'none' | 'bottom_thick' | 'all_subtle' | 'accent';
+  fontScale?: 'compact' | 'normal' | 'large';
+  paddingToken?: 'dense' | 'normal' | 'spacious';
 }
 
 /**
@@ -187,7 +235,11 @@ export type TablePresetId =
   | 'presys_clean_technical'
   | 'dense_spec_matrix'
   | 'model_comparison'
-  | 'parameter_value';
+  | 'parameter_value'
+  | 'presys_dark_navy'
+  | 'presys_blue_comparison'
+  | 'gray_technical'
+  | 'corporate_slate';
 
 export type TableDensityToken = 'compact' | 'regular' | 'spacious';
 export type TableBorderToken = 'all' | 'horizontal_only' | 'outer_only' | 'none';
@@ -211,8 +263,29 @@ export interface TablePresentationModel {
   stripeStyle: TableStripeToken;
   headerBackgroundToken: TableColorToken;   // Token semântico de cor tipado
   headerTextColorToken: TableColorToken;    // Token semântico de cor de texto tipado
+  sectionBackgroundToken?: TableColorToken;
+  sectionTextColorToken?: TableColorToken;
+  bodyBackgroundToken?: TableColorToken;
   fontScale: 'compact' | 'normal' | 'large';
   tableWidth: TableWidthSpec;               // Especificação discriminada da largura total
+  cellPadding?: 'dense' | 'normal' | 'spacious';
+  headerPadding?: 'dense' | 'normal' | 'spacious';
+  lineHeight?: 'tight' | 'normal' | 'relaxed';
+  borderWidth?: 'none' | 'thin' | 'medium';
+  outerBorderWidth?: 'none' | 'thin' | 'thick';
+  borderColorToken?: TableColorToken;
+  cornerRoundness?: 'none' | 'small' | 'medium';
+}
+
+/**
+ * Template Reutilizável de Apresentação de Tabela.
+ * Desacoplado dos dados: Knowledge Dataset != Table Presentation Template.
+ */
+export interface TablePresentationTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  presentation: TablePresentationModel;
 }
 
 /**
@@ -257,24 +330,32 @@ export function getCellKey(rowId: string, columnId: string): string {
  */
 export function parseCellKey(key: string): { rowId: string; columnId: string } | null {
   if (!key.startsWith('r')) return null;
-  const colIndex = key.indexOf('|c');
-  if (colIndex === -1) return null;
 
-  const rowPart = key.slice(1, colIndex);
-  const colPart = key.slice(colIndex + 2);
+  const firstColon = key.indexOf(':');
+  if (firstColon === -1) return null;
 
-  const rowColon = rowPart.indexOf(':');
-  const colColon = colPart.indexOf(':');
-  if (rowColon === -1 || colColon === -1) return null;
+  const rowLen = parseInt(key.slice(1, firstColon), 10);
+  if (isNaN(rowLen) || rowLen < 1) return null;
 
-  const rowLen = parseInt(rowPart.slice(0, rowColon), 10);
-  const colLen = parseInt(colPart.slice(0, colColon), 10);
-  if (isNaN(rowLen) || isNaN(colLen)) return null;
+  const rowStart = firstColon + 1;
+  const rowEnd = rowStart + rowLen;
+  if (key.length < rowEnd + 2) return null;
 
-  const rowId = rowPart.slice(rowColon + 1);
-  const columnId = colPart.slice(colColon + 1);
+  const rowId = key.slice(rowStart, rowEnd);
 
-  if (rowId.length !== rowLen || columnId.length !== colLen) return null;
+  if (key.slice(rowEnd, rowEnd + 2) !== '|c') return null;
+
+  const colColonIndex = key.indexOf(':', rowEnd + 2);
+  if (colColonIndex === -1) return null;
+
+  const colLen = parseInt(key.slice(rowEnd + 2, colColonIndex), 10);
+  if (isNaN(colLen) || colLen < 1) return null;
+
+  const colStart = colColonIndex + 1;
+  const colEnd = colStart + colLen;
+  if (key.length !== colEnd) return null;
+
+  const columnId = key.slice(colStart, colEnd);
 
   return { rowId, columnId };
 }

@@ -166,10 +166,12 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
   const tableId = generateDeterministicTableId(block.id);
 
   // 4. Determinar Preset inicial
-  let presetId: TablePresetId = 'presys_clean_technical';
-  if (block.type === 'electrical_table') presetId = 'dense_spec_matrix';
-  if (block.type === 'accessories_table') presetId = 'parameter_value';
-  if (block.type === 'custom_table') presetId = 'presys_clean_technical';
+  let presetId: TablePresetId = (block.customData?.presentationPresetId as TablePresetId) || 'presys_clean_technical';
+  if (!block.customData?.presentationPresetId) {
+    if (block.type === 'electrical_table') presetId = 'dense_spec_matrix';
+    if (block.type === 'accessories_table') presetId = 'parameter_value';
+    if (block.type === 'custom_table') presetId = 'presys_clean_technical';
+  }
 
   // 5. Extrair Colunas
   const columns: TableColumnModel[] = legacyColumns.map((col) => {
@@ -200,28 +202,58 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
 
   rows.forEach((row, rIdx) => {
     const legacyRow = legacyRows[rIdx];
+    const isManualRow = !legacyRow.productRefId || legacyRow.productRefId.trim() === '';
 
     columns.forEach((col) => {
       const cellId = generateDeterministicCellId(block.id, legacyRow.id, col.semanticKey);
       const key = getCellKey(row.id, col.id);
 
+      const explicitBinding = legacyRow.cellBindings?.[col.semanticKey];
+      const hasExplicitBinding = Boolean(explicitBinding && explicitBinding.productId);
+
+      let canonicalBoundContent: TableCellBoundContent | undefined = undefined;
+
+      if (hasExplicitBinding && explicitBinding) {
+        let datumKey = explicitBinding.semanticKey;
+        if (explicitBinding.sourceKind === 'product_metadata' && !datumKey.startsWith('metadata.')) {
+          datumKey = `metadata.${datumKey}`;
+        } else if (explicitBinding.sourceKind === 'legacy' && !datumKey.startsWith('legacy.')) {
+          datumKey = `legacy.product_field.${datumKey}`;
+        }
+        canonicalBoundContent = {
+          kind: 'datum_reference',
+          productId: explicitBinding.productId,
+          datumKey,
+          moduleKey: explicitBinding.moduleKey,
+          datasetId: explicitBinding.datasetId,
+          sourceRevision: explicitBinding.sourceRevision,
+          bindingMode: explicitBinding.bindingMode,
+          snapshot: explicitBinding.snapshot
+        };
+      } else if (!isManualRow && !col.isCustom && legacyRow.productRefId) {
+        canonicalBoundContent = {
+          kind: 'datum_reference',
+          productId: legacyRow.productRefId,
+          datumKey: `legacy.product_field.${col.semanticKey}`,
+          bindingMode: 'live'
+        };
+        hasLegacyProductBinding = true;
+      }
+
+      const rawOverride = legacyRow.localOverrides?.[col.semanticKey];
+      const hasLocalValue = rawOverride !== undefined && rawOverride !== null;
+      const isBound = Boolean(canonicalBoundContent);
+
+      // Um override só existe se a célula for vinculada a uma fonte e possuir valor local
+      const isOverride = isBound && hasLocalValue;
+      const isManualValue = !isBound && hasLocalValue;
+
       let content: TableCellContent = { kind: 'empty' };
-      const isOverride = Boolean(legacyRow.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined);
 
-      const canonicalBoundContent: TableCellBoundContent | undefined = legacyRow.productRefId
-        ? {
-            kind: 'datum_reference',
-            productId: legacyRow.productRefId,
-            datumKey: `legacy.product_field.${col.semanticKey}`,
-            bindingMode: 'live'
-          }
-        : undefined;
-
-      if (isOverride) {
-        const textVal = String(legacyRow.localOverrides![col.semanticKey]);
+      if (hasLocalValue) {
+        const textVal = String(rawOverride);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
       } else if (canonicalBoundContent) {
-        hasLegacyProductBinding = true;
         content = canonicalBoundContent;
       }
 
@@ -243,10 +275,13 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         legacyColKey: col.semanticKey,
         content,
         isOverride,
-        hasProductBinding: Boolean(legacyRow.productRefId),
-        productRefId: legacyRow.productRefId,
+        hasProductBinding: isBound,
+        productRefId: explicitBinding?.productId || (isManualRow ? undefined : legacyRow.productRefId),
         canonicalBoundContent,
-        originalOverrideValue: isOverride ? String(legacyRow.localOverrides![col.semanticKey]) : undefined
+        originalOverrideValue: hasLocalValue ? String(rawOverride) : undefined,
+        isManualRow,
+        isManualValue,
+        cellBinding: explicitBinding
       });
     });
   });

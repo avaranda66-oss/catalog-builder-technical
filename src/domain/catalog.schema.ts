@@ -82,10 +82,23 @@ export interface TableColumnConfig {
   type?: 'text' | 'number' | 'badge';
 }
 
+export interface CatalogCellBinding {
+  sourceKind: 'product_metadata' | 'pim_datum' | 'dataset' | 'legacy';
+  productId: string;
+  semanticKey: string;
+  moduleKey?: string;
+  datasetId?: string;
+  bindingMode: 'live' | 'snapshot' | 'review_required';
+  snapshot?: any; // TableCellLiteralContent
+  sourceRevision?: number;
+  stale?: boolean;
+}
+
 export interface CatalogTableRow {
   id: string;
   productRefId?: string;
   localOverrides?: Record<string, string>;
+  cellBindings?: Record<string, CatalogCellBinding>;
   customNotes?: string;
   order?: number;
 }
@@ -282,10 +295,23 @@ export const TableColumnConfigSchema = z.object({
   type: z.enum(['text', 'number', 'badge']).optional().default('text')
 });
 
+export const CatalogCellBindingSchema = z.object({
+  sourceKind: z.enum(['product_metadata', 'pim_datum', 'dataset', 'legacy']),
+  productId: z.string(),
+  semanticKey: z.string(),
+  moduleKey: z.string().optional(),
+  datasetId: z.string().optional(),
+  bindingMode: z.enum(['live', 'snapshot', 'review_required']).default('live'),
+  snapshot: z.any().optional(),
+  sourceRevision: z.number().int().positive().optional(),
+  stale: z.boolean().optional()
+});
+
 export const CatalogTableRowSchema = z.object({
   id: z.string(),
   productRefId: z.string().optional().default(''),
   localOverrides: z.record(z.string()).optional().default({}),
+  cellBindings: z.record(CatalogCellBindingSchema).optional().default({}),
   customNotes: z.string().optional().default(''),
   order: z.number().int().optional().default(0)
 });

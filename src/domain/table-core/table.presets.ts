@@ -45,6 +45,54 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     headerTextColorToken: 'slate_900',
     fontScale: 'normal',
     tableWidth: { mode: 'auto_fill' }
+  },
+  presys_dark_navy: {
+    presetId: 'presys_dark_navy',
+    density: 'regular',
+    borderStyle: 'horizontal_only',
+    stripeStyle: 'none',
+    headerBackgroundToken: 'brand_navy',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'surface_subtle',
+    sectionTextColorToken: 'slate_900',
+    fontScale: 'normal',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  presys_blue_comparison: {
+    presetId: 'presys_blue_comparison',
+    density: 'compact',
+    borderStyle: 'all',
+    stripeStyle: 'subtle_zebra',
+    headerBackgroundToken: 'brand_primary',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'surface_subtle',
+    sectionTextColorToken: 'brand_navy',
+    fontScale: 'compact',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  gray_technical: {
+    presetId: 'gray_technical',
+    density: 'compact',
+    borderStyle: 'all',
+    stripeStyle: 'none',
+    headerBackgroundToken: 'slate_800',
+    headerTextColorToken: 'slate_100',
+    sectionBackgroundToken: 'slate_100',
+    sectionTextColorToken: 'slate_800',
+    fontScale: 'compact',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  corporate_slate: {
+    presetId: 'corporate_slate',
+    density: 'regular',
+    borderStyle: 'outer_only',
+    stripeStyle: 'subtle_zebra',
+    headerBackgroundToken: 'slate_900',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'surface_subtle',
+    sectionTextColorToken: 'slate_900',
+    fontScale: 'normal',
+    tableWidth: { mode: 'auto_fill' }
   }
 };
 
