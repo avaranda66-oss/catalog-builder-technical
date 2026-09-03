@@ -14,7 +14,11 @@ export const TextBlock: React.FC<TextBlockProps> = ({ block, pageId, isSelected,
 
   const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
     if (isExport) return;
-    updateBlock(pageId, block.id, { textContent: e.currentTarget.innerText });
+    const currentVal = e.currentTarget.innerText || e.currentTarget.textContent || '';
+    if (currentVal === (block.textContent || '')) {
+      return;
+    }
+    updateBlock(pageId, block.id, { textContent: currentVal });
   };
 
   return (

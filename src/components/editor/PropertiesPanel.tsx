@@ -37,6 +37,8 @@ import {
 import { StructuralSectionInspector } from './inspector/StructuralSectionInspector';
 import { StructuralCardInspector } from './inspector/StructuralCardInspector';
 import { FullPageCoverInspector } from './inspector/FullPageCoverInspector';
+import { TextInspector } from './inspector/TextInspector';
+import { ImageInspector } from './inspector/ImageInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -1106,61 +1108,14 @@ export const PropertiesPanel: React.FC = () => {
               </div>
             )}
 
-            {/* Propriedades de Texto */}
+            {/* 9. BLOCO DE TEXTO LIVRE (CORE.E5A) */}
             {selectedBlock.type === 'text' && (
-              <div className="space-y-3 pt-2 border-t border-slate-200">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Conteúdo de Texto</label>
-                  <textarea
-                    rows={6}
-                    value={selectedBlock.textContent || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { textContent: e.target.value })
-                    }
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-brand-500 font-sans text-xs"
-                    placeholder="Use # para título, ## para subtítulo..."
-                  />
-                </div>
-              </div>
+              <TextInspector block={selectedBlock} pageId={blockPageId} />
             )}
 
-            {/* Propriedades de Imagem Individual */}
+            {/* 10. BLOCO DE IMAGEM INDIVIDUAL (CORE.E5A) */}
             {selectedBlock.type === 'image' && (
-              <div className="space-y-3 pt-2 border-t border-slate-200">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Fotografia do Computador ou URL</label>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-semibold text-xs shadow-2xs"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Selecionar Arquivo do PC</span>
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleLocalImageUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Legenda Técnica</label>
-                  <input
-                    type="text"
-                    value={selectedBlock.imageCaption || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { imageCaption: e.target.value })
-                    }
-                    placeholder="Ex: Figura 1 — Calibrador Presys PCON"
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-brand-500 text-xs"
-                  />
-                </div>
-              </div>
+              <ImageInspector block={selectedBlock} pageId={blockPageId} />
             )}
 
 

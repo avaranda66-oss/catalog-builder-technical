@@ -169,7 +169,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <TextBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'image' && (
-                        <ImageBlock block={block} pageId={page.id} isSelected={false} />
+                        <ImageBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'box' && (
                         <BoxBlock block={block} pageId={page.id} isSelected={false} />
