@@ -643,20 +643,34 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    -- 6. Validação de language (opcional; se presente deve ser tag BCP-47 válida)
+    -- 6. Validação de language (opcional; se presente deve ser tag BCP-47 válida estritamente alinhada com o domínio)
     IF (p_document ? 'language') AND p_document->'language' IS NOT NULL THEN
-        IF jsonb_typeof(p_document->'language') IS DISTINCT FROM 'string' OR NOT ((p_document->>'language') ~ '^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$') THEN
+        IF jsonb_typeof(p_document->'language') IS DISTINCT FROM 'string'
+           OR (p_document->>'language') IS DISTINCT FROM trim(p_document->>'language')
+           OR length(p_document->>'language') < 2
+           OR length(p_document->>'language') > 35
+           OR NOT ((p_document->>'language') ~* '^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_LANGUAGE: language "%" não é uma tag BCP-47 válida.', (p_document->>'language')
                 USING ERRCODE = '22023';
         END IF;
     END IF;
 
-    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível)
+    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível estritamente alinhada com o domínio)
     IF (p_document ? 'publicationDate') AND p_document->'publicationDate' IS NOT NULL THEN
-        IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string' OR NOT ((p_document->>'publicationDate') ~ '^\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$') THEN
+        IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string'
+           OR (p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')
+           OR NOT ((p_document->>'publicationDate') ~ '^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?)?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" não é uma data ISO-8601 válida.', (p_document->>'publicationDate')
                 USING ERRCODE = '22023';
         END IF;
+
+        -- Validação de parseabilidade sem deixar escapar erro de cast bruto
+        BEGIN
+            PERFORM (p_document->>'publicationDate')::timestamptz;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" não é uma data ISO-8601 parseável.', (p_document->>'publicationDate')
+                USING ERRCODE = '22023';
+        END;
     END IF;
 
     -- 8. Validação de fileReference (opcional; se presente deve ser string)
@@ -665,10 +679,12 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    -- 9. Validação de externalUrl (opcional; se presente deve ser URL http/https válida)
+    -- 9. Validação de externalUrl (opcional; se presente deve ser URL HTTP ou HTTPS válida)
     IF (p_document ? 'externalUrl') AND p_document->'externalUrl' IS NOT NULL THEN
-        IF jsonb_typeof(p_document->'externalUrl') IS DISTINCT FROM 'string' OR NOT ((p_document->>'externalUrl') ~ '^https?://.+$') THEN
-            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl "%" não é uma URL válida.', (p_document->>'externalUrl')
+        IF jsonb_typeof(p_document->'externalUrl') IS DISTINCT FROM 'string'
+           OR (p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')
+           OR NOT ((p_document->>'externalUrl') ~* '^https?://[^\s/$.?#].[^\s]*$') THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl "%" não é uma URL HTTP/HTTPS válida.', (p_document->>'externalUrl')
                 USING ERRCODE = '22023';
         END IF;
     END IF;
