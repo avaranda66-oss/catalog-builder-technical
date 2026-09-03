@@ -516,4 +516,143 @@ describe('FullPageCoverInspector (CORE.E4)', () => {
     expect(updatedLayer.imageUrl).toBeUndefined();
     expect(updatedLayer.legacyUrl).toBeUndefined();
   });
+
+  // ==========================================================================
+  // 7. IDEMPOTÊNCIA SEM DEPENDÊNCIA DE RERENDER (CORE.E4.2)
+  // ==========================================================================
+  it('COVER-OVERLAY-IDEMPOTENCE-2: pointerup seguido de múltiplos blurs sem rerender do parent block gera exatamente 1 mutação', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent();
+
+    const appearanceTrigger = container.querySelector('#inspector-cover-section-appearance-header') as HTMLButtonElement;
+    act(() => {
+      appearanceTrigger.click();
+    });
+
+    const slider = container.querySelector('#cover-overlay-slider') as HTMLInputElement;
+
+    act(() => {
+      slider.value = '80';
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      slider.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+
+    // Múltiplos blurs sem rerender do parent block
+    act(() => {
+      slider.dispatchEvent(new Event('blur', { bubbles: true }));
+      slider.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('COVER-GEOMETRY-IDEMPOTENCE-2: pointerup seguido de múltiplos blurs sem rerender gera exatamente 1 mutação', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent();
+
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const firstRow = container.querySelector('[data-cover-layer-id]') as HTMLElement;
+    act(() => {
+      firstRow.click();
+    });
+
+    const xSlider = container.querySelector('#selected-layer-x-slider') as HTMLInputElement;
+
+    act(() => {
+      xSlider.value = '55';
+      xSlider.dispatchEvent(new Event('change', { bubbles: true }));
+      xSlider.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+
+    // Múltiplos blurs sem rerender
+    act(() => {
+      xSlider.dispatchEvent(new Event('blur', { bubbles: true }));
+      xSlider.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('COVER-BG-URL-IDEMPOTENCE-1: Enter seguido de blur no campo de URL de background gera exatamente 1 mutação', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent();
+
+    const mediaTrigger = container.querySelector('#inspector-cover-section-media-header') as HTMLButtonElement;
+    act(() => {
+      mediaTrigger.click();
+    });
+
+    const bgUrlInput = container.querySelector('#cover-field-bg-url') as HTMLInputElement;
+    expect(bgUrlInput).not.toBeNull();
+
+    act(() => {
+      setInputValue(bgUrlInput, 'https://imagem-externa.com/hero.png');
+      bgUrlInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+
+    // Blur subsequente SEM rerender intermediário do parent block:
+    act(() => {
+      bgUrlInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1); // Permanece exatamente 1
+  });
+
+  it('COVER-IMAGE-URL-IDEMPOTENCE-1: Enter seguido de blur no campo de URL da imagem da camada gera exatamente 1 mutação', () => {
+    const blockWithImageLayer: ContentBlock = {
+      ...sampleBlock,
+      customData: {
+        canvasLayers: [
+          {
+            id: 'layer-img-test',
+            type: 'image',
+            label: 'Foto do Produto',
+            x: 10,
+            y: 10,
+            visible: true
+          }
+        ]
+      }
+    };
+
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent(blockWithImageLayer);
+
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const imgRow = container.querySelector('[data-cover-layer-id="layer-img-test"]') as HTMLElement;
+    act(() => {
+      imgRow.click();
+    });
+
+    const imgUrlInput = container.querySelector('#selected-layer-image-url-input') as HTMLInputElement;
+    expect(imgUrlInput).not.toBeNull();
+
+    act(() => {
+      setInputValue(imgUrlInput, 'https://produtos.com/calibrador-novo.png');
+      imgUrlInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+
+    // Blur subsequente SEM rerender intermediário:
+    act(() => {
+      imgUrlInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1); // Permanece exatamente 1
+  });
 });

@@ -59,6 +59,17 @@ import {
   InspectorActionRow
 } from './components';
 
+export type CoverGeometryDraft = {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  fontSize?: number;
+  borderWidth?: number;
+};
+
+export type CoverGeometryField = keyof CoverGeometryDraft;
+
 export interface FullPageCoverInspectorProps {
   block: ContentBlock;
   pageId: string;
@@ -86,7 +97,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   const selectedLayer = layers.find((l) => l.id === selectedLayerId) || null;
 
   // ==========================================================================
-  // 1. ESTADO TRANSIENTE DE OVERLAY (Zero Save-Storm + Idempotência de Commit)
+  // 1. ESTADO TRANSIENTE DE OVERLAY (Idempotência sem Dependência de Rerender)
   // ==========================================================================
   const persistedOverlay = block.customData?.overlayOpacity ?? 45;
   const [localOverlay, setLocalOverlay] = useState<number>(persistedOverlay);
@@ -98,7 +109,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   }, [persistedOverlay]);
 
   const commitOverlay = (val: number) => {
-    if (val === lastCommittedOverlayRef.current && val === persistedOverlay) {
+    if (val === lastCommittedOverlayRef.current) {
       return;
     }
     lastCommittedOverlayRef.current = val;
@@ -108,57 +119,59 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   };
 
   // ==========================================================================
-  // 2. ESTADO TRANSIENTE DE BACKGROUND URL (Item 17: Commit no Blur/Enter)
+  // 2. ESTADO TRANSIENTE DE BACKGROUND URL (Enter + Blur Idempotente)
   // ==========================================================================
   const persistedBgUrl = bgSource.kind === 'url' ? bgSource.url : '';
   const [localBgUrl, setLocalBgUrl] = useState<string>(persistedBgUrl);
+  const lastCommittedBgUrlRef = useRef<string>(persistedBgUrl);
 
   useEffect(() => {
-    setLocalBgUrl(bgSource.kind === 'url' ? bgSource.url : '');
+    const current = bgSource.kind === 'url' ? bgSource.url : '';
+    setLocalBgUrl(current);
+    lastCommittedBgUrlRef.current = current;
   }, [persistedBgUrl]);
 
   const commitBgUrl = () => {
     const trimmed = localBgUrl.trim();
-    if (trimmed && trimmed !== persistedBgUrl) {
-      handleSelectUrl(trimmed);
+    if (!trimmed || trimmed === lastCommittedBgUrlRef.current) {
+      return;
     }
+    lastCommittedBgUrlRef.current = trimmed;
+    handleSelectUrl(trimmed);
   };
 
   // ==========================================================================
-  // 3. ESTADO TRANSIENTE DE IMAGE LAYER URL (Item 18: Commit no Blur/Enter)
+  // 3. ESTADO TRANSIENTE DE IMAGE LAYER URL (Enter + Blur Idempotente)
   // ==========================================================================
   const persistedLayerImageUrl = selectedLayer?.imageUrl || '';
   const [localImageUrl, setLocalImageUrl] = useState<string>(persistedLayerImageUrl);
+  const lastCommittedLayerImageUrlRef = useRef<string>(persistedLayerImageUrl);
 
   useEffect(() => {
-    setLocalImageUrl(persistedLayerImageUrl);
+    const current = selectedLayer?.imageUrl || '';
+    setLocalImageUrl(current);
+    lastCommittedLayerImageUrlRef.current = current;
   }, [selectedLayerId, persistedLayerImageUrl]);
 
   const commitLayerImageUrl = () => {
     if (!selectedLayer) return;
     const trimmed = localImageUrl.trim();
-    if (trimmed && trimmed !== persistedLayerImageUrl) {
-      handleUpdateLayerProps(selectedLayer.id, setCoverLayerImageUrl(trimmed));
+    if (!trimmed || trimmed === lastCommittedLayerImageUrlRef.current) {
+      return;
     }
+    lastCommittedLayerImageUrlRef.current = trimmed;
+    handleUpdateLayerProps(selectedLayer.id, setCoverLayerImageUrl(trimmed));
   };
 
   // ==========================================================================
-  // 4. ESTADO TRANSIENTE DE GEOMETRIA DA CAMADA SELECIONADA (Itens 14, 15, 16)
+  // 4. ESTADO TRANSIENTE DE GEOMETRIA (Zero Any + Idempotência Estrita)
   // ==========================================================================
-  const [geometryDraft, setGeometryDraft] = useState<{
-    x: number;
-    y: number;
-    width?: number;
-    height?: number;
-    fontSize?: number;
-    borderWidth?: number;
-  }>({ x: 0, y: 0 });
-
-  const lastCommittedGeometryRef = useRef<Record<string, any>>({});
+  const [geometryDraft, setGeometryDraft] = useState<CoverGeometryDraft>({ x: 0, y: 0 });
+  const lastCommittedGeometryRef = useRef<Partial<CoverGeometryDraft>>({});
 
   useEffect(() => {
     if (selectedLayer) {
-      const initial = {
+      const initial: CoverGeometryDraft = {
         x: selectedLayer.x ?? 0,
         y: selectedLayer.y ?? 0,
         width: selectedLayer.width,
@@ -179,13 +192,9 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     selectedLayer?.borderWidth
   ]);
 
-  const commitGeometryField = (
-    field: 'x' | 'y' | 'width' | 'height' | 'fontSize' | 'borderWidth',
-    value: number
-  ) => {
+  const commitGeometryField = (field: CoverGeometryField, value: number) => {
     if (!selectedLayer) return;
-    const persistedVal = selectedLayer[field];
-    if (value === lastCommittedGeometryRef.current[field] && value === persistedVal) {
+    if (value === lastCommittedGeometryRef.current[field]) {
       return;
     }
     lastCommittedGeometryRef.current[field] = value;

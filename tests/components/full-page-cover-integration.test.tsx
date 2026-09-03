@@ -234,6 +234,26 @@ describe('Full Page Cover Integration & Parity (CORE.E4)', () => {
     expect(titleNode?.policy).toBe('translate');
   });
 
+  it('COVER-I18N-LEGACY-HIDDEN-1: capa legacy com titleConfig.visible=false ou logoConfig.visible=false omite os respectivos nós', () => {
+    const legacyWithHiddenParts: ContentBlock = {
+      ...sampleLegacyCover,
+      customData: {
+        ...sampleLegacyCover.customData,
+        titleConfig: { visible: false },
+        logoConfig: { visible: false }
+      }
+    };
+
+    const nodes = extractHeroBlocks(legacyWithHiddenParts, 'page-1', 1);
+    const paths = nodes.map((n) => n.path);
+
+    expect(paths).not.toContain('title');
+    expect(paths).not.toContain('customData.brandName');
+    // subtitle e badge continuam visíveis e são extraídos
+    expect(paths).toContain('subtitle');
+    expect(paths).toContain('badgeText');
+  });
+
   // ==========================================================================
   // 5. COVER-PRINT-CLEANLINESS-1: CONTENTEDITABLE É FALSE QUANDO ISSELECTED=FALSE
   // ==========================================================================

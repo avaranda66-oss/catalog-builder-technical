@@ -16,7 +16,13 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   // (badgeText, title, subtitle, brandName), pois eles não aparecem no PDF.
   // Regra: traduzir tudo que aparece no PDF e SOMENTE o que aparece no PDF.
   if (!isCanonicalCover) {
-    if (typeof block.badgeText === 'string' && block.badgeText.trim()) {
+    const isCover = block.type === 'full_page_cover';
+    const isBadgeVisible = !isCover || block.customData?.badgeConfig?.visible !== false;
+    const isTitleVisible = !isCover || block.customData?.titleConfig?.visible !== false;
+    const isSubtitleVisible = !isCover || block.customData?.subtitleConfig?.visible !== false;
+    const isLogoVisible = !isCover || block.customData?.logoConfig?.visible !== false;
+
+    if (isBadgeVisible && typeof block.badgeText === 'string' && block.badgeText.trim()) {
       nodes.push({
         id: `p${pageNumber}_b${block.id}_badgeText`,
         pageId,
@@ -30,7 +36,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       });
     }
 
-    if (typeof block.title === 'string' && block.title.trim()) {
+    if (isTitleVisible && typeof block.title === 'string' && block.title.trim()) {
       nodes.push({
         id: `p${pageNumber}_b${block.id}_title`,
         pageId,
@@ -44,7 +50,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       });
     }
 
-    if (typeof block.subtitle === 'string' && block.subtitle.trim()) {
+    if (isSubtitleVisible && typeof block.subtitle === 'string' && block.subtitle.trim()) {
       nodes.push({
         id: `p${pageNumber}_b${block.id}_subtitle`,
         pageId,
@@ -58,8 +64,8 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       });
     }
 
-    // Marca legacy na cover (aparece na layer-logo derivada na impressão)
-    if (block.type === 'full_page_cover') {
+    // Marca legacy na cover (aparece na layer-logo derivada na impressão apenas se logoConfig.visible !== false)
+    if (isCover && isLogoVisible) {
       const brand =
         typeof block.customData?.brandName === 'string' && block.customData.brandName.trim()
           ? block.customData.brandName.trim()
