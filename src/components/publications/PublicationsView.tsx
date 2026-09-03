@@ -22,6 +22,7 @@ import { useUIStore } from '../../stores/useUIStore';
 import { PDFService } from '../../services/pdf.service';
 import { AIService } from '../../services/ai.service';
 import { Catalog } from '../../domain/catalog.schema';
+import { isTableLikeBlock } from '../../domain/compliance-coverage';
 import { PresetModal } from '../editor/PresetModal';
 
 export const PublicationsView: React.FC = () => {
@@ -57,7 +58,7 @@ export const PublicationsView: React.FC = () => {
   const complianceReport = AIService.checkCatalogCompliance(currentCatalog, products);
   const totalBlocks = currentCatalog.pages.reduce((acc, p) => acc + (p.blocks?.length || 0), 0);
   const totalTables = currentCatalog.pages.reduce(
-    (acc, p) => acc + (p.blocks?.filter((b) => b.type === 'table' || b.type === 'specs_table' || b.type === 'electrical_table' || b.type === 'accessories_table' || b.type === 'matrix_spec_table').length || 0),
+    (acc, p) => acc + (p.blocks?.filter((b) => isTableLikeBlock(b.type)).length || 0),
     0
   );
   const totalImages = currentCatalog.pages.reduce(

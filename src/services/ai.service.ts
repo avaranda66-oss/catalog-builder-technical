@@ -1,6 +1,12 @@
-import { Catalog } from '../domain/catalog.schema';
+import { Catalog, BlockType } from '../domain/catalog.schema';
 import { Product } from '../domain/product.schema';
 import { calculateRowDivergences, FieldDivergence } from '../domain/divergence';
+import {
+  evaluateBlockComplianceCapability,
+  isTableLikeBlock
+} from '../domain/compliance-coverage';
+
+export type ComplianceStatus = 'compliant' | 'divergent' | 'partial' | 'no_tables';
 
 export interface ComplianceItem {
   pageNumber: number;
@@ -15,8 +21,14 @@ export interface ComplianceReport {
   totalRowsChecked: number;
   divergenceCount: number;
   isFullyCompliant: boolean;
+  coverageComplete: boolean;
+  complianceStatus: ComplianceStatus;
+  auditedBlocksCount: number;
+  skippedBlocksCount: number;
+  skippedBlockTypes: BlockType[];
   items: ComplianceItem[];
   generatedAt: string;
+  notes?: string;
 }
 
 export class AIService {
@@ -38,6 +50,7 @@ export class AIService {
   /**
    * Varre todas as tabelas do catálogo e gera um relatório de conformidade factual contra a biblioteca oficial em memória.
    * 100% determinístico e seguro (Zero chamadas de rede externas).
+   * Reporta veracidade de cobertura (Fase CORE.H2): distingue 100% conforme de auditoria parcial ou ausência de tabelas.
    */
   static checkCatalogCompliance(
     catalog: Catalog,
@@ -46,15 +59,23 @@ export class AIService {
     const items: ComplianceItem[] = [];
     let totalRowsChecked = 0;
     let divergenceCount = 0;
+    let auditedBlocksCount = 0;
+    let skippedBlocksCount = 0;
+    const skippedBlockTypesSet = new Set<BlockType>();
 
     const productMap = new Map<string, Product>();
     for (const prod of libraryProducts) {
       productMap.set(prod.id, prod);
     }
 
-    for (const page of catalog.pages) {
+    for (const page of catalog.pages || []) {
       for (const block of page.blocks || []) {
-        if (block.type === 'table' && block.tableRows) {
+        if (!isTableLikeBlock(block.type)) continue;
+
+        const evalResult = evaluateBlockComplianceCapability(block);
+
+        if (evalResult.isSupported && block.tableRows) {
+          auditedBlocksCount++;
           for (const row of block.tableRows) {
             totalRowsChecked++;
             const product = row.productRefId ? productMap.get(row.productRefId) : undefined;
@@ -83,16 +104,48 @@ export class AIService {
               });
             }
           }
+        } else {
+          // Bloco tabular não suportado / skipped para conferência de produtos
+          skippedBlocksCount++;
+          skippedBlockTypesSet.add(block.type);
         }
       }
+    }
+
+    const skippedBlockTypes = Array.from(skippedBlockTypesSet);
+    const coverageComplete = skippedBlocksCount === 0;
+    const isFullyCompliant = divergenceCount === 0 && coverageComplete && totalRowsChecked > 0;
+
+    let complianceStatus: ComplianceStatus;
+    if (totalRowsChecked === 0 && auditedBlocksCount === 0) {
+      complianceStatus = skippedBlocksCount > 0 ? 'partial' : 'no_tables';
+    } else if (divergenceCount > 0) {
+      complianceStatus = 'divergent';
+    } else if (!coverageComplete) {
+      complianceStatus = 'partial';
+    } else {
+      complianceStatus = 'compliant';
+    }
+
+    let notes: string | undefined;
+    if (complianceStatus === 'no_tables') {
+      notes = 'Nenhuma tabela compatível com a Biblioteca Oficial encontrada para auditoria.';
+    } else if (complianceStatus === 'partial') {
+      notes = `Auditoria parcial: ${auditedBlocksCount} tabela(s) verificada(s), ${skippedBlocksCount} estrutura(s) especializada(s) não suportada(s) (${skippedBlockTypes.join(', ')}).`;
     }
 
     return {
       totalRowsChecked,
       divergenceCount,
-      isFullyCompliant: divergenceCount === 0,
+      isFullyCompliant,
+      coverageComplete,
+      complianceStatus,
+      auditedBlocksCount,
+      skippedBlocksCount,
+      skippedBlockTypes,
       items,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      notes
     };
   }
 

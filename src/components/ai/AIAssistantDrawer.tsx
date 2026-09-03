@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, CheckCircle2, Search, Bot } from 'lucide-react';
+import { X, Sparkles, CheckCircle2, Search, Bot, AlertTriangle, Info } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { useLibraryStore } from '../../stores/useLibraryStore';
@@ -84,7 +84,7 @@ export const AIAssistantDrawer: React.FC = () => {
                   <span>Verificador de Integridade Factual</span>
                 </p>
                 <p className="text-[11px] leading-relaxed">
-                  A IA varre todas as tabelas do catálogo e compara cada especificação contra a Biblioteca Oficial, apontando valores customizados e potenciais divergências.
+                  Audita tabelas técnicas compatíveis contra a Biblioteca Oficial de Produtos, reportando divergências de especificações e identificando estruturas especializadas.
                 </p>
               </div>
 
@@ -98,12 +98,16 @@ export const AIAssistantDrawer: React.FC = () => {
 
               {report && (
                 <div className="space-y-3 pt-2">
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between font-mono text-[11px]">
-                    <div>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 font-mono text-[11px]">
+                    <div className="flex items-center justify-between">
                       <span className="text-slate-500">Linhas Verificadas: </span>
                       <span className="font-bold text-slate-800">{report.totalRowsChecked}</span>
                     </div>
-                    <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Tabelas Auditadas: </span>
+                      <span className="font-bold text-slate-800">{report.auditedBlocksCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-slate-500">Divergências: </span>
                       <span
                         className={`font-bold ${
@@ -113,21 +117,62 @@ export const AIAssistantDrawer: React.FC = () => {
                         {report.divergenceCount}
                       </span>
                     </div>
+                    {report.skippedBlocksCount > 0 && (
+                      <div className="flex items-center justify-between text-slate-500 pt-1 border-t border-slate-200 text-[10px]">
+                        <span>Estruturas Não Suportadas:</span>
+                        <span className="font-bold text-slate-700">
+                          {report.skippedBlocksCount} ({report.skippedBlockTypes.join(', ')})
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {report.isFullyCompliant ? (
+                  {/* Estado 1: 100% Conforme */}
+                  {report.complianceStatus === 'compliant' && (
                     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2">
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                       <div>
                         <p className="font-bold">100% em Conformidade</p>
                         <p className="text-[11px] text-emerald-700">
-                          Todos os dados tabulares do catálogo correspondem com exatidão à Biblioteca Oficial de Produtos.
+                          Todas as tabelas do catálogo correspondem com exatidão à Biblioteca Oficial de Produtos.
                         </p>
                       </div>
                     </div>
-                  ) : (
+                  )}
+
+                  {/* Estado 2: Nenhuma tabela auditável */}
+                  {report.complianceStatus === 'no_tables' && (
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 flex items-center gap-2">
+                      <Info className="w-5 h-5 text-slate-500 flex-shrink-0" />
+                      <div>
+                        <p className="font-bold text-slate-800">Nenhuma Tabela Auditável</p>
+                        <p className="text-[11px] text-slate-500">
+                          Não foram encontradas tabelas vinculadas à Biblioteca Oficial para conferência de produtos.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estado 3: Auditoria Parcial (0 divergências, mas estruturas puladas) */}
+                  {report.complianceStatus === 'partial' && (
+                    <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-lg text-blue-900 space-y-1">
+                      <div className="flex items-center gap-2 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <span>Auditoria Parcial ({report.auditedBlocksCount} tabela(s) verificada(s))</span>
+                      </div>
+                      <p className="text-[11px] text-blue-800">
+                        As linhas auditadas estão em conformidade. Contudo, {report.skippedBlocksCount} estrutura(s) especializada(s) ({report.skippedBlockTypes.join(', ')}) utilizam formato proprietário sem vínculo a produtos oficiais.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Estado 4: Divergências Identificadas */}
+                  {report.items.length > 0 && (
                     <div className="space-y-2">
-                      <h3 className="font-bold text-slate-800 text-xs">Divergências Identificadas:</h3>
+                      <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Divergências Identificadas ({report.divergenceCount}):</span>
+                      </h3>
                       {report.items.map((item, idx) => (
                         <div
                           key={idx}

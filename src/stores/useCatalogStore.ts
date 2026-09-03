@@ -289,19 +289,28 @@ interface CatalogState {
   handleRealtimeTemplateChange: (payload: { eventType: string; new?: any; old?: any }) => void;
 }
 
-// Controle de Fila por Catálogo (Per-Catalog Save Queue)
-interface CatalogSaveQueue {
+// Controle de Fila por Catálogo (Per-Catalog Save Queue) com Token de Geração
+export interface CatalogSaveQueue {
   isSaving: boolean;
   hasPending: boolean;
   inFlightPromise: Promise<SaveResult> | null;
+  currentAttemptId: number;
 }
 
 const catalogSaveQueues = new Map<string, CatalogSaveQueue>();
 
+export function _resetCatalogSaveQueuesForTest() {
+  catalogSaveQueues.clear();
+}
+
+export function _getCatalogSaveQueueForTest(catalogId: string): CatalogSaveQueue | undefined {
+  return catalogSaveQueues.get(catalogId);
+}
+
 function getCatalogQueue(catalogId: string): CatalogSaveQueue {
   let q = catalogSaveQueues.get(catalogId);
   if (!q) {
-    q = { isSaving: false, hasPending: false, inFlightPromise: null };
+    q = { isSaving: false, hasPending: false, inFlightPromise: null, currentAttemptId: 0 };
     catalogSaveQueues.set(catalogId, q);
   }
   return q;
@@ -1400,7 +1409,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return { success: true, status: 'saving', version: expectedVer };
     }
 
-    // MODO CATÁLOGO: Fila Single-Flight por catálogo
+    // MODO CATÁLOGO: Fila Single-Flight por catálogo com Generation Token e Watchdog Recuperável
     const queue = getCatalogQueue(currentCatalog.id);
 
     if (queue.isSaving) {
@@ -1412,6 +1421,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
 
     queue.isSaving = true;
+    queue.currentAttemptId++;
+    const thisAttemptId = queue.currentAttemptId;
 
     // Watchdog Timer de 10s para garantir que saving nunca trave
     let watchdogTimer: any = null;
@@ -1421,7 +1432,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }, 10000);
     });
 
-    const savePromise = (async () => {
+    const savePromise = (async (): Promise<SaveResult> => {
       let finalResult: SaveResult = { success: false, status: 'saving' };
       try {
         while (true) {
@@ -1470,7 +1481,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               documentId: catalogSnapshot.id,
               expectedVersion,
               capturedRevision,
-              mutationKind: mutation?.kind || 'MANUAL_EDIT'
+              mutationKind: mutation?.kind || 'MANUAL_EDIT',
+              attemptId: thisAttemptId
             });
           }
 
@@ -1490,6 +1502,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             summaryText
           );
 
+          // PROTEÇÃO CONTRA LATE COMPLETION / STALE SAVE
+          // Se o attemptId atual da fila divergir de thisAttemptId (ex: watchdog expirou ou retry iniciou),
+          // este attempt é obsoleto e NÃO PODE alterar o estado do store nem a fila!
+          if (queue.currentAttemptId !== thisAttemptId) {
+            return {
+              success: false,
+              status: 'error',
+              error: 'Operação de salvamento desatualizada (stale attempt discard).'
+            };
+          }
+
           if (remoteRes.success && remoteRes.data) {
             const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
             const nowIso = new Date().toISOString();
@@ -1499,7 +1522,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
                 documentKind: 'catalog',
                 documentId: catalogSnapshot.id,
                 confirmedVersion,
-                capturedRevision
+                capturedRevision,
+                attemptId: thisAttemptId
               });
             }
 
@@ -1614,22 +1638,50 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       } finally {
         if (watchdogTimer) clearTimeout(watchdogTimer);
-        queue.isSaving = false;
-        queue.inFlightPromise = null;
-        set({ isSaving: false, inFlightSave: null });
+        // Limpeza SOMENTE se este attempt ainda for a autoridade ativa da fila!
+        if (queue.currentAttemptId === thisAttemptId) {
+          queue.isSaving = false;
+          queue.inFlightPromise = null;
+          set({ isSaving: false, inFlightSave: null });
+        }
       }
       return finalResult;
     })();
 
-    queue.inFlightPromise = Promise.race([savePromise, watchdogPromise.then((wd) => {
-      if (wd && (wd as any).timeout) {
-        set({ isSaving: false, syncStatus: 'error', syncError: 'Tempo limite de salvamento excedido (watchdog 10s).' });
-        return { success: false, status: 'error' as const, error: 'Tempo limite de salvamento excedido.' };
-      }
-      return savePromise;
-    })]);
+    const supervisedPromise: Promise<SaveResult> = Promise.race([
+      savePromise,
+      watchdogPromise.then((wd): SaveResult => {
+        if (wd && wd.timeout) {
+          if (watchdogTimer) clearTimeout(watchdogTimer);
+          if (queue.currentAttemptId === thisAttemptId) {
+            // Invalida a autoridade deste attempt para que conclusões tardias sejam descartadas
+            queue.currentAttemptId++;
+            queue.isSaving = false;
+            queue.inFlightPromise = null;
 
-    return savePromise;
+            // Mantém isDirty se houver revisões locais não confirmadas
+            const isStillDirty = get().localRevision > get().lastAcknowledgedLocalRevision;
+
+            set({
+              isSaving: false,
+              inFlightSave: null,
+              syncStatus: 'error',
+              syncError: 'Tempo limite de salvamento excedido (watchdog 10s).',
+              isDirty: isStillDirty || get().isDirty
+            });
+          }
+          return {
+            success: false,
+            status: 'error' as const,
+            error: 'Tempo limite de salvamento excedido.'
+          };
+        }
+        return { success: false, status: 'error' as const, error: 'Erro inesperado no supervisor de salvamento.' };
+      })
+    ]);
+
+    queue.inFlightPromise = supervisedPromise;
+    return supervisedPromise;
   },
 
   flushCatalog: async (catalogId?: string): Promise<SaveResult> => {
