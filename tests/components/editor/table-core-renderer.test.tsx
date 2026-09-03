@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TableCoreRenderer } from '../../../src/components/editor/table-core';
+import { TableCoreRenderer, collectTableRenderDiagnostics } from '../../../src/components/editor/table-core';
 import {
   createTable,
   setCellContent,
@@ -385,5 +385,146 @@ describe('TableCoreRenderer (CORE.T2A)', () => {
     expect(tableEl?.getAttribute('role')).toBe('table');
     expect(container.querySelectorAll('colgroup col')).toHaveLength(2);
     expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
+  it('RENDER-DATUM-REVIEW-NOSNAPSHOT: review_required sem snapshot exibe aviso no editor e gera diagnóstico rastreável', () => {
+    let table = createTable({
+      columns: [{ semanticKey: 'rev', defaultLabel: 'Revisão', widthSpec: { mode: 'auto' }, align: 'left' }],
+      rowsCount: 1
+    });
+    table = setCellContent(table, table.rows[0].id, table.columns[0].id, {
+      kind: 'datum_reference',
+      productId: 'p1',
+      datumKey: 'electrical.power',
+      bindingMode: 'review_required'
+    });
+
+    const diagnostics = collectTableRenderDiagnostics(table);
+    expect(diagnostics.some((d) => d.code === 'REVIEW_REQUIRED_WITHOUT_SNAPSHOT')).toBe(true);
+
+    // Editor: exibe indicador explícito de pendência
+    renderComponent(<TableCoreRenderer table={table} mode="editor" />);
+    expect(container.textContent).toContain('[Revisão pendente: electrical.power]');
+
+    // Export: não gera dado falso nem crasha
+    renderComponent(<TableCoreRenderer table={table} mode="export" />);
+    expect(container.textContent).not.toContain('[Revisão pendente:');
+  });
+
+  it('RENDER-GEOMETRY-INVALID: Geometria inválida exibe aviso no editor e não quebra exportação', () => {
+    let table = createTable({
+      columns: [
+        { semanticKey: 'c1', defaultLabel: 'C1', widthSpec: { mode: 'fixed_mm', widthMm: 150 }, align: 'left' },
+        { semanticKey: 'c2', defaultLabel: 'C2', widthSpec: { mode: 'fixed_mm', widthMm: 150 }, align: 'left' }
+      ],
+      rowsCount: 1
+    });
+    // 300mm excede a largura do A4 (182mm útil)
+    table = setTableWidth(table, { mode: 'fixed_mm', widthMm: 300 });
+
+    const diagnostics = collectTableRenderDiagnostics(table);
+    expect(diagnostics.some((d) => d.code === 'INVALID_GEOMETRY')).toBe(true);
+
+    // Editor: alerta visual renderizado
+    renderComponent(<TableCoreRenderer table={table} mode="editor" />);
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).toBeTruthy();
+    expect(alert?.textContent).toContain('Aviso de Geometria:');
+
+    // Export: não crasha, renderiza a tabela com fail-safe
+    renderComponent(<TableCoreRenderer table={table} mode="export" />);
+    const tableEl = container.querySelector('table');
+    expect(tableEl).toBeTruthy();
+  });
+
+  it('RENDER-DIVIDER: Linha com kind="divider" é renderizada como separador estrutural explícito', () => {
+    let table = createTable({
+      columns: [
+        { semanticKey: 'c1', defaultLabel: 'C1', widthSpec: { mode: 'auto' }, align: 'left' },
+        { semanticKey: 'c2', defaultLabel: 'C2', widthSpec: { mode: 'auto' }, align: 'left' }
+      ],
+      rowsCount: 2
+    });
+
+    // Transforma a segunda linha em divisor
+    table.rows[1].kind = 'divider';
+    table = setCellContent(table, table.rows[1].id, table.columns[0].id, {
+      kind: 'text',
+      text: 'Seção Suplementar'
+    });
+
+    renderComponent(<TableCoreRenderer table={table} mode="editor" />);
+
+    const dividerRow = container.querySelector('tr[data-row-kind="divider"]');
+    expect(dividerRow).toBeTruthy();
+    expect(dividerRow?.getAttribute('role')).toBe('separator');
+
+    const td = dividerRow?.querySelector('td');
+    expect(td?.getAttribute('colspan')).toBe('2');
+    expect(td?.textContent).toContain('Seção Suplementar');
+  });
+
+  it('RENDER-CONTENT-EXHAUSTIVE: Todos os tipos discriminados de TableCellContent são renderizados exaustivamente', () => {
+    let table = createTable({
+      columns: [
+        { semanticKey: 'c1', defaultLabel: 'C1', widthSpec: { mode: 'auto' }, align: 'left' },
+        { semanticKey: 'c2', defaultLabel: 'C2', widthSpec: { mode: 'auto' }, align: 'left' },
+        { semanticKey: 'c3', defaultLabel: 'C3', widthSpec: { mode: 'auto' }, align: 'left' },
+        { semanticKey: 'c4', defaultLabel: 'C4', widthSpec: { mode: 'auto' }, align: 'left' },
+        { semanticKey: 'c5', defaultLabel: 'C5', widthSpec: { mode: 'auto' }, align: 'left' }
+      ],
+      rowsCount: 2
+    });
+
+    const r0 = table.rows[0].id;
+    const r1 = table.rows[1].id;
+
+    table = setCellContent(table, r0, table.columns[0].id, { kind: 'empty' });
+    table = setCellContent(table, r0, table.columns[1].id, { kind: 'text', text: 'Txt' });
+    table = setCellContent(table, r0, table.columns[2].id, { kind: 'number', value: 42 });
+    table = setCellContent(table, r0, table.columns[3].id, { kind: 'value_unit', amount: 5, unit: 'bar' });
+    table = setCellContent(table, r0, table.columns[4].id, { kind: 'badge', label: 'OK', variant: 'success' });
+    table = setCellContent(table, r1, table.columns[0].id, { kind: 'asset_reference', assetId: 'img1' });
+    table = setCellContent(table, r1, table.columns[1].id, {
+      kind: 'datum_reference',
+      productId: 'p1',
+      datumKey: 'key1',
+      bindingMode: 'snapshot',
+      snapshot: { kind: 'text', text: 'Snap' }
+    });
+
+    // Não deve lançar erro de runtime assertNever
+    expect(() => {
+      renderComponent(
+        <TableCoreRenderer
+          table={table}
+          mode="editor"
+          resolveAsset={() => ({ url: 'https://cdn.example.com/img.png' })}
+        />
+      );
+    }).not.toThrow();
+
+    expect(container.textContent).toContain('Txt');
+    expect(container.textContent).toContain('42');
+    expect(container.textContent).toContain('5 bar');
+    expect(container.textContent).toContain('OK');
+    expect(container.textContent).toContain('Snap');
+  });
+
+  it('RENDER-MODE-EXPLICIT: Propriedade mode é estritamente obrigatória e isola atributos interativos', () => {
+    const table = createTable({
+      columns: [{ semanticKey: 'c1', defaultLabel: 'C1', widthSpec: { mode: 'auto' }, align: 'left' }],
+      rowsCount: 1
+    });
+
+    // Em modo editor: data-cell-id e data-table-id estão presentes
+    renderComponent(<TableCoreRenderer table={table} mode="editor" />);
+    expect(container.querySelector('[data-table-mode="editor"]')).toBeTruthy();
+    expect(container.querySelector('[data-cell-id]')).toBeTruthy();
+
+    // Em modo export: zero atributos interativos do editor
+    renderComponent(<TableCoreRenderer table={table} mode="export" />);
+    expect(container.querySelector('[data-table-mode="export"]')).toBeTruthy();
+    expect(container.querySelector('[data-cell-id]')).toBeNull();
   });
 });

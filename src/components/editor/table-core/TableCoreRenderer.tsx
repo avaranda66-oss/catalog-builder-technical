@@ -1,15 +1,18 @@
 // src/components/editor/table-core/TableCoreRenderer.tsx
-// Renderizador Canônico Compartilhado de Tabelas Técnicas (Table Core V2 - Fase CORE.T2A).
+// Renderizador Canônico Compartilhado de Tabelas Técnicas (Table Core V2 - Fase CORE.T2A.1).
 // Suporta modos 'editor' e 'export' sem duplicação de lógica nem mutações de estado.
+// Zero unsafe casts, tratamento exaustivo com assertNever(), diagnósticos puros e divisor explícito.
 // Zero explicit any.
 
 import React from 'react';
 import {
+  TableCoreModel,
   TableCellContent,
   TableCellLiteralContent,
   TableCellModel,
   TableColumnModel,
   TableRowModel,
+  TableCellTextContent,
   getCellKey
 } from '../../../domain/table-core/table.types';
 import { resolveColumnWidthsMm } from '../../../domain/table-core/table.geometry';
@@ -17,23 +20,105 @@ import {
   TableCoreRendererProps,
   TableAssetResolver,
   TableDatumResolver,
-  TableCoreRendererMode
+  TableCoreRendererMode,
+  TableRenderDiagnostic
 } from './table-renderer.types';
 import {
   getBackgroundColorClass,
   getTextColorClass,
   getDensityClasses,
   getBorderClasses,
-  getStripeClass
+  getStripeClass,
+  getBadgeVariantClasses
 } from './table-tokens';
 
 /**
- * Renderiza o conteúdo literal de uma célula de forma pura.
+ * Helper para garantia de exaustividade em tempo de compilação e execução.
+ */
+function assertNever(x: never): never {
+  throw new Error(`Unhandled TableCellContent kind: ${JSON.stringify(x)}`);
+}
+
+/**
+ * Coleta diagnósticos puros de renderização sem causar efeitos colaterais.
+ */
+export function collectTableRenderDiagnostics(
+  table: TableCoreModel,
+  resolveAsset?: TableAssetResolver,
+  resolveDatum?: TableDatumResolver
+): TableRenderDiagnostic[] {
+  const diagnostics: TableRenderDiagnostic[] = [];
+
+  // 1. Diagnóstico de geometria física
+  const geometryResult = resolveColumnWidthsMm(table);
+  if (!geometryResult.valid) {
+    diagnostics.push({
+      code: 'INVALID_GEOMETRY',
+      severity: 'error',
+      tableId: table.id,
+      message: geometryResult.error || 'A largura física total da tabela é inválida.'
+    });
+  } else if (geometryResult.warnings.length > 0) {
+    diagnostics.push({
+      code: 'INVALID_GEOMETRY',
+      severity: 'warning',
+      tableId: table.id,
+      message: geometryResult.warnings.join('; ')
+    });
+  }
+
+  // 2. Diagnóstico sobre células
+  for (const [cellKey, cell] of Object.entries(table.cells)) {
+    const { content } = cell;
+
+    if (content.kind === 'asset_reference') {
+      const resolved = resolveAsset ? resolveAsset(content.assetId) : undefined;
+      if (!resolved || !resolved.url) {
+        diagnostics.push({
+          code: 'UNRESOLVED_ASSET',
+          severity: 'warning',
+          tableId: table.id,
+          cellId: cell.id,
+          message: `Asset de mídia '${content.assetId}' na célula ${cellKey} não pôde ser resolvido.`
+        });
+      }
+    } else if (content.kind === 'datum_reference') {
+      if (content.bindingMode === 'live') {
+        const resolved = resolveDatum ? resolveDatum(content) : undefined;
+        if (!resolved && !content.snapshot) {
+          diagnostics.push({
+            code: 'UNRESOLVED_LIVE_DATUM',
+            severity: 'warning',
+            tableId: table.id,
+            cellId: cell.id,
+            message: `Dado vinculado ao vivo '${content.datumKey}' na célula ${cellKey} não foi resolvido e não possui snapshot.`
+          });
+        }
+      } else if (content.bindingMode === 'review_required' && !content.snapshot) {
+        diagnostics.push({
+          code: 'REVIEW_REQUIRED_WITHOUT_SNAPSHOT',
+          severity: 'warning',
+          tableId: table.id,
+          cellId: cell.id,
+          message: `Dado na célula ${cellKey} requer revisão ('${content.datumKey}'), mas não possui snapshot anterior.`
+        });
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+/**
+ * Renderiza o conteúdo literal de uma célula de forma pura e exaustiva.
  */
 function renderLiteralContent(
   content: TableCellLiteralContent,
   mode: TableCoreRendererMode,
-  resolveAsset?: TableAssetResolver
+  resolveAsset?: TableAssetResolver,
+  onDiagnostic?: (diag: TableRenderDiagnostic) => void,
+  tableId?: string,
+  cellId?: string
 ): React.ReactNode {
   switch (content.kind) {
     case 'empty':
@@ -59,17 +144,7 @@ function renderLiteralContent(
     }
 
     case 'badge': {
-      let badgeColorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
-      if (content.variant === 'info') {
-        badgeColorClasses = 'bg-blue-50 text-blue-700 border-blue-200';
-      } else if (content.variant === 'success') {
-        badgeColorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      } else if (content.variant === 'warning') {
-        badgeColorClasses = 'bg-amber-50 text-amber-700 border-amber-200';
-      } else if (content.variant === 'critical') {
-        badgeColorClasses = 'bg-rose-50 text-rose-700 border-rose-200';
-      }
-
+      const badgeColorClasses = getBadgeVariantClasses(content.variant);
       return (
         <span
           className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border ${badgeColorClasses}`}
@@ -97,6 +172,14 @@ function renderLiteralContent(
         );
       }
 
+      onDiagnostic?.({
+        code: 'UNRESOLVED_ASSET',
+        severity: 'warning',
+        tableId: tableId ?? '',
+        cellId,
+        message: `Mídia referenciada '${content.assetId}' não pôde ser resolvida.`
+      });
+
       // Se o asset não foi resolvido, NUNCA renderizar tag <img> quebrada
       if (mode === 'editor') {
         return (
@@ -107,71 +190,139 @@ function renderLiteralContent(
       }
       return null;
     }
+
+    default:
+      return assertNever(content);
   }
 }
 
 /**
- * Renderizador de conteúdo de célula com suporte a bindings e literais.
+ * Renderizador exaustivo de conteúdo de célula com tratamento discriminado de bindings e literais.
+ * Zero unsafe cast.
  */
 function renderCellContent(
   content: TableCellContent,
   mode: TableCoreRendererMode,
   resolveAsset?: TableAssetResolver,
-  resolveDatum?: TableDatumResolver
+  resolveDatum?: TableDatumResolver,
+  tableId?: string,
+  cellId?: string,
+  onDiagnostic?: (diag: TableRenderDiagnostic) => void
 ): React.ReactNode {
-  if (content.kind === 'datum_reference') {
-    if (content.bindingMode === 'snapshot' && content.snapshot) {
-      return renderLiteralContent(content.snapshot, mode, resolveAsset);
-    }
+  switch (content.kind) {
+    case 'empty':
+    case 'text':
+    case 'number':
+    case 'value_unit':
+    case 'badge':
+    case 'asset_reference':
+      return renderLiteralContent(content, mode, resolveAsset, onDiagnostic, tableId, cellId);
 
-    if (content.bindingMode === 'live') {
-      const resolved = resolveDatum ? resolveDatum(content) : undefined;
-      if (resolved) {
-        return renderLiteralContent(resolved.value, mode, resolveAsset);
-      }
+    case 'datum_reference': {
+      switch (content.bindingMode) {
+        case 'snapshot': {
+          if (content.snapshot) {
+            return renderLiteralContent(content.snapshot, mode, resolveAsset, onDiagnostic, tableId, cellId);
+          }
 
-      // Unresolved fallback
-      if (mode === 'editor') {
-        return (
-          <span className="text-amber-700 bg-amber-50 px-1 py-0.5 rounded text-[9px] border border-amber-200 font-mono">
-            [Pendente: {content.datumKey}]
-          </span>
-        );
-      }
-      return content.snapshot
-        ? renderLiteralContent(content.snapshot, mode, resolveAsset)
-        : null;
-    }
+          onDiagnostic?.({
+            code: 'UNRESOLVED_LIVE_DATUM',
+            severity: 'warning',
+            tableId: tableId ?? '',
+            cellId,
+            message: `Dado vinculado em modo snapshot sem snapshot materializado para '${content.datumKey}'.`
+          });
 
-    if (content.bindingMode === 'review_required') {
-      if (content.snapshot) {
-        return (
-          <span className={mode === 'editor' ? 'relative' : ''}>
-            {renderLiteralContent(content.snapshot, mode, resolveAsset)}
-            {mode === 'editor' && (
-              <span
-                title="Revisão necessária para este dado"
-                className="ml-1 text-[8px] text-amber-500 font-bold"
-              >
-                *
+          if (mode === 'editor') {
+            return (
+              <span className="text-amber-700 bg-amber-50 px-1 py-0.5 rounded text-[9px] border border-amber-200 font-mono">
+                [Snapshot ausente: {content.datumKey}]
               </span>
-            )}
-          </span>
-        );
+            );
+          }
+          return null;
+        }
+
+        case 'live': {
+          const resolved = resolveDatum ? resolveDatum(content) : undefined;
+          if (resolved) {
+            return renderLiteralContent(resolved.value, mode, resolveAsset, onDiagnostic, tableId, cellId);
+          }
+
+          onDiagnostic?.({
+            code: 'UNRESOLVED_LIVE_DATUM',
+            severity: 'warning',
+            tableId: tableId ?? '',
+            cellId,
+            message: `Dado vinculado ao vivo não resolvido para '${content.datumKey}'.`
+          });
+
+          if (mode === 'editor') {
+            return (
+              <span className="text-amber-700 bg-amber-50 px-1 py-0.5 rounded text-[9px] border border-amber-200 font-mono">
+                [Pendente: {content.datumKey}]
+              </span>
+            );
+          }
+          return content.snapshot
+            ? renderLiteralContent(content.snapshot, mode, resolveAsset, onDiagnostic, tableId, cellId)
+            : null;
+        }
+
+        case 'review_required': {
+          if (content.snapshot) {
+            return (
+              <span className={mode === 'editor' ? 'relative' : ''}>
+                {renderLiteralContent(content.snapshot, mode, resolveAsset, onDiagnostic, tableId, cellId)}
+                {mode === 'editor' && (
+                  <span
+                    title="Revisão necessária para este dado"
+                    className="ml-1 text-[8px] text-amber-500 font-bold"
+                  >
+                    *
+                  </span>
+                )}
+              </span>
+            );
+          }
+
+          onDiagnostic?.({
+            code: 'REVIEW_REQUIRED_WITHOUT_SNAPSHOT',
+            severity: 'warning',
+            tableId: tableId ?? '',
+            cellId,
+            message: `Dado marcado como review_required sem snapshot anterior para '${content.datumKey}'.`
+          });
+
+          if (mode === 'editor') {
+            return (
+              <span className="text-amber-700 bg-amber-50 px-1 py-0.5 rounded text-[9px] border border-amber-200 font-mono">
+                [Revisão pendente: {content.datumKey}]
+              </span>
+            );
+          }
+          return null;
+        }
+
+        default:
+          return assertNever(content);
       }
     }
-  }
 
-  return renderLiteralContent(content as TableCellLiteralContent, mode, resolveAsset);
+    default:
+      return assertNever(content);
+  }
 }
 
 export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   table,
-  mode = 'editor',
+  mode,
   resolveAsset,
   resolveDatum,
   selectedCellId,
   onSelectCell,
+  onDiagnostic,
+  renderTitle = false,
   className = ''
 }) => {
   // 1. Resolução geométrica pura em mm
@@ -179,6 +330,16 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   const columnWidthMap = new Map<string, number>(
     geometryResult.columns.map((c) => [c.columnId, c.widthMm])
   );
+
+  // Emissão de diagnóstico de geometria se inválida
+  if (!geometryResult.valid && onDiagnostic) {
+    onDiagnostic({
+      code: 'INVALID_GEOMETRY',
+      severity: 'error',
+      tableId: table.id,
+      message: geometryResult.error || 'Largura física da tabela excede o espaço disponível.'
+    });
+  }
 
   // 2. Extração e mapeamento de estilos de apresentação
   const { presentation } = table;
@@ -202,7 +363,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   const explicitHeaderRows = table.rows.filter(
     (r) => r.isHeader === true || r.kind === 'header'
   );
-  const dataRows = table.rows.filter(
+  const bodyRows = table.rows.filter(
     (r) => !r.isHeader && r.kind !== 'header' && r.kind !== 'footer'
   );
   const footerRows = table.rows.filter((r) => r.kind === 'footer');
@@ -269,12 +430,48 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         data-row-id={mode === 'editor' ? cell.rowId : undefined}
         data-column-id={mode === 'editor' ? cell.columnId : undefined}
       >
-        {renderCellContent(cell.content, mode, resolveAsset, resolveDatum)}
+        {renderCellContent(
+          cell.content,
+          mode,
+          resolveAsset,
+          resolveDatum,
+          table.id,
+          cell.id,
+          onDiagnostic
+        )}
       </Tag>
     );
   };
 
   const renderRow = (row: TableRowModel, isHeaderRow: boolean) => {
+    // A5: Tratamento explícito de Linha Divisora (kind === 'divider')
+    if (row.kind === 'divider') {
+      const firstColId = table.columns[0]?.id;
+      const firstKey = firstColId ? getCellKey(row.id, firstColId) : '';
+      const dividerCell = table.cells[firstKey];
+      const dividerText =
+        dividerCell && dividerCell.content.kind === 'text'
+          ? (dividerCell.content as TableCellTextContent).text
+          : null;
+
+      return (
+        <tr
+          key={row.id}
+          role="separator"
+          className="border-b border-t border-slate-300 bg-slate-100/80 font-medium"
+          data-row-id={mode === 'editor' ? row.id : undefined}
+          data-row-kind="divider"
+        >
+          <td
+            colSpan={table.columns.length}
+            className="py-1 px-2.5 text-[9px] text-slate-600 tracking-wide"
+          >
+            {dividerText}
+          </td>
+        </tr>
+      );
+    }
+
     const rowStyle: React.CSSProperties = {};
     if (row.minHeightMm) {
       rowStyle.minHeight = `${row.minHeightMm}mm`;
@@ -309,12 +506,30 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         geometryResult.warnings.length > 0 ? geometryResult.warnings.join('; ') : undefined
       }
     >
+      {/* A6: Aviso visual discreto de geometria inválida no editor */}
+      {mode === 'editor' && (!geometryResult.valid || geometryResult.warnings.length > 0) && (
+        <div
+          role="alert"
+          className="mb-1.5 px-2 py-1 bg-rose-50 border border-rose-200 rounded text-rose-700 text-[9px] flex items-center gap-1 font-sans"
+        >
+          <span className="font-bold">Aviso de Geometria:</span>
+          <span>{geometryResult.error || geometryResult.warnings.join('; ')}</span>
+        </div>
+      )}
+
       <table
         role="table"
         aria-label={table.title || 'Tabela Técnica'}
         className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize}`}
         style={{ tableLayout: 'fixed' }}
       >
+        {/* A7: Título opcional interno via caption para não duplicar cabeçalhos externos */}
+        {renderTitle && table.title && (
+          <caption className="caption-top text-left font-semibold text-slate-800 pb-1 text-xs">
+            {table.title}
+          </caption>
+        )}
+
         {/* Definição física de larguras das colunas em mm */}
         <colgroup>
           {table.columns.map((col) => {
@@ -358,7 +573,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         </thead>
 
         {/* Corpo principal de dados (tbody) */}
-        <tbody>{dataRows.map((row) => renderRow(row, false))}</tbody>
+        <tbody>{bodyRows.map((row) => renderRow(row, false))}</tbody>
 
         {/* Rodapé estrutural (tfoot) */}
         {footerRows.length > 0 && (

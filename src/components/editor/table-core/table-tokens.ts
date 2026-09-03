@@ -7,7 +7,8 @@ import {
   TableColorToken,
   TableDensityToken,
   TableBorderToken,
-  TableStripeToken
+  TableStripeToken,
+  TableCellBadgeContent
 } from '../../../domain/table-core/table.types';
 
 export interface TablePresentationStyles {
@@ -153,5 +154,26 @@ export function getStripeClass(stripeStyle: TableStripeToken): string {
     case 'none':
     default:
       return '';
+  }
+}
+
+/**
+ * Retorna as classes CSS para variantes semânticas de badges.
+ */
+export function getBadgeVariantClasses(
+  variant: TableCellBadgeContent['variant']
+): string {
+  switch (variant) {
+    case 'info':
+      return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'success':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'warning':
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'critical':
+      return 'bg-rose-50 text-rose-700 border-rose-200';
+    case 'neutral':
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 }
