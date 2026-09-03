@@ -115,7 +115,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <FullPageCoverBlock block={block} pageId={page.id} isSelected={false} />
                       )}
                       {block.type === 'bottom_header' && (
-                        <BottomHeaderBlock block={block} pageId={page.id} isSelected={false} />
+                        <BottomHeaderBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'matrix_spec_table' && (
                         <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={false} />
@@ -130,10 +130,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <HeroBannerBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'additel_two_col_hero' && (
-                        <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} />
+                        <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'fluke_header' && (
-                        <FlukeHeaderBlock block={block} pageId={page.id} isSelected={false} />
+                        <FlukeHeaderBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'inserts_visual' && (
                         <InsertsVisualBlock block={block} pageId={page.id} isSelected={false} />

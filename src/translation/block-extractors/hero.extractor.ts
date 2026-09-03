@@ -126,7 +126,11 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   }
 
   // Description em customData (apenas para blocos que a exibem visualmente)
-  if (block.type !== 'full_page_cover' && typeof block.customData?.description === 'string' && block.customData.description.trim()) {
+  if (
+    (block.type === 'hero_banner' || block.type === 'fluke_header') &&
+    typeof block.customData?.description === 'string' &&
+    block.customData.description.trim()
+  ) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_description`,
       pageId,
@@ -137,37 +141,15 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       policy: 'translate',
       source: { blockType: block.type, field: 'description' }
     });
-  } else if (block.type === 'fluke_header') {
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_description`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.description',
-      sourceText: 'Os calibradores metrológicos combinam máxima portabilidade e velocidade com estabilidade de laboratório primário. Com compensação de gradiente térmico integrada e canais para medição de Pt100, termopares e loop de 24V.',
-      kind: 'body',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'description' }
-    });
   }
 
   // Highlights & Notas técnicas adicionais em customData
-  // full_page_cover NÃO renderiza highlights visualmente: não extrai nós fantasmas de tradução
-  const defaultHighlights = [
-    'Leve, portátil e de resposta térmica ultrarrápida',
-    'Resfria até -25 °C e aquece até 660 °C em poucos minutos',
-    'Dois canais de medição para PRT, RTD, termopar e 4-20 mA',
-    'Exatidão metrológica com estabilidade térmica de ±0.01 °C',
-    'Rotinas automáticas de calibração com emissão de relatórios',
-    'Homogeneidade radial e axial certificada conforme normas internacionais'
-  ];
+  // full_page_cover NÃO renderiza highlights visualmente: não extrai nós de tradução
+  // Elimina fallbacks fantasmas: apenas itens reais existentes e não vazios são extraídos
   const rawHighlights = block.type === 'full_page_cover' ? [] : block.customData?.highlights;
-  const highlights = Array.isArray(rawHighlights)
-    ? rawHighlights
-    : block.type === 'fluke_header'
-    ? defaultHighlights
-    : [];
+  const highlights: string[] = Array.isArray(rawHighlights) ? rawHighlights : [];
 
-  highlights.forEach((hl: any, idx: number) => {
+  highlights.forEach((hl: string, idx: number) => {
     if (typeof hl === 'string' && hl.trim()) {
       nodes.push({
         id: `p${pageNumber}_b${block.id}_hl_${idx}`,
@@ -182,137 +164,79 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     }
   });
 
-  // Fluke Header: Badge & Subtitle Fallbacks
+  // Fluke Header: Badge Secundário real
   if (block.type === 'fluke_header') {
-    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'PRESYS';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeText`,
-      pageId,
-      blockId: block.id,
-      path: 'badgeText',
-      sourceText: badge,
-      kind: 'badge',
-      policy: 'protect',
-      source: { blockType: block.type, field: 'badgeText' }
-    });
-
-    const badgeSecondary = typeof block.customData?.badgeSecondary === 'string' && block.customData.badgeSecondary.trim()
-      ? block.customData.badgeSecondary.trim()
-      : 'Calibration';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeSecondary`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.badgeSecondary',
-      sourceText: badgeSecondary,
-      kind: 'badge',
-      policy: 'protect',
-      source: { blockType: block.type, field: 'badgeSecondary' }
-    });
+    if (
+      typeof block.customData?.badgeSecondary === 'string' &&
+      block.customData.badgeSecondary.trim()
+    ) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_badgeSecondary`,
+        pageId,
+        blockId: block.id,
+        path: 'customData.badgeSecondary',
+        sourceText: block.customData.badgeSecondary.trim(),
+        kind: 'badge',
+        policy: 'translate',
+        source: { blockType: block.type, field: 'badgeSecondary' }
+      });
+    }
   }
 
-  // Additel Two Col: Overview, Badge Subtitle e Bullets
+  // Additel Two Col: Overview, Badge Subtitle e Bullets reais
   if ((block.type as string) === 'additel_two_col' || block.type === 'additel_two_col_hero') {
-    const overview = typeof block.customData?.overview === 'string' && block.customData.overview.trim()
-      ? block.customData.overview.trim()
-      : 'A linha de calibradores automáticos de pressão oferece geração autônoma e medição com exatidão metrológica. Ideal para testes automatizados de transmissores, manômetros e pressostatos em laboratório e campo.';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_overview`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.overview',
-      sourceText: overview,
-      kind: 'body',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'overview' }
-    });
+    if (typeof block.customData?.overview === 'string' && block.customData.overview.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_overview`,
+        pageId,
+        blockId: block.id,
+        path: 'customData.overview',
+        sourceText: block.customData.overview.trim(),
+        kind: 'body',
+        policy: 'translate',
+        source: { blockType: block.type, field: 'overview' }
+      });
+    }
 
-    const badgeSubtitle = typeof block.customData?.badgeSubtitle === 'string' && block.customData.badgeSubtitle.trim()
-      ? block.customData.badgeSubtitle.trim()
-      : 'Precision Metrology';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeSubtitle`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.badgeSubtitle',
-      sourceText: badgeSubtitle,
-      kind: 'badge',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'badgeSubtitle' }
-    });
+    if (
+      typeof block.customData?.badgeSubtitle === 'string' &&
+      block.customData.badgeSubtitle.trim()
+    ) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_badgeSubtitle`,
+        pageId,
+        blockId: block.id,
+        path: 'customData.badgeSubtitle',
+        sourceText: block.customData.badgeSubtitle.trim(),
+        kind: 'badge',
+        policy: 'translate',
+        source: { blockType: block.type, field: 'badgeSubtitle' }
+      });
+    }
 
-    const defaultBullets = [
-      'Geração de pressão de vácuo a 70 bar com bomba interna',
-      'Estabilidade de controle melhor que 0.005% do fundo de escala',
-      'Duplo canal de medição de pressão com sensores intercambiáveis'
-    ];
-    const rawBullets = block.customData?.bulletList || block.customData?.bullets;
-    const bulletList = Array.isArray(rawBullets)
-      ? rawBullets
-      : defaultBullets;
+    // Autoridade de bullets: customData.bullets canônico > fallback bulletList legado > []
+    const customData = block.customData;
+    const isCanonicalBullets = Array.isArray(customData?.bullets);
+    const rawBullets: string[] = isCanonicalBullets
+      ? (customData!.bullets as string[])
+      : Array.isArray(customData?.bulletList)
+      ? (customData!.bulletList as string[])
+      : [];
+    const basePath = isCanonicalBullets ? 'customData.bullets' : 'customData.bulletList';
 
-    bulletList.forEach((b: any, idx: number) => {
+    rawBullets.forEach((b: string, idx: number) => {
       if (typeof b === 'string' && b.trim()) {
         nodes.push({
           id: `p${pageNumber}_b${block.id}_bullet_${idx}`,
           pageId,
           blockId: block.id,
-          path: `customData.bulletList[${idx}]`,
+          path: `${basePath}[${idx}]`,
           sourceText: b.trim(),
           kind: 'body',
           policy: 'translate',
-          source: { blockType: block.type, field: `bulletList[${idx}]` }
+          source: { blockType: block.type, field: `bullets[${idx}]` }
         });
       }
-    });
-  }
-
-  // Contatos em customData (bottom_header)
-  if (block.type === 'bottom_header') {
-    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'PRESYS METROLOGIA';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeText`,
-      pageId,
-      blockId: block.id,
-      path: 'badgeText',
-      sourceText: badge,
-      kind: 'badge',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'badgeText' }
-    });
-    const phone = typeof block.customData?.phone === 'string' && block.customData.phone.trim() ? block.customData.phone.trim() : '+55 (11) 3038-1300';
-    const email = typeof block.customData?.email === 'string' && block.customData.email.trim() ? block.customData.email.trim() : 'vendas@presys.com.br';
-    const website = typeof block.customData?.website === 'string' && block.customData.website.trim() ? block.customData.website.trim() : 'www.presys.com.br';
-
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_phone`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.phone',
-      sourceText: phone,
-      kind: 'contact',
-      policy: 'protect',
-      source: { blockType: block.type, field: 'phone' }
-    });
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_email`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.email',
-      sourceText: email,
-      kind: 'contact',
-      policy: 'protect',
-      source: { blockType: block.type, field: 'email' }
-    });
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_website`,
-      pageId,
-      blockId: block.id,
-      path: 'customData.website',
-      sourceText: website,
-      kind: 'contact',
-      policy: 'protect',
-      source: { blockType: block.type, field: 'website' }
     });
   }
 

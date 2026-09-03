@@ -11,8 +11,9 @@ import {
 } from './capability.types';
 import { ElementCapabilityDefinitionSchema } from './capability.schema';
 import { HERO_PALETTE_OPTIONS } from '../hero-banner.appearance';
+import { BOTTOM_HEADER_PALETTE_OPTIONS } from '../bottom-header.appearance';
 
-export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 3;
+export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 4;
 
 export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabilityDefinition>> = {
   // 1. TEXT
@@ -1323,7 +1324,10 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
-        writePolicy: 'user_only'
+        writePolicy: 'user_only',
+        constraints: {
+          options: BOTTOM_HEADER_PALETTE_OPTIONS
+        }
       }
     ],
     universalActions: {

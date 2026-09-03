@@ -287,7 +287,7 @@ export class TranslationApplierRegistry {
               }
             }
 
-            // 2. Fluke Header (materializa description e highlights se não existirem)
+            // 2. Fluke Header
             if (block.type === 'fluke_header') {
               if (!block.customData || typeof block.customData !== 'object') block.customData = {};
               const custom = block.customData;
@@ -306,25 +306,16 @@ export class TranslationApplierRegistry {
                 appliedNodeIds.add(badgeSecKey);
               }
 
-              const defaultHighlights = [
-                'Leve, portátil e de resposta térmica ultrarrápida',
-                'Resfria até -25 °C e aquece até 660 °C em poucos minutos',
-                'Dois canais de medição para PRT, RTD, termopar e 4-20 mA',
-                'Exatidão metrológica com estabilidade térmica de ±0.01 °C',
-                'Rotinas automáticas de calibração com emissão de relatórios',
-                'Homogeneidade radial e axial certificada conforme normas internacionais'
-              ];
-              if (!Array.isArray(custom.highlights)) {
-                custom.highlights = [...defaultHighlights];
+              if (Array.isArray(custom.highlights)) {
+                custom.highlights.forEach((_: string, hIdx: number) => {
+                  const hlKey = `p${pageNumber}_b${blockId}_hl_${hIdx}`;
+                  if (transMap.has(hlKey)) {
+                    custom.highlights[hIdx] = transMap.get(hlKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(hlKey);
+                  }
+                });
               }
-              custom.highlights.forEach((_: string, hIdx: number) => {
-                const hlKey = `p${pageNumber}_b${blockId}_hl_${hIdx}`;
-                if (transMap.has(hlKey)) {
-                  custom.highlights[hIdx] = transMap.get(hlKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(hlKey);
-                }
-              });
             }
 
             // 3. Additel Two Col / Additel Two Col Hero
@@ -346,28 +337,23 @@ export class TranslationApplierRegistry {
                 appliedNodeIds.add(badgeSubtitleKey);
               }
 
-              const defaultBullets = [
-                'Geração de pressão de vácuo a 70 bar com bomba interna',
-                'Estabilidade de controle melhor que 0.005% do fundo de escala',
-                'Duplo canal de medição de pressão com sensores intercambiáveis'
-              ];
-              if (!Array.isArray(custom.bulletList) && !Array.isArray(custom.bullets)) {
-                custom.bulletList = [...defaultBullets];
-              }
-              const bulletsArr = Array.isArray(custom.bulletList)
-                ? custom.bulletList
-                : Array.isArray(custom.bullets)
+              // Aplica na coleção existente (prioridade canônica customData.bullets > bulletList legacy)
+              const bulletsArr = Array.isArray(custom.bullets)
                 ? custom.bullets
-                : defaultBullets;
+                : Array.isArray(custom.bulletList)
+                ? custom.bulletList
+                : null;
 
-              bulletsArr.forEach((_: string, bIdx: number) => {
-                const bulletKey = `p${pageNumber}_b${blockId}_bullet_${bIdx}`;
-                if (transMap.has(bulletKey)) {
-                  bulletsArr[bIdx] = transMap.get(bulletKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(bulletKey);
-                }
-              });
+              if (bulletsArr) {
+                bulletsArr.forEach((_: string, bIdx: number) => {
+                  const bulletKey = `p${pageNumber}_b${blockId}_bullet_${bIdx}`;
+                  if (transMap.has(bulletKey)) {
+                    bulletsArr[bIdx] = transMap.get(bulletKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(bulletKey);
+                  }
+                });
+              }
             }
 
             // 4. Bottom Header

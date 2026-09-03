@@ -130,13 +130,19 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
             type: 'additel_two_col_hero',
             title: 'SÉRIE PRESYS PCON-Y18',
             subtitle: 'Calibrador Automático de Pressão de Alta Estabilidade',
-            badgeText: 'PRESYS'
+            badgeText: 'PRESYS',
+            customData: {
+              overview: 'Calibrador automático de pressão de bancada e campo.'
+            }
           },
           {
             id: 'b-fluke',
             type: 'fluke_header',
             title: 'SÉRIE TA-ADVANCED',
-            subtitle: 'Blocos Secos de Alta Homogeneidade Térmica'
+            subtitle: 'Blocos Secos de Alta Homogeneidade Térmica',
+            customData: {
+              description: 'Calibrador de temperatura de bloco seco com controle microprocessado.'
+            }
           },
           {
             id: 'b-bottom-hdr',

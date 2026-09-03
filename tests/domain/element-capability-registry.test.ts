@@ -254,10 +254,18 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     }
   });
 
-  // CAP-REG-15: Registry version definida como 2 (bump na CORE.E4)
-  it('CAP-REG-15: versão do contrato definida como 2 (CORE.E4)', () => {
-    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(3);
+  // CAP-REG-15: Registry version definida como 4 (bump na CORE.E6A)
+  it('CAP-REG-15: versão do contrato definida como 4 (CORE.E6A)', () => {
+    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(4);
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
+  });
+
+  it('CAP-REG-BOTTOM-PALETTE: bottom_header APPEARANCE_GRADIENT possui opções semânticas sincronizadas', () => {
+    const bottomDef = ElementCapabilityRegistry.bottom_header;
+    const gradCap = bottomDef.capabilities.find((c) => c.id === CAPABILITY_IDS.APPEARANCE_GRADIENT);
+    expect(gradCap).toBeDefined();
+    expect(gradCap?.valueKind).toBe('enum');
+    expect(gradCap?.constraints?.options?.length).toBe(9);
   });
 
   it('CAP-REG-COVER-V2: full_page_cover possui capabilities canônicas comprovadas e canReorder=false', () => {

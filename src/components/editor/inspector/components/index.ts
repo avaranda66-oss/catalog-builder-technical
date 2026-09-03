@@ -13,3 +13,4 @@ export * from './InspectorDimensionInput';
 export * from './InspectorToggle';
 export * from './InspectorActionRow';
 export * from './InspectorResetAction';
+export * from './InspectorColorInput';

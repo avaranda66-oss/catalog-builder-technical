@@ -15,7 +15,6 @@ import {
   Grid3X3,
   Plus,
   Upload,
-  Palette,
   Sparkles,
   CircleDot,
   Layers,
@@ -40,6 +39,9 @@ import { FullPageCoverInspector } from './inspector/FullPageCoverInspector';
 import { TextInspector } from './inspector/TextInspector';
 import { ImageInspector } from './inspector/ImageInspector';
 import { HeroBannerInspector } from './inspector/HeroBannerInspector';
+import { FlukeHeaderInspector } from './inspector/FlukeHeaderInspector';
+import { AdditelTwoColInspector } from './inspector/AdditelTwoColInspector';
+import { BottomHeaderInspector } from './inspector/BottomHeaderInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -95,17 +97,6 @@ export const PropertiesPanel: React.FC = () => {
     { key: 'output', label: 'Sinal Saída' },
     { key: 'powerSupply', label: 'Alimentação' },
     { key: 'processConnection', label: 'Conexão Processo' }
-  ];
-
-  const COLOR_PALETTES = [
-    { label: 'Azul Presys Industrial (Padrão)', value: 'bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900', hex: '#003366' },
-    { label: 'Azul Marinho Corporativo', value: 'bg-gradient-to-br from-blue-950 via-indigo-950 to-slate-900', hex: '#1E3A8A' },
-    { label: 'Obsidiana / Preto Puro', value: 'bg-gradient-to-b from-black via-zinc-950 to-black', hex: '#09090B' },
-    { label: 'Grafite Técnico', value: 'bg-gradient-to-br from-zinc-900 via-neutral-900 to-stone-900', hex: '#27272A' },
-    { label: 'Aço Escuro Metrológico', value: 'bg-gradient-to-br from-slate-800 via-slate-900 to-zinc-900', hex: '#334155' },
-    { label: 'Esmeralda Metrologia', value: 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900', hex: '#065F46' },
-    { label: 'Vinho / Rubi Industrial', value: 'bg-gradient-to-br from-slate-900 via-rose-950 to-slate-900', hex: '#881337' },
-    { label: 'Amarelo Presys Calibration', value: 'bg-[#FFC20E]', hex: '#FFC20E' }
   ];
 
   const handleToggleColumn = (colKey: string, label: string) => {
@@ -290,51 +281,6 @@ export const PropertiesPanel: React.FC = () => {
               )
             )}
 
-            {/* Seletor Global de Paletas de Cores Corporativas (Fluke, Yokogawa, etc.) */}
-            {['bottom_header', 'fluke_header', 'additel_two_col_hero'].includes(selectedBlock.type) && (
-              <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <label className="block font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
-                  <Palette className="w-3.5 h-3.5 text-[#003366]" />
-                  <span>Cores & Paleta Visual do Elemento</span>
-                </label>
-
-                <div className="grid grid-cols-4 gap-1.5">
-                  {COLOR_PALETTES.map((pal, pIdx) => (
-                    <button
-                      key={pIdx}
-                      type="button"
-                      onClick={() => {
-                        if (selectedBlock?.type === 'fluke_header') {
-                          updateBlock(blockPageId, selectedBlock.id, {
-                            customData: { ...(selectedBlock.customData || {}), badgeBg: pal.hex }
-                          });
-                        } else if (selectedBlock?.type === 'additel_two_col_hero') {
-                          updateBlock(blockPageId, selectedBlock.id, {
-                            customData: { ...(selectedBlock.customData || {}), themeColor: pal.hex }
-                          });
-                        } else {
-                          updateBlock(blockPageId, selectedBlock.id, {
-                            style: { ...(selectedBlock.style || {}), gradient: pal.value },
-                            customData: { ...(selectedBlock.customData || {}), gradient: pal.value }
-                          });
-                        }
-                      }}
-                      className="p-1.5 rounded-lg border border-slate-300 hover:border-slate-800 text-center flex flex-col items-center gap-1 bg-white hover:shadow-xs transition-all"
-                      title={pal.label}
-                    >
-                      <div
-                        style={{ backgroundColor: pal.hex }}
-                        className="w-5 h-5 rounded-full border border-slate-300 shadow-2xs"
-                      />
-                      <span className="text-[8px] font-mono text-slate-600 truncate max-w-full">
-                        {pal.label.split(' ')[0]}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* 1. CAPA A4 PÁGINA INTEIRA (CORE.E4 INSPECTOR CANÔNICO) */}
             {selectedBlock.type === 'full_page_cover' && (
               <FullPageCoverInspector
@@ -343,198 +289,20 @@ export const PropertiesPanel: React.FC = () => {
               />
             )}
 
-            {/* 2. HEADER METROLÓGICO (TARJA AMARELA) */}
-            {selectedBlock.type === 'fluke_header' && (() => {
-              const custom = selectedBlock.customData || {};
+            {/* 2. HEADER METROLÓGICO CANÔNICO (CORE.E6A) */}
+            {selectedBlock.type === 'fluke_header' && (
+              <FlukeHeaderInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
-              return (
-                <div className="space-y-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Texto Principal do Badge</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.badgeText || 'PRESYS Calibration'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { badgeText: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded font-bold text-xs"
-                    />
-                  </div>
+            {/* 3. HEADER DUAL-COLUMN PRESYS CANÔNICO (CORE.E6A) */}
+            {selectedBlock.type === 'additel_two_col_hero' && (
+              <AdditelTwoColInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Texto Secundário do Badge</label>
-                    <input
-                      type="text"
-                      value={custom.badgeSecondary || 'Calibration'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: { ...custom, badgeSecondary: e.target.value }
-                        })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título Principal</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.title || ''}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded font-bold text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Subtítulo</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.subtitle || 'Technical Data & Metrology Specifications'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { subtitle: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* 3. HEADER DUAL-COLUMN PRESYS */}
-            {selectedBlock.type === 'additel_two_col_hero' && (() => {
-              const custom = selectedBlock.customData || {};
-
-              return (
-                <div className="space-y-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Selo / Marca Superior</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.badgeText || 'PRESYS Metrology'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { badgeText: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded font-bold text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Slogan do Selo</label>
-                    <input
-                      type="text"
-                      value={custom.badgeSubtitle || 'Metrology Made Simple'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: { ...custom, badgeSubtitle: e.target.value }
-                        })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.title || ''}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded font-bold text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Subtítulo</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.subtitle || ''}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { subtitle: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* 4. BOTTOM HEADER */}
-            {selectedBlock.type === 'bottom_header' && (() => {
-              const custom = selectedBlock.customData || {};
-
-              return (
-                <div className="space-y-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título da Empresa</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.title || 'PRESYS INSTRUMENTOS & SISTEMAS LTDA'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded font-bold text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Selo / Certificação</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.badgeText || 'ISO 9001 / RBC'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, { badgeText: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Telefone</label>
-                    <input
-                      type="text"
-                      value={custom.phone || '+55 (11) 3038-1300'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: { ...custom, phone: e.target.value }
-                        })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">E-mail</label>
-                    <input
-                      type="text"
-                      value={custom.email || 'vendas@presys.com.br'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: { ...custom, email: e.target.value }
-                        })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Website</label>
-                    <input
-                      type="text"
-                      value={custom.website || 'www.presys.com.br'}
-                      onChange={(e) =>
-                        updateBlock(blockPageId, selectedBlock.id, {
-                          customData: { ...custom, website: e.target.value }
-                        })
-                      }
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                    />
-                  </div>
-                </div>
-              );
-            })()}
+            {/* 4. BOTTOM HEADER CANÔNICO (CORE.E6A) */}
+            {selectedBlock.type === 'bottom_header' && (
+              <BottomHeaderInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
             {/* 5. HERO BANNER CANÔNICO (CORE.E5B) */}
             {selectedBlock.type === 'hero_banner' && (
