@@ -5,12 +5,11 @@
 
 import {
   TableCoreModel,
-  TableCellLiteralContent,
-  TableCellBoundContent,
   TableCellModel,
   TableRowModel,
-  TableColumnModel
-} from '../../../domain/table-core/table.types';
+  TableColumnModel,
+  TableDatumResolver
+} from '../../../domain/table-core';
 
 export type TableCoreRendererMode = 'editor' | 'export';
 
@@ -38,16 +37,8 @@ export type TableAssetResolver = (
   assetId: string
 ) => { url: string; altText?: string } | undefined;
 
-/**
- * Função de resolução pura para dados técnicos vinculados (datum_reference).
- * Permite que o renderizador permaneça 100% desacoplado da Library ou do Product Workbook.
- */
-export type TableDatumResolver = (
-  reference: TableCellBoundContent
-) => {
-  value: TableCellLiteralContent;
-  status?: 'approved' | 'draft' | 'conflict' | 'unknown';
-} | undefined;
+// Re-exporta o contrato canônico do Table Core
+export type { TableDatumResolver };
 
 /**
  * Propriedades do componente TableCoreRenderer.

@@ -63,48 +63,21 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
         }
       };
 
-    case 'boolean':
-      return {
-        supported: true,
-        content: {
-          kind: 'badge',
-          label: value.value ? 'Sim' : 'Não',
-          variant: value.value ? 'success' : 'neutral'
-        }
-      };
-
-    case 'enum':
-      return {
-        supported: true,
-        content: {
-          kind: 'text',
-          text: value.label ?? value.code
-        }
-      };
-
-    case 'technical_token':
-      return {
-        supported: true,
-        content: {
-          kind: 'badge',
-          label: value.token,
-          variant: 'neutral'
-        }
-      };
-
     case 'asset_reference':
       return {
         supported: true,
         content: {
           kind: 'asset_reference',
-          assetId: value.assetId
+          assetId: value.assetId,
+          caption: value.label
         }
       };
 
-    case 'unknown':
+    case 'boolean':
       return {
-        supported: true,
-        content: { kind: 'empty' }
+        supported: false,
+        reason: 'Valores booleanos exigem tratamento de apresentação/tradução e não possuem projeção semântica tabular direta nesta fase.',
+        unsupportedType: 'boolean'
       };
 
     case 'range':
@@ -114,11 +87,34 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
         unsupportedType: 'range'
       };
 
+    case 'enum':
+      return {
+        supported: false,
+        reason: `Valores do tipo enum (código: "${value.code}") não possuem projeção semântica tabular dedicada nesta fase e não devem perder código ou rótulo.`,
+        unsupportedType: 'enum'
+      };
+
+    case 'technical_token':
+      return {
+        supported: false,
+        reason: `Tokens técnicos (token: "${value.token}") não possuem célula semântica dedicada nesta fase e não devem ser projetados como badges genéricos.`,
+        unsupportedType: 'technical_token'
+      };
+
     case 'product_reference':
       return {
         supported: false,
-        reason: 'Referência a outro produto não possui projeção literal direta sem política explícita de exibição.',
+        reason: `Referência ao produto "${value.targetProductId}" não possui projeção literal direta sem política explícita de navegação/composição.`,
         unsupportedType: 'product_reference'
+      };
+
+    case 'unknown':
+      return {
+        supported: false,
+        reason: value.reason
+          ? `Dado técnico com valor desconhecido (unknown): ${value.reason}`
+          : 'Dado técnico com valor desconhecido (unknown).',
+        unsupportedType: 'unknown'
       };
 
     default:
@@ -178,20 +174,31 @@ export function createProductWorkbookDatumResolver(
       };
     }
 
-    // MODO REVIEW_REQUIRED: Preserva o snapshot existente e sinaliza necessidade de revisão
-    if (reference.bindingMode === 'review_required' && reference.snapshot) {
+    // MODO REVIEW_REQUIRED: Preserva o snapshot existente se presente; se ausente, NÃO inventa valor publicado silenciosamente
+    if (reference.bindingMode === 'review_required') {
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: mappedStatus,
+          diagnostic: {
+            message: 'Publicação requer revisão de alteração de dados.',
+            productRevision: knowledge.productRevision,
+            familyRevision: knowledge.familyRevision
+          }
+        };
+      }
       return {
-        value: reference.snapshot,
+        value: { kind: 'empty' },
         status: mappedStatus,
         diagnostic: {
-          message: 'Publicação requer revisão de alteração de dados.',
+          message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
           productRevision: knowledge.productRevision,
           familyRevision: knowledge.familyRevision
         }
       };
     }
 
-    // MODO LIVE (ou review_required sem snapshot prévio): Mapeia o valor técnico atual
+    // MODO LIVE: Mapeia o valor técnico atual de forma conservadora e lossless
     const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value);
     if (!literalRes.supported) {
       return {
