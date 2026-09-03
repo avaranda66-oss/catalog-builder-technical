@@ -11,3 +11,4 @@ export * from './table.printable';
 export * from './table.engine';
 export * from './table.serialization';
 export * from './legacy-table.adapter';
+export * from './legacy-table.bridge';
