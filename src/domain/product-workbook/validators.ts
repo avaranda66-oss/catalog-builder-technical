@@ -150,6 +150,15 @@ export function validateProductWorkbook(
   for (const [dataKey, datum] of Object.entries(workbook.data)) {
     const datumPath = `data[${dataKey}]`;
 
+    if (!datum || typeof datum !== 'object') {
+      errors.push({
+        path: datumPath,
+        code: 'INVALID_DATUM_OBJECT',
+        message: `Dado "${dataKey}" é nulo ou inválido.`
+      });
+      continue;
+    }
+
     // C1. Data Record Key Match
     if (datum.id !== dataKey) {
       errors.push({
