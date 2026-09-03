@@ -240,7 +240,12 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
           {
             id: 'b-soft',
             type: 'software_connectivity',
-            title: 'CONECTIVIDADE ISOPLAN & DIGITAL LAB'
+            title: 'CONECTIVIDADE ISOPLAN & DIGITAL LAB',
+            customData: {
+              items: [
+                { badge: 'Software', title: 'Software ISOPLAN', desc: 'Integração de certificados' }
+              ]
+            }
           },
           {
             id: 'b-inserts',
@@ -255,7 +260,12 @@ describe('Phase 2C.2: Full Catalog Translation Engine & Non-Destructive Versioni
           {
             id: 'b-multi-mode',
             type: 'multi_mode_calibrator',
-            title: 'MODOS DE OPERAÇÃO DO INSTRUMENTO'
+            title: 'MODOS DE OPERAÇÃO DO INSTRUMENTO',
+            customData: {
+              modes: [
+                { id: 'm1', badge: '01', title: 'Dry Block', desc: 'Calibração rápida a seco' }
+              ]
+            }
           },
           {
             id: 'b-gallery',

@@ -254,9 +254,9 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     }
   });
 
-  // CAP-REG-15: Registry version definida como 4 (bump na CORE.E6A)
-  it('CAP-REG-15: versão do contrato definida como 4 (CORE.E6A)', () => {
-    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(5);
+  // CAP-REG-15: Registry version definida como 6 (bump na CORE.E6B)
+  it('CAP-REG-15: versão do contrato definida como 6 (CORE.E6B)', () => {
+    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(6);
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
   });
 

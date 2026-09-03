@@ -3,6 +3,8 @@
 // Cobre os 21 BlockTypes, Headers de Página, Metadados Globais, Overrides Locais e Materialização de Fallbacks.
 
 import { Catalog, CatalogPage, ContentBlock, FeatureItem, TableColumnConfig, CatalogTableRow, OrderingSegment } from '@/domain/catalog.schema';
+import { GalleryItem } from '@/domain/gallery-image.engine';
+import { CalibratorModeItem, SoftwareConnectivityItem } from '@/domain/composite-content.engine';
 import { TranslationApplierResult } from './types';
 import { PrintStringRegistry } from './print-strings.registry';
 
@@ -250,7 +252,7 @@ export class TranslationApplierRegistry {
 
             // Image Gallery (suporta tanto _img_${iIdx}_caption quanto _gallery_${iIdx}_caption)
             if (Array.isArray(block.images)) {
-              block.images.forEach((img: any, iIdx: number) => {
+              block.images.forEach((img: GalleryItem, iIdx: number) => {
                 if (!img || typeof img !== 'object') return;
                 const imgCapKey = `p${pageNumber}_b${blockId}_img_${iIdx}_caption`;
                 const galleryCapKey = `p${pageNumber}_b${blockId}_gallery_${iIdx}_caption`;
@@ -358,83 +360,80 @@ export class TranslationApplierRegistry {
 
             // 4. Software Connectivity
             if (block.type === 'software_connectivity') {
-              if (!block.customData || typeof block.customData !== 'object') block.customData = {};
-              const custom = block.customData;
+              if (Array.isArray(block.customData?.items)) {
+                block.customData.items.forEach((item: SoftwareConnectivityItem, iIdx: number) => {
+                  if (!item || typeof item !== 'object') return;
+                  const badgeKey = `p${pageNumber}_b${blockId}_item_${iIdx}_badge`;
+                  const titleKey = `p${pageNumber}_b${blockId}_item_${iIdx}_title`;
+                  const descKey = `p${pageNumber}_b${blockId}_item_${iIdx}_desc`;
 
-              const defaultItems = [
-                { badge: 'Software', title: 'Software ISOPLAN®', desc: 'Integração direta para emissão automatizada de certificados de calibração RBC e relatórios de conformidade.' },
-                { badge: 'Protocolos', title: 'Comunicação HART® & Modbus', desc: 'Configuração de transmissores inteligentes com leitura de PV, loop de corrente e ajuste de zero/span.' },
-                { badge: 'Hardware', title: 'Conexão USB & Ethernet', desc: 'Exportação de dados em tempo real para SCADA, CLP ou pendrive em formato CSV e PDF criptografado.' },
-                { badge: 'Memória', title: 'Datalogger Interno', desc: 'Memória para mais de 100.000 pontos com gravação de tendências e rastreabilidade total.' }
-              ];
-
-              if (!Array.isArray(custom.items)) {
-                custom.items = JSON.parse(JSON.stringify(defaultItems));
+                  if (transMap.has(badgeKey)) {
+                    item.badge = transMap.get(badgeKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(badgeKey);
+                  }
+                  if (transMap.has(titleKey)) {
+                    item.title = transMap.get(titleKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(titleKey);
+                  }
+                  if (transMap.has(descKey)) {
+                    item.desc = transMap.get(descKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(descKey);
+                  }
+                });
               }
-
-              custom.items.forEach((item: any, iIdx: number) => {
-                if (!item || typeof item !== 'object') return;
-                const badgeKey = `p${pageNumber}_b${blockId}_item_${iIdx}_badge`;
-                const titleKey = `p${pageNumber}_b${blockId}_item_${iIdx}_title`;
-                const descKey = `p${pageNumber}_b${blockId}_item_${iIdx}_desc`;
-
-                if (transMap.has(badgeKey)) {
-                  item.badge = transMap.get(badgeKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(badgeKey);
-                }
-                if (transMap.has(titleKey)) {
-                  item.title = transMap.get(titleKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(titleKey);
-                }
-                if (transMap.has(descKey)) {
-                  item.desc = transMap.get(descKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(descKey);
-                }
-              });
             }
 
-            // 6. Multi-Mode Calibrator
+            // 5. Multi-Mode Calibrator
             if (block.type === 'multi_mode_calibrator') {
-              if (!block.customData || typeof block.customData !== 'object') block.customData = {};
-              const custom = block.customData;
+              if (Array.isArray(block.customData?.modes)) {
+                block.customData.modes.forEach((mode: CalibratorModeItem, mIdx: number) => {
+                  if (!mode || typeof mode !== 'object') return;
+                  const modeId = mode.id || String(mIdx);
 
-              const defaultModes = [
-                { badge: '01', title: 'Dry Block', desc: 'Calibração rápida em bloco seco para termopares e termorresistências.' },
-                { badge: '02', title: 'Banho de Óleo Agitado', desc: 'Uniformidade térmica máxima com fluído térmico recirculado.' },
-                { badge: '03', title: 'Corpo Negro Infravermelho', desc: 'Emissividade e alvo calibrado para termômetros IR e pirômetros ópticos.' },
-                { badge: '04', title: 'Calibração de Superfície', desc: 'Bloco de contato planar para sensores de superfície.' }
-              ];
+                  // Chaves estáveis por mode.id (preferencial CORE.E6B)
+                  const stableBadgeKey = `p${pageNumber}_b${blockId}_mode_${modeId}_badge`;
+                  const stableTitleKey = `p${pageNumber}_b${blockId}_mode_${modeId}_title`;
+                  const stableDescKey = `p${pageNumber}_b${blockId}_mode_${modeId}_desc`;
 
-              if (!Array.isArray(custom.modes)) {
-                custom.modes = JSON.parse(JSON.stringify(defaultModes));
+                  // Chaves legadas por índice (retrocompatibilidade)
+                  const legacyBadgeKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_badge`;
+                  const legacyTitleKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_title`;
+                  const legacyDescKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_desc`;
+
+                  if (transMap.has(stableBadgeKey)) {
+                    mode.badge = transMap.get(stableBadgeKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(stableBadgeKey);
+                  } else if (transMap.has(legacyBadgeKey)) {
+                    mode.badge = transMap.get(legacyBadgeKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(legacyBadgeKey);
+                  }
+
+                  if (transMap.has(stableTitleKey)) {
+                    mode.title = transMap.get(stableTitleKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(stableTitleKey);
+                  } else if (transMap.has(legacyTitleKey)) {
+                    mode.title = transMap.get(legacyTitleKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(legacyTitleKey);
+                  }
+
+                  if (transMap.has(stableDescKey)) {
+                    mode.desc = transMap.get(stableDescKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(stableDescKey);
+                  } else if (transMap.has(legacyDescKey)) {
+                    mode.desc = transMap.get(legacyDescKey)!;
+                    appliedCount++;
+                    appliedNodeIds.add(legacyDescKey);
+                  }
+                });
               }
-
-              custom.modes.forEach((mode: any, mIdx: number) => {
-                if (!mode || typeof mode !== 'object') return;
-                const badgeKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_badge`;
-                const titleKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_title`;
-                const descKey = `p${pageNumber}_b${blockId}_mode_${mIdx}_desc`;
-
-                if (transMap.has(badgeKey)) {
-                  mode.badge = transMap.get(badgeKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(badgeKey);
-                }
-                if (transMap.has(titleKey)) {
-                  mode.title = transMap.get(titleKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(titleKey);
-                }
-                if (transMap.has(descKey)) {
-                  if (mode.desc !== undefined) mode.desc = transMap.get(descKey)!;
-                  if (mode.description !== undefined) mode.description = transMap.get(descKey)!;
-                  appliedCount++;
-                  appliedNodeIds.add(descKey);
-                }
-              });
             }
 
             // 7. Inserts Visual

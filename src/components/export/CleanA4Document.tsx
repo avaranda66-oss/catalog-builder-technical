@@ -121,7 +121,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={false} />
                       )}
                       {block.type === 'software_connectivity' && (
-                        <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} />
+                        <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'structural_section' && (
                         <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
@@ -139,10 +139,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <InsertsVisualBlock block={block} pageId={page.id} isSelected={false} />
                       )}
                       {block.type === 'multi_mode_calibrator' && (
-                        <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={false} />
+                        <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'features_list' && (
-                        <FeaturesListBlock block={block} pageId={page.id} isSelected={false} />
+                        <FeaturesListBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {(block.type === 'table' || block.type === 'specs_table') && (
                         <TechnicalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
@@ -157,7 +157,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <OrderingCodesBlock block={block} pageId={page.id} isSelected={false} />
                       )}
                       {block.type === 'image_gallery' && (
-                        <ImageGalleryBlock block={block} pageId={page.id} isSelected={false} />
+                        <ImageGalleryBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'contact_footer' && (
                         <ContactFooterBlock block={block} pageId={page.id} isSelected={false} />

@@ -2,6 +2,11 @@
 // Extrator resiliente e protegido contra formatos legados ou malformados para blocos Features, Inserts, Software Connectivity e Multi-Mode.
 
 import { ContentBlock, FeatureItem } from '@/domain/catalog.schema';
+import {
+  CalibratorModeItem,
+  SoftwareConnectivityItem,
+  getEffectiveModeDesc
+} from '@/domain/composite-content.engine';
 import { PrintableTextNode } from '../types';
 
 export function extractFeaturesBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
@@ -215,133 +220,125 @@ export function extractFeaturesBlocks(block: ContentBlock, pageId: string, pageN
 
   // Software Connectivity: Título, Badge e Itens de Conectividade
   if (block.type === 'software_connectivity') {
-    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'Digital Factory 4.0';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeText`,
-      pageId,
-      blockId: block.id,
-      path: 'badgeText',
-      sourceText: badge,
-      kind: 'badge',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'badgeText' }
-    });
+    if (typeof block.badgeText === 'string' && block.badgeText.trim().length > 0) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_badgeText`,
+        pageId,
+        blockId: block.id,
+        path: 'badgeText',
+        sourceText: block.badgeText.trim(),
+        kind: 'badge',
+        policy: 'translate',
+        source: { blockType: block.type, field: 'badgeText' }
+      });
+    }
 
-    const defaultItems = [
-      { badge: 'Software', title: 'Software ISOPLAN®', desc: 'Integração direta para emissão automatizada de certificados de calibração RBC e relatórios de conformidade.' },
-      { badge: 'Protocolos', title: 'Comunicação HART® & Modbus', desc: 'Configuração de transmissores inteligentes com leitura de PV, loop de corrente e ajuste de zero/span.' },
-      { badge: 'Hardware', title: 'Conexão USB & Ethernet', desc: 'Exportação de dados em tempo real para SCADA, CLP ou pendrive em formato CSV e PDF criptografado.' },
-      { badge: 'Memória', title: 'Datalogger Interno', desc: 'Memória para mais de 100.000 pontos com gravação de tendências e rastreabilidade total.' }
-    ];
-    const rawItems = block.customData?.items;
-    const items = Array.isArray(rawItems) ? rawItems : defaultItems;
-
-    items.forEach((item: any, idx: number) => {
-      if (item && typeof item === 'object') {
-        if (item.badge !== undefined && String(item.badge).trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_item_${idx}_badge`,
-            pageId,
-            blockId: block.id,
-            path: `customData.items[${idx}].badge`,
-            sourceText: String(item.badge).trim(),
-            kind: 'badge',
-            policy: 'translate',
-            source: { blockType: block.type, field: `items[${idx}].badge` }
-          });
+    if (Array.isArray(block.customData?.items)) {
+      block.customData.items.forEach((item: SoftwareConnectivityItem, idx: number) => {
+        if (item && typeof item === 'object') {
+          if (typeof item.badge === 'string' && item.badge.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_item_${idx}_badge`,
+              pageId,
+              blockId: block.id,
+              path: `customData.items[${idx}].badge`,
+              sourceText: item.badge.trim(),
+              kind: 'badge',
+              policy: 'translate',
+              source: { blockType: block.type, field: `items[${idx}].badge` }
+            });
+          }
+          if (typeof item.title === 'string' && item.title.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_item_${idx}_title`,
+              pageId,
+              blockId: block.id,
+              path: `customData.items[${idx}].title`,
+              sourceText: item.title.trim(),
+              kind: 'heading',
+              policy: 'translate',
+              source: { blockType: block.type, field: `items[${idx}].title` }
+            });
+          }
+          if (typeof item.desc === 'string' && item.desc.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_item_${idx}_desc`,
+              pageId,
+              blockId: block.id,
+              path: `customData.items[${idx}].desc`,
+              sourceText: item.desc.trim(),
+              kind: 'body',
+              policy: 'translate',
+              source: { blockType: block.type, field: `items[${idx}].desc` }
+            });
+          }
         }
-        if (item.title !== undefined && String(item.title).trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_item_${idx}_title`,
-            pageId,
-            blockId: block.id,
-            path: `customData.items[${idx}].title`,
-            sourceText: String(item.title).trim(),
-            kind: 'heading',
-            policy: 'translate',
-            source: { blockType: block.type, field: `items[${idx}].title` }
-          });
-        }
-        if (item.desc !== undefined && String(item.desc).trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_item_${idx}_desc`,
-            pageId,
-            blockId: block.id,
-            path: `customData.items[${idx}].desc`,
-            sourceText: String(item.desc).trim(),
-            kind: 'body',
-            policy: 'translate',
-            source: { blockType: block.type, field: `items[${idx}].desc` }
-          });
-        }
-      }
-    });
+      });
+    }
   }
 
   // Multi Mode Calibrator: Títulos e descrições dos modos operacionais
   if (block.type === 'multi_mode_calibrator') {
-    const badge = typeof block.badgeText === 'string' && block.badgeText.trim() ? block.badgeText.trim() : 'Multifunctional Series';
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeText`,
-      pageId,
-      blockId: block.id,
-      path: 'badgeText',
-      sourceText: badge,
-      kind: 'badge',
-      policy: 'translate',
-      source: { blockType: block.type, field: 'badgeText' }
-    });
+    if (typeof block.badgeText === 'string' && block.badgeText.trim().length > 0) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_badgeText`,
+        pageId,
+        blockId: block.id,
+        path: 'badgeText',
+        sourceText: block.badgeText.trim(),
+        kind: 'badge',
+        policy: 'translate',
+        source: { blockType: block.type, field: 'badgeText' }
+      });
+    }
 
-    const defaultModes = [
-      { badge: '01', title: 'Dry Block', desc: 'Calibração rápida em bloco seco para termopares e termorresistências.' },
-      { badge: '02', title: 'Banho de Óleo Agitado', desc: 'Uniformidade térmica máxima com fluído térmico recirculado.' },
-      { badge: '03', title: 'Corpo Negro Infravermelho', desc: 'Emissividade e alvo calibrado para termômetros IR e pirômetros ópticos.' },
-      { badge: '04', title: 'Calibração de Superfície', desc: 'Bloco de contato planar para sensores de superfície.' }
-    ];
-    const rawModes = block.customData?.modes;
-    const modes = Array.isArray(rawModes) ? rawModes : defaultModes;
+    if (Array.isArray(block.customData?.modes)) {
+      block.customData.modes.forEach((mode: CalibratorModeItem, idx: number) => {
+        if (mode && typeof mode === 'object') {
+          const modeId = mode.id || String(idx);
 
-    modes.forEach((mode: any, idx: number) => {
-      if (mode && typeof mode === 'object') {
-        const modeBadge = mode.badge !== undefined ? String(mode.badge).trim() : String(idx + 1).padStart(2, '0');
-        nodes.push({
-          id: `p${pageNumber}_b${block.id}_mode_${idx}_badge`,
-          pageId,
-          blockId: block.id,
-          path: `customData.modes[${idx}].badge`,
-          sourceText: modeBadge,
-          kind: 'badge',
-          policy: 'protect',
-          source: { blockType: block.type, field: `modes[${idx}].badge` }
-        });
+          if (typeof mode.badge === 'string' && mode.badge.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_mode_${modeId}_badge`,
+              pageId,
+              blockId: block.id,
+              path: `customData.modes[${idx}].badge`,
+              sourceText: mode.badge.trim(),
+              kind: 'badge',
+              policy: 'protect',
+              source: { blockType: block.type, field: `modes[${idx}].badge` }
+            });
+          }
 
-        if (mode.title !== undefined && String(mode.title).trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_mode_${idx}_title`,
-            pageId,
-            blockId: block.id,
-            path: `customData.modes[${idx}].title`,
-            sourceText: String(mode.title).trim(),
-            kind: 'heading',
-            policy: 'translate',
-            source: { blockType: block.type, field: `modes[${idx}].title` }
-          });
+          if (typeof mode.title === 'string' && mode.title.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_mode_${modeId}_title`,
+              pageId,
+              blockId: block.id,
+              path: `customData.modes[${idx}].title`,
+              sourceText: mode.title.trim(),
+              kind: 'heading',
+              policy: 'translate',
+              source: { blockType: block.type, field: `modes[${idx}].title` }
+            });
+          }
+
+          const desc = getEffectiveModeDesc(mode);
+          if (desc.trim().length > 0) {
+            nodes.push({
+              id: `p${pageNumber}_b${block.id}_mode_${modeId}_desc`,
+              pageId,
+              blockId: block.id,
+              path: `customData.modes[${idx}].desc`,
+              sourceText: desc.trim(),
+              kind: 'body',
+              policy: 'translate',
+              source: { blockType: block.type, field: `modes[${idx}].desc` }
+            });
+          }
         }
-        const desc = mode.desc !== undefined ? mode.desc : mode.description;
-        if (desc !== undefined && String(desc).trim()) {
-          nodes.push({
-            id: `p${pageNumber}_b${block.id}_mode_${idx}_desc`,
-            pageId,
-            blockId: block.id,
-            path: `customData.modes[${idx}].description`,
-            sourceText: String(desc).trim(),
-            kind: 'body',
-            policy: 'translate',
-            source: { blockType: block.type, field: `modes[${idx}].description` }
-          });
-        }
-      }
-    });
+      });
+    }
   }
 
   return nodes;

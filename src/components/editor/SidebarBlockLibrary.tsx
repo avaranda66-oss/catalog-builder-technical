@@ -59,61 +59,8 @@ export interface SidebarBlockOption {
   renderPreview: () => React.ReactNode;
 }
 
-export const SidebarBlockLibrary: React.FC = () => {
-  const { currentCatalog, activePageIndex, addBlock, insertStructuralSection, insertContentOnNewPageAfter } = useCatalogStore();
-  const [activeCategory, setActiveCategory] = useState<'all' | 'headers' | 'tables' | 'structures'>('all');
-  const [search, setSearch] = useState('');
-  const [hoveredItem, setHoveredItem] = useState<SidebarBlockOption | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-
-  const [pendingInsertion, setPendingInsertion] = useState<{
-    sourcePageId: string;
-    spec: PageContentInsertionSpec;
-    itemTitle: string;
-    reason: 'EXISTING_COVER_WITH_FLOW_BLOCK' | 'INCOMING_COVER_ON_NON_EMPTY_PAGE' | 'PAGE_ALREADY_MIXED';
-  } | null>(null);
-
-  if (!currentCatalog) return null;
-
-  const activePage = currentCatalog.pages[activePageIndex] || currentCatalog.pages[0];
-  const targetPageId = activePage?.id;
-  const pageNumber = activePage?.pageNumber || 1;
-
-  const handleInsert = (option: SidebarBlockOption) => {
-    if (!targetPageId || !activePage) return;
-
-    let incomingType: BlockType;
-    if (option.presetId) {
-      incomingType = 'structural_section';
-    } else if (option.blockData) {
-      incomingType = option.blockData.type;
-    } else {
-      // Option malformada sem payload: fail closed sem mutação nem modal
-      return;
-    }
-
-    const safety = evaluatePageCompositionInsertion(activePage, incomingType);
-    if (!safety.isSafe) {
-      setPendingInsertion({
-        sourcePageId: targetPageId,
-        spec: option.presetId
-          ? { kind: 'structural_preset', presetId: option.presetId }
-          : { kind: 'block', blockData: option.blockData! },
-        itemTitle: option.title,
-        reason: safety.reason
-      });
-      return;
-    }
-
-    if (option.presetId) {
-      insertStructuralSection(targetPageId, option.presetId);
-    } else if (option.blockData) {
-      addBlock(targetPageId, option.blockData);
-    }
-  };
-
-  const BLOCK_ITEMS: SidebarBlockOption[] = [
-    // 1. CAPAS & HEADERS
+export const SIDEBAR_BLOCK_ITEMS: SidebarBlockOption[] = [
+  // 1. CAPAS & HEADERS
     {
       id: 'item-full-cover',
       title: 'Capa Editorial A4 Completa',
@@ -594,7 +541,59 @@ export const SidebarBlockLibrary: React.FC = () => {
     }))
   ];
 
-  const filtered = BLOCK_ITEMS.filter((item) => {
+export const SidebarBlockLibrary: React.FC = () => {
+  const { currentCatalog, activePageIndex, addBlock, insertStructuralSection, insertContentOnNewPageAfter } = useCatalogStore();
+  const [activeCategory, setActiveCategory] = useState<'all' | 'headers' | 'tables' | 'structures'>('all');
+  const [search, setSearch] = useState('');
+  const [hoveredItem, setHoveredItem] = useState<SidebarBlockOption | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [pendingInsertion, setPendingInsertion] = useState<{
+    sourcePageId: string;
+    spec: PageContentInsertionSpec;
+    itemTitle: string;
+    reason: 'EXISTING_COVER_WITH_FLOW_BLOCK' | 'INCOMING_COVER_ON_NON_EMPTY_PAGE' | 'PAGE_ALREADY_MIXED';
+  } | null>(null);
+
+  if (!currentCatalog) return null;
+
+  const activePage = currentCatalog.pages[activePageIndex] || currentCatalog.pages[0];
+  const targetPageId = activePage?.id;
+  const pageNumber = activePage?.pageNumber || 1;
+
+  const handleInsert = (option: SidebarBlockOption) => {
+    if (!targetPageId || !activePage) return;
+
+    let incomingType: BlockType;
+    if (option.presetId) {
+      incomingType = 'structural_section';
+    } else if (option.blockData) {
+      incomingType = option.blockData.type;
+    } else {
+      return;
+    }
+
+    const safety = evaluatePageCompositionInsertion(activePage, incomingType);
+    if (!safety.isSafe) {
+      setPendingInsertion({
+        sourcePageId: targetPageId,
+        spec: option.presetId
+          ? { kind: 'structural_preset', presetId: option.presetId }
+          : { kind: 'block', blockData: option.blockData! },
+        itemTitle: option.title,
+        reason: safety.reason
+      });
+      return;
+    }
+
+    if (option.presetId) {
+      insertStructuralSection(targetPageId, option.presetId);
+    } else if (option.blockData) {
+      addBlock(targetPageId, option.blockData);
+    }
+  };
+
+  const filtered = SIDEBAR_BLOCK_ITEMS.filter((item) => {
     const matchesCat = activeCategory === 'all' || item.category === activeCategory;
     const q = search.toLowerCase().trim();
     const matchesSearch =

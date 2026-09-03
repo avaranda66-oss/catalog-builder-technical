@@ -13,8 +13,8 @@ import { ElementCapabilityDefinitionSchema } from './capability.schema';
 import { HERO_PALETTE_OPTIONS } from '../hero-banner.appearance';
 import { BOTTOM_HEADER_PALETTE_OPTIONS } from '../bottom-header.appearance';
 
-// v5 = truthful defaultSource metadata for canonical editorial headers.
-export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 5;
+// v6 = truthful defaultSource metadata for composite non-table blocks (features_list, multi_mode_calibrator, software_connectivity, image_gallery).
+export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 6;
 
 export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabilityDefinition>> = {
   // 1. TEXT
@@ -338,7 +338,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'collection',
         controlHint: 'custom',
         unit: 'none',
-        defaultSource: 'preset',
+        defaultSource: 'none',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
@@ -589,7 +589,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'collection',
         controlHint: 'custom',
         unit: 'none',
-        defaultSource: 'preset',
+        defaultSource: 'none',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
@@ -1088,7 +1088,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'text',
         controlHint: 'text',
         unit: 'none',
-        defaultSource: 'factory',
+        defaultSource: 'preset',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'translate',
@@ -1101,7 +1101,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'collection',
         controlHint: 'custom',
         unit: 'none',
-        defaultSource: 'factory',
+        defaultSource: 'none',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
@@ -1421,7 +1421,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'text',
         controlHint: 'text',
         unit: 'none',
-        defaultSource: 'factory',
+        defaultSource: 'none',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'translate',
@@ -1434,7 +1434,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         valueKind: 'collection',
         controlHint: 'custom',
         unit: 'none',
-        defaultSource: 'factory',
+        defaultSource: 'none',
         resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',

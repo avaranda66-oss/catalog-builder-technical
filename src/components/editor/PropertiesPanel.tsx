@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import {
   Trash2,
   Image,
@@ -14,7 +14,6 @@ import {
   Building2,
   Grid3X3,
   Plus,
-  Upload,
   Sparkles,
   CircleDot,
   Layers,
@@ -25,7 +24,6 @@ import {
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
 import { TableColumnConfig } from '../../domain/catalog.schema';
-import { CalibratorModeItem, DEFAULT_CALIBRATOR_MODES } from './blocks/MultiModeCalibratorBlock';
 import {
   InsertCircleItem,
   InsertTableRow,
@@ -42,6 +40,10 @@ import { HeroBannerInspector } from './inspector/HeroBannerInspector';
 import { FlukeHeaderInspector } from './inspector/FlukeHeaderInspector';
 import { AdditelTwoColInspector } from './inspector/AdditelTwoColInspector';
 import { BottomHeaderInspector } from './inspector/BottomHeaderInspector';
+import { FeaturesListInspector } from './inspector/FeaturesListInspector';
+import { MultiModeCalibratorInspector } from './inspector/MultiModeCalibratorInspector';
+import { SoftwareConnectivityInspector } from './inspector/SoftwareConnectivityInspector';
+import { ImageGalleryInspector } from './inspector/ImageGalleryInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -58,8 +60,6 @@ export const PropertiesPanel: React.FC = () => {
   } = useCatalogStore();
   const getParticipantsOnBlock = usePresenceStore((state) => state.getParticipantsOnBlock);
   const markEditing = usePresenceStore((state) => state.markEditing);
-
-  const galleryFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!currentCatalog) return null;
 
@@ -143,26 +143,6 @@ export const PropertiesPanel: React.FC = () => {
     updateBlock(blockPageId, selectedBlock.id, {
       tableColumns: currentCols.filter((c) => c.key !== colKey)
     });
-  };
-
-
-  const handleAddGalleryImageFromUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedBlock) return;
-
-    const { useAssetStore } = await import('../../stores/useAssetStore');
-    const res = await useAssetStore.getState().uploadAndLinkAsset(file, {
-      role: 'application',
-      caption: 'Nova foto de aplicação'
-    });
-
-    if (res.success && res.assetId) {
-      const currentImages = selectedBlock.images || [];
-      updateBlock(blockPageId, selectedBlock.id, {
-        images: [...currentImages, { assetId: res.assetId, url: '', caption: 'Nova foto de aplicação' }]
-      });
-    }
-    e.target.value = '';
   };
 
   return (
@@ -309,119 +289,20 @@ export const PropertiesPanel: React.FC = () => {
               <HeroBannerInspector block={selectedBlock} pageId={blockPageId} />
             )}
 
-            {/* 6. SISTEMA MULTIFUNÇÃO (4 MODOS / CUSTOM) */}
-            {selectedBlock.type === 'multi_mode_calibrator' && (() => {
-              const modes: CalibratorModeItem[] = selectedBlock.customData?.modes || DEFAULT_CALIBRATOR_MODES;
-              const updateModes = (newModes: CalibratorModeItem[]) => {
-                updateBlock(blockPageId, selectedBlock.id, {
-                  customData: { ...(selectedBlock.customData || {}), modes: newModes }
-                });
-              };
+            {/* 6. SISTEMA MULTIFUNÇÃO CANÔNICO (CORE.E6B) */}
+            {selectedBlock.type === 'multi_mode_calibrator' && (
+              <MultiModeCalibratorInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
-              return (
-                <div className="space-y-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título do Bloco</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.title || ''}
-                      onChange={(e) => updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })}
-                      placeholder="SISTEMA MULTIFUNÇÃO..."
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-bold"
-                    />
-                  </div>
+            {/* 7. RECURSOS & DIFERENCIAIS CANÔNICO (CORE.E6B) */}
+            {selectedBlock.type === 'features_list' && (
+              <FeaturesListInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Selo / Badge Superior</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.badgeText !== undefined ? selectedBlock.badgeText : 'Multifunctional Series'}
-                      onChange={(e) => updateBlock(blockPageId, selectedBlock.id, { badgeText: e.target.value })}
-                      placeholder="Multifunctional Series"
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-mono"
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-800">Modos de Calibração ({modes.length})</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newMode: CalibratorModeItem = {
-                            id: `mode-${Date.now()}`,
-                            badge: 'MODO',
-                            title: `${modes.length + 1}. Novo Modo`,
-                            desc: 'Descrição técnica da aplicação.'
-                          };
-                          updateModes([...modes, newMode]);
-                        }}
-                        className="text-[10px] text-blue-700 font-bold px-2 py-0.5 bg-blue-50 border border-blue-200 rounded"
-                      >
-                        + Modo
-                      </button>
-                    </div>
-
-                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                      {modes.map((m, idx) => (
-                        <div key={m.id || idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
-                          <div className="flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5 flex-1">
-                              <span className="text-[10px] text-slate-400 font-mono">Ícone/Badge:</span>
-                              <input
-                                type="text"
-                                value={m.badge}
-                                onChange={(e) => {
-                                  const updated = [...modes];
-                                  updated[idx] = { ...updated[idx], badge: e.target.value };
-                                  updateModes(updated);
-                                }}
-                                className="w-12 px-1.5 py-0.5 text-center text-xs border border-slate-300 rounded bg-white font-bold"
-                              />
-                            </div>
-
-                            {modes.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => updateModes(modes.filter((_, i) => i !== idx))}
-                                className="text-slate-400 hover:text-red-600 p-0.5"
-                                title="Excluir este modo"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-
-                          <input
-                            type="text"
-                            value={m.title}
-                            onChange={(e) => {
-                              const updated = [...modes];
-                              updated[idx] = { ...updated[idx], title: e.target.value };
-                              updateModes(updated);
-                            }}
-                            placeholder="Título do modo"
-                            className="w-full px-2 py-1 text-xs font-bold border border-slate-300 rounded bg-white"
-                          />
-
-                          <textarea
-                            rows={2}
-                            value={m.desc}
-                            onChange={(e) => {
-                              const updated = [...modes];
-                              updated[idx] = { ...updated[idx], desc: e.target.value };
-                              updateModes(updated);
-                            }}
-                            placeholder="Descrição técnica..."
-                            className="w-full px-2 py-1 text-[11px] border border-slate-300 rounded bg-white leading-tight"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* 8. SOFTWARE & CONECTIVIDADE CANÔNICO (CORE.E6B) */}
+            {selectedBlock.type === 'software_connectivity' && (
+              <SoftwareConnectivityInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
             {/* 7. INSERTOS VISUAIS & FURAÇÕES */}
             {selectedBlock.type === 'inserts_visual' && (() => {
@@ -601,94 +482,10 @@ export const PropertiesPanel: React.FC = () => {
               );
             })()}
 
-            {/* 8. GALERIA DE FOTOS */}
-            {selectedBlock.type === 'image_gallery' && (() => {
-              const images = selectedBlock.images || [];
-
-              return (
-                <div className="space-y-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título da Galeria</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.title || ''}
-                      onChange={(e) => updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded text-xs font-bold"
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-800">Fotos da Galeria ({images.length})</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => galleryFileInputRef.current?.click()}
-                          className="flex items-center gap-1 text-[10px] text-blue-700 font-bold px-2 py-0.5 bg-blue-50 border border-blue-200 rounded"
-                        >
-                          <Upload className="w-3 h-3" />
-                          <span>+ Foto do PC</span>
-                        </button>
-                        <input
-                          type="file"
-                          ref={galleryFileInputRef}
-                          onChange={handleAddGalleryImageFromUpload}
-                          accept="image/*"
-                          className="hidden"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                      {images.map((img, idx) => (
-                        <div key={idx} className="p-2 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-12 h-10 bg-slate-200 rounded overflow-hidden flex-shrink-0">
-                              <img src={img.url} alt="Thumbnail" className="w-full h-full object-cover" />
-                            </div>
-                            <input
-                              type="text"
-                              value={img.url}
-                              onChange={(e) => {
-                                const updated = [...images];
-                                updated[idx] = { ...updated[idx], url: e.target.value };
-                                updateBlock(blockPageId, selectedBlock.id, { images: updated });
-                              }}
-                              placeholder="URL da imagem..."
-                              className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-slate-300 rounded bg-white truncate"
-                            />
-                            {images.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = images.filter((_, i) => i !== idx);
-                                  updateBlock(blockPageId, selectedBlock.id, { images: updated });
-                                }}
-                                className="text-slate-400 hover:text-red-600 p-0.5"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-
-                          <input
-                            type="text"
-                            value={img.caption || ''}
-                            onChange={(e) => {
-                              const updated = [...images];
-                              updated[idx] = { ...updated[idx], caption: e.target.value };
-                              updateBlock(blockPageId, selectedBlock.id, { images: updated });
-                            }}
-                            placeholder="Legenda da foto..."
-                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white italic"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* 9. GALERIA DE FOTOS CANÔNICA (CORE.E6B) */}
+            {selectedBlock.type === 'image_gallery' && (
+              <ImageGalleryInspector block={selectedBlock} pageId={blockPageId} />
+            )}
 
             {/* Customização de Colunas para Tabelas */}
             {['table', 'electrical_table', 'accessories_table', 'custom_table'].includes(selectedBlock.type) && (

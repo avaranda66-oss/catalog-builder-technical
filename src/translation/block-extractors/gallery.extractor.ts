@@ -2,6 +2,7 @@
 // Extrator resiliente e protegido contra formatos legados ou malformados para blocos de Imagem e Galeria.
 
 import { ContentBlock } from '@/domain/catalog.schema';
+import { GalleryItem, resolveGalleryImageSource } from '@/domain/gallery-image.engine';
 import { PrintableTextNode } from '../types';
 
 export function extractGalleryBlocks(block: ContentBlock, pageId: string, pageNumber: number): PrintableTextNode[] {
@@ -35,18 +36,22 @@ export function extractGalleryBlocks(block: ContentBlock, pageId: string, pageNu
   }
 
   if (Array.isArray(block.images)) {
-    block.images.forEach((img: any, idx: number) => {
-      if (img && typeof img === 'object' && typeof img.caption === 'string' && img.caption.trim()) {
-        nodes.push({
-          id: `p${pageNumber}_b${block.id}_img_${idx}_caption`,
-          pageId,
-          blockId: block.id,
-          path: `images[${idx}].caption`,
-          sourceText: img.caption.trim(),
-          kind: 'caption',
-          policy: 'translate',
-          source: { blockType: block.type, field: `images[${idx}].caption` }
-        });
+    block.images.forEach((img: GalleryItem, idx: number) => {
+      if (img && typeof img === 'object') {
+        const source = resolveGalleryImageSource(img);
+        // Caption só é traduzível se o item possui fonte fotográfica renderizável (CORE.E6B Req 27)
+        if (source.kind !== 'none' && typeof img.caption === 'string' && img.caption.trim()) {
+          nodes.push({
+            id: `p${pageNumber}_b${block.id}_img_${idx}_caption`,
+            pageId,
+            blockId: block.id,
+            path: `images[${idx}].caption`,
+            sourceText: img.caption.trim(),
+            kind: 'caption',
+            policy: 'translate',
+            source: { blockType: block.type, field: `images[${idx}].caption` }
+          });
+        }
       }
     });
   }
