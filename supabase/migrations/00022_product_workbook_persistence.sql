@@ -607,6 +607,7 @@ DECLARE
     v_meta_key TEXT;
     v_meta_val JSONB;
     v_doc_key TEXT;
+    v_url_port BIGINT;
 BEGIN
     -- 1. Validação estrutural de objeto
     IF p_document IS NULL OR jsonb_typeof(p_document) IS DISTINCT FROM 'object' THEN
@@ -669,12 +670,18 @@ BEGIN
         END IF;
     END IF;
 
-    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível e não pode ser nulo - PIM.W2C.2)
+    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível e não pode ser nulo - PIM.W2C.2/PIM.W2C.3)
     IF (p_document ? 'publicationDate') THEN
         IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string'
            OR (p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')
-           OR NOT ((p_document->>'publicationDate') ~ '^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?)?$') THEN
+           OR NOT ((p_document->>'publicationDate') ~ '^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" não é uma data ISO-8601 válida.', (p_document->>'publicationDate')
+                USING ERRCODE = '22023';
+        END IF;
+
+        -- Guard explícito para rejeitar hora 24:00 (PostgreSQL normalizaria para o dia seguinte em ::timestamptz) (PIM.W2C.3)
+        IF (p_document->>'publicationDate') ~* 'T24:' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" possui hora 24:00 inválida.', (p_document->>'publicationDate')
                 USING ERRCODE = '22023';
         END IF;
 
@@ -695,13 +702,22 @@ BEGIN
         END IF;
     END IF;
 
-    -- 9. Validação de externalUrl (opcional; se presente deve ser URL HTTP ou HTTPS canônica e não pode ser nulo - PIM.W2C.2)
+    -- 9. Validação de externalUrl (opcional; se presente deve ser URL HTTP ou HTTPS canônica e não pode ser nulo - PIM.W2C.2/PIM.W2C.3)
     IF (p_document ? 'externalUrl') THEN
         IF jsonb_typeof(p_document->'externalUrl') IS DISTINCT FROM 'string'
            OR (p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')
-           OR NOT ((p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\d{1,5})?(/[^\s]*)?$') THEN
+           OR NOT ((p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|[1-9]\d{0,3}|0))?(/[^\s]*)?$') THEN
             RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl "%" não é uma URL HTTP/HTTPS válida.', (p_document->>'externalUrl')
                 USING ERRCODE = '22023';
+        END IF;
+
+        -- Validação explícita de range de porta (0 <= port <= 65535) (PIM.W2C.3)
+        IF (p_document->>'externalUrl') ~ ':(\d+)(/|$|\?|#)' THEN
+            v_url_port := (regexp_match(p_document->>'externalUrl', ':(\d+)(/|$|\?|#)'))[1]::bigint;
+            IF v_url_port < 0 OR v_url_port > 65535 THEN
+                RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: Porta % fora do intervalo permitido [0, 65535].', v_url_port
+                    USING ERRCODE = '22023';
+            END IF;
         END IF;
     END IF;
 

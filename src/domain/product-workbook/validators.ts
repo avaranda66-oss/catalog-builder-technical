@@ -31,11 +31,12 @@ export function isValidBcp47LanguageTag(tag: string): boolean {
 }
 
 /**
- * ISO-8601 string regular expression for calendar dates and timestamps.
- * Accepts: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm:ss...' with optional timezone.
+ * ISO-8601 string regular expression for calendar dates and timestamps (PIM.W2C.3).
+ * Accepts: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm:ss...' with strictly validated hour [00-23],
+ * minute [00-59], second [00-59], optional millisecond fraction (1-3 digits) and optional timezone.
  */
 export const ISO_DATE_REGEX =
-  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?)?$/;
+  /^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$/;
 
 /**
  * Validates whether a string is a well-formed, parseable ISO-8601 date/timestamp
@@ -75,15 +76,15 @@ export function isValidIsoDate(dateStr: string): boolean {
 }
 
 /**
- * Regex canônica para URLs HTTP ou HTTPS compartilhada entre domínio e SQL (PIM.W2C.2).
+ * Regex canônica para URLs HTTP ou HTTPS compartilhada entre domínio e SQL (PIM.W2C.3).
  * Aceita protocolo http:// ou https://, host estruturado (FQDN com TLD >= 2 letras, localhost ou IPv4 válido),
- * porta opcional e caminho/query/hash opcionais sem whitespace.
+ * porta opcional estritamente no intervalo [0, 65535] e caminho/query/hash opcionais sem whitespace.
  */
 export const CANONICAL_HTTP_URL_REGEX =
-  /^https?:\/\/(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\d{1,5})?(\/[^\s]*)?$/i;
+  /^https?:\/\/(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|[1-9]\d{0,3}|0))?(\/[^\s]*)?$/i;
 
 /**
- * Valida se uma string é uma URL HTTP ou HTTPS canônica válida (PIM.W2C.2).
+ * Valida se uma string é uma URL HTTP ou HTTPS canônica válida com porta [0, 65535] (PIM.W2C.3).
  */
 export function isValidHttpUrl(url: string): boolean {
   if (typeof url !== 'string') return false;
@@ -91,7 +92,13 @@ export function isValidHttpUrl(url: string): boolean {
   if (trimmed !== url || !CANONICAL_HTTP_URL_REGEX.test(trimmed)) return false;
   try {
     const parsed = new URL(trimmed);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const portMatch = trimmed.match(/:(\d+)(?:\/|$|\?|#)/);
+    if (portMatch) {
+      const port = parseInt(portMatch[1], 10);
+      if (port < 0 || port > 65535) return false;
+    }
+    return true;
   } catch {
     return false;
   }

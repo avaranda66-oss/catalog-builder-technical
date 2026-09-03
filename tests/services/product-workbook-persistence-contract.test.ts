@@ -678,7 +678,7 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
   // =========================================================================
   describe('PIM.W2C.1 — ISO Date Grammar & Parseability Parity', () => {
     it('PIM-W2C1-DATE-SQL-PARITY: migration SQL valida regex canônica e parseabilidade com timestamptz sem erro bruto', () => {
-      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?(Z|[+-]\\d{2}:?\\d{2})?)?$'");
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^\\d{4}-\\d{2}-\\d{2}(T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d{1,3})?(Z|[+-]([01]\\d|2[0-3]):?[0-5]\\d)?)?$'");
       expect(migrationSql).toContain("(p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')");
       expect(migrationSql).toContain('(p_document->>\'publicationDate\')::timestamptz');
       expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_DATE');
@@ -733,7 +733,7 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
   // =========================================================================
   describe('PIM.W2C.1 — External URL HTTP/HTTPS Policy Parity', () => {
     it('PIM-W2C1-URL-SQL-PARITY: migration SQL restringe externalUrl estritamente a HTTP ou HTTPS e valida trim', () => {
-      expect(migrationSql).toContain("(p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\\d{1,5})?(/[^\\s]*)?$'");
+      expect(migrationSql).toContain("(p_document->>'externalUrl') ~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:(6553[0-5]|655[0-2]\\d|65[0-4]\\d{2}|6[0-4]\\d{3}|[1-5]\\d{4}|[1-9]\\d{0,3}|0))?(/[^\\s]*)?$'");
       expect(migrationSql).toContain("(p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')");
       expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_URL');
     });
@@ -983,7 +983,7 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
     // -----------------------------------------------------------------------
     it('W2C2-URL-SERVER-DOMAIN-ADVERSARIAL: URLs malformadas são rejeitadas de forma idêntica no domínio e SQL', () => {
       // Regex SQL canônica presente na migration
-      expect(migrationSql).toContain("~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:\\d{1,5})?(/[^\\s]*)?$'");
+      expect(migrationSql).toContain("~* '^https?://(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:(6553[0-5]|655[0-2]\\d|65[0-4]\\d{2}|6[0-4]\\d{3}|[1-5]\\d{4}|[1-9]\\d{0,3}|0))?(/[^\\s]*)?$'");
 
       const adversarialUrls = [
         'http://::',
@@ -1099,6 +1099,256 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
       // SQL: upsert_source_document_v1 itera jsonb_object_keys e lança INVALID_SOURCE_DOCUMENT_UNKNOWN_KEY
       expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_UNKNOWN_KEY');
       expect(migrationSql).toContain('SELECT jsonb_object_keys(p_document)');
+    });
+  });
+
+  // =========================================================================
+  // PIM.W2C.3: FINAL SOURCE DOCUMENT EDGE PARITY (TIMESTAMP 24:00 & URL PORT)
+  // =========================================================================
+  describe('PIM.W2C.3 — Final Source Document Edge Parity Suite', () => {
+    // -----------------------------------------------------------------------
+    // Helper de simulação do contrato PL/pgSQL (upsert_source_document_v1)
+    // Reproduz fielmente a semântica de guards SQL da migration 00022
+    // -----------------------------------------------------------------------
+    function validateSqlPublicationDateContract(dateStr: string): { valid: boolean; error?: string } {
+      const sqlIsoRegex = /^\d{4}-\d{2}-\d{2}(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,3})?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?)?$/;
+      if (dateStr.trim() !== dateStr || !sqlIsoRegex.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE' };
+      }
+      if (/T24:/i.test(dateStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_DATE_HOUR24' };
+      }
+      return { valid: true };
+    }
+
+    function validateSqlExternalUrlContract(urlStr: string): { valid: boolean; error?: string } {
+      const sqlUrlRegex = /^https?:\/\/(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost|((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]))(:(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|[1-9]\d{0,3}|0))?(\/[^\s]*)?$/i;
+      if (urlStr.trim() !== urlStr || !sqlUrlRegex.test(urlStr)) {
+        return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_URL' };
+      }
+      const portMatch = urlStr.match(/:(\d+)(?:\/|$|\?|#)/);
+      if (portMatch) {
+        const port = parseInt(portMatch[1], 10);
+        if (port < 0 || port > 65535) {
+          return { valid: false, error: 'INVALID_SOURCE_DOCUMENT_URL_PORT_OUT_OF_RANGE' };
+        }
+      }
+      return { valid: true };
+    }
+
+    // -----------------------------------------------------------------------
+    // BLOCKER 1: Timestamp 24:00:00 Parity
+    // -----------------------------------------------------------------------
+    it('W2C3-DATE-HOUR24-PARITY: 23:59:59 é válido, enquanto 24:00:00, 24:00:01, 25:00:00, 23:60:00 e 23:59:60 são rejeitados no domínio e SQL', () => {
+      // 23:59:59 válido
+      expect(isValidIsoDate('2026-05-15T23:59:59Z')).toBe(true);
+      expect(validateSqlPublicationDateContract('2026-05-15T23:59:59Z').valid).toBe(true);
+      expect(
+        parseSourceDocument({
+          id: 'doc-valid-time',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T23:59:59Z'
+        }).publicationDate
+      ).toBe('2026-05-15T23:59:59Z');
+
+      // 24:00:00 inválido
+      expect(isValidIsoDate('2026-05-15T24:00:00Z')).toBe(false);
+      expect(validateSqlPublicationDateContract('2026-05-15T24:00:00Z').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-invalid-2400',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T24:00:00Z'
+        })
+      ).toThrow();
+
+      // 24:00:01 inválido
+      expect(isValidIsoDate('2026-05-15T24:00:01Z')).toBe(false);
+      expect(validateSqlPublicationDateContract('2026-05-15T24:00:01Z').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-invalid-2401',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T24:00:01Z'
+        })
+      ).toThrow();
+
+      // 25:00:00 inválido
+      expect(isValidIsoDate('2026-05-15T25:00:00Z')).toBe(false);
+      expect(validateSqlPublicationDateContract('2026-05-15T25:00:00Z').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-invalid-2500',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T25:00:00Z'
+        })
+      ).toThrow();
+
+      // 23:60:00 inválido (minuto 60)
+      expect(isValidIsoDate('2026-05-15T23:60:00Z')).toBe(false);
+      expect(validateSqlPublicationDateContract('2026-05-15T23:60:00Z').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-invalid-m60',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T23:60:00Z'
+        })
+      ).toThrow();
+
+      // 23:59:60 inválido (segundo 60 / leap second não suportado)
+      expect(isValidIsoDate('2026-05-15T23:59:60Z')).toBe(false);
+      expect(validateSqlPublicationDateContract('2026-05-15T23:59:60Z').valid).toBe(false);
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-invalid-s60',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: '2026-05-15T23:59:60Z'
+        })
+      ).toThrow();
+
+      // Verificação da presença explícita do guard no SQL da migration
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~* 'T24:'");
+    });
+
+    // -----------------------------------------------------------------------
+    // BLOCKER 2: Port Range [0, 65535] Parity
+    // -----------------------------------------------------------------------
+    it('W2C3-URL-PORT-65535: http://example.com:65535, :0, :80 e :443 são válidos no domínio e SQL', () => {
+      const validPorts = [
+        'http://example.com:0',
+        'http://example.com:80',
+        'https://example.com:443',
+        'http://example.com:65535'
+      ];
+
+      for (const url of validPorts) {
+        expect(isValidHttpUrl(url)).toBe(true);
+        expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(true);
+        expect(validateSqlExternalUrlContract(url).valid).toBe(true);
+
+        const doc = parseSourceDocument({
+          id: 'doc-port-valid',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: url
+        });
+        expect(doc.externalUrl).toBe(url);
+      }
+    });
+
+    it('W2C3-URL-PORT-65536: http://example.com:65536 é rejeitado no domínio e SQL', () => {
+      const url = 'http://example.com:65536';
+      expect(isValidHttpUrl(url)).toBe(false);
+      expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(false);
+      expect(validateSqlExternalUrlContract(url).valid).toBe(false);
+
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-port-65536',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: url
+        })
+      ).toThrow();
+
+      expect(migrationSql).toContain('v_url_port < 0 OR v_url_port > 65535');
+    });
+
+    it('W2C3-URL-PORT-99999: http://example.com:99999 é rejeitado no domínio e SQL', () => {
+      const url = 'http://example.com:99999';
+      expect(isValidHttpUrl(url)).toBe(false);
+      expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(false);
+      expect(validateSqlExternalUrlContract(url).valid).toBe(false);
+
+      expect(() =>
+        parseSourceDocument({
+          id: 'doc-port-99999',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: url
+        })
+      ).toThrow();
+    });
+
+    // -----------------------------------------------------------------------
+    // EDGE MATRIX: Matriz Adversarial Completa de Borda
+    // -----------------------------------------------------------------------
+    it('W2C3-EDGE-MATRIX: validação sistemática de borda para timestamps, timezones e portas', () => {
+      // Matriz de Timestamps
+      const timestampMatrix: [string, boolean][] = [
+        ['2026-05-15T00:00:00Z', true],
+        ['2026-05-15T23:59:59Z', true],
+        ['2026-05-15T24:00:00Z', false],
+        ['2026-05-15T24:01:00Z', false],
+        ['2026-05-15T12:00:00+00:00', true],
+        ['2026-05-15T12:00:00-03:00', true],
+        ['2026-05-15T12:00:00-0300', true]
+      ];
+
+      for (const [dateStr, expected] of timestampMatrix) {
+        expect(isValidIsoDate(dateStr)).toBe(expected);
+        expect(validateSqlPublicationDateContract(dateStr).valid).toBe(expected);
+        if (expected) {
+          expect(
+            parseSourceDocument({
+              id: 'doc-edge-ts',
+              title: 'Doc',
+              documentType: 'manual',
+              publicationDate: dateStr
+            }).publicationDate
+          ).toBe(dateStr);
+        } else {
+          expect(() =>
+            parseSourceDocument({
+              id: 'doc-edge-ts',
+              title: 'Doc',
+              documentType: 'manual',
+              publicationDate: dateStr
+            })
+          ).toThrow();
+        }
+      }
+
+      // Matriz de Portas
+      const portMatrix: [string, boolean][] = [
+        ['http://example.com:0', true],
+        ['http://example.com:80', true],
+        ['https://example.com:443', true],
+        ['http://example.com:65535', true],
+        ['http://example.com:65536', false],
+        ['http://example.com:99999', false]
+      ];
+
+      for (const [url, expected] of portMatrix) {
+        expect(isValidHttpUrl(url)).toBe(expected);
+        expect(CANONICAL_HTTP_URL_REGEX.test(url)).toBe(expected);
+        expect(validateSqlExternalUrlContract(url).valid).toBe(expected);
+        if (expected) {
+          expect(
+            parseSourceDocument({
+              id: 'doc-edge-port',
+              title: 'Doc',
+              documentType: 'manual',
+              externalUrl: url
+            }).externalUrl
+          ).toBe(url);
+        } else {
+          expect(() =>
+            parseSourceDocument({
+              id: 'doc-edge-port',
+              title: 'Doc',
+              documentType: 'manual',
+              externalUrl: url
+            })
+          ).toThrow();
+        }
+      }
     });
   });
 });
