@@ -12,6 +12,7 @@ import { StorageService } from '../services/storage.service';
 import { SupabaseService, getSupabase } from '../services/supabase.service';
 import { useAuthStore } from './useAuthStore';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { resolveFamilySelectionAfterDelete, slugifyFamilyName } from '../domain/family-selection.helper';
 
 export type SyncStatus = 'synced' | 'dirty' | 'saving' | 'conflict' | 'error' | 'offline';
 
@@ -32,6 +33,8 @@ interface LibraryState {
   selectedProductId: string | null;
   searchQuery: string;
   selectedFamily: string; // family name or slug
+  workspaceLoaded: boolean;
+  workspaceSource: 'cloud' | 'offline';
   
   // Status de Sincronização
   syncStatus: SyncStatus;
@@ -126,7 +129,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   changeEvents: [],
   selectedProductId: null,
   searchQuery: '',
-  selectedFamily: 'Transmissores de Pressão Relativa',
+  selectedFamily: '',
+  workspaceLoaded: false,
+  workspaceSource: 'cloud',
   
   syncStatus: 'synced',
   syncError: null,
@@ -225,45 +230,144 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   renameFamily: async (familyId, newName) => {
-    const previousFamilies = get().families;
-    set((state) => ({
-      families: state.families.map(f => f.id === familyId ? { ...f, name: newName } : f),
-      syncStatus: 'saving'
-    }));
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      return { success: false, error: 'O nome da família não pode ser vazio.' };
+    }
 
-    const res = await SupabaseService.saveProductFamily({ id: familyId, name: newName });
+    const currentFamilies = get().families;
+    const target = currentFamilies.find(f => f.id === familyId);
+    if (!target) {
+      return { success: false, error: 'Família não encontrada.' };
+    }
+
+    if (trimmed === target.name) {
+      return { success: true };
+    }
+
+    const isDuplicate = currentFamilies.some(
+      f => f.id !== familyId && (f.name.trim().toLowerCase() === trimmed.toLowerCase() || f.slug === slugifyFamilyName(trimmed))
+    );
+    if (isDuplicate) {
+      return { success: false, error: 'Já existe uma família com este nome.' };
+    }
+
+    const userRole = useAuthStore.getState().role;
+    if (userRole !== 'admin') {
+      return { success: false, error: 'Permissão negada: apenas administradores podem alterar famílias de produtos.' };
+    }
+
+    set({ syncStatus: 'saving' });
+
+    // CLOUD-FIRST: chama SupabaseService com expected_updated_at (CAS)
+    const res = await SupabaseService.saveProductFamily({
+      id: familyId,
+      name: trimmed,
+      expected_updated_at: target.updated_at
+    });
+
     if (res.success && res.data) {
-      set({ syncStatus: 'synced', syncError: null });
+      const confirmed = res.data;
+      const oldName = target.name;
+      const oldSlug = target.slug;
+
+      const wasSelected =
+        get().selectedFamily === oldName ||
+        get().selectedFamily === oldSlug ||
+        get().selectedFamily === familyId;
+
+      const nextSelected = wasSelected ? confirmed.name : get().selectedFamily;
+
+      // Propaga novo nome para os produtos da família (canônicos e legados)
+      const updatedProducts = get().products.map(p => {
+        if (p.family_id === familyId || (p.family && p.family.trim().toLowerCase() === oldName.trim().toLowerCase())) {
+          return { ...p, family_id: familyId, family: confirmed.name };
+        }
+        return p;
+      });
+
+      // Atualiza familyFields: ID é a autoridade canônica estável
+      const updatedFields = { ...get().familyFields };
+      const targetFields = updatedFields[familyId] || (oldName ? updatedFields[oldName] : []) || [];
+      updatedFields[familyId] = targetFields;
+      updatedFields[confirmed.name] = targetFields;
+      if (confirmed.slug) updatedFields[confirmed.slug] = targetFields;
+      if (oldName && oldName !== confirmed.name) delete updatedFields[oldName];
+      if (oldSlug && oldSlug !== confirmed.slug) delete updatedFields[oldSlug];
+
+      set((state) => ({
+        families: state.families.map(f => f.id === familyId ? confirmed : f),
+        products: updatedProducts,
+        familyFields: updatedFields,
+        selectedFamily: nextSelected,
+        syncStatus: 'synced',
+        syncError: null
+      }));
+
+      void StorageService.saveProducts(updatedProducts);
       return { success: true };
     }
 
     set({
-      families: previousFamilies,
-      syncStatus: 'error',
-      syncError: res.error || 'Erro ao renomear família'
+      syncStatus: res.conflict ? 'conflict' : 'error',
+      syncError: res.error || 'Erro ao renomear família no servidor.'
     });
-    return { success: false, error: res.error || 'Falha ao renomear família no servidor' };
+    return { success: false, error: res.error || 'Falha ao renomear família no servidor.' };
   },
 
   deleteFamily: async (familyId) => {
-    const previousFamilies = get().families;
-    set((state) => ({
-      families: state.families.filter(f => f.id !== familyId),
-      syncStatus: 'saving'
-    }));
+    const currentFamilies = get().families;
+    const target = currentFamilies.find(f => f.id === familyId);
+    if (!target) {
+      return { success: false, error: 'Família não encontrada.' };
+    }
 
-    const res = await SupabaseService.deleteProductFamily(familyId);
+    const userRole = useAuthStore.getState().role;
+    if (userRole !== 'admin') {
+      return { success: false, error: 'Permissão negada: apenas administradores podem excluir famílias de produtos.' };
+    }
+
+    // Client-side guard (informativo / rápido)
+    const hasProducts = get().products.some(
+      p => p.family_id === familyId || (p.family && p.family.trim().toLowerCase() === target.name.trim().toLowerCase())
+    );
+    if (hasProducts) {
+      return {
+        success: false,
+        error: 'Esta família contém produtos associados e não pode ser excluída.'
+      };
+    }
+
+    set({ syncStatus: 'saving' });
+
+    // CLOUD-FIRST: chama delete_product_family_v2 com expected_updated_at (CAS)
+    const res = await SupabaseService.deleteProductFamily(familyId, target.updated_at);
     if (res.success) {
-      set({ syncStatus: 'synced', syncError: null });
+      const nextSelected = resolveFamilySelectionAfterDelete(currentFamilies, familyId, get().selectedFamily);
+      const remaining = currentFamilies.filter(f => f.id !== familyId);
+
+      // Limpeza de chaves de familyFields
+      const updatedFields = { ...get().familyFields };
+      delete updatedFields[familyId];
+      delete updatedFields[target.name];
+      if (target.slug) delete updatedFields[target.slug];
+
+      set({
+        families: remaining,
+        selectedFamily: nextSelected,
+        familyFields: updatedFields,
+        syncStatus: 'synced',
+        syncError: null
+      });
+
       return { success: true };
     }
 
     set({
-      families: previousFamilies,
-      syncStatus: 'error',
-      syncError: res.error || 'Erro ao excluir família'
+      syncStatus: res.conflict ? 'conflict' : 'error',
+      syncError: res.error || 'Erro ao excluir família no servidor.'
     });
-    return { success: false, error: res.error || 'Falha ao excluir família no servidor' };
+    return { success: false, error: res.error || 'Falha ao excluir família no servidor.' };
   },
 
   getColumnsForFamily: (family: string) => {
@@ -714,10 +818,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           updatedAt: rp.updated_at
         }));
 
-        const activeFam = families[0]?.name || get().selectedFamily || 'Transmissores de Pressão Relativa';
+        const currentSelected = get().selectedFamily;
+        const matchingFam = families.find(f => f.name === currentSelected || f.id === currentSelected || f.slug === currentSelected);
+        const activeFam = matchingFam ? matchingFam.name : (families[0]?.name || '');
 
-        // EMPTY CLOUD É VÁLIDO: se o servidor respondeu com sucesso, mantém exatamente os produtos do cloud (mesmo se vazio)
+        // EMPTY CLOUD É VÁLIDO: se o servidor respondeu com sucesso, mantém exatamente os dados do cloud (mesmo se vazio)
         set({
+          workspaceLoaded: true,
+          workspaceSource: 'cloud',
           families,
           familyFields: fieldMap,
           products: remoteProducts,
@@ -737,9 +845,24 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     // Fallback OFFLINE somente em caso de falha de conexão com Supabase
     const saved = await StorageService.loadProducts();
     if (saved && saved.length > 0) {
-      set({ products: saved, syncStatus: 'offline', syncError: 'Modo Offline: exibindo cache local' });
+      const derivedFamilies = Array.from(new Set(saved.map(p => p.family || 'Geral')));
+      set({
+        workspaceLoaded: true,
+        workspaceSource: 'offline',
+        products: saved,
+        selectedFamily: derivedFamilies[0] || '',
+        syncStatus: 'offline',
+        syncError: 'Modo Offline: exibindo cache local'
+      });
     } else {
-      set({ products: INITIAL_PRODUCTS, syncStatus: 'offline', syncError: 'Modo Offline: dados de demonstração' });
+      set({
+        workspaceLoaded: true,
+        workspaceSource: 'offline',
+        products: INITIAL_PRODUCTS,
+        selectedFamily: 'Transmissores de Pressão Relativa',
+        syncStatus: 'offline',
+        syncError: 'Modo Offline: dados de demonstração'
+      });
     }
   },
 
@@ -818,13 +941,69 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         set((state) => {
           if (eventType === 'INSERT') {
             if (state.families.some(f => f.id === newFam.id)) return state;
-            return { families: [...state.families, newFam as ProductFamily] };
+            const updatedFamilies = [...state.families, newFam as ProductFamily];
+            const nextSelected = state.selectedFamily || (newFam as ProductFamily).name;
+            return { families: updatedFamilies, selectedFamily: nextSelected };
           }
           if (eventType === 'UPDATE') {
-            return { families: state.families.map(f => f.id === newFam.id ? (newFam as ProductFamily) : f) };
+            const confirmed = newFam as ProductFamily;
+            const oldTarget = state.families.find(f => f.id === confirmed.id);
+            const oldName = oldTarget?.name;
+            const oldSlug = oldTarget?.slug;
+
+            const wasSelected = oldTarget && (
+              state.selectedFamily === oldName ||
+              state.selectedFamily === oldSlug ||
+              state.selectedFamily === confirmed.id
+            );
+            const nextSelected = wasSelected ? confirmed.name : state.selectedFamily;
+
+            // Propagação para produtos em memória
+            const updatedProducts = state.products.map(p => {
+              if (p.family_id === confirmed.id || (oldName && p.family && p.family.trim().toLowerCase() === oldName.trim().toLowerCase())) {
+                return { ...p, family_id: confirmed.id, family: confirmed.name };
+              }
+              return p;
+            });
+
+            // Atualiza familyFields: ID é autoridade estável, aliases atualizados, antigos removidos
+            const updatedFields = { ...state.familyFields };
+            const targetFields = updatedFields[confirmed.id] || (oldName ? updatedFields[oldName] : []) || [];
+            updatedFields[confirmed.id] = targetFields;
+            updatedFields[confirmed.name] = targetFields;
+            if (confirmed.slug) updatedFields[confirmed.slug] = targetFields;
+            if (oldName && oldName !== confirmed.name) delete updatedFields[oldName];
+            if (oldSlug && oldSlug !== confirmed.slug) delete updatedFields[oldSlug];
+
+            return {
+              families: state.families.map(f => f.id === confirmed.id ? confirmed : f),
+              products: updatedProducts,
+              familyFields: updatedFields,
+              selectedFamily: nextSelected
+            };
           }
           if (eventType === 'DELETE') {
-            return { families: state.families.filter(f => f.id !== oldFam.id) };
+            const deletedId = oldFam?.id;
+            if (!deletedId || !state.families.some(f => f.id === deletedId)) {
+              return state; // Idempotente
+            }
+
+            const target = state.families.find(f => f.id === deletedId);
+            const nextSelected = resolveFamilySelectionAfterDelete(state.families, deletedId, state.selectedFamily);
+            const remaining = state.families.filter(f => f.id !== deletedId);
+
+            const updatedFields = { ...state.familyFields };
+            delete updatedFields[deletedId];
+            if (target) {
+              delete updatedFields[target.name];
+              if (target.slug) delete updatedFields[target.slug];
+            }
+
+            return {
+              families: remaining,
+              selectedFamily: nextSelected,
+              familyFields: updatedFields
+            };
           }
           return state;
         });

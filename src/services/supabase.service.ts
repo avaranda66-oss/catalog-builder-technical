@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
-import { Product } from '@/domain/product.schema';
+import { Product, ProductFamily } from '@/domain/product.schema';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -113,6 +113,31 @@ export interface WorkspaceData {
   }>;
   templates: any[];
   userRole: 'admin' | 'editor';
+}
+
+export interface SaveProductFamilyInput {
+  id?: string;
+  name: string;
+  slug?: string;
+  description?: string | null;
+  sort_order?: number;
+  expected_updated_at?: string | null;
+}
+
+export interface ProductFamilyMutationResult {
+  success: boolean;
+  data?: ProductFamily;
+  conflict?: boolean;
+  error?: string;
+  errorCode?: string;
+}
+
+export interface DeleteProductFamilyResult {
+  success: boolean;
+  conflict?: boolean;
+  hasProducts?: boolean;
+  error?: string;
+  errorCode?: string;
 }
 
 /**
@@ -736,26 +761,54 @@ export class SupabaseService {
     }
   }
 
-  static async saveProductFamily(family: Partial<any>): Promise<{ success: boolean; data?: any; error?: string }> {
+  static async saveProductFamily(family: SaveProductFamilyInput): Promise<ProductFamilyMutationResult> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
     try {
       const { data, error } = await supabase.rpc('save_product_family_v1', { p_family: family });
-      if (error) return { success: false, error: error.message };
-      return { success: true, data };
+      if (error) {
+        if (error.code === '42501' || error.message.includes('permission') || error.message.includes('Admin')) {
+          return { success: false, errorCode: '42501', error: 'Permissão negada: apenas administradores podem alterar a biblioteca de produtos.' };
+        }
+        if (error.code === '40001' || error.message.includes('FAMILY_CONFLICT') || error.message.includes('Conflito')) {
+          return { success: false, conflict: true, errorCode: '40001', error: 'Conflito de Concorrência: a família foi modificada em outro dispositivo. Recarregue a página.' };
+        }
+        if (error.code === '23505' || error.message.includes('DUPLICATE_FAMILY_NAME')) {
+          return { success: false, errorCode: '23505', error: 'Já existe uma família com este nome.' };
+        }
+        if (error.code === '22023') {
+          return { success: false, errorCode: '22023', error: 'Nome da família não pode ser vazio.' };
+        }
+        return { success: false, error: error.message };
+      }
+      return { success: true, data: data as ProductFamily };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao salvar família de produtos' };
     }
   }
 
-  static async deleteProductFamily(familyId: string): Promise<{ success: boolean; error?: string }> {
+  static async deleteProductFamily(familyId: string, expectedUpdatedAt?: string | null): Promise<DeleteProductFamilyResult> {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
     try {
-      const { data, error } = await supabase.rpc('delete_product_family_v1', { p_family_id: familyId });
-      if (error) return { success: false, error: error.message };
+      const { data, error } = await supabase.rpc('delete_product_family_v2', {
+        p_family_id: familyId,
+        p_expected_updated_at: expectedUpdatedAt || null
+      });
+      if (error) {
+        if (error.code === '42501' || error.message.includes('permission') || error.message.includes('Admin')) {
+          return { success: false, errorCode: '42501', error: 'Permissão negada: apenas administradores podem excluir famílias de produtos.' };
+        }
+        if (error.code === '40001' || error.message.includes('FAMILY_CONFLICT') || error.message.includes('Conflito')) {
+          return { success: false, conflict: true, errorCode: '40001', error: 'Conflito de Concorrência: a família foi modificada em outro dispositivo. Recarregue a página.' };
+        }
+        if (error.code === '23503' || error.message.includes('FAMILY_NOT_EMPTY') || error.message.includes('produtos associados')) {
+          return { success: false, hasProducts: true, errorCode: '23503', error: 'Esta família contém produtos associados e não pode ser excluída.' };
+        }
+        return { success: false, error: error.message };
+      }
       return { success: Boolean(data) };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao excluir família de produtos' };
