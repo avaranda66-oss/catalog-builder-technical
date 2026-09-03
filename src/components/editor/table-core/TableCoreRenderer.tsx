@@ -317,13 +317,15 @@ function renderCellContent(
 export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   table,
   mode,
-  resolveAsset,
-  resolveDatum,
   selectedCellId,
   onSelectCell,
+  resolveAsset,
+  resolveDatum,
   onDiagnostic,
   renderTitle = false,
-  className = ''
+  className = '',
+  getCellPrintableField,
+  getHeaderPrintableField
 }) => {
   // 1. Resolução geométrica pura em mm
   const geometryResult = resolveColumnWidthsMm(table);
@@ -371,6 +373,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   // Renderiza uma célula individual respeitando merges e overrides
   const renderCell = (
     cell: TableCellModel,
+    row: TableRowModel,
     col: TableColumnModel,
     isHeaderCell: boolean
   ) => {
@@ -409,6 +412,15 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
       : '';
 
     const Tag = isHeaderCell ? 'th' : 'td';
+    const printableField = isHeaderCell
+      ? getHeaderPrintableField
+        ? getHeaderPrintableField(col)
+        : col.semanticKey
+        ? `col_${col.semanticKey}_label`
+        : undefined
+      : getCellPrintableField
+      ? getCellPrintableField(cell, row, col)
+      : undefined;
 
     return (
       <Tag
@@ -417,6 +429,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         colSpan={colSpan}
         rowSpan={rowSpan}
         scope={isHeaderCell ? 'col' : undefined}
+        data-printable-field={printableField}
         onClick={
           mode === 'editor' && onSelectCell
             ? (e) => {
@@ -489,7 +502,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
           const key = getCellKey(row.id, col.id);
           const cell = table.cells[key];
           if (!cell) return null;
-          return renderCell(cell, col, isHeaderRow);
+          return renderCell(cell, row, col, isHeaderRow);
         })}
       </tr>
     );
@@ -564,6 +577,13 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
                       : 'text-left'
                   }`}
                   data-column-header={col.semanticKey}
+                  data-printable-field={
+                    getHeaderPrintableField
+                      ? getHeaderPrintableField(col)
+                      : col.semanticKey
+                      ? `col_${col.semanticKey}_label`
+                      : undefined
+                  }
                 >
                   <span>{col.defaultLabel}</span>
                 </th>

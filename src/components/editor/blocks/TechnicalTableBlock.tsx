@@ -5,7 +5,10 @@ import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
+import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
+import { adaptLegacyBlockToTableCore } from '../../../domain/table-core';
+import { TableCoreRenderer } from '../table-core';
 
 interface TechnicalTableBlockProps {
   block: ContentBlock;
@@ -34,6 +37,11 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const columns: TableColumnConfig[] = block.tableColumns || [];
   const rows = block.tableRows || [];
   const family: TableVisualFamily = (block.style?.family as TableVisualFamily) || 'monochrome';
+
+  // Pilot Table Core V2 para specs_table (CORE.T2B.1)
+  const isPilotSpecsTable = block.type === 'specs_table';
+  const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
+  const useTableCorePilot = isPilotSpecsTable && pilotAdaptResult?.supported;
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     if (isExport) return;
@@ -105,56 +113,128 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
         )}
       </div>
 
-      {/* Motor Unificado de Tabela Técnica */}
-      <TechnicalTable
-        columns={columns}
-        rows={rows}
-        getProduct={getProduct}
-        family={family}
-        isEditable={!isExport}
-        legendConfig={{
-          showLegend: block.customData?.showLegend ?? true,
-          title: block.customData?.legendTitle || 'LEGEND:',
-          items: block.customData?.legendLabels
-            ? Object.entries(block.customData.legendLabels).map(([type, label]) => ({
-                type: type as any,
-                label: String(label)
-              }))
-            : undefined
-        }}
-        onToggleLegend={(show) =>
-          updateBlock(pageId, block.id, {
-            customData: { ...(block.customData || {}), showLegend: show }
-          })
-        }
-        onUpdateLegendTitle={(newTitle) =>
-          updateBlock(pageId, block.id, {
-            customData: { ...(block.customData || {}), legendTitle: newTitle }
-          })
-        }
-        onUpdateLegendItem={(markerType, newLabel) => {
-          const currentLabels = block.customData?.legendLabels || {
-            filled_square: 'Item included in standard configuration',
-            empty_square: 'Item not selected / available as optional',
-            asterisk: 'Refer to technical footnote (*)',
-            dash: 'Not applicable for this model'
-          };
-          updateBlock(pageId, block.id, {
-            customData: {
-              ...(block.customData || {}),
-              legendLabels: {
-                ...currentLabels,
-                [markerType]: newLabel
+      {/* Motor de Tabela: Table Core V2 Pilot para specs_table, fallback seguro para TechnicalTable */}
+      {useTableCorePilot ? (
+        <div className="w-full">
+          <TableCoreRenderer
+            table={pilotAdaptResult.table}
+            mode={isExport ? 'export' : 'editor'}
+            resolveDatum={(ref) => {
+              if (ref.kind === 'datum_reference') {
+                const product = getProduct(ref.productId);
+                if (!product) return undefined;
+                const fieldKey = ref.datumKey.replace(/^legacy\.product_field\./, '');
+                const specs = (product.specs || {}) as Record<string, unknown>;
+                const customSpecs = (specs.customSpecs || {}) as Record<string, unknown>;
+                const rawVal =
+                  (product as unknown as Record<string, unknown>)[fieldKey] ??
+                  specs[fieldKey] ??
+                  customSpecs[fieldKey];
+                if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+                  return {
+                    value: { kind: 'text', text: String(rawVal) }
+                  };
+                }
               }
-            }
-          });
-        }}
-        onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
-        onRestoreCell={(rowId, colKey) => restoreCellToLibrary(block.id, rowId, colKey)}
-        onRemoveRow={(rowId) => removeRowFromTable(block.id, rowId)}
-        onRemoveColumn={handleRemoveColumn}
-        onRenameColumn={handleColumnLabelBlur}
-      />
+              return undefined;
+            }}
+            getHeaderPrintableField={(col) => `col_${col.semanticKey}_label`}
+            getCellPrintableField={(_cell, row, col) => {
+              const rowIdx = pilotAdaptResult.table.rows.findIndex((r) => r.id === row.id);
+              const legacyRow = block.tableRows?.[rowIdx];
+              if (!legacyRow) return undefined;
+              return `row_${legacyRow.id}_ov_${col.semanticKey}`;
+            }}
+          />
+          {block.customData?.showLegend && (
+            <TechnicalLegend
+              config={{
+                showLegend: true,
+                title: block.customData?.legendTitle || 'LEGEND:',
+                items: block.customData?.legendLabels
+                  ? Object.entries(block.customData.legendLabels).map(([type, label]) => ({
+                      type: type as any,
+                      label: String(label)
+                    }))
+                  : undefined
+              }}
+              isEditable={!isExport}
+              onUpdateLegendTitle={(newTitle) =>
+                updateBlock(pageId, block.id, {
+                  customData: { ...(block.customData || {}), legendTitle: newTitle }
+                })
+              }
+              onUpdateLegendItem={(markerType, newLabel) => {
+                const currentLabels = block.customData?.legendLabels || {
+                  filled_square: 'Item included in standard configuration',
+                  empty_square: 'Item not selected / available as optional',
+                  asterisk: 'Refer to technical footnote (*)',
+                  dash: 'Not applicable for this model'
+                };
+                updateBlock(pageId, block.id, {
+                  customData: {
+                    ...(block.customData || {}),
+                    legendLabels: {
+                      ...currentLabels,
+                      [markerType]: newLabel
+                    }
+                  }
+                });
+              }}
+            />
+          )}
+        </div>
+      ) : (
+        <TechnicalTable
+          columns={columns}
+          rows={rows}
+          getProduct={getProduct}
+          family={family}
+          isEditable={!isExport}
+          legendConfig={{
+            showLegend: block.customData?.showLegend ?? true,
+            title: block.customData?.legendTitle || 'LEGEND:',
+            items: block.customData?.legendLabels
+              ? Object.entries(block.customData.legendLabels).map(([type, label]) => ({
+                  type: type as any,
+                  label: String(label)
+                }))
+              : undefined
+          }}
+          onToggleLegend={(show) =>
+            updateBlock(pageId, block.id, {
+              customData: { ...(block.customData || {}), showLegend: show }
+            })
+          }
+          onUpdateLegendTitle={(newTitle) =>
+            updateBlock(pageId, block.id, {
+              customData: { ...(block.customData || {}), legendTitle: newTitle }
+            })
+          }
+          onUpdateLegendItem={(markerType, newLabel) => {
+            const currentLabels = block.customData?.legendLabels || {
+              filled_square: 'Item included in standard configuration',
+              empty_square: 'Item not selected / available as optional',
+              asterisk: 'Refer to technical footnote (*)',
+              dash: 'Not applicable for this model'
+            };
+            updateBlock(pageId, block.id, {
+              customData: {
+                ...(block.customData || {}),
+                legendLabels: {
+                  ...currentLabels,
+                  [markerType]: newLabel
+                }
+              }
+            });
+          }}
+          onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
+          onRestoreCell={(rowId, colKey) => restoreCellToLibrary(block.id, rowId, colKey)}
+          onRemoveRow={(rowId) => removeRowFromTable(block.id, rowId)}
+          onRemoveColumn={handleRemoveColumn}
+          onRenameColumn={handleColumnLabelBlur}
+        />
+      )}
 
       {/* Rodapé da Tabela: Inserir Produtos (Apenas no Modo Editor) */}
       {!isExport && (
