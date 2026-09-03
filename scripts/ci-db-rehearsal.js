@@ -373,8 +373,8 @@ async function run() {
     `, [FAMILY_ID]);
 
     await client.query(`
-      INSERT INTO public.products (id, name, family_id)
-      VALUES ($1, 'Rehearsal Product', $2)
+      INSERT INTO public.products (id, sku, name, family_id)
+      VALUES ($1, 'SKU-REHEARSAL-01', 'Rehearsal Product', $2)
       ON CONFLICT (id) DO NOTHING;
     `, [PRODUCT_ID, FAMILY_ID]);
 
@@ -490,8 +490,8 @@ async function run() {
     // -------------------------------------------------------------
     logStep('FASE 9: OWNER DELETE GUARD');
     await client.query(`
-      INSERT INTO public.products (id, name, family_id)
-      VALUES ($1, 'Unattached Product', $2)
+      INSERT INTO public.products (id, sku, name, family_id)
+      VALUES ($1, 'SKU-TEMP-01', 'Unattached Product', $2)
     `, [TEMP_PROD_ID, FAMILY_ID]);
     await client.query(`DELETE FROM public.products WHERE id = $1`, [TEMP_PROD_ID]);
     console.log('Unattached product deleted successfully');
