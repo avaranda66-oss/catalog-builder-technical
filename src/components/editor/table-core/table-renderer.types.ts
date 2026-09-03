@@ -5,9 +5,11 @@
 
 import {
   TableCoreModel,
-  TableCellLiteralContent,
-  TableCellBoundContent
-} from '../../../domain/table-core/table.types';
+  TableCellModel,
+  TableRowModel,
+  TableColumnModel,
+  TableDatumResolver
+} from '../../../domain/table-core';
 
 export type TableCoreRendererMode = 'editor' | 'export';
 
@@ -35,16 +37,8 @@ export type TableAssetResolver = (
   assetId: string
 ) => { url: string; altText?: string } | undefined;
 
-/**
- * Função de resolução pura para dados técnicos vinculados (datum_reference).
- * Permite que o renderizador permaneça 100% desacoplado da Library ou do Product Workbook.
- */
-export type TableDatumResolver = (
-  reference: TableCellBoundContent
-) => {
-  value: TableCellLiteralContent;
-  status?: 'approved' | 'draft' | 'conflict' | 'unknown';
-} | undefined;
+// Re-exporta o contrato canônico do Table Core
+export type { TableDatumResolver };
 
 /**
  * Propriedades do componente TableCoreRenderer.
@@ -60,4 +54,10 @@ export interface TableCoreRendererProps {
   onDiagnostic?: (diagnostic: TableRenderDiagnostic) => void;
   renderTitle?: boolean; // Default: false (evita duplicação com wrappers externos)
   className?: string;
+  getCellPrintableField?: (
+    cell: TableCellModel,
+    row: TableRowModel,
+    col: TableColumnModel
+  ) => string | undefined;
+  getHeaderPrintableField?: (col: TableColumnModel) => string | undefined;
 }

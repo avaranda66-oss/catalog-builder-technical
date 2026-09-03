@@ -115,9 +115,6 @@ export interface TableApplyPresetCommand extends BaseDocumentCommand {
   presetId: TablePresetId;
 }
 
-/**
- * Discriminated Union de todos os Comandos de Tabela.
- */
 export type TableCommand =
   | TableAddRowCommand
   | TableRemoveRowCommand

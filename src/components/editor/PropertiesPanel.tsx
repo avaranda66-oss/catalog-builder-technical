@@ -44,6 +44,7 @@ import { FeaturesListInspector } from './inspector/FeaturesListInspector';
 import { MultiModeCalibratorInspector } from './inspector/MultiModeCalibratorInspector';
 import { SoftwareConnectivityInspector } from './inspector/SoftwareConnectivityInspector';
 import { ImageGalleryInspector } from './inspector/ImageGalleryInspector';
+import { SpecsTableInspector } from './inspector/SpecsTableInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -485,6 +486,16 @@ export const PropertiesPanel: React.FC = () => {
             {/* 9. GALERIA DE FOTOS CANÔNICA (CORE.E6B) */}
             {selectedBlock.type === 'image_gallery' && (
               <ImageGalleryInspector block={selectedBlock} pageId={blockPageId} />
+            )}
+
+            {/* 10. PILOTO TABLE CORE V2: SPECS_TABLE (CORE.T2C.1) */}
+            {selectedBlock.type === 'specs_table' && (
+              <SpecsTableInspector
+                block={selectedBlock}
+                pageId={blockPageId}
+                selectedCellId={selectedChildId}
+                onSelectCell={(cellId) => selectEditorElement({ blockId: selectedBlock.id, childId: cellId })}
+              />
             )}
 
             {/* Customização de Colunas para Tabelas */}

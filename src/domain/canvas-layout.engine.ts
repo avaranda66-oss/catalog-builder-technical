@@ -12,6 +12,7 @@ import {
   SPACING_MM_MAP
 } from './canvas-layout.schema';
 import type { Catalog, ContentBlock } from './catalog.schema';
+import { adaptLegacyBlockToTableCore } from './table-core';
 
 // ============================================================================
 // 1. Dimensões Físicas Padronizadas da Folha A4 (ISO 216)
@@ -355,16 +356,26 @@ export function resolveEditorSelection(
     return { selectedBlockId: null, selectedChildId: null };
   }
 
-  // Bloco legado: nunca possui childId
-  if (targetBlock.type !== 'structural_section') {
+  // Seção estrutural: valida existência estrita do childId
+  if (targetBlock.type === 'structural_section') {
+    if (childId && targetBlock.structuralData?.children?.some((c) => c.id === childId)) {
+      return { selectedBlockId: blockId, selectedChildId: childId };
+    }
     return { selectedBlockId: blockId, selectedChildId: null };
   }
 
-  // Seção estrutural: valida existência estrita do childId
-  if (childId && targetBlock.structuralData?.children?.some((c) => c.id === childId)) {
-    return { selectedBlockId: blockId, selectedChildId: childId };
+  // Piloto Table Core para specs_table: valida existência estrita da célula como childId
+  if (targetBlock.type === 'specs_table') {
+    if (childId) {
+      const adaptRes = adaptLegacyBlockToTableCore(targetBlock);
+      if (adaptRes.supported && adaptRes.bridge.getByCellId(childId)) {
+        return { selectedBlockId: blockId, selectedChildId: childId };
+      }
+    }
+    return { selectedBlockId: blockId, selectedChildId: null };
   }
 
+  // Demais blocos legados: nunca possuem childId
   return { selectedBlockId: blockId, selectedChildId: null };
 }
 
