@@ -39,16 +39,17 @@ jobs:
           echo "=== SUPABASE CLI VERSION ==="
           npx supabase --version
 
-      - name: Setup Migration Boundary (Isolate Target 00022 and Historical 00005-00021)
+      - name: Setup Migration Boundary (Isolate Target 00022 and Historical Migrations)
         run: |
-          mkdir -p target_migration pending_migrations
+          mkdir -p target_migration pending_00005_00013 pending_00014_00021
           # 1. Isolate target migration 00022
           cp supabase/migrations/00022_product_workbook_persistence.sql target_migration/00022_product_workbook_persistence.sql
           rm supabase/migrations/00022_product_workbook_persistence.sql
-          # 2. Isolate migrations 00005 through 00021 so initial stack starts on 00001-00004
-          mv supabase/migrations/0000[5-9]* pending_migrations/ || true
-          mv supabase/migrations/0001* pending_migrations/ || true
-          mv supabase/migrations/0002* pending_migrations/ || true
+          # 2. Isolate migrations 00005-00013 and 00014-00021
+          mv supabase/migrations/0000[5-9]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[0-3]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[4-9]* pending_00014_00021/ || true
+          mv supabase/migrations/0002* pending_00014_00021/ || true
           echo "Active initial baseline migrations (00001-00004):"
           ls -la supabase/migrations/
 
@@ -58,20 +59,37 @@ jobs:
           echo "=== SUPABASE STATUS ==="
           npx supabase status
 
-      - name: Apply Live-Derived Rehearsal Baseline Bridge
+      - name: Apply Live-Derived Rehearsal Baseline Bridge (Gap #1: media_library)
         run: |
-          echo "Applying live-derived baseline bridge (media_library) via psql in db container..."
+          echo "Applying Gap #1 baseline bridge (media_library)..."
           docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres < scripts/db-release0-live-baseline.sql
-          echo "Verifying media_library in container:"
           docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres -c "SELECT table_name FROM information_schema.tables WHERE table_name = 'media_library';"
 
-      - name: Apply Remaining Historical Migrations (00005 - 00021)
+      - name: Apply Historical Migrations 00005 - 00013
         run: |
-          echo "Restoring historical migrations 00005-00021..."
-          mv pending_migrations/*.sql supabase/migrations/
+          echo "Restoring historical migrations 00005-00013..."
+          mv pending_00005_00013/*.sql supabase/migrations/
           ls -la supabase/migrations/
-          echo "Applying pending migrations via supabase migration up..."
+          echo "Applying pending migrations 00005-00013 via supabase migration up..."
           npx supabase migration up --local
+
+      - name: Apply Reconciliation Gap #2 Pre-00014
+        run: |
+          echo "Applying Gap #2 pre-00014 reconciliation..."
+          docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres < scripts/db-release0-gap2-pre14.sql
+
+      - name: Apply Historical Migrations 00014 - 00021
+        run: |
+          echo "Restoring historical migrations 00014-00021..."
+          mv pending_00014_00021/*.sql supabase/migrations/
+          ls -la supabase/migrations/
+          echo "Applying pending migrations 00014-00021 via supabase migration up..."
+          npx supabase migration up --local
+
+      - name: Apply Reconciliation Gap #2 Post-00014
+        run: |
+          echo "Applying Gap #2 post-00014 restoration (verbatim live function overload)..."
+          docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres < scripts/db-release0-gap2-post14.sql
 
       - name: Restore Target Migration 00022 for Rehearsal Execution
         run: |

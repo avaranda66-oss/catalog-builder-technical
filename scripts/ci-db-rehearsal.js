@@ -21,7 +21,7 @@ const results = {
   opsHeadSha: 'f4656c5fbe2e84b8769ecc234b1114ffb11af788',
   migrationSha256: null,
   ciEnvironment: 'PASS',
-  historicalGapsFound: 1,
+  historicalGapsFound: 2,
   historicalGapInventory: [
     {
       gapNumber: 1,
@@ -30,6 +30,14 @@ const results = {
       liveDefinitionEvidence: 'Columns: id (text, PK), name (text), url (text), category (text, default product), tags (text[], default empty array), size_bytes (bigint), created_at (timestamptz, default now())',
       reconciliationSql: 'scripts/db-release0-live-baseline.sql',
       reasonSafeForRehearsal: 'Exact schema captured via live read-only introspection on project bjxqvrpbigwgabwbhtqa'
+    },
+    {
+      gapNumber: 2,
+      object: 'public.update_asset_metadata_v1 signature conflict',
+      firstFailingMigration: '00014_asset_reference_hardening.sql:211',
+      liveDefinitionEvidence: 'Both 3-arg and 4-arg overloads exist in live project bjxqvrpbigwgabwbhtqa without comments. Migration 00014 fails on COMMENT ON FUNCTION due to duplicate name without parameter types.',
+      reconciliationSql: 'scripts/db-release0-gap2-pre14.sql & scripts/db-release0-gap2-post14.sql',
+      reasonSafeForRehearsal: 'Does not affect 00022 dependencies; restores identical live overload state.'
     }
   ],
   liveDerivedBaseline: 'PENDING',
