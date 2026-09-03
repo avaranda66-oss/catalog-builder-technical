@@ -127,7 +127,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'hero_banner' && (
-                        <HeroBannerBlock block={block} pageId={page.id} isSelected={false} />
+                        <HeroBannerBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'additel_two_col_hero' && (
                         <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} />

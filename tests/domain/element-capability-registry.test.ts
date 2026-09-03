@@ -256,7 +256,7 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
 
   // CAP-REG-15: Registry version definida como 2 (bump na CORE.E4)
   it('CAP-REG-15: versão do contrato definida como 2 (CORE.E4)', () => {
-    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(2);
+    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(3);
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
   });
 

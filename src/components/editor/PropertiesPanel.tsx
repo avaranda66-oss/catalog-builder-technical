@@ -39,6 +39,7 @@ import { StructuralCardInspector } from './inspector/StructuralCardInspector';
 import { FullPageCoverInspector } from './inspector/FullPageCoverInspector';
 import { TextInspector } from './inspector/TextInspector';
 import { ImageInspector } from './inspector/ImageInspector';
+import { HeroBannerInspector } from './inspector/HeroBannerInspector';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -56,7 +57,6 @@ export const PropertiesPanel: React.FC = () => {
   const getParticipantsOnBlock = usePresenceStore((state) => state.getParticipantsOnBlock);
   const markEditing = usePresenceStore((state) => state.markEditing);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!currentCatalog) return null;
@@ -154,23 +154,6 @@ export const PropertiesPanel: React.FC = () => {
     });
   };
 
-  const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedBlock) return;
-
-    const { useAssetStore } = await import('../../stores/useAssetStore');
-    const res = await useAssetStore.getState().uploadAndLinkAsset(file, {
-      role: 'hero',
-      caption: selectedBlock.title || 'Foto de Capa/Destaque'
-    });
-
-    if (res.success && res.assetId) {
-      updateBlock(blockPageId, selectedBlock.id, {
-        assetId: res.assetId
-      });
-    }
-    e.target.value = '';
-  };
 
   const handleAddGalleryImageFromUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -308,7 +291,7 @@ export const PropertiesPanel: React.FC = () => {
             )}
 
             {/* Seletor Global de Paletas de Cores Corporativas (Fluke, Yokogawa, etc.) */}
-            {['hero_banner', 'bottom_header', 'fluke_header', 'additel_two_col_hero'].includes(selectedBlock.type) && (
+            {['bottom_header', 'fluke_header', 'additel_two_col_hero'].includes(selectedBlock.type) && (
               <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                 <label className="block font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
                   <Palette className="w-3.5 h-3.5 text-[#003366]" />
@@ -553,91 +536,9 @@ export const PropertiesPanel: React.FC = () => {
               );
             })()}
 
-            {/* 5. HERO BANNER PADRÃO */}
+            {/* 5. HERO BANNER CANÔNICO (CORE.E5B) */}
             {selectedBlock.type === 'hero_banner' && (
-              <div className="space-y-3 pt-2 border-t border-slate-200">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Selo / Badge Superior</label>
-                  <input
-                    type="text"
-                    value={selectedBlock.badgeText || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { badgeText: e.target.value })
-                    }
-                    placeholder="PRESYS — INSTRUMENTAÇÃO INDUSTRIAL DE PRECISÃO"
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-brand-500 font-mono text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Título Principal *</label>
-                  <input
-                    type="text"
-                    value={selectedBlock.title || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { title: e.target.value })
-                    }
-                    placeholder="Ex: Presys PCON-Y18 / Série T"
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-brand-500 font-bold text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Subtítulo / Descritivo</label>
-                  <textarea
-                    rows={3}
-                    value={selectedBlock.subtitle || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { subtitle: e.target.value })
-                    }
-                    placeholder="Descrição dos diferenciais e aplicações..."
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-brand-500 text-xs"
-                  />
-                </div>
-
-                {/* Upload e Foto */}
-                <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <span className="block font-bold text-slate-800 text-[11px]">Fotografia do Equipamento</span>
-                  
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg font-semibold text-xs transition-colors shadow-2xs"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Carregar Foto do PC</span>
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleLocalImageUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </div>
-
-                  <input
-                    type="text"
-                    value={selectedBlock.imageUrl || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { imageUrl: e.target.value })
-                    }
-                    placeholder="Ou cole a URL da imagem..."
-                    className="w-full p-1.5 border border-slate-300 rounded text-[11px] font-mono"
-                  />
-
-                  <input
-                    type="text"
-                    value={selectedBlock.imageCaption || ''}
-                    onChange={(e) =>
-                      updateBlock(blockPageId, selectedBlock.id, { imageCaption: e.target.value })
-                    }
-                    placeholder="Legenda da foto..."
-                    className="w-full p-1.5 border border-slate-300 rounded text-[11px] italic"
-                  />
-                </div>
-              </div>
+              <HeroBannerInspector block={selectedBlock} pageId={blockPageId} />
             )}
 
             {/* 6. SISTEMA MULTIFUNÇÃO (4 MODOS / CUSTOM) */}

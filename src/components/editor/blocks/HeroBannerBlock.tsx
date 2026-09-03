@@ -1,155 +1,125 @@
-import React, { useRef } from 'react';
-import { Upload } from 'lucide-react';
+// src/components/editor/blocks/HeroBannerBlock.tsx
+// Bloco Hero Banner Corporativo (CORE.E5B).
+// Canvas = representação visual segura + seleção.
+// Inspector = autoridade única de edição.
+// Zero contentEditable, zero inline upload, zero fake defaults impressos no PDF.
+
+import React from 'react';
+import { Image as ImageIcon } from 'lucide-react';
 import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
-import { useAssetStore } from '../../../stores/useAssetStore';
 import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
+import { resolvePrimaryImageSource } from '../../../domain/primary-image.engine';
+import { resolveHeroPaletteClass } from '../../../domain/hero-banner.appearance';
 
 interface HeroBannerBlockProps {
   block: ContentBlock;
-  pageId: string;
-  isSelected: boolean;
+  pageId?: string;
+  isSelected?: boolean;
+  isExport?: boolean;
 }
 
 export const HeroBannerBlock: React.FC<HeroBannerBlockProps> = ({
   block,
-  pageId,
-  isSelected
+  isSelected,
+  isExport
 }) => {
-  const { updateBlock, setSelectedBlockId } = useCatalogStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadAndLinkAsset = useAssetStore((state) => state.uploadAndLinkAsset);
+  const setSelectedBlockId = useCatalogStore((state) => state.setSelectedBlockId);
 
-  const handleBadgeBlur = (e: React.FocusEvent<HTMLSpanElement>) => {
-    updateBlock(pageId, block.id, { badgeText: e.currentTarget.innerText.trim() });
-  };
+  const gradientClass = resolveHeroPaletteClass(block);
 
-  const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
-    updateBlock(pageId, block.id, { title: e.currentTarget.innerText.trim() });
-  };
+  const source = resolvePrimaryImageSource(block);
+  const assetId = source.kind === 'asset' ? source.assetId : undefined;
+  const fallbackUrl = source.kind === 'url' ? source.url : undefined;
+  const displayUrl = useResolvedAssetUrl(assetId, fallbackUrl);
 
-  const handleSubtitleBlur = (e: React.FocusEvent<HTMLParagraphElement>) => {
-    updateBlock(pageId, block.id, { subtitle: e.currentTarget.innerText.trim() });
-  };
-
-  const handleCaptionBlur = (e: React.FocusEvent<HTMLParagraphElement>) => {
-    updateBlock(pageId, block.id, { imageCaption: e.currentTarget.innerText.trim() });
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const res = await uploadAndLinkAsset(file, {
-      role: 'hero',
-      isPrimary: true,
-      caption: block.title || 'Foto de Destaque'
-    });
-
-    if (res.success && res.assetId) {
-      updateBlock(pageId, block.id, { assetId: res.assetId });
-    }
-  };
-
-  const gradientClass =
-    block.style?.gradient ||
-    'bg-[#001f3f]';
-
-  const displayUrl = useResolvedAssetUrl(block.assetId, block.legacyUrl || block.imageUrl);
+  const hasBadge = typeof block.badgeText === 'string' && Boolean(block.badgeText.trim());
+  const hasTitle = typeof block.title === 'string' && Boolean(block.title.trim());
+  const hasSubtitle = typeof block.subtitle === 'string' && Boolean(block.subtitle.trim());
+  const hasCaption = typeof block.imageCaption === 'string' && Boolean(block.imageCaption.trim());
 
   return (
     <div
       onClick={(e) => {
+        if (isExport) return;
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-5 rounded-none text-white ${gradientClass} transition-all cursor-pointer ${
-        isSelected ? 'ring-2 ring-blue-400' : 'hover:ring-1 hover:ring-slate-400'
+      className={`relative p-5 rounded-none text-white ${gradientClass} transition-all ${
+        isSelected && !isExport
+          ? 'ring-2 ring-blue-400'
+          : isExport
+          ? 'shadow-none'
+          : 'cursor-pointer hover:ring-1 hover:ring-slate-400'
       }`}
     >
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
         <div className="md:col-span-8 space-y-2">
-          {block.badgeText && (
+          {/* 1. BADGE */}
+          {hasBadge && (
             <span
               data-printable-field="badgeText"
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={handleBadgeBlur}
-              className="inline-block px-2.5 py-0.5 bg-blue-600/80 text-white text-[10px] font-bold tracking-wider uppercase rounded-none outline-none focus:bg-blue-600 cursor-text"
+              className="inline-block px-2.5 py-0.5 bg-blue-600/80 text-white text-[10px] font-bold tracking-wider uppercase rounded-none select-none"
             >
               {block.badgeText}
             </span>
           )}
 
-          <h2
-            data-printable-field="title"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={handleTitleBlur}
-            className="text-lg font-black tracking-tight leading-tight outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text"
-          >
-            {block.title || 'PSV Portable — Sistema Pneumático e Hidrostático'}
-          </h2>
+          {/* 2. TÍTULO */}
+          {hasTitle ? (
+            <h2
+              data-printable-field="title"
+              className="text-lg font-black tracking-tight leading-tight rounded-none"
+            >
+              {block.title}
+            </h2>
+          ) : !isExport ? (
+            <h2 className="text-lg font-black tracking-tight leading-tight rounded-none text-slate-400 italic select-none no-print">
+              Título do Hero Banner...
+            </h2>
+          ) : null}
 
-          <p
-            data-printable-field="subtitle"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={handleSubtitleBlur}
-            className="text-xs text-slate-300 font-normal leading-relaxed outline-none focus:bg-white/10 rounded-none px-1 -ml-1 cursor-text"
-          >
-            {block.subtitle ||
-              'Faixas de pressão configuráveis até 300 bar, fixação universal de flanges e aquisição automática de dados para calibração de válvulas de segurança.'}
-          </p>
+          {/* 3. SUBTÍTULO */}
+          {hasSubtitle ? (
+            <p
+              data-printable-field="subtitle"
+              className="text-xs text-slate-300 font-normal leading-relaxed rounded-none"
+            >
+              {block.subtitle}
+            </p>
+          ) : !isExport ? (
+            <p className="text-xs text-slate-500 italic leading-relaxed select-none no-print">
+              Descrição dos diferenciais e aplicações...
+            </p>
+          ) : null}
         </div>
 
+        {/* 4. MÍDIA & LEGENDA */}
         <div className="md:col-span-4 flex flex-col items-center justify-center">
-          <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900 border border-slate-700 relative group flex items-center justify-center p-2">
-            {displayUrl ? (
+          {displayUrl ? (
+            <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900/60 border border-slate-700/60 flex items-center justify-center p-2">
               <img
                 src={displayUrl}
-                alt="Produto Destaque"
+                alt={block.title || 'Foto de Destaque'}
                 className="max-h-full max-w-full object-contain filter drop-shadow"
               />
-            ) : (
-              <div className="text-slate-500 text-[10px] font-sans flex flex-col items-center gap-1 text-center p-2">
-                <Upload className="w-5 h-5 text-slate-600 no-print" />
-                <span className="no-print">Clique em Trocar para definir imagem corporativa</span>
-              </div>
-            )}
-
-            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center no-print" data-editor-action="true">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="px-2.5 py-1 bg-[#003366] hover:bg-blue-700 text-white rounded-none text-[10px] font-bold flex items-center gap-1 no-print"
-                data-editor-action="true"
-              >
-                <Upload className="w-3 h-3" />
-                <span>Trocar Imagem</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
             </div>
-          </div>
+          ) : !isExport ? (
+            <div className="w-full h-32 rounded-none overflow-hidden bg-slate-900/60 border border-slate-700/60 flex flex-col items-center justify-center p-2 text-slate-500 text-[10px] font-sans gap-1 text-center select-none no-print">
+              <ImageIcon className="w-5 h-5 text-slate-600" />
+              <span>Defina a fotografia no painel lateral</span>
+            </div>
+          ) : null}
 
-          <p
-            data-printable-field="imageCaption"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={handleCaptionBlur}
-            className="text-[10px] text-slate-400 italic mt-1 text-center outline-none focus:bg-white/10 px-1 rounded-none cursor-text"
-          >
-            {block.imageCaption || 'Estação portátil em gabinete industrial'}
-          </p>
+          {/* 5. LEGENDA TÉCNICA */}
+          {hasCaption && (
+            <p
+              data-printable-field="imageCaption"
+              className="text-[10px] text-slate-400 italic mt-1 text-center px-1 rounded-none font-sans"
+            >
+              {block.imageCaption}
+            </p>
+          )}
         </div>
       </div>
     </div>
