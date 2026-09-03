@@ -97,7 +97,7 @@ enabled = false
 enabled = false
 
 [storage]
-enabled = false
+enabled = true
 
 [storage.s3_protocol]
 enabled = false

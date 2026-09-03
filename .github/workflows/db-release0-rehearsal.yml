@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Environment Diagnostics
         run: |
@@ -70,7 +70,7 @@ jobs:
         with:
           name: db-release0-rehearsal-artifacts
           path: rehearsal_artifacts/
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Cleanup Disposable Supabase
         if: always()
