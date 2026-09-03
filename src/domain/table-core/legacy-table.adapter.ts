@@ -10,6 +10,7 @@ import {
   TableRowModel,
   TableCellModel,
   TableCellContent,
+  TableCellBoundContent,
   TablePresetId
 } from './table.types';
 import { getCellKey, validateTableModel } from './table.validator';
@@ -207,17 +208,21 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
       let content: TableCellContent = { kind: 'empty' };
       const isOverride = Boolean(legacyRow.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined);
 
+      const canonicalBoundContent: TableCellBoundContent | undefined = legacyRow.productRefId
+        ? {
+            kind: 'datum_reference',
+            productId: legacyRow.productRefId,
+            datumKey: `legacy.product_field.${col.semanticKey}`,
+            bindingMode: 'live'
+          }
+        : undefined;
+
       if (isOverride) {
         const textVal = String(legacyRow.localOverrides![col.semanticKey]);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
-      } else if (legacyRow.productRefId) {
+      } else if (canonicalBoundContent) {
         hasLegacyProductBinding = true;
-        content = {
-          kind: 'datum_reference',
-          productId: legacyRow.productRefId,
-          datumKey: `legacy.product_field.${col.semanticKey}`,
-          bindingMode: 'live'
-        };
+        content = canonicalBoundContent;
       }
 
       cells[key] = {
@@ -240,6 +245,7 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         isOverride,
         hasProductBinding: Boolean(legacyRow.productRefId),
         productRefId: legacyRow.productRefId,
+        canonicalBoundContent,
         originalOverrideValue: isOverride ? String(legacyRow.localOverrides![col.semanticKey]) : undefined
       });
     });

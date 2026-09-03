@@ -18,16 +18,14 @@ import {
   Edit3
 } from 'lucide-react';
 import { ContentBlock, TableColumnConfig } from '../../../domain/catalog.schema';
+import { TableSetCellContentCommand } from '../../../domain/document-commands/table-commands.types';
 import {
   adaptLegacyBlockToTableCore,
   executeTableCommandOnLegacyBlock,
   LegacyBridgeCommandContext,
   LegacyTableCoordinateBridge
 } from '../../../domain/table-core';
-import {
-  TableSetCellContentCommand,
-  TableRestoreCellCommand
-} from '../../../domain/document-commands/table-commands.types';
+import { resolveLegacyProductField } from '../../../domain/table-binding';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
 
@@ -51,45 +49,61 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   const adaptRes = adaptLegacyBlockToTableCore(block);
   let bridge: LegacyTableCoordinateBridge | null = adaptRes.supported ? adaptRes.bridge : null;
 
-  // Estado local para o input de edição da célula
-  const [cellInputValue, setCellInputValue] = useState<string>('');
-  const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
-
   // Identifica a célula selecionada via bridge
   const cellMapping = selectedCellId && bridge ? bridge.getByCellId(selectedCellId) : undefined;
 
-  const lastSelectedCellIdRef = React.useRef<string | null>(null);
-
-  // Sincroniza o input quando a seleção de célula mudar
+  // Falha segura contra seleção stale (ex.: coluna removida): limpa a seleção de forma controlada
+  const isStaleSelection = Boolean(selectedCellId && !cellMapping);
   useEffect(() => {
-    if (selectedCellId !== lastSelectedCellIdRef.current) {
-      lastSelectedCellIdRef.current = selectedCellId ?? null;
-
-      if (!cellMapping) {
-        setCellInputValue('');
-        return;
-      }
-
-      if (cellMapping.isOverride && cellMapping.content.kind === 'text') {
-        setCellInputValue(cellMapping.content.text);
-      } else if (cellMapping.hasProductBinding && cellMapping.productRefId) {
-        const product = getProduct(cellMapping.productRefId);
-        const fieldKey = cellMapping.legacyColKey;
-        const specs = (product?.specs || {}) as Record<string, unknown>;
-        const customSpecs = (specs.customSpecs || {}) as Record<string, unknown>;
-        const rawVal =
-          (product as unknown as Record<string, unknown>)?.[fieldKey] ??
-          specs[fieldKey] ??
-          customSpecs[fieldKey];
-        setCellInputValue(rawVal !== undefined && rawVal !== null ? String(rawVal) : '');
-      } else if (cellMapping.content.kind === 'text') {
-        setCellInputValue(cellMapping.content.text);
-      } else {
-        setCellInputValue('');
-      }
-      setIsSavedRecently(false);
+    if (isStaleSelection && onSelectCell) {
+      onSelectCell(null);
     }
-  }, [selectedCellId, cellMapping]);
+  }, [isStaleSelection, onSelectCell]);
+
+  // Estado local para o input de edição da célula e controle de dirty
+  const [inputDraft, setInputDraft] = useState<string>('');
+  const [isInputDirty, setIsInputDirty] = useState<boolean>(false);
+  const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
+
+  // Resolução pura do valor de origem usando resolver legado compartilhado
+  const product = cellMapping?.productRefId ? getProduct(cellMapping.productRefId) : undefined;
+  let resolvedSourceValue = '';
+  if (cellMapping) {
+    if (cellMapping.isOverride && cellMapping.content.kind === 'text') {
+      resolvedSourceValue = cellMapping.content.text;
+    } else if (cellMapping.hasProductBinding && cellMapping.productRefId) {
+      resolvedSourceValue = resolveLegacyProductField(product, cellMapping.legacyColKey) ?? '';
+    } else if (cellMapping.content.kind === 'text') {
+      resolvedSourceValue = cellMapping.content.text;
+    }
+  }
+
+  const prevSelectedCellIdRef = React.useRef<string | null>(null);
+  const prevResolvedSourceValueRef = React.useRef<string>('');
+
+  // Sincronização inteligente: Live-binding vs Draft do usuário
+  useEffect(() => {
+    const isNewSelection = selectedCellId !== prevSelectedCellIdRef.current;
+    prevSelectedCellIdRef.current = selectedCellId ?? null;
+
+    if (isNewSelection) {
+      // Nova seleção de célula: inicializa draft e limpa estado dirty
+      setInputDraft(resolvedSourceValue);
+      setIsInputDirty(false);
+      prevResolvedSourceValueRef.current = resolvedSourceValue;
+      setIsSavedRecently(false);
+    } else {
+      // Mesma célula selecionada: se o valor de origem externo mudou
+      if (resolvedSourceValue !== prevResolvedSourceValueRef.current) {
+        prevResolvedSourceValueRef.current = resolvedSourceValue;
+        // Se o usuário NÃO estiver digitando, sincroniza o live-binding
+        if (!isInputDirty) {
+          setInputDraft(resolvedSourceValue);
+        }
+        // Se isInputDirty === true, preserva intacto o draft do usuário!
+      }
+    }
+  }, [selectedCellId, resolvedSourceValue, isInputDirty]);
 
   if (!adaptRes.supported) {
     return (
@@ -123,33 +137,37 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
       tableId: bridge.tableId,
       rowId: cellMapping.rowId,
       columnId: cellMapping.columnId,
-      content: { kind: 'text', text: cellInputValue },
+      content: { kind: 'text', text: inputDraft },
       origin: 'inspector',
       timestamp: new Date().toISOString()
     };
 
     const result = executeTableCommandOnLegacyBlock(command, commandContext);
     if (result.success) {
+      setIsInputDirty(false);
+      prevResolvedSourceValueRef.current = inputDraft;
       setIsSavedRecently(true);
       setTimeout(() => setIsSavedRecently(false), 2000);
     }
   };
 
-  // Despacho de TABLE_RESTORE_CELL
+  // Despacho de Restore via TABLE_SET_CELL_CONTENT com canonicalBoundContent (Semântica Unificada BIND.B1)
   const handleRestoreCell = () => {
-    if (!cellMapping) return;
+    if (!cellMapping || !cellMapping.canonicalBoundContent) return;
 
-    const command: TableRestoreCellCommand = {
-      type: 'TABLE_RESTORE_CELL',
+    const command: TableSetCellContentCommand = {
+      type: 'TABLE_SET_CELL_CONTENT',
       tableId: bridge.tableId,
       rowId: cellMapping.rowId,
       columnId: cellMapping.columnId,
+      content: cellMapping.canonicalBoundContent,
       origin: 'inspector',
       timestamp: new Date().toISOString()
     };
 
     const result = executeTableCommandOnLegacyBlock(command, commandContext);
     if (result.success) {
+      setIsInputDirty(false);
       setIsSavedRecently(true);
       setTimeout(() => setIsSavedRecently(false), 2000);
     }
@@ -267,9 +285,15 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           <div className="flex gap-1.5">
             <input
               type="text"
-              value={cellInputValue}
-              onChange={(e) => setCellInputValue(e.target.value)}
-              onInput={(e) => setCellInputValue((e.target as HTMLInputElement).value)}
+              value={inputDraft}
+              onChange={(e) => {
+                setInputDraft(e.target.value);
+                setIsInputDirty(true);
+              }}
+              onInput={(e) => {
+                setInputDraft((e.target as HTMLInputElement).value);
+                setIsInputDirty(true);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();

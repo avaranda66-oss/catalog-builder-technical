@@ -115,16 +115,6 @@ export interface TableApplyPresetCommand extends BaseDocumentCommand {
   presetId: TablePresetId;
 }
 
-export interface TableRestoreCellCommand extends BaseDocumentCommand {
-  type: 'TABLE_RESTORE_CELL';
-  tableId: string;
-  rowId: string;
-  columnId: string;
-}
-
-/**
- * Discriminated Union de todos os Comandos de Tabela.
- */
 export type TableCommand =
   | TableAddRowCommand
   | TableRemoveRowCommand
@@ -136,7 +126,6 @@ export type TableCommand =
   | TableSetTableWidthCommand
   | TableSetRowMinHeightCommand
   | TableSetCellContentCommand
-  | TableRestoreCellCommand
   | TableMergeCellsCommand
   | TableUnmergeCellCommand
   | TableApplyPresetCommand;
@@ -288,16 +277,6 @@ export const TableApplyPresetCommandSchema = z.object({
   timestamp: z.string().optional()
 }).strict();
 
-export const TableRestoreCellCommandSchema = z.object({
-  type: z.literal('TABLE_RESTORE_CELL'),
-  tableId: z.string().min(1),
-  rowId: z.string().min(1),
-  columnId: z.string().min(1),
-  commandId: z.string().optional(),
-  origin: CommandOriginSchema.optional(),
-  timestamp: z.string().optional()
-}).strict();
-
 export const TableCommandSchema = z.discriminatedUnion('type', [
   TableAddRowCommandSchema,
   TableRemoveRowCommandSchema,
@@ -309,7 +288,6 @@ export const TableCommandSchema = z.discriminatedUnion('type', [
   TableSetTableWidthCommandSchema,
   TableSetRowMinHeightCommandSchema,
   TableSetCellContentCommandSchema,
-  TableRestoreCellCommandSchema,
   TableMergeCellsCommandSchema,
   TableUnmergeCellCommandSchema,
   TableApplyPresetCommandSchema

@@ -8,6 +8,7 @@ import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
 import { adaptLegacyBlockToTableCore } from '../../../domain/table-core';
+import { createLegacyProductFieldResolver } from '../../../domain/table-binding';
 import { TableCoreRenderer } from '../table-core';
 
 interface TechnicalTableBlockProps {
@@ -130,25 +131,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
                     selectEditorElement({ blockId: block.id, childId: cellId });
                   }
             }
-            resolveDatum={(ref) => {
-              if (ref.kind === 'datum_reference') {
-                const product = getProduct(ref.productId);
-                if (!product) return undefined;
-                const fieldKey = ref.datumKey.replace(/^legacy\.product_field\./, '');
-                const specs = (product.specs || {}) as Record<string, unknown>;
-                const customSpecs = (specs.customSpecs || {}) as Record<string, unknown>;
-                const rawVal =
-                  (product as unknown as Record<string, unknown>)[fieldKey] ??
-                  specs[fieldKey] ??
-                  customSpecs[fieldKey];
-                if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
-                  return {
-                    value: { kind: 'text', text: String(rawVal) }
-                  };
-                }
-              }
-              return undefined;
-            }}
+            resolveDatum={createLegacyProductFieldResolver(getProduct)}
             getHeaderPrintableField={(col) => `col_${col.semanticKey}_label`}
             getCellPrintableField={(_cell, row, col) => {
               const mapping = pilotAdaptResult.bridge.getByCoordinates(row.id, col.id);
