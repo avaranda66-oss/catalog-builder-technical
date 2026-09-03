@@ -165,7 +165,7 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     expect(getCapability('text', unknownId)).toBeNull();
   });
 
-  // CAP-REG-11: full_page_cover NÃO registra os NO_OPs confirmados
+  // CAP-REG-11: full_page_cover NÃO registra os NO_OPs confirmados na CORE.E1 e E4
   it('CAP-REG-11: full_page_cover não legitima os NO_OPs confirmados na CORE.E1', () => {
     const coverDef = ElementCapabilityRegistry.full_page_cover;
     expect(coverDef).toBeDefined();
@@ -174,10 +174,15 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
 
     // Não deve registrar highlights, footerLeft, footerRight, coverStyle, textAlign, gradient
     expect(registeredIds).not.toContain(CAPABILITY_IDS.APPEARANCE_GRADIENT);
-    expect(registeredIds).not.toContain(CAPABILITY_IDS.CONTENT_SUBTITLE);
+    expect(registeredIds).not.toContain(CAPABILITY_IDS.LAYOUT_ALIGNMENT);
+    expect(registeredIds).not.toContain(CAPABILITY_IDS.LAYOUT_MODE);
 
-    // Apenas capacidades conservadoras comprovadas
+    // Exatamente as 7 capacidades canônicas comprovadas da CORE.E4
     expect(registeredIds).toEqual([
+      CAPABILITY_IDS.CONTENT_COMPANY_NAME,
+      CAPABILITY_IDS.CONTENT_BADGE,
+      CAPABILITY_IDS.CONTENT_TITLE,
+      CAPABILITY_IDS.CONTENT_SUBTITLE,
       CAPABILITY_IDS.MEDIA_PRIMARY_ASSET,
       CAPABILITY_IDS.APPEARANCE_OVERLAY_OPACITY,
       CAPABILITY_IDS.LAYERS_CANVAS_LAYERS
@@ -249,10 +254,29 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     }
   });
 
-  // CAP-REG-15: Registry version definida como 1
-  it('CAP-REG-15: versão do contrato definida como 1', () => {
-    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(1);
+  // CAP-REG-15: Registry version definida como 2 (bump na CORE.E4)
+  it('CAP-REG-15: versão do contrato definida como 2 (CORE.E4)', () => {
+    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(2);
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
+  });
+
+  it('CAP-REG-COVER-V2: full_page_cover possui capabilities canônicas comprovadas e canReorder=false', () => {
+    const coverDef = ElementCapabilityRegistry.full_page_cover;
+    expect(coverDef).toBeDefined();
+    expect(coverDef.universalActions.canReorder).toBe(false);
+    expect(coverDef.universalActions.canDuplicate).toBe(false);
+
+    const capIds = coverDef.capabilities.map((c) => c.id);
+    expect(capIds).toContain('content.company_name');
+    expect(capIds).toContain('content.badge');
+    expect(capIds).toContain('content.title');
+    expect(capIds).toContain('content.subtitle');
+    expect(capIds).toContain('media.primary_asset');
+    expect(capIds).toContain('appearance.overlay_opacity');
+    expect(capIds).toContain('layers.canvas_layers');
+
+    const companyCap = coverDef.capabilities.find((c) => c.id === 'content.company_name')!;
+    expect(companyCap.translationPolicy).toBe('protect');
   });
 
   // CAP-REG-SPECS-PARITY: specs_table possui suporte de renderização pleno tanto no Editor quanto no Print (CORE.E2.2)

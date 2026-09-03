@@ -8,52 +8,74 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   const nodes: PrintableTextNode[] = [];
   if (!block || typeof block !== 'object') return nodes;
 
-  const hasCanvasLayers =
+  const isCanonicalCover =
     block.type === 'full_page_cover' &&
-    Array.isArray(block.customData?.canvasLayers) &&
-    block.customData.canvasLayers.length > 0;
-  const legacyExpectation = hasCanvasLayers ? 'optional' : 'required';
+    Array.isArray(block.customData?.canvasLayers);
 
-  if (typeof block.badgeText === 'string' && block.badgeText.trim()) {
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_badgeText`,
-      pageId,
-      blockId: block.id,
-      path: 'badgeText',
-      sourceText: block.badgeText.trim(),
-      kind: 'badge',
-      policy: 'translate',
-      renderExpectation: legacyExpectation,
-      source: { blockType: block.type, field: 'badgeText' }
-    });
-  }
+  // Se for capa canônica (canvasLayers é array, inclusive []), NÃO extrai campos legados
+  // (badgeText, title, subtitle, brandName), pois eles não aparecem no PDF.
+  // Regra: traduzir tudo que aparece no PDF e SOMENTE o que aparece no PDF.
+  if (!isCanonicalCover) {
+    if (typeof block.badgeText === 'string' && block.badgeText.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_badgeText`,
+        pageId,
+        blockId: block.id,
+        path: 'badgeText',
+        sourceText: block.badgeText.trim(),
+        kind: 'badge',
+        policy: 'translate',
+        renderExpectation: 'required',
+        source: { blockType: block.type, field: 'badgeText' }
+      });
+    }
 
-  if (typeof block.title === 'string' && block.title.trim()) {
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_title`,
-      pageId,
-      blockId: block.id,
-      path: 'title',
-      sourceText: block.title.trim(),
-      kind: 'heading',
-      policy: 'translate',
-      renderExpectation: legacyExpectation,
-      source: { blockType: block.type, field: 'title' }
-    });
-  }
+    if (typeof block.title === 'string' && block.title.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_title`,
+        pageId,
+        blockId: block.id,
+        path: 'title',
+        sourceText: block.title.trim(),
+        kind: 'heading',
+        policy: 'translate',
+        renderExpectation: 'required',
+        source: { blockType: block.type, field: 'title' }
+      });
+    }
 
-  if (typeof block.subtitle === 'string' && block.subtitle.trim()) {
-    nodes.push({
-      id: `p${pageNumber}_b${block.id}_subtitle`,
-      pageId,
-      blockId: block.id,
-      path: 'subtitle',
-      sourceText: block.subtitle.trim(),
-      kind: 'body',
-      policy: 'translate',
-      renderExpectation: legacyExpectation,
-      source: { blockType: block.type, field: 'subtitle' }
-    });
+    if (typeof block.subtitle === 'string' && block.subtitle.trim()) {
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_subtitle`,
+        pageId,
+        blockId: block.id,
+        path: 'subtitle',
+        sourceText: block.subtitle.trim(),
+        kind: 'body',
+        policy: 'translate',
+        renderExpectation: 'required',
+        source: { blockType: block.type, field: 'subtitle' }
+      });
+    }
+
+    // Marca legacy na cover (aparece na layer-logo derivada na impressão)
+    if (block.type === 'full_page_cover') {
+      const brand =
+        typeof block.customData?.brandName === 'string' && block.customData.brandName.trim()
+          ? block.customData.brandName.trim()
+          : 'PRESYS';
+      nodes.push({
+        id: `p${pageNumber}_b${block.id}_brandName`,
+        pageId,
+        blockId: block.id,
+        path: 'customData.brandName',
+        sourceText: brand,
+        kind: 'heading',
+        policy: 'protect',
+        renderExpectation: 'required',
+        source: { blockType: block.type, field: 'brandName' }
+      });
+    }
   }
 
   if (typeof block.imageCaption === 'string' && block.imageCaption.trim()) {
@@ -72,7 +94,15 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   // Full Page Cover: Canvas Layers de Texto e Badges
   if (block.type === 'full_page_cover' && Array.isArray(block.customData?.canvasLayers)) {
     block.customData.canvasLayers.forEach((layer: CanvasLayer, idx: number) => {
-      if (layer && typeof layer === 'object' && (layer.type === 'text' || layer.type === 'badge') && typeof layer.content === 'string' && layer.content.trim()) {
+      if (
+        layer &&
+        typeof layer === 'object' &&
+        (layer.type === 'text' || layer.type === 'badge') &&
+        typeof layer.content === 'string' &&
+        layer.content.trim()
+      ) {
+        // Marca institucional (layer-logo) é explicitamente protegida contra tradução
+        const isBrandLogo = layer.id === 'layer-logo';
         nodes.push({
           id: `p${pageNumber}_b${block.id}_layer_${layer.id || idx}`,
           pageId,
@@ -80,15 +110,16 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
           path: `customData.canvasLayers[${idx}].content`,
           sourceText: layer.content.trim(),
           kind: layer.type === 'badge' ? 'badge' : 'heading',
-          policy: 'translate',
+          policy: isBrandLogo ? 'protect' : 'translate',
+          renderExpectation: 'required',
           source: { blockType: block.type, field: `canvasLayers[${idx}].content` }
         });
       }
     });
   }
 
-  // Description em customData
-  if (typeof block.customData?.description === 'string' && block.customData.description.trim()) {
+  // Description em customData (apenas para blocos que a exibem visualmente)
+  if (block.type !== 'full_page_cover' && typeof block.customData?.description === 'string' && block.customData.description.trim()) {
     nodes.push({
       id: `p${pageNumber}_b${block.id}_description`,
       pageId,
@@ -113,6 +144,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
   }
 
   // Highlights & Notas técnicas adicionais em customData
+  // full_page_cover NÃO renderiza highlights visualmente: não extrai nós fantasmas de tradução
   const defaultHighlights = [
     'Leve, portátil e de resposta térmica ultrarrápida',
     'Resfria até -25 °C e aquece até 660 °C em poucos minutos',
@@ -121,7 +153,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
     'Rotinas automáticas de calibração com emissão de relatórios',
     'Homogeneidade radial e axial certificada conforme normas internacionais'
   ];
-  const rawHighlights = block.customData?.highlights;
+  const rawHighlights = block.type === 'full_page_cover' ? [] : block.customData?.highlights;
   const highlights = Array.isArray(rawHighlights)
     ? rawHighlights
     : block.type === 'fluke_header'

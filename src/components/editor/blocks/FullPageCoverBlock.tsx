@@ -1,4 +1,9 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+// src/components/editor/blocks/FullPageCoverBlock.tsx
+// Bloco de Capa A4 Página Inteira (full_page_cover).
+// Integra a Pure Domain Engine (CORE.E4) para materialização segura de camadas,
+// eliminação completa do save-storm de drag (preview transiente local) e resolução canônica de background.
+
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Trash2,
   Image as ImageIcon,
@@ -12,6 +17,15 @@ import {
 import { ContentBlock, CanvasLayer, CanvasLayerType } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
+import {
+  getEffectiveCoverLayers,
+  materializeCoverLayers,
+  createCoverLayer,
+  updateCoverLayer,
+  removeCoverLayer,
+  duplicateCoverLayer,
+  resolveCoverBackgroundSource
+} from '../../../domain/full-page-cover.engine';
 
 export interface ElementPositionConfig {
   x: number;
@@ -33,7 +47,7 @@ const CoverImageLayer: React.FC<{ layer: CanvasLayer }> = ({ layer }) => {
       className="overflow-hidden bg-slate-900 border border-slate-700 relative group/img"
     >
       <img
-        src={displayUrl || layer.imageUrl}
+        src={displayUrl || layer.imageUrl || ''}
         alt={layer.label}
         className="w-full h-full object-contain"
       />
@@ -57,282 +71,160 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
 
   const custom = block.customData || {};
   const overlayOpacity = custom.overlayOpacity ?? 45; // 0 a 100%
+
+  // Resolução pura da fonte de fotografia de fundo (assetId vs URLs)
+  const bgSource = resolveCoverBackgroundSource(block);
   const backgroundImageUrl = useResolvedAssetUrl(
-    block.assetId,
-    custom.backgroundImageUrl || block.legacyUrl || block.imageUrl
+    bgSource.kind === 'asset' ? bgSource.assetId : undefined,
+    bgSource.kind === 'url' ? bgSource.url : undefined
   );
 
-  // Migração automática de configs legadas para canvasLayers[]
-  const getInitialLayers = (): CanvasLayer[] => {
-    if (custom.canvasLayers && Array.isArray(custom.canvasLayers)) {
-      return custom.canvasLayers;
-    }
-
-    const legacyLayers: CanvasLayer[] = [];
-
-    // Logo
-    const logoCfg = custom.logoConfig || { x: 5, y: 3.5, size: 22, visible: true };
-    if (logoCfg.visible !== false) {
-      legacyLayers.push({
-        id: 'layer-logo',
-        type: 'text',
-        label: 'Logotipo / Marca',
-        x: logoCfg.x ?? 5,
-        y: logoCfg.y ?? 3.5,
-        fontSize: logoCfg.size || 22,
-        fontWeight: 'black',
-        fontFamily: 'sans',
-        color: '#ffffff',
-        letterSpacing: 'wider' as any,
-        content: custom.brandName || 'PRESYS',
-        visible: true,
-        zIndex: 10
-      });
-    }
-
-    // Badge RBC
-    const badgeCfg = custom.badgeConfig || { x: 58, y: 3.8, size: 10, visible: true };
-    if (badgeCfg.visible !== false) {
-      legacyLayers.push({
-        id: 'layer-badge',
-        type: 'badge',
-        label: 'Selo Metrológico / Badge',
-        x: badgeCfg.x ?? 58,
-        y: badgeCfg.y ?? 3.8,
-        fontSize: badgeCfg.size || 10,
-        fontWeight: 'bold',
-        fontFamily: 'mono',
-        color: '#93c5fd',
-        backgroundColor: 'rgba(30, 58, 138, 0.4)',
-        borderColor: 'rgba(96, 165, 250, 0.5)',
-        borderWidth: 1,
-        content: block.badgeText || 'CALIBRAÇÃO RBC · ISO/IEC 17025',
-        visible: true,
-        zIndex: 11
-      });
-    }
-
-    // Título Comercial
-    const titleCfg = custom.titleConfig || { x: 5, y: 22, size: 42, visible: true };
-    if (titleCfg.visible !== false) {
-      legacyLayers.push({
-        id: 'layer-title',
-        type: 'text',
-        label: 'Título Comercial',
-        x: titleCfg.x ?? 5,
-        y: titleCfg.y ?? 22,
-        fontSize: titleCfg.size || 42,
-        fontWeight: 'black',
-        fontFamily: 'sans',
-        color: '#ffffff',
-        content: block.title || 'PCON-Y18-LP / CALIBRADOR',
-        visible: true,
-        zIndex: 12
-      });
-    }
-
-    // Subtítulo
-    const subCfg = custom.subtitleConfig || { x: 5, y: 29, size: 16, visible: true };
-    if (subCfg.visible !== false) {
-      legacyLayers.push({
-        id: 'layer-subtitle',
-        type: 'text',
-        label: 'Subtítulo',
-        x: subCfg.x ?? 5,
-        y: subCfg.y ?? 29,
-        fontSize: subCfg.size || 16,
-        fontWeight: 'medium',
-        fontFamily: 'sans',
-        color: '#cbd5e1',
-        content: block.subtitle || 'Calibrador Automático de Pressão de Alta Estabilidade',
-        visible: true,
-        zIndex: 13
-      });
-    }
-
-    // Linha de Destaque
-    const lineCfg = custom.accentLineConfig || { x: 5, y: 34, width: 80, visible: true };
-    if (lineCfg.visible !== false) {
-      legacyLayers.push({
-        id: 'layer-line',
-        type: 'line',
-        label: 'Linha de Destaque',
-        x: lineCfg.x ?? 5,
-        y: lineCfg.y ?? 34,
-        width: lineCfg.width || 80,
-        backgroundColor: '#3b82f6',
-        height: 3,
-        visible: true,
-        zIndex: 14
-      });
-    }
-
-    return legacyLayers;
-  };
-
-  const layers: CanvasLayer[] = getInitialLayers();
+  // Camadas canônicas / derivadas da engine pura
+  const effectiveLayers = getEffectiveCoverLayers(block);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
 
-  // Estado de Drag & Drop
+  // ==========================================================================
+  // ESTADO DE DRAG TRANSIENTE (Zero Save-Storm)
+  // ==========================================================================
   const [draggingLayerId, setDraggingLayerId] = useState<string | null>(null);
-  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+  const [localPreviewLayers, setLocalPreviewLayers] = useState<CanvasLayer[] | null>(null);
+  const dragStartRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    startX: number;
+    startY: number;
+    hasMoved: boolean;
+  } | null>(null);
 
-  const handleStartDrag = (layerId: string, currentX: number, currentY: number, e: React.MouseEvent) => {
+  const handleStartDrag = (
+    layerId: string,
+    currentX: number,
+    currentY: number,
+    e: React.PointerEvent
+  ) => {
     e.stopPropagation();
     setSelectedLayerId(layerId);
     setDraggingLayerId(layerId);
+
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Defensivo
+    }
+
     dragStartRef.current = {
-      mouseX: e.clientX,
-      mouseY: e.clientY,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
       startX: currentX,
-      startY: currentY
+      startY: currentY,
+      hasMoved: false
     };
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!draggingLayerId || !dragStartRef.current || !containerRef.current) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const deltaXPixels = e.clientX - dragStartRef.current.mouseX;
-    const deltaYPixels = e.clientY - dragStartRef.current.mouseY;
+    const deltaXPixels = e.clientX - dragStartRef.current.clientX;
+    const deltaYPixels = e.clientY - dragStartRef.current.clientY;
 
+    if (Math.abs(deltaXPixels) > 1 || Math.abs(deltaYPixels) > 1) {
+      dragStartRef.current.hasMoved = true;
+    }
+
+    if (!dragStartRef.current.hasMoved) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
     const deltaXPercent = (deltaXPixels / rect.width) * 100;
     const deltaYPercent = (deltaYPixels / rect.height) * 100;
 
-    let newX = Math.max(0, Math.min(95, dragStartRef.current.startX + deltaXPercent));
-    let newY = Math.max(0, Math.min(95, dragStartRef.current.startY + deltaYPercent));
+    const newX = Math.max(0, Math.min(95, dragStartRef.current.startX + deltaXPercent));
+    const newY = Math.max(0, Math.min(95, dragStartRef.current.startY + deltaYPercent));
 
-    const updatedLayers = layers.map((l) =>
+    // Atualiza SOMENTE o preview local React. ZERO chamada de updateBlock() aqui!
+    const base = localPreviewLayers || effectiveLayers;
+    const updated = base.map((l) =>
       l.id === draggingLayerId
         ? { ...l, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
         : l
     );
 
-    updateBlock(pageId, block.id, {
-      customData: { ...custom, canvasLayers: updatedLayers }
-    });
-  }, [draggingLayerId, layers, custom, pageId, block.id, updateBlock]);
-
-  const handleMouseUp = useCallback(() => {
-    if (draggingLayerId) {
-      setDraggingLayerId(null);
-      dragStartRef.current = null;
-    }
-  }, [draggingLayerId]);
-
-  useEffect(() => {
-    if (draggingLayerId) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [draggingLayerId, handleMouseMove, handleMouseUp]);
-
-  // Funções de Manipulação de Layers
-  const handleUpdateLayer = (layerId: string, updates: Partial<CanvasLayer>) => {
-    const updatedLayers = layers.map((l) => (l.id === layerId ? { ...l, ...updates } : l));
-    updateBlock(pageId, block.id, {
-      customData: { ...custom, canvasLayers: updatedLayers }
-    });
+    setLocalPreviewLayers(updated);
   };
 
-  const handleAddLayer = (type: CanvasLayerType) => {
-    const newId = `layer-${Date.now()}`;
-    let newLayer: CanvasLayer;
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (dragStartRef.current) {
+      try {
+        e.currentTarget.releasePointerCapture?.(dragStartRef.current.pointerId);
+      } catch {
+        // Defensivo
+      }
 
-    switch (type) {
-      case 'text':
-        newLayer = {
-          id: newId,
-          type: 'text',
-          label: `Texto Livre ${layers.length + 1}`,
-          content: 'Novo Texto Técnico',
-          x: 10,
-          y: 20 + layers.length * 5,
-          fontSize: 20,
-          fontWeight: 'bold',
-          color: '#ffffff',
-          visible: true,
-          zIndex: layers.length + 1
-        };
-        break;
-      case 'badge':
-        newLayer = {
-          id: newId,
-          type: 'badge',
-          label: `Badge / Selo ${layers.length + 1}`,
-          content: 'CERTIFICADO RBC',
-          x: 10,
-          y: 10,
-          fontSize: 10,
-          fontWeight: 'bold',
-          fontFamily: 'mono',
-          color: '#93c5fd',
-          backgroundColor: 'rgba(30, 58, 138, 0.5)',
-          borderColor: 'rgba(96, 165, 250, 0.5)',
-          borderWidth: 1,
-          visible: true,
-          zIndex: layers.length + 1
-        };
-        break;
-      case 'image':
-        newLayer = {
-          id: newId,
-          type: 'image',
-          label: `Imagem / Logo ${layers.length + 1}`,
-          imageUrl: '',
-          x: 10,
-          y: 40,
-          width: 200,
-          height: 140,
-          visible: true,
-          zIndex: layers.length + 1
-        };
-        break;
-      case 'line':
-        newLayer = {
-          id: newId,
-          type: 'line',
-          label: `Linha Técnica ${layers.length + 1}`,
-          x: 10,
-          y: 35,
-          width: 80,
-          height: 3,
-          backgroundColor: '#3b82f6',
-          visible: true,
-          zIndex: layers.length + 1
-        };
-        break;
-      case 'shape':
-        newLayer = {
-          id: newId,
-          type: 'shape',
-          label: `Caixa / Moldura ${layers.length + 1}`,
-          x: 10,
-          y: 50,
-          width: 250,
-          height: 100,
-          backgroundColor: 'rgba(15, 23, 42, 0.8)',
-          borderColor: '#475569',
-          borderWidth: 1,
-          visible: true,
-          zIndex: layers.length + 1
-        };
-        break;
+      // Se houve movimento real, comita EXATAMENTE UMA VEZ no Zustand
+      if (dragStartRef.current.hasMoved && localPreviewLayers && draggingLayerId) {
+        const baseLayers = materializeCoverLayers(block);
+        const targetPreview = localPreviewLayers.find((l) => l.id === draggingLayerId);
+
+        if (targetPreview) {
+          const finalLayers = updateCoverLayer(baseLayers, draggingLayerId, {
+            x: targetPreview.x,
+            y: targetPreview.y
+          });
+
+          updateBlock(pageId, block.id, {
+            customData: { ...custom, canvasLayers: finalLayers }
+          });
+        }
+      }
+      // Se !hasMoved: ZERO mutação, ZERO materialização (COVER-DRAG-NOMOVE-1)
     }
 
-    const updated = [...layers, newLayer];
+    setDraggingLayerId(null);
+    setLocalPreviewLayers(null);
+    dragStartRef.current = null;
+  };
+
+  const handlePointerCancel = () => {
+    setDraggingLayerId(null);
+    setLocalPreviewLayers(null);
+    dragStartRef.current = null;
+  };
+
+  // Cancelamento via tecla Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && draggingLayerId) {
+        setDraggingLayerId(null);
+        setLocalPreviewLayers(null);
+        dragStartRef.current = null;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [draggingLayerId]);
+
+  // Camadas a renderizar: usa preview transiente se estiver em drag ativo, senão as efetivas
+  const displayLayers = localPreviewLayers || effectiveLayers;
+
+  // ==========================================================================
+  // AÇÕES DA BARRA FLUTUANTE (CANVAS TOOLBAR) VIA ENGINE PURA
+  // ==========================================================================
+  const handleAddLayer = (type: CanvasLayerType) => {
+    const baseLayers = materializeCoverLayers(block);
+    const newLayer = createCoverLayer(type, baseLayers.length);
+    const updated = [...baseLayers, newLayer];
+
     updateBlock(pageId, block.id, {
       customData: { ...custom, canvasLayers: updated }
     });
-    setSelectedLayerId(newId);
+    setSelectedLayerId(newLayer.id);
   };
 
   const handleRemoveLayer = (layerId: string) => {
-    const updated = layers.filter((l) => l.id !== layerId);
+    const baseLayers = materializeCoverLayers(block);
+    const updated = removeCoverLayer(baseLayers, layerId);
+
     updateBlock(pageId, block.id, {
       customData: { ...custom, canvasLayers: updated }
     });
@@ -342,19 +234,24 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
   };
 
   const handleDuplicateLayer = (layer: CanvasLayer) => {
-    const cloned: CanvasLayer = {
-      ...layer,
-      id: `layer-${Date.now()}`,
-      label: `${layer.label} (Cópia)`,
-      x: Math.min(90, layer.x + 3),
-      y: Math.min(90, layer.y + 3),
-      zIndex: layers.length + 1
-    };
-    const updated = [...layers, cloned];
+    const baseLayers = materializeCoverLayers(block);
+    const updated = duplicateCoverLayer(baseLayers, layer.id);
+
     updateBlock(pageId, block.id, {
       customData: { ...custom, canvasLayers: updated }
     });
-    setSelectedLayerId(cloned.id);
+  };
+
+  const handleInlineContentBlur = (layerId: string, newContent: string) => {
+    const currentLayer = displayLayers.find((l) => l.id === layerId);
+    if (currentLayer && currentLayer.content !== newContent) {
+      const baseLayers = materializeCoverLayers(block);
+      const updated = updateCoverLayer(baseLayers, layerId, { content: newContent });
+
+      updateBlock(pageId, block.id, {
+        customData: { ...custom, canvasLayers: updated }
+      });
+    }
   };
 
   return (
@@ -374,7 +271,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
       <div
         className="absolute inset-0 z-0 overflow-hidden bg-slate-950 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url("${backgroundImageUrl}")`,
+          backgroundImage: backgroundImageUrl ? `url("${backgroundImageUrl}")` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat'
@@ -400,7 +297,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           <button
             type="button"
             onClick={() => handleAddLayer('text')}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors cursor-pointer"
             title="Inserir texto livre arrastável"
           >
             <Type className="w-3 h-3 text-blue-400" />
@@ -409,7 +306,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           <button
             type="button"
             onClick={() => handleAddLayer('badge')}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors cursor-pointer"
             title="Inserir selo ou badge metrológico"
           >
             <Sparkles className="w-3 h-3 text-amber-400" />
@@ -418,7 +315,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           <button
             type="button"
             onClick={() => handleAddLayer('image')}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors cursor-pointer"
             title="Inserir foto ou logo secundário"
           >
             <ImageIcon className="w-3 h-3 text-emerald-400" />
@@ -427,7 +324,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           <button
             type="button"
             onClick={() => handleAddLayer('line')}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors cursor-pointer"
             title="Inserir linha técnica horizontal"
           >
             <Minus className="w-3 h-3 text-blue-400" />
@@ -436,7 +333,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
           <button
             type="button"
             onClick={() => handleAddLayer('shape')}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-blue-600 text-[10px] font-bold rounded-none border border-slate-700 transition-colors cursor-pointer"
             title="Inserir moldura ou caixa de destaque"
           >
             <Square className="w-3 h-3 text-purple-400" />
@@ -445,8 +342,8 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
         </div>
       )}
 
-      {/* 3. Renderização de Cada Camada / Layer no Canvas */}
-      {layers
+      {/* 3. Renderização de Cada Camada no Canvas */}
+      {displayLayers
         .filter((l) => l.visible !== false)
         .map((layer) => {
           const isLayerSelected = selectedLayerId === layer.id;
@@ -472,9 +369,12 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                   : 'hover:ring-1 hover:ring-white/40'
               }`}
             >
-              {/* Handle de Drag & Drop */}
+              {/* Handle de Drag & Drop (Pointer Capture) */}
               <div
-                onMouseDown={(e) => handleStartDrag(layer.id, layer.x, layer.y, e)}
+                onPointerDown={(e) => handleStartDrag(layer.id, layer.x, layer.y, e)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
                 className={`absolute -top-5 left-0 px-1.5 py-0.5 bg-[#003366] text-white text-[8px] font-mono font-bold flex items-center gap-1 rounded-none shadow cursor-grab active:cursor-grabbing no-print ${
                   isLayerSelected ? 'opacity-100' : 'opacity-0 group-hover/layer:opacity-100'
                 }`}
@@ -488,7 +388,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                     e.stopPropagation();
                     handleDuplicateLayer(layer);
                   }}
-                  className="hover:text-blue-300 ml-1"
+                  className="hover:text-blue-300 ml-1 cursor-pointer"
                   title="Duplicar elemento"
                 >
                   <Copy className="w-2.5 h-2.5" />
@@ -499,7 +399,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                     e.stopPropagation();
                     handleRemoveLayer(layer.id);
                   }}
-                  className="hover:text-red-400 ml-0.5"
+                  className="hover:text-red-400 ml-0.5 cursor-pointer"
                   title="Excluir elemento"
                 >
                   <Trash2 className="w-2.5 h-2.5" />
@@ -510,9 +410,9 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
               {layer.type === 'text' && (
                 <div
                   data-printable-field={`layer_${layer.id}`}
-                  contentEditable
+                  contentEditable={isSelected}
                   suppressContentEditableWarning
-                  onBlur={(e) => handleUpdateLayer(layer.id, { content: e.currentTarget.innerText.trim() })}
+                  onBlur={(e) => handleInlineContentBlur(layer.id, e.currentTarget.innerText.trim())}
                   style={{
                     fontSize: `${layer.fontSize || 16}px`,
                     color: layer.color || '#ffffff',
@@ -526,7 +426,12 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
                         : 400,
                     fontFamily: layer.fontFamily === 'mono' ? 'monospace' : 'sans-serif',
                     textAlign: layer.textAlign || 'left',
-                    letterSpacing: layer.letterSpacing === 'widest' ? '0.2em' : layer.letterSpacing === 'wide' ? '0.1em' : 'normal',
+                    letterSpacing:
+                      layer.letterSpacing === 'widest'
+                        ? '0.2em'
+                        : layer.letterSpacing === 'wide'
+                        ? '0.1em'
+                        : 'normal',
                     textTransform: layer.textTransform || 'none'
                   }}
                   className="outline-none focus:bg-white/10 px-1 py-0.5 cursor-text leading-tight whitespace-pre-wrap min-w-[60px]"
@@ -538,9 +443,9 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
               {layer.type === 'badge' && (
                 <div
                   data-printable-field={`layer_${layer.id}`}
-                  contentEditable
+                  contentEditable={isSelected}
                   suppressContentEditableWarning
-                  onBlur={(e) => handleUpdateLayer(layer.id, { content: e.currentTarget.innerText.trim() })}
+                  onBlur={(e) => handleInlineContentBlur(layer.id, e.currentTarget.innerText.trim())}
                   style={{
                     fontSize: `${layer.fontSize || 10}px`,
                     lineHeight: '1.2',

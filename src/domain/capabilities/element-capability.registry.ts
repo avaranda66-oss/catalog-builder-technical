@@ -11,7 +11,7 @@ import {
 } from './capability.types';
 import { ElementCapabilityDefinitionSchema } from './capability.schema';
 
-export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 1;
+export const ELEMENT_CAPABILITY_REGISTRY_VERSION = 2;
 
 export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabilityDefinition>> = {
   // 1. TEXT
@@ -1112,14 +1112,66 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
 
   // 18. FULL PAGE COVER
   // NOTA ARQUITETURAL: Modela estritamente a realidade comprovada pelo renderer.
-  // NO-OPs eliminados: highlights, footerLeft, footerRight, coverStyle, textAlign, gradient.
-  // Escritas divergentes de title/subtitle não são marcadas como validated_command.
+  // 18. FULL PAGE COVER
+  // Canonicalizado na CORE.E4: Pure Domain Engine, binds semânticos e eliminação de dead controls.
   full_page_cover: {
     blockType: 'full_page_cover',
     displayName: 'Capa A4 Página Inteira',
     engineFamily: 'cover_legacy',
     inspectorFamily: 'composite',
     capabilities: [
+      {
+        id: CAPABILITY_IDS.CONTENT_COMPANY_NAME,
+        label: 'Nome da Empresa / Marca',
+        category: 'content',
+        valueKind: 'text',
+        controlHint: 'text',
+        unit: 'none',
+        defaultSource: 'derived',
+        resetPolicy: 'none',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'protect',
+        writePolicy: 'user_only'
+      },
+      {
+        id: CAPABILITY_IDS.CONTENT_BADGE,
+        label: 'Selo Metrológico / Badge',
+        category: 'content',
+        valueKind: 'text',
+        controlHint: 'text',
+        unit: 'none',
+        defaultSource: 'derived',
+        resetPolicy: 'none',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'translate',
+        writePolicy: 'user_only'
+      },
+      {
+        id: CAPABILITY_IDS.CONTENT_TITLE,
+        label: 'Título Principal da Capa',
+        category: 'content',
+        valueKind: 'text',
+        controlHint: 'text',
+        unit: 'none',
+        defaultSource: 'derived',
+        resetPolicy: 'none',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'translate',
+        writePolicy: 'user_only'
+      },
+      {
+        id: CAPABILITY_IDS.CONTENT_SUBTITLE,
+        label: 'Subtítulo Descritivo',
+        category: 'content',
+        valueKind: 'text',
+        controlHint: 'textarea',
+        unit: 'none',
+        defaultSource: 'derived',
+        resetPolicy: 'none',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'translate',
+        writePolicy: 'user_only'
+      },
       {
         id: CAPABILITY_IDS.MEDIA_PRIMARY_ASSET,
         label: 'Fotografia de Fundo (Full-Bleed)',
@@ -1167,7 +1219,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
       canDuplicate: false, // Capa é estritamente isolada: exatamente 1 por página
       canDelete: true,
       canReset: false,
-      canReorder: true
+      canReorder: false // Capa isolada numa página dedicada
     }
   },
 
