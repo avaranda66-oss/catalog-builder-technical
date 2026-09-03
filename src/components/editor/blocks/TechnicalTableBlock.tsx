@@ -20,15 +20,16 @@ interface TechnicalTableBlockProps {
 export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   block,
   pageId,
-  isSelected,
   isExport
 }) => {
   const {
+    selectedBlockId,
+    selectedChildId,
+    selectEditorElement,
     updateBlock,
     updateCellOverride,
     restoreCellToLibrary,
-    removeRowFromTable,
-    setSelectedBlockId
+    removeRowFromTable
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
@@ -38,10 +39,12 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const rows = block.tableRows || [];
   const family: TableVisualFamily = (block.style?.family as TableVisualFamily) || 'monochrome';
 
-  // Pilot Table Core V2 para specs_table (CORE.T2B.1)
+  // Pilot Table Core V2 para specs_table (CORE.T2B.1 / CORE.T2C.1)
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
   const useTableCorePilot = isPilotSpecsTable && pilotAdaptResult?.supported;
+  const isSelected = selectedBlockId === block.id;
+  const selectedCellId = isSelected && !isExport ? selectedChildId : undefined;
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     if (isExport) return;
@@ -76,7 +79,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
       onClick={(e) => {
         if (isExport) return;
         e.stopPropagation();
-        setSelectedBlockId(block.id);
+        selectEditorElement({ blockId: block.id, childId: null });
       }}
       className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
         isSelected && !isExport ? 'ring-2 ring-blue-600' : isExport ? 'shadow-none' : 'hover:border-slate-400'
@@ -119,6 +122,14 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
           <TableCoreRenderer
             table={pilotAdaptResult.table}
             mode={isExport ? 'export' : 'editor'}
+            selectedCellId={selectedCellId ?? undefined}
+            onSelectCell={
+              isExport
+                ? undefined
+                : (cellId) => {
+                    selectEditorElement({ blockId: block.id, childId: cellId });
+                  }
+            }
             resolveDatum={(ref) => {
               if (ref.kind === 'datum_reference') {
                 const product = getProduct(ref.productId);
@@ -140,10 +151,9 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
             }}
             getHeaderPrintableField={(col) => `col_${col.semanticKey}_label`}
             getCellPrintableField={(_cell, row, col) => {
-              const rowIdx = pilotAdaptResult.table.rows.findIndex((r) => r.id === row.id);
-              const legacyRow = block.tableRows?.[rowIdx];
-              if (!legacyRow) return undefined;
-              return `row_${legacyRow.id}_ov_${col.semanticKey}`;
+              const mapping = pilotAdaptResult.bridge.getByCoordinates(row.id, col.id);
+              if (!mapping) return undefined;
+              return `row_${mapping.legacyRowId}_ov_${mapping.legacyColKey}`;
             }}
           />
           {block.customData?.showLegend && (

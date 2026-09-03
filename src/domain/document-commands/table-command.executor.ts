@@ -154,6 +154,17 @@ export function executeTableCommand(
         break;
       }
 
+      case 'TABLE_RESTORE_CELL': {
+        updatedTable = setCellContent(
+          table,
+          command.rowId,
+          command.columnId,
+          { kind: 'empty' }
+        );
+        summary = `Célula [${command.rowId}::${command.columnId}] restaurada`;
+        break;
+      }
+
       case 'TABLE_MERGE_CELLS': {
         updatedTable = mergeCells(
           table,

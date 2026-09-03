@@ -24,10 +24,17 @@ export type LegacyAdapterUnsupportedReason =
   | 'ordering_codes_specialized_domain'
   | 'inserts_visual_hybrid_block';
 
+import {
+  LegacyTableCoordinateBridge,
+  LegacyCellCoordinateMapping,
+  buildLegacyTableCoordinateBridge
+} from './legacy-table.bridge';
+
 export type LegacyAdapterResult =
   | {
       supported: true;
       table: TableCoreModel;
+      bridge: LegacyTableCoordinateBridge;
       warnings: string[];
     }
   | {
@@ -185,8 +192,9 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     kind: 'data'
   }));
 
-  // 7. Construir Células
+  // 7. Construir Células e Bridge de Coordenadas
   const cells: Record<string, TableCellModel> = {};
+  const cellMappings: LegacyCellCoordinateMapping[] = [];
   let hasLegacyProductBinding = false;
 
   rows.forEach((row, rIdx) => {
@@ -197,8 +205,10 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
       const key = getCellKey(row.id, col.id);
 
       let content: TableCellContent = { kind: 'empty' };
-      if (legacyRow.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined) {
-        const textVal = String(legacyRow.localOverrides[col.semanticKey]);
+      const isOverride = Boolean(legacyRow.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined);
+
+      if (isOverride) {
+        const textVal = String(legacyRow.localOverrides![col.semanticKey]);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
       } else if (legacyRow.productRefId) {
         hasLegacyProductBinding = true;
@@ -218,6 +228,20 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         colSpan: 1,
         rowSpan: 1
       };
+
+      cellMappings.push({
+        cellId,
+        rowId: row.id,
+        columnId: col.id,
+        legacyBlockId: block.id,
+        legacyRowId: legacyRow.id,
+        legacyColKey: col.semanticKey,
+        content,
+        isOverride,
+        hasProductBinding: Boolean(legacyRow.productRefId),
+        productRefId: legacyRow.productRefId,
+        originalOverrideValue: isOverride ? String(legacyRow.localOverrides![col.semanticKey]) : undefined
+      });
     });
   });
 
@@ -247,9 +271,12 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     };
   }
 
+  const bridge = buildLegacyTableCoordinateBridge(block, tableId, cellMappings);
+
   return {
     supported: true,
     table: tableCore,
+    bridge,
     warnings
   };
 }
