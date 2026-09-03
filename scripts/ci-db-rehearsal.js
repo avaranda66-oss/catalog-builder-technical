@@ -401,10 +401,11 @@ async function run() {
     logStep('FASE 8: CAS E2E BEHAVIOR');
     const workbookPayloadRev0 = {
       id: 'wb-test-01',
-      ownerKind: 'product',
-      ownerId: PRODUCT_ID,
+      schemaVersion: 1,
+      owner: { kind: 'product', id: PRODUCT_ID },
       revision: 0,
-      technicalData: [],
+      modules: [],
+      data: {},
       metadata: { note: 'Initial baseline' }
     };
 
@@ -470,7 +471,7 @@ async function run() {
         `SELECT public.save_product_workbook_v1($1::jsonb, 0) AS data`,
         [JSON.stringify({
           ...workbookPayloadRev0,
-          ownerId: '99999999-9999-9999-9999-999999999999'
+          owner: { kind: 'product', id: '99999999-9999-9999-9999-999999999999' }
         })]
       );
     } catch (err) {
@@ -598,20 +599,23 @@ async function run() {
     logStep('FASE 12: ORPHAN EVIDENCE INTEGRITY');
     const ghostEvidenceWb = {
       id: 'wb-orphan-test',
-      ownerKind: 'family',
-      ownerId: FAMILY_ID,
+      schemaVersion: 1,
+      owner: { kind: 'family', id: FAMILY_ID },
       revision: 0,
-      technicalData: [{
-        id: 'datum-orphan',
-        semanticKey: 'accuracy',
-        moduleId: 'm1',
-        label: 'Accuracy',
-        value: { kind: 'number', value: 0.1 },
-        evidence: {
-          sourceDocumentId: 'non-existent-source-doc-id',
-          citationText: 'Datasheet page 10'
+      modules: [],
+      data: {
+        'accuracy': {
+          id: 'datum-orphan',
+          semanticKey: 'accuracy',
+          moduleId: 'm1',
+          label: 'Accuracy',
+          value: { type: 'number', value: 0.1 },
+          evidence: [{
+            sourceDocumentId: 'non-existent-source-doc-id',
+            citationText: 'Datasheet page 10'
+          }]
         }
-      }]
+      }
     };
 
     let orphanCaught = false;
@@ -633,7 +637,7 @@ async function run() {
       title: 'Valid Evidence Document',
       documentType: 'certificate'
     })]);
-    ghostEvidenceWb.technicalData[0].evidence.sourceDocumentId = 'valid-evidence-doc';
+    ghostEvidenceWb.data.accuracy.evidence[0].sourceDocumentId = 'valid-evidence-doc';
     const orphanResolvedRes = await runAsActor(`SELECT public.save_product_workbook_v1($1::jsonb, 0) AS data`, [JSON.stringify(ghostEvidenceWb)]);
     if (orphanResolvedRes.rows[0].data.revision !== 1) {
       results.orphanEvidence = 'FAIL';
@@ -647,21 +651,22 @@ async function run() {
     logStep('FASE 13: TECHNICAL DATA INDEX PROJECTION (ALL 10 TYPES)');
     const allTypesWb = {
       id: 'wb-all-types',
-      ownerKind: 'product',
-      ownerId: PRODUCT_ID,
+      schemaVersion: 1,
+      owner: { kind: 'product', id: PRODUCT_ID },
       revision: 2,
-      technicalData: [
-        { id: 'd-text', semanticKey: 'material', moduleId: 'm1', label: 'Material', value: { kind: 'text', text: 'SS316' } },
-        { id: 'd-num', semanticKey: 'weight', moduleId: 'm1', label: 'Weight', value: { kind: 'number', value: 42.5 } },
-        { id: 'd-qty', semanticKey: 'pressure', moduleId: 'm1', label: 'Pressure', value: { kind: 'quantity', magnitude: 100, unit: 'bar' } },
-        { id: 'd-bool', semanticKey: 'hazardous', moduleId: 'm1', label: 'Hazardous', value: { kind: 'boolean', value: true } },
-        { id: 'd-range', semanticKey: 'temp_range', moduleId: 'm1', label: 'Temp Range', value: { kind: 'range', lower: -25.0, upper: 140.0, unit: '°C' } },
-        { id: 'd-enum', semanticKey: 'protection', moduleId: 'm1', label: 'Protection', value: { kind: 'enum', code: 'IP67' } },
-        { id: 'd-token', semanticKey: 'part_code', moduleId: 'm1', label: 'Part Code', value: { kind: 'technical_token', token: 'TOKEN_123' } },
-        { id: 'd-asset', semanticKey: 'drawing_ref', moduleId: 'm1', label: 'Drawing', value: { kind: 'asset_reference', assetId: 'asset-01' } },
-        { id: 'd-prod', semanticKey: 'accessory', moduleId: 'm1', label: 'Accessory', value: { kind: 'product_reference', targetProductId: 'prod-01' } },
-        { id: 'd-unk', semanticKey: 'unknown_prop', moduleId: 'm1', label: 'Unknown Prop', value: { kind: 'unknown', reason: 'Unverified' } }
-      ]
+      modules: [],
+      data: {
+        'material': { id: 'd-text', semanticKey: 'material', moduleId: 'm1', label: 'Material', value: { type: 'text', value: 'SS316' } },
+        'weight': { id: 'd-num', semanticKey: 'weight', moduleId: 'm1', label: 'Weight', value: { type: 'number', value: 42.5 } },
+        'pressure': { id: 'd-qty', semanticKey: 'pressure', moduleId: 'm1', label: 'Pressure', value: { type: 'quantity', amount: 100, unit: 'bar' } },
+        'hazardous': { id: 'd-bool', semanticKey: 'hazardous', moduleId: 'm1', label: 'Hazardous', value: { type: 'boolean', value: true } },
+        'temp_range': { id: 'd-range', semanticKey: 'temp_range', moduleId: 'm1', label: 'Temp Range', value: { type: 'range', lower: -25.0, upper: 140.0, unit: '°C' } },
+        'protection': { id: 'd-enum', semanticKey: 'protection', moduleId: 'm1', label: 'Protection', value: { type: 'enum', code: 'IP67', label: 'IP67 Enclosure' } },
+        'part_code': { id: 'd-token', semanticKey: 'part_code', moduleId: 'm1', label: 'Part Code', value: { type: 'technical_token', token: 'TOKEN_123' } },
+        'drawing_ref': { id: 'd-asset', semanticKey: 'drawing_ref', moduleId: 'm1', label: 'Drawing', value: { type: 'asset_reference', assetId: 'asset-01' } },
+        'accessory': { id: 'd-prod', semanticKey: 'accessory', moduleId: 'm1', label: 'Accessory', value: { type: 'product_reference', targetProductId: 'prod-01' } },
+        'unknown_prop': { id: 'd-unk', semanticKey: 'unknown_prop', moduleId: 'm1', label: 'Unknown Prop', value: { type: 'unknown', reason: 'Unverified' } }
+      }
     };
 
     await runAsActor(`SELECT public.save_product_workbook_v1($1::jsonb, 2)`, [JSON.stringify(allTypesWb)]);
@@ -701,7 +706,7 @@ async function run() {
       throw new Error('No library_change_events recorded for workbook save');
     }
     const latestEvent = auditRes.rows[0];
-    if (latestEvent.actor_id !== ACTOR_ID || latestEvent.action !== 'SAVE_PRODUCT_WORKBOOK') {
+    if (latestEvent.actor_id !== ACTOR_ID || latestEvent.action !== 'SAVE_WORKBOOK') {
       results.auditEvent = 'FAIL';
       throw new Error(`Audit event actor or action mismatch: ${JSON.stringify(latestEvent)}`);
     }
