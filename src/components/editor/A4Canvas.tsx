@@ -434,7 +434,8 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                   data-block-id={block.id}
                   data-block-type={block.type}
                   data-block-index={blockIndex}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onSetActivePageIndex(pageIndex);
                     onSelectEditorElement({ blockId: block.id, childId: null });
                   }}
@@ -540,7 +541,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                   {block.type === 'features_list' && (
                     <FeaturesListBlock block={block} pageId={page.id} isSelected={isSelected} />
                   )}
-                  {block.type === 'table' && (
+                  {(block.type === 'table' || block.type === 'specs_table') && (
                     <TechnicalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
                   )}
                   {block.type === 'electrical_table' && (

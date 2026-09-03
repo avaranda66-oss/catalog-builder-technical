@@ -255,14 +255,49 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
   });
 
-  // Teste de Integridade Documental: specs_table reflete a realidade de Drift (editor=false, print=true)
-  it('CAP-REG-SPECS: specs_table declara honestamente a ausência no Editor e presença no Print', () => {
+  // CAP-REG-SPECS-PARITY: specs_table possui suporte de renderização pleno tanto no Editor quanto no Print (CORE.E2.2)
+  it('CAP-REG-SPECS-PARITY: specs_table declara paridade plena no Editor e no Print (true/true)', () => {
     const specsDef = ElementCapabilityRegistry.specs_table;
     expect(specsDef).toBeDefined();
     for (const cap of specsDef.capabilities) {
-      expect(cap.rendererSupport.editor).toBe(false);
+      expect(cap.rendererSupport.editor).toBe(true);
       expect(cap.rendererSupport.print).toBe(true);
     }
+  });
+
+  // ==========================================================================
+  // Testes de Validação Numérica: step (CORE.E2.2)
+  // ==========================================================================
+  it('CAP-NUM-STEP-1: step = 0 => reject', () => {
+    const res = CapabilityNumericConstraintSchema.safeParse({ min: 1, max: 10, step: 0 });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some((i) => i.message.includes('step'))).toBe(true);
+    }
+  });
+
+  it('CAP-NUM-STEP-2: step < 0 => reject', () => {
+    const res = CapabilityNumericConstraintSchema.safeParse({ min: 1, max: 10, step: -2 });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some((i) => i.message.includes('step'))).toBe(true);
+    }
+  });
+
+  it('CAP-NUM-STEP-3: step = Infinity => reject', () => {
+    const res = CapabilityNumericConstraintSchema.safeParse({ min: 1, max: 10, step: Infinity });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues.some((i) => i.message.includes('step'))).toBe(true);
+    }
+  });
+
+  it('CAP-NUM-STEP-4: step positivo finito => accept', () => {
+    const res1 = CapabilityNumericConstraintSchema.safeParse({ min: 1, max: 10, step: 1 });
+    expect(res1.success).toBe(true);
+
+    const res2 = CapabilityNumericConstraintSchema.safeParse({ step: 0.5 });
+    expect(res2.success).toBe(true);
   });
 });
 

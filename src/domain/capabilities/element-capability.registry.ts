@@ -348,9 +348,8 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
   },
 
   // 7. SPECS TABLE
-  // NOTA ARQUITETURAL: No baseline atual, specs_table possui DRIFT CONFIRMADO
-  // (rendererSupport.editor = false; rendererSupport.print = true).
-  // O Registry relata a realidade de forma transparente e não mascara o bug.
+  // NOTA ARQUITETURAL (CORE.E2.2): Paridade de renderização plenamente restabelecida
+  // com A4Canvas e CleanA4Document (rendererSupport.editor = true; rendererSupport.print = true).
   specs_table: {
     blockType: 'specs_table',
     displayName: 'Tabela de Especificações Técnicas (Legada)',
@@ -366,7 +365,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         unit: 'none',
         defaultSource: 'preset',
         resetPolicy: 'none',
-        rendererSupport: { editor: false, print: true },
+        rendererSupport: { editor: true, print: true },
         translationPolicy: 'translate',
         writePolicy: 'user_only'
       },
@@ -379,7 +378,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         unit: 'none',
         defaultSource: 'preset',
         resetPolicy: 'none',
-        rendererSupport: { editor: false, print: true },
+        rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
         writePolicy: 'user_only'
       },
@@ -392,7 +391,7 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         unit: 'none',
         defaultSource: 'document',
         resetPolicy: 'none',
-        rendererSupport: { editor: false, print: true },
+        rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
         writePolicy: 'user_only'
       }

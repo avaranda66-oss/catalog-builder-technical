@@ -150,6 +150,19 @@ export const CapabilityNumericConstraintSchema = z
         message: 'max deve ser um número finito.'
       });
     }
+    if (data.step !== undefined) {
+      if (!Number.isFinite(data.step)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'step deve ser um número finito.'
+        });
+      } else if (data.step <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'step deve ser estritamente positivo (> 0).'
+        });
+      }
+    }
   });
 
 export const CapabilityOptionConstraintSchema = z.object({
