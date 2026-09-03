@@ -33,6 +33,9 @@ export class SupabaseProductSourceDocumentRepository implements ProductSourceDoc
     });
 
     if (error) {
+      if (error.code === '42501' || error.message.includes('AUTH_READ_DENIED')) {
+        throw new ProductWorkbookPersistenceError('AUTH_READ_DENIED', error.message);
+      }
       throw new ProductWorkbookPersistenceError('GET_SOURCE_DOCUMENT_FAILED', error.message);
     }
 
@@ -76,6 +79,9 @@ export class SupabaseProductSourceDocumentRepository implements ProductSourceDoc
     });
 
     if (error) {
+      if (error.code === '42501' || error.message.includes('AUTH_READ_DENIED')) {
+        throw new ProductWorkbookPersistenceError('AUTH_READ_DENIED', error.message);
+      }
       throw new ProductWorkbookPersistenceError('LIST_SOURCE_DOCUMENTS_FAILED', error.message);
     }
 

@@ -1,5 +1,5 @@
 -- ============================================================================
--- MIGRATION 00022: PRODUCT WORKBOOK PERSISTENCE HARDENING (PHASE PIM.W2B)
+-- MIGRATION 00022: PRODUCT WORKBOOK PERSISTENCE HARDENING (PHASE PIM.W2C PRE-FLIGHT)
 -- STATUS: READY FOR ARCHITECT REVIEW — DO NOT APPLY LIVE YET.
 --
 -- Core Invariants:
@@ -7,13 +7,17 @@
 -- 2. SEMÂNTICA DE REVISÃO: 0 representa baseline não persistida. Primeiro save avança 0 -> 1. Saves subsequentes N -> N+1.
 -- 3. RACE PREVENTION & OWNER INTEGRITY: Bloqueio pessimista (FOR UPDATE) na entidade owner (public.products ou public.product_families)
 --    antes da criação/atualização do workbook. Garante serialização atômica de first-saves concorrentes e integridade referencial.
--- 4. SINGLE WRITE AUTHORITY: DML direto (INSERT/UPDATE/DELETE) revogado de PUBLIC, anon e authenticated.
+-- 4. POLYMORPHIC OWNER DELETE GUARD: Triggers BEFORE DELETE em public.products e public.product_families impedem exclusão
+--    de entidades cujo workbook exista (WORKBOOK_OWNER_IN_USE / SQLSTATE 23503). Sem cascade destrutivo.
+-- 5. SINGLE WRITE AUTHORITY: DML direto (INSERT/UPDATE/DELETE) revogado de PUBLIC, anon e authenticated.
 --    Toda mutação ocorre exclusivamente através de RPCs autorizadas com public.require_document_editor_v1().
--- 5. SOURCE DOCUMENT INTEGRITY: Tabela product_source_documents espelha estritamente o enum do domínio de 8 valores.
---    Validação fail-closed rejeita workbooks com evidências órfãs que referenciem documentos inexistentes.
--- 6. ÍNDICE ANALÍTICO LOSSLESS: Projeção transacional determinística cobrindo a união dos 10 tipos de TechnicalValue.
---    has_conflicts removido do índice analítico (resolução de conflito pertence exclusivamente à autoridade do domínio).
--- 7. AUDITORIA TRANSACIONAL: Registro em library_change_events na mesma transação atômica do commit.
+-- 6. READ AUTHORITY FAIL-CLOSED: RLS SELECT exige public.team_role() IS NOT NULL.
+--    RPCs SECURITY DEFINER validam auth.uid() IS NOT NULL e public.team_role() IS NOT NULL antes de retornar dados.
+-- 7. SOURCE DOCUMENT INTEGRITY: Tabela product_source_documents espelha estritamente o enum canônico de 8 valores.
+--    Validação fail-closed de servidor para metadados, BCP-47, ISO-8601 e rejeição de evidências órfãs.
+-- 8. ÍNDICE ANALÍTICO LOSSLESS (RANGE LOWER/UPPER): Projeção transacional determinística cobrindo a união dos 10 tipos de TechnicalValue.
+--    TechnicalValue.range projeta estritamente lower e upper (sem min/max). has_conflicts removido do índice analítico.
+-- 9. AUDITORIA TRANSACIONAL: Registro em library_change_events na mesma transação atômica do commit.
 -- ============================================================================
 
 -- 1. TABELA PRINCIPAL DE WORKBOOKS TÉCNICOS
@@ -31,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.product_workbooks (
 );
 
 -- 2. TABELA DE DOCUMENTOS FONTE (PROVENIÊNCIA E EVIDÊNCIA)
--- Espelha estritamente o enum canônico SourceDocumentType do domínio
+-- Espelha estritamente o enum canônico SourceDocumentType do domínio (8 valores)
 CREATE TABLE IF NOT EXISTS public.product_source_documents (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -110,18 +114,21 @@ ALTER TABLE public.product_workbooks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_source_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_technical_data_index ENABLE ROW LEVEL SECURITY;
 
--- Políticas de Leitura (Authenticated Users)
+-- Políticas de Leitura Fail-Closed (Authenticated Users com team_role ativo)
 DROP POLICY IF EXISTS "allow_read_product_workbooks" ON public.product_workbooks;
 CREATE POLICY "allow_read_product_workbooks" ON public.product_workbooks
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (public.team_role() IS NOT NULL);
 
 DROP POLICY IF EXISTS "allow_read_source_documents" ON public.product_source_documents;
 CREATE POLICY "allow_read_source_documents" ON public.product_source_documents
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (public.team_role() IS NOT NULL);
 
 DROP POLICY IF EXISTS "allow_read_technical_data_index" ON public.product_technical_data_index;
 CREATE POLICY "allow_read_technical_data_index" ON public.product_technical_data_index
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (public.team_role() IS NOT NULL);
 
 -- AUTORIDADE ÚNICA DE ESCRITA: Revogação explícita de DML direto
 -- Mutações ocorrem unicamente via RPCs autorizadas (save_product_workbook_v1, upsert_source_document_v1)
@@ -133,7 +140,49 @@ GRANT SELECT ON public.product_workbooks TO authenticated;
 GRANT SELECT ON public.product_source_documents TO authenticated;
 GRANT SELECT ON public.product_technical_data_index TO authenticated;
 
--- 6. RPC: GET PRODUCT WORKBOOK V1
+-- 6. TRIGGERS BEFORE DELETE: PROTEÇÃO DE OWNER CONTRA WORKBOOK ÓRFÃO (BLOCKER 4)
+CREATE OR REPLACE FUNCTION public.guard_product_workbook_owner_delete_v1()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'products' THEN
+        IF EXISTS (
+            SELECT 1 FROM public.product_workbooks
+            WHERE owner_kind = 'product' AND owner_id = OLD.id
+        ) THEN
+            RAISE EXCEPTION 'WORKBOOK_OWNER_IN_USE: Não é possível excluir o produto "%" porque existe um Product Workbook associado a ele.', OLD.id
+                USING ERRCODE = '23503';
+        END IF;
+    ELSIF TG_TABLE_NAME = 'product_families' THEN
+        IF EXISTS (
+            SELECT 1 FROM public.product_workbooks
+            WHERE owner_kind = 'family' AND owner_id = OLD.id
+        ) THEN
+            RAISE EXCEPTION 'WORKBOOK_OWNER_IN_USE: Não é possível excluir a família "%" porque existe um Product Workbook associado a ela.', OLD.id
+                USING ERRCODE = '23503';
+        END IF;
+    END IF;
+
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_product_delete_workbook ON public.products;
+CREATE TRIGGER trg_guard_product_delete_workbook
+    BEFORE DELETE ON public.products
+    FOR EACH ROW
+    EXECUTE FUNCTION public.guard_product_workbook_owner_delete_v1();
+
+DROP TRIGGER IF EXISTS trg_guard_family_delete_workbook ON public.product_families;
+CREATE TRIGGER trg_guard_family_delete_workbook
+    BEFORE DELETE ON public.product_families
+    FOR EACH ROW
+    EXECUTE FUNCTION public.guard_product_workbook_owner_delete_v1();
+
+-- 7. RPC: GET PRODUCT WORKBOOK V1 (Leitura com validação de Auth, Role e Insumos)
 CREATE OR REPLACE FUNCTION public.get_product_workbook_v1(
     p_owner_kind TEXT,
     p_owner_id TEXT
@@ -148,7 +197,19 @@ DECLARE
     v_owner_uuid UUID;
     v_payload_revision INTEGER;
 BEGIN
-    -- Validação de UUID
+    -- 1. Read Authority Fail-Closed
+    IF auth.uid() IS NULL OR public.team_role() IS NULL THEN
+        RAISE EXCEPTION 'AUTH_READ_DENIED: Usuário não autenticado ou sem perfil de equipe válido.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    -- 2. Validação estrita de owner_kind
+    IF p_owner_kind IS NULL OR p_owner_kind NOT IN ('product', 'family') THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_OWNER_KIND: owner.kind deve ser "product" ou "family".'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 3. Validação estrita de owner_id como UUID
     IF p_owner_id IS NULL OR NOT (p_owner_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') THEN
         RAISE EXCEPTION 'INVALID_WORKBOOK_OWNER_ID: owner.id "%" não é um UUID válido.', p_owner_id
             USING ERRCODE = '22023';
@@ -176,7 +237,7 @@ BEGIN
 END;
 $$;
 
--- 7. RPC: SAVE PRODUCT WORKBOOK V1 (CAS Estrito + Lock de Owner + Zero Órfãos)
+-- 8. RPC: SAVE PRODUCT WORKBOOK V1 (CAS Estrito + Lock de Owner + Zero Órfãos + Range lower/upper)
 CREATE OR REPLACE FUNCTION public.save_product_workbook_v1(
     p_workbook JSONB,
     p_expected_revision INTEGER
@@ -201,12 +262,35 @@ DECLARE
     v_source_exists BOOLEAN;
 BEGIN
     -- 1. Validação estrita do parâmetro CAS (sem default NULL)
-    IF p_expected_revision IS NULL THEN
-        RAISE EXCEPTION 'CAS_REVISION_REQUIRED: p_expected_revision é obrigatório e não pode ser nulo.'
+    IF p_expected_revision IS NULL OR p_expected_revision < 0 THEN
+        RAISE EXCEPTION 'CAS_REVISION_REQUIRED: p_expected_revision é obrigatório e deve ser um inteiro >= 0.'
             USING ERRCODE = '22023';
     END IF;
 
-    -- 2. Extração e validação estrita dos identificadores de ownership
+    -- 2. Validação estrutural básica do payload JSON
+    IF p_workbook IS NULL OR jsonb_typeof(p_workbook) IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_PAYLOAD: p_workbook deve ser um objeto JSON.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 3. Validação do ID do workbook
+    IF NOT (p_workbook ? 'id') OR jsonb_typeof(p_workbook->'id') IS DISTINCT FROM 'string' OR trim(p_workbook->>'id') = '' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_ID: id é obrigatório e deve ser string não vazia.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 4. Validação estrita de schemaVersion (apenas inteiro JSON 1)
+    IF NOT (p_workbook ? 'schemaVersion') OR jsonb_typeof(p_workbook->'schemaVersion') IS DISTINCT FROM 'number' OR (p_workbook->>'schemaVersion') IS DISTINCT FROM '1' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_SCHEMA: schemaVersion deve ser o inteiro 1.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 5. Validação estrutural de owner
+    IF NOT (p_workbook ? 'owner') OR jsonb_typeof(p_workbook->'owner') IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_OWNER: owner deve ser um objeto JSON.'
+            USING ERRCODE = '22023';
+    END IF;
+
     v_owner_kind    := p_workbook->'owner'->>'kind';
     v_owner_id_text := p_workbook->'owner'->>'id';
 
@@ -221,19 +305,9 @@ BEGIN
     END IF;
     v_owner_id := v_owner_id_text::uuid;
 
-    -- 3. Validação estrutural do payload de persistência
-    IF (p_workbook->>'schemaVersion')::integer <> 1 THEN
-        RAISE EXCEPTION 'INVALID_WORKBOOK_SCHEMA: schemaVersion deve ser 1.'
-            USING ERRCODE = '22023';
-    END IF;
-
-    IF jsonb_typeof(p_workbook->'modules') <> 'array' THEN
-        RAISE EXCEPTION 'INVALID_WORKBOOK_MODULES: modules deve ser um array JSON.'
-            USING ERRCODE = '22023';
-    END IF;
-
-    IF jsonb_typeof(p_workbook->'data') <> 'object' THEN
-        RAISE EXCEPTION 'INVALID_WORKBOOK_DATA: data deve ser um objeto JSON.'
+    -- 6. Validação estrita de revision no payload
+    IF NOT (p_workbook ? 'revision') OR jsonb_typeof(p_workbook->'revision') IS DISTINCT FROM 'number' OR NOT ((p_workbook->>'revision') ~ '^[0-9]+$') THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_REVISION: revision deve ser um inteiro >= 0.'
             USING ERRCODE = '22023';
     END IF;
 
@@ -243,8 +317,29 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    -- 4. Validação de Evidências Órfãs (Fail-Closed)
-    -- Verifica que todo sourceDocumentId referenciado em data[].evidence existe no banco
+    -- 7. Validação estrita de modules e data
+    IF NOT (p_workbook ? 'modules') OR jsonb_typeof(p_workbook->'modules') IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_MODULES: modules deve ser um array JSON.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    IF NOT (p_workbook ? 'data') OR jsonb_typeof(p_workbook->'data') IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_DATA: data deve ser um objeto JSON.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 8. Validação estrutural de overrides e savedViews (quando presentes)
+    IF (p_workbook ? 'overrides') AND p_workbook->'overrides' IS NOT NULL AND jsonb_typeof(p_workbook->'overrides') IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_OVERRIDES: overrides deve ser um objeto JSON quando presente.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    IF (p_workbook ? 'savedViews') AND p_workbook->'savedViews' IS NOT NULL AND jsonb_typeof(p_workbook->'savedViews') IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'INVALID_WORKBOOK_SAVED_VIEWS: savedViews deve ser um array JSON quando presente.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 9. Validação de Evidências Órfãs (Fail-Closed)
     FOR v_evidence_item IN
         SELECT DISTINCT ev->>'sourceDocumentId' AS doc_id
         FROM jsonb_each(p_workbook->'data') d,
@@ -267,7 +362,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 5. Bloqueio pessimista na entidade Owner (Prevenção de Race de Criação e Integridade Referencial)
+    -- 10. Bloqueio pessimista na entidade Owner (Prevenção de Race de Criação e Integridade Referencial)
     IF v_owner_kind = 'product' THEN
         PERFORM 1 FROM public.products WHERE id = v_owner_id FOR UPDATE;
         IF NOT FOUND THEN
@@ -282,7 +377,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- 6. Carrega usuário ator
+    -- 11. Carrega usuário ator
     SELECT email, raw_user_meta_data->>'full_name'
     INTO v_actor_email, v_actor_name
     FROM auth.users
@@ -292,7 +387,7 @@ BEGIN
         v_actor_name := split_part(v_actor_email, '@', 1);
     END IF;
 
-    -- 7. Lock transacional no workbook existente e validação estrita de CAS
+    -- 12. Lock transacional no workbook existente e validação estrita de CAS
     SELECT * INTO v_existing
     FROM public.product_workbooks
     WHERE owner_kind = v_owner_kind
@@ -304,7 +399,8 @@ BEGIN
         IF v_existing.revision IS DISTINCT FROM p_expected_revision THEN
             RAISE EXCEPTION 'WORKBOOK_CONFLICT: Conflito de concorrência no workbook (Esperado: %, Atual: %). Recarregue antes de salvar.',
                 p_expected_revision, v_existing.revision
-                USING ERRCODE = '40001';
+                USING ERRCODE = '40001',
+                      DETAIL = format('{"expectedRevision":%s,"actualRevision":%s,"ownerIdentity":"%s:%s"}', p_expected_revision, v_existing.revision, v_owner_kind, v_owner_id);
         END IF;
 
         v_new_revision := v_existing.revision + 1;
@@ -324,7 +420,8 @@ BEGIN
         IF p_expected_revision <> 0 THEN
             RAISE EXCEPTION 'WORKBOOK_CONFLICT: Workbook não existe no banco mas expected_revision informado foi % (esperado 0 para novo registro).',
                 p_expected_revision
-                USING ERRCODE = '40001';
+                USING ERRCODE = '40001',
+                      DETAIL = format('{"expectedRevision":%s,"actualRevision":null,"ownerIdentity":"%s:%s"}', p_expected_revision, v_owner_kind, v_owner_id);
         END IF;
 
         -- Primeiro commit avança formalmente 0 -> 1
@@ -353,7 +450,7 @@ BEGIN
         RETURNING id INTO v_saved_id;
     END IF;
 
-    -- 8. Gravação na Trilha de Auditoria (library_change_events) na mesma transação
+    -- 13. Gravação na Trilha de Auditoria (library_change_events) na mesma transação
     INSERT INTO public.library_change_events (
         entity_type,
         entity_id,
@@ -378,7 +475,7 @@ BEGIN
         now()
     );
 
-    -- 9. Atualização transacional atômica do índice analítico (projeção rápida)
+    -- 14. Atualização transacional atômica do índice analítico (projeção rápida)
     DELETE FROM public.product_technical_data_index
     WHERE workbook_id = v_saved_id;
 
@@ -397,20 +494,21 @@ BEGIN
                 ELSE NULL 
             END AS txt_val,
             CASE 
-                WHEN value->'value'->>'type' = 'number' THEN (value->'value'->>'value')::numeric
-                WHEN value->'value'->>'type' = 'quantity' THEN (value->'value'->>'amount')::numeric
+                WHEN value->'value'->>'type' = 'number' AND value->'value'->>'value' IS NOT NULL THEN (value->'value'->>'value')::numeric
+                WHEN value->'value'->>'type' = 'quantity' AND value->'value'->>'amount' IS NOT NULL THEN (value->'value'->>'amount')::numeric
                 ELSE NULL 
             END AS num_val,
             CASE 
-                WHEN value->'value'->>'type' = 'boolean' THEN (value->'value'->>'value')::boolean
+                WHEN value->'value'->>'type' = 'boolean' AND value->'value'->>'value' IS NOT NULL THEN (value->'value'->>'value')::boolean
                 ELSE NULL 
             END AS bool_val,
+            -- BLOCKER 1 FIX: TechnicalValue.range usa lower e upper (NUNCA min/max)
             CASE 
-                WHEN value->'value'->>'type' = 'range' THEN (value->'value'->>'min')::numeric
+                WHEN value->'value'->>'type' = 'range' AND value->'value'->>'lower' IS NOT NULL THEN (value->'value'->>'lower')::numeric
                 ELSE NULL 
             END AS low_val,
             CASE 
-                WHEN value->'value'->>'type' = 'range' THEN (value->'value'->>'max')::numeric
+                WHEN value->'value'->>'type' = 'range' AND value->'value'->>'upper' IS NOT NULL THEN (value->'value'->>'upper')::numeric
                 ELSE NULL 
             END AS up_val,
             CASE 
@@ -489,9 +587,9 @@ BEGIN
 END;
 $$;
 
--- 8. RPCS PARA SOURCE DOCUMENTS (Lifecycle de Persistência Completo)
+-- 9. RPCS PARA SOURCE DOCUMENTS (Lifecycle de Persistência Completo)
 
--- 8.1 UPSERT SOURCE DOCUMENT V1
+-- 9.1 UPSERT SOURCE DOCUMENT V1 (Validação fail-closed estrita no servidor - BLOCKER 5)
 CREATE OR REPLACE FUNCTION public.upsert_source_document_v1(
     p_document JSONB
 )
@@ -506,24 +604,94 @@ DECLARE
     v_title TEXT;
     v_doc_type TEXT;
     v_saved public.product_source_documents;
+    v_meta_key TEXT;
+    v_meta_val JSONB;
 BEGIN
+    -- 1. Validação estrutural de objeto
+    IF p_document IS NULL OR jsonb_typeof(p_document) IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_PAYLOAD: p_document deve ser um objeto JSON.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 2. Validação de ID
+    IF NOT (p_document ? 'id') OR jsonb_typeof(p_document->'id') IS DISTINCT FROM 'string' OR trim(p_document->>'id') = '' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_ID: id é obrigatório e deve ser string não vazia.'
+            USING ERRCODE = '22023';
+    END IF;
     v_id := p_document->>'id';
+
+    -- 3. Validação de Title
+    IF NOT (p_document ? 'title') OR jsonb_typeof(p_document->'title') IS DISTINCT FROM 'string' OR trim(p_document->>'title') = '' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_TITLE: title é obrigatório e deve ser string não vazia.'
+            USING ERRCODE = '22023';
+    END IF;
     v_title := p_document->>'title';
-    v_doc_type := p_document->>'documentType';
 
-    IF v_id IS NULL OR trim(v_id) = '' THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_ID: id é obrigatório.' USING ERRCODE = '22023';
-    END IF;
-
-    IF v_title IS NULL OR trim(v_title) = '' THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_TITLE: title é obrigatório.' USING ERRCODE = '22023';
-    END IF;
-
-    IF v_doc_type NOT IN (
+    -- 4. Validação de documentType (8 valores canônicos)
+    IF NOT (p_document ? 'documentType') OR (p_document->>'documentType') NOT IN (
         'manual', 'datasheet', 'certificate', 'drawing',
         'standard', 'engineering_note', 'website', 'other'
     ) THEN
-        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_TYPE: documentType "%" inválido.', v_doc_type USING ERRCODE = '22023';
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_TYPE: documentType "%" inválido.', (p_document->>'documentType')
+            USING ERRCODE = '22023';
+    END IF;
+    v_doc_type := p_document->>'documentType';
+
+    -- 5. Validação de revision (opcional; se presente deve ser string)
+    IF (p_document ? 'revision') AND p_document->'revision' IS NOT NULL AND jsonb_typeof(p_document->'revision') IS DISTINCT FROM 'string' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_REVISION: revision deve ser string.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 6. Validação de language (opcional; se presente deve ser tag BCP-47 válida)
+    IF (p_document ? 'language') AND p_document->'language' IS NOT NULL THEN
+        IF jsonb_typeof(p_document->'language') IS DISTINCT FROM 'string' OR NOT ((p_document->>'language') ~ '^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$') THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_LANGUAGE: language "%" não é uma tag BCP-47 válida.', (p_document->>'language')
+                USING ERRCODE = '22023';
+        END IF;
+    END IF;
+
+    -- 7. Validação de publicationDate (opcional; se presente deve ser ISO-8601 compatível)
+    IF (p_document ? 'publicationDate') AND p_document->'publicationDate' IS NOT NULL THEN
+        IF jsonb_typeof(p_document->'publicationDate') IS DISTINCT FROM 'string' OR NOT ((p_document->>'publicationDate') ~ '^\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$') THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_DATE: publicationDate "%" não é uma data ISO-8601 válida.', (p_document->>'publicationDate')
+                USING ERRCODE = '22023';
+        END IF;
+    END IF;
+
+    -- 8. Validação de fileReference (opcional; se presente deve ser string)
+    IF (p_document ? 'fileReference') AND p_document->'fileReference' IS NOT NULL AND jsonb_typeof(p_document->'fileReference') IS DISTINCT FROM 'string' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_FILE: fileReference deve ser string.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 9. Validação de externalUrl (opcional; se presente deve ser URL http/https válida)
+    IF (p_document ? 'externalUrl') AND p_document->'externalUrl' IS NOT NULL THEN
+        IF jsonb_typeof(p_document->'externalUrl') IS DISTINCT FROM 'string' OR NOT ((p_document->>'externalUrl') ~ '^https?://.+$') THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_URL: externalUrl "%" não é uma URL válida.', (p_document->>'externalUrl')
+                USING ERRCODE = '22023';
+        END IF;
+    END IF;
+
+    -- 10. Validação de checksum (opcional; se presente deve ser string)
+    IF (p_document ? 'checksum') AND p_document->'checksum' IS NOT NULL AND jsonb_typeof(p_document->'checksum') IS DISTINCT FROM 'string' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_CHECKSUM: checksum deve ser string.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- 11. Validação de metadata (opcional; deve ser object e TODOS os valores devem ser strings)
+    IF (p_document ? 'metadata') AND p_document->'metadata' IS NOT NULL THEN
+        IF jsonb_typeof(p_document->'metadata') IS DISTINCT FROM 'object' THEN
+            RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_METADATA: metadata deve ser um objeto JSON.'
+                USING ERRCODE = '22023';
+        END IF;
+
+        FOR v_meta_key, v_meta_val IN SELECT * FROM jsonb_each(p_document->'metadata') LOOP
+            IF jsonb_typeof(v_meta_val) IS DISTINCT FROM 'string' THEN
+                RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_METADATA_VALUE: O valor da chave de metadata "%" deve ser string.', v_meta_key
+                    USING ERRCODE = '22023';
+            END IF;
+        END LOOP;
     END IF;
 
     INSERT INTO public.product_source_documents (
@@ -575,7 +743,7 @@ BEGIN
 END;
 $$;
 
--- 8.2 GET SOURCE DOCUMENT V1
+-- 9.2 GET SOURCE DOCUMENT V1 (Com Read Authority Fail-Closed)
 CREATE OR REPLACE FUNCTION public.get_source_document_v1(
     p_id TEXT
 )
@@ -587,6 +755,16 @@ AS $$
 DECLARE
     v_record public.product_source_documents;
 BEGIN
+    IF auth.uid() IS NULL OR public.team_role() IS NULL THEN
+        RAISE EXCEPTION 'AUTH_READ_DENIED: Usuário não autenticado ou sem perfil de equipe válido.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF p_id IS NULL OR trim(p_id) = '' THEN
+        RAISE EXCEPTION 'INVALID_SOURCE_DOCUMENT_ID: id é obrigatório.'
+            USING ERRCODE = '22023';
+    END IF;
+
     SELECT * INTO v_record
     FROM public.product_source_documents
     WHERE id = p_id;
@@ -599,7 +777,7 @@ BEGIN
 END;
 $$;
 
--- 8.3 LIST SOURCE DOCUMENTS V1
+-- 9.3 LIST SOURCE DOCUMENTS V1 (Com Read Authority Fail-Closed)
 CREATE OR REPLACE FUNCTION public.list_source_documents_v1(
     p_ids TEXT[] DEFAULT NULL
 )
@@ -611,6 +789,11 @@ AS $$
 DECLARE
     v_result JSONB;
 BEGIN
+    IF auth.uid() IS NULL OR public.team_role() IS NULL THEN
+        RAISE EXCEPTION 'AUTH_READ_DENIED: Usuário não autenticado ou sem perfil de equipe válido.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF p_ids IS NULL OR array_length(p_ids, 1) = 0 THEN
         SELECT jsonb_agg(to_jsonb(d)) INTO v_result
         FROM public.product_source_documents d;
@@ -624,7 +807,7 @@ BEGIN
 END;
 $$;
 
--- 9. PERMISSÕES EXPLÍCITAS NAS RPCS (REVOKE PUBLIC / GRANT AUTHENTICATED)
+-- 10. PERMISSÕES EXPLÍCITAS NAS RPCS (REVOKE PUBLIC / GRANT AUTHENTICATED)
 REVOKE EXECUTE ON FUNCTION public.get_product_workbook_v1(TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_product_workbook_v1(TEXT, TEXT) TO authenticated;
 
@@ -640,7 +823,7 @@ GRANT EXECUTE ON FUNCTION public.get_source_document_v1(TEXT) TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.list_source_documents_v1(TEXT[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.list_source_documents_v1(TEXT[]) TO authenticated;
 
--- 10. PUBLICAÇÃO REALTIME COMPATÍVEL
+-- 11. PUBLICAÇÃO REALTIME COMPATÍVEL
 DO $$
 BEGIN
     IF NOT EXISTS (

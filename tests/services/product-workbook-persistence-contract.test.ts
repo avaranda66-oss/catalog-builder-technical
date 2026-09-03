@@ -7,6 +7,8 @@ import * as path from 'path';
 import {
   createWorkbook,
   addModule,
+  addDatum,
+  validateProductWorkbook,
   SourceDocument
 } from '../../src/domain/product-workbook';
 import {
@@ -399,4 +401,205 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
       repo.saveWorkbook({ workbook: wb, expectedRevision: 0 })
     ).rejects.toThrowError(/PERSISTENCE_PROTOCOL_VIOLATION/);
   });
+
+  // =========================================================================
+  // PIM-W2C-RANGE-1: lower/upper corretos na projection SQL e domínio
+  // =========================================================================
+  it('PIM-W2C-RANGE-1: lower/upper aparecem na projeção SQL e cobrem ranges bilaterais e unilaterais sem typecasts forçados', () => {
+    expect(migrationSql).toContain("value->'value'->>'lower'");
+    expect(migrationSql).toContain("value->'value'->>'upper'");
+
+    // Fixtures de domínio estritamente tipadas sem `as unknown as TechnicalValue`
+    let wb = createWorkbook({ owner: { kind: 'product', id: VALID_PRODUCT_UUID }, revision: 0 });
+    wb = addModule(wb, { id: 'm-range', semanticKey: 'env.conditions', label: 'Condições', kind: 'key_value', order: 1 });
+
+    // 1. Bilateral
+    wb = addDatum(wb, {
+      semanticKey: 'env.conditions.temp',
+      moduleId: 'm-range',
+      label: 'Temperatura de Operação',
+      value: {
+        type: 'range',
+        lower: -50,
+        upper: 140,
+        unit: '°C'
+      },
+      evidence: [],
+      status: 'approved'
+    });
+
+    // 2. Unilateral Upper
+    wb = addDatum(wb, {
+      semanticKey: 'env.conditions.pressure',
+      moduleId: 'm-range',
+      label: 'Pressão Máxima',
+      value: {
+        type: 'range',
+        upper: 10,
+        unit: 'bar'
+      },
+      evidence: [],
+      status: 'approved'
+    });
+
+    // 3. Unilateral Lower
+    wb = addDatum(wb, {
+      semanticKey: 'env.conditions.speed',
+      moduleId: 'm-range',
+      label: 'Velocidade Mínima',
+      value: {
+        type: 'range',
+        lower: 0,
+        unit: 'rpm'
+      },
+      evidence: [],
+      status: 'approved'
+    });
+
+    const valResult = validateProductWorkbook(wb);
+    expect(valResult.valid).toBe(true);
+    expect(valResult.errors.length).toBe(0);
+  });
+
+  // =========================================================================
+  // PIM-W2C-RANGE-2: migration NÃO consulta 'min'/'max' para TechnicalValue.range
+  // =========================================================================
+  it('PIM-W2C-RANGE-2: migration SQL não referencia min nem max para o tipo range', () => {
+    expect(migrationSql).not.toContain("value->'value'->>'min'");
+    expect(migrationSql).not.toContain("value->'value'->>'max'");
+  });
+
+  // =========================================================================
+  // PIM-W2C-STRUCT-1: missing schemaVersion é fail-closed pelo contrato SQL
+  // =========================================================================
+  it('PIM-W2C-STRUCT-1: ausência ou tipo inválido de schemaVersion é fail-closed na RPC SQL', () => {
+    expect(migrationSql).toContain("NOT (p_workbook ? 'schemaVersion')");
+    expect(migrationSql).toContain("jsonb_typeof(p_workbook->'schemaVersion') IS DISTINCT FROM 'number'");
+    expect(migrationSql).toContain("(p_workbook->>'schemaVersion') IS DISTINCT FROM '1'");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_SCHEMA');
+  });
+
+  // =========================================================================
+  // PIM-W2C-STRUCT-2: missing modules é fail-closed
+  // =========================================================================
+  it('PIM-W2C-STRUCT-2: ausência ou tipo não-array de modules é fail-closed na RPC SQL', () => {
+    expect(migrationSql).toContain("NOT (p_workbook ? 'modules')");
+    expect(migrationSql).toContain("jsonb_typeof(p_workbook->'modules') IS DISTINCT FROM 'array'");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_MODULES');
+  });
+
+  // =========================================================================
+  // PIM-W2C-STRUCT-3: missing data é fail-closed
+  // =========================================================================
+  it('PIM-W2C-STRUCT-3: ausência ou tipo não-objeto de data é fail-closed na RPC SQL', () => {
+    expect(migrationSql).toContain("NOT (p_workbook ? 'data')");
+    expect(migrationSql).toContain("jsonb_typeof(p_workbook->'data') IS DISTINCT FROM 'object'");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_DATA');
+  });
+
+  // =========================================================================
+  // PIM-W2C-STRUCT-4: non-object p_workbook é rejeitado
+  // =========================================================================
+  it('PIM-W2C-STRUCT-4: payload p_workbook não-objeto é rejeitado com INVALID_WORKBOOK_PAYLOAD', () => {
+    expect(migrationSql).toContain("jsonb_typeof(p_workbook) IS DISTINCT FROM 'object'");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_PAYLOAD');
+  });
+
+  // =========================================================================
+  // PIM-W2C-STRUCT-5: non-integer revision/schemaVersion não dependem de casts inseguros
+  // =========================================================================
+  it('PIM-W2C-STRUCT-5: revision e schemaVersion são validadas com regex/number antes de qualquer cast numérico', () => {
+    expect(migrationSql).toContain("(p_workbook->>'revision') ~ '^[0-9]+$'");
+    expect(migrationSql).toContain("jsonb_typeof(p_workbook->'revision') IS DISTINCT FROM 'number'");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_REVISION');
+  });
+
+  // =========================================================================
+  // PIM-W2C-READ-AUTH-1: RLS SELECT exige team_role() IS NOT NULL
+  // =========================================================================
+  it('PIM-W2C-READ-AUTH-1: RLS para SELECT em todas as tabelas exige public.team_role() IS NOT NULL', () => {
+    expect(migrationSql).toContain('CREATE POLICY "allow_read_product_workbooks" ON public.product_workbooks');
+    expect(migrationSql).toContain('USING (public.team_role() IS NOT NULL)');
+    expect(migrationSql).toContain('CREATE POLICY "allow_read_source_documents" ON public.product_source_documents');
+    expect(migrationSql).toContain('CREATE POLICY "allow_read_technical_data_index" ON public.product_technical_data_index');
+    expect(migrationSql).not.toContain('FOR SELECT TO authenticated USING (true)');
+  });
+
+  // =========================================================================
+  // PIM-W2C-READ-AUTH-2: SECURITY DEFINER read RPCs fazem explicit auth/team membership check
+  // =========================================================================
+  it('PIM-W2C-READ-AUTH-2: todas as RPCs de leitura validam explicitamente auth.uid() e public.team_role()', () => {
+    expect(migrationSql).toContain('AUTH_READ_DENIED: Usuário não autenticado ou sem perfil de equipe válido.');
+    expect(migrationSql).toContain("USING ERRCODE = '42501'");
+  });
+
+  // =========================================================================
+  // PIM-W2C-DELETE-GUARD-1: products possui BEFORE DELETE guard contra workbook existente
+  // =========================================================================
+  it('PIM-W2C-DELETE-GUARD-1: tabela products possui trigger BEFORE DELETE que dispara WORKBOOK_OWNER_IN_USE', () => {
+    expect(migrationSql).toContain('CREATE TRIGGER trg_guard_product_delete_workbook');
+    expect(migrationSql).toContain('BEFORE DELETE ON public.products');
+    expect(migrationSql).toContain('WORKBOOK_OWNER_IN_USE');
+    expect(migrationSql).toContain("owner_kind = 'product' AND owner_id = OLD.id");
+  });
+
+  // =========================================================================
+  // PIM-W2C-DELETE-GUARD-2: product_families possui mesmo guard
+  // =========================================================================
+  it('PIM-W2C-DELETE-GUARD-2: tabela product_families possui trigger BEFORE DELETE que impede exclusão órfã', () => {
+    expect(migrationSql).toContain('CREATE TRIGGER trg_guard_family_delete_workbook');
+    expect(migrationSql).toContain('BEFORE DELETE ON public.product_families');
+    expect(migrationSql).toContain("owner_kind = 'family' AND owner_id = OLD.id");
+  });
+
+  // =========================================================================
+  // PIM-W2C-DELETE-GUARD-3: não existe ON DELETE CASCADE entre owner e workbook
+  // =========================================================================
+  it('PIM-W2C-DELETE-GUARD-3: product_workbooks não possui ON DELETE CASCADE para products ou product_families', () => {
+    expect(migrationSql).not.toMatch(/product_workbooks[\s\S]*?REFERENCES\s+public\.products[\s\S]*?ON DELETE CASCADE/i);
+    expect(migrationSql).not.toMatch(/product_workbooks[\s\S]*?REFERENCES\s+public\.product_families[\s\S]*?ON DELETE CASCADE/i);
+  });
+
+  // =========================================================================
+  // PIM-W2C-SOURCE-1: source metadata não-object é rejeitável
+  // =========================================================================
+  it('PIM-W2C-SOURCE-1: RPC upsert_source_document_v1 rejeita metadata que não seja objeto JSON', () => {
+    expect(migrationSql).toContain("jsonb_typeof(p_document->'metadata') IS DISTINCT FROM 'object'");
+    expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_METADATA');
+  });
+
+  // =========================================================================
+  // PIM-W2C-SOURCE-2: metadata values não-string não são persistíveis
+  // =========================================================================
+  it('PIM-W2C-SOURCE-2: RPC upsert_source_document_v1 valida que todos os valores de metadata são strings', () => {
+    expect(migrationSql).toContain("jsonb_typeof(v_meta_val) IS DISTINCT FROM 'string'");
+    expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_METADATA_VALUE');
+  });
+
+  // =========================================================================
+  // PIM-W2C-SOURCE-3: invalid language/date/url possuem server guard coerente
+  // =========================================================================
+  it('PIM-W2C-SOURCE-3: RPC upsert_source_document_v1 valida formatos BCP-47, ISO-8601 e URLs http/https', () => {
+    expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_LANGUAGE');
+    expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_DATE');
+    expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_URL');
+  });
+
+  // =========================================================================
+  // PIM-W2C-GET-1: owner kind inválido é rejeitado
+  // =========================================================================
+  it('PIM-W2C-GET-1: owner.kind inválido é rejeitado antes da rede e no SQL', async () => {
+    expect(migrationSql).toContain("p_owner_kind NOT IN ('product', 'family')");
+    expect(migrationSql).toContain('INVALID_WORKBOOK_OWNER_KIND');
+
+    const mockRpc = vi.fn();
+    const repo = new SupabaseProductWorkbookRepository({ rpc: mockRpc } as any);
+
+    await expect(
+      repo.getWorkbook({ kind: 'invalid-kind' as any, id: VALID_PRODUCT_UUID })
+    ).rejects.toThrowError(/INVALID_OWNER_KIND/);
+
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
 });
+

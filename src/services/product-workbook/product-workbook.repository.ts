@@ -1,5 +1,5 @@
 // src/services/product-workbook/product-workbook.repository.ts
-// Repositório de persistência do Product Workbook com CAS estrito e autoridade única (PIM.W2B)
+// Repositório de persistência do Product Workbook com CAS estrito e autoridade única (PIM.W2C)
 // Estritamente tipado. Zero explicit any.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -38,7 +38,15 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       throw new ProductWorkbookPersistenceError('CLIENT_NOT_INITIALIZED', 'Supabase client não inicializado.');
     }
 
-    // Validação fail-closed antes da rede
+    // Validação fail-closed de owner.kind
+    if (owner.kind !== 'product' && owner.kind !== 'family') {
+      throw new ProductWorkbookPersistenceError(
+        'INVALID_OWNER_KIND',
+        `owner.kind "${(owner as any).kind}" deve ser "product" ou "family".`
+      );
+    }
+
+    // Validação fail-closed antes da rede de owner.id
     if (!isValidUuid(owner.id)) {
       throw new ProductWorkbookPersistenceError(
         'INVALID_OWNER_ID',
@@ -52,8 +60,14 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
     });
 
     if (error) {
+      if (error.code === '42501' || error.message.includes('AUTH_READ_DENIED')) {
+        throw new ProductWorkbookPersistenceError('AUTH_READ_DENIED', error.message);
+      }
       if (error.code === 'XX000' || error.message.includes('WORKBOOK_CORRUPTED')) {
         throw new ProductWorkbookPersistenceError('WORKBOOK_CORRUPTED', error.message);
+      }
+      if (error.message.includes('INVALID_WORKBOOK_OWNER_KIND')) {
+        throw new ProductWorkbookPersistenceError('INVALID_OWNER_KIND', error.message);
       }
       throw new ProductWorkbookPersistenceError('GET_WORKBOOK_FAILED', error.message);
     }
@@ -89,7 +103,16 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       );
     }
 
-    // 3. Validação pré-rede: owner.id deve ser um UUID válido
+    // 3. Validação pré-rede: owner.kind deve ser product ou family
+    const ownerKind = (workbook.owner as { kind?: unknown })?.kind;
+    if (ownerKind !== 'product' && ownerKind !== 'family') {
+      throw new ProductWorkbookPersistenceError(
+        'INVALID_OWNER_KIND',
+        `owner.kind "${ownerKind}" deve ser "product" ou "family".`
+      );
+    }
+
+    // 4. Validação pré-rede: owner.id deve ser um UUID válido
     if (!isValidUuid(workbook.owner.id)) {
       throw new ProductWorkbookPersistenceError(
         'INVALID_OWNER_ID',
@@ -97,7 +120,7 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       );
     }
 
-    // 4. Validação pré-rede: Invariantes do domínio do Product Workbook
+    // 5. Validação pré-rede: Invariantes do domínio do Product Workbook
     const validation = validateProductWorkbook(workbook);
     if (!validation.valid) {
       const errorDetails = validation.errors.map((e) => `[${e.code}] ${e.message}`).join(', ');
@@ -107,7 +130,7 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       );
     }
 
-    // 5. Chamada RPC com token de concorrência CAS estrito
+    // 6. Chamada RPC com token de concorrência CAS estrito
     const { data, error } = await this.client.rpc('save_product_workbook_v1', {
       p_workbook: workbook,
       p_expected_revision: expectedRevision
@@ -117,9 +140,24 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       // Conflito de concorrência CAS (SQLSTATE 40001 / WORKBOOK_CONFLICT)
       if (error.code === '40001' || error.message.includes('WORKBOOK_CONFLICT')) {
         let actualRevision: number | undefined;
-        const actualMatch = error.message.match(/Atual:\s*(\d+)/i);
-        if (actualMatch && actualMatch[1]) {
-          actualRevision = parseInt(actualMatch[1], 10);
+
+        // Preferência por campo structured error.details se fornecido pelo PostgreSQL
+        if ((error as any).details) {
+          try {
+            const parsedDetails = JSON.parse((error as any).details);
+            if (typeof parsedDetails.actualRevision === 'number') {
+              actualRevision = parsedDetails.actualRevision;
+            }
+          } catch {
+            // Fallback para regex
+          }
+        }
+
+        if (actualRevision === undefined) {
+          const actualMatch = error.message.match(/Atual:\s*(\d+)/i);
+          if (actualMatch && actualMatch[1]) {
+            actualRevision = parseInt(actualMatch[1], 10);
+          }
         }
 
         throw new WorkbookConflictError(
@@ -140,6 +178,11 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
         throw new ProductWorkbookPersistenceError('OWNER_NOT_FOUND', error.message);
       }
 
+      // Owner em uso bloqueando exclusão
+      if (error.message.includes('WORKBOOK_OWNER_IN_USE')) {
+        throw new ProductWorkbookPersistenceError('WORKBOOK_OWNER_IN_USE', error.message);
+      }
+
       throw new ProductWorkbookPersistenceError('SAVE_WORKBOOK_FAILED', error.message);
     }
 
@@ -152,7 +195,7 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
 
     const savedWorkbook = parseProductWorkbook(data);
 
-    // 6. Protocolo de Persistência: a revisão retornada deve ser estritamente expectedRevision + 1
+    // 7. Protocolo de Persistência: a revisão retornada deve ser estritamente expectedRevision + 1
     const expectedNextRevision = expectedRevision + 1;
     if (savedWorkbook.revision !== expectedNextRevision) {
       throw new ProductWorkbookPersistenceError(
