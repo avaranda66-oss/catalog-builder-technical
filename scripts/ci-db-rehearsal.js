@@ -98,15 +98,20 @@ async function run() {
     // -------------------------------------------------------------
     logStep('FASE 0: CHECKSUM GATE');
     const migrationContent = fs.readFileSync(MIGRATION_PATH, 'utf8');
-    const hash = crypto.createHash('sha256').update(migrationContent).digest('hex');
-    results.migrationSha256 = hash;
-    console.log(`Migration path: ${MIGRATION_PATH}`);
-    console.log(`Computed SHA-256: ${hash}`);
-    console.log(`Expected SHA-256: ${EXPECTED_MIGRATION_SHA256}`);
+    const crlfContent = migrationContent.replace(/\r?\n/g, '\r\n');
+    const lfContent = migrationContent.replace(/\r\n/g, '\n');
+    const crlfHash = crypto.createHash('sha256').update(crlfContent).digest('hex');
+    const lfHash = crypto.createHash('sha256').update(lfContent).digest('hex');
 
-    if (hash.toLowerCase() !== EXPECTED_MIGRATION_SHA256.toLowerCase()) {
-      throw new Error(`CHECKSUM MISMATCH! Got ${hash}, expected ${EXPECTED_MIGRATION_SHA256}`);
+    console.log(`Migration path: ${MIGRATION_PATH}`);
+    console.log(`Computed CRLF SHA-256: ${crlfHash}`);
+    console.log(`Computed LF SHA-256:   ${lfHash}`);
+    console.log(`Expected SHA-256:      ${EXPECTED_MIGRATION_SHA256}`);
+
+    if (crlfHash.toLowerCase() !== EXPECTED_MIGRATION_SHA256.toLowerCase()) {
+      throw new Error(`CHECKSUM MISMATCH! Got ${crlfHash}, expected ${EXPECTED_MIGRATION_SHA256}`);
     }
+    results.migrationSha256 = crlfHash.toUpperCase();
     console.log('Checksum verification: PASS');
 
     // -------------------------------------------------------------
