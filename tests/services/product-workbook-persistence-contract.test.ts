@@ -9,6 +9,7 @@ import {
   addModule,
   addDatum,
   validateProductWorkbook,
+  parseSourceDocument,
   SourceDocument
 } from '../../src/domain/product-workbook';
 import {
@@ -600,6 +601,202 @@ describe('PIM.W2B — Product Workbook Persistence Hardening Suite', () => {
     ).rejects.toThrowError(/INVALID_OWNER_KIND/);
 
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // PIM.W2C.1: BCP-47 LANGUAGE VALIDATOR PARITY (DOMAIN ↔ POSTGRESQL)
+  // =========================================================================
+  describe('PIM.W2C.1 — BCP-47 Language Grammar Parity', () => {
+    // Regex canônica idêntica entre TypeScript e PostgreSQL
+    const CANONICAL_BCP47_REGEX = /^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?$/i;
+
+    it('PIM-W2C1-LANG-SQL-GRAMMAR: migration SQL declara a gramática canônica com case-insensitivity e trim', () => {
+      expect(migrationSql).toContain("(p_document->>'language') ~* '^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?$'");
+      expect(migrationSql).toContain("(p_document->>'language') IS DISTINCT FROM trim(p_document->>'language')");
+      expect(migrationSql).toContain('length(p_document->>\'language\') < 2');
+      expect(migrationSql).toContain('length(p_document->>\'language\') > 35');
+    });
+
+    it('PIM-W2C1-LANG-VALID-1: "en" é válido tanto no domínio quanto na regex canônica SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('en')).toBe(true);
+      const doc = parseSourceDocument({ id: 'd1', title: 'Doc', documentType: 'manual', language: 'en' });
+      expect(doc.language).toBe('en');
+    });
+
+    it('PIM-W2C1-LANG-VALID-2: "pt-BR" é válido tanto no domínio quanto na regex canônica SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('pt-BR')).toBe(true);
+      const doc = parseSourceDocument({ id: 'd2', title: 'Doc', documentType: 'datasheet', language: 'pt-BR' });
+      expect(doc.language).toBe('pt-BR');
+    });
+
+    it('PIM-W2C1-LANG-VALID-3: "zh-Hans" é válido tanto no domínio quanto na regex canônica SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('zh-Hans')).toBe(true);
+      const doc = parseSourceDocument({ id: 'd3', title: 'Doc', documentType: 'certificate', language: 'zh-Hans' });
+      expect(doc.language).toBe('zh-Hans');
+    });
+
+    it('PIM-W2C1-LANG-VALID-4: "es-419" é válido tanto no domínio quanto na regex canônica SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('es-419')).toBe(true);
+      const doc = parseSourceDocument({ id: 'd4', title: 'Doc', documentType: 'standard', language: 'es-419' });
+      expect(doc.language).toBe('es-419');
+    });
+
+    it('PIM-W2C1-LANG-INVALID-1: "en-ABCDE" (script com 5 letras) é rejeitado pelo domínio e pela regex SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('en-ABCDE')).toBe(false);
+      expect(() =>
+        parseSourceDocument({ id: 'd5', title: 'Doc', documentType: 'manual', language: 'en-ABCDE' })
+      ).toThrow();
+    });
+
+    it('PIM-W2C1-LANG-INVALID-2: "pt-BRA" (região com 3 letras) é rejeitado pelo domínio e pela regex SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('pt-BRA')).toBe(false);
+      expect(() =>
+        parseSourceDocument({ id: 'd6', title: 'Doc', documentType: 'manual', language: 'pt-BRA' })
+      ).toThrow();
+    });
+
+    it('PIM-W2C1-LANG-INVALID-3: "en-US-extra" (subtag excedente) é rejeitado pelo domínio e pela regex SQL', () => {
+      expect(CANONICAL_BCP47_REGEX.test('en-US-extra')).toBe(false);
+      expect(() =>
+        parseSourceDocument({ id: 'd7', title: 'Doc', documentType: 'manual', language: 'en-US-extra' })
+      ).toThrow();
+    });
+
+    it('PIM-W2C1-LANG-INVALID-4: " pt-BR" (whitespace leading) é rejeitado pelo domínio e pelo guard de trim no SQL', () => {
+      expect(() =>
+        parseSourceDocument({ id: 'd8', title: 'Doc', documentType: 'manual', language: ' pt-BR' })
+      ).toThrow();
+    });
+  });
+
+  // =========================================================================
+  // PIM.W2C.1: ISO DATE VALIDATOR PARITY (DOMAIN ↔ POSTGRESQL)
+  // =========================================================================
+  describe('PIM.W2C.1 — ISO Date Grammar & Parseability Parity', () => {
+    it('PIM-W2C1-DATE-SQL-PARITY: migration SQL valida regex canônica e parseabilidade com timestamptz sem erro bruto', () => {
+      expect(migrationSql).toContain("(p_document->>'publicationDate') ~ '^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?(Z|[+-]\\d{2}:?\\d{2})?)?$'");
+      expect(migrationSql).toContain("(p_document->>'publicationDate') IS DISTINCT FROM trim(p_document->>'publicationDate')");
+      expect(migrationSql).toContain('(p_document->>\'publicationDate\')::timestamptz');
+      expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_DATE');
+    });
+
+    const validIsoDates = [
+      '2026-05-15',
+      '2026-08-10T14:30:00',
+      '2026-08-10T14:30:00Z',
+      '2026-08-10T14:30:00-03:00',
+      '2026-08-10T14:30:00-0300'
+    ];
+
+    for (const validDate of validIsoDates) {
+      it(`PIM-W2C1-DATE-VALID: "${validDate}" é aceito no domínio`, () => {
+        const doc = parseSourceDocument({
+          id: 'date-doc',
+          title: 'Doc',
+          documentType: 'manual',
+          publicationDate: validDate
+        });
+        expect(doc.publicationDate).toBe(validDate);
+      });
+    }
+
+    const invalidIsoDates = [
+      '2026',                        // Apenas ano (incompleto)
+      '2026-05',                     // Ano e mês (incompleto)
+      '2026-05-15T14:30',            // Sem segundos
+      '2026-05-15T14:30:00.1234Z',   // Mais de 3 dígitos de milissegundos
+      ' 2026-05-15',                 // Leading whitespace
+      '2026-05-15 ',                 // Trailing whitespace
+      'invalid-date'                 // String aleatória
+    ];
+
+    for (const invalidDate of invalidIsoDates) {
+      it(`PIM-W2C1-DATE-INVALID: "${invalidDate}" é rejeitado no domínio`, () => {
+        expect(() =>
+          parseSourceDocument({
+            id: 'invalid-date-doc',
+            title: 'Doc',
+            documentType: 'manual',
+            publicationDate: invalidDate
+          })
+        ).toThrow();
+      });
+    }
+  });
+
+  // =========================================================================
+  // PIM.W2C.1: EXTERNAL URL HTTP/HTTPS POLICY PARITY (DOMAIN ↔ POSTGRESQL)
+  // =========================================================================
+  describe('PIM.W2C.1 — External URL HTTP/HTTPS Policy Parity', () => {
+    it('PIM-W2C1-URL-SQL-PARITY: migration SQL restringe externalUrl estritamente a HTTP ou HTTPS e valida trim', () => {
+      expect(migrationSql).toContain("(p_document->>'externalUrl') ~* '^https?://[^\\s/$.?#].[^\\s]*$'");
+      expect(migrationSql).toContain("(p_document->>'externalUrl') IS DISTINCT FROM trim(p_document->>'externalUrl')");
+      expect(migrationSql).toContain('INVALID_SOURCE_DOCUMENT_URL');
+    });
+
+    it('PIM-W2C1-URL-VALID-1: "https://example.com/manual.pdf" é aceito no domínio', () => {
+      const doc = parseSourceDocument({
+        id: 'u1',
+        title: 'Doc',
+        documentType: 'manual',
+        externalUrl: 'https://example.com/manual.pdf'
+      });
+      expect(doc.externalUrl).toBe('https://example.com/manual.pdf');
+    });
+
+    it('PIM-W2C1-URL-VALID-2: "http://example.com/doc" é aceito no domínio', () => {
+      const doc = parseSourceDocument({
+        id: 'u2',
+        title: 'Doc',
+        documentType: 'manual',
+        externalUrl: 'http://example.com/doc'
+      });
+      expect(doc.externalUrl).toBe('http://example.com/doc');
+    });
+
+    it('PIM-W2C1-URL-INVALID-1: "ftp://example.com/doc" é rejeitado no domínio (protocolo proibido)', () => {
+      expect(() =>
+        parseSourceDocument({
+          id: 'u3',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: 'ftp://example.com/doc'
+        })
+      ).toThrowError(/externalUrl deve utilizar exclusivamente protocolo HTTP ou HTTPS/);
+    });
+
+    it('PIM-W2C1-URL-INVALID-2: "file:///tmp/doc.pdf" é rejeitado no domínio (protocolo proibido)', () => {
+      expect(() =>
+        parseSourceDocument({
+          id: 'u4',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: 'file:///tmp/doc.pdf'
+        })
+      ).toThrowError(/externalUrl deve utilizar exclusivamente protocolo HTTP ou HTTPS/);
+    });
+
+    it('PIM-W2C1-URL-INVALID-3: "javascript:alert(1)" é rejeitado no domínio (protocolo proibido e formato inválido)', () => {
+      expect(() =>
+        parseSourceDocument({
+          id: 'u5',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: 'javascript:alert(1)'
+        })
+      ).toThrow();
+    });
+
+    it('PIM-W2C1-URL-INVALID-4: " https://example.com" (whitespace) é rejeitado pelo domínio e SQL', () => {
+      expect(() =>
+        parseSourceDocument({
+          id: 'u6',
+          title: 'Doc',
+          documentType: 'manual',
+          externalUrl: ' https://example.com'
+        })
+      ).toThrow();
+    });
   });
 });
 

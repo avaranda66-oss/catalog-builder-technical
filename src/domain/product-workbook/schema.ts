@@ -181,6 +181,25 @@ export const SourceDocumentTypeSchema = z.enum([
   'other'
 ]);
 
+/**
+ * Schema para URLs externas HTTP ou HTTPS (PIM.W2C.1).
+ * Rejeita explicitamente espaços leading/trailing e protocolos proibidos (ftp:, file:, javascript: etc).
+ */
+export const HttpUrlSchema = z
+  .string()
+  .refine((url) => url.trim() === url, 'externalUrl não pode conter espaços no início ou fim')
+  .refine(
+    (url) => {
+      try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    'externalUrl deve utilizar exclusivamente protocolo HTTP ou HTTPS'
+  );
+
 export const SourceDocumentSchema = z.object({
   id: z.string().min(1, 'ID do documento fonte é obrigatório'),
   title: z.string().min(1, 'Título do documento fonte é obrigatório'),
@@ -189,7 +208,7 @@ export const SourceDocumentSchema = z.object({
   language: Bcp47TagSchema.optional(),
   publicationDate: IsoDateStringSchema.optional(),
   fileReference: z.string().optional(),
-  externalUrl: z.string().url().optional(),
+  externalUrl: HttpUrlSchema.optional(),
   checksum: z.string().optional(),
   metadata: z.record(z.string()).optional()
 }).strict();
