@@ -1,0 +1,78 @@
+name: DB.RELEASE0.2 — Disposable Supabase Rehearsal
+
+on:
+  push:
+    branches:
+      - ops/db-release0-ci-rehearsal
+  workflow_dispatch:
+
+jobs:
+  rehearsal:
+    name: Rehearsal Execution & Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Environment Diagnostics
+        run: |
+          echo "=== DOCKER VERSION ==="
+          docker version
+          echo "=== NODE VERSION ==="
+          node --version
+          echo "=== NPM VERSION ==="
+          npm --version
+
+      - name: Install Dependencies
+        run: |
+          npm install --no-save pg @types/pg
+          npm install --no-save supabase@2.116.0
+          echo "=== SUPABASE CLI VERSION ==="
+          npx supabase --version
+
+      - name: Setup Migration Boundary (Isolate Target Migration 00022)
+        run: |
+          mkdir -p target_migration
+          cp supabase/migrations/00022_product_workbook_persistence.sql target_migration/00022_product_workbook_persistence.sql
+          rm supabase/migrations/00022_product_workbook_persistence.sql
+          echo "Active baseline migrations:"
+          ls -la supabase/migrations/
+
+      - name: Start Disposable Supabase Stack (Baseline up to 00021)
+        run: |
+          npx supabase start
+          echo "=== SUPABASE STATUS ==="
+          npx supabase status
+
+      - name: Restore Target Migration 00022 for Rehearsal Execution
+        run: |
+          cp target_migration/00022_product_workbook_persistence.sql supabase/migrations/00022_product_workbook_persistence.sql
+          echo "Restored target migration 00022:"
+          ls -la supabase/migrations/00022*
+          sha256sum supabase/migrations/00022_product_workbook_persistence.sql
+
+      - name: Run Full Rehearsal Verification Suite
+        run: |
+          node scripts/ci-db-rehearsal.js
+
+      - name: Upload Rehearsal Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-release0-rehearsal-artifacts
+          path: rehearsal_artifacts/
+          if-no-files-found: error
+
+      - name: Cleanup Disposable Supabase
+        if: always()
+        run: |
+          npx supabase stop --no-backup || true
