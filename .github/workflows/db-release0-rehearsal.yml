@@ -34,7 +34,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install --no-save pg @types/pg
+          npm install
           npm install --no-save supabase@2.116.0
           echo "=== SUPABASE CLI VERSION ==="
           npx supabase --version
@@ -60,8 +60,10 @@ jobs:
 
       - name: Apply Live-Derived Rehearsal Baseline Bridge
         run: |
-          echo "Applying live-derived baseline bridge (media_library)..."
-          node scripts/apply-baseline-bridge.js
+          echo "Applying live-derived baseline bridge (media_library) via psql in db container..."
+          docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres < scripts/db-release0-live-baseline.sql
+          echo "Verifying media_library in container:"
+          docker exec -i $(docker ps -qf "name=supabase_db") psql -U postgres -d postgres -c "SELECT table_name FROM information_schema.tables WHERE table_name = 'media_library';"
 
       - name: Apply Remaining Historical Migrations (00005 - 00021)
         run: |
