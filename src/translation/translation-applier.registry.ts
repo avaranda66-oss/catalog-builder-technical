@@ -268,7 +268,7 @@ export class TranslationApplierRegistry {
             }
 
             // =====================================================================
-            // Custom Data Handlers por BlockType (com Materialização de Fallbacks)
+            // Custom Data Handlers por BlockType
             // =====================================================================
 
             // 1. Full Page Cover: Canvas Layers
@@ -356,28 +356,7 @@ export class TranslationApplierRegistry {
               }
             }
 
-            // 4. Bottom Header
-            if (block.type === 'bottom_header') {
-              if (!block.customData || typeof block.customData !== 'object') block.customData = {};
-              const custom = block.customData;
-              if (transMap.has(`p${pageNumber}_b${blockId}_phone`)) {
-                custom.phone = transMap.get(`p${pageNumber}_b${blockId}_phone`)!;
-                appliedCount++;
-                appliedNodeIds.add(`p${pageNumber}_b${blockId}_phone`);
-              }
-              if (transMap.has(`p${pageNumber}_b${blockId}_email`)) {
-                custom.email = transMap.get(`p${pageNumber}_b${blockId}_email`)!;
-                appliedCount++;
-                appliedNodeIds.add(`p${pageNumber}_b${blockId}_email`);
-              }
-              if (transMap.has(`p${pageNumber}_b${blockId}_website`)) {
-                custom.website = transMap.get(`p${pageNumber}_b${blockId}_website`)!;
-                appliedCount++;
-                appliedNodeIds.add(`p${pageNumber}_b${blockId}_website`);
-              }
-            }
-
-            // 5. Software Connectivity
+            // 4. Software Connectivity
             if (block.type === 'software_connectivity') {
               if (!block.customData || typeof block.customData !== 'object') block.customData = {};
               const custom = block.customData;

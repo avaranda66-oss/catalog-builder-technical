@@ -310,4 +310,166 @@ describe('Editorial Headers Canonicalization & Parity (CORE.E6A)', () => {
     const navyHeading = container.querySelector('h2');
     expect(navyHeading?.className).toContain('text-white');
   });
+
+  // ==========================================================================
+  // 7. BOTTOM TRANSLATION FAIL-CLOSED (BOTTOM-I18N-NONE-1)
+  // ==========================================================================
+  it('BOTTOM-I18N-NONE-1: Applier falha fechado — contatos com policy "none" nunca são mutados por mapa artificial', () => {
+    const bottomBlock: ContentBlock = {
+      id: 'b-bottom-contacts',
+      type: 'bottom_header',
+      title: 'Presys Metrologia',
+      subtitle: 'Calibração Primária',
+      customData: {
+        phone: '+55 (11) 3038-1300',
+        email: 'vendas@presys.com.br',
+        website: 'www.presys.com.br'
+      }
+    };
+
+    // Extractor: zero nós gerados para phone, email ou website
+    const nodes = extractHeroBlocks(bottomBlock, 'p1', 1);
+    expect(nodes.some((n) => n.path.includes('phone'))).toBe(false);
+    expect(nodes.some((n) => n.path.includes('email'))).toBe(false);
+    expect(nodes.some((n) => n.path.includes('website'))).toBe(false);
+
+    // Constrói transMap artificial tentando injetar traduções nos contatos
+    const fakeTransMap = new Map<string, string>([
+      ['p1_bb-bottom-contacts_phone', '+1 (800) 555-0199'],
+      ['p1_bb-bottom-contacts_email', 'sales@presys-us.com'],
+      ['p1_bb-bottom-contacts_website', 'www.presys-us.com']
+    ]);
+
+    const catalog = {
+      id: 'cat-fail-closed',
+      name: 'Catálogo Teste',
+      version: 1,
+      cover: { title: 'Capa' },
+      pages: [
+        {
+          id: 'p1',
+          pageNumber: 1,
+          blocks: [JSON.parse(JSON.stringify(bottomBlock))]
+        }
+      ]
+    };
+
+    const result = TranslationApplierRegistry.applyTranslations(catalog as any, fakeTransMap, 'en');
+    const targetBlock = result.translatedCatalog.pages[0].blocks[0];
+
+    // EXPECTED: contatos originais permanecem estritamente intactos (fail-closed)
+    expect(targetBlock.customData.phone).toBe('+55 (11) 3038-1300');
+    expect(targetBlock.customData.email).toBe('vendas@presys.com.br');
+    expect(targetBlock.customData.website).toBe('www.presys.com.br');
+  });
+
+  // ==========================================================================
+  // 8. CUSTOM COLOR CONTRAST TESTS (FLUKE-CONTRAST-1, ADDITEL-CONTRAST-1, PARITY)
+  // ==========================================================================
+  it('FLUKE-CONTRAST-1: badgeBg="#FFC20E" renderiza foreground escuro e "#003366" renderiza claro', () => {
+    const yellowFluke: ContentBlock = {
+      id: 'f-yellow',
+      type: 'fluke_header',
+      badgeText: 'PRESYS',
+      customData: {
+        badgeBg: '#FFC20E',
+        badgeSecondary: 'Calibration'
+      }
+    };
+
+    act(() => {
+      root!.render(<FlukeHeaderBlock block={yellowFluke} pageId="p1" isSelected={false} />);
+    });
+
+    const badgeTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    const badgeSecEl = container.querySelector('[data-printable-field="badgeSecondary"]');
+
+    expect(badgeTextEl?.className).toContain('text-slate-900');
+    expect(badgeSecEl?.className).toContain('text-slate-800');
+
+    // Com o default #003366 (escuro), renderiza texto claro
+    const defaultFluke: ContentBlock = {
+      id: 'f-default',
+      type: 'fluke_header',
+      badgeText: 'PRESYS',
+      customData: {
+        badgeSecondary: 'Calibration'
+      }
+    };
+
+    act(() => {
+      root!.render(<FlukeHeaderBlock block={defaultFluke} pageId="p1" isSelected={false} />);
+    });
+
+    const defBadgeTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    expect(defBadgeTextEl?.className).toContain('text-white');
+  });
+
+  it('ADDITEL-CONTRAST-1: themeColor="#FFC20E" renderiza foreground escuro e "#003366" renderiza claro', () => {
+    const yellowAdditel: ContentBlock = {
+      id: 'a-yellow',
+      type: 'additel_two_col_hero',
+      badgeText: 'PRESYS',
+      customData: {
+        themeColor: '#FFC20E',
+        badgeSubtitle: 'Precision Metrology'
+      }
+    };
+
+    act(() => {
+      root!.render(<AdditelTwoColBlock block={yellowAdditel} pageId="p1" isSelected={false} />);
+    });
+
+    const badgeTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    const badgeSubEl = container.querySelector('[data-printable-field="badgeSubtitle"]');
+
+    expect(badgeTextEl?.className).toContain('text-slate-900');
+    expect(badgeSubEl?.className).toContain('text-slate-700');
+
+    // Com o default #003366 (escuro), renderiza texto claro e azul secundário
+    const defaultAdditel: ContentBlock = {
+      id: 'a-default',
+      type: 'additel_two_col_hero',
+      badgeText: 'PRESYS',
+      customData: {
+        badgeSubtitle: 'Precision Metrology'
+      }
+    };
+
+    act(() => {
+      root!.render(<AdditelTwoColBlock block={defaultAdditel} pageId="p1" isSelected={false} />);
+    });
+
+    const defBadgeTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    const defBadgeSubEl = container.querySelector('[data-printable-field="badgeSubtitle"]');
+
+    expect(defBadgeTextEl?.className).toContain('text-white');
+    expect(defBadgeSubEl?.className).toContain('text-blue-200');
+  });
+
+  it('HEADER-CONTRAST-PARITY-1: Editor e CleanA4 export utilizam a mesma derivação de contraste', () => {
+    const yellowFluke: ContentBlock = {
+      id: 'f-yellow-parity',
+      type: 'fluke_header',
+      badgeText: 'PRESYS',
+      customData: {
+        badgeBg: '#FFC20E',
+        badgeSecondary: 'Calibration'
+      }
+    };
+
+    // No Editor (isExport=false)
+    act(() => {
+      root!.render(<FlukeHeaderBlock block={yellowFluke} pageId="p1" isSelected={false} isExport={false} />);
+    });
+    const editorTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    expect(editorTextEl?.className).toContain('text-slate-900');
+
+    // No CleanA4 (isExport=true)
+    act(() => {
+      root!.render(<FlukeHeaderBlock block={yellowFluke} pageId="p1" isSelected={false} isExport={true} />);
+    });
+    const exportTextEl = container.querySelector('[data-printable-field="badgeText"]');
+    expect(exportTextEl?.className).toContain('text-slate-900');
+  });
 });

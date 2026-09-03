@@ -7,6 +7,7 @@ import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 import { resolvePrimaryImageSource } from '../../../domain/primary-image.engine';
+import { resolveReadableForegroundTone } from '../../../domain/color-contrast';
 
 interface AdditelTwoColBlockProps {
   block: ContentBlock;
@@ -41,6 +42,9 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
   );
 
   const themeColor = custom.themeColor || '#003366';
+  const themeForegroundTone = resolveReadableForegroundTone(themeColor);
+  const isDarkTheme = themeForegroundTone === 'dark';
+
   const hasBadgeText = typeof block.badgeText === 'string' && block.badgeText.trim().length > 0;
   const hasBadgeSubtitle = typeof custom.badgeSubtitle === 'string' && custom.badgeSubtitle.trim().length > 0;
   const hasTitle = typeof block.title === 'string' && block.title.trim().length > 0;
@@ -90,21 +94,29 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
           </div>
         </div>
 
-        {/* Badge Lateral Temático */}
+        {/* Badge Lateral Temático com contraste determinístico */}
         {(hasBadgeText || hasBadgeSubtitle || !isExport) && (
           <div
             style={{ backgroundColor: themeColor }}
-            className="px-3 py-1 text-white text-right rounded-none border border-slate-900 shrink-0 select-none"
+            className={`px-3 py-1 ${
+              isDarkTheme ? 'text-slate-900' : 'text-white'
+            } text-right rounded-none border border-slate-900 shrink-0 select-none`}
           >
             {hasBadgeText ? (
               <span
                 data-printable-field="badgeText"
-                className="font-mono font-bold text-xs tracking-wider block leading-none uppercase"
+                className={`font-mono font-bold text-xs tracking-wider block leading-none uppercase ${
+                  isDarkTheme ? 'text-slate-900' : 'text-white'
+                }`}
               >
                 {block.badgeText}
               </span>
             ) : !isExport ? (
-              <span className="font-mono font-bold text-xs tracking-wider block leading-none uppercase text-white/50 no-print">
+              <span
+                className={`font-mono font-bold text-xs tracking-wider block leading-none uppercase ${
+                  isDarkTheme ? 'text-slate-900/50' : 'text-white/50'
+                } no-print`}
+              >
                 PRESYS
               </span>
             ) : null}
@@ -112,12 +124,18 @@ export const AdditelTwoColBlock: React.FC<AdditelTwoColBlockProps> = ({
             {hasBadgeSubtitle ? (
               <span
                 data-printable-field="badgeSubtitle"
-                className="text-[8px] font-mono text-blue-200 block uppercase tracking-widest mt-0.5"
+                className={`text-[8px] font-mono ${
+                  isDarkTheme ? 'text-slate-700' : 'text-blue-200'
+                } block uppercase tracking-widest mt-0.5`}
               >
                 {custom.badgeSubtitle}
               </span>
             ) : !isExport && hasBadgeText ? (
-              <span className="text-[8px] font-mono text-blue-200/50 block uppercase tracking-widest mt-0.5 no-print">
+              <span
+                className={`text-[8px] font-mono ${
+                  isDarkTheme ? 'text-slate-700/50' : 'text-blue-200/50'
+                } block uppercase tracking-widest mt-0.5 no-print`}
+              >
                 Precision Metrology
               </span>
             ) : null}

@@ -7,6 +7,7 @@ import { ContentBlock } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useResolvedAssetUrl } from '../../../hooks/useResolvedAssetUrl';
 import { resolvePrimaryImageSource } from '../../../domain/primary-image.engine';
+import { resolveReadableForegroundTone } from '../../../domain/color-contrast';
 
 interface FlukeHeaderBlockProps {
   block: ContentBlock;
@@ -37,6 +38,9 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
   );
 
   const badgeBg = custom.badgeBg || '#003366';
+  const badgeForegroundTone = resolveReadableForegroundTone(badgeBg);
+  const isDarkBadge = badgeForegroundTone === 'dark';
+
   const hasBadgeText = typeof block.badgeText === 'string' && block.badgeText.trim().length > 0;
   const hasBadgeSec = typeof custom.badgeSecondary === 'string' && custom.badgeSecondary.trim().length > 0;
   const hasTitle = typeof block.title === 'string' && block.title.trim().length > 0;
@@ -87,21 +91,29 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
           </div>
         </div>
 
-        {/* Badge Metrológico Duplo com fundo customizável */}
+        {/* Badge Metrológico Duplo com fundo customizável e contraste determinístico */}
         {(hasBadgeText || hasBadgeSec || !isExport) && (
           <div
             style={{ backgroundColor: badgeBg }}
-            className="px-2.5 py-1 text-white text-right rounded-none border border-slate-900 shrink-0 select-none"
+            className={`px-2.5 py-1 ${
+              isDarkBadge ? 'text-slate-900' : 'text-white'
+            } text-right rounded-none border border-slate-900 shrink-0 select-none`}
           >
             {hasBadgeText ? (
               <span
                 data-printable-field="badgeText"
-                className="font-mono font-bold text-xs tracking-wider block leading-none uppercase"
+                className={`font-mono font-bold text-xs tracking-wider block leading-none uppercase ${
+                  isDarkBadge ? 'text-slate-900' : 'text-white'
+                }`}
               >
                 {block.badgeText}
               </span>
             ) : !isExport ? (
-              <span className="font-mono font-bold text-xs tracking-wider block leading-none uppercase text-white/50 no-print">
+              <span
+                className={`font-mono font-bold text-xs tracking-wider block leading-none uppercase ${
+                  isDarkBadge ? 'text-slate-900/50' : 'text-white/50'
+                } no-print`}
+              >
                 PRESYS
               </span>
             ) : null}
@@ -109,12 +121,18 @@ export const FlukeHeaderBlock: React.FC<FlukeHeaderBlockProps> = ({
             {hasBadgeSec ? (
               <span
                 data-printable-field="badgeSecondary"
-                className="text-[9px] block opacity-90 leading-tight mt-0.5"
+                className={`text-[9px] block ${
+                  isDarkBadge ? 'text-slate-800' : 'opacity-90'
+                } leading-tight mt-0.5`}
               >
                 {custom.badgeSecondary}
               </span>
             ) : !isExport && hasBadgeText ? (
-              <span className="text-[9px] block opacity-50 leading-tight mt-0.5 no-print">
+              <span
+                className={`text-[9px] block ${
+                  isDarkBadge ? 'text-slate-800/50' : 'opacity-50'
+                } leading-tight mt-0.5 no-print`}
+              >
                 Calibration
               </span>
             ) : null}

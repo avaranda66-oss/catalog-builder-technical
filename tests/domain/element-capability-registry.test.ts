@@ -256,7 +256,7 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
 
   // CAP-REG-15: Registry version definida como 4 (bump na CORE.E6A)
   it('CAP-REG-15: versão do contrato definida como 4 (CORE.E6A)', () => {
-    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(4);
+    expect(ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe(5);
     expect(typeof ELEMENT_CAPABILITY_REGISTRY_VERSION).toBe('number');
   });
 
@@ -539,5 +539,80 @@ describe('Structural Section Cross-Contract Authority (CORE.E2)', () => {
       writePolicy: 'user_only'
     });
     expect(presetWithPreset.success).toBe(true);
+  });
+
+  // =========================================================================
+  // CROSS-CONTRACT: DefaultSource Truth vs. Real Presets (CORE.E6A.1)
+  // =========================================================================
+
+  it('HEADER-CAP-DEFAULT-1: Fluke Header — somente title e badgeText possuem defaultSource="preset"', () => {
+    const flukeDef = ElementCapabilityRegistry.fluke_header;
+    const presetCapabilities = flukeDef.capabilities.filter((c) => c.defaultSource === 'preset');
+    const noneCapabilities = flukeDef.capabilities.filter((c) => c.defaultSource === 'none');
+
+    // Somente title e badge possuem preset defaults
+    expect(presetCapabilities.map((c) => c.id).sort()).toEqual(
+      [CAPABILITY_IDS.CONTENT_BADGE, CAPABILITY_IDS.CONTENT_TITLE].sort()
+    );
+
+    // Campos não materializados no preset devem ser 'none'
+    const noneIds = noneCapabilities.map((c) => c.id);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_SECONDARY_BADGE);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_SUBTITLE);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_DESCRIPTION);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_ITEMS);
+    expect(noneIds).toContain(CAPABILITY_IDS.MEDIA_PRIMARY_ASSET);
+  });
+
+  it('HEADER-CAP-DEFAULT-2: Additel Two Col — somente title, subtitle e badgeText possuem defaultSource="preset"', () => {
+    const additelDef = ElementCapabilityRegistry.additel_two_col_hero;
+    const presetCapabilities = additelDef.capabilities.filter((c) => c.defaultSource === 'preset');
+    const noneCapabilities = additelDef.capabilities.filter((c) => c.defaultSource === 'none');
+
+    // Somente title, subtitle e badge possuem preset defaults
+    expect(presetCapabilities.map((c) => c.id).sort()).toEqual(
+      [CAPABILITY_IDS.CONTENT_BADGE, CAPABILITY_IDS.CONTENT_TITLE, CAPABILITY_IDS.CONTENT_SUBTITLE].sort()
+    );
+
+    // Campos não materializados no preset devem ser 'none'
+    const noneIds = noneCapabilities.map((c) => c.id);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_SECONDARY_BADGE);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_DESCRIPTION);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_ITEMS);
+    expect(noneIds).toContain(CAPABILITY_IDS.MEDIA_PRIMARY_ASSET);
+  });
+
+  it('HEADER-CAP-DEFAULT-3: Bottom Header — somente title e subtitle possuem defaultSource="preset"', () => {
+    const bottomDef = ElementCapabilityRegistry.bottom_header;
+    const presetCapabilities = bottomDef.capabilities.filter((c) => c.defaultSource === 'preset');
+    const noneCapabilities = bottomDef.capabilities.filter((c) => c.defaultSource === 'none');
+
+    // Somente title e subtitle possuem preset defaults
+    expect(presetCapabilities.map((c) => c.id).sort()).toEqual(
+      [CAPABILITY_IDS.CONTENT_TITLE, CAPABILITY_IDS.CONTENT_SUBTITLE].sort()
+    );
+
+    // Campos não materializados no preset devem ser 'none'
+    const noneIds = noneCapabilities.map((c) => c.id);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_BADGE);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_PHONE);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_EMAIL);
+    expect(noneIds).toContain(CAPABILITY_IDS.CONTENT_WEBSITE);
+  });
+
+  it('HEADER-CAP-DEFAULT-4: appearance fallbacks — badgeBg, themeColor e gradient são defaultSource="derived"', () => {
+    const flukeBadgeBg = ElementCapabilityRegistry.fluke_header.capabilities.find(
+      (c) => c.id === CAPABILITY_IDS.APPEARANCE_BADGE_BG
+    );
+    const additelThemeColor = ElementCapabilityRegistry.additel_two_col_hero.capabilities.find(
+      (c) => c.id === CAPABILITY_IDS.APPEARANCE_THEME_COLOR
+    );
+    const bottomGradient = ElementCapabilityRegistry.bottom_header.capabilities.find(
+      (c) => c.id === CAPABILITY_IDS.APPEARANCE_GRADIENT
+    );
+
+    expect(flukeBadgeBg?.defaultSource).toBe('derived');
+    expect(additelThemeColor?.defaultSource).toBe('derived');
+    expect(bottomGradient?.defaultSource).toBe('derived');
   });
 });
