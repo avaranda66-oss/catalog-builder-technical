@@ -1,25 +1,43 @@
 // src/domain/table-core/table.types.ts
-// Table Core V2: Contratos de tipos estritos do domínio documental puro.
-// Zero dependência de React, Zustand ou infraestrutura de banco de dados.
-// Conformidade absoluta: Zero explicit any.
+// Tipos Puros de Domínio do Table Core V2.
+// Totalmente desacoplado de React, Zustand, DOM e banco de dados.
+// Invariante de tipagem estrita: Zero explicit any.
 
 export type TableSchemaVersion = 1;
 
-/**
- * Alinhamento horizontal do conteúdo da coluna ou célula.
- */
 export type TableHorizontalAlign = 'left' | 'center' | 'right';
-
-/**
- * Alinhamento vertical do conteúdo da célula.
- */
 export type TableVerticalAlign = 'top' | 'middle' | 'bottom';
 
+export type TableRowKind = 'header' | 'data' | 'footer' | 'divider';
+
 /**
- * Modo e especificação de largura de coluna física (Discriminated Union estrita).
- * - auto: Sem largura fixa, distribuída proporcionalmente no espaço restante.
- * - fixed_mm: Largura explícita em milímetros (autoridade física A4).
- * - weighted: Peso relativo (flex factor) para distribuição proporcional.
+ * Tokens semânticos fechados de cor para estilização e apresentação de tabelas.
+ * Proíbe expressamente strings arbitrárias de cores, hexadecimais soltos e injeção de CSS.
+ */
+export type TableColorToken =
+  | 'transparent'
+  | 'surface'
+  | 'surface_subtle'
+  | 'surface_header'
+  | 'text_primary'
+  | 'text_secondary'
+  | 'text_muted'
+  | 'text_on_header'
+  | 'brand_primary'
+  | 'brand_secondary'
+  | 'brand_navy'
+  | 'accent'
+  | 'success'
+  | 'warning'
+  | 'critical'
+  | 'white'
+  | 'slate_900'
+  | 'slate_800'
+  | 'slate_100';
+
+/**
+ * Especificação discriminada da largura de coluna física.
+ * Não permite combinações inválidas ou ambíguas de propriedades.
  */
 export type ColumnWidthSpec =
   | { mode: 'auto' }
@@ -27,101 +45,123 @@ export type ColumnWidthSpec =
   | { mode: 'weighted'; weight: number };
 
 /**
- * Definição da Coluna no Table Core.
- * O ID é um identificador estável único; semanticKey é o identificador técnico
- * para binding ou tradução, totalmente desacoplado do label visual.
+ * Definição de Coluna no Table Core.
+ * `id`: Identificador estável opaco.
+ * `semanticKey`: Chave canônica de domínio estável para matching e bindings.
  */
 export interface TableColumnModel {
-  id: string;                      // Identificador estável único da coluna
-  semanticKey: string;             // Chave técnica única por tabela (ex: 'range', 'accuracy', 'code')
-  defaultLabel: string;            // Rótulo padrão (conteúdo traduzível)
-  widthSpec: ColumnWidthSpec;      // Especificação geométrica discriminada
-  align: TableHorizontalAlign;     // Alinhamento padrão da coluna
-  isCustom?: boolean;              // Indica coluna adicionada pelo usuário
+  id: string;                      // Identificador estável da coluna
+  semanticKey: string;             // Chave semântica (ex: 'range', 'accuracy', 'supply')
+  defaultLabel: string;            // Rótulo padrão da coluna
+  widthSpec: ColumnWidthSpec;      // Especificação discriminada de largura
+  align: TableHorizontalAlign;     // Alinhamento padrão do conteúdo
+  isCustom?: boolean;              // Indica se foi adicionada manualmente pelo usuário
 }
 
 /**
- * Tipo semântico da linha na tabela.
- */
-export type TableRowKind = 'data' | 'header' | 'footer' | 'divider';
-
-/**
- * Definição da Linha no Table Core.
- * O ID é um identificador estável único; não depende do índice no array.
+ * Definição de Linha no Table Core.
+ * `id`: Identificador estável opaco.
  */
 export interface TableRowModel {
-  id: string;                      // Identificador estável único da linha
-  kind: TableRowKind;              // Papel estrutural da linha
-  minHeightMm?: number;            // Altura mínima opcional em mm
-  isHeader?: boolean;              // Flag de cabeçalho (repetível em paginação)
+  id: string;                      // Identificador estável da linha
+  kind: TableRowKind;              // Semântica estrutural (data, header, footer, divider)
+  minHeightMm?: number;            // Altura física mínima em milímetros
+  isHeader?: boolean;              // Linha repetível em quebra de página
+}
+
+// ============================================================================
+// CONTEÚDO POLIMÓRFICO DE CÉLULAS (DISCRIMINATED UNIONS)
+// ============================================================================
+
+export interface TableCellEmptyContent {
+  kind: 'empty';
+}
+
+export interface TableCellTextContent {
+  kind: 'text';
+  text: string;
+}
+
+export interface TableCellNumberContent {
+  kind: 'number';
+  value: number;
+  format?: {
+    decimals?: number;
+    prefix?: string;
+    suffix?: string;
+  };
+}
+
+export interface TableCellValueUnitContent {
+  kind: 'value_unit';
+  amount: number;
+  unit: string;
+  qualifier?: string; // ex: '±', '≤', '≥', 'ca.'
+}
+
+export interface TableCellBadgeContent {
+  kind: 'badge';
+  label: string;
+  variant: 'info' | 'success' | 'warning' | 'neutral' | 'critical';
+}
+
+export interface TableCellAssetRefContent {
+  kind: 'asset_reference';
+  assetId: string;
+  caption?: string;
+  altText?: string;
+  targetWidthMm?: number;
+  targetHeightMm?: number;
 }
 
 /**
- * Célula literal: valor físico imediato registrado na tabela.
+ * Conteúdos literais que podem ser materializados de forma independente.
  */
 export type TableCellLiteralContent =
-  | { kind: 'text'; text: string }
-  | { kind: 'number'; value: number; format?: { decimals?: number; prefix?: string; suffix?: string } }
-  | { kind: 'value_unit'; amount: number; unit: string; qualifier?: '±' | '≤' | '≥' | '<' | '>' | 'typ.' | 'max.' | 'min.' }
-  | { kind: 'badge'; text: string; variant?: 'neutral' | 'success' | 'warning' | 'info' | 'critical' }
-  | { kind: 'asset_reference'; assetId: string; caption?: string; altText?: string }
-  | { kind: 'empty' };
+  | TableCellEmptyContent
+  | TableCellTextContent
+  | TableCellNumberContent
+  | TableCellValueUnitContent
+  | TableCellBadgeContent
+  | TableCellAssetRefContent;
 
-/**
- * Modo de sincronização para células vinculadas a dados de biblioteca.
- * Nota: 'literal' é proibido aqui pois valores literais pertencem a TableCellLiteralContent.
- */
 export type TableBindingMode = 'live' | 'snapshot' | 'review_required';
 
 /**
- * Célula vinculada (Contrato future-facing para integração com Product Workbook).
- * Se bindingMode === 'snapshot', o snapshot é estritamente obrigatório.
+ * Referência tipada a um dado do Product Workbook ou catálogo.
+ * Se bindingMode === 'snapshot', a presença de snapshot materializado é obrigatória.
  */
 export type TableCellBoundContent =
   | {
       kind: 'datum_reference';
       productId: string;
-      moduleKey?: string;
       datumKey: string;
-      sourceRevision?: number;
-      bindingMode: 'live';
+      moduleKey?: string;
+      bindingMode: 'live' | 'review_required';
       snapshot?: TableCellLiteralContent;
     }
   | {
       kind: 'datum_reference';
       productId: string;
-      moduleKey?: string;
       datumKey: string;
-      sourceRevision?: number;
+      moduleKey?: string;
       bindingMode: 'snapshot';
-      snapshot: TableCellLiteralContent; // Obrigatório quando snapshot
-    }
-  | {
-      kind: 'datum_reference';
-      productId: string;
-      moduleKey?: string;
-      datumKey: string;
-      sourceRevision?: number;
-      bindingMode: 'review_required';
-      snapshot?: TableCellLiteralContent;
+      snapshot: TableCellLiteralContent;
     };
 
-/**
- * União estrita de conteúdos possíveis para uma célula.
- * Rejeita explicitamente HTML arbitrário e JSON blobs genéricos.
- */
 export type TableCellContent = TableCellLiteralContent | TableCellBoundContent;
 
 /**
- * Sobrescrita de estilo visual pontual na célula.
+ * Overrides de estilo a nível de célula.
+ * Usa exclusivamente tokens semânticos de cor (TableColorToken). Proíbe CSS ou cores arbitrárias.
  */
 export interface TableCellStyleOverride {
   bold?: boolean;
   italic?: boolean;
   align?: TableHorizontalAlign;
   verticalAlign?: TableVerticalAlign;
-  textColor?: string;
-  backgroundColor?: string;
+  textColorToken?: TableColorToken;
+  backgroundColorToken?: TableColorToken;
 }
 
 /**
@@ -162,17 +202,17 @@ export type TableWidthSpec =
 
 /**
  * Configuração de Apresentação da Tabela (Desacoplada dos dados).
- * Usa tokens semânticos e unidades em mm, sem classes CSS de frameworks.
+ * Usa tokens semânticos e unidades em mm, sem classes CSS arbitrárias.
  */
 export interface TablePresentationModel {
   presetId: TablePresetId;
   density: TableDensityToken;
   borderStyle: TableBorderToken;
   stripeStyle: TableStripeToken;
-  headerBackgroundToken: string;   // Token semântico de cor (ex: 'slate_900', 'white')
-  headerTextColorToken: string;     // Token semântico de cor de texto
+  headerBackgroundToken: TableColorToken;   // Token semântico de cor tipado
+  headerTextColorToken: TableColorToken;    // Token semântico de cor de texto tipado
   fontScale: 'compact' | 'normal' | 'large';
-  tableWidth: TableWidthSpec;      // Especificação discriminada da largura total
+  tableWidth: TableWidthSpec;               // Especificação discriminada da largura total
 }
 
 /**
@@ -194,7 +234,47 @@ export interface TableCoreModel {
   title?: string;
   columns: TableColumnModel[];
   rows: TableRowModel[];
-  cells: Record<string, TableCellModel>; // Chave composta indexada: `${rowId}::${columnId}`
+  cells: Record<string, TableCellModel>; // Chave composta indexada: getCellKey(rowId, columnId)
   presentation: TablePresentationModel;
   paginationPolicy: TablePaginationPolicy;
+}
+
+/**
+ * Retorna a chave canônica e determinística de indexação de uma célula na matriz.
+ * Utiliza codificação de coordenadas prefixadas com comprimento para garantir
+ * total ausência de colisões de delimitadores (Collision-Safe Cell Key Contract).
+ * Exemplo: rowId="a::b", colId="c" -> "r4:a::b|c1:c"
+ */
+export function getCellKey(rowId: string, columnId: string): string {
+  if (!rowId || !columnId) {
+    throw new Error(`Coordenadas de célula não podem ser vazias: rowId="${rowId}", columnId="${columnId}"`);
+  }
+  return `r${rowId.length}:${rowId}|c${columnId.length}:${columnId}`;
+}
+
+/**
+ * Faz o parse reversível de uma chave canônica de célula.
+ */
+export function parseCellKey(key: string): { rowId: string; columnId: string } | null {
+  if (!key.startsWith('r')) return null;
+  const colIndex = key.indexOf('|c');
+  if (colIndex === -1) return null;
+
+  const rowPart = key.slice(1, colIndex);
+  const colPart = key.slice(colIndex + 2);
+
+  const rowColon = rowPart.indexOf(':');
+  const colColon = colPart.indexOf(':');
+  if (rowColon === -1 || colColon === -1) return null;
+
+  const rowLen = parseInt(rowPart.slice(0, rowColon), 10);
+  const colLen = parseInt(colPart.slice(0, colColon), 10);
+  if (isNaN(rowLen) || isNaN(colLen)) return null;
+
+  const rowId = rowPart.slice(rowColon + 1);
+  const columnId = colPart.slice(colColon + 1);
+
+  if (rowId.length !== rowLen || columnId.length !== colLen) return null;
+
+  return { rowId, columnId };
 }

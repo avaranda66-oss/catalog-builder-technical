@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { ContentBlock } from '../../../src/domain/catalog.schema';
-import { adaptLegacyBlockToTableCore } from '../../../src/domain/table-core';
+import { adaptLegacyBlockToTableCore, legacyPxToMm } from '../../../src/domain/table-core';
 
 describe('Table Core V2: Legacy Read-Only Adapters', () => {
   it('LEGACY-ADAPTER-1: Bloco "table" canônico é adaptado com sucesso', () => {
@@ -183,6 +183,35 @@ describe('Table Core V2: Legacy Read-Only Adapters', () => {
     expect(res.supported).toBe(false);
     if (!res.supported) {
       expect(res.reason).toBe('inserts_visual_hybrid_block');
+    }
+  });
+
+  it('LEGACY-WIDTH-PX-1: Conversão de largura CSS em pixels (96 DPI) para milímetros A4 é determinística', () => {
+    // 100px -> (100 * 25.4) / 96 = 26.45833... -> 26.46 mm
+    expect(legacyPxToMm(100)).toBe(26.46);
+    expect(legacyPxToMm(0)).toBe(0);
+    expect(legacyPxToMm(-10)).toBe(0);
+  });
+
+  it('LEGACY-PRODUCT-BINDING-1: Linha com productRefId gera datum_reference com namespace transitório legacy.product_field.*', () => {
+    const block: ContentBlock = {
+      id: 'blk_prod_binding',
+      type: 'table',
+      tableColumns: [{ key: 'accuracy', label: 'Exatidão', visible: true }],
+      tableRows: [{ id: 'r1', productRefId: 'prod_uuid_123' }]
+    };
+
+    const res = adaptLegacyBlockToTableCore(block);
+    expect(res.supported).toBe(true);
+    if (res.supported) {
+      const cell = Object.values(res.table.cells)[0];
+      expect(cell.content.kind).toBe('datum_reference');
+      if (cell.content.kind === 'datum_reference') {
+        expect(cell.content.productId).toBe('prod_uuid_123');
+        expect(cell.content.datumKey).toBe('legacy.product_field.accuracy');
+        expect(cell.content.bindingMode).toBe('live');
+      }
+      expect(res.warnings.some((w) => w.includes('legacy.product_field.*'))).toBe(true);
     }
   });
 });

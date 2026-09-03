@@ -145,7 +145,7 @@ describe('Table Core V2: Schema & Invariants', () => {
       ],
       rows: [{ id: 'r1', kind: 'data' }],
       cells: {
-        'r1::col_1': {
+        [getCellKey('r1', 'col_1')]: {
           id: 'c1',
           rowId: 'r1',
           columnId: 'col_1',

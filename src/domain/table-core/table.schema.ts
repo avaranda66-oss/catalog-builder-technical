@@ -66,7 +66,7 @@ export const TableCellLiteralContentSchema = z.discriminatedUnion('kind', [
   }).strict(),
   z.object({
     kind: z.literal('badge'),
-    text: z.string().min(1),
+    label: z.string().min(1),
     variant: z.enum(['neutral', 'success', 'warning', 'info', 'critical']).default('neutral')
   }).strict(),
   z.object({
@@ -117,13 +117,35 @@ export const TableCellContentSchema = z.union([
   TableCellBoundContentSchema
 ]);
 
+export const TableColorTokenSchema = z.enum([
+  'transparent',
+  'surface',
+  'surface_subtle',
+  'surface_header',
+  'text_primary',
+  'text_secondary',
+  'text_muted',
+  'text_on_header',
+  'brand_primary',
+  'brand_secondary',
+  'brand_navy',
+  'accent',
+  'success',
+  'warning',
+  'critical',
+  'white',
+  'slate_900',
+  'slate_800',
+  'slate_100'
+]);
+
 export const TableCellStyleOverrideSchema = z.object({
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   align: TableHorizontalAlignSchema.optional(),
   verticalAlign: TableVerticalAlignSchema.optional(),
-  textColor: z.string().optional(),
-  backgroundColor: z.string().optional()
+  textColorToken: TableColorTokenSchema.optional(),
+  backgroundColorToken: TableColorTokenSchema.optional()
 }).strict();
 
 export const TableCellModelSchema = z.object({
@@ -159,8 +181,8 @@ export const TablePresentationModelSchema = z.object({
   density: z.enum(['compact', 'regular', 'spacious']).default('regular'),
   borderStyle: z.enum(['all', 'horizontal_only', 'outer_only', 'none']).default('all'),
   stripeStyle: z.enum(['none', 'subtle_zebra', 'high_contrast_zebra']).default('none'),
-  headerBackgroundToken: z.string().default('slate_900'),
-  headerTextColorToken: z.string().default('white'),
+  headerBackgroundToken: TableColorTokenSchema.default('slate_900'),
+  headerTextColorToken: TableColorTokenSchema.default('white'),
   fontScale: z.enum(['compact', 'normal', 'large']).default('normal'),
   tableWidth: TableWidthSpecSchema.default({ mode: 'auto_fill' })
 }).strict();

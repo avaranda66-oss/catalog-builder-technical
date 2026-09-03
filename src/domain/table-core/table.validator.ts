@@ -3,20 +3,15 @@
 // Garante conformidade de merges, unicidade de IDs e ausência de células órfãs.
 // Zero explicit any.
 
-import { TableCoreModel } from './table.types';
+import { TableCoreModel, getCellKey, parseCellKey } from './table.types';
 import { TableCoreModelSchema } from './table.schema';
+
+export { getCellKey, parseCellKey };
 
 export interface TableValidationResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
-}
-
-/**
- * Gera a chave canônica para o mapa de células.
- */
-export function getCellKey(rowId: string, columnId: string): string {
-  return `${rowId}::${columnId}`;
 }
 
 /**

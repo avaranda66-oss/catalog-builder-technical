@@ -78,6 +78,16 @@ export function generateDeterministicCellId(blockId: string, rowId: string, colK
 }
 
 /**
+ * Converte largura de coluna legada (confirmada em pixels CSS a 96 DPI no editor legado)
+ * para milímetros físicos de impressão A4.
+ * Fator de conversão: 1 in = 96 px = 25.4 mm => 1 px = 25.4 / 96 = 0.26458333... mm.
+ */
+export function legacyPxToMm(px: number): number {
+  if (px <= 0 || !Number.isFinite(px)) return 0;
+  return Number(((px * 25.4) / 96).toFixed(2));
+}
+
+/**
  * Converte um ContentBlock legado suportado para TableCoreModel.
  * Suporta formas canônicas de: 'table', 'specs_table', 'electrical_table', 'accessories_table' e 'custom_table' canônico.
  */
@@ -156,7 +166,7 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
   // 5. Extrair Colunas
   const columns: TableColumnModel[] = legacyColumns.map((col) => {
     const colId = generateDeterministicColumnId(block.id, col.key, col.id);
-    const widthMm = typeof col.width === 'number' && col.width > 0 ? Number((col.width * 0.264583).toFixed(2)) : undefined;
+    const widthMm = typeof col.width === 'number' && col.width > 0 ? legacyPxToMm(col.width) : undefined;
 
     return {
       id: colId,
@@ -177,6 +187,7 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
 
   // 7. Construir Células
   const cells: Record<string, TableCellModel> = {};
+  let hasLegacyProductBinding = false;
 
   rows.forEach((row, rIdx) => {
     const legacyRow = legacyRows[rIdx];
@@ -190,10 +201,11 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         const textVal = String(legacyRow.localOverrides[col.semanticKey]);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
       } else if (legacyRow.productRefId) {
+        hasLegacyProductBinding = true;
         content = {
           kind: 'datum_reference',
           productId: legacyRow.productRefId,
-          datumKey: col.semanticKey,
+          datumKey: `legacy.product_field.${col.semanticKey}`,
           bindingMode: 'live'
         };
       }
@@ -208,6 +220,10 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
       };
     });
   });
+
+  if (hasLegacyProductBinding) {
+    warnings.push("Vinculação de produto legada mapeada sob namespace transitório 'legacy.product_field.*' para preservar integridade de chave.");
+  }
 
   const presentation = getTablePreset(presetId);
 
