@@ -107,7 +107,7 @@ describe('PIM.W1 — Provenance, Evidence Conflict & Canonical Decisions', () =>
         }
       ],
       canonicalDecision: {
-        status: 'selected',
+        kind: 'selected_evidence',
         selectedEvidenceId: 'ev-datasheet-pt',
         rationale: 'O manual EN rev2 continha errata corrigida no datasheet PT 2026 pelo laboratório de metrologia.',
         decidedAt: '2026-08-10T14:30:00Z',
@@ -165,9 +165,10 @@ describe('PIM.W1 — Provenance, Evidence Conflict & Canonical Decisions', () =>
 
     // Agora arbitra a decisão canônica
     wb = setCanonicalDecision(wb, 'datum-flow', {
-      status: 'selected',
+      kind: 'selected_evidence',
       selectedEvidenceId: 'ev-a',
-      rationale: 'Calibração padrão em bancada 50 m.'
+      rationale: 'Calibração padrão em bancada 50 m.',
+      decidedAt: '2026-08-10T14:30:00Z'
     });
 
     // Agora a aprovação deve ter sucesso!

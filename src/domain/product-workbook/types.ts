@@ -6,6 +6,8 @@
 
 /**
  * Validated Technical Unit Codes (Engineering & SI units).
+ * Note: Intentionally extensible via `(string & {})` for domain-specific engineering units,
+ * while runtime `UnitCodeSchema` serves as the authoritative security and syntax gate.
  */
 export type UnitCode =
   | '°C'
@@ -119,8 +121,8 @@ export interface SourceDocument {
   readonly title: string;
   readonly documentType: SourceDocumentType;
   readonly revision?: string;
-  readonly language?: string; // BCP-47 tag (e.g. 'en', 'pt-BR')
-  readonly publicationDate?: string;
+  readonly language?: string; // Validated BCP-47 tag (e.g. 'en', 'pt-BR', 'zh-Hans')
+  readonly publicationDate?: string; // Validated ISO-8601 string
   readonly fileReference?: string;
   readonly externalUrl?: string;
   readonly checksum?: string;
@@ -138,20 +140,55 @@ export interface Evidence {
   readonly locator?: string;
   readonly observedValue?: TechnicalValue; // The value asserted by this specific source
   readonly excerpt?: string;
-  readonly capturedAt?: string;
+  readonly capturedAt?: string; // Validated ISO-8601 string
   readonly capturedBy?: string;
   readonly notes?: string;
 }
 
 /**
- * Decision metadata when selecting or verifying a canonical assertion among evidences.
+ * Strict discriminated union of Canonical Decisions resolving evidence conflicts.
+ * Invariant: Every decision must have a non-empty rationale, ISO-8601 timestamp,
+ * and valid non-orphan evidence references.
  */
-export interface CanonicalDecision {
-  readonly status: 'selected' | 'synthetic' | 'verified';
-  readonly selectedEvidenceId?: string;
-  readonly rationale?: string;
-  readonly decidedAt?: string;
-  readonly decidedBy?: string;
+export type CanonicalDecision =
+  | {
+      readonly kind: 'selected_evidence';
+      readonly selectedEvidenceId: string;
+      readonly rationale: string;
+      readonly decidedAt: string; // ISO-8601 string
+      readonly decidedBy?: string;
+    }
+  | {
+      readonly kind: 'engineering_decision';
+      readonly basisEvidenceIds: readonly string[]; // IDs das evidências de base consideradas
+      readonly rationale: string;
+      readonly decidedAt: string; // ISO-8601 string
+      readonly decidedBy?: string;
+    }
+  | {
+      readonly kind: 'verified_consensus';
+      readonly verifiedEvidenceIds: readonly string[]; // IDs das evidências em consenso verificado
+      readonly rationale: string;
+      readonly decidedAt: string; // ISO-8601 string
+      readonly decidedBy?: string;
+    };
+
+/**
+ * Structured validation issue for domain invariants.
+ */
+export interface ValidationIssue {
+  readonly path: string;
+  readonly message: string;
+  readonly code: string;
+}
+
+/**
+ * Structured validation report for Product Workbook and Knowledge Bundle.
+ */
+export interface ValidationResult {
+  readonly valid: boolean;
+  readonly errors: readonly ValidationIssue[];
+  readonly warnings: readonly ValidationIssue[];
 }
 
 /**

@@ -9,4 +9,5 @@ export * from './provenance.engine';
 export * from './inheritance.engine';
 export * from './query.engine';
 export * from './operations';
+export * from './validators';
 export * from './table-compatibility';

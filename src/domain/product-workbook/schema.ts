@@ -1,6 +1,6 @@
 // src/domain/product-workbook/schema.ts
 // Strict Zod schemas for Product Workbook validation and serialization.
-// Enforces schemaVersion: 1, strict field checking, and semantic key grammars.
+// Enforces schemaVersion: 1, strict field checking, semantic key grammars, BCP-47 tags, and ISO-8601 dates.
 // Zero explicit any.
 
 import { z } from 'zod';
@@ -9,6 +9,14 @@ import {
   SourceDocument,
   ProductKnowledgeBundle
 } from './types';
+import { ProductWorkbookError } from './operations';
+import {
+  validateProductWorkbook,
+  validateProductKnowledgeBundle,
+  isValidBcp47LanguageTag,
+  isValidIsoDate,
+  WorkbookValidationOptions
+} from './validators';
 
 /**
  * Regular expression validating lowercase ASCII segmented semantic keys.
@@ -26,15 +34,54 @@ export function isValidSemanticKey(key: string): boolean {
 }
 
 /**
- * Technical Unit Code Schema.
+ * BCP-47 Language Tag Schema (e.g. 'en', 'pt-BR', 'zh-Hans', 'sr-Cyrl').
+ */
+export const Bcp47TagSchema = z
+  .string()
+  .min(2, 'Tag BCP-47 deve conter no mínimo 2 caracteres')
+  .max(35, 'Tag BCP-47 excede tamanho máximo')
+  .refine(
+    isValidBcp47LanguageTag,
+    'Código de idioma BCP-47 inválido (ex: en, pt-BR, zh-Hans, sr-Cyrl)'
+  );
+
+/**
+ * ISO-8601 Date/Timestamp String Schema.
+ */
+export const IsoDateStringSchema = z
+  .string()
+  .refine(
+    isValidIsoDate,
+    'Data deve ser uma string válida no padrão ISO-8601 (ex: 2026-05-15 ou 2026-08-10T14:30:00Z)'
+  );
+
+/**
+ * Validated map of localized text keyed by BCP-47 language tag (Part G).
+ */
+export const LocalizedTextMapSchema = z.record(
+  Bcp47TagSchema,
+  z.string().min(1, 'Texto localizado não pode ser vazio')
+);
+
+/**
+ * Technical Unit Code Schema (Part E).
+ * Runtime authority for engineering and scientific units.
  */
 export const UnitCodeSchema = z
   .string()
   .min(1, 'Código de unidade não pode ser vazio')
   .max(30, 'Código de unidade não pode exceder 30 caracteres')
   .refine(
-    (u) => !/[<>{}\\]/.test(u),
+    (u) => u.trim() === u,
+    'Código de unidade não pode conter espaços no início ou fim'
+  )
+  .refine(
+    (u) => !/[<>{}\\;`"']/.test(u),
     'Unidade contém caracteres inválidos ou inseguros'
+  )
+  .refine(
+    (u) => !/\s{2,}/.test(u),
+    'Unidade contém múltiplos espaços consecutivos inseguros'
   );
 
 export const QuantityQualifierSchema = z.enum([
@@ -139,8 +186,8 @@ export const SourceDocumentSchema = z.object({
   title: z.string().min(1, 'Título do documento fonte é obrigatório'),
   documentType: SourceDocumentTypeSchema,
   revision: z.string().optional(),
-  language: z.string().optional(),
-  publicationDate: z.string().optional(),
+  language: Bcp47TagSchema.optional(),
+  publicationDate: IsoDateStringSchema.optional(),
   fileReference: z.string().optional(),
   externalUrl: z.string().url().optional(),
   checksum: z.string().optional(),
@@ -155,18 +202,43 @@ export const EvidenceSchema = z.object({
   locator: z.string().optional(),
   observedValue: TechnicalValueSchema.optional(),
   excerpt: z.string().max(500, 'Excerto deve ser conciso (máx 500 chars)').optional(),
-  capturedAt: z.string().optional(),
+  capturedAt: IsoDateStringSchema.optional(),
   capturedBy: z.string().optional(),
   notes: z.string().optional()
 }).strict();
 
-export const CanonicalDecisionSchema = z.object({
-  status: z.enum(['selected', 'synthetic', 'verified']),
-  selectedEvidenceId: z.string().optional(),
-  rationale: z.string().optional(),
-  decidedAt: z.string().optional(),
-  decidedBy: z.string().optional()
-}).strict();
+/**
+ * Discriminated union of Canonical Decisions (Part A1).
+ */
+export const CanonicalDecisionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('selected_evidence'),
+    selectedEvidenceId: z.string().min(1, 'ID da evidência selecionada é obrigatório'),
+    rationale: z.string().min(1, 'Justificativa da decisão canônica é obrigatória'),
+    decidedAt: IsoDateStringSchema,
+    decidedBy: z.string().optional()
+  }).strict(),
+
+  z.object({
+    kind: z.literal('engineering_decision'),
+    basisEvidenceIds: z
+      .array(z.string().min(1))
+      .min(1, 'Ao menos uma evidência de base deve ser indicada'),
+    rationale: z.string().min(1, 'Justificativa técnica da decisão de engenharia é obrigatória'),
+    decidedAt: IsoDateStringSchema,
+    decidedBy: z.string().optional()
+  }).strict(),
+
+  z.object({
+    kind: z.literal('verified_consensus'),
+    verifiedEvidenceIds: z
+      .array(z.string().min(1))
+      .min(1, 'Ao menos uma evidência verificada deve ser indicada'),
+    rationale: z.string().min(1, 'Justificativa do consenso verificado é obrigatória'),
+    decidedAt: IsoDateStringSchema,
+    decidedBy: z.string().optional()
+  }).strict()
+]);
 
 export const DatumStatusSchema = z.enum(['draft', 'verified', 'approved', 'deprecated']);
 
@@ -176,15 +248,15 @@ export const TechnicalDatumSchema = z.object({
   moduleId: z.string().min(1, 'moduleId é obrigatório'),
   label: z.string().min(1, 'Label do dado é obrigatório'),
   description: z.string().optional(),
-  localizedLabels: z.record(z.string()).optional(),
+  localizedLabels: LocalizedTextMapSchema.optional(),
   value: TechnicalValueSchema,
   evidence: z.array(EvidenceSchema).default([]),
   canonicalDecision: CanonicalDecisionSchema.optional(),
   status: DatumStatusSchema,
   audit: z.object({
-    createdAt: z.string(),
+    createdAt: IsoDateStringSchema,
     createdBy: z.string().optional(),
-    updatedAt: z.string(),
+    updatedAt: IsoDateStringSchema,
     updatedBy: z.string().optional()
   }).strict().optional()
 }).strict();
@@ -202,7 +274,7 @@ export const TechnicalModuleSchema = z.object({
   id: z.string().min(1, 'ID do módulo é obrigatório'),
   semanticKey: z.string().regex(SEMANTIC_KEY_REGEX, 'semanticKey deve seguir padrão namespace.segment'),
   label: z.string().min(1, 'Label do módulo é obrigatório'),
-  localizedLabels: z.record(z.string()).optional(),
+  localizedLabels: LocalizedTextMapSchema.optional(),
   kind: ModuleKindSchema,
   order: z.number().int().default(0),
   datumIds: z.array(z.string()).default([]),
@@ -275,10 +347,24 @@ export const ProductKnowledgeBundleSchema = z.object({
 }).strict();
 
 /**
- * Validador e parser estrito de ProductWorkbook.
+ * Validador e parser estrito de ProductWorkbook (Zod shape + Domain Invariants).
  */
-export function parseProductWorkbook(input: unknown): ProductWorkbook {
-  return ProductWorkbookSchema.parse(input) as ProductWorkbook;
+export function parseProductWorkbook(
+  input: unknown,
+  options?: WorkbookValidationOptions
+): ProductWorkbook {
+  const parsed = ProductWorkbookSchema.parse(input) as ProductWorkbook;
+  const validation = validateProductWorkbook(parsed, options);
+
+  if (!validation.valid) {
+    const firstErr = validation.errors[0];
+    throw new ProductWorkbookError(
+      firstErr.code,
+      `Falha de integridade no ProductWorkbook: [${firstErr.path}] ${firstErr.message}`
+    );
+  }
+
+  return parsed;
 }
 
 /**
@@ -289,8 +375,19 @@ export function parseSourceDocument(input: unknown): SourceDocument {
 }
 
 /**
- * Validador e parser estrito de ProductKnowledgeBundle.
+ * Validador e parser estrito de ProductKnowledgeBundle (Zod shape + Bundle Invariants).
  */
 export function parseProductKnowledgeBundle(input: unknown): ProductKnowledgeBundle {
-  return ProductKnowledgeBundleSchema.parse(input) as ProductKnowledgeBundle;
+  const parsed = ProductKnowledgeBundleSchema.parse(input) as ProductKnowledgeBundle;
+  const validation = validateProductKnowledgeBundle(parsed);
+
+  if (!validation.valid) {
+    const firstErr = validation.errors[0];
+    throw new ProductWorkbookError(
+      firstErr.code,
+      `Falha de integridade no ProductKnowledgeBundle: [${firstErr.path}] ${firstErr.message}`
+    );
+  }
+
+  return parsed;
 }

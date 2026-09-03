@@ -7,8 +7,15 @@ import {
   addModule,
   addDatum,
   createOverride,
+  attachEvidence,
+  setCanonicalDecision,
+  approveDatum,
+  createSavedView,
+  renameModuleLabel,
+  removeModule,
   resolveEffectiveProductKnowledge,
   compareResolvedProducts,
+  validateProductWorkbook,
   ProductWorkbook
 } from '../../../src/domain/product-workbook';
 
@@ -194,5 +201,115 @@ describe('PIM.W1 — Domain Operations & Scale Fixtures', () => {
 
     // Deve executar sem esforço quadrático e resolver centenas de fatos em menos de 500ms
     expect(elapsedMs).toBeLessThan(500);
+  });
+
+  // =========================================================================
+  // OPERATIONS-INVARIANT: Toda operação preserva validateProductWorkbook.valid === true
+  // =========================================================================
+  it('OPERATIONS-INVARIANT: sucessão de operações preserva integridade e valid === true em cada etapa', () => {
+    // 1. Criação
+    let wb = createWorkbook({ owner: { kind: 'product', id: 'prod-op-test' } });
+    expect(wb.revision).toBe(0);
+
+    // 2. Adiciona módulo
+    wb = addModule(wb, {
+      id: 'mod-specs',
+      semanticKey: 'hardware.specs',
+      label: 'Especificações de Hardware',
+      kind: 'key_value',
+      order: 1
+    });
+    expect(wb.revision).toBe(1);
+
+    // 3. Adiciona datum
+    wb = addDatum(
+      wb,
+      {
+        semanticKey: 'hardware.processor.freq',
+        moduleId: 'mod-specs',
+        label: 'Frequência do Clock',
+        value: { type: 'quantity', amount: 400, unit: 'MHz' },
+        evidence: [],
+        status: 'draft'
+      },
+      'd-freq'
+    );
+    expect(wb.revision).toBe(2);
+
+    // 4. Anexa evidência
+    wb = attachEvidence(wb, 'd-freq', {
+      id: 'ev-datasheet',
+      sourceDocumentId: 'doc-mcu-datasheet',
+      page: 12,
+      observedValue: { type: 'quantity', amount: 400, unit: 'MHz' }
+    });
+    expect(wb.revision).toBe(3);
+
+    // 5. Aplica decisão canônica
+    wb = setCanonicalDecision(wb, 'd-freq', {
+      kind: 'selected_evidence',
+      selectedEvidenceId: 'ev-datasheet',
+      rationale: 'Confirmado no datasheet oficial do microcontrolador.',
+      decidedAt: '2026-08-10T14:30:00Z'
+    });
+    expect(wb.revision).toBe(4);
+
+    // 6. Aprova o dado
+    wb = approveDatum(wb, 'd-freq', 'engineer-user');
+    expect(wb.revision).toBe(5);
+
+    // 7. Cria visão salva
+    wb = createSavedView(wb, {
+      id: 'view-summary',
+      name: 'Resumo Geral',
+      datumKeys: ['hardware.processor.freq']
+    });
+    expect(wb.revision).toBe(6);
+
+    // 8. Renomeia módulo
+    wb = renameModuleLabel(wb, 'mod-specs', 'Hardware Principal');
+    expect(wb.revision).toBe(7);
+
+    // Invariante de validação estrita preservada
+    const validation = validateProductWorkbook(wb);
+    expect(validation.valid).toBe(true);
+    expect(validation.errors.length).toBe(0);
+  });
+
+  // =========================================================================
+  // ADVERSARIAL-OPERATIONS: Rejeição fechada de operações inválidas
+  // =========================================================================
+  it('ADVERSARIAL-OPERATIONS: rejeita sequências maliciosas ou que quebrem referências', () => {
+    let wb = createWorkbook({ owner: { kind: 'product', id: 'prod-adv' } });
+
+    // Módulo com chave inválida (maiúsculas)
+    expect(() => {
+      addModule(wb, {
+        id: 'm-bad',
+        semanticKey: 'INVALID.UPPERCASE.KEY',
+        label: 'Inválido',
+        kind: 'key_value',
+        order: 1
+      });
+    }).toThrowError(/INVALID_SEMANTIC_KEY/);
+
+    wb = addModule(wb, { id: 'm-ok', semanticKey: 'valid.key', label: 'Válido', kind: 'key_value', order: 1 });
+
+    // Datum com chave inválida
+    expect(() => {
+      addDatum(wb, {
+        semanticKey: 'singleword',
+        moduleId: 'm-ok',
+        label: 'Dado Inválido',
+        value: { type: 'text', value: 'x' },
+        evidence: [],
+        status: 'draft'
+      });
+    }).toThrowError(/INVALID_SEMANTIC_KEY/);
+
+    // Remoção de módulo inexistente
+    expect(() => {
+      removeModule(wb, 'non-existent-module');
+    }).toThrowError(/MODULE_NOT_FOUND/);
   });
 });

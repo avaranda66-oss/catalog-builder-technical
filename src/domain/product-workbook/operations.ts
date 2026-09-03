@@ -16,7 +16,10 @@ import {
   ProductDataView
 } from './types';
 import { isValidSemanticKey } from './schema';
-import { detectEvidenceConflicts } from './provenance.engine';
+import {
+  detectEvidenceConflicts,
+  isCanonicalDecisionValidForDatum
+} from './provenance.engine';
 
 /**
  * Domain Error for Product Workbook validation and invariant violations.
@@ -278,6 +281,7 @@ export function attachEvidence(
 
 /**
  * Sets the canonical decision resolving among multiple observed evidences.
+ * Enforces strict referential validity, non-empty rationale, and known evidence IDs (Parts A1, A2, A3).
  */
 export function setCanonicalDecision(
   workbook: ProductWorkbook,
@@ -289,14 +293,12 @@ export function setCanonicalDecision(
     throw new ProductWorkbookError('DATUM_NOT_FOUND', `Dado com ID "${datumId}" não encontrado.`);
   }
 
-  if (decision.selectedEvidenceId) {
-    const evidenceExists = existingDatum.evidence.some((e) => e.id === decision.selectedEvidenceId);
-    if (!evidenceExists) {
-      throw new ProductWorkbookError(
-        'EVIDENCE_NOT_FOUND',
-        `A evidência selecionada "${decision.selectedEvidenceId}" não está anexada ao dado.`
-      );
-    }
+  const validation = isCanonicalDecisionValidForDatum(decision, existingDatum);
+  if (!validation.valid) {
+    throw new ProductWorkbookError(
+      'INVALID_CANONICAL_DECISION',
+      validation.reason ?? 'Decisão canônica inválida para o dado especificado.'
+    );
   }
 
   const updatedDatum: TechnicalDatum = {
@@ -472,14 +474,36 @@ export function removeOverride(
 
 /**
  * Creates a saved view in the workbook.
+ * Enforces fail-closed validation on datumKeys: dangling keys without matching local or family datum are rejected (Part C8).
  */
 export function createSavedView(
   workbook: ProductWorkbook,
-  view: ProductDataView
+  view: ProductDataView,
+  familyWorkbook?: ProductWorkbook
 ): ProductWorkbook {
   const existingView = workbook.savedViews?.find((v) => v.id === view.id);
   if (existingView) {
     throw new ProductWorkbookError('DUPLICATE_VIEW_ID', `Visão com ID "${view.id}" já existe.`);
+  }
+
+  for (const datumKey of view.datumKeys) {
+    const existsLocally = Object.values(workbook.data).some(
+      (d) => d.semanticKey === datumKey || d.id === datumKey
+    );
+    const existsInFamily = Boolean(
+      familyWorkbook &&
+        Object.values(familyWorkbook.data).some(
+          (d) => d.semanticKey === datumKey || d.id === datumKey
+        )
+    );
+    if (!existsLocally && !existsInFamily) {
+      throw new ProductWorkbookError(
+        'DANGLING_VIEW_KEY',
+        `A chave "${datumKey}" referenciada na visão "${view.name}" não existe nos dados do produto${
+          familyWorkbook ? ' nem da família' : ''
+        }.`
+      );
+    }
   }
 
   return {
@@ -491,16 +515,40 @@ export function createSavedView(
 
 /**
  * Updates an existing saved view.
+ * Enforces fail-closed validation if datumKeys are updated (Part C8).
  */
 export function updateSavedView(
   workbook: ProductWorkbook,
   viewId: string,
-  updates: Partial<ProductDataView>
+  updates: Partial<ProductDataView>,
+  familyWorkbook?: ProductWorkbook
 ): ProductWorkbook {
   const views = workbook.savedViews ?? [];
   const viewIndex = views.findIndex((v) => v.id === viewId);
   if (viewIndex === -1) {
     throw new ProductWorkbookError('VIEW_NOT_FOUND', `Visão com ID "${viewId}" não encontrada.`);
+  }
+
+  if (updates.datumKeys) {
+    for (const datumKey of updates.datumKeys) {
+      const existsLocally = Object.values(workbook.data).some(
+        (d) => d.semanticKey === datumKey || d.id === datumKey
+      );
+      const existsInFamily = Boolean(
+        familyWorkbook &&
+          Object.values(familyWorkbook.data).some(
+            (d) => d.semanticKey === datumKey || d.id === datumKey
+          )
+      );
+      if (!existsLocally && !existsInFamily) {
+        throw new ProductWorkbookError(
+          'DANGLING_VIEW_KEY',
+          `A chave "${datumKey}" referenciada na atualização da visão não existe nos dados do produto${
+            familyWorkbook ? ' nem da família' : ''
+          }.`
+        );
+      }
+    }
   }
 
   const updatedViews = [...views];
