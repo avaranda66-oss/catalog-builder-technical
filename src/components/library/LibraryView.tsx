@@ -70,6 +70,11 @@ export const LibraryView: React.FC = () => {
   const [editingColKey, setEditingColKey] = useState<string | null>(null);
   const [editingColLabel, setEditingColLabel] = useState('');
 
+  // Modo de Inserção de Novo Produto (Sem defaults sintéticos)
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [newProductCode, setNewProductCode] = useState('');
+  const [newProductModel, setNewProductModel] = useState('');
+
   // Modais de Gestão de Famílias (Criação, Rename, Safe Delete)
   const [isAddingFamily, setIsAddingFamily] = useState(false);
   const [newFamilyName, setNewFamilyName] = useState('');
@@ -182,27 +187,43 @@ export const LibraryView: React.FC = () => {
     );
   });
 
-  // Inserir Novo Produto
-  const handleAddNewRow = async () => {
-    const nextNum = products.length + 1;
+  // Inserir Novo Produto com Identidade Mínima Válida e SEM Defaults Sintéticos
+  const handleAddNewRow = async (customCode?: string, customModel?: string) => {
+    const code = customCode?.trim();
+    if (!code) {
+      setIsAddingProduct(true);
+      return;
+    }
+    const model = customModel?.trim() || code;
     const newProd: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'version'> = {
-      code: `PRESYS-${nextNum.toString().padStart(3, '0')}`,
+      code,
       family: currentFamily,
-      model: `MOD-${nextNum}`,
-      description: `Instrumento PRESYS #${nextNum}`,
+      model,
+      description: '',
       specs: {
-        range: '0 a 100',
-        unit: 'bar',
-        accuracy: '±0.05% FE',
-        output: '4-20 mA + HART',
-        powerSupply: '24 Vdc',
-        processConnection: '1/2" NPT',
-        protectionDegree: 'IP67',
+        range: '',
+        unit: '',
+        accuracy: '',
+        output: '',
+        powerSupply: '',
+        processConnection: '',
+        protectionDegree: '',
         customSpecs: {}
       },
       imageUrl: ''
     };
     await addProduct(newProd);
+  };
+
+  const handleConfirmAddProduct = async () => {
+    if (!newProductCode.trim()) {
+      alert('O código do produto é obrigatório.');
+      return;
+    }
+    await handleAddNewRow(newProductCode, newProductModel);
+    setNewProductCode('');
+    setNewProductModel('');
+    setIsAddingProduct(false);
   };
 
   // Criar Nova Coluna
@@ -384,7 +405,10 @@ export const LibraryView: React.FC = () => {
 
           {isAdmin && (
             <button
-              onClick={handleAddNewRow}
+              onClick={() => {
+                setIsAddingProduct((prev) => !prev);
+                setIsAddingColumn(false);
+              }}
               className="flex items-center gap-1 px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded-none shadow-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -393,6 +417,46 @@ export const LibraryView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Formulário Inline para Novo Produto */}
+      {isAdmin && isAddingProduct && (
+        <div className="bg-emerald-50/90 border-b border-emerald-300 px-4 py-2 flex items-center gap-3 animate-in fade-in duration-100">
+          <span className="font-bold text-xs text-emerald-950">Novo Produto na Família:</span>
+          <input
+            type="text"
+            value={newProductCode}
+            onChange={(e) => setNewProductCode(e.target.value)}
+            placeholder="Código * (ex: TA-650)"
+            className="px-2 py-1 bg-white border border-emerald-300 rounded text-xs w-48 font-mono focus:outline-none focus:border-[#003366]"
+            autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && void handleConfirmAddProduct()}
+          />
+          <input
+            type="text"
+            value={newProductModel}
+            onChange={(e) => setNewProductModel(e.target.value)}
+            placeholder="Modelo (ex: TA-650-Advanced)"
+            className="px-2 py-1 bg-white border border-emerald-300 rounded text-xs w-56 focus:outline-none focus:border-[#003366]"
+            onKeyDown={(e) => e.key === 'Enter' && void handleConfirmAddProduct()}
+          />
+          <button
+            onClick={() => void handleConfirmAddProduct()}
+            className="px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded shadow-xs"
+          >
+            Adicionar
+          </button>
+          <button
+            onClick={() => {
+              setIsAddingProduct(false);
+              setNewProductCode('');
+              setNewProductModel('');
+            }}
+            className="px-2 py-1 text-slate-500 hover:text-slate-700 text-xs"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
 
       {/* Formulário Inline para Nova Coluna */}
       {isAdmin && isAddingColumn && (

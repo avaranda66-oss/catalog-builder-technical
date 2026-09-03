@@ -49,16 +49,16 @@ export const ProductDrawer: React.FC = () => {
   const isAdmin = useAuthStore((state) => state.role === 'admin');
 
   const [code, setCode] = useState('');
-  const [family, setFamily] = useState('Transmissores de Pressão Relativa');
+  const [family, setFamily] = useState('');
   const [model, setModel] = useState('');
   const [description, setDescription] = useState('');
   const [range, setRange] = useState('');
-  const [unit, setUnit] = useState('bar');
-  const [accuracy, setAccuracy] = useState('±0.075% FS');
-  const [output, setOutput] = useState('4-20 mA + HART');
-  const [powerSupply, setPowerSupply] = useState('12 a 45 Vcc');
-  const [processConnection, setProcessConnection] = useState('1/2" NPT');
-  const [protectionDegree, setProtectionDegree] = useState('IP67');
+  const [unit, setUnit] = useState('');
+  const [accuracy, setAccuracy] = useState('');
+  const [output, setOutput] = useState('');
+  const [powerSupply, setPowerSupply] = useState('');
+  const [processConnection, setProcessConnection] = useState('');
+  const [protectionDegree, setProtectionDegree] = useState('');
   const [customSpecs, setCustomSpecs] = useState<{ key: string; value: string }[]>([]);
   const [newCustomKey, setNewCustomKey] = useState('');
   const [newCustomVal, setNewCustomVal] = useState('');
@@ -72,16 +72,16 @@ export const ProductDrawer: React.FC = () => {
   useEffect(() => {
     if (initialProduct) {
       setCode(initialProduct.code || '');
-      setFamily(initialProduct.family || 'Transmissores de Pressão Relativa');
+      setFamily(initialProduct.family || '');
       setModel(initialProduct.model || '');
       setDescription(initialProduct.description || '');
       setRange(initialProduct.specs?.range || '');
-      setUnit(initialProduct.specs?.unit || 'bar');
-      setAccuracy(initialProduct.specs?.accuracy || '±0.075% FS');
-      setOutput(initialProduct.specs?.output || '4-20 mA + HART');
-      setPowerSupply(initialProduct.specs?.powerSupply || '12 a 45 Vcc');
-      setProcessConnection(initialProduct.specs?.processConnection || '1/2" NPT');
-      setProtectionDegree(initialProduct.specs?.protectionDegree || 'IP67');
+      setUnit(initialProduct.specs?.unit || '');
+      setAccuracy(initialProduct.specs?.accuracy || '');
+      setOutput(initialProduct.specs?.output || '');
+      setPowerSupply(initialProduct.specs?.powerSupply || '');
+      setProcessConnection(initialProduct.specs?.processConnection || '');
+      setProtectionDegree(initialProduct.specs?.protectionDegree || '');
       setCreatedAt(initialProduct.createdAt || null);
       setVersion(initialProduct.version || 1);
 
@@ -97,16 +97,16 @@ export const ProductDrawer: React.FC = () => {
       }
     } else {
       setCode('');
-      setFamily('Transmissores de Pressão Relativa');
+      setFamily('');
       setModel('');
       setDescription('');
       setRange('');
-      setUnit('bar');
-      setAccuracy('±0.075% FS');
-      setOutput('4-20 mA + HART');
-      setPowerSupply('12 a 45 Vcc');
-      setProcessConnection('1/2" NPT');
-      setProtectionDegree('IP67');
+      setUnit('');
+      setAccuracy('');
+      setOutput('');
+      setPowerSupply('');
+      setProcessConnection('');
+      setProtectionDegree('');
       setCreatedAt(null);
       setVersion(1);
       setCustomSpecs([]);

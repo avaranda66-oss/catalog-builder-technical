@@ -171,7 +171,7 @@ export class AIService {
     }
 
     const matched = libraryProducts.filter((p) => {
-      const fullText = `${p.code} ${p.family} ${p.model} ${p.description} ${p.specs.range} ${p.specs.unit} ${p.specs.accuracy}`.toLowerCase();
+      const fullText = `${p.code || ''} ${p.family || ''} ${p.model || ''} ${p.description || ''} ${p.specs?.range || ''} ${p.specs?.unit || ''} ${p.specs?.accuracy || ''}`.toLowerCase();
       return fullText.includes(q) || q.split(' ').some((term) => term.length > 2 && fullText.includes(term));
     });
 
@@ -187,10 +187,10 @@ export class AIService {
     for (const p of matched.slice(0, 3)) {
       responseText += `- **${p.code} (${p.model}):**\n`;
       responseText += `  • Família: ${p.family}\n`;
-      responseText += `  • Faixa: ${p.specs.range} ${p.specs.unit}\n`;
-      responseText += `  • Exatidão: ${p.specs.accuracy}\n`;
-      responseText += `  • Sinal de Saída: ${p.specs.output || 'N/A'}\n`;
-      responseText += `  • Conexão de Processo: ${p.specs.processConnection || 'N/A'}\n\n`;
+      responseText += `  • Faixa: ${p.specs?.range || 'N/A'} ${p.specs?.unit || ''}\n`;
+      responseText += `  • Exatidão: ${p.specs?.accuracy || 'N/A'}\n`;
+      responseText += `  • Sinal de Saída: ${p.specs?.output || 'N/A'}\n`;
+      responseText += `  • Conexão de Processo: ${p.specs?.processConnection || 'N/A'}\n\n`;
     }
 
     return {

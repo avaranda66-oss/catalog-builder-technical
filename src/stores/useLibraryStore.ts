@@ -24,6 +24,8 @@ export interface PendingProductEdit {
   timestamp: number;
 }
 
+export type LibraryDataProvenance = 'cloud_official' | 'offline_cache' | 'demo_seed';
+
 interface LibraryState {
   products: Product[];
   families: ProductFamily[];
@@ -35,6 +37,7 @@ interface LibraryState {
   selectedFamily: string; // family name or slug
   workspaceLoaded: boolean;
   workspaceSource: 'cloud' | 'offline';
+  dataProvenance: LibraryDataProvenance;
   
   // Status de Sincronização
   syncStatus: SyncStatus;
@@ -132,6 +135,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   selectedFamily: '',
   workspaceLoaded: false,
   workspaceSource: 'cloud',
+  dataProvenance: 'demo_seed',
   
   syncStatus: 'synced',
   syncError: null,
@@ -826,6 +830,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         set({
           workspaceLoaded: true,
           workspaceSource: 'cloud',
+          dataProvenance: 'cloud_official',
           families,
           familyFields: fieldMap,
           products: remoteProducts,
@@ -849,6 +854,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set({
         workspaceLoaded: true,
         workspaceSource: 'offline',
+        dataProvenance: 'offline_cache',
         products: saved,
         selectedFamily: derivedFamilies[0] || '',
         syncStatus: 'offline',
@@ -858,6 +864,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set({
         workspaceLoaded: true,
         workspaceSource: 'offline',
+        dataProvenance: 'demo_seed',
         products: INITIAL_PRODUCTS,
         selectedFamily: 'Transmissores de Pressão Relativa',
         syncStatus: 'offline',
@@ -1103,6 +1110,6 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   resetToInitial: () => {
     StorageService.saveProducts(INITIAL_PRODUCTS);
-    set({ products: INITIAL_PRODUCTS, syncStatus: 'synced' });
+    set({ products: INITIAL_PRODUCTS, dataProvenance: 'demo_seed', syncStatus: 'synced' });
   }
 }));

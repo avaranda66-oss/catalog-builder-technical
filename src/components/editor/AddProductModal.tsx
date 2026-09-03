@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { X, Search, Check } from 'lucide-react';
+import { X, Search, Check, AlertTriangle, Database, WifiOff, Sparkles } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
-import { useLibraryStore } from '../../stores/useLibraryStore';
+import { useLibraryStore, LibraryDataProvenance } from '../../stores/useLibraryStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 
 export const AddProductModal: React.FC = () => {
   const { isAddProductToTableModalOpen, targetTableBlockId, closeAddProductToTableModal } = useUIStore();
-  const { products } = useLibraryStore();
+  const { products, dataProvenance } = useLibraryStore();
   const { addRowToTable } = useCatalogStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFamilyFilter, setSelectedFamilyFilter] = useState<string>('all');
@@ -18,13 +18,24 @@ export const AddProductModal: React.FC = () => {
   const filtered = products.filter((p) => {
     const q = searchTerm.toLowerCase().trim();
     const matchesFamily = selectedFamilyFilter === 'all' || p.family === selectedFamilyFilter;
+
+    const code = (p.code || '').toLowerCase();
+    const model = (p.model || '').toLowerCase();
+    const family = (p.family || '').toLowerCase();
+    const range = (p.specs?.range || '').toLowerCase();
+    const accuracy = (p.specs?.accuracy || '').toLowerCase();
+    const output = (p.specs?.output || '').toLowerCase();
+    const description = (p.description || '').toLowerCase();
+
     const matchesSearch =
       !q ||
-      p.code.toLowerCase().includes(q) ||
-      p.model.toLowerCase().includes(q) ||
-      p.family.toLowerCase().includes(q) ||
-      p.specs.range.toLowerCase().includes(q) ||
-      p.description?.toLowerCase().includes(q);
+      code.includes(q) ||
+      model.includes(q) ||
+      family.includes(q) ||
+      range.includes(q) ||
+      accuracy.includes(q) ||
+      output.includes(q) ||
+      description.includes(q);
 
     return matchesFamily && matchesSearch;
   });
@@ -34,21 +45,73 @@ export const AddProductModal: React.FC = () => {
     closeAddProductToTableModal();
   };
 
+  const getProvenanceConfig = (provenance: LibraryDataProvenance) => {
+    switch (provenance) {
+      case 'cloud_official':
+        return {
+          title: 'Biblioteca Oficial — Nuvem',
+          subtitle: `Instrumentos cadastrados na base corporativa oficial (${products.length} disponíveis).`,
+          badgeLabel: 'Nuvem Oficial',
+          badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+          icon: <Database className="w-3.5 h-3.5 text-emerald-700" />,
+          isDemo: false
+        };
+      case 'offline_cache':
+        return {
+          title: 'Biblioteca — Cache Offline',
+          subtitle: `Exibindo cópia em cache local. Pode estar desatualizado em relação à base oficial (${products.length} disponíveis).`,
+          badgeLabel: 'Cache Local (Offline)',
+          badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
+          icon: <WifiOff className="w-3.5 h-3.5 text-amber-700" />,
+          isDemo: false
+        };
+      case 'demo_seed':
+      default:
+        return {
+          title: 'Dados de Demonstração',
+          subtitle: `Atenção: exibindo instrumentos de demonstração. Não representam dados oficiais da Presys (${products.length} disponíveis).`,
+          badgeLabel: 'Demonstração / Teste',
+          badgeClass: 'bg-slate-200 text-slate-800 border-slate-300',
+          icon: <Sparkles className="w-3.5 h-3.5 text-slate-700" />,
+          isDemo: true
+        };
+    }
+  };
+
+  const prov = getProvenanceConfig(dataProvenance);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 select-none">
       <div className="bg-white rounded-xl shadow-2xl border border-slate-300 max-w-2xl w-full p-5 flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div className="flex items-start justify-between pb-3 border-b border-slate-200">
           <div>
-            <h2 className="text-sm font-bold text-[#003366]">Selecionar Produto da Biblioteca Oficial</h2>
-            <p className="text-xs text-slate-500">
-              Escolha um instrumento cadastrado na biblioteca ({products.length} itens disponíveis).
-            </p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#003366]">{prov.title}</h2>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${prov.badgeClass}`}
+              >
+                {prov.icon}
+                <span>{prov.badgeLabel}</span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">{prov.subtitle}</p>
           </div>
           <button onClick={closeAddProductToTableModal} className="text-slate-400 hover:text-slate-700">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Alerta de Fail-Closed / Aviso quando dados forem Demonstração */}
+        {prov.isDemo && (
+          <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-900 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-snug">
+              <strong>Aviso de Proveniência:</strong> Esta sessão está exibindo dados mockados de demonstração.
+              Nenhum dado mockado possui certificação metrológica oficial.
+            </p>
+          </div>
+        )}
 
         {/* Barra de Filtros e Busca */}
         <div className="flex items-center gap-2 mt-3 mb-3">
@@ -69,11 +132,13 @@ export const AddProductModal: React.FC = () => {
             className="px-2.5 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-700 focus:outline-none"
           >
             <option value="all">Todas as Famílias</option>
-            {families.filter((f) => f !== 'all').map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
+            {families
+              .filter((f) => f !== 'all')
+              .map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -92,10 +157,32 @@ export const AddProductModal: React.FC = () => {
                   </span>
                   <span className="text-xs font-bold text-slate-900">{prod.model}</span>
                   <span className="text-[10px] text-slate-500 font-normal">({prod.family})</span>
+                  {prov.isDemo && (
+                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.2 rounded">DEMO</span>
+                  )}
                 </div>
-                <p className="text-[11px] font-mono text-slate-700">
-                  Faixa: <span className="font-semibold">{prod.specs.range} {prod.specs.unit}</span> | Exatidão: <span className="font-semibold">{prod.specs.accuracy}</span> | Saída: {prod.specs.output}
-                </p>
+                <div className="text-[11px] font-mono text-slate-700 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {prod.specs?.range ? (
+                    <span>
+                      Faixa: <span className="font-semibold">{prod.specs.range} {prod.specs?.unit || ''}</span>
+                    </span>
+                  ) : null}
+                  {prod.specs?.accuracy ? (
+                    <span>
+                      Exatidão: <span className="font-semibold">{prod.specs.accuracy}</span>
+                    </span>
+                  ) : null}
+                  {prod.specs?.output ? (
+                    <span>
+                      Saída: <span className="font-semibold">{prod.specs.output}</span>
+                    </span>
+                  ) : null}
+                  {!prod.specs?.range && !prod.specs?.accuracy && !prod.specs?.output && (
+                    <span className="text-slate-400 italic font-sans text-[10.5px]">
+                      Sem especificações técnicas registradas
+                    </span>
+                  )}
+                </div>
               </div>
 
               <button
