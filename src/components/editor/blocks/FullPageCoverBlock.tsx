@@ -37,7 +37,7 @@ export interface ElementPositionConfig {
 }
 
 const CoverImageLayer: React.FC<{ layer: CanvasLayer }> = ({ layer }) => {
-  const displayUrl = useResolvedAssetUrl(layer.assetId, layer.legacyUrl || layer.imageUrl);
+  const displayUrl = useResolvedAssetUrl(layer.assetId, layer.imageUrl || layer.legacyUrl);
   return (
     <div
       style={{
@@ -47,7 +47,7 @@ const CoverImageLayer: React.FC<{ layer: CanvasLayer }> = ({ layer }) => {
       className="overflow-hidden bg-slate-900 border border-slate-700 relative group/img"
     >
       <img
-        src={displayUrl || layer.imageUrl || ''}
+        src={displayUrl || layer.imageUrl || layer.legacyUrl || ''}
         alt={layer.label}
         className="w-full h-full object-contain"
       />

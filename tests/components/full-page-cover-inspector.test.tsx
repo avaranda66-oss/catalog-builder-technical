@@ -329,4 +329,191 @@ describe('FullPageCoverInspector (CORE.E4)', () => {
     expect(createdLayer.type).toBe('image');
     expect(createdLayer.label).toMatch(/Imagem \/ Logo/i);
   });
+
+  // ==========================================================================
+  // 6. CORE.E4.1 REFINAMENTOS: CANONICAL SOURCE OF TRUTH & NESTED SCROLL
+  // ==========================================================================
+  it('COVER-CANONICAL-MISSING-SEMANTIC-INSPECTOR: se capa canônica não possui layer-title, campo Título fica vazio no Inspector', () => {
+    const canonicalWithoutTitle: ContentBlock = {
+      ...sampleBlock,
+      title: 'Título Antigo Legacy Que Não Deve Aparecer',
+      customData: {
+        canvasLayers: [
+          {
+            id: 'layer-logo',
+            type: 'text',
+            label: 'Marca',
+            content: 'PRESYS',
+            x: 5,
+            y: 3.5,
+            visible: true
+          }
+        ]
+      }
+    };
+
+    renderComponent(canonicalWithoutTitle);
+
+    const titleInput = container.querySelector('#cover-field-title') as HTMLInputElement;
+    expect(titleInput.value).toBe(''); // ZERO fallback para block.title!
+  });
+
+  it('COVER-NO-NESTED-SCROLL-1: seção Camadas NÃO possui container com max-h-96 overflow-y-auto', () => {
+    renderComponent();
+
+    // Abre seção Camadas
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const nestedScrollContainer = container.querySelector('.max-h-96');
+    expect(nestedScrollContainer).toBeNull(); // Zero nested scroll!
+  });
+
+  it('COVER-LAYER-SELECTION-AND-DETAILS-1: clicar em uma camada da lista exibe os detalhes da camada selecionada', () => {
+    renderComponent();
+
+    // Abre seção Camadas
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    // Clica na linha da camada Título Comercial
+    const layerRows = container.querySelectorAll('[data-cover-layer-id]');
+    expect(layerRows.length).toBeGreaterThan(0);
+
+    const titleRow = Array.from(layerRows).find((el) => el.textContent?.includes('Título Comercial'));
+    expect(titleRow).toBeDefined();
+
+    act(() => {
+      (titleRow as HTMLElement).click();
+    });
+
+    // Painel de detalhes é renderizado
+    expect(container.textContent).toContain('Detalhes: Título Comercial');
+    const fontSizeSlider = container.querySelector('#selected-layer-fontsize-slider');
+    expect(fontSizeSlider).not.toBeNull();
+  });
+
+  it('COVER-LAYER-GEOMETRY-1 & 2: slider X de camada é transiente; pointerup comita e blur subsequente não duplica', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent();
+
+    // Abre seção Camadas e seleciona a primeira camada
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const firstRow = container.querySelector('[data-cover-layer-id]') as HTMLElement;
+    act(() => {
+      firstRow.click();
+    });
+
+    const xSlider = container.querySelector('#selected-layer-x-slider') as HTMLInputElement;
+    expect(xSlider).not.toBeNull();
+
+    // Múltiplos eventos onChange NÃO comitam
+    act(() => {
+      xSlider.value = '10';
+      xSlider.dispatchEvent(new Event('change', { bubbles: true }));
+      xSlider.value = '20';
+      xSlider.dispatchEvent(new Event('change', { bubbles: true }));
+      xSlider.value = '30';
+      xSlider.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(0);
+
+    // pointerUp comita exatamente UMA vez
+    act(() => {
+      xSlider.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+
+    // blur subsequente com mesmo valor é idempotente (COVER-LAYER-GEOMETRY-2)
+    act(() => {
+      xSlider.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1); // Continua 1
+  });
+
+  it('COVER-LAYER-GEOMETRY-3: pointerup sem alteração de valor gera ZERO mutação', () => {
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent();
+
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const firstRow = container.querySelector('[data-cover-layer-id]') as HTMLElement;
+    act(() => {
+      firstRow.click();
+    });
+
+    const xSlider = container.querySelector('#selected-layer-x-slider') as HTMLInputElement;
+
+    // pointerup direto sem alterar o valor
+    act(() => {
+      xSlider.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    expect(updateBlockSpy).toHaveBeenCalledTimes(0);
+  });
+
+  it('COVER-IMAGE-REMOVE-1: botão "Remover Imagem da Camada" limpa todas as fontes da layer sem apagar a camada', () => {
+    const blockWithImageLayer: ContentBlock = {
+      ...sampleBlock,
+      customData: {
+        canvasLayers: [
+          {
+            id: 'layer-img-test',
+            type: 'image',
+            label: 'Foto do Produto',
+            assetId: 'asset-old-123',
+            imageUrl: 'https://velha.com/foto.jpg',
+            legacyUrl: 'https://legado.com/foto.jpg',
+            x: 10,
+            y: 10,
+            visible: true
+          }
+        ]
+      }
+    };
+
+    const updateBlockSpy = vi.fn();
+    useCatalogStore.setState({ updateBlock: updateBlockSpy });
+
+    renderComponent(blockWithImageLayer);
+
+    const layersTrigger = container.querySelector('#inspector-cover-section-layers-header') as HTMLButtonElement;
+    act(() => {
+      layersTrigger.click();
+    });
+
+    const imgRow = container.querySelector('[data-cover-layer-id="layer-img-test"]') as HTMLElement;
+    act(() => {
+      imgRow.click();
+    });
+
+    const buttons = Array.from(container.querySelectorAll('button'));
+    const removeImgBtn = buttons.find((b) => b.textContent?.includes('Remover Imagem da Camada'));
+    expect(removeImgBtn).toBeDefined();
+
+    act(() => {
+      removeImgBtn!.click();
+    });
+
+    expect(updateBlockSpy).toHaveBeenCalledTimes(1);
+    const [, , patch] = updateBlockSpy.mock.calls[0];
+    const updatedLayer = patch.customData.canvasLayers.find((l: any) => l.id === 'layer-img-test');
+    expect(updatedLayer.assetId).toBeUndefined();
+    expect(updatedLayer.imageUrl).toBeUndefined();
+    expect(updatedLayer.legacyUrl).toBeUndefined();
+  });
 });

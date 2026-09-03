@@ -21,7 +21,10 @@ import {
   resolveCoverBackgroundSource,
   setCoverBackgroundAsset,
   setCoverBackgroundUrl,
-  removeCoverBackground
+  removeCoverBackground,
+  setCoverLayerImageAsset,
+  setCoverLayerImageUrl,
+  removeCoverLayerImage
 } from '../../src/domain/full-page-cover.engine';
 
 describe('Full Page Cover Pure Domain Engine (CORE.E4)', () => {
@@ -330,5 +333,61 @@ describe('Full Page Cover Pure Domain Engine (CORE.E4)', () => {
     expect(patch.imageUrl).toBeUndefined();
     expect(patch.legacyUrl).toBeUndefined();
     expect(patch.customData?.backgroundImageUrl).toBeUndefined();
+  });
+
+  // ==========================================================================
+  // 6. CANONICAL SOURCE OF TRUTH & IMAGE AUTHORITY (CORE.E4.1)
+  // ==========================================================================
+  it('COVER-CANONICAL-MISSING-SEMANTIC-1: em modo canônico sem layer-title, getEffectiveSemanticCoverContent retorna title vazio (zero fallback)', () => {
+    const canonicalMissingTitle: ContentBlock = {
+      ...sampleLegacyBlock,
+      title: 'Título Legacy Antigo Que Não Deve Aparecer',
+      customData: {
+        canvasLayers: [
+          {
+            id: 'layer-logo',
+            type: 'text',
+            label: 'Marca',
+            content: 'PRESYS',
+            x: 5,
+            y: 3.5,
+            zIndex: 10,
+            visible: true
+          }
+        ]
+      }
+    };
+
+    const content = getEffectiveSemanticCoverContent(canonicalMissingTitle);
+    expect(content.title).toBe(''); // ZERO fallback para block.title!
+    expect(content.brand).toBe('PRESYS');
+
+    // Ao editar o campo title novamente, recria layer-title via helper semântico
+    const patch = buildSemanticCoverContentPatch(canonicalMissingTitle, 'title', 'Novo Título Recriado');
+    const recreatedLayers = patch.customData?.canvasLayers;
+    const titleLayer = recreatedLayers?.find((l: any) => l.id === 'layer-title');
+    expect(titleLayer).toBeDefined();
+    expect(titleLayer?.content).toBe('Novo Título Recriado');
+  });
+
+  it('COVER-IMAGE-SOURCE-1: selecionar URL limpa legacyUrl e imageUrl antigos garantindo que nova URL seja autoridade', () => {
+    const patch = setCoverLayerImageUrl('https://novo.com/imagem-nova.png');
+    expect(patch.imageUrl).toBe('https://novo.com/imagem-nova.png');
+    expect(patch.legacyUrl).toBeUndefined();
+    expect(patch.assetId).toBeUndefined();
+  });
+
+  it('COVER-IMAGE-SOURCE-2: selecionar asset limpa legacyUrl e imageUrl', () => {
+    const patch = setCoverLayerImageAsset('asset-xyz-789');
+    expect(patch.assetId).toBe('asset-xyz-789');
+    expect(patch.imageUrl).toBeUndefined();
+    expect(patch.legacyUrl).toBeUndefined();
+  });
+
+  it('COVER-IMAGE-SOURCE-3: remover imagem da layer limpa todas as fontes', () => {
+    const patch = removeCoverLayerImage();
+    expect(patch.assetId).toBeUndefined();
+    expect(patch.imageUrl).toBeUndefined();
+    expect(patch.legacyUrl).toBeUndefined();
   });
 });

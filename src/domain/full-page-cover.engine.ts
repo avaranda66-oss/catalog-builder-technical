@@ -241,6 +241,39 @@ export function materializeCoverLayers(block: ContentBlock): CanvasLayer[] {
 export type CoverLayerPatch = Partial<Omit<CanvasLayer, 'id' | 'type'>>;
 
 /**
+ * Helper puro de autoridade para Image Layer: define novo Asset e limpa URLs legadas/externas.
+ */
+export function setCoverLayerImageAsset(assetId: string): CoverLayerPatch {
+  return {
+    assetId,
+    imageUrl: undefined,
+    legacyUrl: undefined
+  };
+}
+
+/**
+ * Helper puro de autoridade para Image Layer: define nova URL externa e limpa assetId e legacyUrl.
+ */
+export function setCoverLayerImageUrl(url: string): CoverLayerPatch {
+  return {
+    assetId: undefined,
+    imageUrl: url,
+    legacyUrl: undefined
+  };
+}
+
+/**
+ * Helper puro de autoridade para Image Layer: remove a imagem preservando a camada.
+ */
+export function removeCoverLayerImage(): CoverLayerPatch {
+  return {
+    assetId: undefined,
+    imageUrl: undefined,
+    legacyUrl: undefined
+  };
+}
+
+/**
  * Normaliza deterministicamente o zIndex das camadas mantendo sua ordem relativa no array.
  */
 export function normalizeCoverZIndex(layers: CanvasLayer[]): CanvasLayer[] {
@@ -445,6 +478,18 @@ export function getEffectiveSemanticCoverContent(block: ContentBlock): {
   const titleLayer = layers.find((l) => l.id === 'layer-title');
   const subtitleLayer = layers.find((l) => l.id === 'layer-subtitle');
 
+  // Em modo CANONICAL_LAYERS (hasCanonicalCoverLayers === true), canvasLayers é soberano.
+  // Se uma camada semântica foi excluída, NÃO faz fallback para os campos legados de block (COVER-CANONICAL-MISSING-SEMANTIC-1).
+  if (hasCanonicalCoverLayers(block)) {
+    return {
+      brand: logoLayer?.content ?? '',
+      badge: badgeLayer?.content ?? '',
+      title: titleLayer?.content ?? '',
+      subtitle: subtitleLayer?.content ?? ''
+    };
+  }
+
+  // Em modo LEGACY_DERIVED, pode ler brandName/badgeText/title/subtitle e defaults
   return {
     brand: logoLayer?.content ?? block.customData?.brandName ?? 'PRESYS',
     badge: badgeLayer?.content ?? block.badgeText ?? 'CALIBRAÇÃO RBC · ISO/IEC 17025',

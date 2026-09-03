@@ -180,6 +180,44 @@ describe('Full Page Cover Integration & Parity (CORE.E4)', () => {
   });
 
   // ==========================================================================
+  // 3B. COVER-I18N-HIDDEN-LAYER-1: CAMADAS OCULTAS (visible === false) NÃO TRADUZEM
+  // ==========================================================================
+  it('COVER-I18N-HIDDEN-LAYER-1: camada com visible === false não gera PrintableTextNode', () => {
+    const coverWithHiddenLayer: ContentBlock = {
+      ...sampleCanonicalCover,
+      customData: {
+        ...sampleCanonicalCover.customData,
+        canvasLayers: [
+          {
+            id: 'layer-title',
+            type: 'text',
+            label: 'Título Visível',
+            content: 'Visible Title',
+            x: 5,
+            y: 20,
+            visible: true
+          },
+          {
+            id: 'layer-hidden-note',
+            type: 'text',
+            label: 'Nota Oculta',
+            content: 'Do Not Translate Me',
+            x: 5,
+            y: 40,
+            visible: false
+          }
+        ]
+      }
+    };
+
+    const nodes = extractHeroBlocks(coverWithHiddenLayer, 'page-1', 1);
+    const texts = nodes.map((n) => n.sourceText);
+
+    expect(texts).toContain('Visible Title');
+    expect(texts).not.toContain('Do Not Translate Me');
+  });
+
+  // ==========================================================================
   // 4. COVER-I18N-LEGACY-1: CAPA LEGADA EXTRAI CAMPOS QUE ALIMENTAM AS DERIVED LAYERS
   // ==========================================================================
   it('COVER-I18N-LEGACY-1: capa legacy extrai brandName protegido e título/subtítulo/badge para tradução', () => {

@@ -97,6 +97,7 @@ export function extractHeroBlocks(block: ContentBlock, pageId: string, pageNumbe
       if (
         layer &&
         typeof layer === 'object' &&
+        layer.visible !== false &&
         (layer.type === 'text' || layer.type === 'badge') &&
         typeof layer.content === 'string' &&
         layer.content.trim()

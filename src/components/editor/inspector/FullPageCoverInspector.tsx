@@ -1,7 +1,14 @@
 // src/components/editor/inspector/FullPageCoverInspector.tsx
-// Inspector Contextual Canônico da Capa A4 Página Inteira (CORE.E4).
-// Utiliza estritamente as primitives do design system (CORE.E3), elimina controles NO-OP
-// e integra a Pure Domain Engine para materialização e operações de camadas seguras.
+// Inspector Canônico da Capa A4 Página Inteira (CORE.E4 / E4.1).
+// Padrão WAI-ARIA com Primitives CORE.E3.
+// Refinamentos E4.1:
+// - Eliminação de nested scroll (lista compacta de camadas)
+// - Edição focada na camada selecionada (selectedLayerDetails)
+// - Poder de edição real restaurado (fontSize, width, height, backgroundColor, borderColor, borderWidth)
+// - Save-storm eliminado em controles contínuos de geometria (preview transiente local)
+// - Draft em campos de URL (background e imagem) com commit no blur/enter
+// - Helpers puros de autoridade de imagem (setCoverLayerImageAsset, setCoverLayerImageUrl, removeCoverLayerImage)
+// - Type contract estrito usando CoverLayerPatch
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -38,7 +45,11 @@ import {
   resolveCoverBackgroundSource,
   setCoverBackgroundAsset,
   setCoverBackgroundUrl,
-  removeCoverBackground
+  removeCoverBackground,
+  setCoverLayerImageAsset,
+  setCoverLayerImageUrl,
+  removeCoverLayerImage,
+  CoverLayerPatch
 } from '../../../domain/full-page-cover.engine';
 import {
   InspectorSection,
@@ -65,15 +76,17 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   const layerImageInputRef = useRef<HTMLInputElement>(null);
   const [activeLayerImageTargetId, setActiveLayerImageTargetId] = useState<string | null>(null);
 
-  // Leitura segura do conteúdo semântico efetivo
+  // Leitura segura do conteúdo semântico efetivo (obedecendo à autoridade soberana de canvasLayers)
   const semanticContent = getEffectiveSemanticCoverContent(block);
   const bgSource = resolveCoverBackgroundSource(block);
   const layers = getEffectiveCoverLayers(block);
 
+  // Seleção local da camada ativa no Inspector (Item 10)
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const selectedLayer = layers.find((l) => l.id === selectedLayerId) || null;
 
   // ==========================================================================
-  // ESTADO TRANSIENTE DE OVERLAY (Zero Save-Storm + Idempotência de Commit)
+  // 1. ESTADO TRANSIENTE DE OVERLAY (Zero Save-Storm + Idempotência de Commit)
   // ==========================================================================
   const persistedOverlay = block.customData?.overlayOpacity ?? 45;
   const [localOverlay, setLocalOverlay] = useState<number>(persistedOverlay);
@@ -85,7 +98,6 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   }, [persistedOverlay]);
 
   const commitOverlay = (val: number) => {
-    // Idempotência estrita: se já comitado ou idêntico ao persistido, NO-OP (COVER-OVERLAY-COMMIT-1)
     if (val === lastCommittedOverlayRef.current && val === persistedOverlay) {
       return;
     }
@@ -96,7 +108,92 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   };
 
   // ==========================================================================
-  // HANDLERS SEMÂNTICOS DE CONTEÚDO (Materialização Segura na Primeira Ação)
+  // 2. ESTADO TRANSIENTE DE BACKGROUND URL (Item 17: Commit no Blur/Enter)
+  // ==========================================================================
+  const persistedBgUrl = bgSource.kind === 'url' ? bgSource.url : '';
+  const [localBgUrl, setLocalBgUrl] = useState<string>(persistedBgUrl);
+
+  useEffect(() => {
+    setLocalBgUrl(bgSource.kind === 'url' ? bgSource.url : '');
+  }, [persistedBgUrl]);
+
+  const commitBgUrl = () => {
+    const trimmed = localBgUrl.trim();
+    if (trimmed && trimmed !== persistedBgUrl) {
+      handleSelectUrl(trimmed);
+    }
+  };
+
+  // ==========================================================================
+  // 3. ESTADO TRANSIENTE DE IMAGE LAYER URL (Item 18: Commit no Blur/Enter)
+  // ==========================================================================
+  const persistedLayerImageUrl = selectedLayer?.imageUrl || '';
+  const [localImageUrl, setLocalImageUrl] = useState<string>(persistedLayerImageUrl);
+
+  useEffect(() => {
+    setLocalImageUrl(persistedLayerImageUrl);
+  }, [selectedLayerId, persistedLayerImageUrl]);
+
+  const commitLayerImageUrl = () => {
+    if (!selectedLayer) return;
+    const trimmed = localImageUrl.trim();
+    if (trimmed && trimmed !== persistedLayerImageUrl) {
+      handleUpdateLayerProps(selectedLayer.id, setCoverLayerImageUrl(trimmed));
+    }
+  };
+
+  // ==========================================================================
+  // 4. ESTADO TRANSIENTE DE GEOMETRIA DA CAMADA SELECIONADA (Itens 14, 15, 16)
+  // ==========================================================================
+  const [geometryDraft, setGeometryDraft] = useState<{
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    fontSize?: number;
+    borderWidth?: number;
+  }>({ x: 0, y: 0 });
+
+  const lastCommittedGeometryRef = useRef<Record<string, any>>({});
+
+  useEffect(() => {
+    if (selectedLayer) {
+      const initial = {
+        x: selectedLayer.x ?? 0,
+        y: selectedLayer.y ?? 0,
+        width: selectedLayer.width,
+        height: selectedLayer.height,
+        fontSize: selectedLayer.fontSize,
+        borderWidth: selectedLayer.borderWidth
+      };
+      setGeometryDraft(initial);
+      lastCommittedGeometryRef.current = { ...initial };
+    }
+  }, [
+    selectedLayerId,
+    selectedLayer?.x,
+    selectedLayer?.y,
+    selectedLayer?.width,
+    selectedLayer?.height,
+    selectedLayer?.fontSize,
+    selectedLayer?.borderWidth
+  ]);
+
+  const commitGeometryField = (
+    field: 'x' | 'y' | 'width' | 'height' | 'fontSize' | 'borderWidth',
+    value: number
+  ) => {
+    if (!selectedLayer) return;
+    const persistedVal = selectedLayer[field];
+    if (value === lastCommittedGeometryRef.current[field] && value === persistedVal) {
+      return;
+    }
+    lastCommittedGeometryRef.current[field] = value;
+    handleUpdateLayerProps(selectedLayer.id, { [field]: value });
+  };
+
+  // ==========================================================================
+  // HANDLERS SEMÂNTICOS DE CONTEÚDO (Recria se ausente via Engine)
   // ==========================================================================
   const handleSemanticUpdate = (
     field: 'brand' | 'badge' | 'title' | 'subtitle',
@@ -107,7 +204,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   };
 
   // ==========================================================================
-  // HANDLERS DE BACKGROUND (Acervo, Upload, URL, Remoção)
+  // HANDLERS DE BACKGROUND
   // ==========================================================================
   const handleSelectAsset = (assetId: string) => {
     const patch = setCoverBackgroundAsset(block, assetId);
@@ -141,7 +238,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
   };
 
   // ==========================================================================
-  // HANDLERS DE CAMADAS VIA ENGINE PURA
+  // HANDLERS DE CAMADAS VIA ENGINE PURA (Contrato Type-Safe com CoverLayerPatch)
   // ==========================================================================
   const handleAddLayer = (type: CanvasLayerType) => {
     const baseLayers = materializeCoverLayers(block);
@@ -154,7 +251,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     setSelectedLayerId(newLayer.id);
   };
 
-  const handleUpdateLayerProps = (layerId: string, patch: Partial<CanvasLayer>) => {
+  const handleUpdateLayerProps = (layerId: string, patch: CoverLayerPatch) => {
     const baseLayers = materializeCoverLayers(block);
     const updated = updateCoverLayer(baseLayers, layerId, patch);
 
@@ -174,6 +271,8 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     updateBlock(pageId, block.id, {
       customData: { ...(block.customData || {}), canvasLayers: updated }
     });
+    const duplicated = updated[updated.length - 1];
+    if (duplicated) setSelectedLayerId(duplicated.id);
   };
 
   const handleRemove = (layerId: string) => {
@@ -192,7 +291,6 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     const baseLayers = materializeCoverLayers(block);
     const updated = reorderCoverLayer(baseLayers, layerId, direction);
 
-    // Se for NO-OP (limite de borda atingido), não dispara updateBlock (COVER-REORDER-NOOP-1)
     if (updated === baseLayers) {
       return;
     }
@@ -202,7 +300,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     });
   };
 
-  // Upload específico para Image Layer funcional (COVER-IMAGE-LAYER-1)
+  // Upload específico para Image Layer funcional (com helpers puros)
   const handleLayerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeLayerImageTargetId) return;
@@ -210,17 +308,30 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
     try {
       const res = await uploadAndLinkAsset(file);
       if (res?.assetId) {
-        handleUpdateLayerProps(activeLayerImageTargetId, {
-          assetId: res.assetId,
-          imageUrl: undefined,
-          legacyUrl: undefined
-        });
+        handleUpdateLayerProps(activeLayerImageTargetId, setCoverLayerImageAsset(res.assetId));
       }
     } catch (err) {
       console.error('Falha no upload da camada de imagem:', err);
     } finally {
       if (layerImageInputRef.current) layerImageInputRef.current.value = '';
       setActiveLayerImageTargetId(null);
+    }
+  };
+
+  const getLayerIcon = (type: CanvasLayerType) => {
+    switch (type) {
+      case 'text':
+        return <Type className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+      case 'badge':
+        return <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+      case 'image':
+        return <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+      case 'line':
+        return <Minus className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+      case 'shape':
+        return <Square className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
+      default:
+        return <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />;
     }
   };
 
@@ -234,67 +345,94 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
         description="Marca, Selo, Título e Subtítulo"
         defaultOpen={true}
       >
-        <InspectorField label="Nome da Empresa / Marca">
-          <InspectorTextInput
-            id="cover-field-brand"
-            value={semanticContent.brand}
-            onChange={(e) => handleSemanticUpdate('brand', e.target.value)}
-            placeholder="Ex: PRESYS"
-          />
-        </InspectorField>
+        <div className="space-y-2.5">
+          <InspectorField
+            label="Nome da Empresa / Marca"
+            description="Exibido na camada institucional superior"
+          >
+            <InspectorTextInput
+              id="cover-field-brand"
+              value={semanticContent.brand}
+              onChange={(e) => handleSemanticUpdate('brand', e.target.value)}
+              placeholder="Ex: PRESYS INSTRUMENTOS"
+            />
+          </InspectorField>
 
-        <InspectorField label="Selo Metrológico / Badge">
-          <InspectorTextInput
-            id="cover-field-badge"
-            value={semanticContent.badge}
-            onChange={(e) => handleSemanticUpdate('badge', e.target.value)}
-            placeholder="Ex: CALIBRAÇÃO RBC · ISO/IEC 17025"
-          />
-        </InspectorField>
+          <InspectorField
+            label="Selo de Qualidade / Metrologia"
+            description="Badge institucional em destaque"
+          >
+            <InspectorTextInput
+              id="cover-field-badge"
+              value={semanticContent.badge}
+              onChange={(e) => handleSemanticUpdate('badge', e.target.value)}
+              placeholder="Ex: CALIBRAÇÃO RBC · ISO/IEC 17025"
+            />
+          </InspectorField>
 
-        <InspectorField label="Título Principal da Capa">
-          <InspectorTextInput
-            id="cover-field-title"
-            value={semanticContent.title}
-            onChange={(e) => handleSemanticUpdate('title', e.target.value)}
-            placeholder="Ex: PCON-Y18-LP / CALIBRADOR"
-          />
-        </InspectorField>
+          <InspectorField
+            label="Título Principal da Capa"
+            description="Identificação comercial destacada do produto"
+          >
+            <InspectorTextInput
+              id="cover-field-title"
+              value={semanticContent.title}
+              onChange={(e) => handleSemanticUpdate('title', e.target.value)}
+              placeholder="Ex: PCON-Y18-LP / CALIBRADOR"
+            />
+          </InspectorField>
 
-        <InspectorField label="Subtítulo Descritivo">
-          <InspectorTextArea
-            id="cover-field-subtitle"
-            rows={2}
-            value={semanticContent.subtitle}
-            onChange={(e) => handleSemanticUpdate('subtitle', e.target.value)}
-            placeholder="Ex: Calibrador Automático de Pressão de Alta Estabilidade"
-          />
-        </InspectorField>
+          <InspectorField
+            label="Subtítulo Comercial / Resumo"
+            description="Linha auxiliar descritiva da aplicação"
+          >
+            <InspectorTextArea
+              id="cover-field-subtitle"
+              value={semanticContent.subtitle}
+              onChange={(e) => handleSemanticUpdate('subtitle', e.target.value)}
+              rows={2}
+              placeholder="Ex: Calibrador Automático de Pressão de Alta Estabilidade"
+            />
+          </InspectorField>
+        </div>
       </InspectorSection>
 
-      {/* 2. SEÇÃO MÍDIA (defaultOpen = false) */}
+      {/* 2. SEÇÃO MÍDIA: FOTOGRAFIA DE FUNDO (defaultOpen = false) */}
       <InspectorSection
         id="inspector-cover-section-media"
-        title="Fotografia de Fundo (Full-Bleed)"
+        title="Fotografia de Fundo"
         icon={<ImageIcon className="w-3.5 h-3.5" />}
-        description="Acervo, Upload do Computador ou URL"
+        description="Imagem Full-Bleed A4 (Acervo ou Upload)"
         defaultOpen={false}
       >
-        <div className="space-y-2.5">
-          {/* Indicador da Fonte de Fundo Atual */}
-          <div className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-md">
-            <span className="text-xs font-semibold text-slate-700">Fonte Ativa:</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-white border border-slate-200 text-[#003366]">
-              {bgSource.kind === 'asset'
-                ? 'Acervo Interno (Asset)'
-                : bgSource.kind === 'url'
-                ? 'URL Externa Direta'
-                : 'Nenhuma Fotografia'}
-            </span>
+        <div className="space-y-3">
+          {/* Indicador de Fonte Ativa */}
+          <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-slate-700">Fonte Ativa:</span>
+              <span className="font-mono text-[11px] px-1.5 py-0.5 bg-slate-200 text-slate-800 rounded uppercase font-bold">
+                {bgSource.kind}
+              </span>
+            </div>
+            {bgSource.kind === 'asset' && (
+              <p className="text-[11px] text-slate-500 font-mono truncate">
+                Asset ID: {bgSource.assetId}
+              </p>
+            )}
+            {bgSource.kind === 'url' && (
+              <p className="text-[11px] text-slate-500 truncate">
+                URL: {bgSource.url}
+              </p>
+            )}
+            {bgSource.kind === 'none' && (
+              <p className="text-[11px] text-amber-700 font-medium">
+                Nenhuma fotografia definida (fundo sólido escuro padrão).
+              </p>
+            )}
           </div>
 
-          {/* Ações de Seleção de Background */}
-          <div className="grid grid-cols-2 gap-1.5">
+          {/* Botões de Ação: Acervo e Upload do Computador */}
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() =>
@@ -304,9 +442,9 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
                   } else if (selection?.assetId) {
                     handleSelectAsset(selection.assetId);
                   }
-                })
+                }, null)
               }
-              className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-[#003366] hover:bg-[#002244] text-white text-xs font-semibold rounded transition-colors cursor-pointer"
+              className="px-3 py-2 bg-[#003366] hover:bg-[#002244] text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <ImageIcon className="w-3.5 h-3.5" />
               <span>Abrir Acervo</span>
@@ -315,7 +453,7 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded border border-slate-300 transition-colors cursor-pointer"
+              className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Upload className="w-3.5 h-3.5 text-slate-600" />
               <span>Upload do PC</span>
@@ -330,12 +468,18 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
             className="hidden"
           />
 
-          {/* Campo de URL Externa Direta */}
+          {/* Campo de URL Externa Direta com Draft e Commit no Blur/Enter (Item 17) */}
           <InspectorField label="Ou Cole URL Externa Direta">
             <InspectorTextInput
               id="cover-field-bg-url"
-              value={bgSource.kind === 'url' ? bgSource.url : ''}
-              onChange={(e) => handleSelectUrl(e.target.value)}
+              value={localBgUrl}
+              onChange={(e) => setLocalBgUrl(e.target.value)}
+              onBlur={commitBgUrl}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitBgUrl();
+                }
+              }}
               placeholder="https://exemplo.com/fotografia.jpg"
             />
           </InspectorField>
@@ -388,25 +532,24 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
             className="w-full accent-[#003366] cursor-pointer"
           />
           <p className="text-[10.5px] text-slate-500">
-            Aumente o escurecimento para conferir alto contraste e legibilidade a textos brancos.
+            Ajusta o contraste sobre a fotografia full-bleed para máxima legibilidade metrológica.
           </p>
         </div>
       </InspectorSection>
 
-      {/* 4. SEÇÃO CAMADAS (defaultOpen = false) */}
+      {/* 4. SEÇÃO CAMADAS (defaultOpen = false) — UX Refinada E4.1 */}
       <InspectorSection
         id="inspector-cover-section-layers"
         title="Camadas no Canvas"
-        badge={layers.length}
         icon={<Layers className="w-3.5 h-3.5" />}
-        description="Gerencie e personalize elementos gráficos"
+        description="Inserção e Detalhes da Camada Selecionada"
         defaultOpen={false}
       >
         <div className="space-y-3">
-          {/* Barra de Inserção Canônica */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-              + Adicionar Novo Elemento
+          {/* Quick Toolbar de Inserção */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              + Inserir Elemento
             </label>
             <div className="grid grid-cols-3 gap-1">
               <button
@@ -464,48 +607,58 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
             className="hidden"
           />
 
-          {/* Lista de Camadas Efetivas */}
-          {layers.length === 0 ? (
-            <p className="text-[10px] text-slate-500 italic p-3 bg-slate-50 border border-dashed border-slate-200 text-center">
-              Nenhuma camada configurada na capa.
-            </p>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {layers.map((layer, idx) => {
-                const isSelected = selectedLayerId === layer.id;
+          {/* Lista Compacta de Camadas (Item 9: sem nested max-height scroll) */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              Camadas ({layers.length})
+            </label>
 
-                return (
-                  <div
-                    key={layer.id}
-                    data-cover-layer-id={layer.id}
-                    className={`p-2 bg-white border rounded transition-all space-y-2 ${
-                      isSelected ? 'border-blue-400 ring-1 ring-blue-300 bg-blue-50/20' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    {/* Header da Camada */}
-                    <div className="flex items-center justify-between gap-1 border-b border-slate-100 pb-1">
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <span className="text-slate-400 font-mono text-[9px]">#{idx + 1}</span>
-                        <input
-                          type="text"
-                          value={layer.label || 'Elemento'}
-                          onChange={(e) => handleUpdateLayerProps(layer.id, { label: e.target.value })}
-                          className="font-bold text-slate-800 text-xs bg-transparent outline-none focus:bg-amber-50 px-1 border-b border-transparent focus:border-amber-400 flex-1 truncate"
-                        />
-                        <span className="text-[8.5px] font-mono uppercase px-1 py-0.2 bg-slate-100 text-slate-600 rounded">
+            {layers.length === 0 ? (
+              <p className="text-[10px] text-slate-500 italic p-3 bg-slate-50 border border-dashed border-slate-200 text-center">
+                Nenhuma camada configurada na capa.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {layers.map((layer, idx) => {
+                  const isSelected = selectedLayerId === layer.id;
+
+                  return (
+                    <div
+                      key={layer.id}
+                      data-cover-layer-id={layer.id}
+                      onClick={() => setSelectedLayerId(layer.id)}
+                      className={`px-2 py-1.5 bg-white border text-xs flex items-center justify-between gap-1.5 cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-[#003366] bg-blue-50/50 ring-1 ring-[#003366]/30 font-semibold'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      {/* Tipo e Identificador */}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {getLayerIcon(layer.type)}
+                        <span className="text-slate-400 font-mono text-[9px] shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <span className="truncate text-xs text-slate-800">
+                          {layer.label || 'Elemento'}
+                        </span>
+                        <span className="text-[8.5px] font-mono uppercase px-1 py-0.2 bg-slate-100 text-slate-500 rounded shrink-0">
                           {layer.type}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        {/* Reorder Up / Down */}
+                      {/* Botões de Ação Rápida */}
+                      <div
+                        className="flex items-center gap-0.5 shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
                           onClick={() => handleReorder(layer.id, 'up')}
                           disabled={idx === 0}
                           title="Mover para cima"
                           aria-label="Mover camada para cima"
-                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
                         >
                           <ArrowUp className="w-3 h-3" />
                         </button>
@@ -515,25 +668,29 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
                           disabled={idx === layers.length - 1}
                           title="Mover para baixo"
                           aria-label="Mover camada para baixo"
-                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
                         >
                           <ArrowDown className="w-3 h-3" />
                         </button>
 
-                        {/* Visibility Toggle */}
                         <button
                           type="button"
                           onClick={() => handleToggleVisibility(layer)}
                           className={`p-1 text-xs rounded cursor-pointer ${
-                            layer.visible !== false ? 'text-blue-600 bg-blue-50' : 'text-slate-400 bg-slate-100'
+                            layer.visible !== false
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 bg-slate-100'
                           }`}
                           title={layer.visible !== false ? 'Ocultar elemento' : 'Exibir elemento'}
                           aria-label={layer.visible !== false ? 'Ocultar elemento' : 'Exibir elemento'}
                         >
-                          {layer.visible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          {layer.visible !== false ? (
+                            <Eye className="w-3 h-3" />
+                          ) : (
+                            <EyeOff className="w-3 h-3" />
+                          )}
                         </button>
 
-                        {/* Duplicate */}
                         <button
                           type="button"
                           onClick={() => handleDuplicate(layer.id)}
@@ -544,7 +701,6 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
                           <Copy className="w-3 h-3" />
                         </button>
 
-                        {/* Delete */}
                         <button
                           type="button"
                           onClick={() => handleRemove(layer.id)}
@@ -556,100 +712,473 @@ export const FullPageCoverInspector: React.FC<FullPageCoverInspectorProps> = ({
                         </button>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-                    {/* Conteúdo de Texto se for Text ou Badge */}
-                    {(layer.type === 'text' || layer.type === 'badge') && (
-                      <div>
-                        <label className="block text-[9.5px] font-semibold text-slate-600 mb-0.5">
-                          Conteúdo do Texto
-                        </label>
-                        <input
-                          type="text"
-                          value={layer.content || ''}
-                          onChange={(e) => handleUpdateLayerProps(layer.id, { content: e.target.value })}
-                          className="w-full p-1.5 border border-slate-300 rounded text-xs bg-slate-50 focus:bg-white"
-                        />
-                      </div>
-                    )}
+          {/* Painel de Detalhes da Camada Selecionada (Itens 9 e 11) */}
+          {selectedLayer ? (
+            <div className="mt-3 p-2.5 bg-slate-50 border border-slate-300 rounded space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                <div className="flex items-center gap-1.5">
+                  {getLayerIcon(selectedLayer.type)}
+                  <span className="text-xs font-bold text-slate-800 truncate">
+                    Detalhes: {selectedLayer.label}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded font-bold shrink-0">
+                  {selectedLayer.type}
+                </span>
+              </div>
 
-                    {/* Controles Funcionais de Image Layer (COVER-IMAGE-LAYER-1) */}
-                    {layer.type === 'image' && (
-                      <div className="space-y-1.5 p-2 bg-emerald-50/50 border border-emerald-200 rounded">
-                        <span className="block text-[9.5px] font-bold text-emerald-800 uppercase">
-                          Fonte da Imagem
-                        </span>
-                        <div className="grid grid-cols-2 gap-1">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openGallery((sel) => {
-                                if (typeof sel === 'string') {
-                                  handleUpdateLayerProps(layer.id, { imageUrl: sel, assetId: undefined });
-                                } else if (sel?.assetId) {
-                                  handleUpdateLayerProps(layer.id, { assetId: sel.assetId, imageUrl: undefined });
-                                }
-                              })
-                            }
-                            className="py-1 px-1.5 bg-[#003366] text-white text-[10px] font-semibold rounded text-center cursor-pointer"
-                          >
-                            Acervo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveLayerImageTargetId(layer.id);
-                              layerImageInputRef.current?.click();
-                            }}
-                            className="py-1 px-1.5 bg-white border border-slate-300 text-slate-700 text-[10px] font-semibold rounded text-center cursor-pointer"
-                          >
-                            Upload
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          value={layer.imageUrl || ''}
-                          onChange={(e) => handleUpdateLayerProps(layer.id, { imageUrl: e.target.value, assetId: undefined })}
-                          placeholder="Ou cole URL direta..."
-                          className="w-full p-1 border border-slate-300 rounded text-[10px] font-mono bg-white"
-                        />
-                      </div>
-                    )}
+              {/* Rótulo / Nome */}
+              <InspectorField label="Rótulo da Camada">
+                <InspectorTextInput
+                  value={selectedLayer.label || ''}
+                  onChange={(e) =>
+                    handleUpdateLayerProps(selectedLayer.id, { label: e.target.value })
+                  }
+                  placeholder="Nome identificador da camada"
+                />
+              </InspectorField>
 
-                    {/* Dimensões e Posição X / Y */}
-                    <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-1.5 border border-slate-200 rounded text-[10px]">
-                      <div>
-                        <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
-                          <span>Posição X</span>
-                          <span className="font-bold text-[#003366]">{layer.x}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={95}
-                          value={layer.x || 0}
-                          onChange={(e) => handleUpdateLayerProps(layer.id, { x: Number(e.target.value) })}
-                          className="w-full accent-[#003366] cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-[9px] font-mono text-slate-600 mb-0.5">
-                          <span>Posição Y</span>
-                          <span className="font-bold text-[#003366]">{layer.y}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={95}
-                          value={layer.y || 0}
-                          onChange={(e) => handleUpdateLayerProps(layer.id, { y: Number(e.target.value) })}
-                          className="w-full accent-[#003366] cursor-pointer"
-                        />
-                      </div>
+              {/* Controles Específicos: Texto / Badge */}
+              {(selectedLayer.type === 'text' || selectedLayer.type === 'badge') && (
+                <div className="space-y-2.5">
+                  <InspectorField label="Conteúdo do Texto">
+                    <InspectorTextInput
+                      id="selected-layer-content-input"
+                      value={selectedLayer.content || ''}
+                      onChange={(e) =>
+                        handleUpdateLayerProps(selectedLayer.id, { content: e.target.value })
+                      }
+                      placeholder="Texto da camada..."
+                    />
+                  </InspectorField>
+
+                  <InspectorField
+                    label="Tamanho da Fonte"
+                    description="Tamanho tipográfico em pixels (px)"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="selected-layer-fontsize-slider"
+                        type="range"
+                        min={8}
+                        max={72}
+                        step={1}
+                        value={geometryDraft.fontSize ?? selectedLayer.fontSize ?? 16}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            fontSize: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('fontSize', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('fontSize', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('fontSize', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-xs font-bold text-slate-700 w-12 text-right">
+                        {geometryDraft.fontSize ?? selectedLayer.fontSize ?? 16}px
+                      </span>
                     </div>
+                  </InspectorField>
+                </div>
+              )}
+
+              {/* Controles Específicos: Image Layer (Itens 5, 6, 11, 22) */}
+              {selectedLayer.type === 'image' && (
+                <div className="space-y-2.5 p-2 bg-emerald-50/60 border border-emerald-200 rounded">
+                  <span className="block text-[10px] font-bold text-emerald-900 uppercase">
+                    Fonte da Imagem
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openGallery((sel) => {
+                          if (typeof sel === 'string') {
+                            handleUpdateLayerProps(selectedLayer.id, setCoverLayerImageUrl(sel));
+                          } else if (sel?.assetId) {
+                            handleUpdateLayerProps(
+                              selectedLayer.id,
+                              setCoverLayerImageAsset(sel.assetId)
+                            );
+                          }
+                        })
+                      }
+                      className="py-1.5 px-2 bg-[#003366] text-white text-[10.5px] font-semibold rounded text-center cursor-pointer hover:bg-[#002244]"
+                    >
+                      Acervo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveLayerImageTargetId(selectedLayer.id);
+                        layerImageInputRef.current?.click();
+                      }}
+                      className="py-1.5 px-2 bg-white border border-slate-300 text-slate-700 text-[10.5px] font-semibold rounded text-center cursor-pointer hover:bg-slate-50"
+                    >
+                      Upload
+                    </button>
                   </div>
-                );
-              })}
+
+                  <InspectorField label="URL da Imagem">
+                    <InspectorTextInput
+                      id="selected-layer-image-url-input"
+                      value={localImageUrl}
+                      onChange={(e) => setLocalImageUrl(e.target.value)}
+                      onBlur={commitLayerImageUrl}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          commitLayerImageUrl();
+                        }
+                      }}
+                      placeholder="https://exemplo.com/logo.png"
+                    />
+                  </InspectorField>
+
+                  {/* Ação clara: Remover imagem da layer sem apagar a camada (Item 22) */}
+                  {(selectedLayer.assetId || selectedLayer.imageUrl || selectedLayer.legacyUrl) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleUpdateLayerProps(selectedLayer.id, removeCoverLayerImage())
+                      }
+                      className="w-full py-1 text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded cursor-pointer transition-colors"
+                    >
+                      Remover Imagem da Camada
+                    </button>
+                  )}
+
+                  {/* Largura e Altura da Imagem */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-emerald-200/60">
+                    <InspectorField label="Largura (px)">
+                      <input
+                        id="selected-layer-width-slider"
+                        type="range"
+                        min={20}
+                        max={600}
+                        step={5}
+                        value={geometryDraft.width ?? selectedLayer.width ?? 200}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            width: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.width ?? selectedLayer.width ?? 200}px
+                      </span>
+                    </InspectorField>
+
+                    <InspectorField label="Altura (px)">
+                      <input
+                        id="selected-layer-height-slider"
+                        type="range"
+                        min={20}
+                        max={600}
+                        step={5}
+                        value={geometryDraft.height ?? selectedLayer.height ?? 140}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            height: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.height ?? selectedLayer.height ?? 140}px
+                      </span>
+                    </InspectorField>
+                  </div>
+                </div>
+              )}
+
+              {/* Controles Específicos: Linha (Item 11 e 21) */}
+              {selectedLayer.type === 'line' && (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <InspectorField label="Comprimento (px)">
+                      <input
+                        id="selected-layer-line-width"
+                        type="range"
+                        min={10}
+                        max={700}
+                        step={5}
+                        value={geometryDraft.width ?? selectedLayer.width ?? 80}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            width: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.width ?? selectedLayer.width ?? 80}px
+                      </span>
+                    </InspectorField>
+
+                    <InspectorField label="Espessura (px)">
+                      <input
+                        id="selected-layer-line-height"
+                        type="range"
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={geometryDraft.height ?? selectedLayer.height ?? 3}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            height: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.height ?? selectedLayer.height ?? 3}px
+                      </span>
+                    </InspectorField>
+                  </div>
+
+                  <InspectorField label="Cor da Linha">
+                    <InspectorTextInput
+                      value={selectedLayer.backgroundColor || '#3b82f6'}
+                      onChange={(e) =>
+                        handleUpdateLayerProps(selectedLayer.id, {
+                          backgroundColor: e.target.value
+                        })
+                      }
+                      placeholder="#3b82f6"
+                    />
+                  </InspectorField>
+                </div>
+              )}
+
+              {/* Controles Específicos: Shape / Moldura (Item 11 e 21) */}
+              {selectedLayer.type === 'shape' && (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <InspectorField label="Largura (px)">
+                      <input
+                        id="selected-layer-shape-width"
+                        type="range"
+                        min={20}
+                        max={700}
+                        step={5}
+                        value={geometryDraft.width ?? selectedLayer.width ?? 250}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            width: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('width', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.width ?? selectedLayer.width ?? 250}px
+                      </span>
+                    </InspectorField>
+
+                    <InspectorField label="Altura (px)">
+                      <input
+                        id="selected-layer-shape-height"
+                        type="range"
+                        min={20}
+                        max={700}
+                        step={5}
+                        value={geometryDraft.height ?? selectedLayer.height ?? 100}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            height: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('height', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-[11px] font-bold text-slate-700 block text-right">
+                        {geometryDraft.height ?? selectedLayer.height ?? 100}px
+                      </span>
+                    </InspectorField>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <InspectorField label="Cor de Fundo">
+                      <InspectorTextInput
+                        value={selectedLayer.backgroundColor || 'rgba(15, 23, 42, 0.8)'}
+                        onChange={(e) =>
+                          handleUpdateLayerProps(selectedLayer.id, {
+                            backgroundColor: e.target.value
+                          })
+                        }
+                      />
+                    </InspectorField>
+
+                    <InspectorField label="Cor da Borda">
+                      <InspectorTextInput
+                        value={selectedLayer.borderColor || '#475569'}
+                        onChange={(e) =>
+                          handleUpdateLayerProps(selectedLayer.id, {
+                            borderColor: e.target.value
+                          })
+                        }
+                      />
+                    </InspectorField>
+                  </div>
+
+                  <InspectorField label="Espessura da Borda (px)">
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="selected-layer-shape-borderwidth"
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={geometryDraft.borderWidth ?? selectedLayer.borderWidth ?? 1}
+                        onChange={(e) =>
+                          setGeometryDraft((prev) => ({
+                            ...prev,
+                            borderWidth: Number(e.target.value)
+                          }))
+                        }
+                        onPointerUp={(e) =>
+                          commitGeometryField('borderWidth', Number(e.currentTarget.value))
+                        }
+                        onKeyUp={(e) =>
+                          commitGeometryField('borderWidth', Number(e.currentTarget.value))
+                        }
+                        onBlur={(e) =>
+                          commitGeometryField('borderWidth', Number(e.currentTarget.value))
+                        }
+                        className="w-full accent-[#003366] cursor-pointer"
+                      />
+                      <span className="font-mono text-xs font-bold text-slate-700 w-12 text-right">
+                        {geometryDraft.borderWidth ?? selectedLayer.borderWidth ?? 1}px
+                      </span>
+                    </div>
+                  </InspectorField>
+                </div>
+              )}
+
+              {/* Controles de Geometria Contínua X (%) e Y (%) com Proteção de Save-Storm (Itens 13, 14, 15, 16) */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
+                <div>
+                  <div className="flex justify-between text-[10px] font-mono text-slate-600 mb-0.5">
+                    <span>Posição X</span>
+                    <span className="font-bold text-[#003366]">{geometryDraft.x}%</span>
+                  </div>
+                  <input
+                    id="selected-layer-x-slider"
+                    type="range"
+                    min={0}
+                    max={95}
+                    step={1}
+                    value={geometryDraft.x}
+                    onChange={(e) =>
+                      setGeometryDraft((prev) => ({ ...prev, x: Number(e.target.value) }))
+                    }
+                    onPointerUp={(e) => commitGeometryField('x', Number(e.currentTarget.value))}
+                    onKeyUp={(e) => commitGeometryField('x', Number(e.currentTarget.value))}
+                    onBlur={(e) => commitGeometryField('x', Number(e.currentTarget.value))}
+                    className="w-full accent-[#003366] cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[10px] font-mono text-slate-600 mb-0.5">
+                    <span>Posição Y</span>
+                    <span className="font-bold text-[#003366]">{geometryDraft.y}%</span>
+                  </div>
+                  <input
+                    id="selected-layer-y-slider"
+                    type="range"
+                    min={0}
+                    max={95}
+                    step={1}
+                    value={geometryDraft.y}
+                    onChange={(e) =>
+                      setGeometryDraft((prev) => ({ ...prev, y: Number(e.target.value) }))
+                    }
+                    onPointerUp={(e) => commitGeometryField('y', Number(e.currentTarget.value))}
+                    onKeyUp={(e) => commitGeometryField('y', Number(e.currentTarget.value))}
+                    onBlur={(e) => commitGeometryField('y', Number(e.currentTarget.value))}
+                    className="w-full accent-[#003366] cursor-pointer"
+                  />
+                </div>
+              </div>
             </div>
+          ) : (
+            <p className="text-[10px] text-slate-500 italic p-2 bg-slate-100 border border-slate-200 rounded text-center">
+              Selecione uma camada acima para editar seus detalhes.
+            </p>
           )}
         </div>
       </InspectorSection>
