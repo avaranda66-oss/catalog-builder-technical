@@ -609,6 +609,7 @@ async function run() {
           semanticKey: 'accuracy',
           moduleId: 'm1',
           label: 'Accuracy',
+          status: 'valid',
           value: { type: 'number', value: 0.1 },
           evidence: [{
             sourceDocumentId: 'non-existent-source-doc-id',
@@ -656,16 +657,16 @@ async function run() {
       revision: 2,
       modules: [],
       data: {
-        'material': { id: 'd-text', semanticKey: 'material', moduleId: 'm1', label: 'Material', value: { type: 'text', value: 'SS316' } },
-        'weight': { id: 'd-num', semanticKey: 'weight', moduleId: 'm1', label: 'Weight', value: { type: 'number', value: 42.5 } },
-        'pressure': { id: 'd-qty', semanticKey: 'pressure', moduleId: 'm1', label: 'Pressure', value: { type: 'quantity', amount: 100, unit: 'bar' } },
-        'hazardous': { id: 'd-bool', semanticKey: 'hazardous', moduleId: 'm1', label: 'Hazardous', value: { type: 'boolean', value: true } },
-        'temp_range': { id: 'd-range', semanticKey: 'temp_range', moduleId: 'm1', label: 'Temp Range', value: { type: 'range', lower: -25.0, upper: 140.0, unit: '°C' } },
-        'protection': { id: 'd-enum', semanticKey: 'protection', moduleId: 'm1', label: 'Protection', value: { type: 'enum', code: 'IP67', label: 'IP67 Enclosure' } },
-        'part_code': { id: 'd-token', semanticKey: 'part_code', moduleId: 'm1', label: 'Part Code', value: { type: 'technical_token', token: 'TOKEN_123' } },
-        'drawing_ref': { id: 'd-asset', semanticKey: 'drawing_ref', moduleId: 'm1', label: 'Drawing', value: { type: 'asset_reference', assetId: 'asset-01' } },
-        'accessory': { id: 'd-prod', semanticKey: 'accessory', moduleId: 'm1', label: 'Accessory', value: { type: 'product_reference', targetProductId: 'prod-01' } },
-        'unknown_prop': { id: 'd-unk', semanticKey: 'unknown_prop', moduleId: 'm1', label: 'Unknown Prop', value: { type: 'unknown', reason: 'Unverified' } }
+        'material': { id: 'd-text', semanticKey: 'material', moduleId: 'm1', label: 'Material', status: 'valid', value: { type: 'text', value: 'SS316' } },
+        'weight': { id: 'd-num', semanticKey: 'weight', moduleId: 'm1', label: 'Weight', status: 'valid', value: { type: 'number', value: 42.5 } },
+        'pressure': { id: 'd-qty', semanticKey: 'pressure', moduleId: 'm1', label: 'Pressure', status: 'valid', value: { type: 'quantity', amount: 100, unit: 'bar' } },
+        'hazardous': { id: 'd-bool', semanticKey: 'hazardous', moduleId: 'm1', label: 'Hazardous', status: 'valid', value: { type: 'boolean', value: true } },
+        'temp_range': { id: 'd-range', semanticKey: 'temp_range', moduleId: 'm1', label: 'Temp Range', status: 'valid', value: { type: 'range', lower: -25.0, upper: 140.0, unit: '°C' } },
+        'protection': { id: 'd-enum', semanticKey: 'protection', moduleId: 'm1', label: 'Protection', status: 'valid', value: { type: 'enum', code: 'IP67', label: 'IP67 Enclosure' } },
+        'part_code': { id: 'd-token', semanticKey: 'part_code', moduleId: 'm1', label: 'Part Code', status: 'valid', value: { type: 'technical_token', token: 'TOKEN_123' } },
+        'drawing_ref': { id: 'd-asset', semanticKey: 'drawing_ref', moduleId: 'm1', label: 'Drawing', status: 'valid', value: { type: 'asset_reference', assetId: 'asset-01' } },
+        'accessory': { id: 'd-prod', semanticKey: 'accessory', moduleId: 'm1', label: 'Accessory', status: 'valid', value: { type: 'product_reference', targetProductId: 'prod-01' } },
+        'unknown_prop': { id: 'd-unk', semanticKey: 'unknown_prop', moduleId: 'm1', label: 'Unknown Prop', status: 'valid', value: { type: 'unknown', reason: 'Unverified' } }
       }
     };
 
