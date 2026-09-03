@@ -6,6 +6,8 @@
 import { z } from 'zod';
 import {
   ProductWorkbook,
+  ProductWorkbookV1,
+  ProductWorkbookV2,
   SourceDocument,
   ProductKnowledgeBundle
 } from './types';
@@ -341,14 +343,78 @@ export const ProductDataViewSchema = z.object({
   presentationHint: ViewPresentationHintSchema.optional()
 }).strict();
 
-export const ProductWorkbookSchema = z.object({
+export const InheritedDatasetOverrideSchema = z.object({
+  targetSemanticKey: z.string().regex(SEMANTIC_KEY_REGEX),
+  mode: OverrideModeSchema,
+  overriddenLabel: z.string().optional(),
+  overriddenDescription: z.string().optional(),
+  notes: z.string().optional()
+}).strict();
+
+export const DatasetKindSchema = z.enum([
+  'matrix',
+  'collection',
+  'accessories',
+  'ordering',
+  'performance',
+  'compatibility',
+  'dimensions',
+  'custom'
+]);
+
+export const DatasetColumnSchema = z.object({
+  id: z.string().min(1, 'ID da coluna do dataset é obrigatório'),
+  semanticKey: z.string().regex(SEMANTIC_KEY_REGEX, 'semanticKey da coluna deve seguir padrão namespace.segment'),
+  label: z.string().min(1, 'Label da coluna é obrigatório'),
+  valueType: z.enum([
+    'text',
+    'number',
+    'boolean',
+    'quantity',
+    'range',
+    'tolerance',
+    'ratio',
+    'date',
+    'technical_token',
+    'composite'
+  ]),
+  unit: UnitCodeSchema.optional(),
+  order: z.number().int().nonnegative().default(0),
+  metadata: z.record(z.string()).optional()
+}).strict();
+
+export const DatasetRowSchema = z.object({
+  id: z.string().min(1, 'ID da linha do dataset é obrigatório'),
+  semanticKey: z.string().regex(SEMANTIC_KEY_REGEX, 'semanticKey da linha deve seguir padrão namespace.segment').optional(),
+  label: z.string().optional(),
+  order: z.number().int().nonnegative().default(0),
+  metadata: z.record(z.string()).optional()
+}).strict();
+
+export const DatasetCellSchema = z.object({
+  rowId: z.string().min(1, 'rowId da célula é obrigatório'),
+  columnId: z.string().min(1, 'columnId da célula é obrigatório'),
+  datumId: z.string().min(1, 'datumId da célula é obrigatório')
+}).strict();
+
+export const TechnicalDatasetSchema = z.object({
+  id: z.string().min(1, 'ID do dataset é obrigatório'),
+  semanticKey: z.string().regex(SEMANTIC_KEY_REGEX, 'semanticKey do dataset deve seguir padrão namespace.segment'),
+  moduleId: z.string().min(1, 'moduleId do dataset é obrigatório'),
+  label: z.string().min(1, 'Label do dataset é obrigatório'),
+  description: z.string().optional(),
+  kind: DatasetKindSchema,
+  columns: z.array(DatasetColumnSchema).default([]),
+  rows: z.array(DatasetRowSchema).default([]),
+  cells: z.record(DatasetCellSchema).default({}),
+  order: z.number().int().nonnegative().default(0),
+  metadata: z.record(z.string()).optional()
+}).strict();
+
+export const ProductWorkbookV1Schema = z.object({
   id: z.string().min(1, 'ID do workbook é obrigatório'),
   schemaVersion: z.literal(1),
   owner: WorkbookOwnerSchema,
-  /**
-   * Persisted/server revision used for optimistic concurrency (CAS).
-   * Pure domain mutations preserve this value; only persistence authorities increment it.
-   */
   revision: z.number().int().nonnegative('Revisão persistida do servidor deve ser um inteiro >= 0'),
   modules: z.array(TechnicalModuleSchema).default([]),
   data: z.record(TechnicalDatumSchema).default({}),
@@ -356,6 +422,25 @@ export const ProductWorkbookSchema = z.object({
   savedViews: z.array(ProductDataViewSchema).optional(),
   metadata: z.record(z.string()).optional()
 }).strict();
+
+export const ProductWorkbookV2Schema = z.object({
+  id: z.string().min(1, 'ID do workbook é obrigatório'),
+  schemaVersion: z.literal(2),
+  owner: WorkbookOwnerSchema,
+  revision: z.number().int().nonnegative('Revisão persistida do servidor deve ser um inteiro >= 0'),
+  modules: z.array(TechnicalModuleSchema).default([]),
+  data: z.record(TechnicalDatumSchema).default({}),
+  datasets: z.array(TechnicalDatasetSchema).default([]),
+  overrides: z.record(InheritedDatumOverrideSchema).optional(),
+  datasetOverrides: z.record(InheritedDatasetOverrideSchema).optional(),
+  savedViews: z.array(ProductDataViewSchema).optional(),
+  metadata: z.record(z.string()).optional()
+}).strict();
+
+export const ProductWorkbookSchema = z.discriminatedUnion('schemaVersion', [
+  ProductWorkbookV1Schema,
+  ProductWorkbookV2Schema
+]);
 
 export const ProductKnowledgeBundleSchema = z.object({
   sources: z.array(SourceDocumentSchema).default([]),
@@ -377,6 +462,48 @@ export function parseProductWorkbook(
     throw new ProductWorkbookError(
       firstErr.code,
       `Falha de integridade no ProductWorkbook: [${firstErr.path}] ${firstErr.message}`
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Validador e parser estrito de ProductWorkbookV1.
+ */
+export function parseProductWorkbookV1(
+  input: unknown,
+  options?: WorkbookValidationOptions
+): ProductWorkbookV1 {
+  const parsed = ProductWorkbookV1Schema.parse(input) as ProductWorkbookV1;
+  const validation = validateProductWorkbook(parsed, options);
+
+  if (!validation.valid) {
+    const firstErr = validation.errors[0];
+    throw new ProductWorkbookError(
+      firstErr.code,
+      `Falha de integridade no ProductWorkbookV1: [${firstErr.path}] ${firstErr.message}`
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Validador e parser estrito de ProductWorkbookV2.
+ */
+export function parseProductWorkbookV2(
+  input: unknown,
+  options?: WorkbookValidationOptions
+): ProductWorkbookV2 {
+  const parsed = ProductWorkbookV2Schema.parse(input) as ProductWorkbookV2;
+  const validation = validateProductWorkbook(parsed, options);
+
+  if (!validation.valid) {
+    const firstErr = validation.errors[0];
+    throw new ProductWorkbookError(
+      firstErr.code,
+      `Falha de integridade no ProductWorkbookV2: [${firstErr.path}] ${firstErr.message}`
     );
   }
 

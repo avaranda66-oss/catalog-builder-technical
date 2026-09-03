@@ -11,3 +11,5 @@ export * from './query.engine';
 export * from './operations';
 export * from './validators';
 export * from './table-compatibility';
+export * from './dataset-reuse';
+export * from './ingestion';

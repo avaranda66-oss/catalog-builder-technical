@@ -9,6 +9,7 @@ import {
   TechnicalModule,
   TechnicalDatum,
   EffectiveDatum,
+  EffectiveDataset,
   ResolvedProductKnowledge,
   ResolutionPolicy
 } from './types';
@@ -185,6 +186,80 @@ export function resolveEffectiveProductKnowledge(params: {
 
   const sortedModules = Array.from(moduleMap.values()).sort((a, b) => a.order - b.order);
 
+  // 4. Resolver TechnicalDatasets efetivos com herança da Família (PIM.REUSE1.3)
+  const effectiveDatasets = new Map<string, EffectiveDataset>();
+  const suppressedDatasetKeys: string[] = [];
+
+  const familyDatasets =
+    familyWorkbook && 'datasets' in familyWorkbook && Array.isArray(familyWorkbook.datasets)
+      ? familyWorkbook.datasets
+      : [];
+  const productDatasets =
+    'datasets' in productWorkbook && Array.isArray(productWorkbook.datasets)
+      ? productWorkbook.datasets
+      : [];
+  const datasetOverrides =
+    'datasetOverrides' in productWorkbook && productWorkbook.datasetOverrides
+      ? productWorkbook.datasetOverrides
+      : {};
+
+  // Processa datasets da família
+  for (const familyDs of familyDatasets) {
+    const semKey = familyDs.semanticKey;
+    const override = datasetOverrides[semKey];
+
+    if (override) {
+      if (override.mode === 'suppress') {
+        suppressedDatasetKeys.push(semKey);
+        continue;
+      }
+      if (override.mode === 'override') {
+        effectiveDatasets.set(semKey, {
+          dataset: {
+            ...familyDs,
+            label: override.overriddenLabel ?? familyDs.label,
+            description: override.overriddenDescription ?? familyDs.description
+          },
+          origin: 'product_override',
+          familyDatasetId: familyDs.id,
+          isSuppressed: false
+        });
+        continue;
+      }
+    }
+
+    // Se o produto definir localmente um dataset com a mesma chave semântica, o local assume como override
+    const localMatch = productDatasets.find((d) => d.semanticKey === semKey);
+    if (localMatch) {
+      effectiveDatasets.set(semKey, {
+        dataset: localMatch,
+        origin: 'product_override',
+        familyDatasetId: familyDs.id,
+        isSuppressed: false
+      });
+      continue;
+    }
+
+    // Herança direta da família (NENHUMA cópia física; single-source de verdade comum)
+    effectiveDatasets.set(semKey, {
+      dataset: familyDs,
+      origin: 'family',
+      familyDatasetId: familyDs.id,
+      isSuppressed: false
+    });
+  }
+
+  // Processa datasets locais do produto
+  for (const productDs of productDatasets) {
+    if (!effectiveDatasets.has(productDs.semanticKey)) {
+      effectiveDatasets.set(productDs.semanticKey, {
+        dataset: productDs,
+        origin: 'product_local',
+        isSuppressed: false
+      });
+    }
+  }
+
   return {
     productId,
     productRevision: productWorkbook.revision,
@@ -192,7 +267,9 @@ export function resolveEffectiveProductKnowledge(params: {
     familyRevision: familyWorkbook?.revision,
     modules: sortedModules,
     effectiveData,
+    effectiveDatasets,
     suppressedKeys,
+    suppressedDatasetKeys,
     conflictsCount
   };
 }

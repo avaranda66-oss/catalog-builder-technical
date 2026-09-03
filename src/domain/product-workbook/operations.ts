@@ -9,6 +9,7 @@
 
 import {
   ProductWorkbook,
+  ProductWorkbookV2,
   WorkbookOwner,
   TechnicalModule,
   TechnicalDatum,
@@ -16,7 +17,13 @@ import {
   Evidence,
   CanonicalDecision,
   InheritedDatumOverride,
-  ProductDataView
+  ProductDataView,
+  TechnicalDataset,
+  DatasetColumn,
+  DatasetRow,
+  DatasetCell,
+  getDatasetCellKey,
+  ensureWorkbookV2
 } from './types';
 import { isValidSemanticKey } from './schema';
 import {
@@ -582,5 +589,439 @@ export function deleteSavedView(workbook: ProductWorkbook, viewId: string): Prod
     ...workbook,
     revision: workbook.revision,
     savedViews: filtered
+  };
+}
+
+/**
+ * Adiciona um TechnicalDataset ao workbook (PIM Core V1).
+ */
+export function addDataset(
+  workbook: ProductWorkbook,
+  dataset: TechnicalDataset
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+
+  // Valida unicidade de ID
+  if (wbV2.datasets.some((d) => d.id === dataset.id)) {
+    throw new ProductWorkbookError('DUPLICATE_DATASET_ID', `Dataset com ID "${dataset.id}" já existe.`);
+  }
+
+  // Valida unicidade de semanticKey
+  if (wbV2.datasets.some((d) => d.semanticKey === dataset.semanticKey)) {
+    throw new ProductWorkbookError(
+      'DUPLICATE_DATASET_SEMANTIC_KEY',
+      `Dataset com semanticKey "${dataset.semanticKey}" já existe.`
+    );
+  }
+
+  // Valida existência do módulo (EMENDA 5)
+  if (!wbV2.modules.some((m) => m.id === dataset.moduleId)) {
+    throw new ProductWorkbookError(
+      'MODULE_NOT_FOUND',
+      `Módulo com ID "${dataset.moduleId}" referenciado pelo dataset não existe.`
+    );
+  }
+
+  // Valida sintaxe da semanticKey
+  if (!isValidSemanticKey(dataset.semanticKey)) {
+    throw new ProductWorkbookError(
+      'INVALID_SEMANTIC_KEY',
+      `semanticKey do dataset "${dataset.semanticKey}" é inválida.`
+    );
+  }
+
+  return {
+    ...wbV2,
+    datasets: [...wbV2.datasets, dataset]
+  };
+}
+
+/**
+ * Atualiza propriedades estruturais de um TechnicalDataset existente.
+ */
+export function updateDataset(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  updates: Partial<Omit<TechnicalDataset, 'id'>>
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const idx = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (idx === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  if (updates.semanticKey && updates.semanticKey !== wbV2.datasets[idx].semanticKey) {
+    if (!isValidSemanticKey(updates.semanticKey)) {
+      throw new ProductWorkbookError(
+        'INVALID_SEMANTIC_KEY',
+        `semanticKey do dataset "${updates.semanticKey}" é inválida.`
+      );
+    }
+    if (wbV2.datasets.some((d) => d.id !== datasetId && d.semanticKey === updates.semanticKey)) {
+      throw new ProductWorkbookError(
+        'DUPLICATE_DATASET_SEMANTIC_KEY',
+        `Dataset com semanticKey "${updates.semanticKey}" já existe.`
+      );
+    }
+  }
+
+  if (updates.moduleId && !wbV2.modules.some((m) => m.id === updates.moduleId)) {
+    throw new ProductWorkbookError(
+      'MODULE_NOT_FOUND',
+      `Módulo com ID "${updates.moduleId}" referenciado pelo dataset não existe.`
+    );
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[idx] = {
+    ...updatedDatasets[idx],
+    ...updates,
+    id: datasetId // Imutável
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Remove um TechnicalDataset do workbook.
+ */
+export function deleteDataset(
+  workbook: ProductWorkbook,
+  datasetId: string
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const filtered = wbV2.datasets.filter((d) => d.id !== datasetId);
+  if (filtered.length === wbV2.datasets.length) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  return {
+    ...wbV2,
+    datasets: filtered
+  };
+}
+
+/**
+ * Adiciona uma coluna a um TechnicalDataset.
+ */
+export function addDatasetColumn(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  column: DatasetColumn
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  if (dataset.columns.some((c) => c.id === column.id)) {
+    throw new ProductWorkbookError('DUPLICATE_COLUMN_ID', `Coluna com ID "${column.id}" já existe no dataset.`);
+  }
+  if (dataset.columns.some((c) => c.semanticKey === column.semanticKey)) {
+    throw new ProductWorkbookError('DUPLICATE_COLUMN_SEMANTIC_KEY', `Coluna com semanticKey "${column.semanticKey}" já existe no dataset.`);
+  }
+  if (!isValidSemanticKey(column.semanticKey)) {
+    throw new ProductWorkbookError('INVALID_SEMANTIC_KEY', `semanticKey de coluna "${column.semanticKey}" é inválida.`);
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    columns: [...dataset.columns, column]
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Remove uma coluna de um TechnicalDataset e limpa suas células correspondentes.
+ */
+export function deleteDatasetColumn(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  columnId: string
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  const filteredColumns = dataset.columns.filter((c) => c.id !== columnId);
+  if (filteredColumns.length === dataset.columns.length) {
+    throw new ProductWorkbookError('COLUMN_NOT_FOUND', `Coluna com ID "${columnId}" não encontrada no dataset.`);
+  }
+
+  // Remove células pertencentes a esta coluna
+  const updatedCells: Record<string, DatasetCell> = {};
+  for (const [key, cell] of Object.entries(dataset.cells)) {
+    if (cell.columnId !== columnId) {
+      updatedCells[key] = cell;
+    }
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    columns: filteredColumns,
+    cells: updatedCells
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Adiciona uma linha a um TechnicalDataset.
+ */
+export function addDatasetRow(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  row: DatasetRow
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  if (dataset.rows.some((r) => r.id === row.id)) {
+    throw new ProductWorkbookError('DUPLICATE_ROW_ID', `Linha com ID "${row.id}" já existe no dataset.`);
+  }
+  if (row.semanticKey && !isValidSemanticKey(row.semanticKey)) {
+    throw new ProductWorkbookError('INVALID_SEMANTIC_KEY', `semanticKey de linha "${row.semanticKey}" é inválida.`);
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    rows: [...dataset.rows, row]
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Remove uma linha de um TechnicalDataset e limpa suas células correspondentes.
+ */
+export function deleteDatasetRow(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  rowId: string
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  const filteredRows = dataset.rows.filter((r) => r.id !== rowId);
+  if (filteredRows.length === dataset.rows.length) {
+    throw new ProductWorkbookError('ROW_NOT_FOUND', `Linha com ID "${rowId}" não encontrada no dataset.`);
+  }
+
+  // Remove células pertencentes a esta linha
+  const updatedCells: Record<string, DatasetCell> = {};
+  for (const [key, cell] of Object.entries(dataset.cells)) {
+    if (cell.rowId !== rowId) {
+      updatedCells[key] = cell;
+    }
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    rows: filteredRows,
+    cells: updatedCells
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Define/atualiza uma célula em um TechnicalDataset.
+ * Invariante (EMENDA 2): cell.datumId deve existir em workbook.data.
+ * Invariante (EMENDA 3): Chave armazenada é determinística e collision-safe via getDatasetCellKey.
+ */
+export function setDatasetCell(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  cell: DatasetCell
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+
+  // Valida que rowId e columnId existem no dataset
+  const col = dataset.columns.find((c) => c.id === cell.columnId);
+  if (!col) {
+    throw new ProductWorkbookError(
+      'DATASET_COLUMN_NOT_FOUND',
+      `Coluna com ID "${cell.columnId}" não existe no dataset "${dataset.label}".`
+    );
+  }
+
+  const row = dataset.rows.find((r) => r.id === cell.rowId);
+  if (!row) {
+    throw new ProductWorkbookError(
+      'DATASET_ROW_NOT_FOUND',
+      `Linha com ID "${cell.rowId}" não existe no dataset "${dataset.label}".`
+    );
+  }
+
+  // Valida existência do datum em workbook.data (EMENDA 2)
+  const datum = wbV2.data[cell.datumId];
+  if (!datum) {
+    throw new ProductWorkbookError(
+      'DATUM_NOT_FOUND',
+      `Dado com ID "${cell.datumId}" referenciado pela célula não existe em workbook.data.`
+    );
+  }
+
+  // Valida compatibilidade de tipo (EMENDA 4)
+  if (datum.value.type !== col.valueType) {
+    throw new ProductWorkbookError(
+      'TYPE_MISMATCH',
+      `Tipo do valor do dado "${datum.value.type}" incompatível com o tipo da coluna "${col.valueType}".`
+    );
+  }
+
+  // Valida compatibilidade de unidade (EMENDA 4)
+  if (col.unit) {
+    if (datum.value.type === 'quantity' && datum.value.unit !== col.unit) {
+      throw new ProductWorkbookError(
+        'UNIT_MISMATCH',
+        `Unidade do dado "${datum.value.unit}" incompatível com a unidade da coluna "${col.unit}".`
+      );
+    }
+    if (datum.value.type === 'range' && datum.value.unit !== col.unit) {
+      throw new ProductWorkbookError(
+        'UNIT_MISMATCH',
+        `Unidade da faixa "${datum.value.unit}" incompatível com a unidade da coluna "${col.unit}".`
+      );
+    }
+  }
+
+  const cellKey = getDatasetCellKey(cell.rowId, cell.columnId);
+  const updatedCells = {
+    ...dataset.cells,
+    [cellKey]: cell
+  };
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    cells: updatedCells
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Remove uma célula de um TechnicalDataset (torna a coordenada vazia).
+ */
+export function clearDatasetCell(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  rowId: string,
+  columnId: string
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  const cellKey = getDatasetCellKey(rowId, columnId);
+  if (!dataset.cells[cellKey]) {
+    return wbV2;
+  }
+
+  const updatedCells = { ...dataset.cells };
+  delete updatedCells[cellKey];
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = {
+    ...dataset,
+    cells: updatedCells
+  };
+
+  return {
+    ...wbV2,
+    datasets: updatedDatasets
+  };
+}
+
+/**
+ * Remove com segurança um dado técnico do workbook, desvinculando-o do módulo e das tabelas.
+ */
+export function deleteDatum(
+  workbook: ProductWorkbook,
+  datumId: string
+): ProductWorkbook {
+  const existingDatum = workbook.data[datumId];
+  if (!existingDatum) {
+    return workbook;
+  }
+
+  const updatedData = { ...workbook.data };
+  delete updatedData[datumId];
+
+  const updatedModules = workbook.modules.map((mod) => ({
+    ...mod,
+    datumIds: mod.datumIds.filter((id) => id !== datumId)
+  }));
+
+  // Se houver datasets, desvincula células que apontavam para este datum
+  const wbV2 = workbook as ProductWorkbookV2;
+  let updatedDatasets = wbV2.datasets;
+  if (updatedDatasets) {
+    updatedDatasets = updatedDatasets.map((ds) => {
+      let cellsChanged = false;
+      const filteredCells: Record<string, DatasetCell> = {};
+      for (const [key, cell] of Object.entries(ds.cells)) {
+        if (cell.datumId === datumId) {
+          cellsChanged = true;
+        } else {
+          filteredCells[key] = cell;
+        }
+      }
+      return cellsChanged ? { ...ds, cells: filteredCells } : ds;
+    });
+  }
+
+  return {
+    ...workbook,
+    revision: workbook.revision,
+    modules: updatedModules,
+    data: updatedData,
+    ...(updatedDatasets ? { datasets: updatedDatasets } : {})
   };
 }
