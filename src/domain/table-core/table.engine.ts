@@ -1,7 +1,9 @@
 // src/domain/table-core/table.engine.ts
 // Motor Funcional Puro do Table Core V2.
 // Executa mutações puramente imutáveis sobre TableCoreModel,
-// validando invariantes e aplicando política fail-closed.
+// validando invariantes, prevenindo perda de dados (zero silent data loss)
+// e aplicando política fail-closed.
+// Zero explicit any.
 
 import {
   TableCoreModel,
@@ -10,6 +12,7 @@ import {
   TableCellModel,
   TableCellContent,
   ColumnWidthSpec,
+  TableWidthSpec,
   TablePresetId
 } from './table.types';
 import { getCellKey, validateTableModel } from './table.validator';
@@ -26,7 +29,7 @@ export class TableEngineError extends Error {
 }
 
 /**
- * Gera um ID estável simples para novos elementos gerados em runtime.
+ * Gera um identificador estável para novos elementos criados dinamicamente em runtime.
  */
 function generateId(prefix: string): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -41,6 +44,7 @@ export interface CreateTableParams {
   columns: Omit<TableColumnModel, 'id'>[];
   rowsCount?: number;
   presetId?: TablePresetId;
+  tableWidth?: TableWidthSpec;
 }
 
 /**
@@ -49,6 +53,7 @@ export interface CreateTableParams {
 export function createTable(params: CreateTableParams): TableCoreModel {
   const tableId = params.id || generateId('tbl');
   const presetId = params.presetId || 'presys_clean_technical';
+  const tableWidth = params.tableWidth || { mode: 'auto_fill' };
 
   const columns: TableColumnModel[] = params.columns.map((col) => ({
     ...col,
@@ -99,12 +104,17 @@ export function createTable(params: CreateTableParams): TableCoreModel {
       headerBackgroundToken: 'slate_900',
       headerTextColorToken: 'white',
       fontScale: 'normal',
-      tableWidthMode: 'auto_fill'
+      tableWidth
     },
     paginationPolicy: structuredClone(DEFAULT_TABLE_PAGINATION_POLICY)
   };
 
   const configuredTable = applyTablePreset(baseTable, presetId);
+  // Garante a largura solicitada caso o preset tenha resetado
+  if (params.tableWidth) {
+    configuredTable.presentation.tableWidth = params.tableWidth;
+  }
+
   const validation = validateTableModel(configuredTable);
   if (!validation.valid) {
     throw new TableEngineError('INVALID_TABLE_INITIALIZATION', validation.errors.join('; '));
@@ -231,6 +241,9 @@ export function addColumn(
   if (table.columns.some((c) => c.id === colId)) {
     throw new TableEngineError('DUPLICATE_COLUMN_ID', `Já existe coluna com ID "${colId}".`);
   }
+  if (table.columns.some((c) => c.semanticKey === newCol.semanticKey)) {
+    throw new TableEngineError('DUPLICATE_SEMANTIC_KEY', `Já existe coluna com chave semântica "${newCol.semanticKey}".`);
+  }
 
   const colModel: TableColumnModel = {
     ...newCol,
@@ -340,17 +353,51 @@ export function setColumnWidth(
     throw new TableEngineError('COLUMN_NOT_FOUND', `Coluna "${columnId}" não encontrada.`);
   }
 
-  if (widthSpec.mode === 'fixed_mm') {
-    if (typeof widthSpec.widthMm !== 'number' || widthSpec.widthMm <= 0) {
-      throw new TableEngineError('INVALID_COLUMN_WIDTH', 'Largura fixed_mm deve ser estritamente maior que zero.');
-    }
-  }
-
   const updatedCols = table.columns.map((c) => (c.id === columnId ? { ...c, widthSpec } : c));
 
   return {
     ...table,
     columns: updatedCols
+  };
+}
+
+/**
+ * Altera a especificação de largura total da tabela.
+ */
+export function setTableWidth(
+  table: TableCoreModel,
+  tableWidth: TableWidthSpec
+): TableCoreModel {
+  return {
+    ...table,
+    presentation: {
+      ...table.presentation,
+      tableWidth
+    }
+  };
+}
+
+/**
+ * Altera a altura mínima de uma linha.
+ */
+export function setRowMinHeight(
+  table: TableCoreModel,
+  rowId: string,
+  minHeightMm?: number
+): TableCoreModel {
+  const rowIndex = table.rows.findIndex((r) => r.id === rowId);
+  if (rowIndex === -1) {
+    throw new TableEngineError('ROW_NOT_FOUND', `Linha "${rowId}" não encontrada.`);
+  }
+  if (typeof minHeightMm === 'number' && minHeightMm <= 0) {
+    throw new TableEngineError('INVALID_ROW_HEIGHT', 'Altura mínima da linha deve ser maior que zero.');
+  }
+
+  const updatedRows = table.rows.map((r) => (r.id === rowId ? { ...r, minHeightMm } : r));
+
+  return {
+    ...table,
+    rows: updatedRows
   };
 }
 
@@ -392,6 +439,9 @@ export function setCellContent(
 
 /**
  * Mescla uma região retangular de células a partir da âncora (startRowId, startColumnId).
+ * ZERO SILENT DATA LOSS:
+ * Se qualquer célula a ser coberta contiver dados não-vazios (kind !== 'empty'),
+ * a operação é sumariamente rejeitada com MERGE_WOULD_DISCARD_CONTENT.
  */
 export function mergeCells(
   table: TableCoreModel,
@@ -429,19 +479,29 @@ export function mergeCells(
     throw new TableEngineError('ANCHOR_IS_COVERED', `A célula de origem já é coberta por outra mesclagem.`);
   }
 
-  // Verificar se qualquer célula no retângulo de destino já participa de outro merge
+  // Verificar sobreposição e verificar perda silenciosa de dados em células a serem cobertas
   for (let r = startR; r < startR + rowSpan; r++) {
     for (let c = startC; c < startC + colSpan; c++) {
       if (r === startR && c === startC) continue;
       const targetRow = table.rows[r];
       const targetCol = table.columns[c];
-      const targetCell = table.cells[getCellKey(targetRow.id, targetCol.id)];
+      const targetKey = getCellKey(targetRow.id, targetCol.id);
+      const targetCell = table.cells[targetKey];
+
       if (targetCell) {
         if (targetCell.coveredBy) {
           throw new TableEngineError('MERGE_OVERLAP', `A célula [${targetRow.id}::${targetCol.id}] já está coberta por outra mesclagem.`);
         }
         if ((targetCell.colSpan ?? 1) > 1 || (targetCell.rowSpan ?? 1) > 1) {
           throw new TableEngineError('MERGE_OVERLAP', `A célula [${targetRow.id}::${targetCol.id}] é uma âncora ativa de outra mesclagem.`);
+        }
+
+        // ZERO SILENT DATA LOSS INVARIANT: Células que serão cobertas devem ser estritamente vazias!
+        if (targetCell.content.kind !== 'empty') {
+          throw new TableEngineError(
+            'MERGE_WOULD_DISCARD_CONTENT',
+            `Não é possível mesclar células: a célula coberta [${targetRow.id}::${targetCol.id}] contém dados (kind="${targetCell.content.kind}") que seriam perdidos silenciosamente.`
+          );
         }
       }
     }
@@ -471,7 +531,7 @@ export function mergeCells(
           colSpan: 1,
           rowSpan: 1,
           coveredBy: anchorCell.id,
-          content: { kind: 'empty' } // Limpa conteúdo da coberta
+          content: { kind: 'empty' }
         };
       }
     }
@@ -537,6 +597,118 @@ export function unmergeCell(table: TableCoreModel, anchorRowId: string, anchorCo
   const validation = validateTableModel(nextTable);
   if (!validation.valid) {
     throw new TableEngineError('INVALID_UNMERGE_RESULT', validation.errors.join('; '));
+  }
+
+  return nextTable;
+}
+
+/**
+ * Reordena as linhas da tabela preservando IDs, células e validando integridade de mesclagens.
+ * FAIL-CLOSED: Se a reordenação quebrar a contiguidade de uma mesclagem vertical, rejeita.
+ */
+export function reorderRows(table: TableCoreModel, newRowOrderIds: string[]): TableCoreModel {
+  if (newRowOrderIds.length !== table.rows.length) {
+    throw new TableEngineError('INVALID_REORDER', 'A lista de reordenação deve conter exatamente o número de linhas da tabela.');
+  }
+
+  const existingRowMap = new Map(table.rows.map((r) => [r.id, r]));
+  for (const id of newRowOrderIds) {
+    if (!existingRowMap.has(id)) {
+      throw new TableEngineError('ROW_NOT_FOUND', `Linha "${id}" não encontrada para reordenação.`);
+    }
+  }
+
+  const newIndexMap = new Map<string, number>();
+  newRowOrderIds.forEach((id, idx) => newIndexMap.set(id, idx));
+
+  // Validar contiguidade de merges verticais
+  for (const cell of Object.values(table.cells)) {
+    if ((cell.rowSpan ?? 1) > 1 && !cell.coveredBy) {
+      const startOldIdx = table.rows.findIndex((r) => r.id === cell.rowId);
+      const span = cell.rowSpan ?? 1;
+      const expectedOldIds = table.rows.slice(startOldIdx, startOldIdx + span).map((r) => r.id);
+
+      const newIndices = expectedOldIds.map((id) => newIndexMap.get(id)!);
+      newIndices.sort((a, b) => a - b);
+
+      // Checa contiguidade
+      for (let i = 0; i < newIndices.length; i++) {
+        if (newIndices[i] !== newIndices[0] + i) {
+          throw new TableEngineError(
+            'CANNOT_REORDER_MERGED_CELLS',
+            `A reordenação de linhas violaria a contiguidade da mesclagem vertical da célula âncora "${cell.id}".`
+          );
+        }
+      }
+    }
+  }
+
+  const updatedRows = newRowOrderIds.map((id) => existingRowMap.get(id)!);
+
+  const nextTable: TableCoreModel = {
+    ...table,
+    rows: updatedRows
+  };
+
+  const validation = validateTableModel(nextTable);
+  if (!validation.valid) {
+    throw new TableEngineError('INVALID_REORDER_RESULT', validation.errors.join('; '));
+  }
+
+  return nextTable;
+}
+
+/**
+ * Reordena as colunas da tabela preservando IDs, células e validando integridade de mesclagens.
+ * FAIL-CLOSED: Se a reordenação quebrar a contiguidade de uma mesclagem horizontal, rejeita.
+ */
+export function reorderColumns(table: TableCoreModel, newColumnOrderIds: string[]): TableCoreModel {
+  if (newColumnOrderIds.length !== table.columns.length) {
+    throw new TableEngineError('INVALID_REORDER', 'A lista de reordenação deve conter exatamente o número de colunas da tabela.');
+  }
+
+  const existingColMap = new Map(table.columns.map((c) => [c.id, c]));
+  for (const id of newColumnOrderIds) {
+    if (!existingColMap.has(id)) {
+      throw new TableEngineError('COLUMN_NOT_FOUND', `Coluna "${id}" não encontrada para reordenação.`);
+    }
+  }
+
+  const newIndexMap = new Map<string, number>();
+  newColumnOrderIds.forEach((id, idx) => newIndexMap.set(id, idx));
+
+  // Validar contiguidade de merges horizontais
+  for (const cell of Object.values(table.cells)) {
+    if ((cell.colSpan ?? 1) > 1 && !cell.coveredBy) {
+      const startOldIdx = table.columns.findIndex((c) => c.id === cell.columnId);
+      const span = cell.colSpan ?? 1;
+      const expectedOldIds = table.columns.slice(startOldIdx, startOldIdx + span).map((c) => c.id);
+
+      const newIndices = expectedOldIds.map((id) => newIndexMap.get(id)!);
+      newIndices.sort((a, b) => a - b);
+
+      // Checa contiguidade
+      for (let i = 0; i < newIndices.length; i++) {
+        if (newIndices[i] !== newIndices[0] + i) {
+          throw new TableEngineError(
+            'CANNOT_REORDER_MERGED_CELLS',
+            `A reordenação de colunas violaria a contiguidade da mesclagem horizontal da célula âncora "${cell.id}".`
+          );
+        }
+      }
+    }
+  }
+
+  const updatedCols = newColumnOrderIds.map((id) => existingColMap.get(id)!);
+
+  const nextTable: TableCoreModel = {
+    ...table,
+    columns: updatedCols
+  };
+
+  const validation = validateTableModel(nextTable);
+  if (!validation.valid) {
+    throw new TableEngineError('INVALID_REORDER_RESULT', validation.errors.join('; '));
   }
 
   return nextTable;

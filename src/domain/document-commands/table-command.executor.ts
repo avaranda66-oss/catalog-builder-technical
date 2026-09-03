@@ -1,42 +1,63 @@
 // src/domain/document-commands/table-command.executor.ts
 // Executor Funcional Puro de Comandos para Table Core V2.
+// Recebe inputs não-confiáveis (unknown), valida via Zod e consome exclusivamente dados parseados.
 // Totalmente desacoplado de React, Zustand e banco de dados.
+// Zero explicit any.
 
 import { TableCoreModel } from '../table-core/table.types';
 import {
   addRow,
   removeRow,
+  reorderRows,
   addColumn,
   removeColumn,
+  reorderColumns,
   setColumnWidth,
+  setTableWidth,
+  setRowMinHeight,
   setCellContent,
   mergeCells,
   unmergeCell,
   TableEngineError
 } from '../table-core/table.engine';
 import { applyTablePreset } from '../table-core/table.presets';
-import { TableCommand, TableCommandSchema } from './table-commands.types';
+import { TableCommandSchema } from './table-commands.types';
 import { CommandResult } from './command.types';
-import { TableGeometryConstraints } from '../table-core/table.geometry';
+import { TableGeometryConstraints, resolveColumnWidthsMm } from '../table-core/table.geometry';
 
 /**
- * Executa um TableCommand estritamente tipado sobre o TableCoreModel.
+ * Conjunto de tipos de comando que alteram a geometria física da tabela.
+ */
+const GEOMETRY_AFFECTING_COMMANDS = new Set([
+  'TABLE_ADD_COLUMN',
+  'TABLE_REMOVE_COLUMN',
+  'TABLE_REORDER_COLUMNS',
+  'TABLE_SET_COLUMN_WIDTH',
+  'TABLE_SET_TABLE_WIDTH',
+  'TABLE_APPLY_PRESET'
+]);
+
+/**
+ * Executa um comando documental sobre TableCoreModel a partir de entrada não-confiável (unknown).
  * Retorna novo TableCoreModel imutável em caso de sucesso, ou erro tipado fail-closed.
  */
 export function executeTableCommand(
   table: TableCoreModel,
-  command: TableCommand,
-  _constraints?: TableGeometryConstraints
+  commandInput: unknown,
+  constraints?: TableGeometryConstraints
 ): CommandResult<TableCoreModel> {
-  // 1. Validação de formato via Zod (Garante segurança e integridade inclusive para origens de IA)
-  const parseRes = TableCommandSchema.safeParse(command);
+  // 1. Validação de formato via Zod estrito sobre entrada não-confiável
+  const parseRes = TableCommandSchema.safeParse(commandInput);
   if (!parseRes.success) {
     return {
       success: false,
       errorCode: 'INVALID_COMMAND_PAYLOAD',
-      error: `Payload do comando "${(command as any)?.type}" é inválido: ${parseRes.error.errors.map((e) => e.message).join('; ')}`
+      error: `Payload do comando é inválido: ${parseRes.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')}`
     };
   }
+
+  // A partir deste ponto, utiliza-se EXCLUSIVAMENTE o objeto tipado e sanitizado pelo Zod
+  const command = parseRes.data;
 
   // 2. Validação de Alvo (Target Mismatch)
   if (command.tableId !== table.id) {
@@ -47,7 +68,7 @@ export function executeTableCommand(
     };
   }
 
-  // 3. Despacho para o motor funcional
+  // 3. Despacho para o motor funcional puro
   try {
     let updatedTable: TableCoreModel;
     let summary: string;
@@ -56,7 +77,12 @@ export function executeTableCommand(
       case 'TABLE_ADD_ROW': {
         updatedTable = addRow(
           table,
-          command.row || { kind: 'data' },
+          {
+            id: command.row?.id,
+            kind: command.row?.kind ?? 'data',
+            minHeightMm: command.row?.minHeightMm,
+            isHeader: command.row?.isHeader
+          },
           command.initialCellContents,
           command.targetIndex
         );
@@ -67,6 +93,12 @@ export function executeTableCommand(
       case 'TABLE_REMOVE_ROW': {
         updatedTable = removeRow(table, command.rowId);
         summary = `Linha "${command.rowId}" removida da tabela "${table.id}"`;
+        break;
+      }
+
+      case 'TABLE_REORDER_ROWS': {
+        updatedTable = reorderRows(table, command.newRowOrderIds);
+        summary = `Linhas reordenadas na tabela "${table.id}"`;
         break;
       }
 
@@ -87,9 +119,27 @@ export function executeTableCommand(
         break;
       }
 
+      case 'TABLE_REORDER_COLUMNS': {
+        updatedTable = reorderColumns(table, command.newColumnOrderIds);
+        summary = `Colunas reordenadas na tabela "${table.id}"`;
+        break;
+      }
+
       case 'TABLE_SET_COLUMN_WIDTH': {
         updatedTable = setColumnWidth(table, command.columnId, command.widthSpec);
         summary = `Largura da coluna "${command.columnId}" atualizada`;
+        break;
+      }
+
+      case 'TABLE_SET_TABLE_WIDTH': {
+        updatedTable = setTableWidth(table, command.widthSpec);
+        summary = `Largura total da tabela "${table.id}" atualizada`;
+        break;
+      }
+
+      case 'TABLE_SET_ROW_MIN_HEIGHT': {
+        updatedTable = setRowMinHeight(table, command.rowId, command.minHeightMm);
+        summary = `Altura mínima da linha "${command.rowId}" atualizada`;
         break;
       }
 
@@ -127,20 +177,29 @@ export function executeTableCommand(
         summary = `Preset "${command.presetId}" aplicado à tabela "${table.id}"`;
         break;
       }
+    }
 
-      default: {
+    // 4. Execução de restrições de geometria (Geometry Constraints Enforcement)
+    let warnings: string[] | undefined;
+    if (GEOMETRY_AFFECTING_COMMANDS.has(command.type)) {
+      const geometryResult = resolveColumnWidthsMm(updatedTable, constraints);
+      if (!geometryResult.valid) {
         return {
           success: false,
-          errorCode: 'UNKNOWN_COMMAND_TYPE',
-          error: `Tipo de comando desconhecido: "${(command as any).type}"`
+          errorCode: 'INVALID_GEOMETRY',
+          error: geometryResult.error || 'A geometria resultante da tabela é inválida.'
         };
+      }
+      if (geometryResult.warnings.length > 0) {
+        warnings = geometryResult.warnings;
       }
     }
 
     return {
       success: true,
       data: updatedTable,
-      summary
+      summary,
+      warnings
     };
   } catch (err: unknown) {
     if (err instanceof TableEngineError) {
