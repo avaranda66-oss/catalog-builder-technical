@@ -140,14 +140,14 @@ export const AIAssistantDrawer: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Estado 2: Nenhuma tabela auditável */}
+                  {/* Estado 2: Nenhuma linha auditável */}
                   {report.complianceStatus === 'no_tables' && (
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 flex items-center gap-2">
                       <Info className="w-5 h-5 text-slate-500 flex-shrink-0" />
                       <div>
-                        <p className="font-bold text-slate-800">Nenhuma Tabela Auditável</p>
+                        <p className="font-bold text-slate-800">Nenhuma Linha Auditável</p>
                         <p className="text-[11px] text-slate-500">
-                          Não foram encontradas tabelas vinculadas à Biblioteca Oficial para conferência de produtos.
+                          Não foram encontradas linhas de produtos ou especificações vinculadas para conferência factual.
                         </p>
                       </div>
                     </div>

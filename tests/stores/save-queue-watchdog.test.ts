@@ -463,4 +463,201 @@ describe('CORE.H2 — Save Queue Watchdog & State Machine Recovery', () => {
     expect(res.status).toBe('error');
     expect(res.error).toContain('Tempo limite');
   });
+
+  // =========================================================================
+  // SAVE-WATCHDOG-CUMULATIVE-1: Save #1 6s + Save #2 6s (total 12s) -> SUCESSO
+  // =========================================================================
+  it('SAVE-WATCHDOG-CUMULATIVE-1: múltiplos flights legítimos sequenciais (<10s cada) não sofrem timeout acumulativo', async () => {
+    setupCatalog('cat-w-cum1', 1);
+
+    const saveMock = vi.spyOn(SupabaseService, 'saveCatalog');
+
+    // Flight 1 leva 6s
+    saveMock.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ success: true, data: { version: 2 } });
+        }, 6000);
+      });
+    });
+
+    // Flight 2 leva 6s
+    saveMock.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ success: true, data: { version: 3 } });
+        }, 6000);
+      });
+    });
+
+    const saveCallPromise = useCatalogStore.getState().saveCurrentCatalog();
+
+    // Edição pelo usuário aos 2s enquanto o flight 1 está em voo
+    await vi.advanceTimersByTimeAsync(2000);
+    useCatalogStore.setState({
+      localRevision: 2,
+      isDirty: true
+    });
+
+    // Avança até 6s (conclusão do Flight 1 e disparo imediato do Flight 2)
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(useCatalogStore.getState().currentCatalog?.version).toBe(2);
+
+    // Avança até 12s total (6s do Flight 2)
+    await vi.advanceTimersByTimeAsync(6000);
+
+    const result = await saveCallPromise;
+
+    // Deve ter tido sucesso completo sem timeout!
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('synced');
+    expect(useCatalogStore.getState().currentCatalog?.version).toBe(3);
+    expect(useCatalogStore.getState().lastAcknowledgedLocalRevision).toBe(2);
+    expect(useCatalogStore.getState().isDirty).toBe(false);
+    expect(saveMock).toHaveBeenCalledTimes(2);
+  });
+
+  // =========================================================================
+  // SAVE-WATCHDOG-PER-FLIGHT-1: primeira remote call > 10s -> timeout
+  // =========================================================================
+  it('SAVE-WATCHDOG-PER-FLIGHT-1: primeira chamada que excede 10s dispara timeout per-flight', async () => {
+    setupCatalog('cat-w-pf1', 1);
+
+    vi.spyOn(SupabaseService, 'saveCatalog').mockImplementation(
+      () => new Promise(() => {}) // pending
+    );
+
+    const p = useCatalogStore.getState().saveCurrentCatalog();
+    await vi.advanceTimersByTimeAsync(10000);
+    const res = await p;
+
+    expect(res.success).toBe(false);
+    expect(res.status).toBe('error');
+    expect(res.error).toContain('Tempo limite');
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+  });
+
+  // =========================================================================
+  // SAVE-WATCHDOG-PER-FLIGHT-2: Flight 1 (6s) ok, Flight 2 trava >10s -> timeout no flight 2
+  // =========================================================================
+  it('SAVE-WATCHDOG-PER-FLIGHT-2: flight 1 conclui em 6s e flight 2 pendurado sofre timeout aos 16s totais', async () => {
+    setupCatalog('cat-w-pf2', 1);
+
+    const saveMock = vi.spyOn(SupabaseService, 'saveCatalog');
+
+    // Flight 1: 6s
+    saveMock.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ success: true, data: { version: 2 } });
+        }, 6000);
+      });
+    });
+
+    // Flight 2: trava para sempre
+    saveMock.mockImplementationOnce(() => new Promise(() => {}));
+
+    const saveCallPromise = useCatalogStore.getState().saveCurrentCatalog();
+
+    // Edição durante flight 1
+    await vi.advanceTimersByTimeAsync(2000);
+    useCatalogStore.setState({
+      localRevision: 2,
+      isDirty: true
+    });
+
+    // Avança para 6s: Flight 1 ACK
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(useCatalogStore.getState().lastAcknowledgedLocalRevision).toBe(1);
+
+    // Aos 15.9s totais (9.9s no Flight 2), ainda não deu timeout
+    await vi.advanceTimersByTimeAsync(9900);
+    expect(useCatalogStore.getState().isSaving).toBe(true);
+
+    // Aos 16s totais (10s no Flight 2), o watchdog do flight 2 dispara
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = await saveCallPromise;
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('Tempo limite');
+
+    // Estado: erro no flight 2, porém flight 1 permaneceu reconhecido (rev 1) e rev 2 ficou dirty
+    expect(useCatalogStore.getState().lastAcknowledgedLocalRevision).toBe(1);
+    expect(useCatalogStore.getState().isDirty).toBe(true);
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+    expect(useCatalogStore.getState().isSaving).toBe(false);
+  });
+
+  // =========================================================================
+  // SAVE-WATCHDOG-LATE-FLIGHT-2: resolução tardia após timeout do flight 2 é descartada
+  // =========================================================================
+  it('SAVE-WATCHDOG-LATE-FLIGHT-2: conclusão tardia do flight 2 após o timeout não corrompe o estado', async () => {
+    setupCatalog('cat-w-late2', 1);
+
+    let resolveFlight2: Function = () => {};
+    const flight2Promise = new Promise<{ success: boolean; data: any }>((res) => {
+      resolveFlight2 = res;
+    });
+
+    const saveMock = vi.spyOn(SupabaseService, 'saveCatalog');
+    // Flight 1 resolve em 2s
+    saveMock.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        setTimeout(() => resolve({ success: true, data: { version: 2 } }), 2000);
+      });
+    });
+    // Flight 2 usa o resolver manual
+    saveMock.mockImplementationOnce(() => flight2Promise);
+
+    const p = useCatalogStore.getState().saveCurrentCatalog();
+
+    // Edição durante flight 1
+    useCatalogStore.setState({ localRevision: 2, isDirty: true });
+
+    // Avança 2s (Flight 1 ack) + 10s (Flight 2 timeout aos 12s)
+    await vi.advanceTimersByTimeAsync(12000);
+    const res = await p;
+    expect(res.status).toBe('error');
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+
+    // Agora aos 20s, flight 2 resolve tardiamente com versão 3
+    resolveFlight2({ success: true, data: { version: 3 } });
+    await Promise.resolve();
+
+    // O store NÃO deve ter sido atualizado para synced nem versão 3!
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+    expect(useCatalogStore.getState().currentCatalog?.version).toBe(2);
+  });
+
+  // =========================================================================
+  // SAVE-WATCHDOG-FLUSH-RETRY: flushCatalog pode disparar retry real após timeout
+  // =========================================================================
+  it('SAVE-WATCHDOG-FLUSH-RETRY: flushCatalog após timeout dispara retry e sincroniza', async () => {
+    setupCatalog('cat-w-flush', 1);
+    useCatalogStore.setState({ isDirty: true, localRevision: 2 });
+
+    const saveMock = vi.spyOn(SupabaseService, 'saveCatalog');
+    // Tentativa 1 trava
+    saveMock.mockImplementationOnce(() => new Promise(() => {}));
+
+    const p1 = useCatalogStore.getState().saveCurrentCatalog();
+    await vi.advanceTimersByTimeAsync(10000);
+    await p1;
+
+    expect(useCatalogStore.getState().syncStatus).toBe('error');
+
+    // flushCatalog agora
+    saveMock.mockImplementationOnce(async () => ({
+      success: true,
+      data: { version: 2 }
+    }));
+
+    const pFlush = useCatalogStore.getState().flushCatalog();
+    const rFlush = await pFlush;
+
+    expect(rFlush.success).toBe(true);
+    expect(useCatalogStore.getState().syncStatus).toBe('synced');
+    expect(useCatalogStore.getState().currentCatalog?.version).toBe(2);
+  });
 });

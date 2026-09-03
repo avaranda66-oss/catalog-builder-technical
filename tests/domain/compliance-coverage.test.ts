@@ -408,4 +408,133 @@ describe('CORE.H2 — Compliance Coverage Truth & Capability Matrix', () => {
     expect(report.complianceStatus).toBe('partial');
     expect(report.notes).toContain('Auditoria parcial');
   });
+
+  // =========================================================================
+  // COMPLIANCE-ZERO-ROW-1: canonical table empty -> not compliant
+  // =========================================================================
+  it('COMPLIANCE-ZERO-ROW-1: tabela canônica vazia (zero rows) não é compliant', () => {
+    const catalog = createCatalogWithBlocks([
+      {
+        id: 'b-empty-table',
+        type: 'table',
+        title: 'Tabela Sem Linhas',
+        tableColumns: [{ key: 'range', label: 'Faixa' }],
+        tableRows: []
+      }
+    ]);
+
+    const report = AIService.checkCatalogCompliance(catalog, MOCK_PRODUCTS);
+    expect(report.totalRowsChecked).toBe(0);
+    expect(report.auditedBlocksCount).toBe(1);
+    expect(report.skippedBlocksCount).toBe(0);
+    expect(report.isFullyCompliant).toBe(false);
+    expect(report.complianceStatus).toBe('no_tables');
+    expect(report.notes).toContain('Nenhuma linha');
+  });
+
+  // =========================================================================
+  // COMPLIANCE-ZERO-ROW-2: canonical empty -> zero green banner
+  // =========================================================================
+  it('COMPLIANCE-ZERO-ROW-2: tabela canônica vazia garante que status NÃO é compliant para evitar falso verde', () => {
+    const catalog = createCatalogWithBlocks([
+      {
+        id: 'b-empty-specs',
+        type: 'specs_table',
+        tableRows: []
+      }
+    ]);
+
+    const report = AIService.checkCatalogCompliance(catalog, MOCK_PRODUCTS);
+    expect(report.complianceStatus).not.toBe('compliant');
+    expect(report.isFullyCompliant).toBe(false);
+  });
+
+  // =========================================================================
+  // COMPLIANCE-ZERO-ROW-3: canonical empty + unsupported -> partial
+  // =========================================================================
+  it('COMPLIANCE-ZERO-ROW-3: tabela canônica vazia combinada com estrutura especializada reporta partial', () => {
+    const catalog = createCatalogWithBlocks([
+      {
+        id: 'b-empty-table',
+        type: 'table',
+        tableRows: []
+      },
+      {
+        id: 'b-ord',
+        type: 'ordering_codes'
+      }
+    ]);
+
+    const report = AIService.checkCatalogCompliance(catalog, MOCK_PRODUCTS);
+    expect(report.totalRowsChecked).toBe(0);
+    expect(report.auditedBlocksCount).toBe(1);
+    expect(report.skippedBlocksCount).toBe(1);
+    expect(report.isFullyCompliant).toBe(false);
+    expect(report.complianceStatus).toBe('partial');
+  });
+
+  // =========================================================================
+  // COMPLIANCE-ZERO-ROW-4: canonical empty + canonical populated -> populated rows auditadas
+  // =========================================================================
+  it('COMPLIANCE-ZERO-ROW-4: tabela vazia mais tabela populada audita normalmente as linhas da populada', () => {
+    const catalog = createCatalogWithBlocks([
+      {
+        id: 'b-empty-table',
+        type: 'table',
+        tableRows: []
+      },
+      {
+        id: 'b-populated-table',
+        type: 'table',
+        tableRows: [
+          {
+            id: 'r1',
+            productRefId: 'prod-presys-ta-25n',
+            localOverrides: {},
+            order: 0
+          }
+        ]
+      }
+    ]);
+
+    const report = AIService.checkCatalogCompliance(catalog, MOCK_PRODUCTS);
+    expect(report.totalRowsChecked).toBe(1);
+    expect(report.auditedBlocksCount).toBe(2);
+    expect(report.skippedBlocksCount).toBe(0);
+    expect(report.divergenceCount).toBe(0);
+    expect(report.coverageComplete).toBe(true);
+    expect(report.isFullyCompliant).toBe(true);
+    expect(report.complianceStatus).toBe('compliant');
+  });
+
+  // =========================================================================
+  // COMPLIANCE-ZERO-ROW-5: isFullyCompliant and complianceStatus never contradict
+  // =========================================================================
+  it('COMPLIANCE-ZERO-ROW-5: invariante absoluta: status compliant <=> isFullyCompliant true', () => {
+    // Cenário A: Vazia
+    const repA = AIService.checkCatalogCompliance(createCatalogWithBlocks([{ id: 'b1', type: 'table', tableRows: [] }]), MOCK_PRODUCTS);
+    expect(repA.complianceStatus === 'compliant').toBe(repA.isFullyCompliant);
+
+    // Cenário B: Divergente
+    const repB = AIService.checkCatalogCompliance(createCatalogWithBlocks([{
+      id: 'b2',
+      type: 'table',
+      tableRows: [{ id: 'r1', productRefId: 'prod-presys-ta-25n', localOverrides: { range: 'DIVERGENTE' }, order: 0 }]
+    }]), MOCK_PRODUCTS);
+    expect(repB.complianceStatus === 'compliant').toBe(repB.isFullyCompliant);
+
+    // Cenário C: Parcial com linhas válidas
+    const repC = AIService.checkCatalogCompliance(createCatalogWithBlocks([
+      { id: 'b3', type: 'table', tableRows: [{ id: 'r1', productRefId: 'prod-presys-ta-25n', localOverrides: {}, order: 0 }] },
+      { id: 'b4', type: 'ordering_codes' }
+    ]), MOCK_PRODUCTS);
+    expect(repC.complianceStatus === 'compliant').toBe(repC.isFullyCompliant);
+
+    // Cenário D: 100% Conforme
+    const repD = AIService.checkCatalogCompliance(createCatalogWithBlocks([
+      { id: 'b5', type: 'table', tableRows: [{ id: 'r1', productRefId: 'prod-presys-ta-25n', localOverrides: {}, order: 0 }] }
+    ]), MOCK_PRODUCTS);
+    expect(repD.complianceStatus === 'compliant').toBe(repD.isFullyCompliant);
+    expect(repD.isFullyCompliant).toBe(true);
+  });
 });

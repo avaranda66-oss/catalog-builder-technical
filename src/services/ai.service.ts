@@ -117,19 +117,23 @@ export class AIService {
     const isFullyCompliant = divergenceCount === 0 && coverageComplete && totalRowsChecked > 0;
 
     let complianceStatus: ComplianceStatus;
-    if (totalRowsChecked === 0 && auditedBlocksCount === 0) {
-      complianceStatus = skippedBlocksCount > 0 ? 'partial' : 'no_tables';
-    } else if (divergenceCount > 0) {
+    if (divergenceCount > 0) {
       complianceStatus = 'divergent';
-    } else if (!coverageComplete) {
+    } else if (skippedBlocksCount > 0) {
       complianceStatus = 'partial';
+    } else if (totalRowsChecked === 0) {
+      complianceStatus = 'no_tables';
     } else {
       complianceStatus = 'compliant';
     }
 
     let notes: string | undefined;
     if (complianceStatus === 'no_tables') {
-      notes = 'Nenhuma tabela compatível com a Biblioteca Oficial encontrada para auditoria.';
+      if (auditedBlocksCount > 0) {
+        notes = 'Nenhuma linha ou especificação vinculada à Biblioteca Oficial encontrada nas tabelas do catálogo.';
+      } else {
+        notes = 'Nenhuma tabela compatível com a Biblioteca Oficial encontrada para auditoria.';
+      }
     } else if (complianceStatus === 'partial') {
       notes = `Auditoria parcial: ${auditedBlocksCount} tabela(s) verificada(s), ${skippedBlocksCount} estrutura(s) especializada(s) não suportada(s) (${skippedBlockTypes.join(', ')}).`;
     }

@@ -1424,13 +1424,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     queue.currentAttemptId++;
     const thisAttemptId = queue.currentAttemptId;
 
-    // Watchdog Timer de 10s para garantir que saving nunca trave
-    let watchdogTimer: any = null;
-    const watchdogPromise = new Promise<{ timeout: boolean }>((resolve) => {
-      watchdogTimer = setTimeout(() => {
-        resolve({ timeout: true });
-      }, 10000);
-    });
+    let currentFlightTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelFlightTimer = () => {
+      if (currentFlightTimer) {
+        clearTimeout(currentFlightTimer);
+        currentFlightTimer = null;
+      }
+    };
 
     const savePromise = (async (): Promise<SaveResult> => {
       let finalResult: SaveResult = { success: false, status: 'saving' };
@@ -1496,11 +1496,22 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             }
           };
 
-          const remoteRes = await SupabaseService.saveCatalog(
+          // SUPERVISÃO INDIVIDUAL POR VOO REMOTO (Watchdog de 10s por chamada ao Supabase)
+          cancelFlightTimer();
+          const flightPromise = SupabaseService.saveCatalog(
             payloadToSend,
             expectedVersion,
             summaryText
           );
+
+          const flightWatchdog = new Promise<{ timeout: true }>((resolve) => {
+            currentFlightTimer = setTimeout(() => {
+              resolve({ timeout: true });
+            }, 10000);
+          });
+
+          const remoteOrTimeout = await Promise.race([flightPromise, flightWatchdog]);
+          cancelFlightTimer();
 
           // PROTEÇÃO CONTRA LATE COMPLETION / STALE SAVE
           // Se o attemptId atual da fila divergir de thisAttemptId (ex: watchdog expirou ou retry iniciou),
@@ -1512,6 +1523,32 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               error: 'Operação de salvamento desatualizada (stale attempt discard).'
             };
           }
+
+          // SE O VOO REMOTO EXPIROU PELO WATCHDOG (10s):
+          if ('timeout' in remoteOrTimeout) {
+            // Invalida a autoridade deste attempt para que conclusões tardias sejam descartadas
+            queue.currentAttemptId++;
+            queue.isSaving = false;
+            queue.inFlightPromise = null;
+
+            const isStillDirty = get().localRevision > get().lastAcknowledgedLocalRevision;
+
+            set({
+              isSaving: false,
+              inFlightSave: null,
+              syncStatus: 'error',
+              syncError: 'Tempo limite de salvamento excedido (watchdog 10s).',
+              isDirty: isStillDirty || get().isDirty
+            });
+
+            return {
+              success: false,
+              status: 'error',
+              error: 'Tempo limite de salvamento excedido.'
+            };
+          }
+
+          const remoteRes = remoteOrTimeout;
 
           if (remoteRes.success && remoteRes.data) {
             const confirmedVersion = Number(remoteRes.data.version) || targetVersion;
@@ -1637,7 +1674,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           }
         }
       } finally {
-        if (watchdogTimer) clearTimeout(watchdogTimer);
+        cancelFlightTimer();
         // Limpeza SOMENTE se este attempt ainda for a autoridade ativa da fila!
         if (queue.currentAttemptId === thisAttemptId) {
           queue.isSaving = false;
@@ -1648,40 +1685,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return finalResult;
     })();
 
-    const supervisedPromise: Promise<SaveResult> = Promise.race([
-      savePromise,
-      watchdogPromise.then((wd): SaveResult => {
-        if (wd && wd.timeout) {
-          if (watchdogTimer) clearTimeout(watchdogTimer);
-          if (queue.currentAttemptId === thisAttemptId) {
-            // Invalida a autoridade deste attempt para que conclusões tardias sejam descartadas
-            queue.currentAttemptId++;
-            queue.isSaving = false;
-            queue.inFlightPromise = null;
-
-            // Mantém isDirty se houver revisões locais não confirmadas
-            const isStillDirty = get().localRevision > get().lastAcknowledgedLocalRevision;
-
-            set({
-              isSaving: false,
-              inFlightSave: null,
-              syncStatus: 'error',
-              syncError: 'Tempo limite de salvamento excedido (watchdog 10s).',
-              isDirty: isStillDirty || get().isDirty
-            });
-          }
-          return {
-            success: false,
-            status: 'error' as const,
-            error: 'Tempo limite de salvamento excedido.'
-          };
-        }
-        return { success: false, status: 'error' as const, error: 'Erro inesperado no supervisor de salvamento.' };
-      })
-    ]);
-
-    queue.inFlightPromise = supervisedPromise;
-    return supervisedPromise;
+    queue.inFlightPromise = savePromise;
+    return savePromise;
   },
 
   flushCatalog: async (catalogId?: string): Promise<SaveResult> => {
@@ -1699,7 +1704,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (
       current.currentCatalog &&
       current.currentCatalog.id === targetId &&
-      (current.isDirty || current.localRevision > current.lastAcknowledgedLocalRevision)
+      (current.isDirty || current.localRevision > current.lastAcknowledgedLocalRevision || current.syncStatus === 'error')
     ) {
       return await get().saveCurrentCatalog();
     }
