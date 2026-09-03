@@ -1,54 +1,86 @@
-# Blueprint de Persistência do Product Workbook (PIM.W2A)
+# Blueprint de Persistência do Product Workbook (PIM.W2B Hardened)
 
-**Fase:** PIM.W2A — Product Knowledge Persistence Design & Blueprint  
-**Status:** DRAFT / PROPOSTA TÉCNICA (NÃO APLICADO EM PRODUÇÃO)  
-**Branch:** `design/product-workbook-persistence` (Isolada de `main`)  
+**Fase:** PIM.W2B — Product Knowledge Persistence Hardening  
+**Status:** READY FOR ARCHITECT REVIEW (NÃO APLICADO EM PRODUÇÃO)  
+**Branch:** `hardening/product-workbook-persistence-w2b`  
 **Data:** 2026-09-03  
 
 ---
 
 ## 1. Contexto e Requisitos Fundamentais
 
-O domínio **Product Workbook** (PIM.W1 / PIM.W1.1) estabelece o modelo puro de engenharia de conhecimento técnico de produto no Catalog Builder. Ele suporta:
-- Workbooks de Produto e Workbooks de Família (`ProductWorkbookOwner`).
-- Módulos técnicos tipados (`TechnicalModule`).
-- Dados técnicos polimórficos (`TechnicalDatum`) com valores canônicos e evidências empíricas (`TechnicalEvidence`).
-- Decisões canônicas estritas (`selected_evidence`, `engineering_decision`, `verified_consensus`).
-- Resolução de herança pura via overrides (`DatumOverrideRule`: `override`, `extend`, `lock`, `hide`) sem mutação e sem cópia física entre tabelas.
-- Visões salvas (`ProductDataView`).
-- Fechamento referencial e validação estrita (`validateProductWorkbook`, `validateProductKnowledgeBundle`).
+O domínio **Product Workbook** (PIM.W1 / PIM.W1.1 / PIM.W1.2) estabelece o modelo puro de engenharia de conhecimento técnico de produto no Catalog Builder.
+Na fase PIM.W1.2, consolidamos a semântica canônica de `ProductWorkbook.revision`:
+- O campo `revision` representa a **revisão persistida autoritativa do servidor** (token CAS).
+- Operações locais puras de edição preservam a revisão $N = N$.
+- Apenas a autoridade de persistência avança $N \to N+1$.
+
+Na fase **PIM.W2B**, endurecemos a arquitetura de persistência para eliminar qualquer possibilidade de desvios de concorrência, corridas de criação, mutações diretas não autorizadas, divergências de documentos fonte ou perda de tipagem analítica.
 
 ---
 
-## 2. Comparativo de Arquiteturas de Armazenamento
+## 2. Invariantes Arquiteturais e Pilares de Segurança
 
-Avaliamos três alternativas concretas no PostgreSQL / Supabase:
+### 2.1 CAS Estrito (Compare-And-Swap Inviolável)
+- **TypeScript:** `SaveWorkbookParams.expectedRevision` é estritamente obrigatório (`number >= 0`).
+- **Pré-rede:** Antes de qualquer requisição, o repositório valida que `expectedRevision === workbook.revision`. Caso contrário, fail-closed imediato (`REVISION_MISMATCH`).
+- **PostgreSQL RPC:** `p_expected_revision INTEGER` não possui valor padrão (`DEFAULT NULL` proibido). Valores nulos geram exceção `CAS_REVISION_REQUIRED`.
+- **Conflito de Concorrência:** Divergência entre a revisão armazenada e `p_expected_revision` dispara erro canônico `WORKBOOK_CONFLICT` com `SQLSTATE 40001`.
 
-| Critério | Opção A: Full JSONB Puro | Opção B: 100% Relacional Normalizado | Opção C: Híbrido Relacional + Payload Mirror (Recomendada) |
-| :--- | :--- | :--- | :--- |
-| **Garantia de CAS** | Atômico trivial na linha do workbook (`revision = expected_revision`). | Complexo: requer lock pessimista na linha pai e transação em 5 tabelas. | Atômico no cabeçalho `product_workbooks` com atualização transacional. |
-| **Velocidade de Leitura** | Extremamente rápida (1 query única, 1 deserialização Zod). | Lenta (joins em 5 tabelas: modules, data, evidence, overrides, views). | Extremamente rápida para carga do workbook (`full_payload`) + queries SQL ricas. |
-| **Consultas SQL Analíticas** | Limitadas a operadores JSON (`->>`, `@>`). Não indexa bem chaves arbitrárias. | Excelente: `SELECT * FROM technical_data WHERE numeric_value > 100`. | Excelente: tabelas normalizadas indexadas sincronizadas transacionalmente. |
-| **Integridade Referencial** | Validada apenas no runtime TypeScript / Zod. | Validada por Foreign Keys do PostgreSQL. | Validação Zod no runtime + Foreign Keys e Constraints nas tabelas espelho. |
-| **Tamanho da Migração** | Mínimo (1 tabela). | Enorme (5 tabelas + 20 triggers). | Equilibrado (tabela raiz com `full_payload` + tabelas projetadas para busca). |
+### 2.2 Semântica da Primeira Persistência e Avanço de Revisão
+- Workbook local recém-criado: `revision = 0`.
+- Primeiro save no banco de dados: transição atômica $0 \to 1$.
+- Linhas persistidas no banco de dados possuem sempre `revision >= 1` (reforçado por `CHECK (revision >= 1)`).
+- Saves subsequentes: transição atômica $N \to N+1$.
+- Se o cliente tentar criar com `expectedRevision != 0`, ou salvar sobre registro existente com `expectedRevision != stored_revision`, o CAS aborta com `WORKBOOK_CONFLICT` (`40001`).
 
-### Decisão de Arquitetura: Modelo Híbrido Relacional + Payload Mirror
-A solução **Opção C** é a recomendada:
-1. `product_workbooks`: Tabela raiz que armazena a identidade do workbook, dono (`product` ou `family`), `revision` atômica para CAS, metadados e `full_payload` JSONB contendo o workbook completo validado pelo schema Zod.
-2. `product_technical_data_index`: Tabela de projeção e busca contendo linhas normalizadas dos dados técnicos com valores numéricos/texto indexados para busca cross-product no catálogo.
-3. `product_source_documents`: Tabela normalizada de documentos de evidência anexados (datasheets, manuais, certificados).
+### 2.3 Prevenção de Race de Criação e Integridade de Owner
+- O padrão ingênuo `SELECT ... FOR UPDATE` não previne dois clientes tentando criar concorrentemente o primeiro workbook para a mesma entidade.
+- **Solução PIM.W2B:** A RPC obtém lock pessimista transacional (`FOR UPDATE`) diretamente na entidade proprietária antes de consultar a tabela de workbooks:
+  - Para `owner.kind = 'product'`: `PERFORM 1 FROM public.products WHERE id = v_owner_id FOR UPDATE;`
+  - Para `owner.kind = 'family'`: `PERFORM 1 FROM public.product_families WHERE id = v_owner_id FOR UPDATE;`
+- Garante duas propriedades críticas:
+  1. **Integridade Referencial Real:** Se a entidade proprietária não existir no catálogo, a transação aborta imediatamente com `OWNER_NOT_FOUND` (`23503`).
+  2. **Serialização Atômica:** O segundo create aguarda a conclusão da transação do primeiro, encontrando em seguida a linha já criada na revisão 1, disparando `WORKBOOK_CONFLICT` de forma determinística.
+- Validação pré-rede e no SQL garante que `owner.id` seja estritamente um UUID no formato RFC 4122.
+
+### 2.4 Autoridade Única de Escrita (Single Write Authority)
+- Direct DML (`INSERT`, `UPDATE`, `DELETE`) em `product_workbooks`, `product_source_documents` e `product_technical_data_index` é **explicitamente revogado** de `PUBLIC`, `anon` e `authenticated`.
+- Toda e qualquer mutação ocorre exclusivamente através das RPCs autorizadas:
+  - `save_product_workbook_v1`
+  - `upsert_source_document_v1`
+- A validação de perfil editorial é unificada na função canônica:
+  `v_actor := public.require_document_editor_v1();`
+  (Zero tolerância a padrões fail-open como `coalesce(team_role(), 'editor')`).
+
+### 2.5 Lifecycle Completo de Documentos Fonte (Source Documents)
+- `product_source_documents` espelha o enum canônico `SourceDocumentType` de 8 valores:
+  `manual | datasheet | certificate | drawing | standard | engineering_note | website | other`.
+- Fornecido repositório tipado `ProductSourceDocumentRepository` (`upsert`, `get`, `list`).
+- **Validação de Evidências Órfãs:** Ao salvar um workbook, a RPC percorre todas as evidências (`datum.evidence` e `override.evidence`). Se qualquer `sourceDocumentId` apontar para um documento não persistido, a transação aborta com `ORPHAN_SOURCE_DOCUMENT` (`23503`).
+- **Compartilhamento Seguro:** Workbooks distintos podem referenciar os mesmos documentos fonte. Exclusão de workbooks não apaga documentos fonte compartilhados.
+
+### 2.6 Índice Analítico Lossless e Resolução de Conflitos
+- O índice `product_technical_data_index` é uma **projeção pura** atualizada deterministicamente na mesma transação atômica do save do workbook.
+- Cobre a união completa dos 10 tipos de `TechnicalValue` sem casts inseguros e sem ghost data:
+  - `text`, `number`, `boolean`, `quantity`, `range`, `enum`, `technical_token`, `asset_reference`, `product_reference`, `unknown`.
+- `has_conflicts` foi **removido** do índice analítico: o cálculo ingênuo `evidenceCount > 1` violava o domínio; a resolução de conflito pertence exclusivamente às engines puras de domínio (`detectEvidenceConflicts`).
+
+### 2.7 Auditoria Transacional Imutável
+- Toda persistência bem-sucedida registra um evento `SAVE_WORKBOOK` em `public.library_change_events` contendo `owner_kind`, `owner_id`, `new_revision` e metadados do ator autenticado.
+- A auditoria faz parte da transação ACID; se o save falhar ou sofrer rollback, nenhum evento é emitido.
 
 ---
 
-## 3. Modelo de Dados PostgreSQL Proposto
+## 3. Modelo de Tabelas PostgreSQL
 
-### 3.1 Tabela Raiz: `product_workbooks`
 ```sql
+-- 1. Tabela Principal de Workbooks Técnicos
 CREATE TABLE IF NOT EXISTS public.product_workbooks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_kind TEXT NOT NULL CHECK (owner_kind IN ('product', 'family')),
-    owner_id TEXT NOT NULL,
-    revision INTEGER NOT NULL DEFAULT 0,
+    owner_id UUID NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision >= 1),
     full_payload JSONB NOT NULL,
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -56,27 +88,29 @@ CREATE TABLE IF NOT EXISTS public.product_workbooks (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     CONSTRAINT product_workbooks_owner_unique UNIQUE (owner_kind, owner_id)
 );
-```
 
-### 3.2 Tabela de Documentos Fonte: `product_source_documents`
-```sql
+-- 2. Tabela de Documentos Fonte
 CREATE TABLE IF NOT EXISTS public.product_source_documents (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
-    document_type TEXT NOT NULL CHECK (document_type IN ('datasheet', 'manual', 'drawing', 'certificate', 'test_report', 'marketing', 'other')),
-    file_url TEXT,
-    file_name TEXT,
-    mime_type TEXT,
-    sha256 TEXT,
-    version TEXT,
+    document_type TEXT NOT NULL CHECK (document_type IN (
+        'manual', 'datasheet', 'certificate', 'drawing',
+        'standard', 'engineering_note', 'website', 'other'
+    )),
+    revision TEXT,
     language TEXT,
+    publication_date TEXT,
+    file_reference TEXT,
+    external_url TEXT,
+    checksum TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-```
 
-### 3.3 Tabela de Projeção Analítica: `product_technical_data_index`
-```sql
+-- 3. Tabela de Projeção Analítica (Dados Técnicos)
 CREATE TABLE IF NOT EXISTS public.product_technical_data_index (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workbook_id UUID NOT NULL REFERENCES public.product_workbooks(id) ON DELETE CASCADE,
@@ -85,11 +119,19 @@ CREATE TABLE IF NOT EXISTS public.product_technical_data_index (
     module_id TEXT NOT NULL,
     label TEXT NOT NULL,
     value_type TEXT NOT NULL,
+    raw_value JSONB NOT NULL,
     text_value TEXT,
     numeric_value NUMERIC,
+    boolean_value BOOLEAN,
+    lower_value NUMERIC,
+    upper_value NUMERIC,
     unit TEXT,
+    enum_code TEXT,
+    technical_token TEXT,
+    asset_id TEXT,
+    target_product_id TEXT,
+    unknown_reason TEXT,
     status TEXT NOT NULL,
-    has_conflicts BOOLEAN DEFAULT false,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     CONSTRAINT uq_workbook_datum_index UNIQUE (workbook_id, datum_id)
 );
@@ -97,53 +139,37 @@ CREATE TABLE IF NOT EXISTS public.product_technical_data_index (
 
 ---
 
-## 4. Concorrência Otimista (CAS)
+## 4. Assinaturas das RPCs e Contratos TypeScript
 
-O controle de concorrência é estritamente baseado no campo `revision` inteiro do domínio (e não em timestamps voláteis):
-- A função RPC `save_product_workbook_v1(p_workbook jsonb, p_expected_revision integer)` recebe o payload e a revisão esperada.
-- Se `existing.revision IS DISTINCT FROM p_expected_revision`, dispara exceção com SQLSTATE `'40001'`:
-  `WORKBOOK_CONFLICT: Conflito de Concorrência: o workbook foi alterado em outro dispositivo (Esperado: %, Atual: %). Recarregue os dados.`
-- Na gravação bem-sucedida, a revisão é incrementada: `revision := existing.revision + 1`.
+### 4.1 RPCs PostgreSQL
+- `public.get_product_workbook_v1(p_owner_kind TEXT, p_owner_id TEXT) -> JSONB`
+- `public.save_product_workbook_v1(p_workbook JSONB, p_expected_revision INTEGER) -> JSONB`
+- `public.upsert_source_document_v1(p_document JSONB) -> JSONB`
+- `public.get_source_document_v1(p_id TEXT) -> JSONB`
+- `public.list_source_documents_v1(p_ids TEXT[]) -> JSONB`
 
----
+### 4.2 Interfaces TypeScript
+```typescript
+export interface SaveWorkbookParams {
+  readonly workbook: ProductWorkbook;
+  readonly expectedRevision: number; // Obrigatório
+  readonly actorRef?: string;
+}
 
-## 5. Herança de Família Sem Duplicação Física
+export interface SaveWorkbookResult {
+  readonly success: boolean;
+  readonly workbook: ProductWorkbook;
+  readonly revision: number;
+}
 
-Conforme diretiva mandatória do Synkra AIOS:
-- Workbooks de Família são persistidos com `owner_kind = 'family'` e `owner_id = <family_uuid>`.
-- Workbooks de Produto são persistidos com `owner_kind = 'product'` e `owner_id = <product_uuid>`.
-- O banco de dados **NUNCA** duplica ou clona linhas da família para dentro do produto.
-- A resolução de valores efetivos é realizada deterministicamente no runtime através de `resolveEffectiveProductKnowledge(productWorkbook, familyWorkbook)`.
+export interface ProductWorkbookRepository {
+  getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
+  saveWorkbook(params: SaveWorkbookParams): Promise<SaveWorkbookResult>;
+}
 
----
-
-## 6. Segurança e Row Level Security (RLS)
-
-O sistema reutiliza o modelo de segurança existente no projeto:
-- `require_document_editor_v1()` (criado na migration 00019) valida se o usuário autenticado possui role `admin` ou `editor`.
-- Usuários anônimos têm acesso bloqueado.
-- Leitura permitida para qualquer usuário autenticado (`authenticated`).
-- Escrita permitida apenas para `admin` e `editor`.
-
----
-
-## 7. Trilha de Auditoria via `library_change_events`
-
-As mutações no workbook gravam eventos de auditoria imutáveis na tabela existente `public.library_change_events`:
-- `entity_type`: `'product_workbook'`
-- `entity_id`: `workbook_id::text`
-- `family_id`: Preenchido quando `owner_kind = 'family'`
-- `product_id`: Preenchido quando `owner_kind = 'product'`
-- `action`: `'SAVE_WORKBOOK'`
-- `summary`: `format('Workbook gravado para %s (%s) — revisão %s', v_owner_kind, v_owner_id, v_new_revision)`
-- `actor_id`: `auth.uid()`
-- `actor_email`, `actor_name`: Extraídos de `auth.users`.
-
----
-
-## 8. Estratégia de Tempo Real (Realtime)
-
-- A tabela `product_workbooks` é adicionada à publicação `supabase_realtime`.
-- Réplica identity definida como `FULL`: `ALTER TABLE public.product_workbooks REPLICA IDENTITY FULL;`.
-- Os clientes se inscrevem via canal Postgres Changes escutando eventos de `UPDATE` na tabela `product_workbooks` com filtro por `id=eq.<workbook_id>`.
-- Quando um evento de update é recebido com `revision > localWorkbook.revision`, o cliente notifica o usuário ou solicita recarga sem sobrescrever o rascunho local.
+export interface ProductSourceDocumentRepository {
+  getSourceDocument(id: string): Promise<SourceDocument | null>;
+  upsertSourceDocument(document: SourceDocument): Promise<SourceDocument>;
+  listSourceDocuments(ids?: string[]): Promise<SourceDocument[]>;
+}
+```
