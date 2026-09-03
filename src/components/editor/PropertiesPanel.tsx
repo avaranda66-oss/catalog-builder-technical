@@ -46,6 +46,18 @@ import { SoftwareConnectivityInspector } from './inspector/SoftwareConnectivityI
 import { ImageGalleryInspector } from './inspector/ImageGalleryInspector';
 import { SpecsTableInspector } from './inspector/SpecsTableInspector';
 
+export const AVAILABLE_DEFAULT_FIELDS = [
+  { key: 'code', label: 'Código' },
+  { key: 'model', label: 'Modelo' },
+  { key: 'family', label: 'Família' },
+  { key: 'range', label: 'Faixa de Medição' },
+  { key: 'unit', label: 'Unidade' },
+  { key: 'accuracy', label: 'Precisão / Exatidão' },
+  { key: 'output', label: 'Sinal Saída' },
+  { key: 'powerSupply', label: 'Alimentação' },
+  { key: 'processConnection', label: 'Conexão Processo' }
+];
+
 export const PropertiesPanel: React.FC = () => {
   const {
     currentCatalog,
@@ -87,18 +99,6 @@ export const PropertiesPanel: React.FC = () => {
   };
 
   const remoteOnSelectedBlock = selectedBlock ? getParticipantsOnBlock(selectedBlock.id) : [];
-
-  const AVAILABLE_DEFAULT_FIELDS = [
-    { key: 'code', label: 'Código' },
-    { key: 'model', label: 'Modelo' },
-    { key: 'family', label: 'Família' },
-    { key: 'range', label: 'Faixa de Medição' },
-    { key: 'unit', label: 'Unidade' },
-    { key: 'accuracy', label: 'Precisão / Exatidão' },
-    { key: 'output', label: 'Sinal Saída' },
-    { key: 'powerSupply', label: 'Alimentação' },
-    { key: 'processConnection', label: 'Conexão Processo' }
-  ];
 
   const handleToggleColumn = (colKey: string, label: string) => {
     if (!selectedBlock) return;
@@ -199,7 +199,7 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedBlock.type === 'inserts_visual' && <CircleDot className="w-4 h-4 text-slate-700" />}
                 {selectedBlock.type === 'multi_mode_calibrator' && <Layers className="w-4 h-4 text-purple-600" />}
                 {selectedBlock.type === 'features_list' && <Zap className="w-4 h-4 text-brand-600" />}
-                {selectedBlock.type === 'table' && <TableIcon className="w-4 h-4 text-[#003366]" />}
+                {(selectedBlock.type === 'table' || selectedBlock.type === 'specs_table') && <TableIcon className="w-4 h-4 text-[#003366]" />}
                 {selectedBlock.type === 'electrical_table' && <Zap className="w-4 h-4 text-amber-500" />}
                 {selectedBlock.type === 'accessories_table' && <Package className="w-4 h-4 text-emerald-600" />}
                 {selectedBlock.type === 'ordering_codes' && <Barcode className="w-4 h-4 text-purple-600" />}
@@ -209,7 +209,11 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedBlock.type === 'structural_section' && <LayoutGrid className="w-4 h-4 text-[#003366]" />}
                 {selectedBlock.type === 'text' && <Type className="w-4 h-4 text-slate-600" />}
                 {selectedBlock.type === 'image' && <Image className="w-4 h-4 text-[#003366]" />}
-                <span className="capitalize">{selectedBlock.type.replace(/_/g, ' ')}</span>
+                <span className="capitalize">
+                  {selectedBlock.type === 'specs_table'
+                    ? 'Tabela de Especificações — V2'
+                    : selectedBlock.type.replace(/_/g, ' ')}
+                </span>
               </div>
             </div>
 

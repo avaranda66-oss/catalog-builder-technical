@@ -220,7 +220,7 @@ export const SIDEBAR_BLOCK_ITEMS: SidebarBlockOption[] = [
       description: 'Tabela técnica com código, modelo, faixa, unidade e exatidão conectada à biblioteca oficial.',
       icon: TableIcon,
       blockData: {
-        type: 'table',
+        type: 'specs_table',
         title: 'Tabela de Especificações Técnicas de Instrumentação',
         tableColumns: [
           { key: 'code', label: 'Código', visible: true, width: 110 },
@@ -236,7 +236,7 @@ export const SIDEBAR_BLOCK_ITEMS: SidebarBlockOption[] = [
         <TechnicalTableBlock
           block={{
             id: 'prev-table',
-            type: 'table',
+            type: 'specs_table',
             title: 'ESPECIFICAÇÕES TÉCNICAS',
             tableColumns: [
               { key: 'code', label: 'Código', visible: true },

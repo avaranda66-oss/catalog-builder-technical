@@ -160,10 +160,10 @@ describe('CORE.H1 — Insertion Menu Pointer & Stacking Contracts', () => {
       productsOption.click();
     });
 
-    // Inserção deve ter ocorrido exatamente uma vez
+    // Inserção deve ter ocorrido exatamente uma vez com o tipo specs_table (Table Core V2)
     const updatedBlocks = useCatalogStore.getState().currentCatalog?.pages[0].blocks || [];
     expect(updatedBlocks.length).toBe(1);
-    expect(updatedBlocks[0].type).toBe('table');
+    expect(updatedBlocks[0].type).toBe('specs_table');
     expect(updatedBlocks[0].title).toBe('Tabela de Especificações Técnicas de Instrumentação');
 
     // Menu dropdown deve ter fechado automaticamente após o clique

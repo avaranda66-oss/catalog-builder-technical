@@ -1033,7 +1033,7 @@ export const A4Canvas: React.FC = () => {
       badge: 'Biblioteca Oficial',
       description: 'Tabela técnica com código, modelo, faixa, unidade e exatidão conectada à biblioteca oficial.',
       blockData: {
-        type: 'table',
+        type: 'specs_table',
         title: 'Tabela de Especificações Técnicas de Instrumentação',
         tableColumns: [
           { key: 'code', label: 'Código', visible: true, width: 110 },
@@ -1049,7 +1049,7 @@ export const A4Canvas: React.FC = () => {
         <TechnicalTableBlock
           block={{
             id: 'prev-table',
-            type: 'table',
+            type: 'specs_table',
             title: 'ESPECIFICAÇÕES TÉCNICAS',
             tableColumns: [
               { key: 'code', label: 'Código', visible: true },

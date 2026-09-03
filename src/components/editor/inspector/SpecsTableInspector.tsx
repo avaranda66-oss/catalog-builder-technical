@@ -28,6 +28,7 @@ import {
 import { resolveLegacyProductField } from '../../../domain/table-binding';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
+import { AVAILABLE_DEFAULT_FIELDS } from '../PropertiesPanel';
 
 export interface SpecsTableInspectorProps {
   block: ContentBlock;
@@ -42,7 +43,7 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   selectedCellId,
   onSelectCell
 }) => {
-  const { updateBlock, updateCellOverride, restoreCellToLibrary } = useCatalogStore();
+  const { updateBlock, updateCellOverride, restoreCellToLibrary, removeRowFromTable } = useCatalogStore();
   const { getProduct } = useLibraryStore();
 
   // Adaptação pura do bloco legado para TableCore + Bridge
@@ -173,14 +174,15 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     }
   };
 
-  // Ações de Gerenciamento de Colunas da Tabela
+  // Ações de Gerenciamento de Colunas e Linhas da Tabela
   const columns = block.tableColumns || [];
+  const rows = block.tableRows || [];
 
   const handleToggleColumn = (colKey: string, colLabel: string) => {
     const existing = columns.find((c) => c.key === colKey);
     let updated: TableColumnConfig[];
     if (existing) {
-      updated = columns.map((c) => (c.key === colKey ? { ...c, visible: !c.visible } : c));
+      updated = columns.map((c) => (c.key === colKey ? { ...c, visible: c.visible === false } : c));
     } else {
       updated = [...columns, { key: colKey, label: colLabel, visible: true }];
     }
@@ -419,6 +421,77 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Campos Rápidos da Biblioteca (Centralizado de PropertiesPanel) */}
+        <div className="pt-2 border-t border-slate-200">
+          <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+            Campos Rápidos da Biblioteca
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {AVAILABLE_DEFAULT_FIELDS.map((f) => {
+              const exists = columns.some((c) => c.key === f.key);
+              const col = columns.find((c) => c.key === f.key);
+              const isVis = exists && col?.visible !== false;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => handleToggleColumn(f.key, f.label)}
+                  className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                    isVis
+                      ? 'bg-blue-100 text-blue-900 border-blue-300 font-semibold'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Gerenciador de Linhas / Modelos (Fase CORE.T2C / TABLE.V2.ACTIVATION) */}
+      <div className="space-y-2 pt-2 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-slate-800 text-xs">Modelos na Tabela</span>
+          <span className="text-[10px] text-slate-500 font-mono">
+            {rows.length} linha(s)
+          </span>
+        </div>
+
+        <div className="space-y-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200 max-h-48 overflow-y-auto">
+          {rows.length === 0 ? (
+            <p className="text-[10.5px] text-slate-400 italic">Nenhum modelo adicionado à tabela.</p>
+          ) : (
+            rows.map((row, idx) => {
+              const prod = row.productRefId ? getProduct(row.productRefId) : undefined;
+              const rowLabel = prod?.code || prod?.model || row.productRefId || `Linha ${idx + 1}`;
+              const rowSub = prod
+                ? `${prod.model || prod.code} (${prod.family || 'Instrumento'})`
+                : (row.productRefId ? 'Produto da Biblioteca' : 'Linha Personalizada');
+              return (
+                <div key={row.id} className="p-1.5 bg-white border border-slate-200 rounded flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-slate-800 truncate block">{rowLabel}</span>
+                    <span className="text-[10px] text-slate-400 truncate block">{rowSub}</span>
+                  </div>
+                  {rows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeRowFromTable(block.id, row.id)}
+                      className="text-slate-300 hover:text-red-600 p-1 rounded transition-colors"
+                      title="Remover modelo da tabela"
+                      aria-label={`Remover modelo ${rowLabel}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>
