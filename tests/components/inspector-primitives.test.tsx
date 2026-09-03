@@ -19,6 +19,9 @@ import {
   InspectorActionRow,
   InspectorResetAction
 } from '../../src/components/editor/inspector/components';
+import { StructuralSectionInspector } from '../../src/components/editor/inspector/StructuralSectionInspector';
+import { StructuralCardInspector } from '../../src/components/editor/inspector/StructuralCardInspector';
+import { ContentBlock } from '../../src/domain/catalog.schema';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 
 describe('Inspector Design System Primitives (CORE.E3)', () => {
@@ -508,5 +511,332 @@ describe('Inspector Design System Primitives (CORE.E3)', () => {
       const cap = sectionDef.capabilities.find((c) => c.id === capId)!;
       expect(cap.rendererSupport.editor).toBe(true);
     }
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-1: ArrowRight avança e atualiza seleção
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-1: ArrowRight avança para próxima option habilitada, move foco e atualiza valor', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="a"
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B' },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const buttonA = buttons[0];
+    const buttonB = buttons[1];
+
+    buttonA.focus();
+    expect(document.activeElement).toBe(buttonA);
+
+    act(() => {
+      buttonA.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('b');
+    expect(document.activeElement).toBe(buttonB);
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-2: ArrowLeft na primeira option faz wrap para última
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-2: ArrowLeft na primeira option faz wrap-around para a última habilitada', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="a"
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B' },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const buttonA = buttons[0];
+    const buttonC = buttons[2];
+
+    buttonA.focus();
+    act(() => {
+      buttonA.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('c');
+    expect(document.activeElement).toBe(buttonC);
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-3: Disabled option é ignorada
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-3: Opções com disabled=true são ignoradas durante navegação por teclado', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="a"
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B (Desabilitada)', disabled: true },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const buttonA = buttons[0];
+    const buttonC = buttons[2];
+
+    buttonA.focus();
+    act(() => {
+      buttonA.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+
+    // Pula option B e seleciona option C
+    expect(handleChange).toHaveBeenCalledWith('c');
+    expect(document.activeElement).toBe(buttonC);
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-4: Home -> primeira habilitada
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-4: Tecla Home move foco e seleção para a primeira option habilitada', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="c"
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B' },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const buttonA = buttons[0];
+    const buttonC = buttons[2];
+
+    buttonC.focus();
+    act(() => {
+      buttonC.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('a');
+    expect(document.activeElement).toBe(buttonA);
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-5: End -> última habilitada
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-5: Tecla End move foco e seleção para a última option habilitada', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="a"
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B' },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const buttons = container.querySelectorAll('button');
+    const buttonA = buttons[0];
+    const buttonC = buttons[2];
+
+    buttonA.focus();
+    act(() => {
+      buttonA.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('c');
+    expect(document.activeElement).toBe(buttonC);
+  });
+
+  // ==========================================================================
+  // INSPECTOR-SEG-KBD-6: Disabled group: zero onChange
+  // ==========================================================================
+  it('INSPECTOR-SEG-KBD-6: SegmentedControl com disabled=true bloqueia navegação e não dispara onChange', () => {
+    const handleChange = vi.fn();
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <InspectorSegmentedControl
+          value="a"
+          disabled={true}
+          onChange={handleChange}
+          options={[
+            { value: 'a', label: 'Opção A' },
+            { value: 'b', label: 'Opção B' },
+            { value: 'c', label: 'Opção C' }
+          ]}
+        />
+      );
+    });
+
+    const group = container.querySelector('[role="radiogroup"]') as HTMLDivElement;
+    act(() => {
+      group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      group.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    });
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  // ==========================================================================
+  // Sample Block para testes de Disclosure Defaults
+  // ==========================================================================
+  const sampleSectionBlock: ContentBlock = {
+    id: 'block-sec-test',
+    type: 'structural_section',
+    title: 'Seção de Teste',
+    subtitle: 'Subtítulo',
+    badgeText: 'BADGE',
+    structuralData: {
+      version: 1,
+      iconId: 'network',
+      layout: {
+        mode: 'grid',
+        columns: 3,
+        widthMode: 'fill',
+        gap: 'sm',
+        padding: 'md',
+        density: 'normal',
+        align: 'left',
+        background: 'soft',
+        border: 'subtle',
+        radius: 'sm'
+      },
+      children: [
+        {
+          id: 'card-1',
+          type: 'feature_card',
+          title: 'Card 1',
+          body: 'Corpo 1',
+          badge: 'TEST',
+          emphasis: 'normal',
+          iconId: 'settings'
+        }
+      ]
+    }
+  };
+
+  // ==========================================================================
+  // INSPECTOR-DISCLOSURE-1: Structural Section inicial
+  // ==========================================================================
+  it('INSPECTOR-DISCLOSURE-1: StructuralSectionInspector inicializa com Conteúdo aberto e Layout, Aparência e Cards fechados', () => {
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <StructuralSectionInspector
+          sectionBlock={sampleSectionBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    const contentBtn = container.querySelector('#inspector-section-content-header') as HTMLButtonElement;
+    const layoutBtn = container.querySelector('#inspector-section-layout-header') as HTMLButtonElement;
+    const appearanceBtn = container.querySelector('#inspector-section-appearance-header') as HTMLButtonElement;
+    const childrenBtn = container.querySelector('#inspector-section-children-header') as HTMLButtonElement;
+
+    expect(contentBtn).not.toBeNull();
+    expect(layoutBtn).not.toBeNull();
+    expect(appearanceBtn).not.toBeNull();
+    expect(childrenBtn).not.toBeNull();
+
+    expect(contentBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(layoutBtn.getAttribute('aria-expanded')).toBe('false');
+    expect(appearanceBtn.getAttribute('aria-expanded')).toBe('false');
+    expect(childrenBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // ==========================================================================
+  // INSPECTOR-DISCLOSURE-2: Accordion não-exclusivo
+  // ==========================================================================
+  it('INSPECTOR-DISCLOSURE-2: Usuário pode abrir Layout mantendo Conteúdo aberto simultaneamente (não é accordion exclusivo)', () => {
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <StructuralSectionInspector
+          sectionBlock={sampleSectionBlock}
+          pageId="page-1"
+          onSelectCard={() => {}}
+        />
+      );
+    });
+
+    const contentBtn = container.querySelector('#inspector-section-content-header') as HTMLButtonElement;
+    const layoutBtn = container.querySelector('#inspector-section-layout-header') as HTMLButtonElement;
+
+    expect(contentBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(layoutBtn.getAttribute('aria-expanded')).toBe('false');
+
+    // Abre Layout clicando no header
+    act(() => {
+      layoutBtn.click();
+    });
+
+    // Ambas continuam abertas simultaneamente
+    expect(contentBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(layoutBtn.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  // ==========================================================================
+  // INSPECTOR-DISCLOSURE-3: Structural Card inicial
+  // ==========================================================================
+  it('INSPECTOR-DISCLOSURE-3: StructuralCardInspector inicializa com Conteúdo aberto e Ênfase e Ícone fechados', () => {
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <StructuralCardInspector
+          sectionBlock={sampleSectionBlock}
+          pageId="page-1"
+          cardId="card-1"
+          onBackToSection={() => {}}
+        />
+      );
+    });
+
+    const contentBtn = container.querySelector('#inspector-card-section-content-header') as HTMLButtonElement;
+    const emphasisBtn = container.querySelector('#inspector-card-section-emphasis-header') as HTMLButtonElement;
+    const iconBtn = container.querySelector('#inspector-card-section-icon-header') as HTMLButtonElement;
+
+    expect(contentBtn).not.toBeNull();
+    expect(emphasisBtn).not.toBeNull();
+    expect(iconBtn).not.toBeNull();
+
+    expect(contentBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(emphasisBtn.getAttribute('aria-expanded')).toBe('false');
+    expect(iconBtn.getAttribute('aria-expanded')).toBe('false');
   });
 });

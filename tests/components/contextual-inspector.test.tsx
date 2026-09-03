@@ -751,6 +751,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       );
     });
 
+    act(() => {
+      container.querySelector<HTMLButtonElement>('#inspector-section-layout-header')?.click();
+    });
+
     // Encontra o botão "Fixa (mm)" e comprova que agora está HABILITADO na Fase 3A.5A
     const buttons = Array.from(container.querySelectorAll('button'));
     const fixedButton = buttons.find((b) => b.textContent?.includes('Fixa'));
@@ -809,6 +813,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
           onSelectCard={() => {}}
         />
       );
+    });
+
+    act(() => {
+      inspectorContainer.querySelector<HTMLButtonElement>('#inspector-section-layout-header')?.click();
     });
 
     const numInput = inspectorContainer.querySelector('input[type="number"]') as HTMLInputElement;
@@ -883,6 +891,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       );
     });
 
+    act(() => {
+      container.querySelector<HTMLButtonElement>('#inspector-section-layout-header')?.click();
+    });
+
     // 1. No load: documento legado preservado com 215mm e aviso exibido
     expect(container.textContent).toContain('Aviso de Geometria');
     const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
@@ -916,6 +928,13 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
           onSelectCard={() => {}}
         />
       );
+    });
+
+    act(() => {
+      const header = container.querySelector<HTMLButtonElement>('#inspector-section-layout-header');
+      if (header?.getAttribute('aria-expanded') !== 'true') {
+        header?.click();
+      }
     });
 
     // 4. Usuário volta para Fixed
@@ -968,6 +987,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
       );
     });
 
+    act(() => {
+      container.querySelector<HTMLButtonElement>('#inspector-section-layout-header')?.click();
+    });
+
     const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
     expect(numInput).not.toBeNull();
     expect(numInput.step).toBe('any');
@@ -1018,6 +1041,10 @@ describe('Fase 3A.2 — Contextual Inspector (Section & Card)', () => {
           onSelectCard={() => {}}
         />
       );
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('#inspector-section-layout-header')?.click();
     });
 
     // Encontra os selects do Inspector e localiza o select de Gap

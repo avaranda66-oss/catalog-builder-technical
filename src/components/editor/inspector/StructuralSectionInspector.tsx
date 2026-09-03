@@ -1,5 +1,5 @@
 // src/components/editor/inspector/StructuralSectionInspector.tsx
-// Inspector Contextual da Seção Estrutural (Fase 3A.2 / Migrado para Primitives CORE.E3).
+// Inspector Contextual da Seção Estrutural (Fase 3A.2 / Primitives CORE.E3 / E3.1 UX & Hardening).
 // Organizado em categorias canônicas (Conteúdo, Layout, Aparência, Cards) com disclosures independentes e semântica acessível.
 
 import React, { useState } from 'react';
@@ -40,16 +40,23 @@ import {
   InspectorActionRow
 } from './components';
 
-interface StructuralSectionInspectorProps {
+export interface StructuralSectionInspectorProps {
   sectionBlock: ContentBlock;
   pageId: string;
   onSelectCard: (cardId: string) => void;
+  defaultOpenSections?: {
+    content?: boolean;
+    layout?: boolean;
+    appearance?: boolean;
+    children?: boolean;
+  };
 }
 
 export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProps> = ({
   sectionBlock,
   pageId,
-  onSelectCard
+  onSelectCard,
+  defaultOpenSections
 }) => {
   const updateBlock = useCatalogStore((state) => state.updateBlock);
   const addStructuralChild = useCatalogStore((state) => state.addStructuralChild);
@@ -155,12 +162,13 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
 
   return (
     <div className="space-y-3">
-      {/* 1. SEÇÃO CONTEÚDO */}
+      {/* 1. SEÇÃO CONTEÚDO (defaultOpen = true) */}
       <InspectorSection
+        id="inspector-section-content"
         title="Conteúdo da Seção"
         icon={<FileText className="w-3.5 h-3.5" />}
         description="Textos e Ícone"
-        defaultOpen={true}
+        defaultOpen={defaultOpenSections?.content ?? true}
       >
         <InspectorField label="Título Principal">
           <InspectorTextInput
@@ -243,12 +251,13 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
         title="Ícone da Seção Estrutural"
       />
 
-      {/* 2. SEÇÃO LAYOUT */}
+      {/* 2. SEÇÃO LAYOUT (defaultOpen = false) */}
       <InspectorSection
+        id="inspector-section-layout"
         title="Layout da Seção"
         icon={<LayoutGrid className="w-3.5 h-3.5" />}
         description="Distribuição e Grid"
-        defaultOpen={true}
+        defaultOpen={defaultOpenSections?.layout ?? false}
       >
         <InspectorField label="Modo de Disposição">
           <InspectorSegmentedControl
@@ -422,12 +431,13 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
         </div>
       </InspectorSection>
 
-      {/* 3. SEÇÃO APARÊNCIA */}
+      {/* 3. SEÇÃO APARÊNCIA (defaultOpen = false) */}
       <InspectorSection
+        id="inspector-section-appearance"
         title="Aparência Visual"
         icon={<Palette className="w-3.5 h-3.5" />}
         description="Fundo e Bordas"
-        defaultOpen={false}
+        defaultOpen={defaultOpenSections?.appearance ?? false}
       >
         <InspectorField label="Fundo da Seção">
           <InspectorSelect
@@ -487,13 +497,14 @@ export const StructuralSectionInspector: React.FC<StructuralSectionInspectorProp
         </div>
       </InspectorSection>
 
-      {/* 4. SEÇÃO CARDS FILHOS */}
+      {/* 4. SEÇÃO CARDS FILHOS (defaultOpen = false) */}
       <InspectorSection
+        id="inspector-section-children"
         title="Cards Filhos"
         badge={children.length}
         icon={<Layers className="w-3.5 h-3.5" />}
         description="Reordene, duplique ou edite"
-        defaultOpen={true}
+        defaultOpen={defaultOpenSections?.children ?? false}
       >
         <div className="space-y-2">
           <button

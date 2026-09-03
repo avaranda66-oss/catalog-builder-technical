@@ -1,5 +1,5 @@
 // src/components/editor/inspector/StructuralCardInspector.tsx
-// Inspector Contextual do Card Filho (Fase 3A.2 / Migrado para Primitives CORE.E3).
+// Inspector Contextual do Card Filho (Fase 3A.2 / Primitives CORE.E3 / E3.1 UX & Hardening).
 // Permite editar Título, Corpo, Badge, Ênfase Técnica e Ícone Semântico com garantia de mutação imutável por child.id.
 
 import React, { useState } from 'react';
@@ -23,18 +23,24 @@ import {
   InspectorSegmentedControl
 } from './components';
 
-interface StructuralCardInspectorProps {
+export interface StructuralCardInspectorProps {
   sectionBlock: ContentBlock;
   pageId: string;
   cardId: string;
   onBackToSection: () => void;
+  defaultOpenSections?: {
+    content?: boolean;
+    emphasis?: boolean;
+    icon?: boolean;
+  };
 }
 
 export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = ({
   sectionBlock,
   pageId,
   cardId,
-  onBackToSection
+  onBackToSection,
+  defaultOpenSections
 }) => {
   const updateBlock = useCatalogStore((state) => state.updateBlock);
   const duplicateStructuralChild = useCatalogStore((state) => state.duplicateStructuralChild);
@@ -143,12 +149,13 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
         </div>
       </div>
 
-      {/* 1. SEÇÃO CONTEÚDO DO CARD */}
+      {/* 1. SEÇÃO CONTEÚDO DO CARD (defaultOpen = true) */}
       <InspectorSection
+        id="inspector-card-section-content"
         title="Conteúdo do Card"
         icon={<FileEdit className="w-3.5 h-3.5" />}
         description="Textos Técnicos"
-        defaultOpen={true}
+        defaultOpen={defaultOpenSections?.content ?? true}
       >
         <InspectorField label="Título do Card">
           <InspectorTextInput
@@ -176,12 +183,13 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
         </InspectorField>
       </InspectorSection>
 
-      {/* 2. SEÇÃO ÊNFASE VISUAL */}
+      {/* 2. SEÇÃO ÊNFASE VISUAL (defaultOpen = false) */}
       <InspectorSection
+        id="inspector-card-section-emphasis"
         title="Ênfase Visual"
         icon={<Sparkles className="w-3.5 h-3.5" />}
         description="Variante do Card"
-        defaultOpen={true}
+        defaultOpen={defaultOpenSections?.emphasis ?? false}
       >
         <InspectorField label="Estilo de Destaque">
           <InspectorSegmentedControl
@@ -197,12 +205,13 @@ export const StructuralCardInspector: React.FC<StructuralCardInspectorProps> = (
         </InspectorField>
       </InspectorSection>
 
-      {/* 3. SEÇÃO ÍCONE DO CARD */}
+      {/* 3. SEÇÃO ÍCONE DO CARD (defaultOpen = false) */}
       <InspectorSection
+        id="inspector-card-section-icon"
         title="Ícone do Card"
         icon={<Sparkles className="w-3.5 h-3.5" />}
         description="Símbolo Semântico"
-        defaultOpen={false}
+        defaultOpen={defaultOpenSections?.icon ?? false}
       >
         <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
           <div className="flex items-center gap-2 min-w-0">

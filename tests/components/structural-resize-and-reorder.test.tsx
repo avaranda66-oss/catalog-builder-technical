@@ -644,6 +644,13 @@ describe('Fase 3A.5B — Structural Resize & Reorder Suite', () => {
       );
     });
 
+    act(() => {
+      const header = container.querySelector<HTMLButtonElement>('#inspector-section-layout-header');
+      if (header?.getAttribute('aria-expanded') !== 'true') {
+        header?.click();
+      }
+    });
+
     // Localiza botão "Restaurar padrão"
     const buttons = Array.from(container.querySelectorAll('button'));
     const resetBtn = buttons.find((b) => b.textContent?.includes('Restaurar padrão'));
@@ -696,6 +703,13 @@ describe('Fase 3A.5B — Structural Resize & Reorder Suite', () => {
           onSelectCard={() => {}}
         />
       );
+    });
+
+    act(() => {
+      const header = container.querySelector<HTMLButtonElement>('#inspector-section-layout-header');
+      if (header?.getAttribute('aria-expanded') !== 'true') {
+        header?.click();
+      }
     });
 
     // Localiza botão "Usar largura máxima"
@@ -1527,6 +1541,13 @@ describe('Fase 3A.5B — Structural Resize & Reorder Suite', () => {
           onSelectCard={() => {}}
         />
       );
+    });
+
+    act(() => {
+      const header = container.querySelector<HTMLButtonElement>('#inspector-section-children-header');
+      if (header?.getAttribute('aria-expanded') !== 'true') {
+        header?.click();
+      }
     });
 
     const cardB0 = secB.structuralData!.children[0].id;
