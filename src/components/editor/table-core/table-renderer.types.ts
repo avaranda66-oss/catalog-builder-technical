@@ -6,7 +6,10 @@
 import {
   TableCoreModel,
   TableCellLiteralContent,
-  TableCellBoundContent
+  TableCellBoundContent,
+  TableCellModel,
+  TableRowModel,
+  TableColumnModel
 } from '../../../domain/table-core/table.types';
 
 export type TableCoreRendererMode = 'editor' | 'export';
@@ -60,4 +63,10 @@ export interface TableCoreRendererProps {
   onDiagnostic?: (diagnostic: TableRenderDiagnostic) => void;
   renderTitle?: boolean; // Default: false (evita duplicação com wrappers externos)
   className?: string;
+  getCellPrintableField?: (
+    cell: TableCellModel,
+    row: TableRowModel,
+    col: TableColumnModel
+  ) => string | undefined;
+  getHeaderPrintableField?: (col: TableColumnModel) => string | undefined;
 }
