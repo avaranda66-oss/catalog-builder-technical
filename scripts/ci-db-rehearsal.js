@@ -349,10 +349,10 @@ async function run() {
     // FASE 7: AUTHENTICATED TEST ACTOR & OWNER FIXTURES
     // -------------------------------------------------------------
     logStep('FASE 7: TEST ACTOR & FIXTURES CREATION');
-    const ACTOR_ID = '11111111-1111-1111-1111-111111111111';
-    const PRODUCT_ID = '22222222-2222-2222-2222-222222222222';
-    const FAMILY_ID = '33333333-3333-3333-3333-333333333333';
-    const TEMP_PROD_ID = '44444444-4444-4444-4444-444444444444';
+    const ACTOR_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    const PRODUCT_ID = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
+    const FAMILY_ID = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33';
+    const TEMP_PROD_ID = 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44';
 
     await client.query(`
       INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at)
@@ -471,7 +471,7 @@ async function run() {
         `SELECT public.save_product_workbook_v1($1::jsonb, 0) AS data`,
         [JSON.stringify({
           ...workbookPayloadRev0,
-          owner: { kind: 'product', id: '99999999-9999-9999-9999-999999999999' }
+          owner: { kind: 'product', id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99' }
         })]
       );
     } catch (err) {
