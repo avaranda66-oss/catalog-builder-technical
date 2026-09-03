@@ -40,7 +40,10 @@ export const AddProductModal: React.FC = () => {
     return matchesFamily && matchesSearch;
   });
 
+  const isDemo = dataProvenance === 'demo_seed';
+
   const handleSelect = (productId: string) => {
+    if (dataProvenance === 'demo_seed') return;
     addRowToTable(targetTableBlockId, productId);
     closeAddProductToTableModal();
   };
@@ -147,8 +150,12 @@ export const AddProductModal: React.FC = () => {
           {filtered.map((prod) => (
             <div
               key={prod.id}
-              onClick={() => handleSelect(prod.id)}
-              className="p-3 border border-slate-200 hover:border-[#003366] hover:bg-blue-50/40 rounded-lg cursor-pointer transition-all flex items-center justify-between group bg-white shadow-2xs"
+              onClick={isDemo ? undefined : () => handleSelect(prod.id)}
+              className={`p-3 border rounded-lg transition-all flex items-center justify-between group shadow-2xs ${
+                isDemo
+                  ? 'border-slate-200 opacity-80 cursor-not-allowed bg-slate-50/50'
+                  : 'border-slate-200 hover:border-[#003366] hover:bg-blue-50/40 cursor-pointer bg-white'
+              }`}
             >
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
@@ -187,10 +194,29 @@ export const AddProductModal: React.FC = () => {
 
               <button
                 type="button"
-                className="px-3 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors"
+                disabled={isDemo}
+                onClick={
+                  isDemo
+                    ? (e) => e.stopPropagation()
+                    : (e) => {
+                        e.stopPropagation();
+                        handleSelect(prod.id);
+                      }
+                }
+                className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors ${
+                  isDemo
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
+                    : 'bg-[#003366] hover:bg-[#002244] text-white cursor-pointer'
+                }`}
               >
-                <Check className="w-3.5 h-3.5" />
-                <span>Selecionar</span>
+                {isDemo ? (
+                  <span>Indisponível para vínculo</span>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Selecionar</span>
+                  </>
+                )}
               </button>
             </div>
           ))}

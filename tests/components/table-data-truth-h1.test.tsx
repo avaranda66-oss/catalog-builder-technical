@@ -16,6 +16,7 @@ import { fireEvent } from '@testing-library/react';
 import { AddProductModal } from '../../src/components/editor/AddProductModal';
 import { useUIStore } from '../../src/stores/useUIStore';
 import { useLibraryStore } from '../../src/stores/useLibraryStore';
+import { useCatalogStore } from '../../src/stores/useCatalogStore';
 import { SupabaseService } from '../../src/services/supabase.service';
 import { StorageService } from '../../src/services/storage.service';
 import { INITIAL_PRODUCTS } from '../../src/data/initialProducts';
@@ -305,6 +306,302 @@ describe('MISSÃO TABLE.DATA.H1 — Data Truth & Provenance Suite', () => {
       expect(container.textContent).toContain('Demonstração / Teste');
       expect(container.textContent).toContain('Aviso de Proveniência');
       expect(container.textContent).toContain('DEMO');
+    });
+  });
+
+  // ==========================================================================
+  // CONTINUAÇÃO — TABLE.DATA.H1.1: TRUE DEMO FAIL-CLOSED & SELECTION GUARD
+  // ==========================================================================
+  describe('TABLE.DATA.H1.1 — True Demo Fail-Closed & Selection Guard', () => {
+    it('demo card click does not call addRowToTable', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      useLibraryStore.setState({
+        dataProvenance: 'demo_seed',
+        products: INITIAL_PRODUCTS
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'test-table-block'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      // Localizar o primeiro card de produto demo
+      const firstCard = container.querySelector('.space-y-2 > div') as HTMLElement;
+      expect(firstCard).toBeTruthy();
+      expect(firstCard.className).toContain('cursor-not-allowed');
+
+      await act(async () => {
+        fireEvent.click(firstCard);
+      });
+
+      // Prova: ZERO chamadas a addRowToTable
+      expect(addRowSpy).not.toHaveBeenCalled();
+      // O modal permanece aberto
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(true);
+    });
+
+    it('demo Select button is disabled and displays "Indisponível para vínculo"', async () => {
+      useLibraryStore.setState({
+        dataProvenance: 'demo_seed',
+        products: INITIAL_PRODUCTS
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'test-table-block'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      const buttons = container.querySelectorAll('.space-y-2 button[type="button"]');
+      expect(buttons.length).toBeGreaterThan(0);
+
+      buttons.forEach((btn) => {
+        const htmlBtn = btn as HTMLButtonElement;
+        expect(htmlBtn.disabled).toBe(true);
+        expect(htmlBtn.textContent).toContain('Indisponível para vínculo');
+        expect(htmlBtn.className).toContain('cursor-not-allowed');
+      });
+    });
+
+    it('demo Select button does not call addRowToTable when clicked', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      useLibraryStore.setState({
+        dataProvenance: 'demo_seed',
+        products: INITIAL_PRODUCTS
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'test-table-block'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      const firstBtn = container.querySelector('.space-y-2 button[type="button"]') as HTMLButtonElement;
+      expect(firstBtn).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(firstBtn);
+      });
+
+      // Prova: ZERO chamadas a addRowToTable mesmo com clique forçado
+      expect(addRowSpy).not.toHaveBeenCalled();
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(true);
+    });
+
+    it('startup race: when store starts with workspaceLoaded=false and INITIAL_PRODUCTS, selection is fail-closed', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      // Estado exato do store ao inicializar antes de loadWorkspace terminar
+      useLibraryStore.setState({
+        workspaceLoaded: false,
+        products: INITIAL_PRODUCTS,
+        dataProvenance: 'demo_seed'
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'test-table-block'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      // INITIAL_PRODUCTS aparecem para demonstração
+      expect(container.textContent).toContain(INITIAL_PRODUCTS[0].code);
+      expect(container.textContent).toContain('Dados de Demonstração');
+
+      // Mas todos os botões de inserção estão rigorosamente desabilitados
+      const allButtons = container.querySelectorAll('.space-y-2 button[type="button"]');
+      expect(allButtons.length).toBe(INITIAL_PRODUCTS.length);
+      allButtons.forEach((btn) => {
+        expect((btn as HTMLButtonElement).disabled).toBe(true);
+      });
+
+      // Tentar clique no card e no botão do primeiro produto
+      const firstCard = container.querySelector('.space-y-2 > div') as HTMLElement;
+      await act(async () => {
+        fireEvent.click(firstCard);
+      });
+      const firstBtn = allButtons[0] as HTMLButtonElement;
+      await act(async () => {
+        fireEvent.click(firstBtn);
+      });
+
+      expect(addRowSpy).not.toHaveBeenCalled();
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(true);
+    });
+
+    it('cloud_official calls addRowToTable and closes modal when card or button is clicked', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      useLibraryStore.setState({
+        dataProvenance: 'cloud_official',
+        products: [
+          {
+            id: 'cloud-p1',
+            code: 'OFFICIAL-01',
+            model: 'Transmissor Oficial',
+            family: 'Pressão',
+            description: '',
+            specs: {
+              range: '0 a 100 bar',
+              unit: 'bar',
+              accuracy: '0.05%',
+              output: '4-20mA',
+              powerSupply: '24Vdc',
+              processConnection: '1/2 NPT',
+              protectionDegree: 'IP67',
+              customSpecs: {}
+            },
+            imageUrl: '',
+            createdAt: '',
+            updatedAt: '',
+            version: 1
+          }
+        ]
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'target-table-42'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      // Botão está habilitado e diz "Selecionar"
+      const btn = container.querySelector('.space-y-2 button[type="button"]') as HTMLButtonElement;
+      expect(btn).toBeTruthy();
+      expect(btn.disabled).toBe(false);
+      expect(btn.textContent).toContain('Selecionar');
+
+      // Clicar no botão vincula o produto e fecha o modal
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+
+      expect(addRowSpy).toHaveBeenCalledTimes(1);
+      expect(addRowSpy).toHaveBeenCalledWith('target-table-42', 'cloud-p1');
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(false);
+    });
+
+    it('cloud_official calls addRowToTable and closes modal when card container is clicked directly', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      useLibraryStore.setState({
+        dataProvenance: 'cloud_official',
+        products: [
+          {
+            id: 'cloud-p2',
+            code: 'OFFICIAL-02',
+            model: 'Transmissor Oficial 2',
+            family: 'Pressão',
+            description: '',
+            specs: {
+              range: '0 a 200 bar',
+              unit: 'bar',
+              accuracy: '0.02%',
+              output: '4-20mA',
+              powerSupply: '24Vdc',
+              processConnection: '1/2 NPT',
+              protectionDegree: 'IP67',
+              customSpecs: {}
+            },
+            imageUrl: '',
+            createdAt: '',
+            updatedAt: '',
+            version: 1
+          }
+        ]
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'target-table-43'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      const card = container.querySelector('.space-y-2 > div') as HTMLElement;
+      expect(card).toBeTruthy();
+      expect(card.className).toContain('cursor-pointer');
+
+      await act(async () => {
+        fireEvent.click(card);
+      });
+
+      expect(addRowSpy).toHaveBeenCalledTimes(1);
+      expect(addRowSpy).toHaveBeenCalledWith('target-table-43', 'cloud-p2');
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(false);
+    });
+
+    it('offline_cache remains selectable, clearly marked as cache offline and warns that it may be stale', async () => {
+      const addRowSpy = vi.fn();
+      useCatalogStore.setState({ addRowToTable: addRowSpy });
+      useLibraryStore.setState({
+        dataProvenance: 'offline_cache',
+        products: [
+          {
+            id: 'cache-p1',
+            code: 'CACHED-01',
+            model: 'Transmissor em Cache',
+            family: 'Pressão',
+            description: '',
+            specs: {
+              range: '0 a 50 bar',
+              unit: 'bar',
+              accuracy: '',
+              output: '',
+              powerSupply: '',
+              processConnection: '',
+              protectionDegree: '',
+              customSpecs: {}
+            },
+            imageUrl: '',
+            createdAt: '',
+            updatedAt: '',
+            version: 1
+          }
+        ]
+      });
+      useUIStore.setState({
+        isAddProductToTableModalOpen: true,
+        targetTableBlockId: 'target-table-cache'
+      });
+
+      await act(async () => {
+        root.render(<AddProductModal />);
+      });
+
+      // Marcação clara de cache offline
+      expect(container.textContent).toContain('Biblioteca — Cache Offline');
+      expect(container.textContent).toContain('Cache Local (Offline)');
+      expect(container.textContent).toContain('Pode estar desatualizado');
+
+      // Botão continua selecionável
+      const btn = container.querySelector('.space-y-2 button[type="button"]') as HTMLButtonElement;
+      expect(btn).toBeTruthy();
+      expect(btn.disabled).toBe(false);
+      expect(btn.textContent).toContain('Selecionar');
+
+      // Clicar vincula à tabela
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+
+      expect(addRowSpy).toHaveBeenCalledTimes(1);
+      expect(addRowSpy).toHaveBeenCalledWith('target-table-cache', 'cache-p1');
+      expect(useUIStore.getState().isAddProductToTableModalOpen).toBe(false);
     });
   });
 
