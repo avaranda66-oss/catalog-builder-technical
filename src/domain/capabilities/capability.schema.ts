@@ -109,11 +109,48 @@ export const UniversalActionsSchema = z.object({
   canReorder: z.boolean()
 });
 
-export const CapabilityNumericConstraintSchema = z.object({
-  min: z.number().optional(),
-  max: z.number().optional(),
-  step: z.number().optional()
-});
+export const DynamicBoundSourceSchema = z.enum(['page_content_width_mm']);
+
+export const CapabilityNumericConstraintSchema = z
+  .object({
+    min: z.number().optional(),
+    max: z.number().optional(),
+    exclusiveMin: z.number().optional(),
+    maxSource: DynamicBoundSourceSchema.optional(),
+    step: z.number().optional()
+  })
+  .superRefine((data, ctx) => {
+    if (data.max !== undefined && data.maxSource !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Não é permitido definir max literal e maxSource dinâmico simultaneamente.'
+      });
+    }
+    if (data.min !== undefined && data.exclusiveMin !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Não é permitido definir min e exclusiveMin simultaneamente.'
+      });
+    }
+    if (data.exclusiveMin !== undefined && !Number.isFinite(data.exclusiveMin)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'exclusiveMin deve ser um número finito.'
+      });
+    }
+    if (data.min !== undefined && !Number.isFinite(data.min)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'min deve ser um número finito.'
+      });
+    }
+    if (data.max !== undefined && !Number.isFinite(data.max)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'max deve ser um número finito.'
+      });
+    }
+  });
 
 export const CapabilityOptionConstraintSchema = z.object({
   label: z.string().min(1),
@@ -149,19 +186,19 @@ export const PropertyCapabilitySchema = z
       });
     }
 
-    // 2. Reset para factory exige defaultSource compatível
-    if (data.resetPolicy === 'to_factory' && data.defaultSource === 'none') {
+    // 2. Reset para factory exige defaultSource 'factory'
+    if (data.resetPolicy === 'to_factory' && data.defaultSource !== 'factory') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Capability ${data.id} com resetPolicy='to_factory' não pode ter defaultSource='none'.`
+        message: `Capability ${data.id} com resetPolicy='to_factory' exige defaultSource='factory'.`
       });
     }
 
-    // 3. Reset para preset exige defaultSource 'preset' ou 'factory'
-    if (data.resetPolicy === 'to_preset' && data.defaultSource !== 'preset' && data.defaultSource !== 'factory' && data.defaultSource !== 'derived') {
+    // 3. Reset para preset exige defaultSource 'preset'
+    if (data.resetPolicy === 'to_preset' && data.defaultSource !== 'preset') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Capability ${data.id} com resetPolicy='to_preset' exige defaultSource 'preset', 'factory' ou 'derived'.`
+        message: `Capability ${data.id} com resetPolicy='to_preset' exige defaultSource='preset'.`
       });
     }
 

@@ -4,6 +4,14 @@
 import { describe, it, expect } from 'vitest';
 import { BlockTypeSchema } from '../../src/domain/catalog.schema';
 import {
+  CanvasSpacingTokenSchema,
+  CanvasBackgroundTokenSchema,
+  CanvasBorderTokenSchema,
+  CanvasRadiusTokenSchema,
+  CanvasDensityTokenSchema,
+  StructuralLayoutConfigSchema
+} from '../../src/domain/canvas-layout.schema';
+import {
   CAPABILITY_IDS,
   CapabilityId,
   ELEMENT_CAPABILITY_REGISTRY_VERSION,
@@ -12,7 +20,9 @@ import {
   hasCapability,
   getCapability,
   validateElementCapabilityRegistry,
-  PropertyCapabilitySchema
+  PropertyCapabilitySchema,
+  CapabilityNumericConstraintSchema,
+  DynamicBoundSourceSchema
 } from '../../src/domain/capabilities';
 
 describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
@@ -187,9 +197,12 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     const fixedWidth = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_FIXED_WIDTH_MM);
     expect(fixedWidth).toBeDefined();
     expect(fixedWidth?.unit).toBe('mm');
-    expect(fixedWidth?.resetPolicy).toBe('to_preset');
-    expect(fixedWidth?.constraints?.numeric?.min).toBe(40);
-    expect(fixedWidth?.constraints?.numeric?.max).toBe(182);
+    expect(fixedWidth?.defaultSource).toBe('derived');
+    expect(fixedWidth?.resetPolicy).toBe('none');
+    expect(fixedWidth?.constraints?.numeric?.exclusiveMin).toBe(0);
+    expect(fixedWidth?.constraints?.numeric?.maxSource).toBe('page_content_width_mm');
+    expect(fixedWidth?.constraints?.numeric?.min).toBeUndefined();
+    expect(fixedWidth?.constraints?.numeric?.max).toBeUndefined();
 
     expect(secDef.universalActions.canReset).toBe(true);
   });
@@ -229,9 +242,9 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
     for (const def of Object.values(ElementCapabilityRegistry)) {
       for (const cap of def.capabilities) {
         expect(validKinds).toContain(cap.valueKind);
-        // Garantir que não existem propriedades espúrias de defaultValue ou propertyPath
-        expect((cap as any).defaultValue).toBeUndefined();
-        expect((cap as any).propertyPath).toBeUndefined();
+        // Garantir que não existem propriedades espúrias de defaultValue ou propertyPath (zero any)
+        expect('defaultValue' in cap).toBe(false);
+        expect('propertyPath' in cap).toBe(false);
       }
     }
   });
@@ -250,5 +263,214 @@ describe('ElementCapabilityRegistry — Contract Tests (CORE.E2)', () => {
       expect(cap.rendererSupport.editor).toBe(false);
       expect(cap.rendererSupport.print).toBe(true);
     }
+  });
+});
+
+describe('Structural Section Cross-Contract Authority (CORE.E2)', () => {
+  // STRUCT-CAP-1: Registry columns = domínio aceita 1..6, rejeita 0/7
+  it('STRUCT-CAP-1: Registry columns options satisfazem 1..6 e o domínio rejeita 0 e 7', () => {
+    const colCap = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_COLUMNS);
+    expect(colCap).toBeDefined();
+    expect(colCap?.constraints?.options).toBeDefined();
+
+    const registeredValues = colCap!.constraints!.options!.map((o) => o.value);
+    expect(registeredValues).toEqual([1, 2, 3, 4, 5, 6]);
+
+    // Validar contra o schema canônico de domínio
+    for (const val of registeredValues) {
+      const parsed = StructuralLayoutConfigSchema.safeParse({ columns: val });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.columns).toBe(val);
+      }
+    }
+
+    // Rejeição canônica de limites fora de [1, 6]
+    expect(StructuralLayoutConfigSchema.safeParse({ columns: 0 }).success).toBe(false);
+    expect(StructuralLayoutConfigSchema.safeParse({ columns: 7 }).success).toBe(false);
+  });
+
+  // STRUCT-CAP-2: Registry gap values = CanvasSpacingTokenSchema.options
+  it('STRUCT-CAP-2: Registry gap values espelham exatamente CanvasSpacingTokenSchema.options', () => {
+    const gapCap = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_GAP);
+    expect(gapCap).toBeDefined();
+    const registeredValues = gapCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasSpacingTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-3: Registry padding values = CanvasSpacingTokenSchema.options
+  it('STRUCT-CAP-3: Registry padding values espelham exatamente CanvasSpacingTokenSchema.options', () => {
+    const padCap = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_PADDING);
+    expect(padCap).toBeDefined();
+    const registeredValues = padCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasSpacingTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-4: Registry background values = CanvasBackgroundTokenSchema.options
+  it('STRUCT-CAP-4: Registry background values espelham exatamente CanvasBackgroundTokenSchema.options', () => {
+    const bgCap = getCapability('structural_section', CAPABILITY_IDS.APPEARANCE_BACKGROUND);
+    expect(bgCap).toBeDefined();
+    const registeredValues = bgCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasBackgroundTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-5: Registry border values = CanvasBorderTokenSchema.options
+  it('STRUCT-CAP-5: Registry border values espelham exatamente CanvasBorderTokenSchema.options', () => {
+    const borderCap = getCapability('structural_section', CAPABILITY_IDS.APPEARANCE_BORDER);
+    expect(borderCap).toBeDefined();
+    const registeredValues = borderCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasBorderTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-6: Registry radius values = CanvasRadiusTokenSchema.options
+  it('STRUCT-CAP-6: Registry radius values espelham exatamente CanvasRadiusTokenSchema.options', () => {
+    const radiusCap = getCapability('structural_section', CAPABILITY_IDS.APPEARANCE_RADIUS);
+    expect(radiusCap).toBeDefined();
+    const registeredValues = radiusCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasRadiusTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-7: Registry density values = CanvasDensityTokenSchema.options
+  it('STRUCT-CAP-7: Registry density values espelham exatamente CanvasDensityTokenSchema.options', () => {
+    const densityCap = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_DENSITY);
+    expect(densityCap).toBeDefined();
+    const registeredValues = densityCap!.constraints!.options!.map((o) => o.value);
+    const domainOptions = CanvasDensityTokenSchema.options;
+
+    expect([...registeredValues].sort()).toEqual([...domainOptions].sort());
+  });
+
+  // STRUCT-CAP-8: layout.mode = grid/stack
+  it('STRUCT-CAP-8: layout.mode capability existe e valores são grid e stack', () => {
+    const modeCap = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_MODE);
+    expect(modeCap).toBeDefined();
+    expect(modeCap?.category).toBe('layout');
+    expect(modeCap?.valueKind).toBe('enum');
+    expect(modeCap?.controlHint).toBe('segmented');
+    expect(modeCap?.resetPolicy).toBe('to_factory');
+    expect(modeCap?.defaultSource).toBe('factory');
+
+    const registeredValues = modeCap!.constraints!.options!.map((o) => o.value);
+    expect(registeredValues).toEqual(['grid', 'stack']);
+  });
+
+  // STRUCT-CAP-9: fixed width: sem 40/182, contrato exclusive min e dynamic maxSource
+  it('STRUCT-CAP-9: fixed width não possui limites estáticos 40/182 e adota contrato dinâmico', () => {
+    const fixedWidth = getCapability('structural_section', CAPABILITY_IDS.LAYOUT_FIXED_WIDTH_MM);
+    expect(fixedWidth).toBeDefined();
+    expect(fixedWidth?.constraints?.numeric?.min).toBeUndefined();
+    expect(fixedWidth?.constraints?.numeric?.max).toBeUndefined();
+    expect(fixedWidth?.constraints?.numeric?.exclusiveMin).toBe(0);
+    expect(fixedWidth?.constraints?.numeric?.maxSource).toBe('page_content_width_mm');
+  });
+
+  // STRUCT-CAP-10: dynamic max source modela constraint contextual e rejeita combinações contraditórias
+  it('STRUCT-CAP-10: dynamic max source valida valores permitidos e rejeita conflito com max literal', () => {
+    expect(DynamicBoundSourceSchema.safeParse('page_content_width_mm').success).toBe(true);
+    expect(DynamicBoundSourceSchema.safeParse('arbitrary_source').success).toBe(false);
+
+    // Rejeitar conflito: max literal + maxSource simultâneos
+    const conflictMax = CapabilityNumericConstraintSchema.safeParse({
+      max: 180,
+      maxSource: 'page_content_width_mm'
+    });
+    expect(conflictMax.success).toBe(false);
+
+    // Rejeitar conflito: min literal + exclusiveMin simultâneos
+    const conflictMin = CapabilityNumericConstraintSchema.safeParse({
+      min: 10,
+      exclusiveMin: 0
+    });
+    expect(conflictMin.success).toBe(false);
+  });
+
+  // STRUCT-CAP-11: semantic section icon capability existe
+  it('STRUCT-CAP-11: semantic section icon capability existe com autoridade corporativa', () => {
+    const iconCap = getCapability('structural_section', CAPABILITY_IDS.MEDIA_SEMANTIC_ICON);
+    expect(iconCap).toBeDefined();
+    expect(iconCap?.category).toBe('media');
+    expect(iconCap?.valueKind).toBe('enum');
+    expect(iconCap?.controlHint).toBe('custom');
+    expect(iconCap?.unit).toBe('none');
+    expect(iconCap?.translationPolicy).toBe('none');
+    expect(iconCap?.rendererSupport.editor).toBe(true);
+    expect(iconCap?.rendererSupport.print).toBe(true);
+  });
+
+  // STRUCT-CAP-12: reset policies estritas (to_factory exige factory, to_preset exige preset)
+  it('STRUCT-CAP-12: superRefine de reset rejeita derived em to_factory e to_preset', () => {
+    // to_factory com derived deve falhar
+    const factoryWithDerived = PropertyCapabilitySchema.safeParse({
+      id: CAPABILITY_IDS.LAYOUT_WIDTH_MODE,
+      label: 'Teste Reset Factory',
+      category: 'layout',
+      valueKind: 'enum',
+      controlHint: 'segmented',
+      unit: 'none',
+      defaultSource: 'derived',
+      resetPolicy: 'to_factory',
+      rendererSupport: { editor: true, print: true },
+      translationPolicy: 'none',
+      writePolicy: 'user_only'
+    });
+    expect(factoryWithDerived.success).toBe(false);
+
+    // to_preset com derived deve falhar
+    const presetWithDerived = PropertyCapabilitySchema.safeParse({
+      id: CAPABILITY_IDS.LAYOUT_WIDTH_MODE,
+      label: 'Teste Reset Preset',
+      category: 'layout',
+      valueKind: 'enum',
+      controlHint: 'segmented',
+      unit: 'none',
+      defaultSource: 'derived',
+      resetPolicy: 'to_preset',
+      rendererSupport: { editor: true, print: true },
+      translationPolicy: 'none',
+      writePolicy: 'user_only'
+    });
+    expect(presetWithDerived.success).toBe(false);
+
+    // to_factory com factory deve passar
+    const factoryWithFactory = PropertyCapabilitySchema.safeParse({
+      id: CAPABILITY_IDS.LAYOUT_WIDTH_MODE,
+      label: 'Teste Reset Factory OK',
+      category: 'layout',
+      valueKind: 'enum',
+      controlHint: 'segmented',
+      unit: 'none',
+      defaultSource: 'factory',
+      resetPolicy: 'to_factory',
+      rendererSupport: { editor: true, print: true },
+      translationPolicy: 'none',
+      writePolicy: 'user_only'
+    });
+    expect(factoryWithFactory.success).toBe(true);
+
+    // to_preset com preset deve passar
+    const presetWithPreset = PropertyCapabilitySchema.safeParse({
+      id: CAPABILITY_IDS.LAYOUT_WIDTH_MODE,
+      label: 'Teste Reset Preset OK',
+      category: 'layout',
+      valueKind: 'enum',
+      controlHint: 'segmented',
+      unit: 'none',
+      defaultSource: 'preset',
+      resetPolicy: 'to_preset',
+      rendererSupport: { editor: true, print: true },
+      translationPolicy: 'none',
+      writePolicy: 'user_only'
+    });
+    expect(presetWithPreset.success).toBe(true);
   });
 });

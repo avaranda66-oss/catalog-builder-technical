@@ -23,10 +23,12 @@ export const CAPABILITY_IDS = {
 
   // Mídia & Ativos
   MEDIA_PRIMARY_ASSET: 'media.primary_asset',
+  MEDIA_SEMANTIC_ICON: 'media.semantic_icon',
   MEDIA_CAPTION: 'media.caption',
   MEDIA_GALLERY_ITEMS: 'media.gallery_items',
 
   // Layout & Dimensões
+  LAYOUT_MODE: 'layout.mode',
   LAYOUT_WIDTH_MODE: 'layout.width_mode',
   LAYOUT_FIXED_WIDTH_MM: 'layout.fixed_width_mm',
   LAYOUT_COLUMNS: 'layout.columns',

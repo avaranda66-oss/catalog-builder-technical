@@ -1437,6 +1437,38 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         writePolicy: 'user_only'
       },
       {
+        id: CAPABILITY_IDS.MEDIA_SEMANTIC_ICON,
+        label: 'Ícone Semântico Corporativo da Seção',
+        category: 'media',
+        valueKind: 'enum',
+        controlHint: 'custom',
+        unit: 'none',
+        defaultSource: 'factory',
+        resetPolicy: 'none',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'none',
+        writePolicy: 'user_only'
+      },
+      {
+        id: CAPABILITY_IDS.LAYOUT_MODE,
+        label: 'Modo de Distribuição dos Cards',
+        category: 'layout',
+        valueKind: 'enum',
+        controlHint: 'segmented',
+        unit: 'none',
+        defaultSource: 'factory',
+        resetPolicy: 'to_factory',
+        rendererSupport: { editor: true, print: true },
+        translationPolicy: 'none',
+        writePolicy: 'user_only',
+        constraints: {
+          options: [
+            { label: 'Grid Multicolunas', value: 'grid' },
+            { label: 'Pilha Vertical (Stack)', value: 'stack' }
+          ]
+        }
+      },
+      {
         id: CAPABILITY_IDS.LAYOUT_WIDTH_MODE,
         label: 'Modo de Largura da Seção',
         category: 'layout',
@@ -1463,12 +1495,15 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         controlHint: 'dimension',
         unit: 'mm',
         defaultSource: 'derived',
-        resetPolicy: 'to_preset',
+        resetPolicy: 'none',
         rendererSupport: { editor: true, print: true },
         translationPolicy: 'none',
         writePolicy: 'user_only',
         constraints: {
-          numeric: { min: 40, max: 182, step: 1 }
+          numeric: {
+            exclusiveMin: 0,
+            maxSource: 'page_content_width_mm'
+          }
         }
       },
       {
@@ -1488,7 +1523,9 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
             { label: '1', value: 1 },
             { label: '2', value: 2 },
             { label: '3', value: 3 },
-            { label: '4', value: 4 }
+            { label: '4', value: 4 },
+            { label: '5', value: 5 },
+            { label: '6', value: 6 }
           ]
         }
       },
@@ -1507,9 +1544,11 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         constraints: {
           options: [
             { label: 'Nenhum', value: 'none' },
+            { label: 'Extra Pequeno (xs)', value: 'xs' },
             { label: 'Pequeno (sm)', value: 'sm' },
             { label: 'Médio (md)', value: 'md' },
-            { label: 'Grande (lg)', value: 'lg' }
+            { label: 'Grande (lg)', value: 'lg' },
+            { label: 'Extra Grande (xl)', value: 'xl' }
           ]
         }
       },
@@ -1528,9 +1567,11 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         constraints: {
           options: [
             { label: 'Nenhum', value: 'none' },
+            { label: 'Extra Pequeno (xs)', value: 'xs' },
             { label: 'Pequeno (sm)', value: 'sm' },
             { label: 'Médio (md)', value: 'md' },
-            { label: 'Grande (lg)', value: 'lg' }
+            { label: 'Grande (lg)', value: 'lg' },
+            { label: 'Extra Grande (xl)', value: 'xl' }
           ]
         }
       },
@@ -1588,10 +1629,10 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         writePolicy: 'user_only',
         constraints: {
           options: [
-            { label: 'Nenhum (Transparente)', value: 'none' },
-            { label: 'Suave (slate-50)', value: 'soft' },
-            { label: 'Sutil (slate-100)', value: 'subtle' },
-            { label: 'Marca Corporativa', value: 'brand' }
+            { label: 'Transparente', value: 'transparent' },
+            { label: 'Superfície (Branco)', value: 'surface' },
+            { label: 'Suave (Cinza Claro)', value: 'soft' },
+            { label: 'Técnico Corporativo', value: 'technical' }
           ]
         }
       },
@@ -1610,9 +1651,9 @@ export const ElementCapabilityRegistry: Readonly<Record<BlockType, ElementCapabi
         constraints: {
           options: [
             { label: 'Nenhuma', value: 'none' },
-            { label: 'Sutil (slate-200)', value: 'subtle' },
-            { label: 'Média (slate-300)', value: 'medium' },
-            { label: 'Forte (slate-400)', value: 'strong' }
+            { label: 'Sutil', value: 'subtle' },
+            { label: 'Sólida', value: 'solid' },
+            { label: 'Destaque (Accent)', value: 'accent' }
           ]
         }
       },
@@ -1697,7 +1738,7 @@ export function getCapability(
   capabilityId: CapabilityId
 ): PropertyCapability | null {
   const def = getElementCapabilityDefinition(blockType);
-  if (!def) return false as any || null;
+  if (!def) return null;
   return def.capabilities.find((c) => c.id === capabilityId) || null;
 }
 

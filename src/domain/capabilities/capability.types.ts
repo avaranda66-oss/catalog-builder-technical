@@ -94,9 +94,13 @@ export interface UniversalActions {
   readonly canReorder: boolean;
 }
 
+export type DynamicBoundSource = 'page_content_width_mm';
+
 export interface CapabilityNumericConstraint {
   readonly min?: number;
   readonly max?: number;
+  readonly exclusiveMin?: number;
+  readonly maxSource?: DynamicBoundSource;
   readonly step?: number;
 }
 
