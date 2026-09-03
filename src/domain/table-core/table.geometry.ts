@@ -1,6 +1,7 @@
 // src/domain/table-core/table.geometry.ts
 // Cálculos de Geometria Física A4 para o Table Core V2.
 // Milímetros (mm) são a autoridade física canônica.
+// Zero explicit any.
 
 import { TableCoreModel } from './table.types';
 import { CANONICAL_A4_GEOMETRY, getPageContentBox } from '../page-geometry';
@@ -42,37 +43,35 @@ export function resolveColumnWidthsMm(
   const warnings: string[] = [];
 
   let effectiveTableWidth = maxAvailable;
-  if (table.presentation.tableWidthMode === 'fixed_mm') {
-    const specified = table.presentation.fixedTableWidthMm;
-    if (typeof specified === 'number') {
-      if (specified <= 0) {
-        return {
-          valid: false,
-          totalTableWidthMm: specified,
-          availableContentWidthMm: maxAvailable,
-          columns: [],
-          warnings,
-          error: `Largura fixa da tabela (${specified} mm) deve ser maior que zero.`
-        };
-      }
-      if (specified > maxAvailable + 0.001) {
-        warnings.push(
-          `Largura fixa da tabela (${specified} mm) excede a área útil da página A4 (${maxAvailable} mm).`
-        );
-      }
-      effectiveTableWidth = specified;
+  if (table.presentation.tableWidth.mode === 'fixed_mm') {
+    const specified = table.presentation.tableWidth.widthMm;
+    if (typeof specified !== 'number' || specified <= 0) {
+      return {
+        valid: false,
+        totalTableWidthMm: specified ?? 0,
+        availableContentWidthMm: maxAvailable,
+        columns: [],
+        warnings,
+        error: `Largura fixa da tabela (${specified} mm) deve ser maior que zero.`
+      };
     }
+    if (specified > maxAvailable + 0.001) {
+      warnings.push(
+        `Largura fixa da tabela (${specified} mm) excede a área útil da página A4 (${maxAvailable} mm).`
+      );
+    }
+    effectiveTableWidth = specified;
   }
 
-  // 1. Somar larguras fixas
+  // 1. Somar larguras fixas e contar pesos
   let totalFixedMm = 0;
   let autoCount = 0;
   let totalWeight = 0;
 
   for (const col of table.columns) {
     if (col.widthSpec.mode === 'fixed_mm') {
-      const w = col.widthSpec.widthMm ?? 0;
-      if (w <= 0) {
+      const w = col.widthSpec.widthMm;
+      if (typeof w !== 'number' || w <= 0) {
         return {
           valid: false,
           totalTableWidthMm: effectiveTableWidth,
@@ -84,7 +83,18 @@ export function resolveColumnWidthsMm(
       }
       totalFixedMm += w;
     } else if (col.widthSpec.mode === 'weighted') {
-      totalWeight += col.widthSpec.weight ?? 1;
+      const weight = col.widthSpec.weight;
+      if (typeof weight !== 'number' || weight <= 0) {
+        return {
+          valid: false,
+          totalTableWidthMm: effectiveTableWidth,
+          availableContentWidthMm: maxAvailable,
+          columns: [],
+          warnings,
+          error: `Coluna "${col.semanticKey}" possui peso inválido (${weight}).`
+        };
+      }
+      totalWeight += weight;
     } else {
       // auto
       autoCount += 1;
@@ -107,17 +117,17 @@ export function resolveColumnWidthsMm(
     if (col.widthSpec.mode === 'fixed_mm') {
       resolved.push({
         columnId: col.id,
-        widthMm: Number((col.widthSpec.widthMm ?? 0).toFixed(4))
+        widthMm: Number(col.widthSpec.widthMm.toFixed(4))
       });
     } else if (col.widthSpec.mode === 'weighted') {
-      const weight = col.widthSpec.weight ?? 1;
+      const weight = col.widthSpec.weight;
       const share = flexUnits > 0 ? (remainingSpace * weight) / flexUnits : 0;
       resolved.push({
         columnId: col.id,
         widthMm: Number(share.toFixed(4))
       });
     } else {
-      // auto: peso 1 unit
+      // auto: peso unitário
       const share = flexUnits > 0 ? remainingSpace / flexUnits : 0;
       resolved.push({
         columnId: col.id,

@@ -1,6 +1,7 @@
 // src/domain/table-core/legacy-table.adapter.ts
 // Adaptadores READ-ONLY para conversão determinística de blocos legados em TableCoreModel.
 // Garante identidades 100% reproduzíveis sem persistência ou mutação do bloco original.
+// Zero explicit any.
 
 import { ContentBlock, TableColumnConfig, CatalogTableRow } from '../catalog.schema';
 import {
@@ -17,6 +18,7 @@ import { DEFAULT_TABLE_PAGINATION_POLICY } from './table.pagination';
 
 export type LegacyAdapterUnsupportedReason =
   | 'unsupported_block_type'
+  | 'missing_legacy_columns'
   | 'custom_data_headers_unsupported'
   | 'matrix_spec_table_deferred_to_t3'
   | 'ordering_codes_specialized_domain'
@@ -35,46 +37,52 @@ export type LegacyAdapterResult =
     };
 
 /**
- * Função de hash determinística rápida (FNV-1a de 32 bits) para gerar sufixos hexadecimais estáveis.
- * Garante que a mesma string sempre produza o mesmo identificador estável sem crypto assíncrono.
+ * Codificação segura e prefixada com comprimento para componentes de identificadores estáveis.
+ * Garante ausência total de ambiguidade com delimitadores estruturais (Zero Delimiter Collision).
  */
-function fnv1aHex(str: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+function safeToken(value: string): string {
+  const enc = encodeURIComponent(value).replace(/%/g, 'x');
+  return `${enc.length}x${enc}`;
 }
 
 /**
- * Gera IDs determinísticos para elementos adaptados a partir de blocos legados.
+ * Gera identificador estável determinístico para a tabela adaptada.
  */
 export function generateDeterministicTableId(blockId: string): string {
-  return `tbl_${fnv1aHex('table_' + blockId)}`;
+  return `tbl_leg_${safeToken(blockId)}`;
 }
 
+/**
+ * Gera identificador estável determinístico para a coluna adaptada.
+ * Se a coluna possuir ID estável prévio, ele é preservado.
+ */
 export function generateDeterministicColumnId(blockId: string, colKey: string, existingColId?: string): string {
   if (existingColId && existingColId.trim() !== '') {
     return existingColId;
   }
-  return `col_${fnv1aHex(blockId + '_col_' + colKey)}`;
+  return `col_leg_${safeToken(blockId)}_${safeToken(colKey)}`;
 }
 
+/**
+ * Gera identificador estável determinístico para a linha adaptada.
+ */
 export function generateDeterministicRowId(blockId: string, rowId: string): string {
-  return `row_${fnv1aHex(blockId + '_row_' + rowId)}`;
+  return `row_leg_${safeToken(blockId)}_${safeToken(rowId)}`;
 }
 
+/**
+ * Gera identificador estável determinístico para a célula adaptada.
+ */
 export function generateDeterministicCellId(blockId: string, rowId: string, colKey: string): string {
-  return `cell_${fnv1aHex(blockId + '_cell_' + rowId + '_' + colKey)}`;
+  return `cell_leg_${safeToken(blockId)}_${safeToken(rowId)}_${safeToken(colKey)}`;
 }
 
 /**
  * Converte um ContentBlock legado suportado para TableCoreModel.
- * Suporta: 'table', 'specs_table', 'electrical_table', 'accessories_table'.
+ * Suporta formas canônicas de: 'table', 'specs_table', 'electrical_table', 'accessories_table' e 'custom_table' canônico.
  */
 export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterResult {
-  // 1. Rejeição com motivo explícito para blocos não suportados nesta fase
+  // 1. Tratamento específico para custom_table
   if (block.type === 'custom_table') {
     if (block.customData?.headers || block.customData?.rows) {
       return {
@@ -83,8 +91,16 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         message: 'O bloco custom_table utiliza customData.headers/rows não canônico e requer migração estruturada.'
       };
     }
+    if (!block.tableColumns || block.tableColumns.length === 0) {
+      return {
+        supported: false,
+        reason: 'missing_legacy_columns',
+        message: 'O bloco custom_table canônico não possui tableColumns definidas.'
+      };
+    }
   }
 
+  // 2. Rejeições com motivo explícito para blocos não suportados nesta fase
   if (block.type === 'matrix_spec_table') {
     return {
       supported: false,
@@ -109,7 +125,7 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     };
   }
 
-  const supportedTypes = ['table', 'specs_table', 'electrical_table', 'accessories_table'];
+  const supportedTypes = ['table', 'specs_table', 'electrical_table', 'accessories_table', 'custom_table'];
   if (!supportedTypes.includes(block.type)) {
     return {
       supported: false,
@@ -118,24 +134,27 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     };
   }
 
+  // 3. Validação de ausência de colunas (Zero Ghost Data: Não inventa coluna padrão "Item")
+  const legacyColumns: TableColumnConfig[] = block.tableColumns || [];
+  if (legacyColumns.length === 0) {
+    return {
+      supported: false,
+      reason: 'missing_legacy_columns',
+      message: 'Bloco legado não possui tableColumns definidas.'
+    };
+  }
+
   const warnings: string[] = [];
   const tableId = generateDeterministicTableId(block.id);
 
-  // 2. Determinar Preset inicial com base no tipo legado
+  // 4. Determinar Preset inicial
   let presetId: TablePresetId = 'presys_clean_technical';
   if (block.type === 'electrical_table') presetId = 'dense_spec_matrix';
   if (block.type === 'accessories_table') presetId = 'parameter_value';
+  if (block.type === 'custom_table') presetId = 'presys_clean_technical';
 
-  // 3. Extrair Colunas
-  const legacyColumns: TableColumnConfig[] = block.tableColumns || [];
-  if (legacyColumns.length === 0) {
-    warnings.push('Bloco legado não possui tableColumns definidas; utilizando coluna padrão.');
-  }
-
-  const columns: TableColumnModel[] = (legacyColumns.length > 0
-    ? legacyColumns
-    : [{ key: 'col_default', label: 'Item', visible: true }]
-  ).map((col) => {
+  // 5. Extrair Colunas
+  const columns: TableColumnModel[] = legacyColumns.map((col) => {
     const colId = generateDeterministicColumnId(block.id, col.key, col.id);
     const widthMm = typeof col.width === 'number' && col.width > 0 ? Number((col.width * 0.264583).toFixed(2)) : undefined;
 
@@ -149,38 +168,28 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     };
   });
 
-  // 4. Extrair Linhas
+  // 6. Extrair Linhas (Zero Ghost Data: Se 0 linhas, rows = [] e cells = {})
   const legacyRows: CatalogTableRow[] = block.tableRows || [];
   const rows: TableRowModel[] = legacyRows.map((row) => ({
     id: generateDeterministicRowId(block.id, row.id),
     kind: 'data'
   }));
 
-  // Se não havia linhas, cria ao menos uma linha vazia
-  if (rows.length === 0) {
-    rows.push({
-      id: generateDeterministicRowId(block.id, 'row_default_1'),
-      kind: 'data'
-    });
-  }
-
-  // 5. Construir Células
+  // 7. Construir Células
   const cells: Record<string, TableCellModel> = {};
 
   rows.forEach((row, rIdx) => {
     const legacyRow = legacyRows[rIdx];
 
     columns.forEach((col) => {
-      const cellId = generateDeterministicCellId(block.id, legacyRow?.id || row.id, col.semanticKey);
+      const cellId = generateDeterministicCellId(block.id, legacyRow.id, col.semanticKey);
       const key = getCellKey(row.id, col.id);
 
-      // Conteúdo: extrai do override local ou deixa vazio
       let content: TableCellContent = { kind: 'empty' };
-      if (legacyRow?.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined) {
+      if (legacyRow.localOverrides && legacyRow.localOverrides[col.semanticKey] !== undefined) {
         const textVal = String(legacyRow.localOverrides[col.semanticKey]);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
-      } else if (legacyRow?.productRefId) {
-        // Se possui referência a produto, registra como bound datum placeholder
+      } else if (legacyRow.productRefId) {
         content = {
           kind: 'datum_reference',
           productId: legacyRow.productRefId,

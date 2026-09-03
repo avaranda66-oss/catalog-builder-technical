@@ -21,8 +21,7 @@ describe('Table Core V2: Physical Geometry in mm', () => {
     const maxAvailable = getDefaultMaxContentWidthMm();
 
     // Configura largura da tabela maior que a página A4 útil
-    table.presentation.tableWidthMode = 'fixed_mm';
-    table.presentation.fixedTableWidthMm = maxAvailable + 50;
+    table.presentation.tableWidth = { mode: 'fixed_mm', widthMm: maxAvailable + 50 };
 
     const res = resolveColumnWidthsMm(table);
 
@@ -38,8 +37,7 @@ describe('Table Core V2: Physical Geometry in mm', () => {
       rowsCount: 1
     });
 
-    table.presentation.tableWidthMode = 'fixed_mm';
-    table.presentation.fixedTableWidthMm = -10;
+    table.presentation.tableWidth = { mode: 'fixed_mm', widthMm: -10 };
 
     const res = resolveColumnWidthsMm(table);
 

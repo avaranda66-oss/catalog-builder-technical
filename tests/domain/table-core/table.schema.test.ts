@@ -162,7 +162,7 @@ describe('Table Core V2: Schema & Invariants', () => {
         headerBackgroundToken: 'slate_900',
         headerTextColorToken: 'white',
         fontScale: 'normal',
-        tableWidthMode: 'auto_fill'
+        tableWidth: { mode: 'auto_fill' }
       },
       paginationPolicy: {
         allowRowSplit: false,

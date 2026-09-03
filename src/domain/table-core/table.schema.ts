@@ -1,27 +1,30 @@
 // src/domain/table-core/table.schema.ts
-// Table Core V2: Zod runtime validation schemas.
+// Table Core V2: Zod runtime validation schemas com strictness total.
 // Garante conformidade tipada, rejeitando dados corrompidos ou malformados.
+// Zero explicit any.
 
 import { z } from 'zod';
 
 export const TableHorizontalAlignSchema = z.enum(['left', 'center', 'right']);
 export const TableVerticalAlignSchema = z.enum(['top', 'middle', 'bottom']);
 
-export const ColumnWidthModeSchema = z.enum(['fixed_mm', 'auto', 'weighted']);
-
-export const ColumnWidthSpecSchema = z.object({
-  mode: ColumnWidthModeSchema,
-  widthMm: z.number().positive('Largura da coluna em mm deve ser maior que zero').optional(),
-  weight: z.number().positive('Peso da coluna deve ser positivo').optional()
-}).refine(
-  (spec) => {
-    if (spec.mode === 'fixed_mm') {
-      return typeof spec.widthMm === 'number' && spec.widthMm > 0;
-    }
-    return true;
-  },
-  { message: 'Modo fixed_mm exige widthMm estritamente positivo' }
-);
+/**
+ * Schema de ColumnWidthSpec como Discriminated Union estrita.
+ * Proíbe estritamente campos cruzados irrelevantes (ex: auto com widthMm, fixed sem widthMm, etc.).
+ */
+export const ColumnWidthSpecSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('auto')
+  }).strict(),
+  z.object({
+    mode: z.literal('fixed_mm'),
+    widthMm: z.number().positive('Largura da coluna em mm deve ser maior que zero')
+  }).strict(),
+  z.object({
+    mode: z.literal('weighted'),
+    weight: z.number().positive('Peso da coluna deve ser positivo')
+  }).strict()
+]);
 
 export const TableColumnModelSchema = z.object({
   id: z.string().min(1, 'ID da coluna não pode ser vazio'),
@@ -30,7 +33,7 @@ export const TableColumnModelSchema = z.object({
   widthSpec: ColumnWidthSpecSchema,
   align: TableHorizontalAlignSchema.default('left'),
   isCustom: z.boolean().optional()
-});
+}).strict();
 
 export const TableRowKindSchema = z.enum(['data', 'header', 'footer', 'divider']);
 
@@ -39,13 +42,13 @@ export const TableRowModelSchema = z.object({
   kind: TableRowKindSchema.default('data'),
   minHeightMm: z.number().positive().optional(),
   isHeader: z.boolean().optional()
-});
+}).strict();
 
 export const TableCellLiteralContentSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('text'),
     text: z.string()
-  }),
+  }).strict(),
   z.object({
     kind: z.literal('number'),
     value: z.number(),
@@ -53,41 +56,61 @@ export const TableCellLiteralContentSchema = z.discriminatedUnion('kind', [
       decimals: z.number().int().min(0).max(10).optional(),
       prefix: z.string().optional(),
       suffix: z.string().optional()
-    }).optional()
-  }),
+    }).strict().optional()
+  }).strict(),
   z.object({
     kind: z.literal('value_unit'),
     amount: z.number(),
     unit: z.string().min(1, 'Unidade é obrigatória em value_unit'),
     qualifier: z.enum(['±', '≤', '≥', '<', '>', 'typ.', 'max.', 'min.']).optional()
-  }),
+  }).strict(),
   z.object({
     kind: z.literal('badge'),
     text: z.string().min(1),
     variant: z.enum(['neutral', 'success', 'warning', 'info', 'critical']).default('neutral')
-  }),
+  }).strict(),
   z.object({
     kind: z.literal('asset_reference'),
     assetId: z.string().min(1, 'assetId é obrigatório'),
     caption: z.string().optional(),
     altText: z.string().optional()
-  }),
+  }).strict(),
   z.object({
     kind: z.literal('empty')
-  })
+  }).strict()
 ]);
 
-export const TableBindingModeSchema = z.enum(['literal', 'live', 'snapshot', 'review_required']);
+export const TableBindingModeSchema = z.enum(['live', 'snapshot', 'review_required']);
 
-export const TableCellBoundContentSchema = z.object({
-  kind: z.literal('datum_reference'),
-  productId: z.string().min(1, 'productId é obrigatório no binding'),
-  moduleKey: z.string().optional(),
-  datumKey: z.string().min(1, 'datumKey é obrigatória'),
-  sourceRevision: z.number().int().positive().optional(),
-  snapshot: TableCellLiteralContentSchema.optional(),
-  bindingMode: TableBindingModeSchema.default('live')
-});
+export const TableCellBoundContentSchema = z.discriminatedUnion('bindingMode', [
+  z.object({
+    kind: z.literal('datum_reference'),
+    productId: z.string().min(1, 'productId é obrigatório no binding'),
+    moduleKey: z.string().optional(),
+    datumKey: z.string().min(1, 'datumKey é obrigatória'),
+    sourceRevision: z.number().int().positive().optional(),
+    bindingMode: z.literal('live'),
+    snapshot: TableCellLiteralContentSchema.optional()
+  }).strict(),
+  z.object({
+    kind: z.literal('datum_reference'),
+    productId: z.string().min(1, 'productId é obrigatório no binding'),
+    moduleKey: z.string().optional(),
+    datumKey: z.string().min(1, 'datumKey é obrigatória'),
+    sourceRevision: z.number().int().positive().optional(),
+    bindingMode: z.literal('snapshot'),
+    snapshot: TableCellLiteralContentSchema // Obrigatório para modo snapshot
+  }).strict(),
+  z.object({
+    kind: z.literal('datum_reference'),
+    productId: z.string().min(1, 'productId é obrigatório no binding'),
+    moduleKey: z.string().optional(),
+    datumKey: z.string().min(1, 'datumKey é obrigatória'),
+    sourceRevision: z.number().int().positive().optional(),
+    bindingMode: z.literal('review_required'),
+    snapshot: TableCellLiteralContentSchema.optional()
+  }).strict()
+]);
 
 export const TableCellContentSchema = z.union([
   TableCellLiteralContentSchema,
@@ -101,7 +124,7 @@ export const TableCellStyleOverrideSchema = z.object({
   verticalAlign: TableVerticalAlignSchema.optional(),
   textColor: z.string().optional(),
   backgroundColor: z.string().optional()
-});
+}).strict();
 
 export const TableCellModelSchema = z.object({
   id: z.string().min(1, 'ID da célula não pode ser vazio'),
@@ -112,7 +135,7 @@ export const TableCellModelSchema = z.object({
   rowSpan: z.number().int().min(1).default(1),
   coveredBy: z.string().optional(),
   styleOverride: TableCellStyleOverrideSchema.optional()
-});
+}).strict();
 
 export const TablePresetIdSchema = z.enum([
   'presys_clean_technical',
@@ -121,24 +144,33 @@ export const TablePresetIdSchema = z.enum([
   'parameter_value'
 ]);
 
+export const TableWidthSpecSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('auto_fill')
+  }).strict(),
+  z.object({
+    mode: z.literal('fixed_mm'),
+    widthMm: z.number().positive('Largura fixa da tabela deve ser maior que zero')
+  }).strict()
+]);
+
 export const TablePresentationModelSchema = z.object({
   presetId: TablePresetIdSchema.default('presys_clean_technical'),
   density: z.enum(['compact', 'regular', 'spacious']).default('regular'),
   borderStyle: z.enum(['all', 'horizontal_only', 'outer_only', 'none']).default('all'),
   stripeStyle: z.enum(['none', 'subtle_zebra', 'high_contrast_zebra']).default('none'),
-  headerBackgroundToken: z.string().default('slate_800'),
+  headerBackgroundToken: z.string().default('slate_900'),
   headerTextColorToken: z.string().default('white'),
   fontScale: z.enum(['compact', 'normal', 'large']).default('normal'),
-  tableWidthMode: z.enum(['auto_fill', 'fixed_mm']).default('auto_fill'),
-  fixedTableWidthMm: z.number().positive().optional()
-});
+  tableWidth: TableWidthSpecSchema.default({ mode: 'auto_fill' })
+}).strict();
 
 export const TablePaginationPolicySchema = z.object({
   allowRowSplit: z.boolean().default(false),
   repeatHeaderOnBreak: z.boolean().default(true),
   keepHeaderWithFirstRow: z.boolean().default(true),
   minOrphanRows: z.number().int().min(1).default(1)
-});
+}).strict();
 
 export const TableCoreModelSchema = z.object({
   id: z.string().min(1, 'ID da tabela é obrigatório'),
@@ -149,4 +181,4 @@ export const TableCoreModelSchema = z.object({
   cells: z.record(TableCellModelSchema),
   presentation: TablePresentationModelSchema,
   paginationPolicy: TablePaginationPolicySchema
-});
+}).strict();

@@ -1,6 +1,7 @@
 // src/domain/table-core/table.types.ts
 // Table Core V2: Contratos de tipos estritos do domínio documental puro.
 // Zero dependência de React, Zustand ou infraestrutura de banco de dados.
+// Conformidade absoluta: Zero explicit any.
 
 export type TableSchemaVersion = 1;
 
@@ -15,29 +16,26 @@ export type TableHorizontalAlign = 'left' | 'center' | 'right';
 export type TableVerticalAlign = 'top' | 'middle' | 'bottom';
 
 /**
- * Modo de largura da coluna física.
+ * Modo e especificação de largura de coluna física (Discriminated Union estrita).
+ * - auto: Sem largura fixa, distribuída proporcionalmente no espaço restante.
  * - fixed_mm: Largura explícita em milímetros (autoridade física A4).
- * - auto: Largura distribuída proporcionalmente no espaço restante.
  * - weighted: Peso relativo (flex factor) para distribuição proporcional.
  */
-export type ColumnWidthMode = 'fixed_mm' | 'auto' | 'weighted';
-
-export interface ColumnWidthSpec {
-  mode: ColumnWidthMode;
-  widthMm?: number;
-  weight?: number;
-}
+export type ColumnWidthSpec =
+  | { mode: 'auto' }
+  | { mode: 'fixed_mm'; widthMm: number }
+  | { mode: 'weighted'; weight: number };
 
 /**
  * Definição da Coluna no Table Core.
- * O ID é imutável e gerado na criação; semanticKey é o identificador técnico
+ * O ID é um identificador estável único; semanticKey é o identificador técnico
  * para binding ou tradução, totalmente desacoplado do label visual.
  */
 export interface TableColumnModel {
-  id: string;                      // UUID estável único da coluna
-  semanticKey: string;             // Chave técnica (ex: 'range', 'accuracy', 'code')
+  id: string;                      // Identificador estável único da coluna
+  semanticKey: string;             // Chave técnica única por tabela (ex: 'range', 'accuracy', 'code')
   defaultLabel: string;            // Rótulo padrão (conteúdo traduzível)
-  widthSpec: ColumnWidthSpec;      // Especificação geométrica em mm
+  widthSpec: ColumnWidthSpec;      // Especificação geométrica discriminada
   align: TableHorizontalAlign;     // Alinhamento padrão da coluna
   isCustom?: boolean;              // Indica coluna adicionada pelo usuário
 }
@@ -49,10 +47,10 @@ export type TableRowKind = 'data' | 'header' | 'footer' | 'divider';
 
 /**
  * Definição da Linha no Table Core.
- * O ID é imutável e gerado na criação; não depende do índice no array.
+ * O ID é um identificador estável único; não depende do índice no array.
  */
 export interface TableRowModel {
-  id: string;                      // UUID estável único da linha
+  id: string;                      // Identificador estável único da linha
   kind: TableRowKind;              // Papel estrutural da linha
   minHeightMm?: number;            // Altura mínima opcional em mm
   isHeader?: boolean;              // Flag de cabeçalho (repetível em paginação)
@@ -71,22 +69,42 @@ export type TableCellLiteralContent =
 
 /**
  * Modo de sincronização para células vinculadas a dados de biblioteca.
+ * Nota: 'literal' é proibido aqui pois valores literais pertencem a TableCellLiteralContent.
  */
-export type TableBindingMode = 'literal' | 'live' | 'snapshot' | 'review_required';
+export type TableBindingMode = 'live' | 'snapshot' | 'review_required';
 
 /**
- * Célula vinculada (Placeholder para futura integração com Product Workbook).
- * Desacoplado do banco de dados existente.
+ * Célula vinculada (Contrato future-facing para integração com Product Workbook).
+ * Se bindingMode === 'snapshot', o snapshot é estritamente obrigatório.
  */
-export interface TableCellBoundContent {
-  kind: 'datum_reference';
-  productId: string;
-  moduleKey?: string;
-  datumKey: string;
-  sourceRevision?: number;
-  snapshot?: TableCellLiteralContent;
-  bindingMode: TableBindingMode;
-}
+export type TableCellBoundContent =
+  | {
+      kind: 'datum_reference';
+      productId: string;
+      moduleKey?: string;
+      datumKey: string;
+      sourceRevision?: number;
+      bindingMode: 'live';
+      snapshot?: TableCellLiteralContent;
+    }
+  | {
+      kind: 'datum_reference';
+      productId: string;
+      moduleKey?: string;
+      datumKey: string;
+      sourceRevision?: number;
+      bindingMode: 'snapshot';
+      snapshot: TableCellLiteralContent; // Obrigatório quando snapshot
+    }
+  | {
+      kind: 'datum_reference';
+      productId: string;
+      moduleKey?: string;
+      datumKey: string;
+      sourceRevision?: number;
+      bindingMode: 'review_required';
+      snapshot?: TableCellLiteralContent;
+    };
 
 /**
  * União estrita de conteúdos possíveis para uma célula.
@@ -108,11 +126,11 @@ export interface TableCellStyleOverride {
 
 /**
  * Definição de Célula no Table Core.
- * Cada célula possui ID único estável e coordenadas (rowId, columnId).
+ * Cada célula possui identificador estável único e coordenadas (rowId, columnId).
  * Células cobertas por merges são explicitadas via `coveredBy`.
  */
 export interface TableCellModel {
-  id: string;                      // UUID estável da célula
+  id: string;                      // Identificador estável da célula
   rowId: string;                   // Referência à linha correspondente
   columnId: string;                // Referência à coluna correspondente
   content: TableCellContent;       // Conteúdo tipado
@@ -136,6 +154,13 @@ export type TableBorderToken = 'all' | 'horizontal_only' | 'outer_only' | 'none'
 export type TableStripeToken = 'none' | 'subtle_zebra' | 'high_contrast_zebra';
 
 /**
+ * Especificação de largura total da tabela (Discriminated Union estrita).
+ */
+export type TableWidthSpec =
+  | { mode: 'auto_fill' }
+  | { mode: 'fixed_mm'; widthMm: number };
+
+/**
  * Configuração de Apresentação da Tabela (Desacoplada dos dados).
  * Usa tokens semânticos e unidades em mm, sem classes CSS de frameworks.
  */
@@ -144,20 +169,19 @@ export interface TablePresentationModel {
   density: TableDensityToken;
   borderStyle: TableBorderToken;
   stripeStyle: TableStripeToken;
-  headerBackgroundToken: string;   // Token de cor (ex: 'slate_800', 'brand_primary', 'white')
-  headerTextColorToken: string;     // Token de cor de texto
+  headerBackgroundToken: string;   // Token semântico de cor (ex: 'slate_900', 'white')
+  headerTextColorToken: string;     // Token semântico de cor de texto
   fontScale: 'compact' | 'normal' | 'large';
-  tableWidthMode: 'auto_fill' | 'fixed_mm';
-  fixedTableWidthMm?: number;      // Largura total se tableWidthMode === 'fixed_mm'
+  tableWidth: TableWidthSpec;      // Especificação discriminada da largura total
 }
 
 /**
  * Política de Paginação da Tabela em páginas A4.
  */
 export interface TablePaginationPolicy {
-  allowRowSplit: boolean;          // Default false: nunca cortar linha ao meio
-  repeatHeaderOnBreak: boolean;    // Default true: repetir cabeçalhos em folhas seguintes
-  keepHeaderWithFirstRow: boolean; // Default true: evitar cabeçalho órfão no fim da página
+  allowRowSplit: boolean;          // Invariante: Nunca cortar linha ao meio
+  repeatHeaderOnBreak: boolean;    // Repetir cabeçalhos em folhas seguintes
+  keepHeaderWithFirstRow: boolean; // Evitar cabeçalho órfão no fim da página
   minOrphanRows: number;           // Mínimo de linhas para permitir continuação
 }
 
@@ -165,7 +189,7 @@ export interface TablePaginationPolicy {
  * Modelo Canônico Raiz do Table Core V2.
  */
 export interface TableCoreModel {
-  id: string;                      // UUID estável da tabela
+  id: string;                      // Identificador estável da tabela
   schemaVersion: TableSchemaVersion;
   title?: string;
   columns: TableColumnModel[];

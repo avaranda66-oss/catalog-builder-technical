@@ -1,6 +1,7 @@
 // src/domain/table-core/table.validator.ts
 // Validador de Invariantes Estruturais e Integridade do Table Core V2.
 // Garante conformidade de merges, unicidade de IDs e ausência de células órfãs.
+// Zero explicit any.
 
 import { TableCoreModel } from './table.types';
 import { TableCoreModelSchema } from './table.schema';
@@ -25,7 +26,7 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // 1. Validação básica com Zod
+  // 1. Validação com Zod Schema estrito
   const zodParse = TableCoreModelSchema.safeParse(table);
   if (!zodParse.success) {
     zodParse.error.errors.forEach((err) => {
@@ -34,20 +35,29 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
     return { valid: false, errors, warnings };
   }
 
-  // 2. Unicidade de IDs de colunas
+  // 2. Unicidade de IDs e semanticKeys de colunas
   const colIdSet = new Set<string>();
+  const semanticKeySet = new Set<string>();
   const colIndexMap = new Map<string, number>();
+
   table.columns.forEach((col, idx) => {
     if (colIdSet.has(col.id)) {
       errors.push(`ID de coluna duplicado encontrado: "${col.id}".`);
     }
     colIdSet.add(col.id);
+
+    if (semanticKeySet.has(col.semanticKey)) {
+      errors.push(`Chave semântica (semanticKey) duplicada encontrada: "${col.semanticKey}".`);
+    }
+    semanticKeySet.add(col.semanticKey);
+
     colIndexMap.set(col.id, idx);
   });
 
   // 3. Unicidade de IDs de linhas
   const rowIdSet = new Set<string>();
   const rowIndexMap = new Map<string, number>();
+
   table.rows.forEach((row, idx) => {
     if (rowIdSet.has(row.id)) {
       errors.push(`ID de linha duplicado encontrado: "${row.id}".`);
@@ -56,7 +66,16 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
     rowIndexMap.set(row.id, idx);
   });
 
-  // 4. Unicidade de IDs de células
+  // 4. Invariante de contagem exata de células: cells.length === rows.length * columns.length
+  const expectedCellCount = table.rows.length * table.columns.length;
+  const actualCellCount = Object.keys(table.cells).length;
+  if (actualCellCount !== expectedCellCount) {
+    errors.push(
+      `Contagem de células inválida: a tabela possui ${actualCellCount} células, mas a grade ${table.rows.length}x${table.columns.length} exige exatamente ${expectedCellCount}.`
+    );
+  }
+
+  // 5. Unicidade de IDs de células e integridade de coordenadas
   const cellIdSet = new Set<string>();
   for (const [key, cell] of Object.entries(table.cells)) {
     if (cellIdSet.has(cell.id)) {
@@ -64,7 +83,6 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
     }
     cellIdSet.add(cell.id);
 
-    // 5. Integridade de referências de linha e coluna
     if (!rowIdSet.has(cell.rowId)) {
       errors.push(`Célula "${cell.id}" referencia rowId inexistente: "${cell.rowId}".`);
     }
@@ -98,6 +116,16 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
     if (colSpan < 1 || rowSpan < 1) {
       errors.push(`Célula "${cell.id}" possui spans inválidos (colSpan=${colSpan}, rowSpan=${rowSpan}).`);
       continue;
+    }
+
+    // Se a célula é coberta, seus spans devem ser estritamente 1
+    if (cell.coveredBy) {
+      if (colSpan !== 1 || rowSpan !== 1) {
+        errors.push(`Célula coberta "${cell.id}" não pode ter spans maiores que 1 (colSpan=${colSpan}, rowSpan=${rowSpan}).`);
+      }
+      if (cell.content.kind !== 'empty') {
+        errors.push(`Célula coberta "${cell.id}" não pode possuir conteúdo independente (kind="${cell.content.kind}").`);
+      }
     }
 
     // Se é uma Célula Âncora (span > 1)
@@ -139,10 +167,6 @@ export function validateTableModel(table: TableCoreModel): TableValidationResult
           if (targetCell) {
             if (targetCell.coveredBy !== cell.id) {
               errors.push(`Célula coberta "${targetCell.id}" em [${targetKey}] deve apontar coveredBy para a âncora "${cell.id}", mas aponta para "${targetCell.coveredBy}".`);
-            }
-            // Invariante: Células cobertas não podem ter conteúdo independente
-            if (targetCell.content.kind !== 'empty') {
-              errors.push(`Célula coberta "${targetCell.id}" em [${targetKey}] não pode possuir conteúdo independente (kind="${targetCell.content.kind}").`);
             }
           }
         }

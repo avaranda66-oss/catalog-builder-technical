@@ -1,6 +1,7 @@
 // src/domain/table-core/table.presets.ts
 // Presets de Apresentação Canônicos do Table Core V2.
 // Define estilos corporativos sem acoplamento com classes de frameworks CSS.
+// Zero explicit any.
 
 import { TableCoreModel, TablePresetId, TablePresentationModel } from './table.types';
 
@@ -13,7 +14,7 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     headerBackgroundToken: 'slate_900',
     headerTextColorToken: 'white',
     fontScale: 'normal',
-    tableWidthMode: 'auto_fill'
+    tableWidth: { mode: 'auto_fill' }
   },
   dense_spec_matrix: {
     presetId: 'dense_spec_matrix',
@@ -23,7 +24,7 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     headerBackgroundToken: 'slate_800',
     headerTextColorToken: 'white',
     fontScale: 'compact',
-    tableWidthMode: 'auto_fill'
+    tableWidth: { mode: 'auto_fill' }
   },
   model_comparison: {
     presetId: 'model_comparison',
@@ -33,7 +34,7 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     headerBackgroundToken: 'brand_navy',
     headerTextColorToken: 'white',
     fontScale: 'normal',
-    tableWidthMode: 'auto_fill'
+    tableWidth: { mode: 'auto_fill' }
   },
   parameter_value: {
     presetId: 'parameter_value',
@@ -43,7 +44,7 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     headerBackgroundToken: 'slate_100',
     headerTextColorToken: 'slate_900',
     fontScale: 'normal',
-    tableWidthMode: 'auto_fill'
+    tableWidth: { mode: 'auto_fill' }
   }
 };
 
@@ -69,9 +70,8 @@ export function applyTablePreset(
   const presentation = getTablePreset(presetId);
 
   // Preserva largura fixa manual se a tabela anterior possuía uma configurada
-  if (table.presentation.tableWidthMode === 'fixed_mm' && table.presentation.fixedTableWidthMm) {
-    presentation.tableWidthMode = 'fixed_mm';
-    presentation.fixedTableWidthMm = table.presentation.fixedTableWidthMm;
+  if (table.presentation.tableWidth.mode === 'fixed_mm') {
+    presentation.tableWidth = { ...table.presentation.tableWidth };
   }
 
   return {
