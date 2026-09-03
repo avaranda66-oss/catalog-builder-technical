@@ -28,6 +28,7 @@
   box-sizing: border-box;
   page-break-after: always;
   overflow: hidden;
+  isolation: isolate;
 }
 
 /* Tipografia Técnica */

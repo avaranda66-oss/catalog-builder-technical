@@ -130,11 +130,15 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
       id={`page-container-${page.id}`}
       data-page-index={pageIndex}
       data-page-id={page.id}
-      className="flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0"
+      className={`flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0 relative ${
+        isMenuOpenForThisPage ? 'z-30' : 'z-0'
+      }`}
     >
       {/* Barra Técnica Superior da Folha no Meio com Menus e Hover Tooltip (Oculta na Impressão) */}
       <div
-        className="w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between z-20 text-xs shadow-xs relative no-print"
+        className={`w-[794px] bg-white px-3.5 py-2 rounded-t border border-slate-300 flex items-center justify-between text-xs shadow-xs relative no-print ${
+          isMenuOpenForThisPage ? 'z-40' : 'z-10'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2.5">
@@ -154,7 +158,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           {/* 1. Menu Capas & Headers */}
           <div className="relative">
             <button
-              onClick={() => onOpenDropdown('headers')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDropdown('headers');
+              }}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
                 isMenuOpenForThisPage && activeDropdown === 'headers'
                   ? 'bg-[#003366] text-white border-[#003366]'
@@ -174,7 +181,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 {headerOptions.map((opt) => (
                   <div
                     key={opt.id}
-                    onClick={() => onSelectMenuOption(opt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMenuOption(opt);
+                    }}
                     onMouseEnter={(e) => {
                       const rowRect = e.currentTarget.getBoundingClientRect();
                       const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
@@ -206,7 +216,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           {/* 2. Menu Tabelas Técnicas */}
           <div className="relative">
             <button
-              onClick={() => onOpenDropdown('tables')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDropdown('tables');
+              }}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
                 isMenuOpenForThisPage && activeDropdown === 'tables'
                   ? 'bg-[#003366] text-white border-[#003366]'
@@ -226,7 +239,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 {tableOptions.map((opt) => (
                   <div
                     key={opt.id}
-                    onClick={() => onSelectMenuOption(opt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMenuOption(opt);
+                    }}
                     onMouseEnter={(e) => {
                       const rowRect = e.currentTarget.getBoundingClientRect();
                       const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
@@ -258,7 +274,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           {/* 3. Menu Estruturas & Destaques */}
           <div className="relative">
             <button
-              onClick={() => onOpenDropdown('structures')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDropdown('structures');
+              }}
               className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded border transition-colors shadow-2xs ${
                 isMenuOpenForThisPage && activeDropdown === 'structures'
                   ? 'bg-[#003366] text-white border-[#003366]'
@@ -278,7 +297,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 {structureOptions.map((opt) => (
                   <div
                     key={opt.id}
-                    onClick={() => onSelectMenuOption(opt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMenuOption(opt);
+                    }}
                     onMouseEnter={(e) => {
                       const rowRect = e.currentTarget.getBoundingClientRect();
                       const dropdownMenu = e.currentTarget.parentElement?.getBoundingClientRect();
@@ -367,7 +389,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
 
       {/* Folha A4 WYSIWYG Milimétrica (1123px x 794px) */}
       <div
-        className="a4-page-container flex flex-col relative"
+        className="a4-page-container flex flex-col relative isolate"
         style={{ padding: getCanonicalPagePaddingCss(isSingleFullCover) }}
         onClick={(e) => {
           e.stopPropagation();
@@ -389,28 +411,32 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           className="flex-1 min-h-0 relative overflow-hidden flex flex-col"
         >
           {/* Drop Slot no topo da lista de blocos (Overlay Absoluto, 0px in-flow) */}
-          <div
-            data-testid="block-flow-drop-slot-0"
-            data-drop-slot-index={0}
-            className="absolute top-0 left-0 right-0 h-4 z-30 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 pointer-events-auto"
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'move';
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              try {
-                const raw = e.dataTransfer.getData('application/json');
-                if (!raw) return;
-                const data = JSON.parse(raw);
-                if (data.type === 'structural_section' && data.pageId === page.id) {
-                  reorderStructuralSectionOnPage(page.id, data.sectionId, 0);
+          {page.blocks && page.blocks.length > 0 && (
+            <div
+              data-testid="block-flow-drop-slot-0"
+              data-drop-slot-index={0}
+              className={`absolute top-0 left-0 right-0 h-4 z-10 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 ${
+                isMenuOpenForThisPage ? 'pointer-events-none' : 'pointer-events-auto'
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                try {
+                  const raw = e.dataTransfer.getData('application/json');
+                  if (!raw) return;
+                  const data = JSON.parse(raw);
+                  if (data.type === 'structural_section' && data.pageId === page.id) {
+                    reorderStructuralSectionOnPage(page.id, data.sectionId, 0);
+                  }
+                } catch {
+                  // Fail-closed
                 }
-              } catch {
-                // Fail-closed
-              }
-            }}
-          />
+              }}
+            />
+          )}
 
           {/* Conteúdo em Altura Natural (BlockFlowContent - SEM py-3, gap canônico space-y-3) */}
           <div
@@ -581,7 +607,9 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
             <div
               data-testid="block-flow-drop-slot-end"
               data-drop-slot-index={page.blocks.length}
-              className="absolute bottom-0 left-0 right-0 h-4 z-30 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 pointer-events-auto"
+              className={`absolute bottom-0 left-0 right-0 h-4 z-10 no-print editor-only opacity-0 hover:opacity-100 hover:bg-blue-400/20 ${
+                isMenuOpenForThisPage ? 'pointer-events-none' : 'pointer-events-auto'
+              }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
@@ -614,10 +642,13 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           {(!page.blocks || page.blocks.length === 0) && (
             <div
               data-testid="empty-page-placeholder"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 onOpenDropdown('headers');
               }}
-              className="absolute inset-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs cursor-pointer transition-all p-6 text-center z-20 no-print editor-only"
+              className={`absolute inset-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-[#003366] hover:bg-blue-50/20 rounded-none text-slate-400 hover:text-[#003366] text-xs transition-all p-6 text-center z-0 no-print editor-only ${
+                isMenuOpenForThisPage ? 'pointer-events-none' : 'cursor-pointer pointer-events-auto'
+              }`}
             >
               <Plus className="w-8 h-8 mb-2 text-[#003366]" />
               <span className="font-bold text-slate-800 text-sm">This A4 page is empty</span>
@@ -1327,7 +1358,7 @@ export const A4Canvas: React.FC = () => {
 
       {currentCatalog.pages.map((page: CatalogPage, pageIndex: number) => {
         const isAutoFit = autoFitPages[page.id] ?? true;
-        const isMenuOpenForThisPage = activeMenuPageId === page.id;
+        const isMenuOpenForThisPage = Boolean(activeMenuPageId === page.id && activeDropdown);
 
         return (
           <EditorA4PageItem
