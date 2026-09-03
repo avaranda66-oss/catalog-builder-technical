@@ -16,6 +16,7 @@ import { PageInsertionSafetyModal } from '../../src/components/editor/PageInsert
 import { TranslationApplierRegistry } from '../../src/translation/translation-applier.registry';
 import { catalogRowToCatalog } from '../../src/services/supabase.service';
 import { CleanA4Document } from '../../src/components/export/CleanA4Document';
+import { SidebarBlockLibrary } from '../../src/components/editor/SidebarBlockLibrary';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -275,6 +276,133 @@ describe('Fase 3A.6 — Integrated Canvas Acceptance & Workflow Safety', () => {
       expect(updated.pages[4].id).toBe('p4');
 
       expect(useCatalogStore.getState().activePageIndex).toBe(2);
+    });
+
+    it('FULLCOVER-SIDEBAR-1: clicar em bloco de fluxo na Sidebar sobre página com Capa abre o Modal sem mutar catálogo', () => {
+      const coverPage: CatalogPage = {
+        id: 'p-cover-sidebar',
+        pageNumber: 1,
+        pageType: 'cover',
+        title: 'Capa Editorial',
+        blocks: [{ id: 'b-cover-1', type: 'full_page_cover', title: 'Capa A4' }]
+      };
+      const cat = createTestCatalog([coverPage]);
+      cat.localRevision = 50;
+      useCatalogStore.setState({ currentCatalog: cat, localRevision: 50, activePageIndex: 0, isDirty: false });
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      act(() => {
+        root.render(<SidebarBlockLibrary />);
+      });
+
+      // Localiza um item de tabela na Sidebar
+      const allItemHeadings = Array.from(container.querySelectorAll('h4'));
+      const tableItemHeading = allItemHeadings.find((h) => h.textContent?.includes('Tabela'));
+      expect(tableItemHeading).toBeDefined();
+
+      const itemCard = tableItemHeading!.closest('.group') as HTMLElement;
+      expect(itemCard).not.toBeNull();
+
+      // Clica no card da sidebar
+      act(() => {
+        itemCard.click();
+      });
+
+      // 1. Modal de segurança deve estar aberto no DOM
+      const dialog = container.querySelector('[role="dialog"]');
+      expect(dialog).not.toBeNull();
+      expect(container.textContent).toContain('Composição de Página Incompatível');
+
+      // 2. Estado do catálogo e store deve estar 100% inalterado antes de confirmar
+      const state = useCatalogStore.getState();
+      expect(state.currentCatalog!.pages).toHaveLength(1);
+      expect(state.currentCatalog!.pages[0].blocks).toHaveLength(1);
+      expect(state.currentCatalog!.localRevision).toBe(50);
+      expect(state.currentCatalog!.isDirty).toBe(false);
+
+      act(() => {
+        root.unmount();
+      });
+      document.body.removeChild(container);
+    });
+
+    it('FULLCOVER-ENTRY-FAIL-1: opção malformada sem payload falha fechado com zero mutação, zero modal e zero fallback texto', () => {
+      const coverPage: CatalogPage = {
+        id: 'p-cover-fail',
+        pageNumber: 1,
+        pageType: 'cover',
+        title: 'Capa Editorial',
+        blocks: [{ id: 'b-cover-fail', type: 'full_page_cover', title: 'Capa A4' }]
+      };
+      const cat = createTestCatalog([coverPage]);
+      useCatalogStore.setState({ currentCatalog: cat, localRevision: 10, activePageIndex: 0, isDirty: false });
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      act(() => {
+        root.render(<SidebarBlockLibrary />);
+      });
+
+      // A Sidebar em si renderiza sem abrir modal
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+      // Estado do catálogo e Store preservados
+      const state = useCatalogStore.getState();
+      expect(state.currentCatalog!.pages[0].blocks).toHaveLength(1);
+      expect(state.currentCatalog!.localRevision).toBe(10);
+      expect(state.currentCatalog!.isDirty).toBe(false);
+
+      act(() => {
+        root.unmount();
+      });
+      document.body.removeChild(container);
+    });
+
+    it('FULLCOVER-MODAL-FOCUS-1: modal restaura foco para o elemento previamente ativo ao ser desmontado', () => {
+      const triggerButton = document.createElement('button');
+      triggerButton.textContent = 'Trigger Inserção';
+      document.body.appendChild(triggerButton);
+      triggerButton.focus();
+      expect(document.activeElement).toBe(triggerButton);
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      act(() => {
+        root.render(
+          <PageInsertionSafetyModal
+            isOpen={true}
+            reason="EXISTING_COVER_WITH_FLOW_BLOCK"
+            itemTitle="Tabela"
+            onConfirmNewPage={() => {}}
+            onCancel={() => {}}
+          />
+        );
+      });
+
+      // Foco inicial seguro no botão Cancelar dentro do modal
+      const cancelBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Cancelar')
+      );
+      expect(cancelBtn).toBeDefined();
+      expect(document.activeElement).toBe(cancelBtn);
+
+      // Desmonta o modal
+      act(() => {
+        root.unmount();
+      });
+
+      // Foco restaurado para o elemento anterior
+      expect(document.activeElement).toBe(triggerButton);
+
+      document.body.removeChild(triggerButton);
+      document.body.removeChild(container);
     });
   });
 

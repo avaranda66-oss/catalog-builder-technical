@@ -17,7 +17,7 @@ import {
   LayoutGrid
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
-import { ContentBlock } from '../../domain/catalog.schema';
+import { ContentBlock, BlockType } from '../../domain/catalog.schema';
 import { PageInsertionSafetyModal } from './PageInsertionSafetyModal';
 import {
   evaluatePageCompositionInsertion,
@@ -81,7 +81,16 @@ export const SidebarBlockLibrary: React.FC = () => {
 
   const handleInsert = (option: SidebarBlockOption) => {
     if (!targetPageId || !activePage) return;
-    const incomingType: any = option.presetId ? 'structural_section' : (option.blockData?.type || 'text');
+
+    let incomingType: BlockType;
+    if (option.presetId) {
+      incomingType = 'structural_section';
+    } else if (option.blockData) {
+      incomingType = option.blockData.type;
+    } else {
+      // Option malformada sem payload: fail closed sem mutação nem modal
+      return;
+    }
 
     const safety = evaluatePageCompositionInsertion(activePage, incomingType);
     if (!safety.isSafe) {
@@ -89,7 +98,7 @@ export const SidebarBlockLibrary: React.FC = () => {
         sourcePageId: targetPageId,
         spec: option.presetId
           ? { kind: 'structural_preset', presetId: option.presetId }
-          : { kind: 'block', blockData: option.blockData as Omit<ContentBlock, 'id'> },
+          : { kind: 'block', blockData: option.blockData! },
         itemTitle: option.title,
         reason: safety.reason
       });
@@ -99,7 +108,7 @@ export const SidebarBlockLibrary: React.FC = () => {
     if (option.presetId) {
       insertStructuralSection(targetPageId, option.presetId);
     } else if (option.blockData) {
-      addBlock(targetPageId, option.blockData as any);
+      addBlock(targetPageId, option.blockData);
     }
   };
 

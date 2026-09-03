@@ -3,6 +3,7 @@ import {
   Catalog,
   CatalogPreset,
   ContentBlock,
+  BlockType,
   CatalogPage,
   CatalogTableRow,
   TableColumnConfig,
@@ -779,7 +780,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (sourcePageIndex === -1) return;
 
     let createdBlock: ContentBlock;
-    let blockType: any;
+    let blockType: BlockType;
 
     if (spec.kind === 'structural_preset') {
       const preset = getStructuralSectionPreset(spec.presetId);

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
-import { Catalog, CatalogPage, ContentBlock } from '../../domain/catalog.schema';
+import { Catalog, CatalogPage, ContentBlock, BlockType } from '../../domain/catalog.schema';
 import { TextBlock } from './blocks/TextBlock';
 import { ImageBlock } from './blocks/ImageBlock';
 import { BoxBlock } from './blocks/BoxBlock';
@@ -806,16 +806,24 @@ export const A4Canvas: React.FC = () => {
   if (!currentCatalog || currentCatalog.pages.length === 0) return null;
 
   const handleSelectMenuOption = (pageId: string, opt: BlockMenuOption) => {
-    const targetPage = currentCatalog?.pages.find((p) => p.id === pageId);
-    const incomingType: any = opt.presetId ? 'structural_section' : (opt.blockData?.type || 'text');
+    let incomingType: BlockType;
+    if (opt.presetId) {
+      incomingType = 'structural_section';
+    } else if (opt.blockData) {
+      incomingType = opt.blockData.type;
+    } else {
+      // Opção malformada sem payload: fail-closed sem mutação nem modal
+      return;
+    }
 
+    const targetPage = currentCatalog?.pages.find((p) => p.id === pageId);
     const safety = evaluatePageCompositionInsertion(targetPage, incomingType);
     if (!safety.isSafe) {
       setPendingInsertion({
         sourcePageId: pageId,
         spec: opt.presetId
           ? { kind: 'structural_preset', presetId: opt.presetId }
-          : { kind: 'block', blockData: opt.blockData as Omit<ContentBlock, 'id'> },
+          : { kind: 'block', blockData: opt.blockData! },
         itemTitle: opt.title,
         reason: safety.reason
       });
@@ -828,7 +836,7 @@ export const A4Canvas: React.FC = () => {
     if (opt.presetId) {
       insertStructuralSection(pageId, opt.presetId);
     } else if (opt.blockData) {
-      addBlock(pageId, opt.blockData as any);
+      addBlock(pageId, opt.blockData);
     }
     setActiveDropdown(null);
     setActiveMenuPageId(null);

@@ -27,6 +27,8 @@ export const PageInsertionSafetyModal: React.FC<PageInsertionSafetyModalProps> =
   useEffect(() => {
     if (!isOpen) return;
 
+    const previouslyFocusedElement = document.activeElement as HTMLElement | null;
+
     // Foco inicial seguro no botão Cancelar
     cancelBtnRef.current?.focus();
 
@@ -38,7 +40,10 @@ export const PageInsertionSafetyModal: React.FC<PageInsertionSafetyModalProps> =
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedElement?.focus?.();
+    };
   }, [isOpen, onCancel]);
 
   if (!isOpen) return null;
