@@ -14,15 +14,19 @@ import {
   RefreshCw,
   Lock,
   Pencil,
-  Image as ImageIcon
+  Image as ImageIcon,
+  MoreHorizontal,
+  Layers
 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useAssetStore } from '../../stores/useAssetStore';
-import { Product } from '../../domain/product.schema';
+import { Product, ProductFamily } from '../../domain/product.schema';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { LibraryHistoryDrawer } from './LibraryHistoryDrawer';
 import { CellHistoryModal } from './CellHistoryModal';
 import { ProductAssetManager } from './ProductAssetManager';
+import { DeleteFamilyModal } from './DeleteFamilyModal';
+import { RenameFamilyModal } from './RenameFamilyModal';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -47,7 +51,11 @@ export const LibraryView: React.FC = () => {
     familyPresence,
     recentEditedCells,
     syncStatus,
-    syncError
+    syncError,
+    workspaceLoaded,
+    workspaceSource,
+    renameFamily,
+    deleteFamily
   } = useLibraryStore();
 
   const isAdmin = useAuthStore((state) => state.role === 'admin');
@@ -56,15 +64,26 @@ export const LibraryView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCellInfo, setActiveCellInfo] = useState<{ rowIdx: number; colKey: string; value: string; productId: string } | null>(null);
 
-  // Modais de Criação / Edição
+  // Modais de Criação / Edição de Colunas
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnLabel, setNewColumnLabel] = useState('');
   const [editingColKey, setEditingColKey] = useState<string | null>(null);
   const [editingColLabel, setEditingColLabel] = useState('');
 
+  // Modais de Gestão de Famílias (Criação, Rename, Safe Delete)
   const [isAddingFamily, setIsAddingFamily] = useState(false);
   const [newFamilyName, setNewFamilyName] = useState('');
   const [newFamilyDesc, setNewFamilyDesc] = useState('');
+
+  const [familyToRename, setFamilyToRename] = useState<ProductFamily | null>(null);
+  const [isRenamingFamily, setIsRenamingFamily] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const [familyToDelete, setFamilyToDelete] = useState<ProductFamily | null>(null);
+  const [isDeletingFamily, setIsDeletingFamily] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [openMenuFamilyId, setOpenMenuFamilyId] = useState<string | null>(null);
 
   // Drawer de Histórico Geral e Modal de Célula
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
@@ -79,6 +98,13 @@ export const LibraryView: React.FC = () => {
   // Modal de Fotos & Arquivos Corporativos
   const [selectedProductForAssets, setSelectedProductForAssets] = useState<Product | null>(null);
   const { loadWorkspaceAssets, productAssets } = useAssetStore();
+
+  // Fecha o dropdown de opções da família ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuFamilyId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Inicialização e Assinatura Realtime
   useEffect(() => {
@@ -102,22 +128,59 @@ export const LibraryView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [flushLibraryEdits]);
 
-  // Lista de famílias (do banco ou fallback)
+  // Handlers para Renomear e Excluir Família
+  const handleConfirmRenameFamily = async (newName: string) => {
+    if (!familyToRename) return;
+    setIsRenamingFamily(true);
+    setRenameError(null);
+    const res = await renameFamily(familyToRename.id, newName);
+    setIsRenamingFamily(false);
+    if (res.success) {
+      setFamilyToRename(null);
+    } else {
+      setRenameError(res.error || 'Erro ao renomear família');
+    }
+  };
+
+  const handleConfirmDeleteFamily = async () => {
+    if (!familyToDelete) return;
+    setIsDeletingFamily(true);
+    setDeleteError(null);
+    const res = await deleteFamily(familyToDelete.id);
+    setIsDeletingFamily(false);
+    if (res.success) {
+      setFamilyToDelete(null);
+    } else {
+      setDeleteError(res.error || 'Erro ao excluir família');
+    }
+  };
+
+  const isCloudEmpty = workspaceLoaded && workspaceSource === 'cloud' && families.length === 0;
+
+  // Lista de famílias (do banco ou fallback offline)
   const availableFamilies = families.length > 0
     ? families.map(f => f.name)
-    : Array.from(new Set(products.map(p => p.family || 'Geral')));
+    : (isCloudEmpty ? [] : Array.from(new Set(products.map(p => p.family || 'Geral'))));
 
-  const currentFamily = selectedFamily || availableFamilies[0] || 'Transmissores de Pressão Relativa';
-  const columnsForFamily = getColumnsForFamily(currentFamily);
+  const currentFamily = selectedFamily || availableFamilies[0] || '';
+  const activeFamilyObj = families.find(
+    f => f.name === currentFamily || f.slug === currentFamily || f.id === currentFamily
+  );
+  const columnsForFamily = currentFamily ? getColumnsForFamily(currentFamily) : [];
 
-  // Produtos filtrados da família ativa
-  const familyProducts = products.filter(
-    (p) =>
-      (p.family === currentFamily || p.family?.toLowerCase() === currentFamily.toLowerCase()) &&
+  // Produtos filtrados da família ativa (ID First: match primário por family_id)
+  const familyProducts = products.filter((p) => {
+    const matchesFamily = activeFamilyObj
+      ? p.family_id === activeFamilyObj.id || (!p.family_id && p.family?.trim().toLowerCase() === activeFamilyObj.name.trim().toLowerCase())
+      : (p.family === currentFamily || p.family?.toLowerCase() === currentFamily.toLowerCase());
+
+    return (
+      matchesFamily &&
       (p.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.description?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+    );
+  });
 
   // Inserir Novo Produto
   const handleAddNewRow = async () => {
@@ -394,8 +457,30 @@ export const LibraryView: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Tabela Principal de Produtos Estilo Planilha */}
-      <div className="flex-1 overflow-auto bg-slate-100 p-2">
+      {/* 3. Tabela Principal de Produtos ou Estado Vazio Real */}
+      {isCloudEmpty ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/50 text-center select-none">
+          <div className="w-14 h-14 rounded-full bg-slate-200/80 flex items-center justify-center text-slate-500 mb-3 shadow-2xs">
+            <Layers className="w-7 h-7 text-[#003366]" />
+          </div>
+          <h2 className="text-base font-bold text-slate-800 mb-1">
+            Nenhuma família cadastrada na biblioteca
+          </h2>
+          <p className="text-xs text-slate-500 max-w-sm mb-5 leading-relaxed">
+            Crie a primeira família de produtos para começar a organizar as especificações técnicas e o catálogo da sua empresa.
+          </p>
+          {isAdmin && (
+            <button
+              onClick={() => setIsAddingFamily(true)}
+              className="px-4 py-2 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Criar Primeira Família</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto bg-slate-100 p-2">
         <table className="w-full border-collapse bg-white border border-slate-300 shadow-xs">
           <thead>
             <tr className="bg-[#f1f5f9] border-b border-slate-300 text-slate-700 text-left font-bold select-none sticky top-0 z-10 shadow-2xs">
@@ -606,6 +691,7 @@ export const LibraryView: React.FC = () => {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 4. Barra Inferior com Abas de Famílias Estilo Excel / Google Sheets */}
       <div className="h-8 bg-[#f1f5f9] border-t border-slate-300 px-2 flex items-center justify-between shrink-0 select-none">
@@ -616,10 +702,10 @@ export const LibraryView: React.FC = () => {
             const famPresences = famObj ? (familyPresence[famObj.id] || []).filter(p => p.userId !== currentUserId) : [];
 
             return (
-              <button
+              <div
                 key={fam}
                 onClick={() => setSelectedFamily(fam)}
-                className={`px-3 py-1 text-xs font-semibold rounded-t border-t border-l border-r transition-all flex items-center gap-1.5 ${
+                className={`group relative px-3 py-1 text-xs font-semibold rounded-t border-t border-l border-r transition-all flex items-center gap-1.5 cursor-pointer ${
                   isActive
                     ? 'bg-white text-[#003366] border-slate-300 shadow-2xs -mb-1 z-10'
                     : 'bg-slate-200/70 text-slate-600 hover:bg-slate-200 border-transparent'
@@ -632,14 +718,69 @@ export const LibraryView: React.FC = () => {
                     <span>{famPresences.length}</span>
                   </span>
                 )}
-              </button>
+
+                {isAdmin && famObj && (
+                  <div className="relative inline-flex items-center ml-0.5">
+                    <button
+                      type="button"
+                      aria-haspopup="menu"
+                      aria-expanded={openMenuFamilyId === famObj.id}
+                      aria-label={`Opções da família ${fam}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuFamilyId(openMenuFamilyId === famObj.id ? null : famObj.id);
+                      }}
+                      className={`p-0.5 rounded hover:bg-slate-300/60 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer ${
+                        openMenuFamilyId === famObj.id ? 'bg-slate-300/80 text-slate-900' : 'opacity-60 group-hover:opacity-100'
+                      }`}
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" />
+                    </button>
+
+                    {openMenuFamilyId === famObj.id && (
+                      <div
+                        role="menu"
+                        className="absolute bottom-full mb-1 left-0 bg-white border border-slate-200 rounded shadow-lg py-1 w-36 z-50 animate-in fade-in zoom-in-95 duration-100"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setOpenMenuFamilyId(null);
+                            setFamilyToRename(famObj);
+                            setRenameError(null);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition-colors font-normal cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Renomear</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setOpenMenuFamilyId(null);
+                            setFamilyToDelete(famObj);
+                            setDeleteError(null);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors font-normal cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Excluir família</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
 
           {isAdmin && (
             <button
               onClick={() => setIsAddingFamily(true)}
-              className="px-2 py-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded text-xs font-bold flex items-center gap-0.5 ml-1"
+              className="px-2 py-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded text-xs font-bold flex items-center gap-0.5 ml-1 cursor-pointer"
               title="Criar nova família de produtos"
             >
               <Plus className="w-3 h-3" />
@@ -680,6 +821,44 @@ export const LibraryView: React.FC = () => {
         <ProductAssetManager
           product={selectedProductForAssets}
           onClose={() => setSelectedProductForAssets(null)}
+        />
+      )}
+
+      {/* Modal de Renomear Família */}
+      {familyToRename && (
+        <RenameFamilyModal
+          isOpen={Boolean(familyToRename)}
+          family={familyToRename}
+          existingFamilies={families}
+          onClose={() => {
+            setFamilyToRename(null);
+            setRenameError(null);
+          }}
+          onConfirm={handleConfirmRenameFamily}
+          isRenaming={isRenamingFamily}
+          errorMessage={renameError}
+        />
+      )}
+
+      {/* Modal de Excluir Família */}
+      {familyToDelete && (
+        <DeleteFamilyModal
+          isOpen={Boolean(familyToDelete)}
+          family={familyToDelete}
+          productCount={
+            products.filter(
+              (p) =>
+                p.family_id === familyToDelete.id ||
+                (p.family && p.family.trim().toLowerCase() === familyToDelete.name.trim().toLowerCase())
+            ).length
+          }
+          onClose={() => {
+            setFamilyToDelete(null);
+            setDeleteError(null);
+          }}
+          onConfirm={handleConfirmDeleteFamily}
+          isDeleting={isDeletingFamily}
+          errorMessage={deleteError}
         />
       )}
     </div>
