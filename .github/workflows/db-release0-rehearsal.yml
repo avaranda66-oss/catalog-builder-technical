@@ -61,7 +61,7 @@ jobs:
       - name: Apply Live-Derived Rehearsal Baseline Bridge
         run: |
           echo "Applying live-derived baseline bridge (media_library)..."
-          node -e "import pg from 'pg'; import fs from 'fs'; const c = new pg.Client({ connectionString: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' }); await c.connect(); await c.query(fs.readFileSync('scripts/db-release0-live-baseline.sql', 'utf8')); await c.end(); console.log('Live-derived baseline bridge applied successfully');"
+          node scripts/apply-baseline-bridge.js
 
       - name: Apply Remaining Historical Migrations (00005 - 00021)
         run: |
