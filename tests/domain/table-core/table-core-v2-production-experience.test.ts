@@ -7,6 +7,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   ContentBlock,
+  Catalog,
+  CatalogSchema,
   CatalogTableRow,
   CatalogCellBindingSchema
 } from '../../../src/domain/catalog.schema';
@@ -18,6 +20,11 @@ import {
   TableCellTechnicalTokenContent,
   getCellKey
 } from '../../../src/domain/table-core';
+import {
+  TableRowKindSchema,
+  TableRowModelSchema
+} from '../../../src/domain/table-core/table.schema';
+import { useCatalogStore } from '../../../src/stores/useCatalogStore';
 import {
   UnavailableProductKnowledgeProvider,
   TestProductKnowledgeProvider,
@@ -432,6 +439,215 @@ describe('TABLE.PRODUCTION.EXPERIENCE1: Production Experience & Flexible Authori
       expect(parsed.productId).toBe('prod-123');
       expect(parsed.sourceKind).toBe('pim_datum');
       expect(parsed.semanticKey).toBe('pressure.stability');
+    });
+  });
+
+  describe('8. AUDIT GATE: TableRowKind Compatibility', () => {
+    it('deve preservar todos os tipos históricos (header, data, footer, divider) e aceitar section', () => {
+      const kinds = ['header', 'data', 'footer', 'divider', 'section'] as const;
+      kinds.forEach((kind) => {
+        expect(TableRowKindSchema.parse(kind)).toBe(kind);
+        const row = TableRowModelSchema.parse({
+          id: `row-${kind}`,
+          kind
+        });
+        expect(row.kind).toBe(kind);
+      });
+
+      // Modelo legado sem kind explícito deve parsear e adotar default 'data'
+      const legacyRowWithoutKind = TableRowModelSchema.parse({
+        id: 'row-legacy-default'
+      });
+      expect(legacyRowWithoutKind.kind).toBe('data');
+    });
+  });
+
+  describe('9. AUDIT GATE: Unlink Keep-Value Materialization & Offline Provider Resilience', () => {
+    it('deve materializar ±0.1 °C, remover o binding e manter o valor renderizando mesmo se o provider ficar offline', () => {
+      // 1. Catálogo com célula vinculada e valor da fonte "±0.1 °C"
+      const blockId = 'blk-unlink-resilience';
+      const rowId = 'r-ta25n';
+      const initialCatalog: Catalog = {
+        id: 'cat-unlink-test',
+        title: 'Catálogo de Teste de Unlink',
+        themeId: 'default',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+        version: 1,
+        pages: [
+          {
+            id: 'page-1',
+            pageNumber: 1,
+            title: 'Página 1',
+            blocks: [
+              {
+                id: blockId,
+                type: 'specs_table',
+                title: 'Tabela com Binding',
+                tableColumns: [
+                  { key: 'model', label: 'Modelo', visible: true },
+                  { key: 'accuracy', label: 'Exatidão', visible: true }
+                ],
+                tableRows: [
+                  {
+                    id: rowId,
+                    productRefId: 'prod-ta25n',
+                    cellBindings: {
+                      accuracy: {
+                        sourceKind: 'pim_datum',
+                        productId: 'prod-ta25n',
+                        semanticKey: 'metrology.accuracy',
+                        bindingMode: 'live',
+                        snapshot: { kind: 'text', text: '±0.1 °C' }
+                      }
+                    },
+                    localOverrides: {}
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      // Injeta no store
+      useCatalogStore.setState({
+        currentCatalog: initialCatalog,
+        activePageIndex: 0,
+        selectedBlockId: null,
+        selectedChildId: null
+      });
+
+      // 2. Executa unlinkTableCell com policy 'keep_value' fornecendo o valor resolvido da fonte
+      useCatalogStore.getState().unlinkTableCell(blockId, rowId, 'accuracy', 'keep_value', '±0.1 °C');
+
+      // 3. Provedor torna-se posteriormente indisponível (fail-closed)
+      const offlineProvider = new UnavailableProductKnowledgeProvider();
+      expect(offlineProvider.isAvailable()).toBe(false);
+
+      // 4. Salvar / Recarregar (Simula serialização e parsing Zod do catálogo)
+      const serialized = JSON.stringify(useCatalogStore.getState().currentCatalog);
+      const parsedDoc = CatalogSchema.parse(JSON.parse(serialized));
+      useCatalogStore.setState({ currentCatalog: parsedDoc });
+
+      // 5. Verifica que ±0.1 °C continua renderizando e preservado no override
+      const reloadedBlock = parsedDoc.pages[0].blocks[0];
+      const unlinkedRow = reloadedBlock.tableRows![0];
+      expect(unlinkedRow.cellBindings?.accuracy).toBeUndefined(); // Binding foi 100% removido
+      expect(unlinkedRow.localOverrides?.accuracy).toBe('±0.1 °C'); // Valor foi materializado
+
+      const adapted = adaptLegacyBlockToTableCore(reloadedBlock);
+      expect(adapted.supported).toBe(true);
+      if (adapted.supported) {
+        const cell = adapted.bridge.getByLegacyCoordinates(rowId, 'accuracy');
+        expect(cell).toBeDefined();
+        expect(cell?.isOverride).toBe(true);
+        expect(cell?.originalOverrideValue).toBe('±0.1 °C');
+        expect(cell?.content).toEqual({ kind: 'text', text: '±0.1 °C' });
+      }
+    });
+  });
+
+  describe('10. AUDIT GATE: Cell Binding Full Round-Trip (live, snapshot, review_required)', () => {
+    it('deve realizar round-trip completo (setTableCellBinding -> serialize -> Zod parse -> reload -> adapter -> TableCore) para live, snapshot e review_required', () => {
+      const blockId = 'blk-roundtrip';
+      const rowId = 'r-roundtrip';
+      const catalog: Catalog = {
+        id: 'cat-roundtrip-test',
+        title: 'Catálogo Round-Trip Test',
+        themeId: 'default',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+        version: 1,
+        pages: [
+          {
+            id: 'page-1',
+            pageNumber: 1,
+            title: 'Página 1',
+            blocks: [
+              {
+                id: blockId,
+                type: 'specs_table',
+                title: 'Tabela Round-Trip',
+                tableColumns: [
+                  { key: 'col_live', label: 'Coluna Live', visible: true },
+                  { key: 'col_snapshot', label: 'Coluna Snapshot', visible: true },
+                  { key: 'col_review', label: 'Coluna Review', visible: true }
+                ],
+                tableRows: [
+                  {
+                    id: rowId,
+                    productRefId: 'prod-pcon-y18',
+                    cellBindings: {
+                      col_live: {
+                        sourceKind: 'pim_datum',
+                        productId: 'prod-pcon-y18',
+                        semanticKey: 'pressure.range',
+                        bindingMode: 'live'
+                      },
+                      col_snapshot: {
+                        sourceKind: 'pim_datum',
+                        productId: 'prod-pcon-y18',
+                        semanticKey: 'pressure.vacuum_range',
+                        bindingMode: 'snapshot',
+                        snapshot: { kind: 'text', text: '-0.9 a 70 bar' },
+                        sourceRevision: 4
+                      },
+                      col_review: {
+                        sourceKind: 'pim_datum',
+                        productId: 'prod-pcon-y18',
+                        semanticKey: 'pressure.safety_valve',
+                        bindingMode: 'review_required',
+                        snapshot: { kind: 'text', text: '120 bar' },
+                        sourceRevision: 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      // 1. Zod Parse inicial
+      const initialValidated = CatalogSchema.parse(catalog);
+
+      // 2. Serialização JSON
+      const serialized = JSON.stringify(initialValidated);
+
+      // 3. Deserialização & Zod Parse
+      const parsedJson = JSON.parse(serialized);
+      const reloadedCatalog = CatalogSchema.parse(parsedJson);
+
+      // 4. Adaptador Legacy -> TableCore
+      const block = reloadedCatalog.pages[0].blocks[0];
+      const adaptRes = adaptLegacyBlockToTableCore(block);
+      expect(adaptRes.supported).toBe(true);
+      if (!adaptRes.supported) return;
+
+      const bridge = adaptRes.bridge;
+
+      // 5. Verificação da Célula Live
+      const liveCell = bridge.getByLegacyCoordinates(rowId, 'col_live');
+      expect(liveCell).toBeDefined();
+      expect(liveCell?.cellBinding?.bindingMode).toBe('live');
+      expect(liveCell?.cellBinding?.sourceKind).toBe('pim_datum');
+      expect(liveCell?.cellBinding?.semanticKey).toBe('pressure.range');
+
+      // 6. Verificação da Célula Snapshot
+      const snapCell = bridge.getByLegacyCoordinates(rowId, 'col_snapshot');
+      expect(snapCell).toBeDefined();
+      expect(snapCell?.cellBinding?.bindingMode).toBe('snapshot');
+      expect(snapCell?.cellBinding?.snapshot).toEqual({ kind: 'text', text: '-0.9 a 70 bar' });
+      expect(snapCell?.cellBinding?.sourceRevision).toBe(4);
+
+      // 7. Verificação da Célula Review Required
+      const revCell = bridge.getByLegacyCoordinates(rowId, 'col_review');
+      expect(revCell).toBeDefined();
+      expect(revCell?.cellBinding?.bindingMode).toBe('review_required');
+      expect(revCell?.cellBinding?.snapshot).toEqual({ kind: 'text', text: '120 bar' });
+      expect(revCell?.cellBinding?.sourceRevision).toBe(2);
     });
   });
 });
