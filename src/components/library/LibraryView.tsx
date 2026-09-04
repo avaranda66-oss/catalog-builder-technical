@@ -29,7 +29,7 @@ import { CellHistoryModal } from './CellHistoryModal';
 import { ProductAssetManager } from './ProductAssetManager';
 import { DeleteFamilyModal } from './DeleteFamilyModal';
 import { RenameFamilyModal } from './RenameFamilyModal';
-import { ProductKnowledgeWorkspace } from './product-workspace/ProductKnowledgeWorkspace';
+import { ProductWorkspaceExperienceGate } from './mega-workspace/ProductWorkspaceExperienceGate';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -955,9 +955,9 @@ export const LibraryView: React.FC = () => {
         />
       )}
 
-      {/* Modal / Workspace de Conhecimento Técnico Canônico PIM */}
+      {/* Modal / Workspace de Conhecimento Técnico Canônico PIM (Gate de Experiência) */}
       {selectedProductForWorkspace && (
-        <ProductKnowledgeWorkspace
+        <ProductWorkspaceExperienceGate
           product={selectedProductForWorkspace}
           family={families.find((f) => f.id === selectedProductForWorkspace.family_id)}
           onClose={() => {

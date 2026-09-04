@@ -314,6 +314,30 @@ export interface EffectiveSemanticRegistry {
 }
 
 /**
+ * Códigos de erro específicos de integridade do Registro Semântico.
+ * Separados estritamente dos erros de layout/referência do Workspace (Emenda A).
+ */
+export type SemanticRegistryErrorCode =
+  | 'DESCRIPTOR_KEY_MISMATCH'
+  | 'ALIAS_CANONICAL_COLLISION'
+  | 'ALIAS_ALIAS_COLLISION'
+  | 'DEPRECATED_ALIAS_CANONICAL_COLLISION'
+  | 'INVALID_CANONICAL_KEY'
+  | 'EMPTY_DISPLAY_LABEL';
+
+export interface SemanticRegistryValidationError {
+  readonly code: SemanticRegistryErrorCode;
+  readonly message: string;
+  readonly canonicalKey: string;
+  readonly alias?: string;
+}
+
+export interface SemanticRegistryValidationReport {
+  readonly isValid: boolean;
+  readonly errors: readonly SemanticRegistryValidationError[];
+}
+
+/**
  * Localizador contextualizado de referências de bindings em catálogos editoriais externos.
  */
 export interface ExternalCatalogBindingReference {

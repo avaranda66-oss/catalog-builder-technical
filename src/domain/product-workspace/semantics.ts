@@ -19,7 +19,9 @@ import {
   ProductSemanticRegistry,
   EffectiveSemanticDescriptor,
   EffectiveSemanticRegistry,
-  ExternalCatalogBindingReference
+  ExternalCatalogBindingReference,
+  SemanticRegistryValidationError,
+  SemanticRegistryValidationReport
 } from './types';
 import { CatalogCellBinding } from '../catalog.schema';
 
@@ -203,10 +205,143 @@ export function createProductSemanticRegistry(params: {
   });
 }
 
+function areDescriptorsEqual(a: SemanticDescriptor, b: SemanticDescriptor): boolean {
+  if (a.canonicalKey !== b.canonicalKey) return false;
+  if (a.displayLabel !== b.displayLabel) return false;
+  if ((a.description || undefined) !== (b.description || undefined)) return false;
+
+  const aAliases = [...a.aliases].map((x) => x.toLowerCase()).sort();
+  const bAliases = [...b.aliases].map((x) => x.toLowerCase()).sort();
+  if (aAliases.length !== bAliases.length) return false;
+  for (let i = 0; i < aAliases.length; i++) {
+    if (aAliases[i] !== bAliases[i]) return false;
+  }
+
+  const aDep = [...(a.deprecatedAliases || [])].map((x) => x.toLowerCase()).sort();
+  const bDep = [...(b.deprecatedAliases || [])].map((x) => x.toLowerCase()).sort();
+  if (aDep.length !== bDep.length) return false;
+  for (let i = 0; i < aDep.length; i++) {
+    if (aDep[i] !== bDep[i]) return false;
+  }
+
+  const aLoc = a.localeLabels || {};
+  const bLoc = b.localeLabels || {};
+  const aLocKeys = Object.keys(aLoc).sort();
+  const bLocKeys = Object.keys(bLoc).sort();
+  if (aLocKeys.length !== bLocKeys.length) return false;
+  for (let i = 0; i < aLocKeys.length; i++) {
+    const k = aLocKeys[i];
+    if (k !== bLocKeys[i] || aLoc[k] !== bLoc[k]) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validação semântica pura com domínio de erro próprio (Emenda A).
+ * Verifica integridade canônica, descompassos de chave e colisões de aliases.
+ */
+export function validateSemanticRegistry(registry: SemanticRegistryV1): SemanticRegistryValidationReport {
+  const errors: SemanticRegistryValidationError[] = [];
+  const canonicalKeysLower = new Set<string>();
+  const aliasToKeyMap = new Map<string, string>(); // aliasLower -> canonicalKey
+
+  // Primeira passagem: validação estrutural de chaves e labels
+  for (const [key, desc] of Object.entries(registry.descriptors)) {
+    if (desc.canonicalKey !== key) {
+      errors.push({
+        code: 'DESCRIPTOR_KEY_MISMATCH',
+        message: `Chave do mapa "${key}" não coincide com descritor.canonicalKey "${desc.canonicalKey}".`,
+        canonicalKey: desc.canonicalKey
+      });
+    }
+
+    if (!isValidSemanticKey(desc.canonicalKey)) {
+      errors.push({
+        code: 'INVALID_CANONICAL_KEY',
+        message: `Chave canônica "${desc.canonicalKey}" possui formato inválido. Deve ser segmentada minúscula (ex: grupo.subgrupo.item).`,
+        canonicalKey: desc.canonicalKey
+      });
+    }
+
+    if (!desc.displayLabel || !desc.displayLabel.trim()) {
+      errors.push({
+        code: 'EMPTY_DISPLAY_LABEL',
+        message: `displayLabel para "${desc.canonicalKey}" não pode ser vazio.`,
+        canonicalKey: desc.canonicalKey
+      });
+    }
+
+    canonicalKeysLower.add(desc.canonicalKey.toLowerCase());
+  }
+
+  // Segunda passagem: checagem de colisões (alias vs canonical, alias vs alias, deprecated vs canonical)
+  for (const desc of Object.values(registry.descriptors)) {
+    const selfCanonicalLower = desc.canonicalKey.toLowerCase();
+
+    for (const alias of desc.aliases) {
+      const aliasLower = alias.trim().toLowerCase();
+      if (!aliasLower) continue;
+
+      if (aliasLower === selfCanonicalLower) {
+        errors.push({
+          code: 'ALIAS_CANONICAL_COLLISION',
+          message: `Alias "${alias}" colide com a própria canonicalKey "${desc.canonicalKey}".`,
+          canonicalKey: desc.canonicalKey,
+          alias
+        });
+      } else if (canonicalKeysLower.has(aliasLower)) {
+        errors.push({
+          code: 'ALIAS_CANONICAL_COLLISION',
+          message: `Alias "${alias}" de "${desc.canonicalKey}" colide com canonicalKey ativa existente no registro.`,
+          canonicalKey: desc.canonicalKey,
+          alias
+        });
+      }
+
+      const existingOwnerKey = aliasToKeyMap.get(aliasLower);
+      if (existingOwnerKey && existingOwnerKey !== desc.canonicalKey) {
+        errors.push({
+          code: 'ALIAS_ALIAS_COLLISION',
+          message: `Alias "${alias}" de "${desc.canonicalKey}" colide com alias já registrado em "${existingOwnerKey}".`,
+          canonicalKey: desc.canonicalKey,
+          alias
+        });
+      } else {
+        aliasToKeyMap.set(aliasLower, desc.canonicalKey);
+      }
+    }
+
+    if (desc.deprecatedAliases) {
+      for (const dep of desc.deprecatedAliases) {
+        const depLower = dep.trim().toLowerCase();
+        if (canonicalKeysLower.has(depLower)) {
+          errors.push({
+            code: 'DEPRECATED_ALIAS_CANONICAL_COLLISION',
+            message: `Alias depreciado "${dep}" colide com canonicalKey ativa "${depLower}".`,
+            canonicalKey: desc.canonicalKey,
+            alias: dep
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
 export function registerSemanticDescriptor(
   registry: SemanticRegistryV1,
   descriptor: SemanticDescriptor
 ): SemanticRegistryV1 {
+  const existing = registry.descriptors[descriptor.canonicalKey];
+  if (existing && areDescriptorsEqual(existing, descriptor)) {
+    return registry; // NO-OP: descritor idêntico não sobe revisão (Emenda K)
+  }
+
   return {
     ...registry,
     revision: registry.revision + 1,
@@ -223,12 +358,20 @@ export function updateCanonicalDisplayLabel(
   canonicalKey: string,
   newDisplayLabel: string
 ): SemanticRegistryV1 {
-  const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
-    canonicalKey,
-    displayLabel: newDisplayLabel
-  });
+  const trimmed = newDisplayLabel.trim();
+  const existing = registry.descriptors[canonicalKey];
+  if (existing && existing.displayLabel.trim() === trimmed) {
+    return registry; // NO-OP: label idêntico não sobe revisão (Emenda K)
+  }
 
-  const updated = updateDisplayLabel(existing, newDisplayLabel);
+  const baseDescriptor =
+    existing ||
+    createSemanticDescriptor({
+      canonicalKey,
+      displayLabel: trimmed
+    });
+
+  const updated = updateDisplayLabel(baseDescriptor, trimmed);
 
   return {
     ...registry,
@@ -246,12 +389,28 @@ export function addCanonicalAlias(
   canonicalKey: string,
   alias: string
 ): SemanticRegistryV1 {
-  const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
-    canonicalKey,
-    displayLabel: canonicalKey
-  });
+  const trimmed = alias.trim();
+  if (!trimmed) return registry;
 
-  const updated = addAlias(existing, alias);
+  const existing = registry.descriptors[canonicalKey];
+  if (existing) {
+    const hasAlias = existing.aliases.some((a) => a.toLowerCase() === trimmed.toLowerCase());
+    if (hasAlias || trimmed.toLowerCase() === existing.displayLabel.toLowerCase()) {
+      return registry; // NO-OP: alias existente não sobe revisão (Emenda K)
+    }
+  }
+
+  const baseDescriptor =
+    existing ||
+    createSemanticDescriptor({
+      canonicalKey,
+      displayLabel: canonicalKey
+    });
+
+  const updated = addAlias(baseDescriptor, trimmed);
+  if (existing && areDescriptorsEqual(existing, updated)) {
+    return registry; // NO-OP
+  }
 
   return {
     ...registry,
@@ -270,7 +429,13 @@ export function removeCanonicalAlias(
   aliasToRemove: string
 ): SemanticRegistryV1 {
   const existing = registry.descriptors[canonicalKey];
-  if (!existing) return registry;
+  if (!existing) return registry; // NO-OP: descritor inexistente
+
+  const target = aliasToRemove.trim().toLowerCase();
+  const hasAlias = existing.aliases.some((a) => a.toLowerCase() === target);
+  if (!hasAlias) {
+    return registry; // NO-OP: remoção de alias inexistente não sobe revisão (Emenda K)
+  }
 
   const updated = removeAlias(existing, aliasToRemove);
 
@@ -302,8 +467,8 @@ export function resolveSemanticRegistry(
 ): EffectiveSemanticRegistry {
   const { familyRegistry, productRegistry, productOwner } = params;
   const owner: WorkbookOwner =
-    productRegistry?.owner ||
     productOwner ||
+    productRegistry?.owner ||
     (familyRegistry ? familyRegistry.owner : { kind: 'product', id: 'unknown' });
 
   const effectiveDescriptors = new Map<string, EffectiveSemanticDescriptor>();
