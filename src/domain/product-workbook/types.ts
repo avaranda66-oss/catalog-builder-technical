@@ -399,31 +399,57 @@ export function getDatasetCellKey(rowId: string, columnId: string): string {
 
 /**
  * Realiza o parsing seguro e determinístico de uma chave de célula do dataset.
+ * Totalmente imune a colisões mesmo que rowId contenha "|c", ":", "::", unicode ou delimitadores.
  */
 export function parseDatasetCellKey(key: string): { rowId: string; columnId: string } {
   if (!key || typeof key !== 'string') {
     throw new Error('Chave de célula inválida: deve ser uma string não vazia');
   }
-  const match = /^r(\d+):(.*)\|c(\d+):(.*)$/.exec(key);
-  if (!match) {
-    throw new Error(`Formato de chave de célula inválido: "${key}"`);
+  if (!key.startsWith('r')) {
+    throw new Error(`Formato de chave de célula inválido (deve iniciar com "r"): "${key}"`);
   }
-  const rowLen = parseInt(match[1], 10);
-  const rest = match[2];
-  if (rest.length < rowLen) {
-    throw new Error(`Chave de célula corrompida (tamanho de linha incompatível): "${key}"`);
+
+  const firstColon = key.indexOf(':');
+  if (firstColon <= 1) {
+    throw new Error(`Formato de chave de célula inválido (delimitador de tamanho da linha ausente): "${key}"`);
   }
-  const rowId = rest.substring(0, rowLen);
-  const colPart = key.substring(key.indexOf('|c') + 2);
-  const colColon = colPart.indexOf(':');
-  if (colColon === -1) {
-    throw new Error(`Chave de célula corrompida (delimitador de coluna ausente): "${key}"`);
+
+  const rowLenStr = key.substring(1, firstColon);
+  if (!/^\d+$/.test(rowLenStr)) {
+    throw new Error(`Formato de chave de célula inválido (comprimento da linha não é numérico): "${key}"`);
   }
-  const colLen = parseInt(colPart.substring(0, colColon), 10);
-  const columnId = colPart.substring(colColon + 1);
+  const rowLen = parseInt(rowLenStr, 10);
+
+  const rowStart = firstColon + 1;
+  const rowEnd = rowStart + rowLen;
+  if (key.length < rowEnd + 3) {
+    throw new Error(`Chave de célula corrompida (tamanho insuficiente para conteúdo e delimitador): "${key}"`);
+  }
+
+  const rowId = key.substring(rowStart, rowEnd);
+
+  if (key.substring(rowEnd, rowEnd + 2) !== '|c') {
+    throw new Error(`Chave de célula corrompida (delimitador "|c" não encontrado na posição esperada): "${key}"`);
+  }
+
+  const secondColon = key.indexOf(':', rowEnd + 2);
+  if (secondColon === -1) {
+    throw new Error(`Chave de célula corrompida (delimitador de tamanho de coluna ausente): "${key}"`);
+  }
+
+  const colLenStr = key.substring(rowEnd + 2, secondColon);
+  if (!/^\d+$/.test(colLenStr)) {
+    throw new Error(`Formato de chave de célula inválido (comprimento da coluna não é numérico): "${key}"`);
+  }
+  const colLen = parseInt(colLenStr, 10);
+
+  const colStart = secondColon + 1;
+  const columnId = key.substring(colStart);
+
   if (columnId.length !== colLen) {
-    throw new Error(`Chave de célula corrompida (tamanho de coluna incompatível): "${key}"`);
+    throw new Error(`Chave de célula corrompida (tamanho de coluna incompatível: esperado ${colLen}, obtido ${columnId.length}): "${key}"`);
   }
+
   return { rowId, columnId };
 }
 

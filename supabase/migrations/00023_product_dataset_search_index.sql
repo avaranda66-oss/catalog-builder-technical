@@ -194,7 +194,38 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 9. Validação C9 de TechnicalDatasets & Referências de Células (EMENDA 2, 5, 7)
+    -- 9. Validação C9 de TechnicalDatasets & Integridade Server-Side (PIM.PRODUCTION.CORE1.1)
+    -- 9.1. Valida que todo datum em workbook.data referencia moduleId existente
+    FOR v_item IN
+        SELECT d.key AS d_id, d.value AS d_val
+        FROM jsonb_each(p_workbook->'data') d
+    LOOP
+        SELECT EXISTS(
+            SELECT 1 FROM jsonb_array_elements(p_workbook->'modules') m
+            WHERE m->>'id' = v_item.d_val->>'moduleId'
+        ) INTO v_mod_exists;
+
+        IF NOT v_mod_exists THEN
+            RAISE EXCEPTION 'DATUM_MODULE_NOT_FOUND: Dado "%" vinculado a moduleId inexistente "%".',
+                v_item.d_id, v_item.d_val->>'moduleId'
+                USING ERRCODE = '23503';
+        END IF;
+    END LOOP;
+
+    -- 9.2. Valida duplicidade de dataset IDs e semanticKeys
+    IF (SELECT count(DISTINCT ds->>'id') FROM jsonb_array_elements(p_workbook->'datasets') ds)
+       < (SELECT count(*) FROM jsonb_array_elements(p_workbook->'datasets')) THEN
+        RAISE EXCEPTION 'DUPLICATE_DATASET_ID: Existem datasets com IDs duplicados no payload.'
+            USING ERRCODE = '23505';
+    END IF;
+
+    IF (SELECT count(DISTINCT ds->>'semanticKey') FROM jsonb_array_elements(p_workbook->'datasets') ds)
+       < (SELECT count(*) FROM jsonb_array_elements(p_workbook->'datasets')) THEN
+        RAISE EXCEPTION 'DUPLICATE_DATASET_SEMANTIC_KEY: Existem datasets com semanticKeys duplicadas no payload.'
+            USING ERRCODE = '23505';
+    END IF;
+
+    -- 9.3. Itera sobre cada dataset e valida integridade interna profunda
     FOR v_ds IN
         SELECT ds.value AS val
         FROM jsonb_array_elements(p_workbook->'datasets') ds
@@ -211,15 +242,91 @@ BEGIN
                 USING ERRCODE = '23503';
         END IF;
 
-        -- Valida que cada célula referencia datumId existente em data (EMENDA 2)
+        -- Valida duplicidade de column IDs
+        IF (SELECT count(DISTINCT c->>'id') FROM jsonb_array_elements(COALESCE(v_ds.val->'columns', '[]'::jsonb)) c)
+           < (SELECT count(*) FROM jsonb_array_elements(COALESCE(v_ds.val->'columns', '[]'::jsonb))) THEN
+            RAISE EXCEPTION 'DUPLICATE_COLUMN_ID: Dataset "%" contém colunas com IDs duplicados.', v_ds.val->>'label'
+                USING ERRCODE = '23505';
+        END IF;
+
+        -- Valida duplicidade de column semanticKeys
+        IF (SELECT count(DISTINCT c->>'semanticKey') FROM jsonb_array_elements(COALESCE(v_ds.val->'columns', '[]'::jsonb)) c)
+           < (SELECT count(*) FROM jsonb_array_elements(COALESCE(v_ds.val->'columns', '[]'::jsonb))) THEN
+            RAISE EXCEPTION 'DUPLICATE_COLUMN_SEMANTIC_KEY: Dataset "%" contém colunas com semanticKeys duplicadas.', v_ds.val->>'label'
+                USING ERRCODE = '23505';
+        END IF;
+
+        -- Valida duplicidade de row IDs
+        IF (SELECT count(DISTINCT r->>'id') FROM jsonb_array_elements(COALESCE(v_ds.val->'rows', '[]'::jsonb)) r)
+           < (SELECT count(*) FROM jsonb_array_elements(COALESCE(v_ds.val->'rows', '[]'::jsonb))) THEN
+            RAISE EXCEPTION 'DUPLICATE_ROW_ID: Dataset "%" contém linhas com IDs duplicados.', v_ds.val->>'label'
+                USING ERRCODE = '23505';
+        END IF;
+
+        -- Valida cada célula da grade
         FOR v_cell IN
             SELECT c.key AS cell_key, c.value AS cell_val
             FROM jsonb_each(COALESCE(v_ds.val->'cells', '{}'::jsonb)) c
         LOOP
+            -- Valida coordenadas da chave da célula: formato determinístico r{len}:{rowId}|c{len}:{columnId}
+            IF v_cell.cell_key IS DISTINCT FROM format('r%s:%s|c%s:%s',
+                length(v_cell.cell_val->>'rowId'), v_cell.cell_val->>'rowId',
+                length(v_cell.cell_val->>'columnId'), v_cell.cell_val->>'columnId') THEN
+                RAISE EXCEPTION 'DATASET_CELL_KEY_MISMATCH: Chave de célula "%" não corresponde às coordenadas declaradas (rowId="%", columnId="%").',
+                    v_cell.cell_key, v_cell.cell_val->>'rowId', v_cell.cell_val->>'columnId'
+                    USING ERRCODE = '22023';
+            END IF;
+
+            -- Valida existência de rowId nas linhas do dataset
+            IF NOT EXISTS (
+                SELECT 1 FROM jsonb_array_elements(COALESCE(v_ds.val->'rows', '[]'::jsonb)) r
+                WHERE r->>'id' = v_cell.cell_val->>'rowId'
+            ) THEN
+                RAISE EXCEPTION 'DATASET_CELL_ROW_NOT_FOUND: Célula "%" referencia rowId inexistente "%" no dataset.',
+                    v_cell.cell_key, v_cell.cell_val->>'rowId'
+                    USING ERRCODE = '23503';
+            END IF;
+
+            -- Valida existência de columnId nas colunas do dataset
+            SELECT * INTO v_col_def
+            FROM (
+                SELECT 
+                    c->>'id' AS c_id,
+                    c->>'valueType' AS c_vtype,
+                    c->>'unit' AS c_unit
+                FROM jsonb_array_elements(COALESCE(v_ds.val->'columns', '[]'::jsonb)) c
+                WHERE c->>'id' = v_cell.cell_val->>'columnId'
+            ) sub;
+
+            IF v_col_def.c_id IS NULL THEN
+                RAISE EXCEPTION 'DATASET_CELL_COLUMN_NOT_FOUND: Célula "%" referencia columnId inexistente "%" no dataset.',
+                    v_cell.cell_key, v_cell.cell_val->>'columnId'
+                    USING ERRCODE = '23503';
+            END IF;
+
+            -- Valida existência de datumId em data
             IF NOT (p_workbook->'data' ? (v_cell.cell_val->>'datumId')) THEN
                 RAISE EXCEPTION 'DATASET_CELL_DATUM_NOT_FOUND: Célula "%" referencia datumId inexistente "%" no mapa de dados.',
                     v_cell.cell_key, v_cell.cell_val->>'datumId'
                     USING ERRCODE = '23503';
+            END IF;
+
+            v_datum_val := p_workbook->'data'->(v_cell.cell_val->>'datumId');
+
+            -- Valida paridade de tipo (datum.value.type == column.valueType)
+            IF (v_datum_val->'value'->>'type') IS DISTINCT FROM v_col_def.c_vtype THEN
+                RAISE EXCEPTION 'DATASET_CELL_TYPE_MISMATCH: Tipo do valor técnico "%" difere do tipo da coluna "%" na célula "%".',
+                    v_datum_val->'value'->>'type', v_col_def.c_vtype, v_cell.cell_key
+                    USING ERRCODE = '22023';
+            END IF;
+
+            -- Valida compatibilidade de unidade metrológica quando column.unit estiver definida
+            IF v_col_def.c_unit IS NOT NULL AND v_col_def.c_unit <> '' THEN
+                IF (v_datum_val->'value'->>'unit') IS DISTINCT FROM v_col_def.c_unit THEN
+                    RAISE EXCEPTION 'DATASET_CELL_UNIT_MISMATCH: Unidade do valor técnico "%" incompatível com a unidade da coluna "%" na célula "%".',
+                        COALESCE(v_datum_val->'value'->>'unit', 'sem unidade'), v_col_def.c_unit, v_cell.cell_key
+                        USING ERRCODE = '22023';
+                END IF;
             END IF;
         END LOOP;
     END LOOP;
@@ -550,3 +657,100 @@ GRANT EXECUTE ON FUNCTION public.save_product_workbook_v2(JSONB, INTEGER) TO aut
 GRANT EXECUTE ON FUNCTION public.get_product_workbook_v2(TEXT, TEXT) TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.save_product_workbook_v2(JSONB, INTEGER) FROM anon, PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.get_product_workbook_v2(TEXT, TEXT) FROM anon, PUBLIC;
+
+-- 7. RPC CANÔNICA DE BUSCA INTEGRADA: search_product_knowledge_v2 (PIM.PRODUCTION.CORE1.1)
+CREATE OR REPLACE FUNCTION public.search_product_knowledge_v2(
+    p_query TEXT,
+    p_product_id UUID DEFAULT NULL,
+    p_family_id UUID DEFAULT NULL,
+    p_kind TEXT DEFAULT NULL,
+    p_limit INTEGER DEFAULT 20
+)
+RETURNS TABLE (
+    source_index TEXT,
+    owner_kind TEXT,
+    owner_id UUID,
+    dataset_id TEXT,
+    module_id TEXT,
+    semantic_key TEXT,
+    label TEXT,
+    value_formatted TEXT,
+    unit TEXT,
+    status TEXT,
+    relevance REAL
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_limit INTEGER := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
+BEGIN
+    -- Validação de Autorização Fail-Closed
+    IF auth.uid() IS NULL OR public.team_role() IS NULL THEN
+        RAISE EXCEPTION 'AUTH_REQUIRED: Autenticação requerida para busca de conhecimento.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    RETURN QUERY
+    WITH combined AS (
+        -- 1. Fatos técnicos em product_technical_data_index
+        SELECT
+            'technical_data'::TEXT AS source_index,
+            t.owner_kind,
+            t.owner_id,
+            NULL::TEXT AS dataset_id,
+            t.module_id,
+            t.semantic_key,
+            t.label,
+            t.value_text AS value_formatted,
+            t.unit,
+            t.status,
+            CASE 
+                WHEN p_query IS NULL OR trim(p_query) = '' THEN 1.0::REAL
+                ELSE ts_rank_cd(
+                    to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.value_text, '')),
+                    plainto_tsquery('simple', p_query)
+                )::REAL
+            END AS relevance
+        FROM public.product_technical_data_index t
+        WHERE (p_product_id IS NULL OR (t.owner_kind = 'product' AND t.owner_id = p_product_id))
+          AND (p_family_id IS NULL OR (t.owner_kind = 'family' AND t.owner_id = p_family_id))
+          AND (p_query IS NULL OR trim(p_query) = '' OR to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.value_text, '')) @@ plainto_tsquery('simple', p_query))
+
+        UNION ALL
+
+        -- 2. Células e tabelas em product_dataset_search_index
+        SELECT
+            'technical_dataset'::TEXT AS source_index,
+            d.owner_kind,
+            d.owner_id,
+            d.dataset_id,
+            d.module_id,
+            d.column_semantic_key AS semantic_key,
+            (COALESCE(d.dataset_label, '') || ' · ' || COALESCE(d.column_label, '') || ' [' || COALESCE(d.row_label, '') || ']') AS label,
+            d.projected_text AS value_formatted,
+            d.projected_unit AS unit,
+            d.status,
+            CASE 
+                WHEN p_query IS NULL OR trim(p_query) = '' THEN 1.0::REAL
+                ELSE ts_rank_cd(
+                    to_tsvector('simple', COALESCE(d.dataset_label, '') || ' ' || COALESCE(d.column_label, '') || ' ' || COALESCE(d.row_label, '') || ' ' || COALESCE(d.projected_text, '')),
+                    plainto_tsquery('simple', p_query)
+                )::REAL
+            END AS relevance
+        FROM public.product_dataset_search_index d
+        WHERE (p_product_id IS NULL OR (d.owner_kind = 'product' AND d.owner_id = p_product_id))
+          AND (p_family_id IS NULL OR (d.owner_kind = 'family' AND d.owner_id = p_family_id))
+          AND (p_kind IS NULL OR d.dataset_kind = p_kind)
+          AND (p_query IS NULL OR trim(p_query) = '' OR to_tsvector('simple', COALESCE(d.dataset_label, '') || ' ' || COALESCE(d.column_label, '') || ' ' || COALESCE(d.row_label, '') || ' ' || COALESCE(d.projected_text, '')) @@ plainto_tsquery('simple', p_query))
+    )
+    SELECT * FROM combined
+    ORDER BY relevance DESC, label ASC
+    LIMIT v_limit;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.search_product_knowledge_v2(TEXT, UUID, UUID, TEXT, INTEGER) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.search_product_knowledge_v2(TEXT, UUID, UUID, TEXT, INTEGER) FROM anon, PUBLIC;
+

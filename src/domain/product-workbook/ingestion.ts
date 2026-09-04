@@ -15,6 +15,7 @@ import {
   DatasetColumn,
   DatasetRow,
   DatasetCell,
+  UnitCode,
   getDatasetCellKey
 } from './types';
 import { ProductWorkbookError } from './operations';
@@ -71,6 +72,7 @@ export interface ExtractedDatasetCandidate {
     readonly semanticKey: string;
     readonly label: string;
     readonly valueType: TechnicalValue['type'];
+    readonly unit?: UnitCode;
   }[];
   readonly rows: readonly {
     readonly semanticKey?: string;
@@ -122,6 +124,7 @@ export function approveDatumCandidate(params: {
   targetModuleId: string;
   reviewerId?: string;
   status?: DatumStatus; // Defaults to 'verified'
+  authorizedSourceDocumentIds?: readonly string[];
   adjustedSemanticKey?: string;
   adjustedLabel?: string;
   adjustedValue?: TechnicalValue;
@@ -130,10 +133,38 @@ export function approveDatumCandidate(params: {
   approvedDatum: TechnicalDatum;
   updatedCandidate: ExtractedDatumCandidate;
 } {
-  const { candidate, targetWorkbook, targetModuleId, reviewerId, status, adjustedSemanticKey, adjustedLabel, adjustedValue } = params;
+  const {
+    candidate,
+    targetWorkbook,
+    targetModuleId,
+    reviewerId,
+    status,
+    authorizedSourceDocumentIds,
+    adjustedSemanticKey,
+    adjustedLabel,
+    adjustedValue
+  } = params;
 
   if (candidate.status === 'approved') {
     throw new ProductWorkbookError('ALREADY_APPROVED', 'Este candidato já foi aprovado anteriormente.');
+  }
+
+  // Item 11: Validar autorização do SourceDocument
+  if (!candidate.sourceDocumentId || candidate.sourceDocumentId.trim().length === 0) {
+    throw new ProductWorkbookError(
+      'INVALID_SOURCE_DOCUMENT',
+      'Candidato não referencia um SourceDocument válido.'
+    );
+  }
+  if (
+    authorizedSourceDocumentIds &&
+    authorizedSourceDocumentIds.length > 0 &&
+    !authorizedSourceDocumentIds.includes(candidate.sourceDocumentId)
+  ) {
+    throw new ProductWorkbookError(
+      'UNAUTHORIZED_SOURCE_DOCUMENT',
+      `Documento fonte "${candidate.sourceDocumentId}" não está autorizado para aprovação no contexto deste produto.`
+    );
   }
 
   const targetModule = targetWorkbook.modules.find((m) => m.id === targetModuleId);
@@ -243,6 +274,8 @@ export function rejectDatumCandidate(params: {
 /**
  * Approves an extracted dataset candidate, creating TechnicalDatums for all cells and promoting
  * the complete TechnicalDataset into the Product Workbook.
+ * Fail-Closed (Item 11): Strict coordinate, type, unit, semantic key and authorization validation
+ * BEFORE any workbook modifications. Invalid index throws immediately with zero partial dataset.
  */
 export function approveDatasetCandidate(params: {
   candidate: ExtractedDatasetCandidate;
@@ -250,15 +283,41 @@ export function approveDatasetCandidate(params: {
   targetModuleId: string;
   reviewerId?: string;
   status?: DatumStatus;
+  authorizedSourceDocumentIds?: readonly string[];
 }): {
   updatedWorkbook: ProductWorkbookV2;
   approvedDataset: TechnicalDataset;
   updatedCandidate: ExtractedDatasetCandidate;
 } {
-  const { candidate, targetWorkbook, targetModuleId, reviewerId, status } = params;
+  const {
+    candidate,
+    targetWorkbook,
+    targetModuleId,
+    reviewerId,
+    status,
+    authorizedSourceDocumentIds
+  } = params;
 
   if (candidate.status === 'approved') {
     throw new ProductWorkbookError('ALREADY_APPROVED', 'Este dataset já foi aprovado anteriormente.');
+  }
+
+  // Item 11: Validar autorização do SourceDocument
+  if (!candidate.sourceDocumentId || candidate.sourceDocumentId.trim().length === 0) {
+    throw new ProductWorkbookError(
+      'INVALID_SOURCE_DOCUMENT',
+      'Candidato a dataset não referencia um SourceDocument válido.'
+    );
+  }
+  if (
+    authorizedSourceDocumentIds &&
+    authorizedSourceDocumentIds.length > 0 &&
+    !authorizedSourceDocumentIds.includes(candidate.sourceDocumentId)
+  ) {
+    throw new ProductWorkbookError(
+      'UNAUTHORIZED_SOURCE_DOCUMENT',
+      `Documento fonte "${candidate.sourceDocumentId}" não está autorizado para aprovação no contexto deste produto.`
+    );
   }
 
   const targetModule = targetWorkbook.modules.find((m) => m.id === targetModuleId);
@@ -267,6 +326,96 @@ export function approveDatasetCandidate(params: {
       'TARGET_MODULE_NOT_FOUND',
       `Módulo alvo "${targetModuleId}" não encontrado no workbook.`
     );
+  }
+
+  // Item 11: Validar semanticKey do dataset
+  if (!isValidSemanticKey(candidate.suggestedSemanticKey)) {
+    throw new ProductWorkbookError(
+      'INVALID_SEMANTIC_KEY',
+      `semanticKey do dataset sugerido "${candidate.suggestedSemanticKey}" é inválida.`
+    );
+  }
+  if (targetWorkbook.datasets.some((d) => d.semanticKey === candidate.suggestedSemanticKey)) {
+    throw new ProductWorkbookError(
+      'DUPLICATE_DATASET_SEMANTIC_KEY',
+      `Já existe um dataset com a semanticKey "${candidate.suggestedSemanticKey}" no workbook.`
+    );
+  }
+
+  // Item 11: Validar colunas
+  if (candidate.columns.length === 0) {
+    throw new ProductWorkbookError('EMPTY_COLUMNS', 'Candidato a dataset não possui nenhuma coluna.');
+  }
+  const seenColKeys = new Set<string>();
+  for (const col of candidate.columns) {
+    if (!isValidSemanticKey(col.semanticKey)) {
+      throw new ProductWorkbookError(
+        'INVALID_SEMANTIC_KEY',
+        `semanticKey de coluna "${col.semanticKey}" é inválida.`
+      );
+    }
+    if (seenColKeys.has(col.semanticKey)) {
+      throw new ProductWorkbookError(
+        'DUPLICATE_COLUMN_SEMANTIC_KEY',
+        `semanticKey de coluna duplicada no candidato: "${col.semanticKey}".`
+      );
+    }
+    seenColKeys.add(col.semanticKey);
+  }
+
+  // Item 11: Validar linhas
+  const seenRowKeys = new Set<string>();
+  for (const row of candidate.rows) {
+    if (row.semanticKey) {
+      if (!isValidSemanticKey(row.semanticKey)) {
+        throw new ProductWorkbookError(
+          'INVALID_SEMANTIC_KEY',
+          `semanticKey de linha "${row.semanticKey}" é inválida.`
+        );
+      }
+      if (seenRowKeys.has(row.semanticKey)) {
+        throw new ProductWorkbookError(
+          'DUPLICATE_ROW_SEMANTIC_KEY',
+          `semanticKey de linha duplicada no candidato: "${row.semanticKey}".`
+        );
+      }
+      seenRowKeys.add(row.semanticKey);
+    }
+  }
+
+  // Item 11: Validar CADA célula ANTES de produzir updatedWorkbook
+  for (const cell of candidate.cells) {
+    // Índice de linha/coluna inválido -> THROW -> zero partial dataset!
+    if (cell.rowIdx < 0 || cell.rowIdx >= candidate.rows.length || !candidate.rows[cell.rowIdx]) {
+      throw new ProductWorkbookError(
+        'INVALID_CELL_COORDINATE',
+        `Índice de linha inválido (${cell.rowIdx}). O dataset candidato possui ${candidate.rows.length} linhas.`
+      );
+    }
+    if (cell.colIdx < 0 || cell.colIdx >= candidate.columns.length || !candidate.columns[cell.colIdx]) {
+      throw new ProductWorkbookError(
+        'INVALID_CELL_COORDINATE',
+        `Índice de coluna inválido (${cell.colIdx}). O dataset candidato possui ${candidate.columns.length} colunas.`
+      );
+    }
+
+    const colDef = candidate.columns[cell.colIdx];
+
+    // column.valueType vs cell.value.type
+    if (cell.value.type !== colDef.valueType) {
+      throw new ProductWorkbookError(
+        'TYPE_MISMATCH',
+        `Incompatibilidade de tipo na célula [${cell.rowIdx}, ${cell.colIdx}]: coluna espera "${colDef.valueType}", célula possui "${cell.value.type}".`
+      );
+    }
+
+    // unit compatível quando coluna possui unidade definida
+    if (colDef.unit && 'unit' in cell.value && cell.value.unit && cell.value.unit !== colDef.unit) {
+      throw new ProductWorkbookError(
+        'UNIT_MISMATCH',
+        `Incompatibilidade de unidade na célula [${cell.rowIdx}, ${cell.colIdx}]: coluna espera "${colDef.unit}", célula possui "${cell.value.unit}".`
+      );
+    }
   }
 
   const datasetId = `ds_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -278,6 +427,7 @@ export function approveDatasetCandidate(params: {
     semanticKey: c.semanticKey,
     label: c.label,
     valueType: c.valueType,
+    unit: c.unit,
     order: idx
   }));
 
@@ -296,7 +446,6 @@ export function approveDatasetCandidate(params: {
   for (const cell of candidate.cells) {
     const row = rows[cell.rowIdx];
     const col = columns[cell.colIdx];
-    if (!row || !col) continue;
 
     const datumId = `dtm_${datasetId}_${cell.rowIdx}_${cell.colIdx}_${Math.random().toString(36).slice(2, 6)}`;
     const datumSemanticKey = `${candidate.suggestedSemanticKey}.${row.id}.${col.id}`;

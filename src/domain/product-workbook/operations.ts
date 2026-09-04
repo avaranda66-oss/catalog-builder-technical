@@ -630,9 +630,16 @@ export function addDataset(
     );
   }
 
+  const sanitizedDataset: TechnicalDataset = {
+    ...dataset,
+    columns: dataset.columns ?? [],
+    rows: dataset.rows ?? [],
+    cells: dataset.cells ?? {}
+  };
+
   return {
     ...wbV2,
-    datasets: [...wbV2.datasets, dataset]
+    datasets: [...wbV2.datasets, sanitizedDataset]
   };
 }
 
@@ -855,6 +862,76 @@ export function deleteDatasetRow(
     ...wbV2,
     datasets: updatedDatasets
   };
+}
+
+/**
+ * Reordena as colunas de um TechnicalDataset.
+ */
+export function reorderDatasetColumns(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  columnIds: readonly string[]
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  const colMap = new Map(dataset.columns.map((c) => [c.id, c]));
+  const reordered: DatasetColumn[] = [];
+
+  columnIds.forEach((id, idx) => {
+    const col = colMap.get(id);
+    if (col) {
+      reordered.push({ ...col, order: idx });
+      colMap.delete(id);
+    }
+  });
+
+  for (const remaining of colMap.values()) {
+    reordered.push({ ...remaining, order: reordered.length });
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = { ...dataset, columns: reordered };
+  return { ...wbV2, datasets: updatedDatasets };
+}
+
+/**
+ * Reordena as linhas de um TechnicalDataset.
+ */
+export function reorderDatasetRows(
+  workbook: ProductWorkbook,
+  datasetId: string,
+  rowIds: readonly string[]
+): ProductWorkbookV2 {
+  const wbV2 = ensureWorkbookV2(workbook);
+  const dsIndex = wbV2.datasets.findIndex((d) => d.id === datasetId);
+  if (dsIndex === -1) {
+    throw new ProductWorkbookError('DATASET_NOT_FOUND', `Dataset com ID "${datasetId}" não encontrado.`);
+  }
+
+  const dataset = wbV2.datasets[dsIndex];
+  const rowMap = new Map(dataset.rows.map((r) => [r.id, r]));
+  const reordered: DatasetRow[] = [];
+
+  rowIds.forEach((id, idx) => {
+    const row = rowMap.get(id);
+    if (row) {
+      reordered.push({ ...row, order: idx });
+      rowMap.delete(id);
+    }
+  });
+
+  for (const remaining of rowMap.values()) {
+    reordered.push({ ...remaining, order: reordered.length });
+  }
+
+  const updatedDatasets = [...wbV2.datasets];
+  updatedDatasets[dsIndex] = { ...dataset, rows: reordered };
+  return { ...wbV2, datasets: updatedDatasets };
 }
 
 /**

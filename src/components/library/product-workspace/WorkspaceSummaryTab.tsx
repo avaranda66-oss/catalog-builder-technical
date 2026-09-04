@@ -1,20 +1,23 @@
 // src/components/library/product-workspace/WorkspaceSummaryTab.tsx
 // FASE 10: Tab Resumo Técnico do Workspace PIM
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileCheck,
   AlertTriangle,
   HelpCircle,
   Table,
   BookOpen,
-  GitFork
+  GitFork,
+  Plus,
+  Layers
 } from 'lucide-react';
 import {
   ProductWorkbookV2,
   ResolvedProductKnowledge
 } from '../../../domain/product-workbook';
 import { Product, ProductFamily } from '../../../domain/product.schema';
+import { NewModuleModal } from './NewModuleModal';
 
 interface WorkspaceSummaryTabProps {
   product: Product;
@@ -22,6 +25,7 @@ interface WorkspaceSummaryTabProps {
   workbook: ProductWorkbookV2;
   effectiveKnowledge: ResolvedProductKnowledge;
   onNavigateTab: (tab: 'technical_data' | 'technical_tables' | 'documents') => void;
+  onUpdateWorkbook?: (updated: ProductWorkbookV2) => void;
 }
 
 export const WorkspaceSummaryTab: React.FC<WorkspaceSummaryTabProps> = ({
@@ -29,8 +33,10 @@ export const WorkspaceSummaryTab: React.FC<WorkspaceSummaryTabProps> = ({
   family,
   workbook,
   effectiveKnowledge,
-  onNavigateTab
+  onNavigateTab,
+  onUpdateWorkbook
 }) => {
+  const [isNewModuleModalOpen, setIsNewModuleModalOpen] = useState(false);
   const allDatums = Array.from(effectiveKnowledge.effectiveData.values());
   const verifiedCount = allDatums.filter((d) => d.effectiveStatus === 'verified').length;
   const draftCount = allDatums.filter((d) => d.effectiveStatus === 'draft').length;
@@ -111,12 +117,24 @@ export const WorkspaceSummaryTab: React.FC<WorkspaceSummaryTabProps> = ({
             <h3 className="text-sm font-bold text-slate-900">Módulos de Conhecimento Estruturado</h3>
             <p className="text-xs text-slate-500">Agrupamento semântico dos fatos de engenharia deste produto</p>
           </div>
-          <button
-            onClick={() => onNavigateTab('technical_data')}
-            className="text-xs font-bold text-[#003366] hover:underline"
-          >
-            Ver todos os dados →
-          </button>
+          <div className="flex items-center gap-3">
+            {onUpdateWorkbook && (
+              <button
+                type="button"
+                onClick={() => setIsNewModuleModalOpen(true)}
+                className="px-2.5 py-1 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Novo Módulo</span>
+              </button>
+            )}
+            <button
+              onClick={() => onNavigateTab('technical_data')}
+              className="text-xs font-bold text-[#003366] hover:underline cursor-pointer"
+            >
+              Ver todos os dados →
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -151,8 +169,24 @@ export const WorkspaceSummaryTab: React.FC<WorkspaceSummaryTabProps> = ({
           })}
 
           {effectiveKnowledge.modules.length === 0 && (
-            <div className="col-span-full text-center py-6 text-slate-400 text-xs italic">
-              Nenhum módulo cadastrado. Adicione módulos na aba de Dados Técnicos.
+            <div className="col-span-full text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-300 p-6 space-y-3">
+              <Layers className="w-8 h-8 text-slate-400 mx-auto" />
+              <div>
+                <h4 className="text-xs font-bold text-slate-700">Nenhum módulo técnico estruturado</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Workbooks canônicos vazios precisam de um módulo técnico inicial para agrupar dados e tabelas.
+                </p>
+              </div>
+              {onUpdateWorkbook && (
+                <button
+                  type="button"
+                  onClick={() => setIsNewModuleModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Criar Primeiro Módulo Técnico</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -170,6 +204,15 @@ export const WorkspaceSummaryTab: React.FC<WorkspaceSummaryTabProps> = ({
             Qualquer alteração na família reflete automaticamente aqui, a menos que um override local seja definido.
           </p>
         </div>
+      )}
+
+      {onUpdateWorkbook && (
+        <NewModuleModal
+          workbook={workbook}
+          isOpen={isNewModuleModalOpen}
+          onClose={() => setIsNewModuleModalOpen(false)}
+          onUpdateWorkbook={onUpdateWorkbook}
+        />
       )}
     </div>
   );

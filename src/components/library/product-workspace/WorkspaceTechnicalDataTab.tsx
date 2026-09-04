@@ -8,7 +8,8 @@ import {
   Trash2,
   AlertTriangle,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Layers
 } from 'lucide-react';
 import {
   ProductWorkbookV2,
@@ -19,6 +20,7 @@ import {
   addDatum,
   deleteDatum
 } from '../../../domain/product-workbook';
+import { NewModuleModal } from './NewModuleModal';
 
 interface WorkspaceTechnicalDataTabProps {
   workbook: ProductWorkbookV2;
@@ -34,6 +36,8 @@ export const WorkspaceTechnicalDataTab: React.FC<WorkspaceTechnicalDataTabProps>
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModuleId, setSelectedModuleId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const [isNewModuleModalOpen, setIsNewModuleModalOpen] = useState(false);
 
   // Modal de Adicionar Dado
   const [isAdding, setIsAdding] = useState(false);
@@ -158,19 +162,55 @@ export const WorkspaceTechnicalDataTab: React.FC<WorkspaceTechnicalDataTabProps>
           </select>
         </div>
 
-        <button
-          onClick={() => {
-            if (effectiveKnowledge.modules.length > 0) {
-              setNewModuleId(effectiveKnowledge.modules[0].id);
-            }
-            setIsAdding(true);
-          }}
-          className="px-3 py-1.5 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Novo Dado Técnico</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsNewModuleModalOpen(true)}
+            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          >
+            <Layers className="w-3.5 h-3.5 text-[#003366]" />
+            <span>Novo Módulo</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={effectiveKnowledge.modules.length === 0}
+            onClick={() => {
+              if (effectiveKnowledge.modules.length > 0) {
+                setNewModuleId(effectiveKnowledge.modules[0].id);
+              }
+              setIsAdding(true);
+            }}
+            title={effectiveKnowledge.modules.length === 0 ? 'Crie um módulo primeiro' : 'Criar dado técnico'}
+            className={`px-3 py-1.5 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer ${
+              effectiveKnowledge.modules.length === 0
+                ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                : 'bg-[#003366] hover:bg-[#002244]'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Novo Dado Técnico</span>
+          </button>
+        </div>
       </div>
+
+      {effectiveKnowledge.modules.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-lg text-xs text-amber-900 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Nenhum módulo técnico disponível:</strong> Para adicionar dados técnicos canônicos ou tabelas, você deve primeiro criar ao menos um módulo.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsNewModuleModalOpen(true)}
+            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold shrink-0 cursor-pointer shadow-xs"
+          >
+            Criar Primeiro Módulo
+          </button>
+        </div>
+      )}
 
       {/* Tabela de Dados Técnicos */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs">
@@ -445,6 +485,13 @@ export const WorkspaceTechnicalDataTab: React.FC<WorkspaceTechnicalDataTabProps>
           </div>
         </div>
       )}
+
+      <NewModuleModal
+        workbook={workbook}
+        isOpen={isNewModuleModalOpen}
+        onClose={() => setIsNewModuleModalOpen(false)}
+        onUpdateWorkbook={onUpdateWorkbook}
+      />
     </div>
   );
 };

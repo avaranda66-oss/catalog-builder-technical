@@ -14,10 +14,12 @@ import {
   TechnicalValue,
   UnitCode,
   DatumStatus,
+  CanonicalDecision,
   getDatasetCellKey
 } from './types';
 import { ProductWorkbookError } from './operations';
 import { isValidSemanticKey } from './schema';
+import { isCanonicalDecisionValidForDatum } from './provenance.engine';
 
 export interface DatasetColumnDefinition {
   readonly semanticKey: string;
@@ -265,10 +267,32 @@ export function cloneDataset(params: {
     // Gera novo datum ID garantidamente único
     const newDatumId = `dtm_${newDatasetId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-    // Trata evidências com política estrita (EMENDA ADICIONAL)
+    // Trata evidências com política estrita (EMENDA ADICIONAL & ITEM 9)
     const clonedEvidence = preserveEv
       ? sourceDatum.evidence.filter((e) => validSourceSet.has(e.sourceDocumentId))
       : [];
+
+    // ITEM 9: CanonicalDecision só pode ser preservada se TODAS as evidências
+    // referenciadas pela decisão sobreviverem no destino.
+    let finalDecision: CanonicalDecision | undefined = undefined;
+    let finalStatus: DatumStatus = statusFallback;
+
+    if (preserveEv && sourceDatum.canonicalDecision) {
+      const candidateDatum: TechnicalDatum = {
+        ...sourceDatum,
+        id: newDatumId,
+        evidence: clonedEvidence
+      };
+      const validation = isCanonicalDecisionValidForDatum(sourceDatum.canonicalDecision, candidateDatum);
+      if (validation.valid) {
+        finalDecision = sourceDatum.canonicalDecision;
+        finalStatus = sourceDatum.status;
+      } else {
+        // Se qualquer evidência referenciada pela decisão foi filtrada:
+        finalDecision = undefined;
+        finalStatus = 'draft';
+      }
+    }
 
     const newDatum: TechnicalDatum = {
       id: newDatumId,
@@ -279,8 +303,8 @@ export function cloneDataset(params: {
       localizedLabels: sourceDatum.localizedLabels ? { ...sourceDatum.localizedLabels } : undefined,
       value: { ...sourceDatum.value } as TechnicalValue,
       evidence: clonedEvidence,
-      canonicalDecision: preserveEv && clonedEvidence.length > 0 ? sourceDatum.canonicalDecision : undefined,
-      status: statusFallback,
+      canonicalDecision: finalDecision,
+      status: finalStatus,
       audit: {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

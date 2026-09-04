@@ -7,6 +7,7 @@ import {
   ProductWorkbookV2,
   TechnicalDataset,
   TechnicalModule,
+  TechnicalDatum,
   createWorkbook,
   ensureWorkbookV2,
   copyDatasetStructure,
@@ -474,5 +475,116 @@ describe('PIM.REUSE1 — Technical Dataset Reuse, Cloning & Inheritance', () => 
 
     expect(parsed.rowId).toBe(row);
     expect(parsed.columnId).toBe(col);
+  });
+
+  // ITEM 9 — CLONE CANONICAL DECISION SAFETY (Zero Orphan Decision)
+  it('ITEM 9: canonical decision is cleared and downgraded to draft when any required evidence is filtered out', () => {
+    const datumWithDecision: TechnicalDatum = {
+      id: 'dtm_multi_evidence',
+      semanticKey: 'metrology.specs.accuracy_multi',
+      moduleId: 'mod_metrology',
+      label: 'Exatidão Comprovada Multi-Doc',
+      value: { type: 'text', value: '±0.02 °C' },
+      status: 'verified',
+      evidence: [
+        {
+          id: 'ev_a',
+          sourceDocumentId: 'doc_cert_calibracao',
+          page: 3,
+          locator: 'p.3',
+          excerpt: 'Erro observado 0.015 C'
+        },
+        {
+          id: 'ev_b',
+          sourceDocumentId: 'doc_folha_dados',
+          page: 12,
+          locator: 'p.12',
+          excerpt: 'Especificação de catálogo'
+        }
+      ],
+      canonicalDecision: {
+        kind: 'engineering_decision',
+        basisEvidenceIds: ['ev_a', 'ev_b'],
+        rationale: 'Consolidação de laudo de calibração com folha de dados do fabricante',
+        decidedAt: '2026-09-01T10:00:00Z',
+        decidedBy: 'eng_responsavel'
+      },
+      audit: { createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-01T00:00:00Z' }
+    };
+
+    const sourceWbk: ProductWorkbookV2 = {
+      ...createMockV2ProductWorkbook('wbk_source_safety', 'prod_source_safety'),
+      modules: [sourceModule],
+      datasets: [
+        {
+          ...sampleDataset,
+          id: 'ds_safety_source',
+          cells: {
+            [getDatasetCellKey('row_50c', 'col_acc')]: {
+              rowId: 'row_50c',
+              columnId: 'col_acc',
+              datumId: 'dtm_multi_evidence'
+            }
+          }
+        }
+      ],
+      data: {
+        dtm_multi_evidence: datumWithDecision
+      }
+    };
+
+    const targetWbk: ProductWorkbookV2 = {
+      ...createMockV2ProductWorkbook('wbk_target_safety', 'prod_target_safety'),
+      modules: [targetModule],
+      datasets: [],
+      data: {}
+    };
+
+    // Cenário 1: Target autoriza APENAS 'doc_cert_calibracao' (ev_b é filtrada)
+    const { updatedWorkbook: partialTargetWbk, createdDataset: partialDs } = cloneDataset({
+      sourceDataset: sourceWbk.datasets[0],
+      sourceWorkbook: sourceWbk,
+      targetWorkbook: targetWbk,
+      targetModuleId: 'mod_target_metrology',
+      options: {
+        preserveEvidence: true,
+        validSourceDocumentIds: ['doc_cert_calibracao'] // apenas doc A!
+      }
+    });
+
+    const targetCellKey = Object.keys(partialDs.cells)[0];
+    const targetCell = partialDs.cells[targetCellKey];
+    const clonedDatumPartial = partialTargetWbk.data[targetCell.datumId];
+
+    expect(clonedDatumPartial).toBeDefined();
+    // Apenas evidência A sobreviveu
+    expect(clonedDatumPartial.evidence).toHaveLength(1);
+    expect(clonedDatumPartial.evidence[0].id).toBe('ev_a');
+    // Invariante ITEM 9: como ev_b necessária foi filtrada, canonicalDecision DEVE ser undefined!
+    expect(clonedDatumPartial.canonicalDecision).toBeUndefined();
+    // Status deve ser rebaixado para draft
+    expect(clonedDatumPartial.status).toBe('draft');
+
+    // Cenário 2: Target autoriza ambos os documentos ('doc_cert_calibracao' e 'doc_folha_dados')
+    const { updatedWorkbook: fullTargetWbk, createdDataset: fullDs } = cloneDataset({
+      sourceDataset: sourceWbk.datasets[0],
+      sourceWorkbook: sourceWbk,
+      targetWorkbook: targetWbk,
+      targetModuleId: 'mod_target_metrology',
+      options: {
+        preserveEvidence: true,
+        validSourceDocumentIds: ['doc_cert_calibracao', 'doc_folha_dados']
+      }
+    });
+
+    const targetFullCellKey = Object.keys(fullDs.cells)[0];
+    const targetFullCell = fullDs.cells[targetFullCellKey];
+    const clonedDatumFull = fullTargetWbk.data[targetFullCell.datumId];
+
+    expect(clonedDatumFull.evidence).toHaveLength(2);
+    // Como todas as evidências de base sobreviveram, a decisão permanece válida
+    expect(clonedDatumFull.canonicalDecision).toBeDefined();
+    expect(clonedDatumFull.canonicalDecision?.kind).toBe('engineering_decision');
+    expect(clonedDatumFull.status).toBe('verified');
   });
 });

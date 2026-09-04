@@ -319,6 +319,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
             workbook={workbook}
             effectiveKnowledge={effectiveKnowledge}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
+            onUpdateWorkbook={handleUpdateWorkbook}
           />
         )}
 
@@ -337,6 +338,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
             effectiveKnowledge={effectiveKnowledge}
             onUpdateWorkbook={handleUpdateWorkbook}
             availableProducts={availableProducts}
+            repository={repository}
           />
         )}
 
@@ -345,6 +347,8 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
             workbook={workbook}
             effectiveKnowledge={effectiveKnowledge}
             onUpdateWorkbook={handleUpdateWorkbook}
+            product={product}
+            repository={repository}
           />
         )}
 
