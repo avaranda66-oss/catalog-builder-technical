@@ -42,6 +42,20 @@ import { StorageService } from '../services/storage.service';
 import { SupabaseService, templateRowToCatalogPreset, catalogRowToCatalog } from '../services/supabase.service';
 import { useTemplateStore } from './useTemplateStore';
 import { SYSTEM_PRESETS } from '../data/presets';
+import {
+  TableCellLiteralContent,
+  formatTableCellLiteral
+} from '../domain/table-values';
+import {
+  TablePresentationModel,
+  TablePresentationTemplate
+} from '../domain/table-core';
+import {
+  TechnicalDatasetProjection,
+  TechnicalDatasetCellProjection,
+  generateDeterministicDatasetColumnId,
+  generateDeterministicDatasetRowId
+} from '../domain/table-binding';
 
 export type { EditorDocumentContext };
 
@@ -255,18 +269,20 @@ interface CatalogState {
       summary?: string;
     }
   ) => void;
-  updateCellOverride: (blockId: string, rowId: string, fieldKey: string, value: string) => void;
+  updateCellOverride: (blockId: string, rowId: string, fieldKey: string, value: string | TableCellLiteralContent) => void;
   restoreCellToLibrary: (blockId: string, rowId: string, fieldKey: string) => void;
   addRowToTable: (blockId: string, productRefId: string) => void;
-  addManualRowToTable: (blockId: string, initialValues?: Record<string, string>) => string;
+  addManualRowToTable: (blockId: string, initialValues?: Record<string, string | TableCellLiteralContent>) => string;
   removeRowFromTable: (blockId: string, rowId: string) => void;
   setTableCellBinding: (blockId: string, rowId: string, colKey: string, binding: CatalogCellBinding) => void;
-  unlinkTableCell: (blockId: string, rowId: string, colKey: string, policy: 'keep_value' | 'clear', resolvedValue?: string) => void;
-  unlinkTableRow: (blockId: string, rowId: string, policy: 'keep_value' | 'clear', resolvedValues?: Record<string, string>) => void;
+  unlinkTableCell: (blockId: string, rowId: string, colKey: string, policy: 'keep_value' | 'clear', resolvedValue?: string | TableCellLiteralContent) => void;
+  unlinkTableRow: (blockId: string, rowId: string, policy: 'keep_value' | 'clear', resolvedValues?: Record<string, string | TableCellLiteralContent>) => void;
   addTableColumn: (blockId: string, column: TableColumnConfig) => void;
   removeTableColumn: (blockId: string, columnKey: string) => void;
   renameTableColumn: (blockId: string, columnKey: string, newLabel: string) => void;
   updateTableColumn: (blockId: string, columnKey: string, updates: Partial<TableColumnConfig>) => void;
+  applyTablePresentationTemplate: (blockId: string, template: TablePresentationTemplate | TablePresentationModel) => void;
+  insertTechnicalDatasetAsTable: (pageId: string, dataset: TechnicalDatasetProjection, options?: { tableId?: string; title?: string }) => string;
 
   // Persistência & Fila Single-Flight com Retorno Explícito de Resultado
   saveCurrentCatalog: () => Promise<SaveResult>;
@@ -1217,11 +1233,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           if (block && block.tableRows) {
             block.tableRows = block.tableRows.map((r) => {
               if (r.id !== rowId) return r;
+              const isTypedLiteral = typeof value === 'object' && value !== null && 'kind' in value;
+              const literalVal: TableCellLiteralContent = isTypedLiteral
+                ? value
+                : (value.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: value });
+              const textVal = isTypedLiteral ? formatTableCellLiteral(value) : value;
+
               return {
                 ...r,
+                cellValues: {
+                  ...(r.cellValues || {}),
+                  [fieldKey]: literalVal
+                },
                 localOverrides: {
                   ...(r.localOverrides || {}),
-                  [fieldKey]: value
+                  [fieldKey]: textVal
                 }
               };
             });
@@ -1230,7 +1256,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       },
       'UPDATE_TABLE_CELL',
-      { targetId: blockId, targetRowId: rowId, fieldKey, summary: `Override na célula [row=${rowId}, col=${fieldKey}] alterado para "${value}"` }
+      { targetId: blockId, targetRowId: rowId, fieldKey, summary: `Override na célula [row=${rowId}, col=${fieldKey}] atualizado` }
     );
   },
 
@@ -1241,12 +1267,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           const block = page.blocks?.find((b) => b.id === blockId);
           if (block && block.tableRows) {
             block.tableRows = block.tableRows.map((r) => {
-              if (r.id !== rowId || !r.localOverrides) return r;
-              const updatedOverrides = { ...r.localOverrides };
+              if (r.id !== rowId) return r;
+              const updatedOverrides = { ...(r.localOverrides || {}) };
               delete updatedOverrides[fieldKey];
+              const updatedCellValues = { ...(r.cellValues || {}) };
+              delete updatedCellValues[fieldKey];
+
               return {
                 ...r,
-                localOverrides: updatedOverrides
+                localOverrides: updatedOverrides,
+                cellValues: updatedCellValues
               };
             });
             break;
@@ -1285,6 +1315,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   addManualRowToTable: (blockId, initialValues) => {
     const rowId = `row-manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const formattedOverrides: Record<string, string> = {};
+    const formattedCellValues: Record<string, TableCellLiteralContent> = {};
+
+    if (initialValues) {
+      for (const [k, v] of Object.entries(initialValues)) {
+        if (typeof v === 'object' && v !== null && 'kind' in v) {
+          formattedCellValues[k] = v;
+          formattedOverrides[k] = formatTableCellLiteral(v);
+        } else if (typeof v === 'string') {
+          formattedOverrides[k] = v;
+          formattedCellValues[k] = v.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: v };
+        }
+      }
+    }
+
     get().commitDocumentMutation(
       (draft) => {
         for (const page of draft.pages) {
@@ -1294,7 +1339,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             const newRow: CatalogTableRow = {
               id: rowId,
               productRefId: undefined, // 100% manual, zero fake productRefId
-              localOverrides: initialValues ? { ...initialValues } : {},
+              localOverrides: formattedOverrides,
+              cellValues: formattedCellValues,
               cellBindings: {},
               customNotes: '',
               order: currentRows.length
@@ -1347,17 +1393,28 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               delete updatedBindings[colKey];
 
               const updatedOverrides = { ...(r.localOverrides || {}) };
+              const updatedCellValues = { ...(r.cellValues || {}) };
+
               if (policy === 'keep_value') {
                 if (resolvedValue !== undefined) {
-                  updatedOverrides[colKey] = resolvedValue;
+                  const isTyped = typeof resolvedValue === 'object' && resolvedValue !== null && 'kind' in resolvedValue;
+                  const literalVal: TableCellLiteralContent = isTyped
+                    ? resolvedValue
+                    : (resolvedValue.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: resolvedValue });
+                  const textVal = isTyped ? formatTableCellLiteral(resolvedValue) : resolvedValue;
+
+                  updatedCellValues[colKey] = literalVal;
+                  updatedOverrides[colKey] = textVal;
                 }
               } else {
                 delete updatedOverrides[colKey];
+                delete updatedCellValues[colKey];
               }
 
               return {
                 ...r,
                 localOverrides: updatedOverrides,
+                cellValues: updatedCellValues,
                 cellBindings: updatedBindings
               };
             });
@@ -1379,17 +1436,32 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             block.tableRows = block.tableRows.map((r) => {
               if (r.id !== rowId) return r;
               let updatedOverrides: Record<string, string> = {};
+              let updatedCellValues: Record<string, TableCellLiteralContent> = {};
+
               if (policy === 'keep_value') {
-                updatedOverrides = {
-                  ...(r.localOverrides || {}),
-                  ...(resolvedValues || {})
-                };
+                updatedOverrides = { ...(r.localOverrides || {}) };
+                updatedCellValues = { ...(r.cellValues || {}) };
+
+                if (resolvedValues) {
+                  for (const [k, v] of Object.entries(resolvedValues)) {
+                    if (v !== undefined) {
+                      const isTyped = typeof v === 'object' && v !== null && 'kind' in v;
+                      const literalVal: TableCellLiteralContent = isTyped
+                        ? v
+                        : (v.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: v });
+                      const textVal = isTyped ? formatTableCellLiteral(v) : v;
+                      updatedCellValues[k] = literalVal;
+                      updatedOverrides[k] = textVal;
+                    }
+                  }
+                }
               }
 
               return {
                 ...r,
                 productRefId: undefined, // desvincula linha da biblioteca
                 localOverrides: updatedOverrides,
+                cellValues: updatedCellValues,
                 cellBindings: {} // limpa bindings
               };
             });
@@ -1400,6 +1472,112 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       'UPDATE_TABLE_CELL',
       { targetId: blockId, targetRowId: rowId, summary: `Linha [row=${rowId}] desvinculada da fonte (${policy})` }
     );
+  },
+
+  applyTablePresentationTemplate: (blockId, templateOrModel) => {
+    const presentation: TablePresentationModel = 'presentation' in templateOrModel
+      ? structuredClone(templateOrModel.presentation)
+      : structuredClone(templateOrModel);
+
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks?.find((b) => b.id === blockId);
+          if (block) {
+            block.customData = {
+              ...(block.customData || {}),
+              tablePresentation: presentation,
+              presentationPresetId: presentation.presetId
+            };
+            break;
+          }
+        }
+      },
+      'UPDATE_BLOCK',
+      { targetId: blockId, summary: `Template de apresentação aplicado ao bloco ${blockId}` }
+    );
+  },
+
+  insertTechnicalDatasetAsTable: (pageId, dataset, options) => {
+    const blockId = options?.tableId || `tbl-ds-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const title = options?.title || dataset.title || 'Tabela Técnica de Conjunto';
+
+    // Cria as colunas do ContentBlock com estabilidade
+    const tableColumns: TableColumnConfig[] = dataset.columns.map((col) => ({
+      id: generateDeterministicDatasetColumnId(dataset.datasetId, col.id || col.key),
+      key: col.key,
+      label: col.label,
+      visible: true,
+      width: col.widthMm,
+      isCustom: col.isCustom
+    }));
+
+    // Cria as linhas do ContentBlock com identidade canônica e bindings persistidos (Emenda 14)
+    const tableRows: CatalogTableRow[] = dataset.rows.map((r, rIdx) => {
+      const rowId = generateDeterministicDatasetRowId(dataset.datasetId, r.rowId);
+      const cellBindings: Record<string, CatalogCellBinding> = {};
+      const cellValues: Record<string, TableCellLiteralContent> = {};
+      const localOverrides: Record<string, string> = {};
+
+      dataset.columns.forEach((col) => {
+        const cellItem = r.cells[col.key];
+        if (cellItem) {
+          const isCellProj = typeof cellItem === 'object' && cellItem !== null && 'datumKey' in cellItem;
+          const proj = isCellProj ? (cellItem as TechnicalDatasetCellProjection) : undefined;
+          const litVal: TableCellLiteralContent = proj ? proj.value : (cellItem as TableCellLiteralContent);
+          const canonicalKey = proj?.datumKey || `canonical_datum_${proj?.datumId || 'snapshot'}`;
+
+          cellValues[col.key] = litVal;
+          localOverrides[col.key] = formatTableCellLiteral(litVal);
+
+          cellBindings[col.key] = {
+            sourceKind: 'dataset',
+            productId: dataset.productId,
+            semanticKey: canonicalKey,
+            datasetId: dataset.datasetId,
+            bindingMode: dataset.bindingMode,
+            snapshot: litVal,
+            sourceRevision: dataset.sourceRevision
+          };
+        }
+      });
+
+      return {
+        id: rowId,
+        productRefId: dataset.productId,
+        cellBindings,
+        cellValues,
+        localOverrides,
+        order: rIdx
+      };
+    });
+
+    const newBlock: ContentBlock = {
+      id: blockId,
+      type: 'specs_table',
+      title,
+      tableColumns,
+      tableRows,
+      customData: {
+        datasetId: dataset.datasetId,
+        productId: dataset.productId,
+        sourceRevision: dataset.sourceRevision,
+        bindingMode: dataset.bindingMode
+      }
+    };
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = [...(page.blocks || []), newBlock];
+        }
+      },
+      'ADD_BLOCK',
+      { targetId: blockId, targetPageId: pageId, summary: `Dataset "${title}" inserido como tabela técnica` }
+    );
+
+    return blockId;
   },
 
   removeRowFromTable: (blockId, rowId) => {

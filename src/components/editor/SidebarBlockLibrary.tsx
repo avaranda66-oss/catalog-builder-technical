@@ -268,7 +268,7 @@ export const SIDEBAR_BLOCK_ITEMS: SidebarBlockOption[] = [
           { key: 'accuracy', label: 'Exatidão', visible: true, width: 100 },
           { key: 'output', label: 'Sinal Saída', visible: true, width: 120 }
         ],
-        tableRows: [{ id: `r-${Date.now()}`, productRefId: 'prod-presys-pcon-y18', localOverrides: {}, order: 0 }]
+        tableRows: []
       },
       renderPreview: () => (
         <TechnicalTableBlock

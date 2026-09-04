@@ -209,7 +209,7 @@ export const BlockInsertionModal: React.FC<BlockInsertionModalProps> = ({
           { key: 'accuracy', label: 'Exatidão', visible: true, width: 100 },
           { key: 'output', label: 'Sinal Saída', visible: true, width: 120 }
         ],
-        tableRows: [{ id: `r-${Date.now()}`, productRefId: 'prod-presys-pcon-y18', localOverrides: {}, order: 0 }]
+        tableRows: []
       },
       previewRenderer: () => (
         <div className="w-full h-24 bg-white rounded-lg p-1.5 border border-slate-300 text-[8px]">

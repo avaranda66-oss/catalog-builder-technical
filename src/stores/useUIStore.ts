@@ -2,6 +2,23 @@ import { create } from 'zustand';
 
 export type ActiveTab = 'editor' | 'library' | 'catalogs';
 
+export type KnowledgePickerTarget =
+  | {
+      kind: 'cell';
+      blockId: string;
+      legacyRowId: string;
+      legacyColKey: string;
+      tableCoreCellId?: string;
+      productId?: string;
+      productModel?: string;
+    }
+  | {
+      kind: 'table';
+      blockId: string;
+      productId?: string;
+      productModel?: string;
+    };
+
 interface UIState {
   activeTab: ActiveTab;
   isProductDrawerOpen: boolean;
@@ -11,11 +28,7 @@ interface UIState {
   isExportPDFModalOpen: boolean;
   isAIAssistantOpen: boolean;
   isProductKnowledgePickerModalOpen: boolean;
-  knowledgePickerTarget: {
-    blockId: string;
-    targetCell?: { rowId: string; columnId: string };
-    targetColumnKey?: string;
-  } | null;
+  knowledgePickerTarget: KnowledgePickerTarget | null;
   zoomLevel: number;
   
   // Actions
@@ -24,11 +37,7 @@ interface UIState {
   closeProductDrawer: () => void;
   openAddProductToTableModal: (blockId: string) => void;
   closeAddProductToTableModal: () => void;
-  openProductKnowledgePickerModal: (target: {
-    blockId: string;
-    targetCell?: { rowId: string; columnId: string };
-    targetColumnKey?: string;
-  }) => void;
+  openProductKnowledgePickerModal: (target: KnowledgePickerTarget) => void;
   closeProductKnowledgePickerModal: () => void;
   setExportPDFModalOpen: (open: boolean) => void;
   setAIAssistantOpen: (open: boolean) => void;
