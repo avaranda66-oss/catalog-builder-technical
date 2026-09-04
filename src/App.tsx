@@ -7,7 +7,7 @@ import { useTemplateStore } from './stores/useTemplateStore';
 import { useAssetStore } from './stores/useAssetStore';
 import { Navbar } from './components/common/Navbar';
 import { EditorView } from './components/editor/EditorView';
-import { LibraryView } from './components/library/LibraryView';
+import { LibraryExperienceGate } from './components/library-v2';
 import { PublicationsView } from './components/publications/PublicationsView';
 import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
@@ -227,8 +227,8 @@ export const App: React.FC = () => {
       <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {activeTab === 'editor' && <EditorView />}
         {activeTab === 'library' && (
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <LibraryView />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <LibraryExperienceGate />
           </div>
         )}
         {activeTab === 'catalogs' && <PublicationsView />}
