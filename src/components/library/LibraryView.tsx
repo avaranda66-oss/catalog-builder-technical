@@ -16,7 +16,8 @@ import {
   Pencil,
   Image as ImageIcon,
   MoreHorizontal,
-  Layers
+  Layers,
+  BookOpen
 } from 'lucide-react';
 import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useAssetStore } from '../../stores/useAssetStore';
@@ -27,6 +28,7 @@ import { CellHistoryModal } from './CellHistoryModal';
 import { ProductAssetManager } from './ProductAssetManager';
 import { DeleteFamilyModal } from './DeleteFamilyModal';
 import { RenameFamilyModal } from './RenameFamilyModal';
+import { ProductKnowledgeWorkspace } from './product-workspace/ProductKnowledgeWorkspace';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -102,6 +104,7 @@ export const LibraryView: React.FC = () => {
 
   // Modal de Fotos & Arquivos Corporativos
   const [selectedProductForAssets, setSelectedProductForAssets] = useState<Product | null>(null);
+  const [selectedProductForWorkspace, setSelectedProductForWorkspace] = useState<Product | null>(null);
   const { loadWorkspaceAssets, productAssets } = useAssetStore();
 
   // Fecha o dropdown de opções da família ao clicar fora
@@ -604,6 +607,7 @@ export const LibraryView: React.FC = () => {
                   )}
                 </th>
               ))}
+              <th className="w-28 p-2 text-center text-slate-700 font-bold border-r border-slate-200">PIM / Conhecimento</th>
               <th className="w-28 p-2 text-center text-slate-500 font-bold border-r border-slate-200">Fotos & Assets</th>
               {isAdmin && <th className="w-10 p-2 text-center text-slate-500">Ações</th>}
             </tr>
@@ -705,6 +709,18 @@ export const LibraryView: React.FC = () => {
                       </td>
                     );
                   })}
+
+                  {/* PIM / Conhecimento Técnico */}
+                  <td className="p-1 border-r border-slate-200 text-center">
+                    <button
+                      onClick={() => setSelectedProductForWorkspace(product)}
+                      className="px-2 py-1 bg-[#003366] hover:bg-[#002244] text-white rounded text-[11px] font-bold transition-colors flex items-center justify-center gap-1 mx-auto shadow-2xs cursor-pointer"
+                      title="Abrir Workspace de Conhecimento Técnico (PIM)"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Workspace</span>
+                    </button>
+                  </td>
 
                   {/* Fotos & Arquivos */}
                   <td className="p-1 border-r border-slate-200 text-center">
@@ -923,6 +939,16 @@ export const LibraryView: React.FC = () => {
           onConfirm={handleConfirmDeleteFamily}
           isDeleting={isDeletingFamily}
           errorMessage={deleteError}
+        />
+      )}
+
+      {/* Modal / Workspace de Conhecimento Técnico Canônico PIM */}
+      {selectedProductForWorkspace && (
+        <ProductKnowledgeWorkspace
+          product={selectedProductForWorkspace}
+          family={families.find((f) => f.id === selectedProductForWorkspace.family_id)}
+          onClose={() => setSelectedProductForWorkspace(null)}
+          availableProducts={products}
         />
       )}
     </div>

@@ -1,0 +1,114 @@
+name: PIM 00023 Real PostgreSQL Rehearsal
+
+on:
+  push:
+    branches:
+      - feat/pim-production-core-v1
+  workflow_dispatch:
+
+jobs:
+  real-rehearsal:
+    name: Real PostgreSQL 00022 -> 00023 Rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL Client and Supabase CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          npm install --no-save supabase@2.116.0
+          npx supabase --version
+
+      - name: Setup Migration Boundary (Isolate Target Migrations and Historical Gaps)
+        run: |
+          mkdir -p target_00023 pending_00022 pending_00005_00013 pending_00014_00021
+          # 1. Isolate target migration 00023
+          cp supabase/migrations/00023_product_dataset_search_index.sql target_00023/00023_product_dataset_search_index.sql
+          rm supabase/migrations/00023_product_dataset_search_index.sql
+          # 2. Isolate migration 00022
+          cp supabase/migrations/00022_product_workbook_persistence.sql pending_00022/00022_product_workbook_persistence.sql
+          rm supabase/migrations/00022_product_workbook_persistence.sql
+          # 3. Isolate historical migrations 00005-00013 and 00014-00021
+          mv supabase/migrations/0000[5-9]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[0-3]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[4-9]* pending_00014_00021/ || true
+          mv supabase/migrations/0002[0-1]* pending_00014_00021/ || true
+          echo "Active baseline migrations (00001-00004):"
+          ls -la supabase/migrations/
+
+      - name: Start Disposable Supabase Stack (Base 00001 - 00004)
+        run: |
+          npx supabase init
+          npx supabase start
+
+      - name: Apply Live-Derived Rehearsal Baseline Bridge (Gap #1: media_library)
+        run: |
+          echo "Applying Gap #1 baseline bridge (media_library)..."
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-live-baseline.sql
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -c "SELECT table_name FROM information_schema.tables WHERE table_name = 'media_library';"
+
+      - name: Apply Historical Migrations 00005 - 00013
+        run: |
+          echo "Restoring historical migrations 00005-00013..."
+          mv pending_00005_00013/*.sql supabase/migrations/
+          ls -la supabase/migrations/
+          echo "Applying pending migrations 00005-00013 via supabase migration up..."
+          npx supabase migration up --local
+
+      - name: Apply Reconciliation Gap #2 Pre-00014
+        run: |
+          echo "Applying Gap #2 pre-00014 reconciliation..."
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-gap2-pre14.sql
+
+      - name: Apply Historical Migrations 00014 - 00021
+        run: |
+          echo "Restoring historical migrations 00014-00021..."
+          mv pending_00014_00021/*.sql supabase/migrations/
+          ls -la supabase/migrations/
+          echo "Applying pending migrations 00014-00021 via supabase migration up..."
+          npx supabase migration up --local
+
+      - name: Apply Reconciliation Gap #2 Post-00014
+        run: |
+          echo "Applying Gap #2 post-00014 restoration..."
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-gap2-post14.sql
+
+      - name: Apply Target Migration 00022 (Reaching Exact State 00022)
+        run: |
+          echo "Restoring migration 00022..."
+          cp pending_00022/00022_product_workbook_persistence.sql supabase/migrations/00022_product_workbook_persistence.sql
+          echo "Applying migration 00022 via supabase migration up..."
+          npx supabase migration up --local
+          echo "State after 00022 reached successfully!"
+
+      - name: Restore Migration 00023 for Rehearsal Execution
+        run: |
+          cp target_00023/00023_product_dataset_search_index.sql supabase/migrations/00023_product_dataset_search_index.sql
+          ls -la supabase/migrations/00023*
+
+      - name: Execute Real PostgreSQL Rehearsal Suite (Points 01 to 28)
+        run: |
+          chmod +x scripts/rehearsal-real-pg.sh
+          ./scripts/rehearsal-real-pg.sh 2>&1 | tee rehearsal-execution.log
+
+      - name: Upload Rehearsal Execution Evidence Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rehearsal-execution-evidence
+          path: rehearsal-execution.log
+          retention-days: 30
+
+      - name: Stop Disposable Supabase
+        if: always()
+        run: |
+          npx supabase stop --no-backup || true

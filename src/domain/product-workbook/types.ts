@@ -274,6 +274,27 @@ export interface InheritedDatumOverride {
 }
 
 /**
+ * Explicit override record for an inherited dataset from the family.
+ */
+export interface InheritedDatasetOverride {
+  readonly targetSemanticKey: string;
+  readonly mode: OverrideMode;
+  readonly overriddenLabel?: string;
+  readonly overriddenDescription?: string;
+  readonly notes?: string;
+}
+
+/**
+ * Dataset resolved through inheritance (Family -> Product).
+ */
+export interface EffectiveDataset {
+  readonly dataset: TechnicalDataset;
+  readonly origin: 'family' | 'product_local' | 'product_override';
+  readonly familyDatasetId?: string;
+  readonly isSuppressed?: boolean;
+}
+
+/**
  * Presentation hints for a saved data view (decoupled from document rendering).
  */
 export interface ViewPresentationHint {
@@ -298,24 +319,205 @@ export interface ProductDataView {
 }
 
 /**
- * Product Workbook Root Entity.
+ * Classificação canônica dos tipos de datasets técnicos.
  */
-export interface ProductWorkbook {
+export type DatasetKind =
+  | 'matrix'
+  | 'collection'
+  | 'accessories'
+  | 'ordering'
+  | 'performance'
+  | 'compatibility'
+  | 'dimensions'
+  | 'custom';
+
+/**
+ * Coluna canônica de um TechnicalDataset.
+ * Define o contrato e restrições semânticas dos dados presentes nesta dimensão.
+ */
+export interface DatasetColumn {
+  readonly id: string;
+  readonly semanticKey: string; // Validado por SEMANTIC_KEY_REGEX
+  readonly label: string;
+  readonly valueType: TechnicalValue['type'];
+  readonly unit?: UnitCode;
+  readonly order: number;
+  readonly metadata?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Linha canônica de um TechnicalDataset.
+ */
+export interface DatasetRow {
+  readonly id: string;
+  readonly semanticKey?: string;
+  readonly label?: string;
+  readonly order: number;
+  readonly metadata?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Célula canônica de um TechnicalDataset.
+ * Invariante (EMENDA 2): Referencia estritamente um TechnicalDatum existente em workbook.data.
+ * O dado técnico continua sendo a ÚNICA unidade de verdade técnica.
+ */
+export interface DatasetCell {
+  readonly rowId: string;
+  readonly columnId: string;
+  readonly datumId: string;
+}
+
+/**
+ * TechnicalDataset como entidade de domínio de primeira classe (PIM Core V1).
+ * Representa tabelas técnicas pertencentes ao produto (exatidão, acessórios, ordering, etc.).
+ * Invariante (EMENDA 5): Possui relação explícita com TechnicalModule via moduleId.
+ */
+export interface TechnicalDataset {
+  readonly id: string;
+  readonly semanticKey: string;
+  readonly moduleId: string; // Vínculo explícito ao TechnicalModule correspondente
+  readonly label: string;
+  readonly description?: string;
+  readonly kind: DatasetKind;
+  readonly columns: readonly DatasetColumn[];
+  readonly rows: readonly DatasetRow[];
+  readonly cells: Readonly<Record<string, DatasetCell>>; // Keyed por getDatasetCellKey(rowId, columnId)
+  readonly order: number;
+  readonly metadata?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Gera chave de célula determinística, reversível e imune a colisões por delimitador (EMENDA 3).
+ * Formato: r{len}:{rowId}|c{len}:{columnId}
+ */
+export function getDatasetCellKey(rowId: string, columnId: string): string {
+  if (!rowId || !columnId || rowId.trim() === '' || columnId.trim() === '') {
+    throw new Error('Coordenadas de célula do dataset não podem ser vazias');
+  }
+  return `r${rowId.length}:${rowId}|c${columnId.length}:${columnId}`;
+}
+
+/**
+ * Realiza o parsing seguro e determinístico de uma chave de célula do dataset.
+ * Totalmente imune a colisões mesmo que rowId contenha "|c", ":", "::", unicode ou delimitadores.
+ */
+export function parseDatasetCellKey(key: string): { rowId: string; columnId: string } {
+  if (!key || typeof key !== 'string') {
+    throw new Error('Chave de célula inválida: deve ser uma string não vazia');
+  }
+  if (!key.startsWith('r')) {
+    throw new Error(`Formato de chave de célula inválido (deve iniciar com "r"): "${key}"`);
+  }
+
+  const firstColon = key.indexOf(':');
+  if (firstColon <= 1) {
+    throw new Error(`Formato de chave de célula inválido (delimitador de tamanho da linha ausente): "${key}"`);
+  }
+
+  const rowLenStr = key.substring(1, firstColon);
+  if (!/^\d+$/.test(rowLenStr)) {
+    throw new Error(`Formato de chave de célula inválido (comprimento da linha não é numérico): "${key}"`);
+  }
+  const rowLen = parseInt(rowLenStr, 10);
+
+  const rowStart = firstColon + 1;
+  const rowEnd = rowStart + rowLen;
+  if (key.length < rowEnd + 3) {
+    throw new Error(`Chave de célula corrompida (tamanho insuficiente para conteúdo e delimitador): "${key}"`);
+  }
+
+  const rowId = key.substring(rowStart, rowEnd);
+
+  if (key.substring(rowEnd, rowEnd + 2) !== '|c') {
+    throw new Error(`Chave de célula corrompida (delimitador "|c" não encontrado na posição esperada): "${key}"`);
+  }
+
+  const secondColon = key.indexOf(':', rowEnd + 2);
+  if (secondColon === -1) {
+    throw new Error(`Chave de célula corrompida (delimitador de tamanho de coluna ausente): "${key}"`);
+  }
+
+  const colLenStr = key.substring(rowEnd + 2, secondColon);
+  if (!/^\d+$/.test(colLenStr)) {
+    throw new Error(`Formato de chave de célula inválido (comprimento da coluna não é numérico): "${key}"`);
+  }
+  const colLen = parseInt(colLenStr, 10);
+
+  const colStart = secondColon + 1;
+  const columnId = key.substring(colStart);
+
+  if (columnId.length !== colLen) {
+    throw new Error(`Chave de célula corrompida (tamanho de coluna incompatível: esperado ${colLen}, obtido ${columnId.length}): "${key}"`);
+  }
+
+  return { rowId, columnId };
+}
+
+/**
+ * Product Workbook Root Entity V1 (SchemaVersion 1 - Histórico / Legado).
+ */
+export interface ProductWorkbookV1 {
   readonly id: string;
   readonly schemaVersion: 1;
   readonly owner: WorkbookOwner;
-  /**
-   * Persisted/server revision used for optimistic concurrency (CAS).
-   * Represents the authoritative version of the last known persisted workbook.
-   * Pure domain mutations preserve this value; only persistence authorities increment it.
-   */
   readonly revision: number;
   readonly modules: readonly TechnicalModule[];
-  readonly data: Readonly<Record<string, TechnicalDatum>>; // Keyed by datum ID
-  readonly overrides?: Readonly<Record<string, InheritedDatumOverride>>; // Keyed by targetSemanticKey
+  readonly data: Readonly<Record<string, TechnicalDatum>>;
+  readonly overrides?: Readonly<Record<string, InheritedDatumOverride>>;
   readonly savedViews?: readonly ProductDataView[];
   readonly metadata?: Readonly<Record<string, string>>;
 }
+
+/**
+ * Product Workbook Root Entity V2 (SchemaVersion 2 - Canônico PIM Core V1).
+ * Incorpora TechnicalDatasets estruturados e vinculados a módulos.
+ */
+export interface ProductWorkbookV2 {
+  readonly id: string;
+  readonly schemaVersion: 2;
+  readonly owner: WorkbookOwner;
+  readonly revision: number;
+  readonly modules: readonly TechnicalModule[];
+  readonly data: Readonly<Record<string, TechnicalDatum>>;
+  readonly datasets: readonly TechnicalDataset[];
+  readonly overrides?: Readonly<Record<string, InheritedDatumOverride>>;
+  readonly datasetOverrides?: Readonly<Record<string, InheritedDatasetOverride>>;
+  readonly savedViews?: readonly ProductDataView[];
+  readonly metadata?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Migrador explícito, puro, determinístico e idempotente de V1 para V2 (EMENDA 1).
+ */
+export function migrateWorkbookV1ToV2(v1: ProductWorkbookV1): ProductWorkbookV2 {
+  return {
+    id: v1.id,
+    schemaVersion: 2,
+    owner: v1.owner,
+    revision: v1.revision,
+    modules: v1.modules,
+    data: v1.data,
+    datasets: [],
+    overrides: v1.overrides,
+    savedViews: v1.savedViews,
+    metadata: v1.metadata
+  };
+}
+
+/**
+ * Garante que um ProductWorkbook esteja no formato V2.
+ */
+export function ensureWorkbookV2(workbook: ProductWorkbook): ProductWorkbookV2 {
+  if (workbook.schemaVersion === 2) {
+    return workbook;
+  }
+  return migrateWorkbookV1ToV2(workbook);
+}
+
+/**
+ * Product Workbook Root Entity (União Discriminada V1 | V2).
+ */
+export type ProductWorkbook = ProductWorkbookV1 | ProductWorkbookV2;
 
 /**
  * Container bundle for sharing source documents across multiple workbooks.
@@ -364,7 +566,9 @@ export interface ResolvedProductKnowledge {
   readonly familyRevision?: number;
   readonly modules: readonly TechnicalModule[];
   readonly effectiveData: ReadonlyMap<string, EffectiveDatum>; // Keyed by semanticKey
+  readonly effectiveDatasets?: ReadonlyMap<string, EffectiveDataset>; // Keyed by semanticKey
   readonly suppressedKeys: readonly string[];
+  readonly suppressedDatasetKeys?: readonly string[];
   readonly conflictsCount: number;
 }
 

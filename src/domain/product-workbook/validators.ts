@@ -9,7 +9,9 @@ import {
   ProductKnowledgeBundle,
   TechnicalDatum,
   ValidationResult,
-  ValidationIssue
+  ValidationIssue,
+  DatasetColumn,
+  getDatasetCellKey
 } from './types';
 import { isValidSemanticKey } from './schema';
 
@@ -135,11 +137,11 @@ export function validateProductWorkbook(
   const warnings: ValidationIssue[] = [];
 
   // 1. Schema Version & Revision
-  if (workbook.schemaVersion !== 1) {
+  if (workbook.schemaVersion !== 1 && workbook.schemaVersion !== 2) {
     errors.push({
       path: 'schemaVersion',
       code: 'UNSUPPORTED_SCHEMA_VERSION',
-      message: `schemaVersion ${workbook.schemaVersion} não suportada. Esperado: 1.`
+      message: `schemaVersion ${(workbook as { schemaVersion?: unknown }).schemaVersion} não suportada. Esperado: 1 ou 2.`
     });
   }
 
@@ -474,6 +476,215 @@ export function validateProductWorkbook(
             warnings.push(issue);
           } else {
             errors.push(issue);
+          }
+        }
+      }
+    }
+  }
+
+  // C9. TechnicalDataset integrity (PIM Core V1 / SchemaVersion 2)
+  if ('datasets' in workbook && workbook.datasets) {
+    const seenDatasetIds = new Set<string>();
+    const seenDatasetSemanticKeys = new Set<string>();
+    const availableModuleIds = new Set(workbook.modules.map((m) => m.id));
+
+    for (let dsIdx = 0; dsIdx < workbook.datasets.length; dsIdx++) {
+      const dataset = workbook.datasets[dsIdx];
+      const dsPath = `datasets[${dsIdx}]`;
+
+      // Dataset ID uniqueness
+      if (seenDatasetIds.has(dataset.id)) {
+        errors.push({
+          path: `${dsPath}.id`,
+          code: 'DUPLICATE_DATASET_ID',
+          message: `ID de dataset duplicado: "${dataset.id}".`
+        });
+      } else {
+        seenDatasetIds.add(dataset.id);
+      }
+
+      // Dataset semanticKey uniqueness and format
+      if (seenDatasetSemanticKeys.has(dataset.semanticKey)) {
+        errors.push({
+          path: `${dsPath}.semanticKey`,
+          code: 'DUPLICATE_DATASET_SEMANTIC_KEY',
+          message: `semanticKey de dataset duplicada: "${dataset.semanticKey}".`
+        });
+      } else {
+        seenDatasetSemanticKeys.add(dataset.semanticKey);
+      }
+
+      if (!isValidSemanticKey(dataset.semanticKey)) {
+        errors.push({
+          path: `${dsPath}.semanticKey`,
+          code: 'INVALID_SEMANTIC_KEY',
+          message: `semanticKey de dataset "${dataset.semanticKey}" inválida.`
+        });
+      }
+
+      // EMENDA 5: Module relationship
+      if (!availableModuleIds.has(dataset.moduleId)) {
+        errors.push({
+          path: `${dsPath}.moduleId`,
+          code: 'DATASET_MODULE_NOT_FOUND',
+          message: `Dataset "${dataset.label}" vinculado a moduleId inexistente: "${dataset.moduleId}".`
+        });
+      }
+
+      // Columns validation
+      const seenColumnIds = new Set<string>();
+      const seenColumnSemanticKeys = new Set<string>();
+      const columnById = new Map<string, DatasetColumn>();
+
+      for (let cIdx = 0; cIdx < dataset.columns.length; cIdx++) {
+        const col = dataset.columns[cIdx];
+        const colPath = `${dsPath}.columns[${cIdx}]`;
+
+        if (seenColumnIds.has(col.id)) {
+          errors.push({
+            path: `${colPath}.id`,
+            code: 'DUPLICATE_DATASET_COLUMN_ID',
+            message: `ID de coluna duplicado no dataset "${dataset.label}": "${col.id}".`
+          });
+        } else {
+          seenColumnIds.add(col.id);
+        }
+
+        if (seenColumnSemanticKeys.has(col.semanticKey)) {
+          errors.push({
+            path: `${colPath}.semanticKey`,
+            code: 'DUPLICATE_DATASET_COLUMN_SEMANTIC_KEY',
+            message: `semanticKey de coluna duplicada no dataset "${dataset.label}": "${col.semanticKey}".`
+          });
+        } else {
+          seenColumnSemanticKeys.add(col.semanticKey);
+        }
+
+        if (!isValidSemanticKey(col.semanticKey)) {
+          errors.push({
+            path: `${colPath}.semanticKey`,
+            code: 'INVALID_SEMANTIC_KEY',
+            message: `semanticKey de coluna "${col.semanticKey}" inválida.`
+          });
+        }
+
+        columnById.set(col.id, col);
+      }
+
+      // Rows validation
+      const seenRowIds = new Set<string>();
+      for (let rIdx = 0; rIdx < dataset.rows.length; rIdx++) {
+        const row = dataset.rows[rIdx];
+        const rowPath = `${dsPath}.rows[${rIdx}]`;
+
+        if (seenRowIds.has(row.id)) {
+          errors.push({
+            path: `${rowPath}.id`,
+            code: 'DUPLICATE_DATASET_ROW_ID',
+            message: `ID de linha duplicado no dataset "${dataset.label}": "${row.id}".`
+          });
+        } else {
+          seenRowIds.add(row.id);
+        }
+
+        if (row.semanticKey && !isValidSemanticKey(row.semanticKey)) {
+          errors.push({
+            path: `${rowPath}.semanticKey`,
+            code: 'INVALID_SEMANTIC_KEY',
+            message: `semanticKey de linha "${row.semanticKey}" inválida.`
+          });
+        }
+      }
+
+      // Cells validation (EMENDA 2, 3, 4)
+      const seenCellCoords = new Set<string>();
+
+      for (const [cellKey, cell] of Object.entries(dataset.cells)) {
+        const cellPath = `${dsPath}.cells["${cellKey}"]`;
+
+        // EMENDA 3: Key must match getDatasetCellKey
+        let expectedKey: string | null = null;
+        try {
+          expectedKey = getDatasetCellKey(cell.rowId, cell.columnId);
+        } catch {
+          errors.push({
+            path: cellPath,
+            code: 'INVALID_CELL_COORDINATES',
+            message: `Coordenadas da célula inválidas: rowId="${cell.rowId}", columnId="${cell.columnId}".`
+          });
+        }
+
+        if (expectedKey && cellKey !== expectedKey) {
+          errors.push({
+            path: cellPath,
+            code: 'CELL_KEY_COORDINATE_MISMATCH',
+            message: `Chave da célula "${cellKey}" não corresponde à chave determinística esperada "${expectedKey}".`
+          });
+        }
+
+        const coord = `${cell.rowId}#${cell.columnId}`;
+        if (seenCellCoords.has(coord)) {
+          errors.push({
+            path: cellPath,
+            code: 'DUPLICATE_CELL_COORDINATE',
+            message: `Coordenada duplicada no dataset "${dataset.label}": linha "${cell.rowId}", coluna "${cell.columnId}".`
+          });
+        } else {
+          seenCellCoords.add(coord);
+        }
+
+        // Row existence
+        if (!seenRowIds.has(cell.rowId)) {
+          errors.push({
+            path: `${cellPath}.rowId`,
+            code: 'DATASET_ROW_NOT_FOUND',
+            message: `Célula referencia rowId inexistente no dataset: "${cell.rowId}".`
+          });
+        }
+
+        // Column existence
+        const col = columnById.get(cell.columnId);
+        if (!col) {
+          errors.push({
+            path: `${cellPath}.columnId`,
+            code: 'DATASET_COLUMN_NOT_FOUND',
+            message: `Célula referencia columnId inexistente no dataset: "${cell.columnId}".`
+          });
+        }
+
+        // EMENDA 2: Datum existence in workbook.data
+        const datum = workbook.data[cell.datumId];
+        if (!datum) {
+          errors.push({
+            path: `${cellPath}.datumId`,
+            code: 'DATASET_DATUM_NOT_FOUND',
+            message: `Célula referencia datumId inexistente no mapa data do workbook: "${cell.datumId}".`
+          });
+        } else if (col) {
+          // EMENDA 4: Type compatibility constraint
+          if (datum.value.type !== col.valueType) {
+            errors.push({
+              path: `${cellPath}.datumId`,
+              code: 'DATASET_CELL_TYPE_MISMATCH',
+              message: `Tipo do valor do dado "${datum.value.type}" não é compatível com o valueType da coluna "${col.valueType}".`
+            });
+          }
+
+          // EMENDA 4: Unit compatibility constraint
+          if (col.unit) {
+            if (datum.value.type === 'quantity' && datum.value.unit !== col.unit) {
+              errors.push({
+                path: `${cellPath}.datumId`,
+                code: 'DATASET_CELL_UNIT_MISMATCH',
+                message: `Unidade da quantidade do dado "${datum.value.unit}" difere da unidade exigida pela coluna "${col.unit}".`
+              });
+            } else if (datum.value.type === 'range' && datum.value.unit !== col.unit) {
+              errors.push({
+                path: `${cellPath}.datumId`,
+                code: 'DATASET_CELL_UNIT_MISMATCH',
+                message: `Unidade da faixa do dado "${datum.value.unit}" difere da unidade exigida pela coluna "${col.unit}".`
+              });
+            }
           }
         }
       }

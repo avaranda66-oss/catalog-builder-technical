@@ -54,10 +54,20 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       );
     }
 
-    const { data, error } = await this.client.rpc('get_product_workbook_v1', {
+    let response = await this.client.rpc('get_product_workbook_v2', {
       p_owner_kind: owner.kind,
       p_owner_id: owner.id
     });
+
+    // Se a RPC v2 ainda não existe no ambiente (pre-flight / migration pendente), tenta v1
+    if (response.error && (response.error.code === '42883' || response.error.message.includes('function public.get_product_workbook_v2') || response.error.message.includes('does not exist'))) {
+      response = await this.client.rpc('get_product_workbook_v1', {
+        p_owner_kind: owner.kind,
+        p_owner_id: owner.id
+      });
+    }
+
+    const { data, error } = response;
 
     if (error) {
       if (error.code === '42501' || error.message.includes('AUTH_READ_DENIED')) {
@@ -130,8 +140,9 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
       );
     }
 
-    // 6. Chamada RPC com token de concorrência CAS estrito
-    const { data, error } = await this.client.rpc('save_product_workbook_v1', {
+    // 6. Chamada RPC com token de concorrência CAS estrito (V2 ou V1 conforme schemaVersion)
+    const rpcName = workbook.schemaVersion === 2 ? 'save_product_workbook_v2' : 'save_product_workbook_v1';
+    const { data, error } = await this.client.rpc(rpcName, {
       p_workbook: workbook,
       p_expected_revision: expectedRevision
     });
@@ -189,7 +200,7 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
     if (!data) {
       throw new ProductWorkbookPersistenceError(
         'EMPTY_RESPONSE',
-        'Erro inesperado: RPC save_product_workbook_v1 retornou payload vazio.'
+        `Erro inesperado: RPC ${rpcName} retornou payload vazio.`
       );
     }
 

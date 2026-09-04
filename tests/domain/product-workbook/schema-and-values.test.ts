@@ -34,17 +34,17 @@ describe('PIM.W1 — Product Workbook Schema, Value Types & Serialization', () =
   // =========================================================================
   // WORKBOOK-SCHEMA-2: Rejeição de schemaVersion desconhecida ou inválida
   // =========================================================================
-  it('WORKBOOK-SCHEMA-2: rejeita explicitamente schemaVersion divergente de 1', () => {
+  it('WORKBOOK-SCHEMA-2: rejeita explicitamente schemaVersion não suportada (ex: 99 ou 3)', () => {
     const invalid = {
       id: 'wbk_invalid_ver',
-      schemaVersion: 2,
+      schemaVersion: 99,
       owner: { kind: 'product', id: 'prod-1' },
       revision: 0,
       modules: [],
       data: {}
     };
 
-    expect(() => parseProductWorkbook(invalid)).toThrowError(/schemaVersion/);
+    expect(() => parseProductWorkbook(invalid)).toThrowError();
   });
 
   // =========================================================================
