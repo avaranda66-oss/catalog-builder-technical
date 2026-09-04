@@ -15,6 +15,7 @@ import {
   ProductWorkbookV2
 } from '../../../src/domain/product-workbook';
 import { SourceDocument, getDatasetCellKey } from '../../../src/domain/product-workbook/types';
+import { WorkspaceLayoutV1 } from '../../../src/domain/product-workspace/types';
 
 describe('Mega Workspace Production ViewModel & Adapter', () => {
   function createTestFamilyWorkbook(): ProductWorkbookV2 {
@@ -603,5 +604,142 @@ describe('Mega Workspace Production ViewModel & Adapter', () => {
 
     expect(vm.factsById['datum-press-agree']?.evidenceState).toBe('multiple_agreeing');
     expect(vm.factsById['datum-flow-no-value']?.evidenceState).toBe('multiple_sources');
+  });
+
+  it('MICRO-CLOSURE 1.2 — multiple_agreeing exige consenso estrito entre TODOS os valores comparáveis (A=155, B=155, C=140 -> multiple_sources)', () => {
+    let familyWb = createTestFamilyWorkbook();
+
+    // Caso 1: A=155, B=155, C=140 -> NUNCA multiple_agreeing (há discordância com C)
+    familyWb = ensureWorkbookV2(
+      addDatum(
+        familyWb,
+        {
+          semanticKey: 'test.temp.disagree',
+          moduleId: 'mod-metrology',
+          label: 'Temperatura Mista',
+          value: { type: 'quantity', amount: 155, unit: '°C' },
+          evidence: [
+            { id: 'ev-1', sourceDocumentId: 'doc-1', observedValue: { type: 'quantity', amount: 155, unit: '°C' } },
+            { id: 'ev-2', sourceDocumentId: 'doc-2', observedValue: { type: 'quantity', amount: 155, unit: '°C' } },
+            { id: 'ev-3', sourceDocumentId: 'doc-3', observedValue: { type: 'quantity', amount: 140, unit: '°C' } }
+          ],
+          status: 'verified'
+        },
+        'datum-temp-partial'
+      )
+    );
+
+    // Caso 2: A=155, B=155, C=155 -> Todos concordam -> multiple_agreeing
+    familyWb = ensureWorkbookV2(
+      addDatum(
+        familyWb,
+        {
+          semanticKey: 'test.temp.all_agree',
+          moduleId: 'mod-metrology',
+          label: 'Temperatura Conforme',
+          value: { type: 'quantity', amount: 155, unit: '°C' },
+          evidence: [
+            { id: 'ev-a', sourceDocumentId: 'doc-1', observedValue: { type: 'quantity', amount: 155, unit: '°C' } },
+            { id: 'ev-b', sourceDocumentId: 'doc-2', observedValue: { type: 'quantity', amount: 155, unit: '°C' } },
+            { id: 'ev-c', sourceDocumentId: 'doc-3', observedValue: { type: 'quantity', amount: 155, unit: '°C' } }
+          ],
+          status: 'verified'
+        },
+        'datum-temp-all-agree'
+      )
+    );
+
+    // Caso 3: A=155, B=155 com conflito histórico registrado (datum.conflict) -> multiple_sources (não mente dizendo que tudo concorda)
+    familyWb = ensureWorkbookV2(
+      addDatum(
+        familyWb,
+        {
+          semanticKey: 'test.temp.resolved_conflict',
+          moduleId: 'mod-metrology',
+          label: 'Temperatura com Conflito Resolvido',
+          value: { type: 'quantity', amount: 155, unit: '°C' },
+          evidence: [
+            { id: 'ev-r1', sourceDocumentId: 'doc-1', observedValue: { type: 'quantity', amount: 155, unit: '°C' } },
+            { id: 'ev-r2', sourceDocumentId: 'doc-2', observedValue: { type: 'quantity', amount: 155, unit: '°C' } }
+          ],
+          canonicalDecision: {
+            kind: 'engineering_decision',
+            basisEvidenceIds: ['ev-r1', 'ev-r2'],
+            rationale: 'Aprovado canonicamente',
+            decidedAt: '2026-09-04T00:00:00Z',
+            decidedBy: 'QA'
+          },
+          status: 'verified'
+        },
+        'datum-temp-historical'
+      )
+    );
+
+    const vm = buildMegaWorkspaceViewModel({
+      product: { id: 'prod-ta25n', model: 'TA-25N' },
+      family: { id: 'fam-ta', name: 'Família TA' },
+      productWorkbook: null,
+      familyWorkbook: familyWb
+    });
+
+    // A=155, B=155, C=140: NUNCA multiple_agreeing! (é divergente / múltiplas fontes discordantes)
+    expect(vm.factsById['datum-temp-partial']?.evidenceState).not.toBe('multiple_agreeing');
+    expect(['multiple_sources', 'conflicting_sources']).toContain(
+      vm.factsById['datum-temp-partial']?.evidenceState
+    );
+    expect(vm.factsById['datum-temp-all-agree']?.evidenceState).toBe('multiple_agreeing');
+    expect(vm.factsById['datum-temp-historical']?.evidenceState).toBe('multiple_sources');
+  });
+
+  it('MICRO-CLOSURE 1.2 — SearchResultVM carrega blockId, sourceTableId e datasetId quando block.id !== table.id', () => {
+    const familyWb = createTestFamilyWorkbook();
+    // Layout customizado onde block.id !== tableDef.id
+    const customLayout: WorkspaceLayoutV1 = {
+      schemaVersion: 1,
+      id: 'layout-custom-test',
+      productId: 'prod-ta25n',
+      revision: 1,
+      title: 'Especificações',
+      sections: [
+        {
+          id: 'sec-specs',
+          title: 'Especificações',
+          blockIds: ['block-tbl-custom-99'],
+          order: 0
+        }
+      ],
+      blocks: {
+        'block-tbl-custom-99': {
+          id: 'block-tbl-custom-99', // block.id DIFERENTE de tableDef.id!
+          kind: 'technical_table',
+          size: 'full',
+          visibility: 'visible',
+          tableDef: {
+            id: 'table-internal-55', // table.id diferente de block.id
+            title: 'Tabela de Calibração Termométrica',
+            columns: [{ id: 'c1', label: 'Faixa', headerType: 'text', align: 'left' }],
+            rows: [{ id: 'r1', label: 'Faixa Baixa', order: 0 }],
+            cells: {
+              'r1:c1': { type: 'editorial_literal', value: '-20 a 100 °C' }
+            }
+          }
+        }
+      }
+    };
+
+    const vm = buildMegaWorkspaceViewModel({
+      product: { id: 'prod-ta25n', model: 'TA-25N' },
+      family: { id: 'fam-ta', name: 'Família TA' },
+      productWorkbook: null,
+      familyWorkbook: familyWb,
+      layout: customLayout,
+      session: { searchQuery: 'Calibração' }
+    });
+
+    const tblResult = vm.searchResults.find((r) => r.kind === 'table');
+    expect(tblResult).toBeDefined();
+    expect(tblResult?.blockId).toBe('block-tbl-custom-99');
+    expect(tblResult?.tableId).toBe('table-internal-55');
+    expect(tblResult?.sourceTableId).toBe('table-internal-55');
   });
 });

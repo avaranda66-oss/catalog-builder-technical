@@ -42,7 +42,7 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
     }
   };
 
-  // BLOCKER 8: Interação com resultado de busca e jump direto
+  // BLOCKER 8 & MICRO-CLOSURE 1.2: Interação com resultado de busca e jump direto
   const handleSelectSearchResult = (result: SearchResultVM) => {
     if (result.factId) {
       const fact = viewModel.factsById[result.factId];
@@ -55,10 +55,24 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
       }
     } else if (result.sectionId) {
       handleSelectSection(result.sectionId);
-    } else if (result.tableId) {
-      const el = document.getElementById(`table-${result.tableId}`);
+    } else if (result.blockId || result.tableId) {
+      // Prioriza blockId (montado como `table-${block.id}` em MegaTableBlock), com fallback para tableId
+      const el =
+        (result.blockId ? document.getElementById(`table-${result.blockId}`) : null) ||
+        (result.tableId ? document.getElementById(`table-${result.tableId}`) : null);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else if (result.sourceId) {
+      const fact = Object.values(viewModel.factsById).find((f) =>
+        f.sourceDocumentIds.includes(result.sourceId!)
+      );
+      if (fact) {
+        setSelectedFactForSource(fact);
+        const el = document.getElementById(`fact-${fact.datumId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     }
   };

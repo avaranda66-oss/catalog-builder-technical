@@ -24,6 +24,7 @@ import {
   ProductWorkbookV2,
   SourceDocument
 } from '../../../domain/product-workbook/types';
+import { WorkspaceLayoutV1 } from '../../../domain/product-workspace/types';
 import { resolveEffectiveProductKnowledge } from '../../../domain/product-workbook/inheritance.engine';
 import { MegaWorkspace } from './MegaWorkspace';
 import { HumanFriendlyErrorBanner } from '../../common/HumanFriendlyErrorBanner';
@@ -41,6 +42,7 @@ export interface MegaWorkspaceReadOnlyContainerProps {
   onSwitchToLegacy?: () => void;
   workbookRepo?: ProductWorkbookReadRepository;
   sourceRepo?: ProductSourceDocumentReadRepository;
+  layout?: WorkspaceLayoutV1;
 }
 
 export const MegaWorkspaceReadOnlyContainer: React.FC<MegaWorkspaceReadOnlyContainerProps> = ({
@@ -49,7 +51,8 @@ export const MegaWorkspaceReadOnlyContainer: React.FC<MegaWorkspaceReadOnlyConta
   onClose,
   onSwitchToLegacy,
   workbookRepo,
-  sourceRepo
+  sourceRepo,
+  layout
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -208,6 +211,7 @@ export const MegaWorkspaceReadOnlyContainer: React.FC<MegaWorkspaceReadOnlyConta
     productWorkbook,
     familyWorkbook,
     sourceDocuments,
+    layout,
     session
   });
 

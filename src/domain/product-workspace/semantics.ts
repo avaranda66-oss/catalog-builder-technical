@@ -483,6 +483,8 @@ export interface ResolveSemanticRegistryParams {
   familyRegistry?: SemanticRegistryV1;
   productRegistry?: SemanticRegistryV1;
   productOwner?: WorkbookOwner;
+  targetOwner?: WorkbookOwner;
+  contextKind?: 'product' | 'family';
 }
 
 /**
@@ -490,15 +492,29 @@ export interface ResolveSemanticRegistryParams {
  * - Descriptores da família são herdados com zero cópia física;
  * - Descriptores de produto podem complementar ou sobrepor (product_override);
  * - Aliases são combinados e preservados sem duplicidade.
+ * - Effective Owner: Em contexto de produto, o produto alvo é o owner efetivo, nunca o familyRegistry por omissão silenciosa.
  */
 export function resolveSemanticRegistry(
   params: ResolveSemanticRegistryParams
 ): EffectiveSemanticRegistry {
-  const { familyRegistry, productRegistry, productOwner } = params;
-  const owner: WorkbookOwner =
-    productOwner ||
-    productRegistry?.owner ||
-    (familyRegistry ? familyRegistry.owner : { kind: 'product', id: 'unknown' });
+  const { familyRegistry, productRegistry, productOwner, targetOwner, contextKind } = params;
+  const explicitTargetOwner = productOwner || targetOwner;
+
+  let owner: WorkbookOwner;
+  if (explicitTargetOwner) {
+    owner = explicitTargetOwner;
+  } else if (productRegistry?.owner) {
+    owner = productRegistry.owner;
+  } else if (familyRegistry?.owner) {
+    if (contextKind === 'product') {
+      throw new Error(
+        '[resolveSemanticRegistry:PRODUCT_OWNER_REQUIRED] Resolução de registro semântico em contexto de produto requer productOwner ou productRegistry.'
+      );
+    }
+    owner = familyRegistry.owner;
+  } else {
+    owner = { kind: 'product', id: 'unknown' };
+  }
 
   const effectiveDescriptors = new Map<string, EffectiveSemanticDescriptor>();
   const resolvedDescriptors: Record<string, SemanticDescriptor> = {};

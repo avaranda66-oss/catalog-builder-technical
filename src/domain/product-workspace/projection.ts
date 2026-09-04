@@ -534,7 +534,20 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
     const matchedSectionIds: string[] = [];
     const matchedTableIds: string[] = [];
 
-    // Busca em datums (display label, canonical key, aliases, formatted value)
+    // Identifica documentos de origem que batem com a busca (Item 6: documents e source titles)
+    const matchedSourceDocIds = new Set<string>();
+    for (const src of sources) {
+      if (
+        src.title.toLowerCase().includes(cleanQuery) ||
+        (src.documentType && src.documentType.toLowerCase().includes(cleanQuery)) ||
+        (src.externalUrl && src.externalUrl.toLowerCase().includes(cleanQuery)) ||
+        (src.fileReference && src.fileReference.toLowerCase().includes(cleanQuery))
+      ) {
+        matchedSourceDocIds.add(src.id);
+      }
+    }
+
+    // Busca em datums (display label, canonical key, aliases, formatted value, e fontes citadas)
     for (const [datumId, entry] of datumMap.entries()) {
       const desc = descriptors[entry.datum.semanticKey];
       const matchesDesc = desc ? matchesSemanticQuery(desc, cleanQuery) : false;
@@ -542,23 +555,53 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
       const matchesKey = entry.datum.semanticKey.toLowerCase().includes(cleanQuery);
       const formatted = formatTechnicalValue(entry.datum.value).text.toLowerCase();
       const matchesVal = formatted.includes(cleanQuery);
+      const matchesSource = entry.datum.evidence?.some((ev) =>
+        matchedSourceDocIds.has(ev.sourceDocumentId) ||
+        (ev.notes && ev.notes.toLowerCase().includes(cleanQuery)) ||
+        (ev.excerpt && ev.excerpt.toLowerCase().includes(cleanQuery))
+      ) || false;
 
-      if (matchesDesc || matchesLabel || matchesKey || matchesVal) {
+      if (matchesDesc || matchesLabel || matchesKey || matchesVal || matchesSource) {
         matchedDatumIds.push(datumId);
       }
     }
 
-    // Busca em seções
+    // Busca em seções, tabelas, datasets (row labels) e notas
     for (const sec of projectedSections) {
-      if (sec.title.toLowerCase().includes(cleanQuery) || (sec.description && sec.description.toLowerCase().includes(cleanQuery))) {
-        matchedSectionIds.push(sec.id);
-      }
+      const matchesSecTitle = sec.title.toLowerCase().includes(cleanQuery);
+      const matchesSecDesc = sec.description ? sec.description.toLowerCase().includes(cleanQuery) : false;
+      let matchesBlockNote = false;
+
       for (const b of sec.blocks) {
+        if (b.kind === 'text_note') {
+          if (
+            (b.title && b.title.toLowerCase().includes(cleanQuery)) ||
+            (b.content && b.content.toLowerCase().includes(cleanQuery))
+          ) {
+            matchesBlockNote = true;
+          }
+        }
         if (b.kind === 'technical_table' || b.kind === 'dataset_view') {
-          if (b.table.title.toLowerCase().includes(cleanQuery)) {
+          const matchesTitle = b.table.title.toLowerCase().includes(cleanQuery);
+          const matchesDesc = (b.table.description || '').toLowerCase().includes(cleanQuery);
+          // Item 6: dataset row labels e colunas
+          const matchesRowLabels = b.table.rows.some((r) =>
+            (r.label || '').toLowerCase().includes(cleanQuery) ||
+            r.id.toLowerCase().includes(cleanQuery)
+          );
+          const matchesColHeaders = b.table.columns.some((c) =>
+            (c.label || '').toLowerCase().includes(cleanQuery) ||
+            c.id.toLowerCase().includes(cleanQuery)
+          );
+
+          if (matchesTitle || matchesDesc || matchesRowLabels || matchesColHeaders) {
             matchedTableIds.push(b.table.id);
           }
         }
+      }
+
+      if (matchesSecTitle || matchesSecDesc || matchesBlockNote) {
+        matchedSectionIds.push(sec.id);
       }
     }
 

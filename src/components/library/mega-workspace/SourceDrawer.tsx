@@ -166,7 +166,7 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
                   {fact.pendingOverrideValue || 'Novo valor em rascunho'}
                 </span>
                 <span className="block text-[11px] text-blue-600 mt-1">
-                  O valor comprovado da família continua ativo para segurança metrológica.
+                  O valor aprovado continua vigente enquanto a alteração está em revisão.
                 </span>
               </div>
             )}

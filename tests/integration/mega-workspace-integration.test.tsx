@@ -18,6 +18,7 @@ import {
   createProductSemanticRegistry,
   createSemanticDescriptor
 } from '../../src/domain/product-workspace/semantics';
+import { WorkspaceLayoutV1 } from '../../src/domain/product-workspace/types';
 import {
   createWorkbook,
   ensureWorkbookV2,
@@ -904,5 +905,89 @@ describe('PIM.MEGA.WORKSPACE.INTEGRATION1 — Complete Integration Suite', () =>
 
     // localStorage NÃO é poluído com 'pim_workspace_experience'
     expect(localStorage.getItem('pim_workspace_experience')).toBeNull();
+  });
+
+  it('MICRO-CLOSURE 1.2 — Global Table Search Jump: quando block.id !== table.id, clique no resultado encontra o elemento DOM correto', async () => {
+    // 1. Cria layout onde o bloco tem id 'block-tbl-xyz' e a tabela interna tem id 'tbl-dataset-abc' (IDs diferentes)
+    const customLayout: WorkspaceLayoutV1 = {
+      schemaVersion: 1,
+      id: 'layout-custom-xyz',
+      productId: 'prod-ta25n',
+      revision: 1,
+      title: 'Ficha com Tabela Customizada',
+      sections: [
+        {
+          id: 'sec-meas',
+          title: 'Medição',
+          blockIds: ['block-tbl-xyz'],
+          order: 0
+        }
+      ],
+      blocks: {
+        'block-tbl-xyz': {
+          id: 'block-tbl-xyz', // block.id diferente de tableDef.id!
+          kind: 'technical_table',
+          size: 'full',
+          visibility: 'visible',
+          tableDef: {
+            id: 'tbl-dataset-abc', // table.id diferente de block.id
+            title: 'Tabela de Calibração Termométrica Especial',
+            columns: [{ id: 'col1', label: 'Faixa', headerType: 'text', align: 'left' }],
+            rows: [{ id: 'row1', label: 'Faixa 1', order: 0 }],
+            cells: {
+              'row1:col1': { type: 'editorial_literal', value: '-20 a 100 °C' }
+            }
+          }
+        }
+      }
+    };
+
+    render(
+      <MegaWorkspaceReadOnlyContainer
+        product={mockProductTA25N}
+        family={mockFamilyTA}
+        layout={customLayout}
+        onClose={vi.fn()}
+        workbookRepo={{
+          getWorkbook: vi.fn().mockImplementation((owner) =>
+            owner.kind === 'family'
+              ? Promise.resolve(mockFamilyWorkbook)
+              : Promise.resolve(null)
+          )
+        }}
+        sourceRepo={{
+          getSourceDocument: vi.fn().mockResolvedValue(null),
+          listSourceDocuments: vi.fn().mockResolvedValue([])
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'TA-25N' })).toBeInTheDocument();
+    });
+
+    // 2. Digita na busca para encontrar a tabela
+    const searchInput = screen.getByPlaceholderText(/Buscar dados, tabelas ou fontes/i);
+    fireEvent.change(searchInput, { target: { value: 'Termométrica Especial' } });
+
+    // 3. O dropdown de resultados de busca deve aparecer
+    await screen.findByText(/Resultados da busca/i);
+    const searchItemButton = screen.getByRole('button', { name: /Tabela de Calibração Termométrica Especial/i });
+    expect(searchItemButton).toBeInTheDocument();
+
+    // 4. Mock do scrollIntoView no protótipo do Element (JSDOM não implementa nativamente)
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    // 5. Clica no resultado de busca
+    fireEvent.click(searchItemButton);
+
+    // 6. TESTE OBRIGATÓRIO: O target DOM montado pelo MegaTableBlock (`table-${block.id}`) existe!
+    const targetElement = document.getElementById('table-block-tbl-xyz');
+    expect(targetElement).not.toBeNull();
+    expect(targetElement).toBeInTheDocument();
+
+    // O scroll foi disparado no elemento correto
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 });

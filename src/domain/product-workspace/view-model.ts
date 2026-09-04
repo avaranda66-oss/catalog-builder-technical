@@ -232,11 +232,15 @@ export interface WorkspaceSessionVM {
 
 export interface SearchResultVM {
   readonly id: string;
-  readonly kind: 'fact' | 'table' | 'section';
+  readonly kind: 'fact' | 'table' | 'section' | 'source';
   readonly label: string;
   readonly factId?: string;
   readonly sectionId?: string;
   readonly tableId?: string;
+  readonly blockId?: string;
+  readonly sourceTableId?: string;
+  readonly datasetId?: string;
+  readonly sourceId?: string;
   readonly snippet?: string;
 }
 
@@ -324,9 +328,9 @@ export function collectReferencedSourceDocumentIds(
 }
 
 /**
- * Deriva o estado de evidência baseado em consenso factual comprovado (Blocker 12).
- * multiple_agreeing: apenas quando pelo menos 2 observed values concordam estruturalmente.
- * multiple_sources: quando existem múltiplas evidências sem consenso comprovado.
+ * Deriva o estado de evidência baseado em consenso factual comprovado (Blocker 12 + Micro-closure 1.2).
+ * multiple_agreeing: SOMENTE se houver >= 2 observedValues comparáveis E TODOS os observedValues comparáveis forem estruturalmente iguais.
+ * Se conflito histórico foi resolvido ou houver divergência entre quaisquer valores comparáveis: multiple_sources.
  */
 function deriveEvidenceState(datum: TechnicalDatum, hasConflict: boolean): EvidenceState {
   if (hasConflict) return 'conflicting_sources';
@@ -338,13 +342,17 @@ function deriveEvidenceState(datum: TechnicalDatum, hasConflict: boolean): Evide
     .map((e) => e.observedValue)
     .filter((v): v is TechnicalValue => v !== undefined);
 
+  // multiple_agreeing: somente se houver >= 2 observedValues comparáveis
+  // E TODOS os observedValues comparáveis forem estruturalmente iguais.
   if (observedValues.length >= 2) {
-    for (let i = 0; i < observedValues.length; i++) {
-      for (let j = i + 1; j < observedValues.length; j++) {
-        if (areValuesEqual(observedValues[i], observedValues[j])) {
-          return 'multiple_agreeing';
-        }
+    const first = observedValues[0];
+    const allAgree = observedValues.every((val) => areValuesEqual(val, first));
+    if (allAgree) {
+      // Se conflito histórico foi resolvido por decisão canônica, não fingir que todas as fontes concordam
+      if (datum.canonicalDecision || (datum as any).conflict) {
+        return 'multiple_sources';
       }
+      return 'multiple_agreeing';
     }
   }
 
@@ -809,12 +817,58 @@ export function buildMegaWorkspaceViewModel(
       }
     }
     for (const tblId of projection.searchHits.matchedTableIds) {
+      let matchingBlockId: string | undefined;
+      let sourceTableId: string | undefined;
+      let datasetId: string | undefined;
+      let tableTitle = 'Tabela Técnica';
+
+      for (const sec of projection.sections) {
+        for (const b of sec.blocks) {
+          if (b.kind === 'technical_table' && (b.table.id === tblId || b.id === tblId)) {
+            matchingBlockId = b.id;
+            sourceTableId = b.table.id;
+            tableTitle = b.table.title || tableTitle;
+            break;
+          }
+          if (b.kind === 'dataset_view' && (b.table.id === tblId || b.id === tblId)) {
+            matchingBlockId = b.id;
+            sourceTableId = b.table.id;
+            datasetId = b.table.id;
+            tableTitle = b.table.title || tableTitle;
+            break;
+          }
+        }
+        if (matchingBlockId) break;
+      }
+
       searchResults.push({
-        id: `search-tbl-${tblId}`,
+        id: `search-tbl-${matchingBlockId || tblId}`,
         kind: 'table',
-        label: 'Tabela Técnica',
-        tableId: tblId
+        label: tableTitle,
+        blockId: matchingBlockId || tblId,
+        tableId: tblId,
+        sourceTableId: sourceTableId || tblId,
+        datasetId
       });
+    }
+
+    // Busca global em fontes / títulos de documentos comprobatórios
+    const cleanQ = projection.searchHits.query.trim().toLowerCase();
+    if (cleanQ) {
+      for (const src of Object.values(sourcesById)) {
+        if (
+          src.title.toLowerCase().includes(cleanQ) ||
+          (src.documentType && src.documentType.toLowerCase().includes(cleanQ))
+        ) {
+          searchResults.push({
+            id: `search-src-${src.id}`,
+            kind: 'source',
+            label: src.title,
+            sourceId: src.id,
+            snippet: src.documentType ? `Documento: ${src.documentType}` : undefined
+          });
+        }
+      }
     }
   }
 

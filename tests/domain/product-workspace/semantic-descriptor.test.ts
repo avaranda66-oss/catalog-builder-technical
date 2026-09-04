@@ -12,7 +12,8 @@ import {
   registerSemanticDescriptor,
   addCanonicalAlias,
   removeCanonicalAlias,
-  SemanticRegistryValidationException
+  SemanticRegistryValidationException,
+  resolveSemanticRegistry
 } from '../../../src/domain/product-workspace';
 import { ProductWorkbookV2, createWorkbook, ensureWorkbookV2, addModule, addDatum } from '../../../src/domain/product-workbook';
 
@@ -295,6 +296,59 @@ describe('Semantic Descriptor & Canonical Rename Safety', () => {
         });
         registerSemanticDescriptor(reg, collidingDesc);
       }).toThrow(SemanticRegistryValidationException);
+    });
+  });
+
+  describe('MICRO-CLOSURE 1.2 — Effective Semantic Registry Owner', () => {
+    it('family registry only + productOwner=P -> effectiveRegistry.owner=P (nunca herda owner da família por omissão)', () => {
+      const familyReg = {
+        schemaVersion: 1 as const,
+        owner: { kind: 'family' as const, id: 'FAM-TEMPERATURA' },
+        revision: 3,
+        descriptors: {
+          'metrology.temp.range': {
+            canonicalKey: 'metrology.temp.range',
+            displayLabel: 'Faixa de Temperatura',
+            aliases: ['range']
+          }
+        },
+        createdAt: '2026-09-04T00:00:00Z',
+        updatedAt: '2026-09-04T00:00:00Z'
+      };
+
+      const productTargetOwner = { kind: 'product' as const, id: 'PROD-TA25N' };
+
+      const effective = resolveSemanticRegistry({
+        familyRegistry: familyReg,
+        productOwner: productTargetOwner
+      });
+
+      // O owner efetivo DEVE ser o produto alvo, e não a família
+      expect(effective.owner).toEqual(productTargetOwner);
+      expect(effective.owner.kind).toBe('product');
+      expect(effective.owner.id).toBe('PROD-TA25N');
+
+      // Os descritores herdados vêm da família
+      expect(effective.effectiveDescriptors.get('metrology.temp.range')?.origin).toBe('family');
+      expect(effective.effectiveDescriptors.get('metrology.temp.range')?.isInherited).toBe(true);
+    });
+
+    it('contextKind="product" sem productOwner ou productRegistry falha closed explicitamente', () => {
+      const familyReg = {
+        schemaVersion: 1 as const,
+        owner: { kind: 'family' as const, id: 'FAM-TEMPERATURA' },
+        revision: 1,
+        descriptors: {},
+        createdAt: '2026-09-04T00:00:00Z',
+        updatedAt: '2026-09-04T00:00:00Z'
+      };
+
+      expect(() => {
+        resolveSemanticRegistry({
+          familyRegistry: familyReg,
+          contextKind: 'product'
+        });
+      }).toThrow(/\[resolveSemanticRegistry:PRODUCT_OWNER_REQUIRED\]/);
     });
   });
 });

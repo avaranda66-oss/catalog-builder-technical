@@ -64,7 +64,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
               {product.isFamilyOnly ? (
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60" title="Produto sem workbook local próprio: herda 100% dos fatos da família">
-                  Herança da Família (Family-Only)
+                  {session.detailLevel === 'advanced' ? 'Herança da Família (Family-Only)' : 'Informações da família'}
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
@@ -100,7 +100,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Buscar fatos e tabelas..."
+              placeholder="Buscar dados, tabelas ou fontes..."
               value={session.searchQuery || ''}
               onChange={(e) => onUpdateSession({ searchQuery: e.target.value })}
               className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003366] focus:border-[#003366] w-48 sm:w-64 transition-all"
@@ -209,7 +209,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
             <strong className="text-slate-900">
               {metrics.knowledgeFactsCount ?? 0}
             </strong>{' '}
-            fatos canônicos
+            {session.detailLevel === 'advanced' ? 'fatos canônicos' : 'informações técnicas'}
           </span>
 
           <span className="inline-flex items-center gap-1.5 font-medium">

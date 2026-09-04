@@ -30,7 +30,7 @@ export const EmptyStateBlock: React.FC<EmptyStateBlockProps> = ({ product, onClo
       <p className="text-sm text-slate-600 mb-8 leading-relaxed">
         Este produto ainda não possui dados estruturados no Catálogo Técnico PIM
         {product.familyLabel ? ` nem na família ${product.familyLabel}` : ''}.
-        O Mega Workspace opera estritamente com base nos fatos canônicos verificados do PIM.
+        O Mega Workspace opera estritamente com base nas informações técnicas verificadas do PIM.
       </p>
 
       {onClose && (
