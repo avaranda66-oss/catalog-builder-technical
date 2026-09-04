@@ -117,11 +117,20 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
 
                   {fact.originScope === 'family' && (
                     <span
-                      title="Compartilhado com toda a Linha TA"
+                      title={`Compartilhado com toda a ${fact.originLabel || 'Linha'}`}
                       className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded cursor-help"
                     >
                       <Users className="w-2.5 h-2.5 text-slate-400" />
-                      Linha TA
+                      {fact.originLabel || 'Linha'}
+                    </span>
+                  )}
+
+                  {fact.originKind === 'product_override' && (
+                    <span
+                      title="Especificação própria deste produto (override da linha)"
+                      className="inline-flex items-center gap-0.5 text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded"
+                    >
+                      Próprio
                     </span>
                   )}
 
@@ -201,7 +210,7 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
               )}
               {fact.originScope === 'family' && (
                 <span
-                  title="Compartilhado com toda a Linha TA"
+                  title={`Compartilhado com toda a ${fact.originLabel || 'Linha'}`}
                   className="inline-flex items-center gap-0.5 text-[9px] font-medium text-slate-400 bg-slate-50 px-1 py-0.2 rounded"
                 >
                   Linha
