@@ -93,11 +93,17 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     addManualRowToTable,
     unlinkTableCell,
     unlinkTableRow,
-    applyTablePresentationTemplate
+    applyTablePresentationTemplate,
+    applyPresentationToAllTableCoreV2
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
-  const { openAddProductToTableModal, openProductKnowledgePickerModal, openProductKnowledgeWorkspace } = useUIStore();
+  const {
+    openAddProductToTableModal,
+    openProductKnowledgePickerModal,
+    openProductKnowledgeWorkspace,
+    setTablePresentationDraft
+  } = useUIStore();
 
   // Adaptação pura do bloco legado para TableCore + Bridge
   const adaptRes = adaptLegacyBlockToTableCore(block);
@@ -119,6 +125,8 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   const [isInputDirty, setIsInputDirty] = useState<boolean>(false);
   const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
   const [isCustomizingColors, setIsCustomizingColors] = useState<boolean>(false);
+  const [colorDraftPresentation, setColorDraftPresentation] = useState<TablePresentationModel | null>(null);
+  const [isAdvancedColorsOpen, setIsAdvancedColorsOpen] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [pasteSuccess, setPasteSuccess] = useState<boolean>(false);
   const [applyAllCount, setApplyAllCount] = useState<number | null>(null);
@@ -266,18 +274,13 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || preset;
     const updatedPres: TablePresentationModel = {
       ...preset,
+      presetId,
       rowStyleOverrides: currentPres.rowStyleOverrides,
       columnStyleOverrides: currentPres.columnStyleOverrides,
       cellStyleOverrides: currentPres.cellStyleOverrides
     };
+    // Atômico (Closure 2): Exatamente 1 commitDocumentMutation
     applyTablePresentationTemplate(block.id, updatedPres);
-    updateBlock(pageId, block.id, {
-      customData: {
-        ...(block.customData || {}),
-        presentationPresetId: presetId,
-        tablePresentation: updatedPres
-      }
-    });
   };
 
   const currentPresentation: TablePresentationModel =
@@ -289,13 +292,40 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     return TABLE_COLOR_TOKEN_HEX_MAP[val as TableColorToken] || '#ffffff';
   };
 
-  const handleColorChange = (key: keyof TablePresentationModel, hexVal: string) => {
+  // Handlers para o Color Picker Draft Local (Closure 1)
+  const handleOpenColorCustomization = () => {
+    const initialDraft = structuredClone(currentPresentation);
+    setColorDraftPresentation(initialDraft);
+    setTablePresentationDraft({ blockId: block.id, presentation: initialDraft });
+    setIsCustomizingColors(true);
+  };
+
+  const handleCancelColorChanges = () => {
+    setTablePresentationDraft(null);
+    setColorDraftPresentation(null);
+    setIsCustomizingColors(false);
+  };
+
+  const handleColorDraftChange = (key: keyof TablePresentationModel, hexVal: string) => {
     const normalized = normalizeHexColor(hexVal);
-    const updated: TablePresentationModel = {
-      ...currentPresentation,
+    const base = colorDraftPresentation || currentPresentation;
+    const updatedDraft: TablePresentationModel = {
+      ...base,
       [key]: normalized
     };
-    applyTablePresentationTemplate(block.id, updated);
+    // Preview local imediato sem mutação de documento nem save
+    setColorDraftPresentation(updatedDraft);
+    setTablePresentationDraft({ blockId: block.id, presentation: updatedDraft });
+  };
+
+  const handleConfirmColorChanges = () => {
+    if (colorDraftPresentation) {
+      // Exatamente 1 commitDocumentMutation ao confirmar (Closure 1)
+      applyTablePresentationTemplate(block.id, colorDraftPresentation);
+    }
+    setTablePresentationDraft(null);
+    setColorDraftPresentation(null);
+    setIsCustomizingColors(false);
   };
 
   const handleApplyPalette = (palette: CuratedPalette | SavedPalette) => {
@@ -932,7 +962,13 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => setIsCustomizingColors(!isCustomizingColors)}
+            onClick={() => {
+              if (isCustomizingColors) {
+                handleCancelColorChanges();
+              } else {
+                handleOpenColorCustomization();
+              }
+            }}
             className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors ${
               isCustomizingColors
                 ? 'bg-blue-600 text-white border-blue-700'
@@ -1028,14 +1064,27 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
         </div>
 
         {/* 3. Painel de Cores Customizadas (Live Draft local, Validação HEX e WCAG Contrast) */}
-        {isCustomizingColors && (
+        {/* 3. Painel de Cores Customizadas (Live Draft local, Validação HEX e WCAG Contrast) */}
+        {isCustomizingColors && (() => {
+          const activeColorPresentation = colorDraftPresentation || currentPresentation;
+          const bgHex = toHex(activeColorPresentation.headerBackgroundToken);
+          const textHex = toHex(activeColorPresentation.headerTextColorToken);
+          const borderHex = toHex(activeColorPresentation.borderColorToken);
+          const sectionBgHex = toHex(activeColorPresentation.sectionBackgroundToken);
+          const sectionTextHex = toHex(activeColorPresentation.sectionTextColorToken);
+          const bodyBgHex = toHex(activeColorPresentation.bodyBackgroundToken);
+
+          return (
           <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5">
-            <span className="text-[11px] font-bold text-slate-800 block">Personalização Livre de Cores</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-800 block">Personalização Livre de Cores</span>
+              <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold">
+                Preview Local
+              </span>
+            </div>
 
             {/* Aviso de Contraste WCAG (Emenda 20) */}
             {(() => {
-              const bgHex = toHex(currentPresentation.headerBackgroundToken);
-              const textHex = toHex(currentPresentation.headerTextColorToken);
               const ratio = calculateContrastRatio(textHex, bgHex);
               const isLow = ratio < 4.5;
               if (!isLow) return null;
@@ -1047,9 +1096,9 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                       type="button"
                       onClick={() => {
                         const safeColor = autoFixContrast(bgHex);
-                        handleColorChange('headerTextColorToken', safeColor);
+                        handleColorDraftChange('headerTextColorToken', safeColor);
                       }}
-                      className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
+                      className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors cursor-pointer"
                     >
                       Corrigir automaticamente
                     </button>
@@ -1068,16 +1117,16 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <input
                     type="color"
-                    value={toHex(currentPresentation.headerBackgroundToken)}
-                    onChange={(e) => handleColorChange('headerBackgroundToken', e.target.value)}
+                    value={bgHex}
+                    onChange={(e) => handleColorDraftChange('headerBackgroundToken', e.target.value)}
                     className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
                   />
                   <input
                     type="text"
-                    value={toHex(currentPresentation.headerBackgroundToken)}
+                    value={bgHex}
                     onChange={(e) => {
                       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
-                        handleColorChange('headerBackgroundToken', e.target.value);
+                        handleColorDraftChange('headerBackgroundToken', e.target.value);
                       }
                     }}
                     className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
@@ -1091,16 +1140,16 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <input
                     type="color"
-                    value={toHex(currentPresentation.headerTextColorToken)}
-                    onChange={(e) => handleColorChange('headerTextColorToken', e.target.value)}
+                    value={textHex}
+                    onChange={(e) => handleColorDraftChange('headerTextColorToken', e.target.value)}
                     className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
                   />
                   <input
                     type="text"
-                    value={toHex(currentPresentation.headerTextColorToken)}
+                    value={textHex}
                     onChange={(e) => {
                       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
-                        handleColorChange('headerTextColorToken', e.target.value);
+                        handleColorDraftChange('headerTextColorToken', e.target.value);
                       }
                     }}
                     className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
@@ -1114,16 +1163,16 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <input
                     type="color"
-                    value={toHex(currentPresentation.borderColorToken)}
-                    onChange={(e) => handleColorChange('borderColorToken', e.target.value)}
+                    value={borderHex}
+                    onChange={(e) => handleColorDraftChange('borderColorToken', e.target.value)}
                     className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
                   />
                   <input
                     type="text"
-                    value={toHex(currentPresentation.borderColorToken)}
+                    value={borderHex}
                     onChange={(e) => {
                       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
-                        handleColorChange('borderColorToken', e.target.value);
+                        handleColorDraftChange('borderColorToken', e.target.value);
                       }
                     }}
                     className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
@@ -1137,22 +1186,105 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <input
                     type="color"
-                    value={toHex(currentPresentation.sectionBackgroundToken)}
-                    onChange={(e) => handleColorChange('sectionBackgroundToken', e.target.value)}
+                    value={sectionBgHex}
+                    onChange={(e) => handleColorDraftChange('sectionBackgroundToken', e.target.value)}
                     className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
                   />
                   <input
                     type="text"
-                    value={toHex(currentPresentation.sectionBackgroundToken)}
+                    value={sectionBgHex}
                     onChange={(e) => {
                       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
-                        handleColorChange('sectionBackgroundToken', e.target.value);
+                        handleColorDraftChange('sectionBackgroundToken', e.target.value);
                       }
                     }}
                     className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Modo Avançado: Section Text e Body Background (Closure 10) */}
+            <div className="pt-1.5 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setIsAdvancedColorsOpen(!isAdvancedColorsOpen)}
+                className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+              >
+                <span>{isAdvancedColorsOpen ? '▲ Recolher Modo Avançado' : '▼ Modo Avançado (Texto Seção & Fundo Corpo)'}</span>
+              </button>
+
+              {isAdvancedColorsOpen && (
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100">
+                  {/* Section Text */}
+                  <div>
+                    <label className="text-[9.5px] font-semibold text-slate-600 block">Texto da Seção:</label>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <input
+                        type="color"
+                        value={sectionTextHex}
+                        onChange={(e) => handleColorDraftChange('sectionTextColorToken', e.target.value)}
+                        className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={sectionTextHex}
+                        onChange={(e) => {
+                          if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                            handleColorDraftChange('sectionTextColorToken', e.target.value);
+                          }
+                        }}
+                        className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Body Background */}
+                  <div>
+                    <label className="text-[9.5px] font-semibold text-slate-600 block">Fundo do Corpo:</label>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <input
+                        type="color"
+                        value={bodyBgHex}
+                        onChange={(e) => handleColorDraftChange('bodyBackgroundToken', e.target.value)}
+                        className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={bodyBgHex}
+                        onChange={(e) => {
+                          if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                            handleColorDraftChange('bodyBackgroundToken', e.target.value);
+                          }
+                        }}
+                        className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Ações de Confirmação Atômica e Cancelamento (Closure 1) */}
+            <div className="flex gap-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={handleConfirmColorChanges}
+                className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-xs cursor-pointer transition-colors"
+                title="Aplica as cores em 1 única mutação de documento"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Confirmar e Aplicar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelColorChanges}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded cursor-pointer transition-colors"
+                title="Descarta alterações e restaura a aparência anterior"
+              >
+                <span>Cancelar</span>
+              </button>
             </div>
 
             {/* Ações de Salvar Paleta e Salvar Estilo (Emendas 9, 10, 11) */}
@@ -1164,17 +1296,17 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                   if (name && name.trim()) {
                     saveUserPalette({
                       name: name.trim(),
-                      headerBackground: currentPresentation.headerBackgroundToken,
-                      headerText: currentPresentation.headerTextColorToken,
-                      sectionBackground: currentPresentation.sectionBackgroundToken,
-                      sectionText: currentPresentation.sectionTextColorToken,
-                      bodyBackground: currentPresentation.bodyBackgroundToken,
-                      borderColor: currentPresentation.borderColorToken
+                      headerBackground: activeColorPresentation.headerBackgroundToken,
+                      headerText: activeColorPresentation.headerTextColorToken,
+                      sectionBackground: activeColorPresentation.sectionBackgroundToken,
+                      sectionText: activeColorPresentation.sectionTextColorToken,
+                      bodyBackground: activeColorPresentation.bodyBackgroundToken,
+                      borderColor: activeColorPresentation.borderColorToken
                     });
                     setSavedPalettesList(getSavedPalettes());
                   }
                 }}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded"
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded cursor-pointer"
               >
                 <Save className="w-3 h-3" />
                 <span>Salvar Paleta</span>
@@ -1185,18 +1317,19 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                 onClick={() => {
                   const name = window.prompt('Nome para o seu estilo de tabela:');
                   if (name && name.trim()) {
-                    saveUserTableStyle(name.trim(), currentPresentation);
+                    saveUserTableStyle(name.trim(), activeColorPresentation);
                     setSavedStylesList(getSavedTableStyles());
                   }
                 }}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded"
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded cursor-pointer"
               >
                 <Save className="w-3 h-3" />
                 <span>Salvar Estilo</span>
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* 4. Densidade, Bordas e Listras */}
         <div className="grid grid-cols-3 gap-1.5 pt-1">
@@ -1274,10 +1407,8 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
             onClick={() => {
               if (adaptRes.table) {
                 const sysTable = resetToSystemDefault(adaptRes.table);
+                // Atômico (Closure 2): Exatamente 1 commitDocumentMutation
                 applyTablePresentationTemplate(block.id, sysTable.presentation);
-                updateBlock(pageId, block.id, {
-                  customData: { ...(block.customData || {}), presentationPresetId: 'presys_clean_technical' }
-                });
               }
             }}
             className="flex-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 transition-colors"
@@ -1325,24 +1456,13 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           </button>
         </div>
 
-        {/* 7. Escopo de Aplicação: Somente Table Core V2 (Emenda 14) */}
+        {/* 7. Escopo de Aplicação: Somente Table Core V2 (Emenda 14 & Closure 3 Batch Atômico) */}
         <div className="pt-1.5 border-t border-slate-100 space-y-1">
           <button
             type="button"
             onClick={() => {
-              const state = useCatalogStore.getState();
-              const catalog = state.currentCatalog;
-              let count = 0;
-              if (catalog && catalog.pages) {
-                for (const pg of catalog.pages) {
-                  for (const blk of pg.blocks || []) {
-                    if (blk.type === 'specs_table') {
-                      state.applyTablePresentationTemplate(blk.id, currentPresentation);
-                      count++;
-                    }
-                  }
-                }
-              }
+              // Batch Atômico (Closure 3): 1 única transação/mutation no store
+              const count = applyPresentationToAllTableCoreV2(currentPresentation);
               setApplyAllCount(count);
               setTimeout(() => setApplyAllCount(null), 3000);
             }}

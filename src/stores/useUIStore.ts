@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TablePresentationModel } from '../domain/table-core';
 
 export type ActiveTab = 'editor' | 'library' | 'catalogs';
 
@@ -31,6 +32,7 @@ interface UIState {
   knowledgePickerTarget: KnowledgePickerTarget | null;
   zoomLevel: number;
   selectedProductForWorkspaceId: string | null;
+  tablePresentationDraft: { blockId: string; presentation: TablePresentationModel } | null;
   
   // Actions
   setActiveTab: (tab: ActiveTab) => void;
@@ -47,6 +49,7 @@ interface UIState {
   openAIAssistant: () => void;
   openExportModal: () => void;
   setZoomLevel: (zoom: number) => void;
+  setTablePresentationDraft: (draft: { blockId: string; presentation: TablePresentationModel } | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -61,6 +64,7 @@ export const useUIStore = create<UIState>((set) => ({
   knowledgePickerTarget: null,
   zoomLevel: 100,
   selectedProductForWorkspaceId: null,
+  tablePresentationDraft: null,
 
   setActiveTab: (activeTab) => set({ activeTab }),
   openProductDrawer: (editingProductId) => set({ isProductDrawerOpen: true, editingProductId: editingProductId || null }),
@@ -75,5 +79,6 @@ export const useUIStore = create<UIState>((set) => ({
   setAIAssistantOpen: (isAIAssistantOpen) => set({ isAIAssistantOpen }),
   openAIAssistant: () => set({ isAIAssistantOpen: true }),
   openExportModal: () => set({ isExportPDFModalOpen: true }),
-  setZoomLevel: (zoomLevel) => set({ zoomLevel })
+  setZoomLevel: (zoomLevel) => set({ zoomLevel }),
+  setTablePresentationDraft: (tablePresentationDraft) => set({ tablePresentationDraft })
 }));

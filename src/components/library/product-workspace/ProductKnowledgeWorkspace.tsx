@@ -63,6 +63,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [technicalErrorDetails, setTechnicalErrorDetails] = useState<unknown | null>(null);
   const [conflictError, setConflictError] = useState<WorkbookConflictError | null>(null);
 
   const [workbook, setWorkbook] = useState<ProductWorkbookV2>(() => {
@@ -80,6 +81,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   const loadWorkbooks = async () => {
     setIsLoading(true);
     setErrorMessage(null);
+    setTechnicalErrorDetails(null);
     setConflictError(null);
 
     try {
@@ -105,9 +107,12 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
       }
 
       setIsDirty(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao carregar workbooks:', err);
-      setErrorMessage(err.message || 'Falha ao carregar workbook técnico do produto.');
+      const isError = err instanceof Error;
+      const humanMessage = isError ? err.message : 'Falha ao carregar workbook técnico do produto.';
+      setErrorMessage(humanMessage);
+      setTechnicalErrorDetails(err);
     } finally {
       setIsLoading(false);
     }
@@ -246,11 +251,14 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
         <HumanFriendlyErrorBanner
           title="Falha ao carregar conhecimento do produto"
           message={errorMessage}
-          details={errorMessage}
+          details={technicalErrorDetails as string | Record<string, unknown> | Error | null}
           onRetry={async () => {
             await loadWorkbooks();
           }}
-          onDismiss={() => setErrorMessage(null)}
+          onDismiss={() => {
+            setErrorMessage(null);
+            setTechnicalErrorDetails(null);
+          }}
         />
       )}
 

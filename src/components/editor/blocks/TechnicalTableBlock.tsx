@@ -35,7 +35,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
-  const { openAddProductToTableModal } = useUIStore();
+  const { openAddProductToTableModal, tablePresentationDraft } = useUIStore();
 
   const columns: TableColumnConfig[] = block.tableColumns || [];
   const rows = block.tableRows || [];
@@ -45,6 +45,9 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
   const adaptedTable = (pilotAdaptResult && pilotAdaptResult.supported) ? pilotAdaptResult.table : null;
+  if (adaptedTable && tablePresentationDraft && tablePresentationDraft.blockId === block.id) {
+    adaptedTable.presentation = tablePresentationDraft.presentation;
+  }
   const useTableCorePilot = Boolean(isPilotSpecsTable && adaptedTable);
   const isSelected = selectedBlockId === block.id;
   const selectedCellId = isSelected && !isExport ? selectedChildId : undefined;

@@ -48,7 +48,8 @@ import {
 } from '../domain/table-values';
 import {
   TablePresentationModel,
-  TablePresentationTemplate
+  TablePresentationTemplate,
+  TablePresentationModelSchema
 } from '../domain/table-core';
 import {
   TechnicalDatasetProjection,
@@ -295,6 +296,7 @@ interface CatalogState {
   renameTableColumn: (blockId: string, columnKey: string, newLabel: string) => void;
   updateTableColumn: (blockId: string, columnKey: string, updates: Partial<TableColumnConfig>) => void;
   applyTablePresentationTemplate: (blockId: string, template: TablePresentationTemplate | TablePresentationModel) => void;
+  applyPresentationToAllTableCoreV2: (template: TablePresentationTemplate | TablePresentationModel) => number;
   insertTechnicalDatasetAsTable: (pageId: string, dataset: TechnicalDatasetProjection, options?: { tableId?: string; title?: string }) => string;
   insertSavedViewAsTable: (pageId: string, view: SavedViewProjection, options?: { tableId?: string; title?: string }) => string;
 
@@ -1529,9 +1531,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   applyTablePresentationTemplate: (blockId, templateOrModel) => {
-    const presentation: TablePresentationModel = 'presentation' in templateOrModel
-      ? structuredClone(templateOrModel.presentation)
-      : structuredClone(templateOrModel);
+    const rawPresentation = 'presentation' in templateOrModel
+      ? templateOrModel.presentation
+      : templateOrModel;
+
+    // Runtime gate (Closure 8): TablePresentationModelSchema.safeParse
+    const validation = TablePresentationModelSchema.safeParse(rawPresentation);
+    if (!validation.success) {
+      console.warn('[useCatalogStore] TablePresentationModel validation failed, rejecting mutation:', validation.error.message);
+      return;
+    }
+
+    const presentation: TablePresentationModel = structuredClone(validation.data);
 
     get().commitDocumentMutation(
       (draft) => {
@@ -1550,6 +1561,44 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       'UPDATE_BLOCK',
       { targetId: blockId, summary: `Template de apresentação aplicado ao bloco ${blockId}` }
     );
+  },
+
+  applyPresentationToAllTableCoreV2: (templateOrModel) => {
+    const rawPresentation = 'presentation' in templateOrModel
+      ? templateOrModel.presentation
+      : templateOrModel;
+
+    // Runtime gate (Closure 8): TablePresentationModelSchema.safeParse
+    const validation = TablePresentationModelSchema.safeParse(rawPresentation);
+    if (!validation.success) {
+      console.warn('[useCatalogStore] TablePresentationModel validation failed, rejecting batch mutation:', validation.error.message);
+      return 0;
+    }
+
+    const presentation: TablePresentationModel = structuredClone(validation.data);
+    let count = 0;
+
+    // Batch Atômico (Closure 3): 1 commitDocumentMutation para N tabelas
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          for (const block of page.blocks || []) {
+            if (block.type === 'specs_table') {
+              block.customData = {
+                ...(block.customData || {}),
+                tablePresentation: presentation,
+                presentationPresetId: presentation.presetId
+              };
+              count++;
+            }
+          }
+        }
+      },
+      'UPDATE_BLOCK',
+      { targetId: 'all_tables_v2', summary: `Apresentação Table Core V2 aplicada em lote a todas as tabelas` }
+    );
+
+    return count;
   },
 
   insertTechnicalDatasetAsTable: (pageId, dataset, options) => {

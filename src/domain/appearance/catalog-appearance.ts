@@ -3,12 +3,13 @@
 // Zero dependência de Supabase, RPC ou APIs externas - armazenamento local versionado e materialização autossuficiente no documento.
 // Zero explicit any.
 
+import { z } from 'zod';
 import {
   TableCoreModel,
   TablePresentationModel,
   TableColorValue
 } from '../table-core/table.types';
-import { TablePresentationModelSchema } from '../table-core/table.schema';
+import { TablePresentationModelSchema, TableColorValueSchema } from '../table-core/table.schema';
 import { getTablePreset, applyTablePreset } from '../table-core/table.presets';
 import {
   calculateContrastRatio,
@@ -29,25 +30,27 @@ export interface CuratedPalette {
   borderColor?: TableColorValue;
 }
 
-export interface SavedPalette {
-  id: string;
-  name: string;
-  headerBackground: TableColorValue;
-  headerText: TableColorValue;
-  sectionBackground?: TableColorValue;
-  sectionText?: TableColorValue;
-  bodyBackground?: TableColorValue;
-  borderColor?: TableColorValue;
-  createdAt: string;
-}
+export const SavedPaletteSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  headerBackground: TableColorValueSchema,
+  headerText: TableColorValueSchema,
+  sectionBackground: TableColorValueSchema.optional(),
+  sectionText: TableColorValueSchema.optional(),
+  bodyBackground: TableColorValueSchema.optional(),
+  borderColor: TableColorValueSchema.optional(),
+  createdAt: z.string()
+});
+export type SavedPalette = z.infer<typeof SavedPaletteSchema>;
 
-export interface SavedTableStyle {
-  id: string;
-  name: string;
-  presentation: TablePresentationModel;
-  createdAt: string;
-  updatedAt: string;
-}
+export const SavedTableStyleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  presentation: TablePresentationModelSchema,
+  createdAt: z.string(),
+  updatedAt: z.string().optional()
+});
+export type SavedTableStyle = z.infer<typeof SavedTableStyleSchema>;
 
 /**
  * Paletas curadas de alto nível com garantia de contraste WCAG AA/AAA.
@@ -134,7 +137,16 @@ export function getSavedPalettes(): SavedPalette[] {
     const raw = window.localStorage.getItem(STORAGE_KEY_SAVED_PALETTES);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const valid: SavedPalette[] = [];
+    for (const item of parsed) {
+      const check = SavedPaletteSchema.safeParse(item);
+      if (check.success) {
+        valid.push(check.data);
+      }
+    }
+    return valid;
   } catch {
     return [];
   }
@@ -171,8 +183,9 @@ export function deleteSavedPalette(id: string): void {
 }
 
 // ----------------------------------------------------------------------------
-// Gerenciamento de Estilos de Tabela Salvos (Emenda 11)
+// Gerenciamento de Estilos de Tabela Salvos (Emenda 11) & Migração Unificada (Closure 9)
 // ----------------------------------------------------------------------------
+const LEGACY_STORAGE_KEY_TEMPLATES = 'cb_user_table_presentation_templates_v1';
 
 export function getSavedTableStyles(): SavedTableStyle[] {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -180,9 +193,69 @@ export function getSavedTableStyles(): SavedTableStyle[] {
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY_SAVED_STYLES);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    let items: unknown[] = [];
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      }
+    }
+
+    const valid: SavedTableStyle[] = [];
+    const seenIds = new Set<string>();
+
+    for (const item of items) {
+      const check = SavedTableStyleSchema.safeParse(item);
+      if (check.success) {
+        valid.push(check.data);
+        seenIds.add(check.data.id);
+      }
+    }
+
+    // Migração transparente do legado cb_user_table_presentation_templates_v1 (Closure 9)
+    try {
+      const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY_TEMPLATES);
+      if (legacyRaw) {
+        const legacyParsed = JSON.parse(legacyRaw);
+        if (Array.isArray(legacyParsed)) {
+          let migratedAny = false;
+          for (const lItem of legacyParsed) {
+            if (lItem && typeof lItem === 'object' && typeof (lItem as Record<string, unknown>).name === 'string' && (lItem as Record<string, unknown>).presentation) {
+              const presCheck = TablePresentationModelSchema.safeParse((lItem as Record<string, unknown>).presentation);
+              if (presCheck.success) {
+                const legacyId = typeof (lItem as Record<string, unknown>).id === 'string'
+                  ? (lItem as Record<string, unknown>).id as string
+                  : `style_migrated_${Date.now()}`;
+                if (!seenIds.has(legacyId)) {
+                  const now = new Date().toISOString();
+                  const migrated: SavedTableStyle = {
+                    id: legacyId,
+                    name: ((lItem as Record<string, unknown>).name as string).trim() || 'Estilo Migrado',
+                    presentation: presCheck.data,
+                    createdAt: now,
+                    updatedAt: now
+                  };
+                  valid.push(migrated);
+                  seenIds.add(legacyId);
+                  migratedAny = true;
+                }
+              }
+            }
+          }
+          if (migratedAny) {
+            try {
+              window.localStorage.setItem(STORAGE_KEY_SAVED_STYLES, JSON.stringify(valid));
+            } catch {
+              // Ignore storage write error
+            }
+          }
+        }
+      }
+    } catch {
+      // Falha silenciosa de migração
+    }
+
+    return valid;
   } catch {
     return [];
   }
@@ -234,25 +307,16 @@ export function deleteSavedTableStyle(id: string): void {
 }
 
 // ----------------------------------------------------------------------------
-// Aplicação e Materialização de Paleta na Tabela (Emenda 9 e 10)
+// Aplicação e Materialização Canônica de Paleta na Tabela (Emenda 9, 10 & Closure 6)
 // ----------------------------------------------------------------------------
 
 export function applyPaletteToTable(
   table: TableCoreModel,
   palette: CuratedPalette | SavedPalette
 ): TableCoreModel {
-  const presentation: TablePresentationModel = {
-    ...structuredClone(table.presentation),
-    headerBackgroundToken: palette.headerBackground,
-    headerTextColorToken: palette.headerText,
-    sectionBackgroundToken: palette.sectionBackground ?? table.presentation.sectionBackgroundToken,
-    sectionTextColorToken: palette.sectionText ?? table.presentation.sectionTextColorToken,
-    borderColorToken: palette.borderColor ?? table.presentation.borderColorToken
-  };
-
   return {
     ...table,
-    presentation
+    presentation: materializePaletteOnPresentation(table.presentation, palette)
   };
 }
 

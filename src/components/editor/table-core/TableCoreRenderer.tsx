@@ -528,7 +528,10 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
 
     const cellInlineStyle: React.CSSProperties = {
       ...resolvedCellBg.style,
-      ...resolvedCellText.style
+      ...resolvedCellText.style,
+      ...((presentation.borderStyle === 'all' || presentation.borderStyle === 'horizontal_only') && resolvedTableBorder.styleColor
+        ? { borderColor: resolvedTableBorder.styleColor }
+        : {})
     };
 
     // Preenchimento e escalas
@@ -614,7 +617,10 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
 
       const sectionInlineStyle: React.CSSProperties = {
         ...resolvedSectionBg.style,
-        ...resolvedSectionText.style
+        ...resolvedSectionText.style,
+        ...((presentation.borderStyle === 'all' || presentation.borderStyle === 'horizontal_only') && resolvedTableBorder.styleColor
+          ? { borderColor: resolvedTableBorder.styleColor }
+          : {})
       };
 
       return (
@@ -688,8 +694,11 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
       <table
         role="table"
         aria-label={table.title || 'Tabela Técnica'}
-        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize} ${getLineHeightClass(presentation.lineHeight)} ${resolvedTableBorder.className} ${getOuterBorderWidthClass(presentation.outerBorderWidth)} ${getCornerRoundnessClass(presentation.cornerRoundness)}`}
-        style={{ tableLayout: 'fixed', ...resolvedTableBorder.style }}
+        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize} ${getLineHeightClass(presentation.lineHeight)} ${presentation.borderStyle !== 'none' ? resolvedTableBorder.className : ''} ${getOuterBorderWidthClass(presentation.outerBorderWidth)} ${getCornerRoundnessClass(presentation.cornerRoundness)}`}
+        style={{
+          tableLayout: 'fixed',
+          ...(presentation.borderStyle !== 'none' && resolvedTableBorder.style ? resolvedTableBorder.style : {})
+        }}
       >
         {/* A7: Título opcional interno via caption para não duplicar cabeçalhos externos */}
         {renderTitle && table.title && (
@@ -727,6 +736,11 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
                 <th
                   key={`header-${col.id}`}
                   scope="col"
+                  style={{
+                    ...((presentation.borderStyle === 'all' || presentation.borderStyle === 'horizontal_only') && resolvedTableBorder.styleColor
+                      ? { borderColor: resolvedTableBorder.styleColor }
+                      : {})
+                  }}
                   className={`${density.cellPadding} ${borders.cellBorder} font-semibold ${
                     col.align === 'center'
                       ? 'text-center'

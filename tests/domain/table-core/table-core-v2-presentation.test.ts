@@ -326,7 +326,7 @@ describe('TABLE.V2.PRESENTATION1: Competitor-Grade Industrial Layout Capability'
       // Aplica Tema B: Presys Blue Comparison
       const tableBlue = applyTablePreset(tableDarkNavy, 'presys_blue_comparison');
       expect(tableBlue.presentation.presetId).toBe('presys_blue_comparison');
-      expect(tableBlue.presentation.headerBackgroundToken).toBe('brand_primary');
+      expect(tableBlue.presentation.headerBackgroundToken).toBe('technical_blue');
       // Dados idênticos
       expect(tableBlue.rows).toEqual(initialTable.rows);
       expect(tableBlue.columns).toEqual(initialTable.columns);

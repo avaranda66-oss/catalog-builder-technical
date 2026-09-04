@@ -1,6 +1,7 @@
 // src/services/user-presentation-templates.service.ts
-// Serviço de persistência local de Templates de Apresentação criados pelo usuário (Emenda 9).
-// Desacoplado do domínio puro de Table Core.
+// @deprecated - Utilize o módulo canônico src/domain/appearance/catalog-appearance.ts (Closure 9 / CLOSURE.9.CONSOLIDATION).
+// Este serviço é mantido exclusivamente como camada de compatibilidade para testes legados e migração
+// transparente de dados do armazenamento local 'cb_user_table_presentation_templates_v1' para 'cb_saved_table_styles_v1'.
 // Zero dependência de Supabase.
 
 import { TablePresentationTemplate, TablePresentationModel } from '../domain/table-core/table.types';

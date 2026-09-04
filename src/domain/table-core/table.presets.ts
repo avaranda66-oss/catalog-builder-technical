@@ -63,10 +63,10 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     density: 'compact',
     borderStyle: 'all',
     stripeStyle: 'subtle_zebra',
-    headerBackgroundToken: 'brand_primary',
+    headerBackgroundToken: 'technical_blue',
     headerTextColorToken: 'white',
     sectionBackgroundToken: 'surface_subtle',
-    sectionTextColorToken: 'brand_navy',
+    sectionTextColorToken: 'technical_blue',
     fontScale: 'compact',
     tableWidth: { mode: 'auto_fill' }
   },
