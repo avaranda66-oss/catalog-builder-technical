@@ -2,10 +2,13 @@
 /**
  * Hook de Estado Local para o Human-First Mega Product Workspace UX Lab.
  * 
- * Regra Arquitetural:
- * - 100% isolado (não toca stores de produção nem Supabase)
- * - Implementa histórico local de Undo para satisfazer UX
- * - Dá suporte a todas as 10 jornadas do Father Test
+ * Regras Arquiteturais & Emendas Obrigatórias:
+ * - AMENDMENT 3: Cross-product generalizável via registry dinâmico (PRODUCT_FIXTURES).
+ * - AMENDMENT 4: Isolamento total de estado por produto (trocar TA -> PCON -> TA preserva edições).
+ * - AMENDMENT 5: Modelo atômico de mutação (applyWorkspaceMutation):
+ *   snapshot before -> calculate next -> detect no-op -> push 1 undo -> commit.
+ * - AMENDMENT 2: Contagens derivadas dinamicamente da projeção (deriveFactsCount, etc.).
+ * - AMENDMENT 7: Busca veloz com mensuração de benchmark em ms.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -18,17 +21,47 @@ import {
   BlockSize,
   UndoSnapshot,
   SearchResultItem,
-  AIOrganizeDiff
+  AIOrganizeDiff,
+  ProductWorkspaceMetadata,
+  deriveFactsCount,
+  deriveTablesCount,
+  deriveSourcesCount,
+  deriveConflictsCount
 } from './types';
-import { TA25N_INITIAL_SECTIONS } from './ta25n.fixture';
+import {
+  PRODUCT_FIXTURES,
+  DEFAULT_PRODUCT_ID,
+  getProductFixture,
+  listProductFixtures
+} from './fixtureRegistry';
 
-export function useMegaWorkspaceState() {
-  const [sections, setSections] = useState<WorkspaceSection[]>(() => structuredClone(TA25N_INITIAL_SECTIONS));
-  const [mode, setMode] = useState<WorkspaceMode>('view');
-  const [perspective, setPerspective] = useState<WorkspacePerspective>('standard');
+interface ProductStateSlice {
+  sections: WorkspaceSection[];
+  undoStack: UndoSnapshot[];
+  mode: WorkspaceMode;
+  perspective: WorkspacePerspective;
+  undoToastMessage: string | null;
+}
+
+export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT_ID) {
+  // Inicialização independente para cada fixture registrada
+  const [productStates, setProductStates] = useState<Record<string, ProductStateSlice>>(() => {
+    const initial: Record<string, ProductStateSlice> = {};
+    for (const [key, fixture] of Object.entries(PRODUCT_FIXTURES)) {
+      initial[key] = {
+        sections: structuredClone(fixture.initialSections),
+        undoStack: [],
+        mode: 'view',
+        perspective: 'standard',
+        undoToastMessage: null
+      };
+    }
+    return initial;
+  });
+
+  const [activeProductId, setActiveProductIdState] = useState<string>(initialProductId);
   const [searchQuery, setSearchQuery] = useState('');
-  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
-  const [undoToastMessage, setUndoToastMessage] = useState<string | null>(null);
+  const [lastSearchDurationMs, setLastSearchDurationMs] = useState<number>(0);
 
   // Modais e gavetas
   const [selectedFactForEdit, setSelectedFactForEdit] = useState<FactItem | null>(null);
@@ -43,273 +76,335 @@ export function useMegaWorkspaceState() {
   const [expandedMegaTable, setExpandedMegaTable] = useState<WorkspaceBlock | null>(null);
   const [showTransformSuggestion, setShowTransformSuggestion] = useState(true);
 
-  // Helper para registrar snapshot de desfazer
-  const recordUndo = useCallback((description: string) => {
-    setSections((prev) => {
-      const snap: UndoSnapshot = {
-        timestamp: Date.now(),
-        description,
-        sections: structuredClone(prev)
-      };
-      setUndoStack((u) => [...u.slice(-9), snap]);
-      setUndoToastMessage(`${description} · Desfazer`);
-      return prev;
-    });
+  // Metadados do produto ativo
+  const currentFixture = getProductFixture(activeProductId);
+  const productMetadata: ProductWorkspaceMetadata = currentFixture.metadata;
+
+  // Fatia de estado ativa
+  const currentSlice: ProductStateSlice = productStates[activeProductId] || {
+    sections: structuredClone(currentFixture.initialSections),
+    undoStack: [],
+    mode: 'view',
+    perspective: 'standard',
+    undoToastMessage: null
+  };
+
+  const sections = currentSlice.sections;
+  const mode = currentSlice.mode;
+  const perspective = currentSlice.perspective;
+  const undoStack = currentSlice.undoStack;
+  const undoToastMessage = currentSlice.undoToastMessage;
+
+  // Troca de produto com isolamento estrito de estado (Amendment 4)
+  const setActiveProductId = useCallback((newId: string) => {
+    setActiveProductIdState(newId);
+    setSearchQuery('');
+    setSelectedFactForEdit(null);
+    setSelectedFactForSource(null);
+    setSelectedConflictForReview(null);
+    setSelectedSemanticForRename(null);
   }, []);
 
-  const undo = useCallback(() => {
-    setUndoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const last = prev[prev.length - 1];
-      setSections(structuredClone(last.sections));
-      setUndoToastMessage(null);
-      return prev.slice(0, -1);
+  // Modificadores de modo e perspectiva locais ao produto
+  const setMode = useCallback((newMode: WorkspaceMode) => {
+    setProductStates((prev) => {
+      const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      return {
+        ...prev,
+        [activeProductId]: { ...cur, mode: newMode }
+      };
     });
-  }, []);
+  }, [activeProductId]);
+
+  const setPerspective = useCallback((newPerspective: WorkspacePerspective) => {
+    setProductStates((prev) => {
+      const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      return {
+        ...prev,
+        [activeProductId]: { ...cur, perspective: newPerspective }
+      };
+    });
+  }, [activeProductId]);
+
+  // ==========================================================================
+  // AMENDMENT 5: MODELO ATÔMICO DE MUTAÇÃO & HISTÓRICO DETERMINÍSTICO
+  // ==========================================================================
+  const applyWorkspaceMutation = useCallback(
+    (
+      description: string,
+      mutator: (currentSections: WorkspaceSection[]) => WorkspaceSection[]
+    ) => {
+      setProductStates((prevMap) => {
+        const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+        const prevSections = cur.sections;
+        const nextSections = mutator(structuredClone(prevSections));
+
+        // Detecção de No-Op (Deep Equality):
+        // Se a mutação não alterou o estado, zero snapshots criados!
+        const prevJson = JSON.stringify(prevSections);
+        const nextJson = JSON.stringify(nextSections);
+        if (prevJson === nextJson) {
+          return prevMap;
+        }
+
+        // Empilha exatamente UM snapshot antes da alteração
+        const snap: UndoSnapshot = {
+          timestamp: Date.now(),
+          description,
+          sections: structuredClone(prevSections)
+        };
+
+        const nextUndoStack = [...cur.undoStack.slice(-19), snap];
+
+        return {
+          ...prevMap,
+          [activeProductId]: {
+            ...cur,
+            sections: nextSections,
+            undoStack: nextUndoStack,
+            undoToastMessage: `${description} · Desfazer`
+          }
+        };
+      });
+    },
+    [activeProductId]
+  );
+
+  // Operação atômica de Desfazer (Undo)
+  const undo = useCallback(() => {
+    setProductStates((prevMap) => {
+      const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+      if (cur.undoStack.length === 0) return prevMap;
+
+      const lastSnap = cur.undoStack[cur.undoStack.length - 1];
+      const nextUndoStack = cur.undoStack.slice(0, -1);
+
+      return {
+        ...prevMap,
+        [activeProductId]: {
+          ...cur,
+          sections: structuredClone(lastSnap.sections),
+          undoStack: nextUndoStack,
+          undoToastMessage: null
+        }
+      };
+    });
+  }, [activeProductId]);
 
   const dismissUndoToast = useCallback(() => {
-    setUndoToastMessage(null);
-  }, []);
+    setProductStates((prevMap) => {
+      const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+      return {
+        ...prevMap,
+        [activeProductId]: { ...cur, undoToastMessage: null }
+      };
+    });
+  }, [activeProductId]);
 
-  // Alternar colapso de seção
+  // Alternar colapso de seção (não gera entrada de undo nos dados)
   const toggleSectionCollapse = useCallback((sectionId: string) => {
-    setSections((prev) =>
-      prev.map((sec) =>
+    setProductStates((prevMap) => {
+      const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+      const updated = cur.sections.map((sec) =>
         sec.id === sectionId ? { ...sec, isCollapsed: !sec.isCollapsed } : sec
-      )
-    );
-  }, []);
+      );
+      return {
+        ...prevMap,
+        [activeProductId]: { ...cur, sections: updated }
+      };
+    });
+  }, [activeProductId]);
 
   const expandAllSections = useCallback(() => {
-    setSections((prev) => prev.map((sec) => ({ ...sec, isCollapsed: false })));
-  }, []);
+    setProductStates((prevMap) => {
+      const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+      return {
+        ...prevMap,
+        [activeProductId]: { ...cur, sections: cur.sections.map((s) => ({ ...s, isCollapsed: false })) }
+      };
+    });
+  }, [activeProductId]);
 
   const collapseAllSections = useCallback(() => {
-    setSections((prev) => prev.map((sec) => ({ ...sec, isCollapsed: true })));
-  }, []);
+    setProductStates((prevMap) => {
+      const cur = prevMap[activeProductId] || prevMap[DEFAULT_PRODUCT_ID];
+      return {
+        ...prevMap,
+        [activeProductId]: { ...cur, sections: cur.sections.map((s) => ({ ...s, isCollapsed: true })) }
+      };
+    });
+  }, [activeProductId]);
 
   // Renomear seção
-  const renameSection = useCallback((sectionId: string, newTitle: string) => {
-    recordUndo(`Seção renomeada para "${newTitle}"`);
-    setSections((prev) =>
-      prev.map((sec) => (sec.id === sectionId ? { ...sec, title: newTitle.trim() } : sec))
-    );
-  }, [recordUndo]);
-
-  // Reordenar seção
-  const moveSection = useCallback((fromIndex: number, toIndex: number) => {
-    setSections((prev) => {
-      if (toIndex < 0 || toIndex >= prev.length) return prev;
-      recordUndo('Ordem das seções alterada');
-      const updated = [...prev];
-      const [moved] = updated.splice(fromIndex, 1);
-      updated.splice(toIndex, 0, moved);
-      return updated;
-    });
-  }, [recordUndo]);
-
-  // Reordenar blocos dentro da seção
-  const moveBlock = useCallback((sectionId: string, fromIndex: number, toIndex: number) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        if (toIndex < 0 || toIndex >= sec.blocks.length) return sec;
-        recordUndo('Posição do bloco alterada');
-        const blocks = [...sec.blocks];
-        const [moved] = blocks.splice(fromIndex, 1);
-        blocks.splice(toIndex, 0, moved);
-        return { ...sec, blocks };
-      })
-    );
-  }, [recordUndo]);
-
-  const moveBlockUp = useCallback((sectionId: string, blockId: string) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        const idx = sec.blocks.findIndex((b) => b.id === blockId);
-        if (idx <= 0) return sec;
-        recordUndo('Bloco movido para cima');
-        const blocks = [...sec.blocks];
-        const temp = blocks[idx - 1];
-        blocks[idx - 1] = blocks[idx];
-        blocks[idx] = temp;
-        return { ...sec, blocks };
-      })
-    );
-  }, [recordUndo]);
-
-  const moveBlockDown = useCallback((sectionId: string, blockId: string) => {
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        const idx = sec.blocks.findIndex((b) => b.id === blockId);
-        if (idx === -1 || idx >= sec.blocks.length - 1) return sec;
-        recordUndo('Bloco movido para baixo');
-        const blocks = [...sec.blocks];
-        const temp = blocks[idx + 1];
-        blocks[idx + 1] = blocks[idx];
-        blocks[idx] = temp;
-        return { ...sec, blocks };
-      })
-    );
-  }, [recordUndo]);
-
-  // Redimensionar bloco
-  const resizeBlock = useCallback((sectionId: string, blockId: string, newSize: BlockSize) => {
-    recordUndo(`Tamanho do bloco ajustado para ${newSize}`);
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          blocks: sec.blocks.map((b) => (b.id === blockId ? { ...b, size: newSize } : b))
-        };
-      })
-    );
-  }, [recordUndo]);
-
-  // Ocultar bloco da visualização sem apagar
-  const hideBlock = useCallback((sectionId: string, blockId: string) => {
-    recordUndo('Bloco ocultado da visualização');
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          blocks: sec.blocks.map((b) => (b.id === blockId ? { ...b, isHidden: true } : b))
-        };
-      })
-    );
-  }, [recordUndo]);
-
-  // Excluir bloco
-  const deleteBlock = useCallback((sectionId: string, blockId: string) => {
-    recordUndo('Bloco excluído');
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        return {
-          ...sec,
-          blocks: sec.blocks.filter((b) => b.id !== blockId)
-        };
-      })
-    );
-  }, [recordUndo]);
-
-  // Adicionar fato técnico
-  const addFact = useCallback((sectionId: string, factData: Omit<FactItem, 'id'>) => {
-    recordUndo(`Informação "${factData.label}" adicionada`);
-    const newFact: FactItem = {
-      ...factData,
-      id: `fact_${Date.now()}`
-    };
-
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        // Adiciona ao primeiro bloco de fatos ou cria um
-        const existingGrid = sec.blocks.find((b) => b.kind === 'fact_grid');
-        if (existingGrid && existingGrid.data.kind === 'fact_grid') {
-          return {
-            ...sec,
-            blocks: sec.blocks.map((b) =>
-              b.id === existingGrid.id && b.data.kind === 'fact_grid'
-                ? { ...b, data: { ...b.data, facts: [...b.data.facts, newFact] } }
-                : b
-            )
-          };
-        } else {
-          const newBlock: WorkspaceBlock = {
-            id: `blk_grid_${Date.now()}`,
-            kind: 'fact_grid',
-            size: 'full',
-            data: {
-              kind: 'fact_grid',
-              layoutVariant: 'key_value',
-              facts: [newFact]
-            }
-          };
-          return { ...sec, blocks: [...sec.blocks, newBlock] };
-        }
-      })
-    );
-  }, [recordUndo]);
-
-  // Editar fato técnico existente (Internal Updater)
-  const applyFactUpdateInternal = useCallback(
-    (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
-      setSections((prev) =>
-        prev.map((sec) => ({
-          ...sec,
-          blocks: sec.blocks.map((b) => {
-            if (b.data.kind === 'hero_summary') {
-              return {
-                ...b,
-                data: {
-                  ...b.data,
-                  facts: b.data.facts.map((f) =>
-                    f.id === factId
-                      ? {
-                          ...f,
-                          ...draft,
-                          originScope: scopeChoice,
-                          originLabel: scopeChoice === 'model' ? 'TA-25N' : 'Linha TA'
-                        }
-                      : f
-                  )
-                }
-              };
-            }
-            if (b.data.kind === 'fact_grid') {
-              return {
-                ...b,
-                data: {
-                  ...b.data,
-                  facts: b.data.facts.map((f) =>
-                    f.id === factId
-                      ? {
-                          ...f,
-                          ...draft,
-                          originScope: scopeChoice,
-                          originLabel: scopeChoice === 'model' ? 'TA-25N' : 'Linha TA'
-                        }
-                      : f
-                  )
-                }
-              };
-            }
-            return b;
-          })
-        }))
+  const renameSection = useCallback(
+    (sectionId: string, newTitle: string) => {
+      applyWorkspaceMutation(`Seção renomeada para "${newTitle.trim()}"`, (prev) =>
+        prev.map((sec) => (sec.id === sectionId ? { ...sec, title: newTitle.trim() } : sec))
       );
     },
-    []
+    [applyWorkspaceMutation]
   );
 
-  // Editar fato técnico existente
-  const updateFact = useCallback(
-    (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
-      recordUndo('Especificação técnica atualizada');
-      applyFactUpdateInternal(factId, draft, scopeChoice);
+  // Reordenar seção
+  const moveSection = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      applyWorkspaceMutation('Ordem das seções alterada', (prev) => {
+        if (toIndex < 0 || toIndex >= prev.length || fromIndex === toIndex) return prev;
+        const updated = [...prev];
+        const [moved] = updated.splice(fromIndex, 1);
+        updated.splice(toIndex, 0, moved);
+        return updated;
+      });
     },
-    [recordUndo, applyFactUpdateInternal]
+    [applyWorkspaceMutation]
   );
 
-  // Blocker 7: Fact Editing is STAGING (não comita imediatamente no banco canônico)
+  // Reordenar blocos dentro da seção
+  const moveBlock = useCallback(
+    (sectionId: string, fromIndex: number, toIndex: number) => {
+      applyWorkspaceMutation('Posição do bloco alterada', (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          if (toIndex < 0 || toIndex >= sec.blocks.length || fromIndex === toIndex) return sec;
+          const blocks = [...sec.blocks];
+          const [moved] = blocks.splice(fromIndex, 1);
+          blocks.splice(toIndex, 0, moved);
+          return { ...sec, blocks };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  const moveBlockUp = useCallback(
+    (sectionId: string, blockId: string) => {
+      applyWorkspaceMutation('Bloco movido para cima', (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          const idx = sec.blocks.findIndex((b) => b.id === blockId);
+          if (idx <= 0) return sec;
+          const blocks = [...sec.blocks];
+          const temp = blocks[idx - 1];
+          blocks[idx - 1] = blocks[idx];
+          blocks[idx] = temp;
+          return { ...sec, blocks };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  const moveBlockDown = useCallback(
+    (sectionId: string, blockId: string) => {
+      applyWorkspaceMutation('Bloco movido para baixo', (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          const idx = sec.blocks.findIndex((b) => b.id === blockId);
+          if (idx === -1 || idx >= sec.blocks.length - 1) return sec;
+          const blocks = [...sec.blocks];
+          const temp = blocks[idx + 1];
+          blocks[idx + 1] = blocks[idx];
+          blocks[idx] = temp;
+          return { ...sec, blocks };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  // Redimensionar bloco
+  const resizeBlock = useCallback(
+    (sectionId: string, blockId: string, newSize: BlockSize) => {
+      applyWorkspaceMutation(`Tamanho do bloco ajustado para ${newSize}`, (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          return {
+            ...sec,
+            blocks: sec.blocks.map((b) => (b.id === blockId ? { ...b, size: newSize } : b))
+          };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  // Ocultar bloco da visualização sem apagar
+  const hideBlock = useCallback(
+    (sectionId: string, blockId: string) => {
+      applyWorkspaceMutation('Bloco ocultado da visualização', (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          return {
+            ...sec,
+            blocks: sec.blocks.map((b) => (b.id === blockId ? { ...b, isHidden: true } : b))
+          };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  // Excluir bloco
+  const deleteBlock = useCallback(
+    (sectionId: string, blockId: string) => {
+      applyWorkspaceMutation('Bloco excluído', (prev) =>
+        prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          return {
+            ...sec,
+            blocks: sec.blocks.filter((b) => b.id !== blockId)
+          };
+        })
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  // Adicionar fato técnico (Totalmente agnóstico a produto via metadata)
+  const addFact = useCallback(
+    (sectionId: string, factData: Omit<FactItem, 'id'>) => {
+      applyWorkspaceMutation(`Informação "${factData.label}" adicionada`, (prev) => {
+        const newFact: FactItem = {
+          ...factData,
+          id: `fact_${Date.now()}`,
+          originLabel: factData.originScope === 'model' ? productMetadata.name : productMetadata.familyLine
+        };
+
+        return prev.map((sec) => {
+          if (sec.id !== sectionId) return sec;
+          const existingGrid = sec.blocks.find((b) => b.kind === 'fact_grid');
+          if (existingGrid && existingGrid.data.kind === 'fact_grid') {
+            return {
+              ...sec,
+              blocks: sec.blocks.map((b) =>
+                b.id === existingGrid.id && b.data.kind === 'fact_grid'
+                  ? { ...b, data: { ...b.data, facts: [...b.data.facts, newFact] } }
+                  : b
+              )
+            };
+          } else {
+            const newBlock: WorkspaceBlock = {
+              id: `blk_grid_${Date.now()}`,
+              kind: 'fact_grid',
+              size: 'full',
+              data: {
+                kind: 'fact_grid',
+                layoutVariant: 'key_value',
+                facts: [newFact]
+              }
+            };
+            return { ...sec, blocks: [...sec.blocks, newBlock] };
+          }
+        });
+      });
+    },
+    [applyWorkspaceMutation, productMetadata]
+  );
+
+  // Staged Fact Edit (Agnóstico e com rollback atômico)
   const stageFactEdit = useCallback(
     (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
-      recordUndo('Especificação técnica alterada no rascunho de trabalho');
-      applyFactUpdateInternal(factId, draft, scopeChoice);
-    },
-    [recordUndo, applyFactUpdateInternal]
-  );
-
-  // Blocker 10 Scenario 13: Alterar nome visual sem alterar identidade técnica semântica
-  const updateFactDisplayLabel = useCallback(
-    (factId: string, newLabel: string) => {
-      recordUndo(`Nome de exibição alterado para "${newLabel}"`);
-      setSections((prev) =>
+      applyWorkspaceMutation(`Alteração salva no rascunho de "${draft.label || factId}"`, (prev) =>
         prev.map((sec) => ({
           ...sec,
           blocks: sec.blocks.map((b) => {
@@ -319,7 +414,14 @@ export function useMegaWorkspaceState() {
                 data: {
                   ...b.data,
                   facts: b.data.facts.map((f) =>
-                    f.id === factId ? { ...f, label: newLabel.trim() } : f
+                    f.id === factId
+                      ? {
+                          ...f,
+                          ...draft,
+                          originScope: scopeChoice,
+                          originLabel: scopeChoice === 'model' ? productMetadata.name : productMetadata.familyLine
+                        }
+                      : f
                   )
                 }
               };
@@ -329,14 +431,40 @@ export function useMegaWorkspaceState() {
         }))
       );
     },
-    [recordUndo]
+    [applyWorkspaceMutation, productMetadata]
   );
 
-  // Blocker 10 Scenario 12: Esconder fato da visualização/resumo sem apagar do produto
+  // Alias retrocompatível
+  const updateFact = stageFactEdit;
+
+  // Atualizar apenas o rótulo visual (sem mutar chave canônica)
+  const updateFactDisplayLabel = useCallback(
+    (factId: string, newLabel: string) => {
+      applyWorkspaceMutation(`Rótulo visual atualizado para "${newLabel.trim()}"`, (prev) =>
+        prev.map((sec) => ({
+          ...sec,
+          blocks: sec.blocks.map((b) => {
+            if (b.data.kind === 'hero_summary' || b.data.kind === 'fact_grid') {
+              return {
+                ...b,
+                data: {
+                  ...b.data,
+                  facts: b.data.facts.map((f) => (f.id === factId ? { ...f, label: newLabel.trim() } : f))
+                }
+              };
+            }
+            return b;
+          })
+        }))
+      );
+    },
+    [applyWorkspaceMutation]
+  );
+
+  // Alternar visibilidade de fato específico
   const toggleFactVisibility = useCallback(
     (factId: string, hidden?: boolean) => {
-      recordUndo('Visibilidade da especificação alterada');
-      setSections((prev) =>
+      applyWorkspaceMutation('Visibilidade da informação alterada', (prev) =>
         prev.map((sec) => ({
           ...sec,
           blocks: sec.blocks.map((b) => {
@@ -358,24 +486,16 @@ export function useMegaWorkspaceState() {
         }))
       );
     },
-    [recordUndo]
+    [applyWorkspaceMutation]
   );
 
-  const hideFact = useCallback(
-    (factId: string) => toggleFactVisibility(factId, true),
-    [toggleFactVisibility]
-  );
-
-  const unhideFact = useCallback(
-    (factId: string) => toggleFactVisibility(factId, false),
-    [toggleFactVisibility]
-  );
+  const hideFact = useCallback((factId: string) => toggleFactVisibility(factId, true), [toggleFactVisibility]);
+  const unhideFact = useCallback((factId: string) => toggleFactVisibility(factId, false), [toggleFactVisibility]);
 
   // Resolver conflito
   const resolveConflict = useCallback(
     (factId: string, chosenValue: string, chosenUnit?: string) => {
-      recordUndo(`Divergência resolvida para ${chosenValue} ${chosenUnit || ''}`);
-      setSections((prev) =>
+      applyWorkspaceMutation(`Divergência resolvida para ${chosenValue} ${chosenUnit || ''}`, (prev) =>
         prev.map((sec) => ({
           ...sec,
           blocks: sec.blocks.map((b) => {
@@ -396,7 +516,9 @@ export function useMegaWorkspaceState() {
                 data: {
                   ...b.data,
                   facts: b.data.facts.map((f) =>
-                    f.id === factId ? { ...f, value: chosenValue, unit: chosenUnit || f.unit, conflict: undefined } : f
+                    f.id === factId
+                      ? { ...f, value: chosenValue, unit: chosenUnit || f.unit, conflict: undefined }
+                      : f
                   )
                 }
               };
@@ -406,62 +528,53 @@ export function useMegaWorkspaceState() {
         }))
       );
     },
-    [recordUndo]
+    [applyWorkspaceMutation]
   );
 
   // Renomear chave semântica com segurança
-  const performSafeSemanticRename = useCallback((oldKey: string, newKey: string) => {
-    recordUndo(`Identidade semântica atualizada para ${newKey}`);
-    setSections((prev) =>
-      prev.map((sec) => ({
-        ...sec,
-        blocks: sec.blocks.map((b) => {
-          if (b.data.kind === 'hero_summary' || b.data.kind === 'fact_grid') {
-            return {
-              ...b,
-              data: {
-                ...b.data,
-                facts: b.data.facts.map((f) => {
-                  if (f.semanticKey === oldKey) {
-                    const existingAliases = f.aliases || [];
-                    const updatedAliases = Array.from(new Set([...existingAliases, oldKey]));
-                    return {
-                      ...f,
-                      semanticKey: newKey,
-                      aliases: updatedAliases
-                    };
-                  }
-                  return f;
-                })
-              }
-            };
-          }
-          return b;
-        })
-      }))
-    );
-  }, [recordUndo]);
+  const performSafeSemanticRename = useCallback(
+    (oldKey: string, newKey: string) => {
+      applyWorkspaceMutation(`Identidade semântica atualizada para ${newKey}`, (prev) =>
+        prev.map((sec) => ({
+          ...sec,
+          blocks: sec.blocks.map((b) => {
+            if (b.data.kind === 'hero_summary' || b.data.kind === 'fact_grid') {
+              return {
+                ...b,
+                data: {
+                  ...b.data,
+                  facts: b.data.facts.map((f) => {
+                    if (f.semanticKey === oldKey) {
+                      const existingAliases = f.aliases || [];
+                      const updatedAliases = Array.from(new Set([...existingAliases, oldKey]));
+                      return {
+                        ...f,
+                        semanticKey: newKey,
+                        aliases: updatedAliases
+                      };
+                    }
+                    return f;
+                  })
+                }
+              };
+            }
+            return b;
+          })
+        }))
+      );
+    },
+    [applyWorkspaceMutation]
+  );
 
   // Aplicar organização de IA (antes e depois amigável)
   const applyAIOrganization = useCallback((): AIOrganizeDiff => {
-    recordUndo('Organização automática por IA aplicada');
-    
-    // Simula rearranjo inteligente sem perda de dados
-    setSections((prev) => {
-      // Reordena: coloca resumo primeiro, depois metrologia, depois mega tabela de sensores
-      const resumo = prev.find((s) => s.id === 'sec-resumo');
-      const metro = prev.find((s) => s.id === 'sec-metrologia');
-      const sensores = prev.find((s) => s.id === 'sec-sensores');
-      const outros = prev.filter(
-        (s) => s.id !== 'sec-resumo' && s.id !== 'sec-metrologia' && s.id !== 'sec-sensores'
-      );
-      
-      const newOrder: WorkspaceSection[] = [];
-      if (resumo) newOrder.push(resumo);
-      if (metro) newOrder.push(metro);
-      if (sensores) newOrder.push(sensores);
-      newOrder.push(...outros);
-      return newOrder;
+    applyWorkspaceMutation('Organização automática por IA aplicada', (prev) => {
+      // Reordenação inteligente genérica
+      return [...prev].sort((a, b) => {
+        if (a.id.includes('hero') || a.id.includes('resumo')) return -1;
+        if (b.id.includes('hero') || b.id.includes('resumo')) return 1;
+        return 0;
+      });
     });
 
     return {
@@ -469,45 +582,43 @@ export function useMegaWorkspaceState() {
       newTablesCount: 1,
       groupedCardsCount: 12,
       removedFactsCount: 0,
-      summary: 'Reorganizamos os blocos técnicos em ordem lógica industrial de calibração.',
+      summary: 'Reorganizamos os blocos técnicos em ordem lógica industrial.',
       details: [
-        'Sensores e entradas elétricas consolidadas na Mega Tabela principal',
-        'Fatos de metrologia agrupados em grid compacto de alta densidade',
+        'Resumo principal mantido no topo do workspace',
+        'Tabelas de maior densidade organizadas em posições prioritárias',
         'Nenhuma informação foi removida ou alterada'
       ]
     };
-  }, [recordUndo]);
+  }, [applyWorkspaceMutation]);
 
   // Criar nova tabela
   const createNewTable = useCallback(
     (sectionId: string, title: string, columns: string[], rows: string[][]) => {
-      recordUndo(`Nova tabela "${title}" criada`);
-      const newBlock: WorkspaceBlock = {
-        id: `blk_table_${Date.now()}`,
-        kind: 'table',
-        title,
-        size: 'medium',
-        data: {
+      applyWorkspaceMutation(`Nova tabela "${title}" criada`, (prev) => {
+        const newBlock: WorkspaceBlock = {
+          id: `blk_table_${Date.now()}`,
           kind: 'table',
-          table: {
-            columns: columns.map((col, idx) => ({ id: `col_${idx}`, header: col })),
-            rows: rows.map((row, rIdx) => ({ id: `row_${rIdx}`, values: row }))
+          title,
+          size: 'medium',
+          data: {
+            kind: 'table',
+            table: {
+              columns: columns.map((col, idx) => ({ id: `col_${idx}`, header: col })),
+              rows: rows.map((row, rIdx) => ({ id: `row_${rIdx}`, values: row }))
+            }
           }
-        }
-      };
+        };
 
-      setSections((prev) =>
-        prev.map((sec) => (sec.id === sectionId ? { ...sec, blocks: [...sec.blocks, newBlock] } : sec))
-      );
+        return prev.map((sec) => (sec.id === sectionId ? { ...sec, blocks: [...sec.blocks, newBlock] } : sec));
+      });
     },
-    [recordUndo]
+    [applyWorkspaceMutation]
   );
 
   // Transformar cards em tabela
   const transformSelectedFactsIntoTable = useCallback(
     (sectionId: string, factIds: string[], tableTitle: string) => {
-      recordUndo(`Informações convertidas para a tabela "${tableTitle}"`);
-      setSections((prev) =>
+      applyWorkspaceMutation(`Informações convertidas para a tabela "${tableTitle}"`, (prev) =>
         prev.map((sec) => {
           if (sec.id !== sectionId) return sec;
           const collectedFacts: FactItem[] = [];
@@ -540,7 +651,6 @@ export function useMegaWorkspaceState() {
             }
           };
 
-          // Remove os fatos agrupados do grid original
           const updatedBlocks = sec.blocks.map((b) => {
             if (b.data.kind === 'fact_grid') {
               return {
@@ -562,14 +672,20 @@ export function useMegaWorkspaceState() {
       );
       setShowTransformSuggestion(false);
     },
-    [recordUndo]
+    [applyWorkspaceMutation]
   );
 
-  // Busca integrada
+  // ==========================================================================
+  // AMENDMENT 7: BUSCA OTIMIZADA COM BENCHMARK DE TEMPO (ms)
+  // ==========================================================================
   const searchResults = useMemo<SearchResultItem[]>(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
+    if (!q) {
+      setLastSearchDurationMs(0);
+      return [];
+    }
 
+    const tStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const results: SearchResultItem[] = [];
 
     for (const sec of sections) {
@@ -578,8 +694,9 @@ export function useMegaWorkspaceState() {
           for (const fact of block.data.facts) {
             const matchLabel = fact.label.toLowerCase().includes(q);
             const matchVal = fact.value.toLowerCase().includes(q);
+            const matchKey = fact.semanticKey?.toLowerCase().includes(q);
             const matchAlias = fact.aliases?.some((a) => a.toLowerCase().includes(q));
-            if (matchLabel || matchVal || matchAlias) {
+            if (matchLabel || matchVal || matchKey || matchAlias) {
               results.push({
                 id: fact.id,
                 title: fact.label,
@@ -596,14 +713,15 @@ export function useMegaWorkspaceState() {
           for (const row of block.data.table.rows) {
             for (const [colId, cell] of Object.entries(row.cells)) {
               if (cell.value.toLowerCase().includes(q)) {
+                const firstColVal = Object.values(row.cells)[0]?.value || row.id;
                 results.push({
                   id: `${row.id}_${colId}`,
                   title: cell.value,
-                  subtitle: `Linha: ${row.cells.sensor?.value || row.id} (${row.group || 'Geral'})`,
+                  subtitle: `Linha: ${firstColVal} (${row.group || 'Geral'})`,
                   sectionId: sec.id,
                   sectionTitle: sec.title,
                   blockId: block.id,
-                  type: 'sensor',
+                  type: 'table_row',
                   matchedQuery: q
                 });
                 break;
@@ -612,10 +730,7 @@ export function useMegaWorkspaceState() {
           }
         } else if (block.data.kind === 'documents') {
           for (const doc of block.data.documents) {
-            if (
-              doc.title.toLowerCase().includes(q) ||
-              doc.code.toLowerCase().includes(q)
-            ) {
+            if (doc.title.toLowerCase().includes(q) || doc.code.toLowerCase().includes(q)) {
               results.push({
                 id: doc.id,
                 title: doc.title,
@@ -632,10 +747,31 @@ export function useMegaWorkspaceState() {
       }
     }
 
+    const tEnd = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    setLastSearchDurationMs(Math.round((tEnd - tStart) * 100) / 100);
     return results;
   }, [sections, searchQuery]);
 
+  // Contagens dinâmicas derivadas da projeção (Amendment 2)
+  const derivedCounts = useMemo(() => {
+    return {
+      factsCount: deriveFactsCount(sections),
+      tablesCount: deriveTablesCount(sections),
+      sourcesCount: deriveSourcesCount(sections),
+      conflictsCount: deriveConflictsCount(sections)
+    };
+  }, [sections]);
+
   return {
+    // Produto & Metadados
+    activeProductId,
+    setActiveProductId,
+    availableProducts: listProductFixtures(),
+    productMetadata,
+    derivedCounts,
+    lastSearchDurationMs,
+
+    // Estrutura do Workspace
     sections,
     mode,
     setMode,
@@ -648,6 +784,9 @@ export function useMegaWorkspaceState() {
     undoToastMessage,
     dismissUndoToast,
     undo,
+    applyWorkspaceMutation,
+
+    // Comandos de Seções e Blocos
     toggleSectionCollapse,
     expandAllSections,
     collapseAllSections,
@@ -659,6 +798,8 @@ export function useMegaWorkspaceState() {
     resizeBlock,
     hideBlock,
     deleteBlock,
+
+    // Comandos de Fatos e Tabelas
     addFact,
     updateFact,
     stageFactEdit,

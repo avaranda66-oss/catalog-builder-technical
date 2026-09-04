@@ -38,6 +38,7 @@ interface WorkspaceSectionProps {
   onReviewConflict: (conflict: FactItem) => void;
   onToggleMegaTableFullscreen: (block: WorkspaceBlock) => void;
   onToggleFactVisibility?: (factId: string) => void;
+  productName?: string;
 }
 
 export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
@@ -58,7 +59,8 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
   onOpenSemantic,
   onReviewConflict,
   onToggleMegaTableFullscreen,
-  onToggleFactVisibility
+  onToggleFactVisibility,
+  productName
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(section.title);
@@ -292,7 +294,7 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
                         label: 'Especificação da Tabela',
                         value: '',
                         originScope: 'model',
-                        originLabel: 'TA-25N',
+                        originLabel: productName || 'Este instrumento',
                         semanticKey: 'table.spec',
                         source
                       })

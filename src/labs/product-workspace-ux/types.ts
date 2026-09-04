@@ -53,6 +53,8 @@ export interface FactConflictDetails {
   detectedAt: string;
 }
 
+export type FactOriginKind = 'product_local' | 'family' | 'product_override';
+
 export interface FactItem {
   id: string;
   label: string;
@@ -61,9 +63,10 @@ export interface FactItem {
   isHighlighted?: boolean;
   isHidden?: boolean; // Permite esconder do resumo/visualização sem apagar do produto
   originScope: 'model' | 'family';
-  originLabel: string; // "Linha TA" ou "TA-25N"
+  originKind?: FactOriginKind; // 'product_local' | 'family' | 'product_override'
+  originLabel: string; // Ex: "Linha PCON" ou "PCON KOMPRESSOR-Y18"
   category?: string;
-  semanticKey: string; // "temperature.stability"
+  semanticKey: string; // "pressure.range"
   aliases?: string[];
   source?: FactSource;
   sources?: FactSource[]; // Suporte completo a múltiplas fontes/evidências
@@ -100,6 +103,19 @@ export function getFactSourceState(fact: FactItem): FactSourceState {
     return 'multiple_agreeing';
   }
   return 'single_source';
+}
+
+export interface ProductWorkspaceMetadata {
+  id: string;
+  name: string;
+  sku?: string;
+  category: string;
+  familyLine: string;
+  department: string;
+  layoutRevision: number; // "Versão da organização"
+  dataRevision: number;   // "Versão dos dados técnicos"
+  isSynthetic?: boolean;
+  fixtureBadge?: string;  // Ex: "LAB / SYNTHETIC FIXTURE"
 }
 
 export interface StagedDatumChange {
@@ -249,3 +265,68 @@ export interface SearchResultItem {
   type: 'fact' | 'sensor' | 'table_row' | 'document' | 'alias';
   matchedQuery: string;
 }
+
+/**
+ * Derived counts helpers: garante que contagens nunca sejam fonte primária estática
+ * sujeita a desatualização, e sim sempre computadas dinamicamente da projeção de seções.
+ */
+export function deriveFactsCount(sections: WorkspaceSection[]): number {
+  let count = 0;
+  for (const sec of sections) {
+    for (const block of sec.blocks) {
+      if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
+        count += block.data.facts.length;
+      } else if (block.data.kind === 'mega_table') {
+        count += block.data.table.rows.length;
+      } else if (block.data.kind === 'table') {
+        count += block.data.table.rows.length;
+      } else if (block.data.kind === 'conflicts') {
+        count += block.data.conflicts.length;
+      }
+    }
+  }
+  return count;
+}
+
+export function deriveTablesCount(sections: WorkspaceSection[]): number {
+  let count = 0;
+  for (const sec of sections) {
+    for (const block of sec.blocks) {
+      if (block.data.kind === 'mega_table' || block.data.kind === 'table') {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+export function deriveSourcesCount(sections: WorkspaceSection[]): number {
+  const sourceDocCodes = new Set<string>();
+  for (const sec of sections) {
+    for (const block of sec.blocks) {
+      if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
+        for (const f of block.data.facts) {
+          getFactSources(f).forEach((s) => sourceDocCodes.add(s.documentCode));
+        }
+      } else if (block.data.kind === 'documents') {
+        block.data.documents.forEach((d) => sourceDocCodes.add(d.code));
+      }
+    }
+  }
+  return sourceDocCodes.size;
+}
+
+export function deriveConflictsCount(sections: WorkspaceSection[]): number {
+  let count = 0;
+  for (const sec of sections) {
+    for (const block of sec.blocks) {
+      if (block.data.kind === 'conflicts') {
+        count += block.data.conflicts.length;
+      } else if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
+        count += block.data.facts.filter((f) => f.conflict != null).length;
+      }
+    }
+  }
+  return count;
+}
+

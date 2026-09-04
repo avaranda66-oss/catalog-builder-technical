@@ -8,7 +8,20 @@
  * - Fixture estritamente para o laboratório de UX
  */
 
-import { WorkspaceSection, FactSource } from './types';
+import { WorkspaceSection, FactSource, ProductWorkspaceMetadata } from './types';
+
+export const TA25N_METADATA: ProductWorkspaceMetadata = {
+  id: 'ta25n',
+  name: 'PRESYS TA-25N',
+  sku: 'TA-25N',
+  category: 'Calibrador Bloco Seco',
+  familyLine: 'Linha TA',
+  department: 'Metrologia Industrial',
+  layoutRevision: 1,
+  dataRevision: 4,
+  isSynthetic: false
+};
+
 
 export const TA_MANUAL_PT_SOURCE: FactSource = {
   documentId: 'doc-manual-pt',

@@ -1,33 +1,35 @@
 # AGENT 1 INTEGRATION NOTES
-**Mission Reference:** PIM.MEGA.WORKSPACE.UX1.1 ↔ PIM.MEGA.WORKSPACE.FOUNDATION1A (Remote Branch: `origin/feat/pim-mega-workspace-foundation-v1`)  
+**Mission Reference:** PIM.MEGA.WORKSPACE.UX1.2 ↔ PIM.MEGA.WORKSPACE.FOUNDATION1C (Remote Branch: `origin/feat/pim-mega-workspace-foundation-v1-synced`)  
 **Author:** Agent 2 (Interaction Design & UX Lab Lead)  
-**Status:** REALIGNED (False direct mappings eliminated; real code audited)  
+**Status:** REALIGNED TO FOUNDATION1C (All domain advancements audited; zero unverified claims)  
 **Date:** 2026-09-04  
-**Head Base:** `7ea3e814af0577cefeafd6b3a373c208fcd5bb47`
+**Head Base:** `7ea3e814af0577cefeafd6b3a373c208fcd5bb47`  
+**Domain HEAD Synced:** `5de3372b07c6202adafbd62c73887fa04fea44c9` (commit `5de3372`)
 
 ---
 
 ## 1. Executive Summary
 
-A rigorous audit of the code published by Agent 1 on `origin/feat/pim-mega-workspace-foundation-v1` (commits `3386b2f` through `2ba0815`) was performed to eliminate premature compatibility claims and ensure strict architectural alignment before the upcoming `PIM.MEGA.WORKSPACE.INTEGRATION1` mission.
+A comprehensive, read-only audit of the latest code published by Agent 1 on `origin/feat/pim-mega-workspace-foundation-v1-synced` at HEAD `5de3372b07c6202adafbd62c73887fa04fea44c9` (`feat(pim): complete PIM.MEGA.WORKSPACE.FOUNDATION1C final domain hardening`) was performed.
 
-### Corrected Overclaims
-1. **Block Sizing (`BlockSize`):**
-   - *Previous claim:* Claimed `WorkspaceBlockDef['size']` was identical.
-   - *Real Code Reality:* Agent 1's `BaseWorkspaceBlockDef` contains **only** `id: string` and `kind: WorkspaceBlockKind`. There is no `size` property (`'small' | 'medium' | 'large' | 'full'`) in the published domain schema.
-   - *Status:* **PENDING DOMAIN ALIGNMENT** (Requires Agent 1 to add `size` to `BaseWorkspaceBlockDef` in FOUNDATION1B, or layout metadata adapter).
-2. **Block Resize Command (`resizeBlock`):**
-   - *Previous claim:* Claimed direct mapping.
-   - *Real Code Reality:* Agent 1's `src/domain/product-workspace/commands.ts` exports `addBlock`, `removeBlock`, `renameBlock`, `moveBlock`, but **no `resizeBlock`**.
-   - *Status:* **PENDING DOMAIN ALIGNMENT**.
-3. **Block Visibility / Hiding (`hideBlock`):**
-   - *Previous claim:* Claimed direct mapping.
-   - *Real Code Reality:* Agent 1 has `removeBlock` (which removes presentation references while preserving the underlying datum), but no `isHidden: boolean` property on `BaseWorkspaceBlockDef` or `hideBlock` command.
-   - *Status:* **PENDING DOMAIN ALIGNMENT** (Or adapter via presentation removal/pool).
-4. **Semantic Rename Execution (`executeCanonicalKeyRename`):**
-   - *Previous claim:* Suggested ready execution via `executeCanonicalKeyRename(workbook, plan)`.
-   - *Real Code Reality:* Agent 1's domain contains a formal planner (`planCanonicalKeyRename` returning `CanonicalRenamePlan`), but **no execution engine** has been published yet.
-   - *Status:* **PREVIEW ONLY / PENDING FOUNDATION1B**. UX emits only `onRequestSemanticRenamePreview` and defines `onConfirmSemanticRename` as an uncommitted hook.
+### Findings & Delivered Domain Capabilities (FOUNDATION1C)
+1. **Block Sizing (`size`):**
+   - *Status:* **DIRECT**.
+   - *Domain Delivery:* Agent 1 added `size?: WorkspaceBlockSize` (`'small' | 'medium' | 'large' | 'full'`) to `BaseWorkspaceBlockDef` in `src/domain/product-workspace/types.ts`.
+   - *Command:* Agent 1 added `resizeBlock(layout, blockId, size): WorkspaceLayoutV1` in `src/domain/product-workspace/commands.ts`.
+2. **Block Visibility / Hiding (`visibility`):**
+   - *Status:* **DIRECT**.
+   - *Domain Delivery:* Agent 1 added `visibility?: WorkspaceBlockVisibility` (`'visible' | 'hidden'`) to `BaseWorkspaceBlockDef`.
+   - *Command:* Agent 1 added `setBlockVisibility(layout, blockId, visibility): WorkspaceLayoutV1` in `commands.ts`.
+3. **Display Label Renaming vs Canonical Semantics (ADR Parity):**
+   - *Status:* **DIRECT**.
+   - *Domain Delivery:* Agent 1 added `WorkspaceDisplayOverride` (`customLabel`, `customDescription`) on `WorkspaceLayoutV1` via `updateDisplayOverride(layout, canonicalKey, override)`.
+   - *Semantic Registry:* Sovereign `ProductSemanticRegistry` decouples AI aliases and canonical labels from layouts.
+4. **Independent Layout Revision & Touch Idempotency:**
+   - *Status:* **DIRECT**.
+   - *Domain Delivery:* All layout mutations invoke `touchWorkspaceLayout` with strict NO-OP idempotency.
+5. **Canonical Rename Execution (`executeCanonicalKeyRename`):**
+   - *Status:* **PENDING EXECUTION ENGINE** (Planning is fully DIRECT via `planCanonicalKeyRename` returning `CanonicalRenamePlan` with alias collision protection; execution engine remains a controlled operational hook).
 
 ---
 
@@ -38,25 +40,25 @@ Every contract area is categorized into one of three explicit states:
 - **`ADAPTER REQUIRED`**: Data is present in both domains but requires a bidirectional mapper.
 - **`PENDING DOMAIN ALIGNMENT`**: Capability designed in UX Lab but not yet present in Agent 1's domain code.
 
-| Feature Area | Agent 2 UX Lab Contract | Agent 1 Published Domain (`origin/feat/...`) | Alignment State | Notes |
+| Feature Area | Agent 2 UX Lab Contract | Agent 1 Published Domain (`5de3372`) | Alignment State | Notes |
 |---|---|---|---|---|
 | **Inspection Modes** | `WorkspaceMode: 'view' \| 'edit_workspace'`<br>`Simple` vs `Advanced` | `WorkspaceMode: 'simple' \| 'advanced'` | **DIRECT** | Visual modes map cleanly to simple/advanced presentation toggle. |
-| **Section Rename** | `onRenameSection(sectionId, title)` | `renameSection(layout, sectionId, newTitle)` in `commands.ts` | **DIRECT** | Pure immutable layout transformation. |
-| **Section Reordering** | `onMoveSection(sectionId, from, to)` | `moveSection(layout, sectionId, targetIndex)` and `reorderSections(layout, sectionIds)` in `commands.ts` | **DIRECT** | Full reordering parity. |
-| **Block Movement** | `onMoveBlock(blockId, fromSec, toSec, idx)` | `moveBlock(layout, blockId, sourceSec, targetSec, targetIdx)` in `commands.ts` | **DIRECT** | Cross-section and intra-section movement fully supported. |
-| **Block Sizing (`size`)** | `'small' \| 'medium' \| 'large' \| 'full'` | Not defined in `BaseWorkspaceBlockDef` | **PENDING DOMAIN ALIGNMENT** | Needs `size?: BlockSize` added to `BaseWorkspaceBlockDef` in FOUNDATION1B. |
-| **Block Resize Command** | `resizeBlock(secId, blkId, size)` | Not exported in `commands.ts` | **PENDING DOMAIN ALIGNMENT** | Requires command in FOUNDATION1B. |
-| **Block Visibility / Hiding** | `onHideBlock(blockId, hidden)` | `removeBlock(layout, blockId)` removes reference from section | **ADAPTER REQUIRED** | Adapter can treat "hiding" as moving the block to an unassigned block pool or Agent 1 can add `hidden?: boolean`. |
-| **Fact Visibility / Hiding** | `toggleFactVisibility(factId)` / `isHidden` | `removeDatumFromBlock(layout, blockId, datumId)` | **ADAPTER REQUIRED** | Fact remains 100% intact in `ProductWorkbookV2`; adapter reconciles presentation list. |
-| **Display Label Renaming** | `updateFactDisplayLabel(factId, newLabel)` | `updateDescriptorDisplayLabel(layout, canonicalKey, newLabel)` in `commands.ts` | **DIRECT** | Updates human presentation label while preserving `canonicalKey`. |
+| **Section Rename** | `onRenameSection(sectionId, title)` | `renameSection(layout, sectionId, newTitle)` in `commands.ts` | **DIRECT** | Pure immutable layout transformation with revision bump. |
+| **Section Reordering** | `onMoveSection(sectionId, from, to)` | `moveSection(layout, sectionId, targetIndex)` and `reorderSections` in `commands.ts` | **DIRECT** | Full reordering parity. |
+| **Block Movement** | `onMoveBlock(blockId, fromSec, toSec, idx)` | `moveBlock(layout, blockId, sourceSec, targetSec, targetIdx)` in `commands.ts` | **DIRECT** | Single-section ownership enforced. |
+| **Block Sizing (`size`)** | `'small' \| 'medium' \| 'large' \| 'full'` | `BaseWorkspaceBlockDef.size?: WorkspaceBlockSize` | **DIRECT** | Direct union parity delivered in FOUNDATION1C. |
+| **Block Resize Command** | `resizeBlock(secId, blkId, size)` | `resizeBlock(layout, blockId, size)` in `commands.ts` | **DIRECT** | Direct command parity delivered in FOUNDATION1C. |
+| **Block Visibility / Hiding** | `onHideBlock(blockId, hidden)` | `setBlockVisibility(layout, blockId, visibility)` in `commands.ts` | **DIRECT** | Direct command parity (`'visible' \| 'hidden'`) delivered in FOUNDATION1C. |
+| **Fact Visibility / Hiding** | `toggleFactVisibility(factId)` / `isHidden` | `removeDatumFromBlock(layout, blockId, datumId)` | **DIRECT** | Removes datum reference from visual block without deleting datum from workbook. |
+| **Workspace Display Overrides** | `updateFactDisplayLabel(factId, newLabel)` | `updateDisplayOverride(layout, canonicalKey, override)` in `commands.ts` | **DIRECT** | Layout-specific display label without mutating canonical identity. |
 | **Staged Fact Editing** | `onStageFactEdit(datumId, draft, scope)` | `stageDatumChange(draft, datumId, changeDraft)` in `commands.ts` & `WorkspaceEditDraft` | **DIRECT** | Both agents strictly align on **staging** edits rather than direct canonical writes. |
-| **Semantic Identity** | `canonicalKey`, `aliases`, `displayLabel` | `SemanticDescriptor`: `canonicalKey`, `displayLabel`, `aliases`, `deprecatedAliases` | **DIRECT** | Full conceptual and field parity. |
-| **Semantic Rename Planner** | `onRequestSemanticRenamePreview(cur, next)` | `planCanonicalKeyRename(workbook, oldKey, newKey, options)` → `CanonicalRenamePlan` | **DIRECT** | Full blast-radius planning parity. |
-| **Semantic Rename Execution** | `onConfirmSemanticRename(...)` | Not yet implemented in domain | **PENDING DOMAIN ALIGNMENT** | UX treats execution as a future hook; no execution presumed. |
-| **Source Provenance Trace** | `SourceDrawer` with multi-source support (`FactSource[]`) | `traceDatumSource(workbook, datumId)` → `Evidence[]` | **ADAPTER REQUIRED** | Adapter maps domain `Evidence` to UX `FactSource` structure (documentCode, page, excerpt, status). |
-| **Multi-Source Evidence** | Single, agreeing, conflicting, no-source, inherited | Multiple `Evidence` entries per datum in `ProductWorkbookV2` | **ADAPTER REQUIRED** | Domain supports multiple evidences; adapter groups and computes agreement/conflict state. |
-| **Mega Table Matrix** | 19+ sensor rows, RTD/TC groups, sticky header, density modes | `TechnicalTableBlockDef`, `WorkspaceTechnicalTableDef`, `deriveTechnicalTable` | **ADAPTER REQUIRED** | Adapter translates `cells: Record<colId, cell>` to UX table row format. |
-| **AI Layout Optimization** | `WorkspaceOrganizationDiff` (+2 sections, +1 table, 0 removed) | `autoOrganizeWorkspace(workbook, layout)` in `auto-organizer.ts` | **DIRECT** | Pure presentation projection without datum mutation. |
+| **Semantic Identity** | `canonicalKey`, `aliases`, `displayLabel` | `ProductSemanticRegistry` & `SemanticDescriptor` | **DIRECT** | Full conceptual parity; aliases belong to semantic registry. |
+| **Semantic Rename Planner** | `onRequestSemanticRenamePreview(cur, next)` | `planCanonicalKeyRename(workbook, oldKey, newKey, options)` → `CanonicalRenamePlan` | **DIRECT** | Full blast-radius planning parity with collision detection. |
+| **Semantic Rename Execution** | `onConfirmSemanticRename(...)` | Controlled engineering operation | **PENDING EXECUTION ENGINE** | UX treats execution as an uncommitted hook. |
+| **Source Provenance Trace** | `SourceDrawer` with multi-source support (`FactSource[]`) | `ProjectedSourceTrace` & `HumanProvenanceItem` | **ADAPTER REQUIRED** | Adapter maps domain provenance items to UX `FactSource` presentation structures. |
+| **Multi-Source Evidence** | Single, agreeing, conflicting, no-source, inherited | Multiple `Evidence` entries & `AiProductKnowledgeEnvelope` | **ADAPTER REQUIRED** | Domain supports multi-evidence; UX presents up to 5 agreeing or neutral disputes. |
+| **Mega Table Matrix** | 100x15 matrix, groups, sticky header, density modes | `TechnicalTableBlockDef`, `WorkspaceTechnicalTableDef`, `deriveTechnicalTable` | **ADAPTER REQUIRED** | Adapter translates `cells: Record<string, cell>` to UX table matrix format. |
+| **AI Layout Optimization** | `WorkspaceOrganizationDiff` | `autoOrganizeWorkspace(workbook, layout)` in `auto-organizer.ts` | **DIRECT** | Pure presentation projection without datum mutation. |
 
 ---
 
@@ -118,10 +120,12 @@ export function createMegaWorkspaceBridge(
 
 ---
 
-## 4. Pending Requirements for FOUNDATION1B
+## 4. Domain Readiness Status for Integration
+ 
+All structural blockers identified previously have been delivered in FOUNDATION1C (`5de3372`):
+1. [x] **Add `size?: WorkspaceBlockSize` (`'small' | 'medium' | 'large' | 'full'`)** to `BaseWorkspaceBlockDef` in `src/domain/product-workspace/types.ts` — **DELIVERED in FOUNDATION1C**.
+2. [x] **Add `resizeBlock(layout, blockId, newSize)`** to `src/domain/product-workspace/commands.ts` — **DELIVERED in FOUNDATION1C**.
+3. [x] **Add `visibility?: WorkspaceBlockVisibility` (`'visible' | 'hidden'`)** and `setBlockVisibility` to `src/domain/product-workspace/commands.ts` — **DELIVERED in FOUNDATION1C**.
+4. [x] **Display Override Separation**: Sovereign `WorkspaceDisplayOverride` on layouts separated from `ProductSemanticRegistry` — **DELIVERED in FOUNDATION1C**.
+5. [ ] **Safe execution engine** for `CanonicalRenamePlan` with transaction safety and rollback support — **CONTROLLED OPERATIONAL HOOK (PENDING INTEGRATION MISSION)**.
 
-To achieve complete zero-adapter integration:
-1. **Add `size?: 'small' | 'medium' | 'large' | 'full'`** to `BaseWorkspaceBlockDef` in `src/domain/product-workspace/types.ts`.
-2. **Add `resizeBlock(layout, blockId, newSize)`** to `src/domain/product-workspace/commands.ts`.
-3. **Add `hidden?: boolean`** to `BaseWorkspaceBlockDef` or export explicit presentation pool commands.
-4. **Implement safe execution engine** for `CanonicalRenamePlan` with transaction safety and rollback support.

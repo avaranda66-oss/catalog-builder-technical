@@ -1,4 +1,14 @@
 // src/labs/product-workspace-ux/MegaWorkspaceLab.tsx
+/**
+ * Container Principal do Human-First Mega Product Workspace UX Lab.
+ * 
+ * Regras & Emendas (AMENDMENT 2, 3, 4, 8, 9 & UX1.2):
+ * - Integra seletor de múltiplos produtos via registry (TA, PCON, STRESS).
+ * - Isolamento total de estado entre fixtures.
+ * - Suporta 100 linhas x 15 colunas e 500 fatos com performance fluida.
+ * - Desacoplamento total de jargões técnicos específicos de produto.
+ */
+
 import React, { useState } from 'react';
 import { useMegaWorkspaceState } from './useMegaWorkspaceState';
 import { WorkspaceHeader } from './components/WorkspaceHeader';
@@ -22,7 +32,7 @@ export const MegaWorkspaceLab: React.FC = () => {
   const state = useMegaWorkspaceState();
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
-  // Scroll suave até a seção
+  // Scroll suave até a seção selecionada
   const handleScrollToSection = (sectionId: string) => {
     setActiveSectionId(sectionId);
     const element = document.getElementById(sectionId);
@@ -35,10 +45,18 @@ export const MegaWorkspaceLab: React.FC = () => {
     handleScrollToSection(result.sectionId);
   };
 
+  const hasMetrologySection = state.sections.some((s) => s.id === 'sec-metrologia');
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col antialiased selection:bg-blue-100 selection:text-[#003366]">
-      {/* Header Sticky Global */}
+      {/* Header Sticky Global Dinâmico */}
       <WorkspaceHeader
+        productMetadata={state.productMetadata}
+        availableProducts={state.availableProducts}
+        activeProductId={state.activeProductId}
+        onSelectProduct={state.setActiveProductId}
+        derivedCounts={state.derivedCounts}
+        lastSearchDurationMs={state.lastSearchDurationMs}
         mode={state.mode}
         setMode={state.setMode}
         perspective={state.perspective}
@@ -62,9 +80,10 @@ export const MegaWorkspaceLab: React.FC = () => {
           <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
             <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
             <span>
-              <strong>Modo de Organização Ativo:</strong> Arraste seções e blocos, renomeie títulos e redimensione tabelas. A edição de dados continua protegida.
+              <strong>Modo de Organização Ativo:</strong> Arraste seções e blocos, renomeie títulos e ajuste visibilidade. A edição de dados continua protegida no catálogo.
             </span>
             <button
+              type="button"
               onClick={() => state.setMode('view')}
               className="ml-auto px-2.5 py-1 bg-white text-amber-900 font-bold rounded hover:bg-amber-50 transition-colors"
             >
@@ -76,7 +95,7 @@ export const MegaWorkspaceLab: React.FC = () => {
 
       {/* Conteúdo Central e Navigation Rail */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-8">
-        {/* Navigation Rail Lateral Fixo */}
+        {/* Navigation Rail Lateral Fixo (Otimizado para 12+ seções) */}
         <WorkspaceNavOutline
           sections={state.sections}
           activeSectionId={activeSectionId}
@@ -87,25 +106,28 @@ export const MegaWorkspaceLab: React.FC = () => {
 
         {/* Coluna Principal do Workspace Editorial */}
         <main className="flex-1 min-w-0 space-y-6">
-          {/* Banner Inteligente de Sugestão de Tabela */}
-          <TransformCardsSuggestionBanner
-            show={state.showTransformSuggestion}
-            onDismiss={() => state.setShowTransformSuggestion(false)}
-            onPreviewTransform={() => {
-              state.transformSelectedFactsIntoTable(
-                'sec-metrologia',
-                ['f-metro-axial', 'f-metro-radial', 'f-metro-stab-time'],
-                'Matriz de Uniformidade e Estabilidade'
-              );
-            }}
-          />
+          {/* Banner Inteligente de Sugestão de Tabela (Apenas se aplicável à fixture) */}
+          {hasMetrologySection && (
+            <TransformCardsSuggestionBanner
+              show={state.showTransformSuggestion}
+              onDismiss={() => state.setShowTransformSuggestion(false)}
+              onPreviewTransform={() => {
+                state.transformSelectedFactsIntoTable(
+                  'sec-metrologia',
+                  ['f-metro-axial', 'f-metro-radial', 'f-metro-stab-time'],
+                  'Matriz de Uniformidade e Estabilidade'
+                );
+              }}
+            />
+          )}
 
-          {/* Renderização de Cada Seção */}
+          {/* Renderização de Cada Seção Editorial */}
           {state.sections.map((section, sIdx) => (
             <WorkspaceSectionComponent
               key={section.id}
               section={section}
               mode={state.mode}
+              productName={state.productMetadata.name}
               onToggleCollapse={() => state.toggleSectionCollapse(section.id)}
               onRenameSection={(newTitle) => state.renameSection(section.id, newTitle)}
               onMoveUp={sIdx > 0 ? () => state.moveSection(sIdx, sIdx - 1) : undefined}
@@ -130,14 +152,16 @@ export const MegaWorkspaceLab: React.FC = () => {
         </main>
       </div>
 
-      {/* Modais e Drawers Interativos */}
+      {/* Modais e Drawers Interativos Totalmente Agnósticos */}
       <AddTechnicalInfoModal
         isOpen={state.isAddModalOpen}
         onClose={() => state.setIsAddModalOpen(false)}
         sectionTitle={state.sections.find((s) => s.id === state.targetSectionForAdd)?.title}
+        productName={state.productMetadata.name}
+        familyLineName={state.productMetadata.familyLine}
         onAddFact={(factData) => {
-          const target = state.targetSectionForAdd || state.sections[0].id;
-          state.addFact(target, factData);
+          const target = state.targetSectionForAdd || state.sections[0]?.id;
+          if (target) state.addFact(target, factData);
         }}
       />
 
@@ -145,6 +169,8 @@ export const MegaWorkspaceLab: React.FC = () => {
         fact={state.selectedFactForEdit}
         isOpen={Boolean(state.selectedFactForEdit)}
         onClose={() => state.setSelectedFactForEdit(null)}
+        productName={state.productMetadata.name}
+        familyLineName={state.productMetadata.familyLine}
         onSave={(id, draft, scope) => state.stageFactEdit(id, draft, scope)}
         onOpenSource={(fact) => state.setSelectedFactForSource(fact)}
       />
@@ -172,7 +198,7 @@ export const MegaWorkspaceLab: React.FC = () => {
 
       <SemanticAdvancedDrawer
         fact={state.selectedSemanticForRename}
-        isOpen={false} // Ativado pelo modal de semântica quando necessário
+        isOpen={false}
         onClose={() => state.setSelectedSemanticForRename(null)}
         onOpenRenameModal={(fact) => state.setSelectedSemanticForRename(fact)}
       />
@@ -181,23 +207,33 @@ export const MegaWorkspaceLab: React.FC = () => {
         isOpen={state.isAIOrganizeModalOpen}
         onClose={() => state.setIsAIOrganizeModalOpen(false)}
         onApply={state.applyAIOrganization}
+        productName={state.productMetadata.name}
+        factsCount={state.derivedCounts.factsCount}
       />
 
       <AIImportModal
         isOpen={state.isAIImportModalOpen}
         onClose={() => state.setIsAIImportModalOpen(false)}
+        productName={state.productMetadata.name}
       />
 
       <CreateTableModal
         isOpen={state.isCreateTableModalOpen}
         onClose={() => state.setIsCreateTableModalOpen(false)}
         sections={state.sections}
+        productName={state.productMetadata.name}
+        familyLineName={state.productMetadata.familyLine}
         onCreateTable={(secId, title, cols, rows) => state.createNewTable(secId, title, cols, rows)}
       />
 
-      {/* Modal de Tabela Quase Fullscreen */}
+      {/* Modal de Tabela Quase Fullscreen com Tecla Escape */}
       {state.expandedMegaTable && state.expandedMegaTable.data.kind === 'mega_table' && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-2xs flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tabela em modo expandido"
+        >
           <div className="w-full h-full max-w-7xl max-h-[92vh] flex flex-col">
             <MegaTableBlock
               table={state.expandedMegaTable.data.table}
