@@ -19,8 +19,12 @@ import {
   MegaWorkspaceViewModel,
   WorkspaceSessionVM
 } from '../../../domain/product-workspace/view-model';
+import {
+  ensureWorkbookV2,
+  ProductWorkbookV2,
+  SourceDocument
+} from '../../../domain/product-workbook/types';
 import { resolveEffectiveProductKnowledge } from '../../../domain/product-workbook/inheritance.engine';
-import { ProductWorkbookV2, SourceDocument } from '../../../domain/product-workbook/types';
 import { MegaWorkspace } from './MegaWorkspace';
 import { HumanFriendlyErrorBanner } from '../../common/HumanFriendlyErrorBanner';
 
@@ -73,40 +77,53 @@ export const MegaWorkspaceReadOnlyContainer: React.FC<MegaWorkspaceReadOnlyConta
       setErrorMessage(null);
 
       try {
-        // 1. Carrega Workbook do Produto
-        const prodWb = await effectiveWorkbookRepo.getWorkbook({
+        // 1. Carrega Workbook do Produto com migração V1 -> V2 em memória segura (Blocker 10)
+        const rawProdWb = await effectiveWorkbookRepo.getWorkbook({
           kind: 'product',
           id: product.id
         });
+        const prodWb = rawProdWb ? ensureWorkbookV2(rawProdWb) : null;
 
-        // 2. Carrega Workbook da Família (se houver)
+        // 2. Carrega Workbook da Família (se houver) com migração V1 -> V2 em memória segura (Blocker 10)
         let famWb: ProductWorkbookV2 | null = null;
         if (family?.id || product.family_id) {
           const famId = family?.id || product.family_id!;
-          famWb = (await effectiveWorkbookRepo.getWorkbook({
+          const rawFamWb = await effectiveWorkbookRepo.getWorkbook({
             kind: 'family',
             id: famId
-          })) as ProductWorkbookV2 | null;
+          });
+          famWb = rawFamWb ? ensureWorkbookV2(rawFamWb) : null;
         }
 
-        // 3. Resolve Conhecimento Preliminar para identificar Fontes Referenciadas (Emenda D)
+        // 3. Resolve Conhecimento Preliminar para identificar Fontes Referenciadas (Emenda D + Blocker 3)
         const preliminaryKnowledge = resolveEffectiveProductKnowledge({
           productId: product.id,
           familyWorkbook: famWb,
-          productWorkbook: prodWb as ProductWorkbookV2 | null,
+          productWorkbook: prodWb,
           policy: 'effective_for_publishing'
         });
 
-        const referencedDocIds = collectReferencedSourceDocumentIds(preliminaryKnowledge);
+        // Coleta fontes dos fatos seguros E dos overrides/dados locais para auditoria (Blocker 3)
+        const referencedDocIds = collectReferencedSourceDocumentIds(preliminaryKnowledge, {
+          productWorkbook: prodWb,
+          familyWorkbook: famWb
+        });
 
-        // 4. Carrega EXATAMENTE os IDs referenciados (Emenda D: Nunca listSourceDocuments() sem filtro)
+        // 4. Carrega EXATAMENTE os IDs referenciados com fail-soft por documento (Emenda D + Blocker 6)
         let loadedSources: SourceDocument[] = [];
         if (referencedDocIds.length > 0) {
-          loadedSources = await effectiveSourceRepo.listSourceDocuments([...referencedDocIds]);
+          try {
+            loadedSources = await effectiveSourceRepo.listSourceDocuments([...referencedDocIds]);
+          } catch (sourceErr) {
+            console.warn(
+              '[MegaWorkspaceReadOnlyContainer] Falha ao carregar documentos fonte, operando em modo degradado:',
+              sourceErr
+            );
+          }
         }
 
         if (!isCancelled) {
-          setProductWorkbook(prodWb as ProductWorkbookV2 | null);
+          setProductWorkbook(prodWb);
           setFamilyWorkbook(famWb);
           setSourceDocuments(loadedSources);
           setIsLoading(false);

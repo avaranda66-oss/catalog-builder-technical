@@ -21,7 +21,8 @@ import {
   EffectiveSemanticRegistry,
   ExternalCatalogBindingReference,
   SemanticRegistryValidationError,
-  SemanticRegistryValidationReport
+  SemanticRegistryValidationReport,
+  SemanticRegistryValidationException
 } from './types';
 import { CatalogCellBinding } from '../catalog.schema';
 
@@ -342,7 +343,7 @@ export function registerSemanticDescriptor(
     return registry; // NO-OP: descritor idêntico não sobe revisão (Emenda K)
   }
 
-  return {
+  const candidate: SemanticRegistryV1 = {
     ...registry,
     revision: registry.revision + 1,
     descriptors: {
@@ -351,6 +352,13 @@ export function registerSemanticDescriptor(
     },
     updatedAt: new Date().toISOString()
   };
+
+  const validation = validateSemanticRegistry(candidate);
+  if (!validation.isValid) {
+    throw new SemanticRegistryValidationException(validation);
+  }
+
+  return candidate;
 }
 
 export function updateCanonicalDisplayLabel(
@@ -373,7 +381,7 @@ export function updateCanonicalDisplayLabel(
 
   const updated = updateDisplayLabel(baseDescriptor, trimmed);
 
-  return {
+  const candidate: SemanticRegistryV1 = {
     ...registry,
     revision: registry.revision + 1,
     descriptors: {
@@ -382,6 +390,13 @@ export function updateCanonicalDisplayLabel(
     },
     updatedAt: new Date().toISOString()
   };
+
+  const validation = validateSemanticRegistry(candidate);
+  if (!validation.isValid) {
+    throw new SemanticRegistryValidationException(validation);
+  }
+
+  return candidate;
 }
 
 export function addCanonicalAlias(
@@ -412,7 +427,7 @@ export function addCanonicalAlias(
     return registry; // NO-OP
   }
 
-  return {
+  const candidate: SemanticRegistryV1 = {
     ...registry,
     revision: registry.revision + 1,
     descriptors: {
@@ -421,6 +436,13 @@ export function addCanonicalAlias(
     },
     updatedAt: new Date().toISOString()
   };
+
+  const validation = validateSemanticRegistry(candidate);
+  if (!validation.isValid) {
+    throw new SemanticRegistryValidationException(validation);
+  }
+
+  return candidate;
 }
 
 export function removeCanonicalAlias(
@@ -439,7 +461,7 @@ export function removeCanonicalAlias(
 
   const updated = removeAlias(existing, aliasToRemove);
 
-  return {
+  const candidate: SemanticRegistryV1 = {
     ...registry,
     revision: registry.revision + 1,
     descriptors: {
@@ -448,6 +470,13 @@ export function removeCanonicalAlias(
     },
     updatedAt: new Date().toISOString()
   };
+
+  const validation = validateSemanticRegistry(candidate);
+  if (!validation.isValid) {
+    throw new SemanticRegistryValidationException(validation);
+  }
+
+  return candidate;
 }
 
 export interface ResolveSemanticRegistryParams {

@@ -37,33 +37,18 @@ export const ProductWorkspaceExperienceGate: React.FC<ProductWorkspaceExperience
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('workspace') === 'mega') return 'mega';
-      try {
-        const stored = localStorage.getItem('pim_workspace_experience');
-        if (stored === 'mega') return 'mega';
-      } catch {
-        // Ignora falhas em contextos sem localStorage
-      }
     }
 
+    // Padrão de homologação: Sempre Legacy em nova abertura (Emenda Blocker 11)
     return 'legacy';
   });
 
   const handleSwitchToMega = () => {
     setExperience('mega');
-    try {
-      localStorage.setItem('pim_workspace_experience', 'mega');
-    } catch {
-      // Ignora falhas de gravação
-    }
   };
 
   const handleSwitchToLegacy = () => {
     setExperience('legacy');
-    try {
-      localStorage.setItem('pim_workspace_experience', 'legacy');
-    } catch {
-      // Ignora falhas de gravação
-    }
   };
 
   if (experience === 'mega') {

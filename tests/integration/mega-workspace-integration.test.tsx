@@ -735,4 +735,174 @@ describe('PIM.MEGA.WORKSPACE.INTEGRATION1 — Complete Integration Suite', () =>
       }
     }
   });
+
+  // ==========================================================================
+  // GRUPO 7: CLOSURE INTEGRATION1.1 (BLOCKERS 9, 10, 11)
+  // ==========================================================================
+
+  it('BLOCKER 9: Simple Mode Zero Jargon — DOM não contém jargões técnicos e bloqueia Advanced Drawer', async () => {
+    let famWbWithConflict = ensureWorkbookV2(
+      createWorkbook({
+        id: 'wb-fam-ta-jargon',
+        owner: { kind: 'family', id: 'fam-ta' },
+        revision: 4
+      })
+    );
+
+    famWbWithConflict = ensureWorkbookV2(
+      addModule(famWbWithConflict, {
+        id: 'mod-metrology',
+        semanticKey: 'metrology.general',
+        label: 'Metrologia',
+        kind: 'key_value',
+        order: 0
+      })
+    );
+
+    famWbWithConflict = ensureWorkbookV2(
+      addDatum(
+        famWbWithConflict,
+        {
+          semanticKey: 'metrology.temperature.range',
+          moduleId: 'mod-metrology',
+          label: 'Faixa de Temperatura',
+          value: { type: 'range', lower: -25, upper: 155, unit: '°C' },
+          evidence: [
+            {
+              id: 'ev-1',
+              sourceDocumentId: 'doc-1',
+              observedValue: { type: 'range', lower: -25, upper: 155, unit: '°C' }
+            },
+            {
+              id: 'ev-2',
+              sourceDocumentId: 'doc-2',
+              observedValue: { type: 'range', lower: -30, upper: 160, unit: '°C' }
+            }
+          ],
+          status: 'verified'
+        },
+        'datum-range-conflict'
+      )
+    );
+
+    const { container } = render(
+      <MegaWorkspaceReadOnlyContainer
+        product={mockProductTA25N}
+        family={mockFamilyTA}
+        onClose={vi.fn()}
+        workbookRepo={{
+          getWorkbook: vi.fn().mockImplementation((owner) =>
+            owner.kind === 'family'
+              ? Promise.resolve(famWbWithConflict)
+              : Promise.resolve(null)
+          )
+        }}
+        sourceRepo={{
+          getSourceDocument: vi.fn().mockResolvedValue(null),
+          listSourceDocuments: vi.fn().mockResolvedValue([])
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'TA-25N' })).toBeInTheDocument();
+    });
+
+    // Simple Mode DOM Text Check:
+    const htmlText = container.textContent || '';
+    expect(htmlText).not.toContain('metrology.temperature.range'); // No canonicalKey in Simple mode!
+    expect(htmlText).not.toContain('ownerKind');
+    expect(htmlText).not.toContain('canonicalDecision');
+    expect(htmlText).not.toContain('TechnicalValue');
+    expect(htmlText).not.toContain('product_local');
+    expect(htmlText).not.toContain('product_override');
+
+    // Abre o SourceDrawer clicando no botão de fonte
+    const sourceBtn = await screen.findByTitle(/Atenção: Fontes divergentes/i);
+    fireEvent.click(sourceBtn);
+
+    // No modo simples, o SourceDrawer NÃO exibe o botão "Ver Detalhes Avançados"
+    expect(screen.queryByText('Ver Detalhes Avançados')).not.toBeInTheDocument();
+
+    // SemanticAdvancedDrawer não está presente no DOM
+    expect(screen.queryByText('Identidade Semântica Canônica')).not.toBeInTheDocument();
+  });
+
+  it('BLOCKER 10: V1 Workbook Read Safety — migra in-memory para V2 sem lançar e com zero saves', async () => {
+    // Mock de repositório retornando workbook no formato legado V1 (schemaVersion: 1)
+    const mockV1Workbook = {
+      schemaVersion: 1,
+      id: 'wb-v1-test',
+      owner: { kind: 'product' as const, id: 'prod-ta25n' },
+      revision: 1,
+      modules: [
+        {
+          id: 'mod-1',
+          semanticKey: 'metrology.general',
+          label: 'Metrologia',
+          kind: 'key_value' as const,
+          order: 0,
+          datumIds: ['datum-1']
+        }
+      ],
+      data: {
+        'datum-1': {
+          id: 'datum-1',
+          semanticKey: 'metrology.accuracy',
+          moduleId: 'mod-1',
+          label: 'Exatidão',
+          value: { type: 'quantity' as const, amount: 0.1, unit: '°C' },
+          evidence: [],
+          status: 'verified' as const
+        }
+      }
+    };
+
+    render(
+      <MegaWorkspaceReadOnlyContainer
+        product={mockProductTA25N}
+        family={mockFamilyTA}
+        onClose={vi.fn()}
+        workbookRepo={{
+          getWorkbook: vi.fn().mockImplementation((owner) =>
+            owner.kind === 'product'
+              ? Promise.resolve(mockV1Workbook as any)
+              : Promise.resolve(null)
+          )
+        }}
+        sourceRepo={{
+          getSourceDocument: vi.fn().mockResolvedValue(null),
+          listSourceDocuments: vi.fn().mockResolvedValue([])
+        }}
+      />
+    );
+
+    // Carrega sem lançar erro, migrando V1 para V2 em memória
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'TA-25N' })).toBeInTheDocument();
+    });
+    expect(screen.getByText('Exatidão')).toBeInTheDocument();
+  });
+
+  it('BLOCKER 11: Beta Gate Must Remain Opt-In — Zero localStorage persistence', () => {
+    localStorage.clear();
+
+    render(
+      <ProductWorkspaceExperienceGate
+        product={mockProductTA25N}
+        family={mockFamilyTA}
+        onClose={vi.fn()}
+      />
+    );
+
+    // Default inicial é SEMPRE Legacy
+    expect(screen.getByText('✨ Testar Mega Workspace')).toBeInTheDocument();
+
+    // Clica no botão para alternar para o Mega Beta
+    const toggleBtn = screen.getByText('✨ Testar Mega Workspace');
+    fireEvent.click(toggleBtn);
+
+    // localStorage NÃO é poluído com 'pim_workspace_experience'
+    expect(localStorage.getItem('pim_workspace_experience')).toBeNull();
+  });
 });

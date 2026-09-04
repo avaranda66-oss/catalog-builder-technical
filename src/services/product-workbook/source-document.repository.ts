@@ -89,7 +89,18 @@ export class SupabaseProductSourceDocumentRepository implements ProductSourceDoc
       return [];
     }
 
-    return data.map((item) => parseSourceDocument(normalizeSourceDocumentRow(item)));
+    const docs: SourceDocument[] = [];
+    for (const item of data) {
+      try {
+        docs.push(parseSourceDocument(normalizeSourceDocumentRow(item)));
+      } catch (parseErr) {
+        console.warn(
+          `[SupabaseProductSourceDocumentRepository] Documento fonte corrompido ignorado (id: ${item?.id}):`,
+          parseErr
+        );
+      }
+    }
+    return docs;
   }
 }
 

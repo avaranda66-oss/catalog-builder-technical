@@ -11,8 +11,9 @@ import {
   createProductSemanticRegistry,
   registerSemanticDescriptor,
   addCanonicalAlias,
-  removeCanonicalAlias
-} from '../../../src/domain/product-workspace/semantics';
+  removeCanonicalAlias,
+  SemanticRegistryValidationException
+} from '../../../src/domain/product-workspace';
 import { ProductWorkbookV2, createWorkbook, ensureWorkbookV2, addModule, addDatum } from '../../../src/domain/product-workbook';
 
 describe('Semantic Descriptor & Canonical Rename Safety', () => {
@@ -245,6 +246,55 @@ describe('Semantic Descriptor & Canonical Rename Safety', () => {
       const nonExistentRemove = removeCanonicalAlias(withDesc, 'metrology.accuracy', 'alias_fantasma');
       expect(nonExistentRemove).toBe(withDesc);
       expect(nonExistentRemove.revision).toBe(2);
+    });
+
+    // BLOCKER 7: Commands must actually gate through validateSemanticRegistry
+    it('BLOCKER 7: comandos de mutação lançam SemanticRegistryValidationException se o candidato for inválido', () => {
+      const initial = createProductSemanticRegistry({ productId: 'TA-25N', revision: 1 });
+      const desc1 = createSemanticDescriptor({
+        canonicalKey: 'metrology.accuracy',
+        displayLabel: 'Exatidão'
+      });
+      const desc2 = createSemanticDescriptor({
+        canonicalKey: 'metrology.stability',
+        displayLabel: 'Estabilidade'
+      });
+
+      let reg = registerSemanticDescriptor(initial, desc1);
+      reg = registerSemanticDescriptor(reg, desc2);
+
+      // Tentativa 1: Adicionar alias que colide com outra canonicalKey existente (alias A == canonical B)
+      expect(() => {
+        addCanonicalAlias(reg, 'metrology.accuracy', 'metrology.stability');
+      }).toThrow(SemanticRegistryValidationException);
+
+      // Tentativa 2: Adicionar alias que colide com a própria chave canônica (alias A == canonical A)
+      expect(() => {
+        addCanonicalAlias(reg, 'metrology.accuracy', 'metrology.accuracy');
+      }).toThrow();
+
+      // Tentativa 3: Registrar descritor com mapa desalinhado (descriptor map mismatch)
+      expect(() => {
+        const invalidDescriptor = {
+          ...desc1,
+          canonicalKey: 'metrology.corrupted.key'
+        };
+        // Força chave canônica diferente no mapa
+        registerSemanticDescriptor(reg, {
+          ...invalidDescriptor,
+          canonicalKey: 'metrology.mismatch'
+        });
+      }).not.toThrow(); // Valida se chave do mapa e canonicalKey batem (no register ele usa descriptor.canonicalKey)
+
+      // Tentativa 4: Registrar descritor cujo alias colide com chave ativa
+      expect(() => {
+        const collidingDesc = createSemanticDescriptor({
+          canonicalKey: 'metrology.resolution',
+          displayLabel: 'Resolução',
+          aliases: ['metrology.accuracy'] // Colide com desc1 canonicalKey!
+        });
+        registerSemanticDescriptor(reg, collidingDesc);
+      }).toThrow(SemanticRegistryValidationException);
     });
   });
 });

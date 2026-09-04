@@ -14,12 +14,14 @@ interface ConflictsBlockProps {
   conflictsByFactId: Readonly<Record<string, ProjectedConflictVM>>;
   factsById: Readonly<Record<string, ProjectedFactVM>>;
   onOpenSourceTrace: (fact: ProjectedFactVM) => void;
+  detailLevel?: 'simple' | 'advanced'; // Blocker 9
 }
 
 export const ConflictsBlock: React.FC<ConflictsBlockProps> = ({
   conflictsByFactId,
   factsById,
-  onOpenSourceTrace
+  onOpenSourceTrace,
+  detailLevel = 'simple'
 }) => {
   const conflictsList = Object.values(conflictsByFactId);
   if (conflictsList.length === 0) return null;
@@ -57,9 +59,11 @@ export const ConflictsBlock: React.FC<ConflictsBlockProps> = ({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 </div>
 
-                <div className="text-xs text-slate-500 font-mono">
-                  {conflict.canonicalKey}
-                </div>
+                {detailLevel === 'advanced' && (
+                  <div className="text-xs text-slate-500 font-mono">
+                    {conflict.canonicalKey}
+                  </div>
+                )}
 
                 {conflict.candidateValues.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">

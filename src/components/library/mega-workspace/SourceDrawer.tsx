@@ -1,6 +1,9 @@
 // src/components/library/mega-workspace/SourceDrawer.tsx
 // Painel lateral de rastreabilidade de fontes para o Mega Workspace (Produção).
 // Emendas implementadas:
+// - Blocker 4: Unresolved conflict is NOT presented as a vigent fact (shows "Valores encontrados nas fontes").
+// - Blocker 5: Lossless evidence trace. Mostra página, seção, locator, observedValue, excerpt quando existentes.
+// - Blocker 9: Simple mode zero jargon. Botão "Ver Detalhes Avançados" bloqueado em Simple.
 // - Emenda E: Zero fabricated confidence. Mostra apenas atributos canônicos reais existentes.
 // - Emenda L: Partial provenance fail-soft. Documento ausente mostra "Documento de origem indisponível".
 // - Zero explicit any.
@@ -14,7 +17,10 @@ import {
   CheckCircle2,
   ExternalLink,
   ShieldCheck,
-  Building
+  Building,
+  Bookmark,
+  Quote,
+  Layers
 } from 'lucide-react';
 import {
   ProjectedFactVM,
@@ -27,6 +33,7 @@ interface SourceDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenSemanticAdvanced?: (fact: ProjectedFactVM) => void;
+  detailLevel?: 'simple' | 'advanced'; // Blocker 9
 }
 
 export const SourceDrawer: React.FC<SourceDrawerProps> = ({
@@ -34,7 +41,8 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
   sourcesById,
   isOpen,
   onClose,
-  onOpenSemanticAdvanced
+  onOpenSemanticAdvanced,
+  detailLevel = 'simple'
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -64,14 +72,8 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
 
   if (!isOpen || !fact) return null;
 
-  const docIds = fact.sourceDocumentIds || [];
-  const associatedSources = docIds.map((id) => sourcesById[id] || {
-    id,
-    title: 'Documento de origem indisponível',
-    documentType: 'unknown',
-    citationCount: 1,
-    isUnavailable: true
-  });
+  const isConflicting = fact.hasConflict || fact.presentationState === 'conflicting';
+  const evidences = fact.evidences || [];
 
   return (
     <div
@@ -80,7 +82,7 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
       aria-modal="true"
       aria-label={`Origem da informação para ${fact.canonicalLabel}`}
     >
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
           <div>
@@ -104,17 +106,49 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Card de Fato Atual */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Valor Factual Vigente
+          {/* Card de Fato Vigente ou Conflito (Blocker 4) */}
+          <div
+            className={`p-4 rounded-xl border ${
+              isConflicting
+                ? 'bg-amber-50/60 border-amber-300 text-amber-900'
+                : 'bg-slate-50 border-slate-200/80 text-slate-900'
+            }`}
+          >
+            <span
+              className={`text-[11px] font-semibold uppercase tracking-wider ${
+                isConflicting ? 'text-amber-800' : 'text-slate-500'
+              }`}
+            >
+              {isConflicting ? 'Valores Encontrados nas Fontes' : 'Valor Factual Vigente'}
             </span>
-            <div className="text-xl font-bold text-slate-900 mt-1">
-              {fact.formattedValue}
-            </div>
+
+            {isConflicting ? (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Precisa de revisão técnica — divergência factual detectada</span>
+                </div>
+                {fact.candidateValues && fact.candidateValues.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {fact.candidateValues.map((cand, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 text-xs font-bold bg-white text-amber-900 rounded-lg border border-amber-300 shadow-2xs"
+                      >
+                        Candidato {idx + 1}: {cand}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-xl font-bold text-slate-900 mt-1">
+                {fact.formattedValue}
+              </div>
+            )}
 
             {/* Origem e Herança */}
-            <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+            <div className="mt-3 pt-3 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-600">
               <span className="flex items-center gap-1.5 font-medium">
                 <Building className="w-3.5 h-3.5 text-slate-400" />
                 Origem:
@@ -138,25 +172,11 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
             )}
           </div>
 
-          {/* Aviso de Conflito Técnico */}
-          {fact.hasConflict && (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
-              <div className="flex items-center gap-2 font-semibold text-sm text-amber-800">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                Informações Técnicas Concorrentes
-              </div>
-              <p className="text-xs text-amber-700 mt-1.5 leading-relaxed">
-                Foram encontradas fontes documentais com dados divergentes para esta característica.
-                A engenharia deve verificar as evidências abaixo para consenso.
-              </p>
-            </div>
-          )}
-
-          {/* Lista de Documentos Comprobatórios */}
+          {/* Lista de Evidências Lossless com Fontes e Metadados (Blocker 5 + Emenda E) */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Fontes Referenciadas ({associatedSources.length})
+                Evidências e Documentos ({evidences.length > 0 ? evidences.length : fact.sourceDocumentIds.length})
               </h4>
               {fact.evidenceState === 'multiple_agreeing' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -164,9 +184,15 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
                   Múltiplas Fontes Concordam
                 </span>
               )}
+              {fact.evidenceState === 'multiple_sources' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                  <Layers className="w-3 h-3" />
+                  Múltiplas Fontes
+                </span>
+              )}
             </div>
 
-            {associatedSources.length === 0 ? (
+            {evidences.length === 0 && fact.sourceDocumentIds.length === 0 ? (
               <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center">
                 <FileQuestion className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
                 <p className="text-xs font-medium text-slate-600">
@@ -178,71 +204,171 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {associatedSources.map((source, index) => (
-                  <div
-                    key={source.id || index}
-                    className={`p-4 rounded-xl border transition-all ${
-                      source.isUnavailable
-                        ? 'bg-amber-50/50 border-amber-200 text-amber-900'
-                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2.5">
-                        <div className="p-2 rounded-lg bg-slate-100 text-slate-600 shrink-0 mt-0.5">
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h5 className="text-sm font-semibold text-slate-900 leading-snug">
-                            {source.title}
-                          </h5>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
-                            {source.documentType && (
-                              <span className="capitalize">{source.documentType}</span>
-                            )}
-                            {source.revision && (
-                              <span>Rev. {source.revision}</span>
-                            )}
-                            {source.language && (
-                              <span className="uppercase">{source.language}</span>
+                {evidences.length > 0
+                  ? evidences.map((ev, index) => {
+                      const source = sourcesById[ev.sourceDocumentId] || {
+                        id: ev.sourceDocumentId,
+                        title: 'Documento de origem indisponível',
+                        documentType: 'unknown',
+                        citationCount: 1,
+                        isUnavailable: true
+                      };
+
+                      return (
+                        <div
+                          key={ev.evidenceId || index}
+                          className={`p-4 rounded-xl border transition-all ${
+                            source.isUnavailable
+                              ? 'bg-amber-50/50 border-amber-200 text-amber-900'
+                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2.5">
+                              <div className="p-2 rounded-lg bg-slate-100 text-slate-600 shrink-0 mt-0.5">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-semibold text-slate-900 leading-snug">
+                                  {source.title}
+                                </h5>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
+                                  {source.documentType && (
+                                    <span className="capitalize">{source.documentType}</span>
+                                  )}
+                                  {source.revision && (
+                                    <span>Rev. {source.revision}</span>
+                                  )}
+                                  {source.language && (
+                                    <span className="uppercase">{source.language}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {source.externalUrl && (
+                              <a
+                                href={source.externalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                                title="Abrir documento original"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
                             )}
                           </div>
+
+                          {/* Metadados Lossless da Evidência (Blocker 5: Mostra apenas atributos reais) */}
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1.5 text-xs">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-600">
+                              {ev.page !== undefined && (
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  <Bookmark className="w-3 h-3 text-slate-400" />
+                                  Pág. {ev.page}
+                                </span>
+                              )}
+                              {ev.section && (
+                                <span className="font-medium text-slate-600">
+                                  Seção: <span className="text-slate-800">{ev.section}</span>
+                                </span>
+                              )}
+                              {ev.locator && (
+                                <span className="font-medium text-slate-600">
+                                  Localizador: <span className="text-slate-800">{ev.locator}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {ev.formattedObservedValue && (
+                              <div className="text-slate-800 font-medium">
+                                <span className="text-slate-500">Valor observado:</span>{' '}
+                                <span className="font-semibold text-slate-900">{ev.formattedObservedValue}</span>
+                              </div>
+                            )}
+
+                            {ev.excerpt && (
+                              <div className="p-2 rounded bg-slate-50 border border-slate-150 text-slate-700 italic text-[11px] leading-relaxed flex items-start gap-1.5 mt-1.5">
+                                <Quote className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
+                                <span>"{ev.excerpt}"</span>
+                              </div>
+                            )}
+
+                            {ev.notes && (
+                              <p className="text-[11px] text-slate-500 mt-1">
+                                {ev.notes}
+                              </p>
+                            )}
+                          </div>
+
+                          {source.isUnavailable && (
+                            <p className="text-xs text-amber-700 mt-2 font-medium">
+                              ⚠ Documento original não disponível na biblioteca local ativa.
+                            </p>
+                          )}
                         </div>
-                      </div>
+                      );
+                    })
+                  : fact.sourceDocumentIds.map((id, index) => {
+                      const source = sourcesById[id] || {
+                        id,
+                        title: 'Documento de origem indisponível',
+                        documentType: 'unknown',
+                        citationCount: 1,
+                        isUnavailable: true
+                      };
 
-                      {source.externalUrl && (
-                        <a
-                          href={source.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                          title="Abrir documento original"
+                      return (
+                        <div
+                          key={id || index}
+                          className={`p-4 rounded-xl border transition-all ${
+                            source.isUnavailable
+                              ? 'bg-amber-50/50 border-amber-200 text-amber-900'
+                              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                          }`}
                         >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      )}
-                    </div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2.5">
+                              <div className="p-2 rounded-lg bg-slate-100 text-slate-600 shrink-0 mt-0.5">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-semibold text-slate-900 leading-snug">
+                                  {source.title}
+                                </h5>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
+                                  {source.documentType && (
+                                    <span className="capitalize">{source.documentType}</span>
+                                  )}
+                                  {source.revision && (
+                                    <span>Rev. {source.revision}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                    {source.isUnavailable && (
-                      <p className="text-xs text-amber-700 mt-2 font-medium">
-                        ⚠ Documento original não disponível na biblioteca local ativa.
-                      </p>
-                    )}
-                  </div>
-                ))}
+                          {source.isUnavailable && (
+                            <p className="text-xs text-amber-700 mt-2 font-medium">
+                              ⚠ Documento original não disponível na biblioteca local ativa.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer (Blocker 9: Simple mode never renders "Ver Detalhes Avançados") */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             Auditado pelo PIM
           </div>
 
-          {onOpenSemanticAdvanced && (
+          {detailLevel === 'advanced' && onOpenSemanticAdvanced && (
             <button
               onClick={() => onOpenSemanticAdvanced(fact)}
               className="text-xs font-semibold text-[#003366] hover:underline"

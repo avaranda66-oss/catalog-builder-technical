@@ -75,6 +75,17 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
             <span>{fact.sourceDocumentIds.length}</span>
           </button>
         );
+      case 'multiple_sources':
+        return (
+          <button
+            onClick={() => onOpenSourceTrace(fact)}
+            title={`${fact.sourceDocumentIds.length} fontes técnicas vinculadas`}
+            className="inline-flex items-center gap-0.5 p-1 text-slate-600 hover:bg-slate-100 rounded transition-colors font-mono text-[10px] font-bold"
+          >
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+            <span>{fact.sourceDocumentIds.length}</span>
+          </button>
+        );
       case 'single_source':
       default:
         return (
@@ -102,12 +113,15 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
           const fact = factsById[factId];
           if (!fact) return null;
 
+          const isConflicting = fact.hasConflict || fact.presentationState === 'conflicting';
+
           return (
             <div
               key={factId}
+              id={`fact-${factId}`}
               className={`group p-4 rounded-xl border transition-all bg-white hover:border-slate-300 hover:shadow-xs flex flex-col justify-between ${
-                fact.hasConflict
-                  ? 'border-amber-200 bg-amber-50/20'
+                isConflicting
+                  ? 'border-amber-300 bg-amber-50/30'
                   : 'border-slate-200/80'
               }`}
             >
@@ -134,11 +148,23 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
                 </div>
               </div>
 
-              {/* Valor Principal */}
+              {/* Valor Principal ou Aviso de Conflito (Blocker 4) */}
               <div className="mt-2.5">
-                <div className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-                  {fact.formattedValue}
-                </div>
+                {isConflicting ? (
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Precisa de revisão</span>
+                    </div>
+                    <p className="text-[11px] text-amber-700">
+                      Divergência entre fontes técnicas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                    {fact.formattedValue}
+                  </div>
+                )}
 
                 {/* Indicador de Override Pendente (Emenda G) */}
                 {fact.isPendingOverride && (

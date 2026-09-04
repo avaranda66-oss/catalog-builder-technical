@@ -110,7 +110,7 @@ export const MegaTableBlock: React.FC<MegaTableBlockProps> = ({
     : 'border border-slate-200 rounded-xl bg-white shadow-2xs overflow-hidden';
 
   return (
-    <div className={containerClasses}>
+    <div id={`table-${block.id}`} className={containerClasses}>
       {/* Header da Tabela */}
       <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
         <div className="flex items-center gap-2">

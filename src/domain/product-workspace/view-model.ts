@@ -1,14 +1,19 @@
 // src/domain/product-workspace/view-model.ts
-// Pure Production ViewModel & Adapter for Mega Product Workspace (PIM.MEGA.WORKSPACE.INTEGRATION1).
+// Pure Production ViewModel & Adapter for Mega Product Workspace (PIM.MEGA.WORKSPACE.INTEGRATION1.1).
 // Guarantees:
 // 1. Zero Second Truth: factsById is the single canonical map for all facts on screen.
 // 2. Reuse domain TechnicalValue directly (Amendment I).
 // 3. Family-only product remains truly family-only (Amendment B: hasProductWorkbook=false, productRevision=undefined).
-// 4. Simple view uses safe publishing policy (Amendment G: protects verified family truth from draft override).
+// 4. Simple and Advanced views use the SAME safe factual truth: effective_for_publishing (Blocker 2).
 // 5. Zero legacy product.specs fallback (Amendment H).
 // 6. Explicit product field mapping (Amendment J: model -> displayName, code -> code, family.name -> familyLabel).
 // 7. Partial provenance fail-soft (Amendment L: missing source marked unavailable without fabricating data).
-// 8. Zero explicit any.
+// 8. Canonical table cell key collision safety via getDatasetCellKey (Blocker 1).
+// 9. Unresolved conflict is NOT presented as a vigent fact (Blocker 4).
+// 10. Lossless evidence projection (Blocker 5).
+// 11. Search results projection (Blocker 8).
+// 12. Evidence agreement verified via areValuesEqual (Blocker 12).
+// Zero explicit any.
 
 import {
   ProductWorkbookV2,
@@ -16,8 +21,10 @@ import {
   TechnicalDatum,
   TechnicalValue,
   SourceDocument,
-  DatumOrigin
+  DatumOrigin,
+  getDatasetCellKey
 } from '../product-workbook/types';
+import { areValuesEqual } from '../product-workbook/provenance.engine';
 import { resolveEffectiveProductKnowledge } from '../product-workbook/inheritance.engine';
 import {
   WorkspaceLayoutV1,
@@ -26,7 +33,6 @@ import {
   SemanticRegistryV1
 } from './types';
 import { formatTechnicalValue, buildWorkspaceProjection } from './projection';
-
 
 // ============================================================================
 // 1. VIEW-MODEL TYPES (PRODUCTION CONTRACT)
@@ -44,7 +50,28 @@ export interface ProductPresentationVM {
   readonly isFamilyOnly: boolean;
 }
 
-export type EvidenceState = 'no_source' | 'single_source' | 'multiple_agreeing' | 'conflicting_sources';
+export type EvidenceState =
+  | 'no_source'
+  | 'single_source'
+  | 'multiple_sources'
+  | 'multiple_agreeing'
+  | 'conflicting_sources';
+
+export type FactPresentationState = 'factual' | 'pending_review' | 'conflicting';
+
+export interface ProjectedEvidenceVM {
+  readonly evidenceId: string;
+  readonly sourceDocumentId: string;
+  readonly page?: string | number;
+  readonly section?: string;
+  readonly locator?: string;
+  readonly observedValue?: TechnicalValue;
+  readonly formattedObservedValue?: string;
+  readonly excerpt?: string;
+  readonly notes?: string;
+  readonly capturedAt?: string;
+  readonly capturedBy?: string;
+}
 
 export interface ProjectedFactVM {
   readonly datumId: string;
@@ -56,9 +83,12 @@ export interface ProjectedFactVM {
   readonly tolerance?: string;
   readonly dimensionKind?: string;
   readonly evidenceState: EvidenceState;
+  readonly presentationState: FactPresentationState; // Blocker 4
+  readonly candidateValues?: readonly string[]; // Blocker 4
   readonly originState: 'product_local' | 'family' | 'product_override';
   readonly originLabel: string;
   readonly sourceDocumentIds: readonly string[];
+  readonly evidences: readonly ProjectedEvidenceVM[]; // Blocker 5
   readonly hasConflict: boolean;
   readonly isPendingOverride?: boolean; // Amendment G
   readonly pendingOverrideValue?: string;
@@ -200,6 +230,16 @@ export interface WorkspaceSessionVM {
   readonly searchQuery?: string;
 }
 
+export interface SearchResultVM {
+  readonly id: string;
+  readonly kind: 'fact' | 'table' | 'section';
+  readonly label: string;
+  readonly factId?: string;
+  readonly sectionId?: string;
+  readonly tableId?: string;
+  readonly snippet?: string;
+}
+
 export interface MegaWorkspaceViewModel {
   readonly product: ProductPresentationVM;
   readonly metrics: WorkspaceMetricsVM;
@@ -208,6 +248,7 @@ export interface MegaWorkspaceViewModel {
   readonly conflictsByFactId: Readonly<Record<string, ProjectedConflictVM>>;
   readonly sections: readonly ProjectedSectionVM[];
   readonly session: WorkspaceSessionVM;
+  readonly searchResults: readonly SearchResultVM[]; // Blocker 8
   readonly isEmptyState: boolean;
 }
 
@@ -217,13 +258,19 @@ export interface MegaWorkspaceViewModel {
 
 /**
  * Coleta todos os IDs únicos de SourceDocument diretamente referenciados
- * pelas evidências dos fatos resolvidos (Emenda D).
+ * pelas evidências dos fatos resolvidos e por auditorias/overrides pendentes (Emenda D + Blocker 3).
  * Evita chamadas cegas a listSourceDocuments() sem filtro.
  */
 export function collectReferencedSourceDocumentIds(
-  effectiveKnowledge: ResolvedProductKnowledge
+  effectiveKnowledge: ResolvedProductKnowledge,
+  auditContext?: {
+    productWorkbook?: ProductWorkbookV2 | null;
+    familyWorkbook?: ProductWorkbookV2 | null;
+  }
 ): readonly string[] {
   const ids = new Set<string>();
+
+  // 1. Safe factual source IDs (from publishing resolution)
   for (const entry of effectiveKnowledge.effectiveData.values()) {
     if (entry.datum.evidence) {
       for (const ev of entry.datum.evidence) {
@@ -233,15 +280,75 @@ export function collectReferencedSourceDocumentIds(
       }
     }
   }
+
+  // 2. Audit/pending source IDs from product workbook overrides and local data
+  if (auditContext?.productWorkbook) {
+    if (auditContext.productWorkbook.overrides) {
+      for (const ovr of Object.values(auditContext.productWorkbook.overrides)) {
+        if (ovr.evidence) {
+          for (const ev of ovr.evidence) {
+            if (ev.sourceDocumentId && ev.sourceDocumentId.trim()) {
+              ids.add(ev.sourceDocumentId.trim());
+            }
+          }
+        }
+      }
+    }
+    if (auditContext.productWorkbook.data) {
+      for (const datum of Object.values(auditContext.productWorkbook.data)) {
+        if (datum.evidence) {
+          for (const ev of datum.evidence) {
+            if (ev.sourceDocumentId && ev.sourceDocumentId.trim()) {
+              ids.add(ev.sourceDocumentId.trim());
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Audit source IDs from family workbook
+  if (auditContext?.familyWorkbook?.data) {
+    for (const datum of Object.values(auditContext.familyWorkbook.data)) {
+      if (datum.evidence) {
+        for (const ev of datum.evidence) {
+          if (ev.sourceDocumentId && ev.sourceDocumentId.trim()) {
+            ids.add(ev.sourceDocumentId.trim());
+          }
+        }
+      }
+    }
+  }
+
   return Array.from(ids);
 }
 
+/**
+ * Deriva o estado de evidência baseado em consenso factual comprovado (Blocker 12).
+ * multiple_agreeing: apenas quando pelo menos 2 observed values concordam estruturalmente.
+ * multiple_sources: quando existem múltiplas evidências sem consenso comprovado.
+ */
 function deriveEvidenceState(datum: TechnicalDatum, hasConflict: boolean): EvidenceState {
   if (hasConflict) return 'conflicting_sources';
-  const count = datum.evidence ? datum.evidence.length : 0;
-  if (count === 0) return 'no_source';
-  if (count === 1) return 'single_source';
-  return 'multiple_agreeing';
+  const evidences = datum.evidence || [];
+  if (evidences.length === 0) return 'no_source';
+  if (evidences.length === 1) return 'single_source';
+
+  const observedValues = evidences
+    .map((e) => e.observedValue)
+    .filter((v): v is TechnicalValue => v !== undefined);
+
+  if (observedValues.length >= 2) {
+    for (let i = 0; i < observedValues.length; i++) {
+      for (let j = i + 1; j < observedValues.length; j++) {
+        if (areValuesEqual(observedValues[i], observedValues[j])) {
+          return 'multiple_agreeing';
+        }
+      }
+    }
+  }
+
+  return 'multiple_sources';
 }
 
 function mapOriginState(origin: DatumOrigin): 'product_local' | 'family' | 'product_override' {
@@ -336,15 +443,14 @@ export function buildMegaWorkspaceViewModel(
       conflictsByFactId: {},
       sections: [],
       session,
+      searchResults: [],
       isEmptyState: true
     };
   }
 
-  // Safe Knowledge Resolution Policy (Amendment G: Simple view uses effective_for_publishing)
-  const policy =
-    session.detailLevel === 'simple' && session.interactionMode === 'view'
-      ? 'effective_for_publishing'
-      : 'effective_for_editing';
+  // Safe Knowledge Resolution Policy (Blocker 2: Detail level must NOT change factual truth!)
+  // Both simple + view and advanced + view use effective_for_publishing.
+  const policy = 'effective_for_publishing';
 
   const effectiveKnowledge = resolveEffectiveProductKnowledge({
     productId: product.id,
@@ -432,17 +538,44 @@ export function buildMegaWorkspaceViewModel(
       }
     }
 
+    // Collect candidate values from evidence if conflicting or for audit
+    const candidateValues = (datum.evidence || [])
+      .map((ev) => (ev.observedValue ? formatTechnicalValue(ev.observedValue).text : undefined))
+      .filter((v): v is string => Boolean(v));
+
+    // Lossless Projected Evidence (Blocker 5)
+    const projectedEvidences: ProjectedEvidenceVM[] = (datum.evidence || []).map((ev) => ({
+      evidenceId: ev.id,
+      sourceDocumentId: ev.sourceDocumentId,
+      page: ev.page,
+      section: ev.section,
+      locator: ev.locator,
+      observedValue: ev.observedValue,
+      formattedObservedValue: ev.observedValue ? formatTechnicalValue(ev.observedValue).text : undefined,
+      excerpt: ev.excerpt,
+      notes: ev.notes,
+      capturedAt: ev.capturedAt,
+      capturedBy: ev.capturedBy
+    }));
+
+    // BLOCKER 4: Unresolved conflict is NOT presented as a vigent fact
+    const presentationState: FactPresentationState = hasConflict ? 'conflicting' : 'factual';
+    const displayedFormattedValue = hasConflict ? 'Precisa de revisão' : formatted.text;
+
     const factVM: ProjectedFactVM = {
       datumId: datum.id,
       semanticKey: semKey,
       canonicalLabel,
-      formattedValue: formatted.text,
+      formattedValue: displayedFormattedValue,
       technicalValue: datum.value, // Lossless domain TechnicalValue! (Amendment I)
       unit: formatted.unit,
       evidenceState: deriveEvidenceState(datum, hasConflict),
+      presentationState,
+      candidateValues: candidateValues.length > 0 ? candidateValues : undefined,
       originState,
       originLabel,
       sourceDocumentIds: Array.from(new Set(referencedDocIds)),
+      evidences: projectedEvidences,
       hasConflict,
       isPendingOverride: eff.isPendingOverride,
       pendingOverrideValue,
@@ -452,10 +585,6 @@ export function buildMegaWorkspaceViewModel(
     factsById[datum.id] = factVM;
 
     if (hasConflict) {
-      const candidateValues = (datum.evidence || [])
-        .map((ev) => (ev.observedValue ? formatTechnicalValue(ev.observedValue).text : undefined))
-        .filter((v): v is string => Boolean(v));
-
       conflictsByFactId[datum.id] = {
         factId: datum.id,
         canonicalKey: semKey,
@@ -546,7 +675,8 @@ export function buildMegaWorkspaceViewModel(
           const cells: Record<string, MegaTableCellVM> = {};
 
           for (const col of columns) {
-            const cellKey = `${row.id}:${col.id}`;
+            // BLOCKER 1: Use getDatasetCellKey for canonical collision-safe key lookup
+            const cellKey = getDatasetCellKey(row.id, col.id);
             const cell = table.cells[cellKey];
 
             if (cell && cell.datumRefId) {
@@ -652,6 +782,42 @@ export function buildMegaWorkspaceViewModel(
     visibleConflictsCount
   };
 
+  // BLOCKER 8: Map Search Hits to Search Results
+  const searchResults: SearchResultVM[] = [];
+  if (projection.searchHits) {
+    for (const datumId of projection.searchHits.matchedDatumIds) {
+      const fact = factsById[datumId];
+      if (fact) {
+        searchResults.push({
+          id: `search-fact-${datumId}`,
+          kind: 'fact',
+          label: fact.canonicalLabel,
+          factId: datumId,
+          snippet: fact.formattedValue
+        });
+      }
+    }
+    for (const secId of projection.searchHits.matchedSectionIds) {
+      const sec = sections.find((s) => s.id === secId);
+      if (sec) {
+        searchResults.push({
+          id: `search-sec-${secId}`,
+          kind: 'section',
+          label: sec.title,
+          sectionId: secId
+        });
+      }
+    }
+    for (const tblId of projection.searchHits.matchedTableIds) {
+      searchResults.push({
+        id: `search-tbl-${tblId}`,
+        kind: 'table',
+        label: 'Tabela Técnica',
+        tableId: tblId
+      });
+    }
+  }
+
   return {
     product: productPresentation,
     metrics,
@@ -660,6 +826,7 @@ export function buildMegaWorkspaceViewModel(
     conflictsByFactId,
     sections,
     session,
+    searchResults,
     isEmptyState: Object.keys(factsById).length === 0
   };
 }

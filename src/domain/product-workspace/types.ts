@@ -337,6 +337,17 @@ export interface SemanticRegistryValidationReport {
   readonly errors: readonly SemanticRegistryValidationError[];
 }
 
+export class SemanticRegistryValidationException extends Error {
+  public readonly report: SemanticRegistryValidationReport;
+  constructor(report: SemanticRegistryValidationReport) {
+    super(
+      `Validação do registro semântico falhou com ${report.errors.length} erro(s): ${report.errors.map((e) => e.message).join('; ')}`
+    );
+    this.name = 'SemanticRegistryValidationException';
+    this.report = report;
+  }
+}
+
 /**
  * Localizador contextualizado de referências de bindings em catálogos editoriais externos.
  */

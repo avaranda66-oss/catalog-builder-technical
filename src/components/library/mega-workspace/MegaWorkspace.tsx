@@ -7,7 +7,8 @@ import React, { useState } from 'react';
 import {
   MegaWorkspaceViewModel,
   ProjectedFactVM,
-  WorkspaceSessionVM
+  WorkspaceSessionVM,
+  SearchResultVM
 } from '../../../domain/product-workspace/view-model';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { WorkspaceNavOutline } from './WorkspaceNavOutline';
@@ -41,6 +42,29 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
     }
   };
 
+  // BLOCKER 8: Interação com resultado de busca e jump direto
+  const handleSelectSearchResult = (result: SearchResultVM) => {
+    if (result.factId) {
+      const fact = viewModel.factsById[result.factId];
+      if (fact) {
+        setSelectedFactForSource(fact);
+        const el = document.getElementById(`fact-${result.factId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    } else if (result.sectionId) {
+      handleSelectSection(result.sectionId);
+    } else if (result.tableId) {
+      const el = document.getElementById(`table-${result.tableId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  };
+
+  const isAdvanced = viewModel.session.detailLevel === 'advanced';
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150"
@@ -52,6 +76,8 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
         product={viewModel.product}
         metrics={viewModel.metrics}
         session={viewModel.session}
+        searchResults={viewModel.searchResults}
+        onSelectSearchResult={handleSelectSearchResult}
         onUpdateSession={onUpdateSession}
         onClose={onClose}
         onSwitchToLegacy={onSwitchToLegacy}
@@ -69,6 +95,7 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
                 <ConflictsBlock
                   conflictsByFactId={viewModel.conflictsByFactId}
                   factsById={viewModel.factsById}
+                  detailLevel={viewModel.session.detailLevel}
                   onOpenSourceTrace={(fact) => setSelectedFactForSource(fact)}
                 />
               </div>
@@ -91,7 +118,9 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
                     sourcesById={viewModel.sourcesById}
                     session={viewModel.session}
                     onOpenSourceTrace={(fact) => setSelectedFactForSource(fact)}
-                    onOpenSemanticAdvanced={(fact) => setSelectedFactForSemantic(fact)}
+                    onOpenSemanticAdvanced={
+                      isAdvanced ? (fact) => setSelectedFactForSemantic(fact) : undefined
+                    }
                   />
                 ))}
               </div>
@@ -105,19 +134,26 @@ export const MegaWorkspace: React.FC<MegaWorkspaceProps> = ({
         fact={selectedFactForSource}
         sourcesById={viewModel.sourcesById}
         isOpen={Boolean(selectedFactForSource)}
+        detailLevel={viewModel.session.detailLevel}
         onClose={() => setSelectedFactForSource(null)}
-        onOpenSemanticAdvanced={(fact) => {
-          setSelectedFactForSource(null);
-          setSelectedFactForSemantic(fact);
-        }}
+        onOpenSemanticAdvanced={
+          isAdvanced
+            ? (fact) => {
+                setSelectedFactForSource(null);
+                setSelectedFactForSemantic(fact);
+              }
+            : undefined
+        }
       />
 
-      {/* Drawer de Identidade Semântica Avançada (Modo Engenharia) */}
-      <SemanticAdvancedDrawer
-        fact={selectedFactForSemantic}
-        isOpen={Boolean(selectedFactForSemantic)}
-        onClose={() => setSelectedFactForSemantic(null)}
-      />
+      {/* Drawer de Identidade Semântica Avançada (Apenas acessível no Modo Avançado - Blocker 9) */}
+      {isAdvanced && (
+        <SemanticAdvancedDrawer
+          fact={selectedFactForSemantic}
+          isOpen={Boolean(selectedFactForSemantic)}
+          onClose={() => setSelectedFactForSemantic(null)}
+        />
+      )}
     </div>
   );
 };

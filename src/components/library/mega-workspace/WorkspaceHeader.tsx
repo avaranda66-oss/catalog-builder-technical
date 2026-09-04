@@ -18,13 +18,16 @@ import {
 import {
   ProductPresentationVM,
   WorkspaceMetricsVM,
-  WorkspaceSessionVM
+  WorkspaceSessionVM,
+  SearchResultVM
 } from '../../../domain/product-workspace/view-model';
 
 interface WorkspaceHeaderProps {
   product: ProductPresentationVM;
   metrics: WorkspaceMetricsVM;
   session: WorkspaceSessionVM;
+  searchResults?: readonly SearchResultVM[]; // Blocker 8
+  onSelectSearchResult?: (result: SearchResultVM) => void; // Blocker 8
   onUpdateSession: (patch: Partial<WorkspaceSessionVM>) => void;
   onClose: () => void;
   onSwitchToLegacy?: () => void;
@@ -34,6 +37,8 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   product,
   metrics,
   session,
+  searchResults = [],
+  onSelectSearchResult,
   onUpdateSession,
   onClose,
   onSwitchToLegacy
@@ -90,7 +95,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
         {/* Direita: Eixos Ortogonais, Busca & Controles */}
         <div className="flex items-center gap-3">
-          {/* Busca em Tempo Real */}
+          {/* Busca em Tempo Real com Resultados & Jump (Blocker 8) */}
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
@@ -100,6 +105,52 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
               onChange={(e) => onUpdateSession({ searchQuery: e.target.value })}
               className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003366] focus:border-[#003366] w-48 sm:w-64 transition-all"
             />
+
+            {Boolean(session.searchQuery && session.searchQuery.trim().length > 0) && (
+              <div className="absolute top-full right-0 mt-1.5 w-72 sm:w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-72 overflow-y-auto p-1.5 text-xs">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                  <span>Resultados da busca ({searchResults.length})</span>
+                  <button
+                    onClick={() => onUpdateSession({ searchQuery: '' })}
+                    className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                    title="Limpar busca"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {searchResults.length === 0 ? (
+                  <div className="p-3 text-center text-slate-400 text-xs">
+                    Nenhum item encontrado para "{session.searchQuery}".
+                  </div>
+                ) : (
+                  <div className="py-1 space-y-0.5">
+                    {searchResults.map((res) => (
+                      <button
+                        key={res.id}
+                        type="button"
+                        onClick={() => onSelectSearchResult?.(res)}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 rounded-lg flex items-center justify-between group transition-colors"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <span className="font-semibold text-slate-800 group-hover:text-[#003366] truncate block">
+                            {res.label}
+                          </span>
+                          {res.snippet && (
+                            <span className="text-[11px] text-slate-500 font-mono truncate block">
+                              {res.snippet}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                          {res.kind === 'fact' ? 'Fato' : res.kind === 'table' ? 'Tabela' : 'Seção'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Eixo Ortogonal: Nível de Detalhe (Simple vs Advanced) */}
