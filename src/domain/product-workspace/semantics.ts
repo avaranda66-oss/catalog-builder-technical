@@ -8,14 +8,17 @@
 // Zero explicit any.
 
 import { isValidSemanticKey } from '../product-workbook/schema';
-import { ProductWorkbookV2, ResolvedProductKnowledge } from '../product-workbook/types';
+import { ProductWorkbookV2, ResolvedProductKnowledge, WorkbookOwner } from '../product-workbook/types';
 import {
   SemanticDescriptor,
   CanonicalRenamePlan,
   RenameStepAudit,
   SemanticReferenceGraph,
   SemanticReferenceNode,
+  SemanticRegistryV1,
   ProductSemanticRegistry,
+  EffectiveSemanticDescriptor,
+  EffectiveSemanticRegistry,
   ExternalCatalogBindingReference
 } from './types';
 import { CatalogCellBinding } from '../catalog.schema';
@@ -164,29 +167,49 @@ export function matchesSemanticQuery(descriptor: SemanticDescriptor, query: stri
 }
 
 // ============================================================================
-// CANONICAL SEMANTIC REGISTRY OPERATIONS (BLOCKER 13)
+// CANONICAL SEMANTIC REGISTRY OPERATIONS (BLOCKER 13 & 5)
 // ============================================================================
 
-export function createProductSemanticRegistry(params: {
-  productId: string;
+export function createSemanticRegistry(params: {
+  owner: WorkbookOwner;
+  revision?: number;
   descriptors?: Record<string, SemanticDescriptor>;
-}): ProductSemanticRegistry {
+}): SemanticRegistryV1 {
   const now = new Date().toISOString();
   return {
     schemaVersion: 1,
-    productId: params.productId,
+    owner: params.owner,
+    revision: params.revision ?? 1,
     descriptors: params.descriptors || {},
     createdAt: now,
     updatedAt: now
   };
 }
 
+export function createProductSemanticRegistry(params: {
+  productId?: string;
+  owner?: WorkbookOwner;
+  revision?: number;
+  descriptors?: Record<string, SemanticDescriptor>;
+}): SemanticRegistryV1 {
+  const owner: WorkbookOwner = params.owner || {
+    kind: 'product',
+    id: params.productId || 'unknown'
+  };
+  return createSemanticRegistry({
+    owner,
+    revision: params.revision,
+    descriptors: params.descriptors
+  });
+}
+
 export function registerSemanticDescriptor(
-  registry: ProductSemanticRegistry,
+  registry: SemanticRegistryV1,
   descriptor: SemanticDescriptor
-): ProductSemanticRegistry {
+): SemanticRegistryV1 {
   return {
     ...registry,
+    revision: registry.revision + 1,
     descriptors: {
       ...registry.descriptors,
       [descriptor.canonicalKey]: descriptor
@@ -196,10 +219,10 @@ export function registerSemanticDescriptor(
 }
 
 export function updateCanonicalDisplayLabel(
-  registry: ProductSemanticRegistry,
+  registry: SemanticRegistryV1,
   canonicalKey: string,
   newDisplayLabel: string
-): ProductSemanticRegistry {
+): SemanticRegistryV1 {
   const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
     canonicalKey,
     displayLabel: newDisplayLabel
@@ -209,6 +232,7 @@ export function updateCanonicalDisplayLabel(
 
   return {
     ...registry,
+    revision: registry.revision + 1,
     descriptors: {
       ...registry.descriptors,
       [canonicalKey]: updated
@@ -218,10 +242,10 @@ export function updateCanonicalDisplayLabel(
 }
 
 export function addCanonicalAlias(
-  registry: ProductSemanticRegistry,
+  registry: SemanticRegistryV1,
   canonicalKey: string,
   alias: string
-): ProductSemanticRegistry {
+): SemanticRegistryV1 {
   const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
     canonicalKey,
     displayLabel: canonicalKey
@@ -231,6 +255,7 @@ export function addCanonicalAlias(
 
   return {
     ...registry,
+    revision: registry.revision + 1,
     descriptors: {
       ...registry.descriptors,
       [canonicalKey]: updated
@@ -240,10 +265,10 @@ export function addCanonicalAlias(
 }
 
 export function removeCanonicalAlias(
-  registry: ProductSemanticRegistry,
+  registry: SemanticRegistryV1,
   canonicalKey: string,
   aliasToRemove: string
-): ProductSemanticRegistry {
+): SemanticRegistryV1 {
   const existing = registry.descriptors[canonicalKey];
   if (!existing) return registry;
 
@@ -251,11 +276,91 @@ export function removeCanonicalAlias(
 
   return {
     ...registry,
+    revision: registry.revision + 1,
     descriptors: {
       ...registry.descriptors,
       [canonicalKey]: updated
     },
     updatedAt: new Date().toISOString()
+  };
+}
+
+export interface ResolveSemanticRegistryParams {
+  familyRegistry?: SemanticRegistryV1;
+  productRegistry?: SemanticRegistryV1;
+  productOwner?: WorkbookOwner;
+}
+
+/**
+ * Pure domain resolver de herança semântica entre Família e Produto (BLOCKER 5).
+ * - Descriptores da família são herdados com zero cópia física;
+ * - Descriptores de produto podem complementar ou sobrepor (product_override);
+ * - Aliases são combinados e preservados sem duplicidade.
+ */
+export function resolveSemanticRegistry(
+  params: ResolveSemanticRegistryParams
+): EffectiveSemanticRegistry {
+  const { familyRegistry, productRegistry, productOwner } = params;
+  const owner: WorkbookOwner =
+    productRegistry?.owner ||
+    productOwner ||
+    (familyRegistry ? familyRegistry.owner : { kind: 'product', id: 'unknown' });
+
+  const effectiveDescriptors = new Map<string, EffectiveSemanticDescriptor>();
+  const resolvedDescriptors: Record<string, SemanticDescriptor> = {};
+
+  // 1. Incorpora descritores da família (se houver)
+  if (familyRegistry) {
+    for (const [key, famDesc] of Object.entries(familyRegistry.descriptors)) {
+      effectiveDescriptors.set(key, {
+        descriptor: famDesc,
+        origin: 'family',
+        isInherited: true
+      });
+      resolvedDescriptors[key] = famDesc;
+    }
+  }
+
+  // 2. Incorpora / sobrepõe descritores do produto
+  if (productRegistry) {
+    for (const [key, prodDesc] of Object.entries(productRegistry.descriptors)) {
+      const famEntry = effectiveDescriptors.get(key);
+      if (famEntry) {
+        // Produto complementa / sobrepõe a família (product_override)
+        const mergedAliases = Array.from(new Set([...famEntry.descriptor.aliases, ...prodDesc.aliases]));
+        const mergedDesc: SemanticDescriptor = {
+          ...prodDesc,
+          aliases: mergedAliases,
+          description: prodDesc.description || famEntry.descriptor.description,
+          localeLabels: {
+            ...famEntry.descriptor.localeLabels,
+            ...prodDesc.localeLabels
+          }
+        };
+        effectiveDescriptors.set(key, {
+          descriptor: mergedDesc,
+          origin: 'product_override',
+          isInherited: false
+        });
+        resolvedDescriptors[key] = mergedDesc;
+      } else {
+        // Descritor exclusivo do produto (product_local)
+        effectiveDescriptors.set(key, {
+          descriptor: prodDesc,
+          origin: 'product_local',
+          isInherited: false
+        });
+        resolvedDescriptors[key] = prodDesc;
+      }
+    }
+  }
+
+  return {
+    owner,
+    familyRevision: familyRegistry?.revision,
+    productRevision: productRegistry?.revision,
+    descriptors: resolvedDescriptors,
+    effectiveDescriptors
   };
 }
 

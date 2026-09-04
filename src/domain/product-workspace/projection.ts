@@ -41,6 +41,11 @@ export interface BuildWorkspaceProjectionParams {
   sources?: readonly SourceDocument[];
   mode?: WorkspaceMode;
   searchQuery?: string;
+  /**
+   * BLOCKER 6: Habilita explicitamente o fallback para semanticDescriptors legados do layout.
+   * Default: FALSE.
+   */
+  allowLegacyLayoutSemanticFallback?: boolean;
 }
 
 /**
@@ -103,7 +108,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
     semanticRegistry,
     sources = [],
     mode = 'simple',
-    searchQuery = ''
+    searchQuery = '',
+    allowLegacyLayoutSemanticFallback = false
   } = params;
 
   // Garante layout via auto-organizer se não fornecido
@@ -160,9 +166,13 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
     sourceMap.set(s.id, s);
   }
 
-  // BLOCKER 13/14/15: Descritores semânticos vêm do ProductSemanticRegistry como autoridade canônica.
-  // layout.semanticDescriptors é usado apenas como fallback secundário.
-  const descriptors = semanticRegistry?.descriptors || layout.semanticDescriptors || {};
+  // BLOCKER 6 / PROJECTION: Descritores semânticos vêm do ProductSemanticRegistry como autoridade canônica.
+  // layout.semanticDescriptors só é consultado se allowLegacyLayoutSemanticFallback for explicitamente true.
+  // displayOverrides continua sendo aplicado na UI.
+  const descriptors =
+    semanticRegistry?.descriptors ||
+    (allowLegacyLayoutSemanticFallback ? layout.semanticDescriptors : undefined) ||
+    {};
 
   // Função auxiliar para projetar um FactItem
   function projectFactItem(datumId: string): ProjectedFactItem | null {

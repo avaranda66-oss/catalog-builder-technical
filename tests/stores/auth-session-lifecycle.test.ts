@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
-import { SupabaseService, getSupabase } from '../../src/services/supabase.service';
+import { SupabaseService, getSupabase, resetSupabaseClientForTests } from '../../src/services/supabase.service';
 import { Catalog } from '../../src/domain/catalog.schema';
 
 describe('P0.2B — Auth Token Refresh, Channel Lifecycle & Account Isolation Suite', () => {
@@ -31,6 +31,9 @@ describe('P0.2B — Auth Token Refresh, Channel Lifecycle & Account Isolation Su
   let capturedAuthCallback: ((event: string, session: any) => Promise<void> | void) | null = null;
 
   beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
     vi.restoreAllMocks();
     delete (window as any).location;
     window.location = new URL('http://localhost:5173/') as any;
@@ -58,6 +61,11 @@ describe('P0.2B — Auth Token Refresh, Channel Lifecycle & Account Isolation Su
       localRevision: 0,
       lastAcknowledgedLocalRevision: 0
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
   });
 
   // Helper para inicializar useAuthStore e capturar o callback real do onAuthStateChange

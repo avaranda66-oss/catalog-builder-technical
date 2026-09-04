@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from '../../src/App';
@@ -7,12 +7,21 @@ import { useLibraryStore } from '../../src/stores/useLibraryStore';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 import { useMediaStore } from '../../src/stores/useMediaStore';
 import { LibraryView } from '../../src/components/library/LibraryView';
+import { resetSupabaseClientForTests } from '../../src/services/supabase.service';
 
 describe('Auth gate and limited collaborator interface', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
     vi.clearAllMocks();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useAuthStore.setState({ status: 'unauthenticated', role: null, email: null, errorMessage: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
   });
 
   it('does not initialize data stores before authentication resolves', async () => {

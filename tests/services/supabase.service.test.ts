@@ -1,11 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SupabaseService } from '../../src/services/supabase.service';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { SupabaseService, resetSupabaseClientForTests } from '../../src/services/supabase.service';
 import { MOCK_PRODUCTS, MOCK_CATALOG } from '../fixtures/mockData';
 import { mockSupabaseClient } from '../setup';
 
 describe('SupabaseService v2 (RPCs com CAS e Isolamento Total)', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
   });
 
   it('lista workspace compartilhado via RPC list_workspace_v2', async () => {

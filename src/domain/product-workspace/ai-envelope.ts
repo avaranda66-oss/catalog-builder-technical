@@ -32,11 +32,16 @@ import { formatTechnicalValue } from './projection';
 export interface BuildAiEnvelopeParams {
   workbook: ProductWorkbookV2;
   effectiveKnowledge?: ResolvedProductKnowledge;
-  /** Registro Semântico Canônico soberano para IA (Blocker 13/16) */
+  /** Registro Semântico Canônico soberano para IA (Blocker 13/16/BLOCKER 6) */
   semanticRegistry?: ProductSemanticRegistry;
   sources?: readonly SourceDocument[];
-  /** Layout opcional mantido apenas para migração e fallback de descritores legados */
+  /** Layout opcional mantido apenas para migração explícita */
   layout?: WorkspaceLayoutV1;
+  /**
+   * BLOCKER 6: Habilita explicitamente o fallback para semanticDescriptors legados do layout.
+   * Default: FALSE. Um workspace pessoal nunca deve alterar aliases/contexto usados pela IA.
+   */
+  allowLegacyLayoutSemanticFallback?: boolean;
   /**
    * Propósito semântico de consumo.
    * - 'factual_answer': (Padrão) Fatos aprovados/verificados. Exclui drafts, deprecated e conflitos não resolvidos.
@@ -56,6 +61,7 @@ export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): 
     semanticRegistry,
     sources = [],
     layout,
+    allowLegacyLayoutSemanticFallback = false,
     purpose = 'factual_answer'
   } = params;
   const productId = workbook.owner.id;
@@ -65,9 +71,13 @@ export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): 
     sourceMap.set(s.id, s);
   }
 
-  // BLOCKER 13/16: A autoridade soberana para IA é o ProductSemanticRegistry.
-  // layout.semanticDescriptors é usado apenas como fallback secundário para migração retrocompatível.
-  const descriptors = semanticRegistry?.descriptors || layout?.semanticDescriptors || {};
+  // BLOCKER 6: AI path consulta EXCLUSIVAMENTE o SemanticRegistry canônico.
+  // layout.semanticDescriptors NUNCA é consultado silenciosamente.
+  // Somente através de migração explícita (allowLegacyLayoutSemanticFallback: true).
+  const descriptors =
+    semanticRegistry?.descriptors ||
+    (allowLegacyLayoutSemanticFallback ? layout?.semanticDescriptors : undefined) ||
+    {};
 
   // Mapeamento de datasets para associar colunas/células ao datum
   const datasetMembershipMap = new Map<

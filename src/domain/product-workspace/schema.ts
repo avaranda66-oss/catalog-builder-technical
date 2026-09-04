@@ -206,15 +206,25 @@ export const WorkspaceDisplayOverrideSchema = z
   })
   .strict();
 
-export const ProductSemanticRegistrySchema = z
+export const SemanticRegistryOwnerSchema = z
+  .object({
+    kind: z.enum(['family', 'product']),
+    id: z.string().min(1)
+  })
+  .strict();
+
+export const SemanticRegistryV1Schema = z
   .object({
     schemaVersion: z.literal(1),
-    productId: z.string().min(1),
+    owner: SemanticRegistryOwnerSchema,
+    revision: z.number().int().positive('Revisão do registro semântico deve ser um inteiro positivo (>= 1)'),
     descriptors: z.record(z.string().regex(SEMANTIC_KEY_REGEX), SemanticDescriptorSchema),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional()
   })
   .strict();
+
+export const ProductSemanticRegistrySchema = SemanticRegistryV1Schema;
 
 export const WorkspaceLayoutV1Schema = z
   .object({

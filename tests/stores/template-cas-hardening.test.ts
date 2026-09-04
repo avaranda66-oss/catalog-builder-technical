@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useCatalogStore } from '../../src/stores/useCatalogStore';
 import { useTemplateStore } from '../../src/stores/useTemplateStore';
-import { SupabaseService, getSupabase } from '../../src/services/supabase.service';
+import { SupabaseService, getSupabase, resetSupabaseClientForTests } from '../../src/services/supabase.service';
 import { CatalogPreset } from '../../src/domain/catalog.schema';
 
 describe('FASE 2A.1B — Template CAS Hardening & Production Acceptance Suite', () => {
@@ -37,6 +37,9 @@ describe('FASE 2A.1B — Template CAS Hardening & Production Acceptance Suite', 
   };
 
   beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
     vi.restoreAllMocks();
     sessionStorage.clear();
 
@@ -59,6 +62,11 @@ describe('FASE 2A.1B — Template CAS Hardening & Production Acceptance Suite', 
       syncStatus: 'synced',
       syncError: null
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
   });
 
   // =========================================================================

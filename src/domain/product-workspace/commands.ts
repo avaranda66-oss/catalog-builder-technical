@@ -199,11 +199,20 @@ export function addBlock(
   const section = layout.sections.find((s) => s.id === sectionId);
   if (!section) throw new Error(`Seção "${sectionId}" não encontrada.`);
 
-  // Invariante de propriedade: se o bloco já pertencia a outra seção, removemos de lá primeiro
-  const sanitizedSections = layout.sections.map((s) => ({
-    ...s,
-    blockIds: s.blockIds.filter((id) => id !== block.id)
-  }));
+  // BLOCKER 8: Detecção e rejeição estrita de colisão de ID de bloco
+  const existingBlock = layout.blocks[block.id];
+  if (existingBlock) {
+    const isExactMatch = JSON.stringify(existingBlock) === JSON.stringify(block);
+    const isSameOwner = section.blockIds.includes(block.id);
+    if (isExactMatch && isSameOwner) {
+      // Same exact block + same owner: NO-OP aceitável (não bumpa revisão)
+      return layout;
+    }
+    // Different block ou owner divergente: rejeita colisão
+    throw new Error(
+      `Colisão de blockId: Bloco com id "${block.id}" já existe no workspace e não pode ser sobrescrito.`
+    );
+  }
 
   const updated: WorkspaceLayoutV1 = {
     ...layout,
@@ -211,7 +220,7 @@ export function addBlock(
       ...layout.blocks,
       [block.id]: block
     },
-    sections: sanitizedSections.map((s) =>
+    sections: layout.sections.map((s) =>
       s.id === sectionId ? { ...s, blockIds: [...s.blockIds, block.id] } : s
     )
   };
@@ -227,6 +236,23 @@ export function removeBlock(
   if (!layout.blocks[blockId]) {
     // NO-OP: Bloco não existe
     return layout;
+  }
+
+  // BLOCKER 7: Invariante de propriedade de bloco (Fail Closed / Controlled Error)
+  const ownerSection = layout.sections.find((s) => s.blockIds.includes(blockId));
+  if (!ownerSection) {
+    // Bloco órfão sem seção proprietária: limpa de layout.blocks de forma segura
+    const newBlocks = { ...layout.blocks };
+    delete newBlocks[blockId];
+    return touchWorkspaceLayout({ ...layout, blocks: newBlocks });
+  }
+
+  if (ownerSection.id !== sectionId) {
+    // Tentativa de remover bloco informando seção errada
+    // Fail closed / controlled error: o layout permanece 100% íntegro e zero revision bump
+    throw new Error(
+      `Inconsistência de propriedade: Bloco "${blockId}" pertence à seção "${ownerSection.id}", mas foi solicitada remoção na seção "${sectionId}". Layout não alterado.`
+    );
   }
 
   const newBlocks = { ...layout.blocks };

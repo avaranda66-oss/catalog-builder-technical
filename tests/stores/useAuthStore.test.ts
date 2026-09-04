@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createMockQueryBuilder, mockSupabaseClient } from '../setup';
 import { mockAdminSession, mockEditorSession, mockProfiles } from '../fixtures/mockAuth';
 import { useAuthStore } from '../../src/stores/useAuthStore';
+import { resetSupabaseClientForTests } from '../../src/services/supabase.service';
 
 const profileBuilder = (profile: unknown, error: unknown = null) => {
   const builder = createMockQueryBuilder([]) as any;
@@ -11,12 +12,20 @@ const profileBuilder = (profile: unknown, error: unknown = null) => {
 
 describe('useAuthStore', () => {
   beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
     vi.clearAllMocks();
     useAuthStore.getState().resetForTests();
     mockSupabaseClient.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({ data: { session: null }, error: null });
     mockSupabaseClient.from.mockImplementation(() => profileBuilder(null));
     mockSupabaseClient.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
   });
 
   it('bloqueia sem sessão antes de liberar módulos', async () => {

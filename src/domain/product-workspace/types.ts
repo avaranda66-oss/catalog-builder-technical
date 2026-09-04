@@ -277,16 +277,40 @@ export interface WorkspaceDisplayOverride {
 }
 
 /**
- * Registro Canônico de Semântica do Produto.
+ * Registro Canônico de Semântica do Produto / Família (V1).
  * Entidade soberana que armazena aliases para IA, descrições contextuais e labels canônicos.
  * Totalmente desacoplada dos layouts visuais pessoais de cada usuário.
+ * Suporta owner de família ou produto e controle estrito de versão com revision positiva.
  */
-export interface ProductSemanticRegistry {
+export interface SemanticRegistryV1 {
   readonly schemaVersion: 1;
-  readonly productId: string;
+  readonly owner: WorkbookOwner;
+  readonly revision: number; // positive integer (>= 1, autoridade CAS/versão do registro)
   readonly descriptors: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey
   readonly createdAt?: string;
   readonly updatedAt?: string;
+}
+
+export type ProductSemanticRegistry = SemanticRegistryV1;
+
+/**
+ * Descritor semântico efetivo resolvido após herança de família.
+ */
+export interface EffectiveSemanticDescriptor {
+  readonly descriptor: SemanticDescriptor;
+  readonly origin: 'family' | 'product_override' | 'product_local';
+  readonly isInherited: boolean;
+}
+
+/**
+ * Registro Semântico Efetivo resolvido para consumo de IA e Apresentação.
+ */
+export interface EffectiveSemanticRegistry {
+  readonly owner: WorkbookOwner;
+  readonly familyRevision?: number;
+  readonly productRevision?: number;
+  readonly descriptors: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey
+  readonly effectiveDescriptors: ReadonlyMap<string, EffectiveSemanticDescriptor>;
 }
 
 /**
@@ -311,7 +335,9 @@ export interface WorkspaceValidationError {
     | 'DATASET_ROW_NOT_FOUND'
     | 'DATASET_COLUMN_NOT_FOUND'
     | 'DATASET_CELL_NOT_FOUND'
-    | 'SOURCE_DOCUMENT_NOT_FOUND';
+    | 'TABLE_CELL_KEY_INVALID'
+    | 'SOURCE_DOCUMENT_NOT_FOUND'
+    | 'SOURCE_CONTEXT_UNAVAILABLE';
   readonly message: string;
   readonly path: string;
   readonly entityId: string;

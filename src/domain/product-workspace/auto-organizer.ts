@@ -12,6 +12,7 @@ import {
   ProductWorkbookV2,
   ResolvedProductKnowledge,
   TechnicalDatum,
+  TechnicalDataset,
   SourceDocument
 } from '../product-workbook/types';
 import { getDatasetCellKey } from '../product-workbook/types';
@@ -171,6 +172,13 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
   // Identifica Datums já atribuídos a blocos para não duplicar visualmente
   const usedDatumIds = new Set<string>();
 
+  // BLOCKER 4: Utiliza módulos efetivos do ResolvedProductKnowledge para preservar labels da família
+  const effectiveModules =
+    effectiveKnowledge?.modules && effectiveKnowledge.modules.length > 0
+      ? effectiveKnowledge.modules
+      : (workbook.modules || []);
+  const getEffectiveModule = (modId: string) => effectiveModules.find((m) => m.id === modId);
+
   // ==========================================================================
   // SEÇÃO 1: RESUMO TÉCNICO & INFORMAÇÕES PRINCIPAIS (Fact Grid de alto nível)
   // ==========================================================================
@@ -234,8 +242,23 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
   // ==========================================================================
   const tableSectionBlockIds: string[] = [];
 
-  // A) Incorpora TechnicalDatasets existentes no workbook
-  for (const ds of (workbook.datasets || [])) {
+  // BLOCKER 3: Prioriza TechnicalDatasets efetivos (produto local + override + família herdada)
+  const effectiveDatasetsToUse: TechnicalDataset[] = [];
+  if (effectiveKnowledge?.effectiveDatasets && effectiveKnowledge.effectiveDatasets.size > 0) {
+    for (const effDs of effectiveKnowledge.effectiveDatasets.values()) {
+      if (!effDs.isSuppressed) {
+        effectiveDatasetsToUse.push(effDs.dataset);
+      }
+    }
+  } else if (workbook.datasets && workbook.datasets.length > 0) {
+    effectiveDatasetsToUse.push(...workbook.datasets);
+  }
+
+  // Módulos que já possuem TechnicalDataset canônico de primeira classe
+  const canonicalDatasetModuleIds = new Set<string>();
+
+  // A) Incorpora TechnicalDatasets canônicos efetivos
+  for (const ds of effectiveDatasetsToUse) {
     const dsBlockId = `block_dataset_${ds.id}`;
     const dsBlock: DatasetViewBlockDef = {
       id: dsBlockId,
@@ -245,18 +268,26 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
     };
     blocks[dsBlockId] = dsBlock;
     tableSectionBlockIds.push(dsBlockId);
+    if (ds.moduleId) {
+      canonicalDatasetModuleIds.add(ds.moduleId);
+    }
 
     // Marca células como utilizadas
     for (const cell of Object.values(ds.cells)) {
-      usedDatumIds.add(cell.datumId);
+      if (cell.datumId) {
+        usedDatumIds.add(cell.datumId);
+      }
     }
   }
 
   // B) Detecção de Matrizes Naturais nos datums restantes (ex: 76 datums de sensores -> 1 Tabela!)
-  // Agrupa datums não usados por moduleId
+  // TechnicalDataset efetivo existente SEMPRE tem prioridade sobre inferência heurística.
+  // Não recriar por pattern matching uma tabela que já existe como TechnicalDataset canônico.
   const datumsByModule = new Map<string, TechnicalDatum[]>();
   for (const d of allDatums) {
     if (usedDatumIds.has(d.id)) continue;
+    if (canonicalDatasetModuleIds.has(d.moduleId)) continue;
+
     if (!datumsByModule.has(d.moduleId)) {
       datumsByModule.set(d.moduleId, []);
     }
@@ -322,7 +353,7 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
         });
       });
 
-      const moduleObj = workbook.modules.find((m) => m.id === moduleId);
+      const moduleObj = getEffectiveModule(moduleId);
       const tableTitle = moduleObj ? moduleObj.label : matrix.groupLabel;
 
       const tableDef: WorkspaceTechnicalTableDef = {
@@ -375,7 +406,7 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
     const detailBlockIds: string[] = [];
 
     for (const [modId, modDatums] of remainingByModule.entries()) {
-      const moduleObj = workbook.modules.find((m) => m.id === modId);
+      const moduleObj = getEffectiveModule(modId);
       const modLabel = moduleObj?.label || 'Outras Especificações';
       const blockId = `block_detail_${modId}`;
 
@@ -480,7 +511,11 @@ export function createInitialProductSemanticRegistry(
 
   return {
     schemaVersion: 1,
-    productId,
+    owner: {
+      kind: 'product',
+      id: productId
+    },
+    revision: 1,
     descriptors,
     createdAt: now,
     updatedAt: now

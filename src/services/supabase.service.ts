@@ -76,9 +76,14 @@ export function getLatestTranslationRpc(): LastTranslationRpc | null {
 }
 
 export function getSupabase(): SupabaseClient | null {
-  if (!supabaseClient && supabaseUrl && supabaseAnonKey) {
+  const url = import.meta.env.VITE_SUPABASE_URL || supabaseUrl;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || supabaseAnonKey;
+  if (!url || !key) {
+    return null;
+  }
+  if (!supabaseClient) {
     try {
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      supabaseClient = createClient(url, key, {
         auth: { persistSession: true, autoRefreshToken: true }
       });
     } catch {
@@ -86,6 +91,10 @@ export function getSupabase(): SupabaseClient | null {
     }
   }
   return supabaseClient;
+}
+
+export function resetSupabaseClientForTests(): void {
+  supabaseClient = null;
 }
 
 export interface WorkspaceData {
