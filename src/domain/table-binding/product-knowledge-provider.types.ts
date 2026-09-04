@@ -42,7 +42,14 @@ export interface SavedViewProjection {
   readonly columns: string[];
 }
 
+export interface TechnicalDatasetCellProjection {
+  readonly datumId: string;
+  readonly datumKey: string;
+  readonly value: TableCellLiteralContent;
+}
+
 export interface TechnicalDatasetColumn {
+  readonly id?: string;
   readonly key: string;
   readonly label: string;
   readonly widthMm?: number;
@@ -53,7 +60,7 @@ export interface TechnicalDatasetColumn {
 export interface TechnicalDatasetRow {
   readonly rowId: string;
   readonly label?: string;
-  readonly cells: Record<string, TableCellLiteralContent>;
+  readonly cells: Record<string, TechnicalDatasetCellProjection | TableCellLiteralContent>;
 }
 
 export interface TechnicalDatasetProjection {

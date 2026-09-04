@@ -7,3 +7,4 @@ export * from './product-workbook-datum.resolver';
 export * from './default-fields';
 export * from './product-knowledge-provider.types';
 export * from './dataset-to-table.adapter';
+export * from './binding-freshness';

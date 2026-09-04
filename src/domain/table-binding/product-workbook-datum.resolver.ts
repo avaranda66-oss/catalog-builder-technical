@@ -194,8 +194,64 @@ export function createProductWorkbookDatumResolver(
       return undefined;
     }
 
+    // EMENDA 7 — SNAPSHOT OFFLINE FIRST:
+    // MODO SNAPSHOT: Snapshot existente renderiza ANTES de qualquer lookup PIM.
+    // PIM pode estar 100% offline.
+    if (reference.bindingMode === 'snapshot') {
+      const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
+      const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
+      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'approved';
+      return {
+        value: reference.snapshot,
+        status: mappedStatus,
+        diagnostic: {
+          message: knowledge ? undefined : 'Snapshot congelado renderizado offline (PIM indisponível).',
+          productRevision: knowledge?.productRevision,
+          familyRevision: knowledge?.familyRevision
+        }
+      };
+    }
+
+    // MODO REVIEW_REQUIRED: Se possuir snapshot, renderiza snapshot e marca diagnóstico
+    if (reference.bindingMode === 'review_required') {
+      const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
+      const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
+      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'unknown';
+
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: mappedStatus,
+          diagnostic: {
+            message: 'Publicação requer revisão de alteração de dados.',
+            productRevision: knowledge?.productRevision,
+            familyRevision: knowledge?.familyRevision
+          }
+        };
+      }
+      return {
+        value: { kind: 'empty' },
+        status: mappedStatus,
+        diagnostic: {
+          message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
+          productRevision: knowledge?.productRevision,
+          familyRevision: knowledge?.familyRevision
+        }
+      };
+    }
+
+    // MODO LIVE: Lookup PIM
     const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
     if (!knowledge) {
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: 'unknown',
+          diagnostic: {
+            message: `Fonte indisponível para produto "${reference.productId}"; utilizando snapshot como fallback stale.`
+          }
+        };
+      }
       return {
         value: { kind: 'empty' },
         status: 'unknown',
@@ -205,6 +261,17 @@ export function createProductWorkbookDatumResolver(
 
     const effectiveDatum = knowledge.effectiveData.get(reference.datumKey);
     if (!effectiveDatum) {
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: 'unknown',
+          diagnostic: {
+            message: `Chave semântica "${reference.datumKey}" não encontrada; utilizando snapshot como fallback.`,
+            productRevision: knowledge.productRevision,
+            familyRevision: knowledge.familyRevision
+          }
+        };
+      }
       return {
         value: { kind: 'empty' },
         status: 'unknown',
@@ -218,45 +285,21 @@ export function createProductWorkbookDatumResolver(
 
     const mappedStatus = mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus);
 
-    // MODO SNAPSHOT: Preserva estritamente o snapshot persistido; o resolver NÃO o substitui
-    if (reference.bindingMode === 'snapshot') {
-      return {
-        value: reference.snapshot,
-        status: mappedStatus,
-        diagnostic: {
-          productRevision: knowledge.productRevision,
-          familyRevision: knowledge.familyRevision
-        }
-      };
-    }
-
-    // MODO REVIEW_REQUIRED: Preserva o snapshot existente se presente; se ausente, NÃO inventa valor publicado silenciosamente
-    if (reference.bindingMode === 'review_required') {
+    // Mapeia o valor técnico atual de forma conservadora e lossless
+    const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value, options);
+    if (!literalRes.supported) {
       if (reference.snapshot) {
         return {
           value: reference.snapshot,
           status: mappedStatus,
           diagnostic: {
-            message: 'Publicação requer revisão de alteração de dados.',
+            message: `${literalRes.reason} (usando snapshot como fallback).`,
+            unsupportedType: literalRes.unsupportedType,
             productRevision: knowledge.productRevision,
             familyRevision: knowledge.familyRevision
           }
         };
       }
-      return {
-        value: { kind: 'empty' },
-        status: mappedStatus,
-        diagnostic: {
-          message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
-          productRevision: knowledge.productRevision,
-          familyRevision: knowledge.familyRevision
-        }
-      };
-    }
-
-    // MODO LIVE: Mapeia o valor técnico atual de forma conservadora e lossless
-    const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value, options);
-    if (!literalRes.supported) {
       return {
         value: { kind: 'empty' },
         status: mappedStatus,

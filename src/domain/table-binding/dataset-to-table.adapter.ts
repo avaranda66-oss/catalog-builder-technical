@@ -11,6 +11,7 @@ import {
   TableCellContent,
   TablePresetId
 } from '../table-core/table.types';
+import { TableCellLiteralContent } from '../table-values';
 import { getCellKey, validateTableModel } from '../table-core/table.validator';
 import { getTablePreset } from '../table-core/table.presets';
 import { DEFAULT_TABLE_PAGINATION_POLICY } from '../table-core/table.pagination';
@@ -20,6 +21,23 @@ export interface DatasetProjectionOptions {
   tableId?: string;
   presetId?: TablePresetId;
   customTitle?: string;
+}
+
+function safeToken(value: string): string {
+  const enc = encodeURIComponent(value).replace(/%/g, 'x');
+  return `${enc.length}x${enc}`;
+}
+
+export function generateDeterministicDatasetColumnId(datasetId: string, colKeyOrId: string): string {
+  return `col_ds_${safeToken(datasetId)}_${safeToken(colKeyOrId)}`;
+}
+
+export function generateDeterministicDatasetRowId(datasetId: string, rowId: string): string {
+  return `row_ds_${safeToken(datasetId)}_${safeToken(rowId)}`;
+}
+
+export function generateDeterministicDatasetCellId(tableId: string, rowId: string, colId: string): string {
+  return `cell_ds_${safeToken(tableId)}_${safeToken(rowId)}_${safeToken(colId)}`;
 }
 
 /**
@@ -34,42 +52,61 @@ export function projectTechnicalDatasetToTableCore(
   const presetId = options?.presetId || 'dense_spec_matrix';
   const title = options?.customTitle || dataset.title || 'Tabela Técnica de Conjunto';
 
-  // 1. Projeção de Colunas estáveis
-  const columns: TableColumnModel[] = dataset.columns.map((col, idx) => ({
-    id: `col_ds_${idx}_${col.key}`,
-    semanticKey: col.key,
-    defaultLabel: col.label,
-    widthSpec: col.widthMm ? { mode: 'fixed_mm', widthMm: col.widthMm } : { mode: 'auto' },
-    align: col.align || 'left',
-    isCustom: col.isCustom
-  }));
+  // 1. Projeção de Colunas estáveis (Zero array-index, derivado de datasetId + colIdentifier)
+  const columns: TableColumnModel[] = dataset.columns.map((col) => {
+    const colIdentifier = col.id || col.key;
+    return {
+      id: generateDeterministicDatasetColumnId(dataset.datasetId, colIdentifier),
+      semanticKey: col.key,
+      defaultLabel: col.label,
+      widthSpec: col.widthMm ? { mode: 'fixed_mm', widthMm: col.widthMm } : { mode: 'auto' },
+      align: col.align || 'left',
+      isCustom: col.isCustom
+    };
+  });
 
-  // 2. Projeção de Linhas estáveis
-  const rows: TableRowModel[] = dataset.rows.map((r, rIdx) => ({
-    id: `row_ds_${rIdx}_${r.rowId}`,
+  // 2. Projeção de Linhas estáveis (Zero array-index, derivado de datasetId + canonical rowId)
+  const rows: TableRowModel[] = dataset.rows.map((r) => ({
+    id: generateDeterministicDatasetRowId(dataset.datasetId, r.rowId),
     kind: 'data'
   }));
 
-  // 3. Projeção de Células
+  // 3. Projeção de Células com validação canônica de identidade (Emenda 5)
   const cells: Record<string, TableCellModel> = {};
 
   rows.forEach((row, rIdx) => {
     const dsRow = dataset.rows[rIdx];
 
     columns.forEach((col) => {
-      const cellId = `cell_ds_${row.id}_${col.id}`;
+      const cellId = generateDeterministicDatasetCellId(tableId, row.id, col.id);
       const key = getCellKey(row.id, col.id);
 
-      const cellValue = dsRow.cells[col.semanticKey];
+      const cellItem = dsRow.cells[col.semanticKey];
       let content: TableCellContent;
 
-      if (cellValue) {
+      if (cellItem) {
+        const isCellProjection = typeof cellItem === 'object' && cellItem !== null && 'datumKey' in cellItem;
+        const cellProjection = isCellProjection ? (cellItem as { datumId: string; datumKey: string; value: TableCellLiteralContent }) : undefined;
+        const cellValue: TableCellLiteralContent = cellProjection ? cellProjection.value : (cellItem as TableCellLiteralContent);
+
+        // EMENDA 5: Para toda célula dataset vinculada exigir datumId e datumKey canônico real.
+        // Se live/review binding não possuir identidade canônica: FAIL CLOSED.
+        if (dataset.bindingMode !== 'snapshot') {
+          if (!cellProjection || !cellProjection.datumKey || !cellProjection.datumId) {
+            throw new Error(
+              `[FAIL_CLOSED] Célula de dataset vinculada (${col.semanticKey}, row: ${dsRow.rowId}) em modo ${dataset.bindingMode} não possui datumId e datumKey canônicos.`
+            );
+          }
+        }
+
+        const canonicalDatumKey = cellProjection?.datumKey || `canonical_datum_${cellProjection?.datumId || 'snapshot'}`;
+
         if (dataset.bindingMode === 'snapshot') {
           content = {
             kind: 'datum_reference',
             productId: dataset.productId,
             datasetId: dataset.datasetId,
-            datumKey: `dataset.${dataset.datasetId}.${dsRow.rowId}.${col.semanticKey}`,
+            datumKey: canonicalDatumKey,
             bindingMode: 'snapshot',
             snapshot: cellValue,
             sourceRevision: dataset.sourceRevision
@@ -79,7 +116,7 @@ export function projectTechnicalDatasetToTableCore(
             kind: 'datum_reference',
             productId: dataset.productId,
             datasetId: dataset.datasetId,
-            datumKey: `dataset.${dataset.datasetId}.${dsRow.rowId}.${col.semanticKey}`,
+            datumKey: canonicalDatumKey,
             bindingMode: dataset.bindingMode,
             snapshot: cellValue,
             sourceRevision: dataset.sourceRevision
