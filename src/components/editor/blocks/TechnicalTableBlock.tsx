@@ -8,6 +8,7 @@ import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
 import { adaptLegacyBlockToTableCore } from '../../../domain/table-core';
+import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 import { TableCoreRenderer } from '../table-core';
 
 interface TechnicalTableBlockProps {
@@ -43,9 +44,22 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   // Pilot Table Core V2 para specs_table (CORE.T2B.1 / CORE.T2C.1)
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
-  const useTableCorePilot = isPilotSpecsTable && pilotAdaptResult?.supported;
+  const adaptedTable = (pilotAdaptResult && pilotAdaptResult.supported) ? pilotAdaptResult.table : null;
+  const useTableCorePilot = Boolean(isPilotSpecsTable && adaptedTable);
   const isSelected = selectedBlockId === block.id;
   const selectedCellId = isSelected && !isExport ? selectedChildId : undefined;
+
+  const resolveDatum = getTableDatumResolver();
+  const hasVisibleRows = adaptedTable
+    ? adaptedTable.rows
+        .filter((r) => !r.isHeader && r.kind !== 'header' && r.kind !== 'footer')
+        .some((r) => !isTableRowVisuallyEmpty(r, adaptedTable.columns, adaptedTable.cells, resolveDatum))
+    : rows.length > 0;
+
+  // Emenda 3: No EXPORT/PDF, se não existem rows semanticamente visíveis, omitir a tabela vazia
+  if (isExport && !hasVisibleRows && useTableCorePilot) {
+    return null;
+  }
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     if (isExport) return;
@@ -118,11 +132,12 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
       </div>
 
       {/* Motor de Tabela: Table Core V2 Pilot para specs_table, fallback seguro para TechnicalTable */}
-      {useTableCorePilot ? (
+      {useTableCorePilot && adaptedTable && pilotAdaptResult?.supported ? (
         <div className="w-full">
           <TableCoreRenderer
             table={pilotAdaptResult.table}
             mode={isExport ? 'export' : 'editor'}
+            suppressEmptyRows={true}
             selectedCellId={selectedCellId ?? undefined}
             onSelectCell={
               isExport
@@ -139,6 +154,15 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
               return `row_${mapping.legacyRowId}_ov_${mapping.legacyColKey}`;
             }}
           />
+          {!hasVisibleRows && !isExport && (
+            <div
+              data-testid="zero-visible-rows-placeholder"
+              className="my-3 py-6 px-4 text-center bg-slate-50 border border-dashed border-slate-300 rounded text-slate-500"
+            >
+              <p className="text-xs font-semibold text-slate-700">Nenhuma linha preenchida</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Adicione uma linha no painel lateral.</p>
+            </div>
+          )}
           {block.customData?.showLegend && (
             <TechnicalLegend
               config={{

@@ -24,8 +24,7 @@ import {
   TableRenderDiagnostic
 } from './table-renderer.types';
 import {
-  getBackgroundColorClass,
-  getTextColorClass,
+  resolveTableColor,
   getDensityClasses,
   getBorderClasses,
   getStripeClass,
@@ -34,10 +33,10 @@ import {
   getFontScaleClass,
   getCellPaddingTokenClass,
   getLineHeightClass,
-  getBorderColorClass,
   getOuterBorderWidthClass,
   getCornerRoundnessClass
 } from './table-tokens';
+import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 
 /**
  * Helper para garantia de exaustividade em tempo de compilação e execução.
@@ -419,6 +418,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   resolveDatum,
   onDiagnostic,
   renderTitle = false,
+  suppressEmptyRows = false,
   className = '',
   getCellPrintableField,
   getHeaderPrintableField
@@ -441,8 +441,9 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
 
   // 2. Extração e mapeamento de estilos de apresentação
   const { presentation } = table;
-  const headerBgClass = getBackgroundColorClass(presentation.headerBackgroundToken);
-  const headerTextClass = getTextColorClass(presentation.headerTextColorToken);
+  const resolvedHeaderBg = resolveTableColor(presentation.headerBackgroundToken, 'bg');
+  const resolvedHeaderText = resolveTableColor(presentation.headerTextColorToken, 'text');
+  const resolvedTableBorder = resolveTableColor(presentation.borderColorToken, 'border');
   const density = getDensityClasses(presentation.density);
   const borders = getBorderClasses(presentation.borderStyle);
   const stripe = getStripeClass(presentation.stripeStyle);
@@ -465,6 +466,11 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
     (r) => !r.isHeader && r.kind !== 'header' && r.kind !== 'footer'
   );
   const footerRows = table.rows.filter((r) => r.kind === 'footer');
+
+  // Supressão estrita de linhas 100% vazias quando solicitado (Emendas 2 e 3)
+  const visibleBodyRows = suppressEmptyRows
+    ? bodyRows.filter((r) => !isTableRowVisuallyEmpty(r, table.columns, table.cells, resolveDatum))
+    : bodyRows;
 
   // Renderiza uma célula individual respeitando merges e overrides
   const renderCell = (
@@ -505,12 +511,25 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
     if (isBold) fontStyleClass += ' font-bold';
     if (isItalic) fontStyleClass += ' italic';
 
-    const cellTextTokenClass = getTextColorClass(
-      cellOverride?.textColorToken ?? rowOverride?.textColorToken ?? colOverride?.textColorToken
-    );
-    const cellBgTokenClass = getBackgroundColorClass(
-      cellOverride?.backgroundColorToken ?? rowOverride?.backgroundToken ?? colOverride?.backgroundToken
-    );
+    // Resolução determinística de cores conforme precedência da Emenda 15:
+    // CELL > ROW > COLUMN > TABLE PRESENTATION
+    const effectiveBgToken =
+      cellOverride?.backgroundColorToken ??
+      rowOverride?.backgroundToken ??
+      colOverride?.backgroundToken ??
+      presentation.bodyBackgroundToken;
+    const resolvedCellBg = resolveTableColor(effectiveBgToken, 'bg');
+
+    const effectiveTextToken =
+      cellOverride?.textColorToken ??
+      rowOverride?.textColorToken ??
+      colOverride?.textColorToken;
+    const resolvedCellText = resolveTableColor(effectiveTextToken, 'text');
+
+    const cellInlineStyle: React.CSSProperties = {
+      ...resolvedCellBg.style,
+      ...resolvedCellText.style
+    };
 
     // Preenchimento e escalas
     const paddingClass = cellOverride?.paddingToken
@@ -552,6 +571,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         rowSpan={rowSpan}
         scope={isHeaderCell ? 'col' : undefined}
         data-printable-field={printableField}
+        style={Object.keys(cellInlineStyle).length > 0 ? cellInlineStyle : undefined}
         onClick={
           mode === 'editor' && onSelectCell
             ? (e) => {
@@ -560,7 +580,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
               }
             : undefined
         }
-        className={`${paddingClass} ${borders.cellBorder} ${alignClass} ${vAlignClass} ${fontStyleClass} ${fontScaleClass} ${borderEmphasisClass} ${cellTextTokenClass} ${cellBgTokenClass} ${selectionClass}`}
+        className={`${paddingClass} ${borders.cellBorder} ${alignClass} ${vAlignClass} ${fontStyleClass} ${fontScaleClass} ${borderEmphasisClass} ${resolvedCellText.className} ${resolvedCellBg.className} ${selectionClass}`}
         data-cell-id={mode === 'editor' ? cell.id : undefined}
         data-row-id={mode === 'editor' ? cell.rowId : undefined}
         data-column-id={mode === 'editor' ? cell.columnId : undefined}
@@ -589,16 +609,20 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
           ? (sectionCell.content as TableCellTextContent).text
           : null;
 
-      const sectionBgClass =
-        getBackgroundColorClass(presentation.sectionBackgroundToken) || 'bg-slate-100/90';
-      const sectionTextClass =
-        getTextColorClass(presentation.sectionTextColorToken) || 'text-slate-800 font-semibold uppercase tracking-wider text-[9px]';
+      const resolvedSectionBg = resolveTableColor(presentation.sectionBackgroundToken, 'bg');
+      const resolvedSectionText = resolveTableColor(presentation.sectionTextColorToken, 'text');
+
+      const sectionInlineStyle: React.CSSProperties = {
+        ...resolvedSectionBg.style,
+        ...resolvedSectionText.style
+      };
 
       return (
         <tr
           key={row.id}
           role="separator"
-          className={`border-b border-t border-slate-300 ${sectionBgClass} ${sectionTextClass}`}
+          style={Object.keys(sectionInlineStyle).length > 0 ? sectionInlineStyle : undefined}
+          className={`border-b border-t border-slate-300 ${resolvedSectionBg.className || 'bg-slate-100/90'} ${resolvedSectionText.className || 'text-slate-800 font-semibold uppercase tracking-wider text-[9px]'}`}
           data-row-id={mode === 'editor' ? row.id : undefined}
           data-row-kind={row.kind}
         >
@@ -617,11 +641,15 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
       rowStyle.minHeight = `${row.minHeightMm}mm`;
     }
 
+    if (isHeaderRow) {
+      Object.assign(rowStyle, resolvedHeaderBg.style, resolvedHeaderText.style);
+    }
+
     return (
       <tr
         key={row.id}
-        style={rowStyle}
-        className={isHeaderRow ? `${headerBgClass} ${headerTextClass}` : stripe}
+        style={Object.keys(rowStyle).length > 0 ? rowStyle : undefined}
+        className={isHeaderRow ? `${resolvedHeaderBg.className} ${resolvedHeaderText.className}` : stripe}
         data-row-id={mode === 'editor' ? row.id : undefined}
         data-row-kind={row.kind}
       >
@@ -660,8 +688,8 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
       <table
         role="table"
         aria-label={table.title || 'Tabela Técnica'}
-        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize} ${getLineHeightClass(presentation.lineHeight)} ${getBorderColorClass(presentation.borderColorToken)} ${getOuterBorderWidthClass(presentation.outerBorderWidth)} ${getCornerRoundnessClass(presentation.cornerRoundness)}`}
-        style={{ tableLayout: 'fixed' }}
+        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize} ${getLineHeightClass(presentation.lineHeight)} ${resolvedTableBorder.className} ${getOuterBorderWidthClass(presentation.outerBorderWidth)} ${getCornerRoundnessClass(presentation.cornerRoundness)}`}
+        style={{ tableLayout: 'fixed', ...resolvedTableBorder.style }}
       >
         {/* A7: Título opcional interno via caption para não duplicar cabeçalhos externos */}
         {renderTitle && table.title && (
@@ -691,7 +719,10 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
             explicitHeaderRows.map((row) => renderRow(row, true))
           ) : (
             // Linha canônica de cabeçalho padrão com defaultLabel de cada coluna
-            <tr className={`${headerBgClass} ${headerTextClass}`}>
+            <tr
+              style={{ ...resolvedHeaderBg.style, ...resolvedHeaderText.style }}
+              className={`${resolvedHeaderBg.className} ${resolvedHeaderText.className}`}
+            >
               {table.columns.map((col) => (
                 <th
                   key={`header-${col.id}`}
@@ -720,7 +751,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         </thead>
 
         {/* Corpo principal de dados (tbody) */}
-        <tbody>{bodyRows.map((row) => renderRow(row, false))}</tbody>
+        <tbody>{visibleBodyRows.map((row) => renderRow(row, false))}</tbody>
 
         {/* Rodapé estrutural (tfoot) */}
         {footerRows.length > 0 && (

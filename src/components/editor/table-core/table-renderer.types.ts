@@ -53,6 +53,7 @@ export interface TableCoreRendererProps {
   onSelectCell?: (cellId: string) => void;
   onDiagnostic?: (diagnostic: TableRenderDiagnostic) => void;
   renderTitle?: boolean; // Default: false (evita duplicação com wrappers externos)
+  suppressEmptyRows?: boolean; // Se true, omite linhas 100% vazias em Canvas/Preview/PDF (Emenda 2)
   className?: string;
   getCellPrintableField?: (
     cell: TableCellModel,
