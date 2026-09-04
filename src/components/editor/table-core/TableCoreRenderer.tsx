@@ -482,39 +482,50 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
     const colSpan = cell.colSpan && cell.colSpan > 1 ? cell.colSpan : undefined;
     const rowSpan = cell.rowSpan && cell.rowSpan > 1 ? cell.rowSpan : undefined;
 
+    const rowOverride = presentation.rowStyleOverrides?.[row.id];
+    const colOverride = presentation.columnStyleOverrides?.[col.id];
+    const cellOverride = cell.styleOverride || presentation.cellStyleOverrides?.[cell.id];
+
     // Alinhamento
-    const align = cell.styleOverride?.align ?? col.align ?? 'left';
+    const align = cellOverride?.align ?? colOverride?.align ?? col.align ?? 'left';
     let alignClass = 'text-left';
     if (align === 'center') alignClass = 'text-center';
     else if (align === 'right') alignClass = 'text-right';
 
     // Vertical align
-    const vAlign = cell.styleOverride?.verticalAlign ?? 'middle';
+    const vAlign = cellOverride?.verticalAlign ?? 'middle';
     let vAlignClass = 'align-middle';
     if (vAlign === 'top') vAlignClass = 'align-top';
     else if (vAlign === 'bottom') vAlignClass = 'align-bottom';
 
     // Tipografia e Overrides de estilo
     let fontStyleClass = '';
-    if (cell.styleOverride?.bold) fontStyleClass += ' font-bold';
-    if (cell.styleOverride?.italic) fontStyleClass += ' italic';
+    const isBold = cellOverride?.bold ?? rowOverride?.bold ?? colOverride?.bold;
+    const isItalic = cellOverride?.italic ?? rowOverride?.italic;
+    if (isBold) fontStyleClass += ' font-bold';
+    if (isItalic) fontStyleClass += ' italic';
 
-    const cellTextTokenClass = getTextColorClass(cell.styleOverride?.textColorToken);
-    const cellBgTokenClass = getBackgroundColorClass(cell.styleOverride?.backgroundColorToken);
+    const cellTextTokenClass = getTextColorClass(
+      cellOverride?.textColorToken ?? rowOverride?.textColorToken ?? colOverride?.textColorToken
+    );
+    const cellBgTokenClass = getBackgroundColorClass(
+      cellOverride?.backgroundColorToken ?? rowOverride?.backgroundToken ?? colOverride?.backgroundToken
+    );
 
     // Preenchimento e escalas
-    const paddingClass = cell.styleOverride?.paddingToken
-      ? getCellPaddingTokenClass(cell.styleOverride.paddingToken)
+    const paddingClass = cellOverride?.paddingToken
+      ? getCellPaddingTokenClass(cellOverride.paddingToken)
       : isHeaderCell && presentation.headerPadding
       ? getCellPaddingTokenClass(presentation.headerPadding)
       : density.cellPadding;
 
-    const fontScaleClass = cell.styleOverride?.fontScale
-      ? getFontScaleClass(cell.styleOverride.fontScale)
+    const fontScaleClass = cellOverride?.fontScale
+      ? getFontScaleClass(cellOverride.fontScale)
       : '';
 
-    const borderEmphasisClass = cell.styleOverride?.borderEmphasis
-      ? getBorderEmphasisClass(cell.styleOverride.borderEmphasis)
+    const effectiveBorderEmphasis = cellOverride?.borderEmphasis ?? rowOverride?.borderEmphasis;
+    const borderEmphasisClass = effectiveBorderEmphasis
+      ? getBorderEmphasisClass(effectiveBorderEmphasis)
       : '';
 
     // Classes de seleção no Editor

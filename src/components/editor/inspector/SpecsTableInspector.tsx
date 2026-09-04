@@ -21,7 +21,8 @@ import {
   Database,
   Palette,
   ShieldAlert,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
 import { ContentBlock, TableColumnConfig } from '../../../domain/catalog.schema';
 import { TableSetCellContentCommand } from '../../../domain/document-commands/table-commands.types';
@@ -30,8 +31,21 @@ import {
   executeTableCommandOnLegacyBlock,
   LegacyBridgeCommandContext,
   LegacyTableCoordinateBridge,
-  TablePresetId
+  TablePresetId,
+  TablePresentationModel,
+  TablePresentationTemplate,
+  TableColorToken,
+  TableDensityToken,
+  TableBorderToken,
+  TableStripeToken,
+  getTablePreset
 } from '../../../domain/table-core';
+import { TableCellLiteralContent } from '../../../domain/table-values';
+import {
+  getUserPresentationTemplates,
+  saveUserPresentationTemplate,
+  deleteUserPresentationTemplate
+} from '../../../services/user-presentation-templates.service';
 import { resolveLegacyProductField, AVAILABLE_DEFAULT_FIELDS } from '../../../domain/table-binding';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
@@ -57,7 +71,8 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     removeRowFromTable,
     addManualRowToTable,
     unlinkTableCell,
-    unlinkTableRow
+    unlinkTableRow,
+    applyTablePresentationTemplate
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
@@ -82,6 +97,11 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   const [inputDraft, setInputDraft] = useState<string>('');
   const [isInputDirty, setIsInputDirty] = useState<boolean>(false);
   const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
+  const [userTemplates, setUserTemplates] = useState<TablePresentationTemplate[]>([]);
+
+  useEffect(() => {
+    setUserTemplates(getUserPresentationTemplates());
+  }, []);
 
   // Resolução pura do valor de origem usando resolver legado compartilhado
   const product = cellMapping?.productRefId ? getProduct(cellMapping.productRefId) : undefined;
@@ -215,6 +235,15 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     (block.customData?.presentationPresetId as TablePresetId) || 'presys_clean_technical';
 
   const handlePresetChange = (presetId: TablePresetId) => {
+    const preset = getTablePreset(presetId);
+    const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || preset;
+    const updatedPres: TablePresentationModel = {
+      ...preset,
+      rowStyleOverrides: currentPres.rowStyleOverrides,
+      columnStyleOverrides: currentPres.columnStyleOverrides,
+      cellStyleOverrides: currentPres.cellStyleOverrides
+    };
+    applyTablePresentationTemplate(block.id, updatedPres);
     updateBlock(pageId, block.id, {
       customData: {
         ...(block.customData || {}),
@@ -402,12 +431,26 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           </div>
         )}
 
-        {/* Ação de Desvincular Célula da Fonte */}
+        {/* Ação de Desvincular Célula da Fonte (Emenda 12: Materializa literal tipado) */}
         {canUnlink && (
           <div className="pt-1.5 space-y-1">
             <button
               type="button"
-              onClick={() => unlinkTableCell(block.id, cellMapping.legacyRowId, cellMapping.legacyColKey, 'keep_value', resolvedSourceValue)}
+              onClick={() => {
+                const resolvedCellLiteral: TableCellLiteralContent =
+                  cellMapping.canonicalBoundContent?.snapshot ??
+                  (cellMapping.content.kind !== 'datum_reference' && cellMapping.content.kind !== 'empty'
+                    ? cellMapping.content
+                    : { kind: 'text', text: resolvedSourceValue });
+
+                unlinkTableCell(
+                  block.id,
+                  cellMapping.legacyRowId,
+                  cellMapping.legacyColKey,
+                  'keep_value',
+                  resolvedCellLiteral
+                );
+              }}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded transition-colors"
               title="Desvincula esta célula mantendo o valor atual como manual"
             >
@@ -417,14 +460,19 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           </div>
         )}
 
-        {/* Vincular a Dado do PIM */}
+        {/* Vincular a Dado do PIM (Emenda 1: Coordenadas legadas canônicas + scoping) */}
         <div className="pt-1.5">
           <button
             type="button"
             onClick={() =>
               openProductKnowledgePickerModal({
+                kind: 'cell',
                 blockId: block.id,
-                targetCell: { rowId: cellMapping.rowId, columnId: cellMapping.columnId }
+                legacyRowId: cellMapping.legacyRowId,
+                legacyColKey: cellMapping.legacyColKey,
+                tableCoreCellId: cellMapping.cellId,
+                productId: cellMapping.productRefId,
+                productModel: product?.model || product?.code
               })
             }
             className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors"
@@ -432,6 +480,227 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
             <Database className="w-3.5 h-3.5 text-indigo-600" />
             <span>Vincular a Dado Técnico / PIM...</span>
           </button>
+        </div>
+
+        {/* Estilo Canônico da Célula, Linha e Coluna (Emenda 10: Tokens Canônicos) */}
+        <div className="space-y-2 pt-2 border-t border-slate-100">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Estilo da Célula (Tokens Canônicos)
+          </span>
+          <div className="grid grid-cols-3 gap-1.5">
+            <div>
+              <label className="text-[9px] text-slate-500 block">Fundo:</label>
+              <select
+                value={block.customData?.tablePresentation?.cellStyleOverrides?.[cellMapping.cellId]?.backgroundColorToken || 'transparent'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.cellStyleOverrides || {};
+                  const token = e.target.value as TableColorToken;
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.cellId]: {
+                      ...(existingOverrides[cellMapping.cellId] || {}),
+                      backgroundColorToken: token === 'transparent' ? undefined : token
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    cellStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+              >
+                <option value="transparent">Padrão</option>
+                <option value="surface_subtle">Cinza Sutil</option>
+                <option value="brand_primary">Azul</option>
+                <option value="brand_navy">Marinho</option>
+                <option value="surface_header">Cabeçalho</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500 block">Texto:</label>
+              <select
+                value={block.customData?.tablePresentation?.cellStyleOverrides?.[cellMapping.cellId]?.textColorToken || 'text_primary'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.cellStyleOverrides || {};
+                  const token = e.target.value as TableColorToken;
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.cellId]: {
+                      ...(existingOverrides[cellMapping.cellId] || {}),
+                      textColorToken: token
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    cellStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+              >
+                <option value="text_primary">Preto</option>
+                <option value="text_secondary">Cinza</option>
+                <option value="text_on_header">Branco</option>
+                <option value="brand_primary">Azul</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500 block">Alinhamento:</label>
+              <select
+                value={block.customData?.tablePresentation?.cellStyleOverrides?.[cellMapping.cellId]?.align || 'left'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.cellStyleOverrides || {};
+                  const align = e.target.value as 'left' | 'center' | 'right';
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.cellId]: {
+                      ...(existingOverrides[cellMapping.cellId] || {}),
+                      align
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    cellStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+              >
+                <option value="left">Esq</option>
+                <option value="center">Centro</option>
+                <option value="right">Dir</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Estilo Canônico da Linha (Emenda 10) */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Estilo da Linha (Tokens Canônicos)
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-500 block">Fundo da Linha:</label>
+              <select
+                value={block.customData?.tablePresentation?.rowStyleOverrides?.[cellMapping.rowId]?.backgroundToken || 'transparent'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.rowStyleOverrides || {};
+                  const token = e.target.value as TableColorToken;
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.rowId]: {
+                      ...(existingOverrides[cellMapping.rowId] || {}),
+                      backgroundToken: token === 'transparent' ? undefined : token
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    rowStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1.5 py-1 text-[11px] border border-slate-300 rounded bg-white"
+              >
+                <option value="transparent">Padrão</option>
+                <option value="surface_subtle">Cinza Sutil</option>
+                <option value="brand_primary">Azul Primário</option>
+                <option value="surface_header">Cabeçalho</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500 block">Cor do Texto da Linha:</label>
+              <select
+                value={block.customData?.tablePresentation?.rowStyleOverrides?.[cellMapping.rowId]?.textColorToken || 'text_primary'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.rowStyleOverrides || {};
+                  const token = e.target.value as TableColorToken;
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.rowId]: {
+                      ...(existingOverrides[cellMapping.rowId] || {}),
+                      textColorToken: token
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    rowStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1.5 py-1 text-[11px] border border-slate-300 rounded bg-white"
+              >
+                <option value="text_primary">Preto Padrão</option>
+                <option value="text_secondary">Cinza Secundário</option>
+                <option value="text_on_header">Branco</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Estilo Canônico da Coluna (Emenda 10) */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Estilo da Coluna (Tokens Canônicos)
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-500 block">Fundo da Coluna:</label>
+              <select
+                value={block.customData?.tablePresentation?.columnStyleOverrides?.[cellMapping.columnId]?.backgroundToken || 'transparent'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.columnStyleOverrides || {};
+                  const token = e.target.value as TableColorToken;
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.columnId]: {
+                      ...(existingOverrides[cellMapping.columnId] || {}),
+                      backgroundToken: token === 'transparent' ? undefined : token
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    columnStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1.5 py-1 text-[11px] border border-slate-300 rounded bg-white"
+              >
+                <option value="transparent">Padrão</option>
+                <option value="surface_subtle">Cinza Sutil</option>
+                <option value="brand_primary">Azul Primário</option>
+                <option value="surface_header">Cabeçalho</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500 block">Alinhamento Padrão:</label>
+              <select
+                value={block.customData?.tablePresentation?.columnStyleOverrides?.[cellMapping.columnId]?.align || 'left'}
+                onChange={(e) => {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  const existingOverrides = currentPres.columnStyleOverrides || {};
+                  const align = e.target.value as 'left' | 'center' | 'right';
+                  const newOverrides = {
+                    ...existingOverrides,
+                    [cellMapping.columnId]: {
+                      ...(existingOverrides[cellMapping.columnId] || {}),
+                      align
+                    }
+                  };
+                  applyTablePresentationTemplate(block.id, {
+                    ...currentPres,
+                    columnStyleOverrides: newOverrides
+                  });
+                }}
+                className="w-full px-1.5 py-1 text-[11px] border border-slate-300 rounded bg-white"
+              >
+                <option value="left">Esquerda</option>
+                <option value="center">Centralizado</option>
+                <option value="right">Direita</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -550,8 +819,8 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
         </div>
       </div>
 
-      {/* Tema de Apresentação Industrial (TABLE.V2.PRESENTATION1) */}
-      <div className="space-y-1.5 pt-2 border-t border-slate-200">
+      {/* Tema de Apresentação Industrial (TABLE.V2.PRESENTATION1, Emenda 9, 10, 18) */}
+      <div className="space-y-2 pt-2 border-t border-slate-200">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
           <Palette className="w-3.5 h-3.5 text-[#001f3f]" />
           <span>Tema de Apresentação Industrial</span>
@@ -570,6 +839,124 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           <option value="gray_technical">Cinza Técnico Industrial</option>
           <option value="corporate_slate">Ardósia Corporativa</option>
         </select>
+
+        {/* Controles Globais de Apresentação (Densidade, Bordas, Listras) */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1">
+          <div>
+            <label className="text-[9px] text-slate-500 block">Densidade:</label>
+            <select
+              value={block.customData?.tablePresentation?.density || 'regular'}
+              onChange={(e) => {
+                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                applyTablePresentationTemplate(block.id, {
+                  ...currentPres,
+                  density: e.target.value as TableDensityToken
+                });
+              }}
+              className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+            >
+              <option value="compact">Compacta</option>
+              <option value="regular">Regular</option>
+              <option value="spacious">Espaçosa</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] text-slate-500 block">Bordas:</label>
+            <select
+              value={block.customData?.tablePresentation?.borderStyle || 'all'}
+              onChange={(e) => {
+                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                applyTablePresentationTemplate(block.id, {
+                  ...currentPres,
+                  borderStyle: e.target.value as TableBorderToken
+                });
+              }}
+              className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+            >
+              <option value="all">Grade Completa</option>
+              <option value="horizontal_only">Apenas Linhas</option>
+              <option value="outer_only">Apenas Externa</option>
+              <option value="none">Sem Bordas</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] text-slate-500 block">Zebra:</label>
+            <select
+              value={block.customData?.tablePresentation?.stripeStyle || 'none'}
+              onChange={(e) => {
+                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                applyTablePresentationTemplate(block.id, {
+                  ...currentPres,
+                  stripeStyle: e.target.value as TableStripeToken
+                });
+              }}
+              className="w-full px-1 py-1 text-[10.5px] border border-slate-300 rounded bg-white"
+            >
+              <option value="none">Nenhuma</option>
+              <option value="subtle_zebra">Zebra Sutil</option>
+              <option value="high_contrast_zebra">Alto Contraste</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Salvar / Carregar Templates Personalizados (Emenda 9, 18) */}
+        <div className="pt-2 border-t border-slate-100 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-700">Templates Personalizados</span>
+            <button
+              type="button"
+              onClick={() => {
+                const name = window.prompt('Digite um nome para o seu template de apresentação:');
+                if (name && name.trim()) {
+                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+                  saveUserPresentationTemplate({
+                    id: `tmpl_${Date.now()}`,
+                    name: name.trim(),
+                    presentation: currentPres
+                  });
+                  setUserTemplates(getUserPresentationTemplates());
+                }
+              }}
+              className="text-[10px] text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+            >
+              <Save className="w-3 h-3" />
+              <span>Salvar Atual</span>
+            </button>
+          </div>
+
+          {userTemplates.length > 0 ? (
+            <div className="space-y-1 max-h-28 overflow-y-auto">
+              {userTemplates.map((tmpl) => (
+                <div key={tmpl.id} className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-200 text-xs">
+                  <span className="truncate max-w-[150px] font-medium text-slate-700">{tmpl.name}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => applyTablePresentationTemplate(block.id, tmpl.presentation)}
+                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded font-semibold"
+                    >
+                      Aplicar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        deleteUserPresentationTemplate(tmpl.id);
+                        setUserTemplates(getUserPresentationTemplates());
+                      }}
+                      className="text-slate-400 hover:text-red-600 p-0.5"
+                      title="Excluir template"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-slate-400 italic">Nenhum template personalizado salvo.</p>
+          )}
+        </div>
+
         <p className="text-[10px] text-slate-500">
           Altera estilos, densidade e bordas da tabela preservando 100% dos dados e vínculos intactos.
         </p>
@@ -598,7 +985,7 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
         </div>
         <button
           type="button"
-          onClick={() => openProductKnowledgePickerModal({ blockId: block.id })}
+          onClick={() => openProductKnowledgePickerModal({ kind: 'table', blockId: block.id })}
           className="w-full px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
         >
           <Database className="w-3.5 h-3.5 text-indigo-700" />

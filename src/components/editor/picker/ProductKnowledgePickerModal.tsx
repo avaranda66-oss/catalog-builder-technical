@@ -1,6 +1,7 @@
 // src/components/editor/picker/ProductKnowledgePickerModal.tsx
 // Modal de Seleção de Conhecimento Técnico / PIM para Table Core V2.
 // Fail-closed por padrão: NUNCA exibe dados mockados em produção quando o provider está indisponível.
+// Discriminated union target, Product scoping, e ações semânticas distintas (Emendas 1, 2, 8, 11, 17).
 // Zero explicit any.
 
 import React, { useState, useEffect } from 'react';
@@ -12,7 +13,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Filter,
+  TableProperties
 } from 'lucide-react';
 import { useUIStore } from '../../../stores/useUIStore';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
@@ -39,7 +42,9 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
 
   const {
     setTableCellBinding,
-    addTableColumn
+    addTableColumn,
+    insertTechnicalDatasetAsTable,
+    currentCatalog
   } = useCatalogStore();
 
   const [query, setQuery] = useState('');
@@ -47,6 +52,19 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   const [results, setResults] = useState<ProductKnowledgeSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedResult, setSelectedResult] = useState<ProductKnowledgeSearchResult | null>(null);
+
+  // Escopo de produto inteligente (Emenda 11)
+  const scopedProductId = knowledgePickerTarget?.productId;
+  const scopedProductModel = knowledgePickerTarget?.productModel;
+  const [scopeToProduct, setScopeToProduct] = useState<boolean>(Boolean(scopedProductId));
+
+  useEffect(() => {
+    if (scopedProductId) {
+      setScopeToProduct(true);
+    } else {
+      setScopeToProduct(false);
+    }
+  }, [scopedProductId]);
 
   const isAvailable = provider.isAvailable ? provider.isAvailable() : false;
 
@@ -59,9 +77,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
     let isMounted = true;
     setIsLoading(true);
 
-    const targetProductId = knowledgePickerTarget?.targetCell
-      ? undefined
-      : undefined;
+    const targetProductId = scopeToProduct && scopedProductId ? scopedProductId : undefined;
 
     provider
       .search(targetProductId, query)
@@ -84,24 +100,34 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
     return () => {
       isMounted = false;
     };
-  }, [isProductKnowledgePickerModalOpen, query, kindFilter, isAvailable, provider, knowledgePickerTarget]);
+  }, [isProductKnowledgePickerModalOpen, query, kindFilter, isAvailable, provider, scopeToProduct, scopedProductId]);
 
   if (!isProductKnowledgePickerModalOpen) return null;
 
+  // EMENDA 1 & 2: Vincular à célula com coordenadas legadas autoritativas
   const handleBindToTargetCell = (item: ProductKnowledgeSearchResult) => {
-    if (!knowledgePickerTarget || !knowledgePickerTarget.targetCell) return;
-    const { blockId, targetCell } = knowledgePickerTarget;
+    if (!knowledgePickerTarget || knowledgePickerTarget.kind !== 'cell') return;
+    const { blockId, legacyRowId, legacyColKey } = knowledgePickerTarget;
+
+    // Emenda 8: Persistir snapshot tipado; preview textual vira { kind: 'text', text: preview }
+    const previewSnapshot: TableCellLiteralContent | undefined =
+      item.preview !== undefined && item.preview !== null
+        ? (typeof item.preview === 'object' && 'kind' in item.preview
+            ? (item.preview as TableCellLiteralContent)
+            : { kind: 'text', text: String(item.preview) })
+        : undefined;
 
     const binding: CatalogCellBinding = {
-      sourceKind: item.kind === 'dataset' ? 'dataset' : 'pim_datum',
+      sourceKind: 'pim_datum',
       productId: item.productId,
       semanticKey: item.semanticKey,
       datasetId: item.datasetId,
       bindingMode: 'live',
-      snapshot: typeof item.preview !== 'string' ? item.preview : undefined
+      sourceRevision: item.sourceRevision,
+      snapshot: previewSnapshot
     };
 
-    setTableCellBinding(blockId, targetCell.rowId, targetCell.columnId, binding);
+    setTableCellBinding(blockId, legacyRowId, legacyColKey, binding);
     closeProductKnowledgePickerModal();
   };
 
@@ -117,21 +143,55 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
       isCustom: false
     });
 
-    // Se houver uma linha alvo, vincula diretamente
-    if (knowledgePickerTarget.targetCell) {
+    if (knowledgePickerTarget.kind === 'cell') {
+      const previewSnapshot: TableCellLiteralContent | undefined =
+        item.preview !== undefined && item.preview !== null
+          ? (typeof item.preview === 'object' && 'kind' in item.preview
+              ? (item.preview as TableCellLiteralContent)
+              : { kind: 'text', text: String(item.preview) })
+          : undefined;
+
       const binding: CatalogCellBinding = {
-        sourceKind: item.kind === 'dataset' ? 'dataset' : 'pim_datum',
+        sourceKind: 'pim_datum',
         productId: item.productId,
         semanticKey: item.semanticKey,
         datasetId: item.datasetId,
         bindingMode: 'live',
-        snapshot: typeof item.preview !== 'string' ? item.preview : undefined
+        sourceRevision: item.sourceRevision,
+        snapshot: previewSnapshot
       };
 
-      setTableCellBinding(blockId, knowledgePickerTarget.targetCell.rowId, item.semanticKey, binding);
+      setTableCellBinding(blockId, knowledgePickerTarget.legacyRowId, item.semanticKey, binding);
     }
 
     closeProductKnowledgePickerModal();
+  };
+
+  // EMENDA 2 & 17: Inserir Dataset como Tabela
+  const handleInsertDatasetAsTable = async (item: ProductKnowledgeSearchResult) => {
+    if (!knowledgePickerTarget || !item.datasetId) return;
+
+    setIsLoading(true);
+    try {
+      const datasetProj = await provider.getDataset(item.productId, item.datasetId);
+      if (datasetProj && currentCatalog) {
+        const activePage = currentCatalog.pages.find((p) =>
+          p.blocks?.some((b) => b.id === knowledgePickerTarget.blockId)
+        ) || currentCatalog.pages[0];
+
+        if (activePage) {
+          insertTechnicalDatasetAsTable(activePage.id, datasetProj, {
+            title: item.label || datasetProj.title
+          });
+          closeProductKnowledgePickerModal();
+          return;
+        }
+      }
+    } catch {
+      // Falha ao obter projeção do dataset
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderStatusBadge = (status?: string) => {
@@ -202,7 +262,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" data-testid="knowledge-picker-modal">
       <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Cabeçalho */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
@@ -258,6 +318,27 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
           <>
             {/* Barra de Busca e Filtros */}
             <div className="p-4 border-b border-slate-200 bg-white space-y-3 flex-shrink-0">
+              {/* Product Scoping Chip / Toggle (Emenda 11) */}
+              {scopedProductId && (
+                <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-100 px-3 py-1.5 rounded-lg text-xs">
+                  <div className="flex items-center gap-1.5 text-indigo-900 font-medium">
+                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>
+                      {scopeToProduct
+                        ? `Buscando em: ${scopedProductModel || scopedProductId}`
+                        : 'Buscando em: Todos os Produtos'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScopeToProduct((prev) => !prev)}
+                    className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline ml-2"
+                  >
+                    {scopeToProduct ? 'Todos os Produtos' : `Filtrar apenas por ${scopedProductModel || 'produto atual'}`}
+                  </button>
+                </div>
+              )}
+
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -311,6 +392,10 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
               ) : (
                 results.map((item) => {
                   const isSelected = selectedResult?.id === item.id;
+                  const isDataset = item.kind === 'dataset';
+                  const isSavedView = item.kind === 'saved_view';
+                  const isDatum = item.kind === 'datum';
+
                   return (
                     <div
                       key={item.id}
@@ -332,6 +417,9 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                                 {item.productModel}
                               </span>
                             )}
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                              {item.kind === 'dataset' ? 'Tabela Técnica' : item.kind === 'saved_view' ? 'Visão Salva' : 'Dado'}
+                            </span>
                             {renderStatusBadge(item.status)}
                           </div>
                           <p className="text-[11px] text-slate-500 font-mono truncate">
@@ -349,33 +437,68 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                         </div>
                       </div>
 
-                      {/* Ações quando o item está selecionado */}
+                      {/* Ações Semânticas Específicas por Tipo de Resultado (Emenda 2 & 17) */}
                       {isSelected && (
                         <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-end gap-2">
-                          {knowledgePickerTarget?.targetCell && (
+                          {/* DATUM: Vincular à célula ou Adicionar como coluna */}
+                          {isDatum && (
+                            <>
+                              {knowledgePickerTarget?.kind === 'cell' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleBindToTargetCell(item);
+                                  }}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                                >
+                                  <span>Vincular à Célula</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddAsColumn(item);
+                                }}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                              >
+                                <span>Adicionar como Coluna</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+
+                          {/* DATASET: Inserir como Tabela Completa (PROIBIDO vincular como célula simples) */}
+                          {isDataset && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleBindToTargetCell(item);
+                                handleInsertDatasetAsTable(item);
                               }}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
                             >
-                              <span>Vincular à Célula</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
+                              <TableProperties className="w-3.5 h-3.5" />
+                              <span>Inserir Dataset como Tabela</span>
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddAsColumn(item);
-                            }}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
-                          >
-                            <span>Adicionar como Coluna</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+
+                          {/* SAVED VIEW: Inserir View como Tabela */}
+                          {isSavedView && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleInsertDatasetAsTable(item);
+                              }}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                            >
+                              <TableProperties className="w-3.5 h-3.5" />
+                              <span>Inserir View como Tabela</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
