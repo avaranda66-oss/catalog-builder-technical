@@ -96,6 +96,8 @@ export interface CatalogCellBinding {
   bindingMode: 'live' | 'snapshot' | 'review_required';
   snapshot?: TableCellLiteralContent;
   sourceRevision?: number;
+  sourceOwnerKind?: 'product' | 'family';
+  sourceOwnerId?: string;
   stale?: boolean;
 }
 
@@ -310,6 +312,8 @@ export const CatalogCellBindingBaseSchema = z.object({
   bindingMode: z.enum(['live', 'snapshot', 'review_required']).default('live'),
   snapshot: TableCellLiteralContentSchema.optional(),
   sourceRevision: z.number().int().nonnegative().optional(),
+  sourceOwnerKind: z.enum(['product', 'family']).optional(),
+  sourceOwnerId: z.string().optional(),
   stale: z.boolean().optional()
 });
 

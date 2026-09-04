@@ -8,7 +8,6 @@ import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
 import { adaptLegacyBlockToTableCore } from '../../../domain/table-core';
-import { createLegacyProductFieldResolver } from '../../../domain/table-binding';
 import { TableCoreRenderer } from '../table-core';
 
 interface TechnicalTableBlockProps {
@@ -30,7 +29,8 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
     updateBlock,
     updateCellOverride,
     restoreCellToLibrary,
-    removeRowFromTable
+    removeRowFromTable,
+    getTableDatumResolver
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
@@ -131,7 +131,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
                     selectEditorElement({ blockId: block.id, childId: cellId });
                   }
             }
-            resolveDatum={createLegacyProductFieldResolver(getProduct)}
+            resolveDatum={getTableDatumResolver()}
             getHeaderPrintableField={(col) => `col_${col.semanticKey}_label`}
             getCellPrintableField={(_cell, row, col) => {
               const mapping = pilotAdaptResult.bridge.getByCoordinates(row.id, col.id);

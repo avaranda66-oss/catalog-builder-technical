@@ -11,6 +11,14 @@ export interface TableDatumDiagnostic {
   readonly productRevision?: number;
   readonly familyRevision?: number;
   readonly unsupportedType?: string;
+  readonly origin?: string;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
+  readonly sourceRevision?: number;
+  readonly currentRevision?: number;
+  readonly sourceCount?: number;
+  readonly effectiveStatus?: string;
+  readonly datasetId?: string;
 }
 
 export interface TableDatumResolutionResult {

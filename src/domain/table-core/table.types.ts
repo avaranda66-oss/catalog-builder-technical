@@ -116,6 +116,8 @@ export type TableCellBoundContent =
       moduleKey?: string;
       datasetId?: string;
       sourceRevision?: number;
+      sourceOwnerKind?: 'product' | 'family';
+      sourceOwnerId?: string;
       bindingMode: 'live' | 'review_required';
       snapshot?: TableCellLiteralContent;
     }
@@ -126,6 +128,8 @@ export type TableCellBoundContent =
       moduleKey?: string;
       datasetId?: string;
       sourceRevision?: number;
+      sourceOwnerKind?: 'product' | 'family';
+      sourceOwnerId?: string;
       bindingMode: 'snapshot';
       snapshot: TableCellLiteralContent;
     };

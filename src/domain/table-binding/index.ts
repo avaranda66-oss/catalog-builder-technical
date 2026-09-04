@@ -8,3 +8,7 @@ export * from './default-fields';
 export * from './product-knowledge-provider.types';
 export * from './dataset-to-table.adapter';
 export * from './binding-freshness';
+export * from './pim-dataset-projection.adapter';
+export * from './pim-saved-view-projection.adapter';
+export * from './product-registry-reader.types';
+export * from './product-knowledge.runtime';

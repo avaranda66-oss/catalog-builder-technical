@@ -8,6 +8,8 @@ import { TableCellLiteralContent, TableBindingMode, TableHorizontalAlign } from 
 
 export type ProductKnowledgeResultKind = 'datum' | 'dataset' | 'saved_view' | 'asset';
 
+export type ProductKnowledgeProviderStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+
 export interface ProductKnowledgeSearchResult {
   readonly id: string;
   readonly kind: ProductKnowledgeResultKind;
@@ -23,6 +25,8 @@ export interface ProductKnowledgeSearchResult {
   readonly datasetId?: string;
   readonly savedViewId?: string;
   readonly sourceRevision?: number;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
 }
 
 export interface ProductKnowledgeDatumResult {
@@ -34,6 +38,8 @@ export interface ProductKnowledgeDatumResult {
   readonly sourceCount: number;
   readonly value: TableCellLiteralContent;
   readonly sourceRevision?: number;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
 }
 
 export interface SavedViewProjection {
@@ -83,6 +89,7 @@ export interface TechnicalDatasetProjection {
  */
 export interface ProductKnowledgeProvider {
   isAvailable?(): boolean;
+  getStatus?(): ProductKnowledgeProviderStatus;
   search(productId: string | undefined, query: string): Promise<ProductKnowledgeSearchResult[]>;
   getDatum(productId: string, semanticKey: string): Promise<ProductKnowledgeDatumResult | undefined>;
   getDataset(productId: string, datasetId: string): Promise<TechnicalDatasetProjection | undefined>;

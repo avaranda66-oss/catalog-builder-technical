@@ -15,8 +15,7 @@ import { useUIStore } from '../../../stores/useUIStore';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import {
   ProductKnowledgeProvider,
-  ProductKnowledgeSearchResult,
-  UnavailableProductKnowledgeProvider
+  ProductKnowledgeSearchResult
 } from '../../../domain/table-binding/product-knowledge-provider.types';
 import { TableCellLiteralContent } from '../../../domain/table-core/table.types';
 import { formatTableCellLiteral } from '../../../domain/table-values';
@@ -27,7 +26,7 @@ interface ProductKnowledgePickerModalProps {
 }
 
 export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalProps> = ({
-  provider = new UnavailableProductKnowledgeProvider()
+  provider: customProvider
 }) => {
   const {
     isProductKnowledgePickerModalOpen,
@@ -40,13 +39,18 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
     addTableColumn,
     insertTechnicalDatasetAsTable,
     insertSavedViewAsTable,
-    currentCatalog
+    currentCatalog,
+    knowledgeProvider: storeProvider
   } = useCatalogStore();
+
+  const provider = customProvider ?? storeProvider;
 
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | 'datum' | 'dataset' | 'saved_view'>('all');
   const [results, setResults] = useState<ProductKnowledgeSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUnavailableState, setIsUnavailableState] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<ProductKnowledgeSearchResult | null>(null);
 
   const scopedProductId = knowledgePickerTarget?.productId;
@@ -55,6 +59,16 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
 
   useEffect(() => {
     let isCancelled = false;
+
+    if (provider.isAvailable && !provider.isAvailable()) {
+      setIsUnavailableState(true);
+      setIsLoading(false);
+      setResults([]);
+      return;
+    }
+
+    setIsUnavailableState(false);
+    setSearchError(null);
     setIsLoading(true);
 
     const targetProductId = scopeToProduct ? scopedProductId : undefined;
@@ -71,9 +85,15 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
           }
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!isCancelled) {
           setResults([]);
+          const msg = err instanceof Error ? err.message : 'Erro ao consultar conhecimento.';
+          if (msg.includes('Indisponível') || msg.includes('unavailable')) {
+            setIsUnavailableState(true);
+          } else {
+            setSearchError(msg);
+          }
         }
       })
       .finally(() => {
@@ -122,6 +142,8 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
       datasetId: item.datasetId,
       bindingMode: 'live',
       sourceRevision: item.sourceRevision,
+      sourceOwnerKind: item.sourceOwnerKind,
+      sourceOwnerId: item.sourceOwnerId,
       snapshot: previewSnapshot
     };
 
@@ -156,6 +178,8 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
         datasetId: item.datasetId,
         bindingMode: 'live',
         sourceRevision: item.sourceRevision,
+        sourceOwnerKind: item.sourceOwnerKind,
+        sourceOwnerId: item.sourceOwnerId,
         snapshot: previewSnapshot
       };
 
@@ -239,7 +263,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
     }
   };
 
-  const isUnavailable = provider.isAvailable && !provider.isAvailable();
+  const isUnavailable = isUnavailableState || (Boolean(provider.isAvailable) && !provider.isAvailable!());
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -263,14 +287,14 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
           <button
             type="button"
             onClick={closeProductKnowledgePickerModal}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {isUnavailable ? (
-          <div className="p-8 text-center space-y-3">
+          <div className="p-8 text-center space-y-3" data-testid="search-unavailable">
             <div className="inline-flex p-3 bg-rose-50 text-rose-600 rounded-full">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -339,8 +363,18 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                 <div className="py-12 text-center text-xs text-slate-500">
                   Consultando conhecimento técnico...
                 </div>
+              ) : isUnavailable ? (
+                <div className="py-12 text-center space-y-1" data-testid="search-unavailable">
+                  <p className="text-xs font-semibold text-amber-700">Repositório de Conhecimento Indisponível</p>
+                  <p className="text-[11px] text-slate-500">A infraestrutura técnica PIM não está acessível no momento.</p>
+                </div>
+              ) : searchError ? (
+                <div className="py-12 text-center space-y-1" data-testid="search-error">
+                  <p className="text-xs font-semibold text-red-700">Erro na Consulta de Conhecimento</p>
+                  <p className="text-[11px] text-slate-500">{searchError}</p>
+                </div>
               ) : results.length === 0 ? (
-                <div className="py-12 text-center space-y-1">
+                <div className="py-12 text-center space-y-1" data-testid="search-empty">
                   <p className="text-xs font-medium text-slate-600">Nenhum dado encontrado.</p>
                 </div>
               ) : (

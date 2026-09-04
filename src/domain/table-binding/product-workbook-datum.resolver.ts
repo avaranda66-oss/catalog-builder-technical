@@ -201,13 +201,44 @@ export function createProductWorkbookDatumResolver(
       const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
       const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
       const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'approved';
+      const sourceOwnerKind: 'product' | 'family' | undefined = effectiveDatum ? (effectiveDatum.origin === 'family' ? 'family' : 'product') : reference.sourceOwnerKind;
+      const sourceOwnerId = effectiveDatum ? (effectiveDatum.origin === 'family' ? (knowledge?.familyId ?? reference.productId) : knowledge?.productId) : reference.sourceOwnerId;
+      const currentRevision = effectiveDatum ? (effectiveDatum.origin === 'family' ? knowledge?.familyRevision : knowledge?.productRevision) : reference.sourceRevision;
+
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: mappedStatus,
+          diagnostic: {
+            message: 'Dado renderizado a partir de snapshot congelado (offline-safe).',
+            productRevision: knowledge?.productRevision,
+            familyRevision: knowledge?.familyRevision,
+            currentRevision,
+            origin: effectiveDatum?.origin,
+            sourceOwnerKind,
+            sourceOwnerId,
+            sourceRevision: reference.sourceRevision,
+            sourceCount: effectiveDatum?.datum.evidence?.length,
+            effectiveStatus: effectiveDatum?.effectiveStatus,
+            datasetId: reference.datasetId
+          }
+        };
+      }
       return {
-        value: reference.snapshot,
+        value: { kind: 'empty' },
         status: mappedStatus,
         diagnostic: {
-          message: knowledge ? undefined : 'Snapshot congelado renderizado offline (PIM indisponível).',
+          message: 'Célula em modo snapshot sem snapshot prévio; valor não materializado.',
           productRevision: knowledge?.productRevision,
-          familyRevision: knowledge?.familyRevision
+          familyRevision: knowledge?.familyRevision,
+          currentRevision,
+          origin: effectiveDatum?.origin,
+          sourceOwnerKind,
+          sourceOwnerId,
+          sourceRevision: reference.sourceRevision,
+          sourceCount: effectiveDatum?.datum.evidence?.length,
+          effectiveStatus: effectiveDatum?.effectiveStatus,
+          datasetId: reference.datasetId
         }
       };
     }
@@ -216,16 +247,27 @@ export function createProductWorkbookDatumResolver(
     if (reference.bindingMode === 'review_required') {
       const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
       const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
-      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'unknown';
+      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'draft';
+      const sourceOwnerKind: 'product' | 'family' | undefined = effectiveDatum ? (effectiveDatum.origin === 'family' ? 'family' : 'product') : reference.sourceOwnerKind;
+      const sourceOwnerId = effectiveDatum ? (effectiveDatum.origin === 'family' ? (knowledge?.familyId ?? reference.productId) : knowledge?.productId) : reference.sourceOwnerId;
+      const currentRevision = effectiveDatum ? (effectiveDatum.origin === 'family' ? knowledge?.familyRevision : knowledge?.productRevision) : reference.sourceRevision;
 
       if (reference.snapshot) {
         return {
           value: reference.snapshot,
           status: mappedStatus,
           diagnostic: {
-            message: 'Publicação requer revisão de alteração de dados.',
+            message: 'Publicação requer revisão de alteração de dados (fonte técnica atualizada; exibindo snapshot anterior pendente de revisão).',
             productRevision: knowledge?.productRevision,
-            familyRevision: knowledge?.familyRevision
+            familyRevision: knowledge?.familyRevision,
+            currentRevision,
+            origin: effectiveDatum?.origin,
+            sourceOwnerKind,
+            sourceOwnerId,
+            sourceRevision: reference.sourceRevision,
+            sourceCount: effectiveDatum?.datum.evidence?.length,
+            effectiveStatus: effectiveDatum?.effectiveStatus,
+            datasetId: reference.datasetId
           }
         };
       }
@@ -235,7 +277,15 @@ export function createProductWorkbookDatumResolver(
         diagnostic: {
           message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
           productRevision: knowledge?.productRevision,
-          familyRevision: knowledge?.familyRevision
+          familyRevision: knowledge?.familyRevision,
+          currentRevision,
+          origin: effectiveDatum?.origin,
+          sourceOwnerKind,
+          sourceOwnerId,
+          sourceRevision: reference.sourceRevision,
+          sourceCount: effectiveDatum?.datum.evidence?.length,
+          effectiveStatus: effectiveDatum?.effectiveStatus,
+          datasetId: reference.datasetId
         }
       };
     }
@@ -284,6 +334,10 @@ export function createProductWorkbookDatumResolver(
     }
 
     const mappedStatus = mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus);
+    const sourceOwnerKind: 'product' | 'family' = effectiveDatum.origin === 'family' ? 'family' : 'product';
+    const sourceOwnerId = effectiveDatum.origin === 'family' ? (knowledge.familyId ?? reference.productId) : knowledge.productId;
+    const currentRevision = effectiveDatum.origin === 'family' ? knowledge.familyRevision : knowledge.productRevision;
+    const sourceCount = effectiveDatum.datum.evidence?.length ?? 0;
 
     // Mapeia o valor técnico atual de forma conservadora e lossless
     const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value, options);
@@ -296,7 +350,15 @@ export function createProductWorkbookDatumResolver(
             message: `${literalRes.reason} (usando snapshot como fallback).`,
             unsupportedType: literalRes.unsupportedType,
             productRevision: knowledge.productRevision,
-            familyRevision: knowledge.familyRevision
+            familyRevision: knowledge.familyRevision,
+            currentRevision,
+            origin: effectiveDatum.origin,
+            sourceOwnerKind,
+            sourceOwnerId,
+            sourceRevision: reference.sourceRevision,
+            sourceCount,
+            effectiveStatus: effectiveDatum.effectiveStatus,
+            datasetId: reference.datasetId
           }
         };
       }
@@ -307,7 +369,15 @@ export function createProductWorkbookDatumResolver(
           message: literalRes.reason,
           unsupportedType: literalRes.unsupportedType,
           productRevision: knowledge.productRevision,
-          familyRevision: knowledge.familyRevision
+          familyRevision: knowledge.familyRevision,
+          currentRevision,
+          origin: effectiveDatum.origin,
+          sourceOwnerKind,
+          sourceOwnerId,
+          sourceRevision: reference.sourceRevision,
+          sourceCount,
+          effectiveStatus: effectiveDatum.effectiveStatus,
+          datasetId: reference.datasetId
         }
       };
     }
@@ -317,7 +387,15 @@ export function createProductWorkbookDatumResolver(
       status: mappedStatus,
       diagnostic: {
         productRevision: knowledge.productRevision,
-        familyRevision: knowledge.familyRevision
+        familyRevision: knowledge.familyRevision,
+        currentRevision,
+        origin: effectiveDatum.origin,
+        sourceOwnerKind,
+        sourceOwnerId,
+        sourceRevision: reference.sourceRevision,
+        sourceCount,
+        effectiveStatus: effectiveDatum.effectiveStatus,
+        datasetId: reference.datasetId
       }
     };
   };

@@ -22,7 +22,8 @@ import {
   Palette,
   ShieldAlert,
   AlertCircle,
-  Save
+  Save,
+  BookOpen
 } from 'lucide-react';
 import { ContentBlock, TableColumnConfig } from '../../../domain/catalog.schema';
 import { TableSetCellContentCommand } from '../../../domain/document-commands/table-commands.types';
@@ -76,7 +77,7 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
-  const { openAddProductToTableModal, openProductKnowledgePickerModal } = useUIStore();
+  const { openAddProductToTableModal, openProductKnowledgePickerModal, openProductKnowledgeWorkspace } = useUIStore();
 
   // Adaptação pura do bloco legado para TableCore + Bridge
   const adaptRes = adaptLegacyBlockToTableCore(block);
@@ -481,6 +482,57 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
             <span>Vincular a Dado Técnico / PIM...</span>
           </button>
         </div>
+
+        {/* Abrir Conhecimento do Produto no Workspace (Emendas 14 & 16) */}
+        {(cellMapping.productRefId || cellMapping.cellBinding?.productId) && (
+          <div className="pt-1">
+            <button
+              type="button"
+              data-testid="inspector-open-workspace-btn"
+              onClick={() => {
+                const targetProdId = cellMapping.cellBinding?.productId || cellMapping.productRefId;
+                if (targetProdId) {
+                  openProductKnowledgeWorkspace(targetProdId);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#003366] hover:text-blue-900 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+              title="Acessa o Workspace Técnico do Produto no PIM"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-[#003366]" />
+              <span>Abrir Conhecimento do Produto</span>
+            </button>
+          </div>
+        )}
+
+        {/* Metadados de Rastreabilidade Canônica (Emenda 16) */}
+        {cellMapping.cellBinding && (
+          <div className="p-2 bg-indigo-50/40 border border-indigo-100 rounded text-[10.5px] space-y-1 font-mono">
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-sans">Chave Semântica:</span>
+              <span className="font-bold text-indigo-900">{cellMapping.cellBinding.semanticKey}</span>
+            </div>
+            {cellMapping.cellBinding.datasetId && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-sans">Dataset ID:</span>
+                <span className="text-indigo-800">{cellMapping.cellBinding.datasetId}</span>
+              </div>
+            )}
+            {cellMapping.cellBinding.sourceOwnerKind && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-sans">Origem Canônica:</span>
+                <span className="text-indigo-800 font-sans font-medium">
+                  {cellMapping.cellBinding.sourceOwnerKind === 'family' ? 'Herdado da Família' : 'Produto'}
+                </span>
+              </div>
+            )}
+            {cellMapping.cellBinding.sourceRevision !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-sans">Revisão Gravada:</span>
+                <span className="text-slate-700">rev {cellMapping.cellBinding.sourceRevision}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Estilo Canônico da Célula, Linha e Coluna (Emenda 10: Tokens Canônicos) */}
         <div className="space-y-2 pt-2 border-t border-slate-100">

@@ -23,6 +23,7 @@ import { useLibraryStore } from '../../stores/useLibraryStore';
 import { useAssetStore } from '../../stores/useAssetStore';
 import { Product, ProductFamily } from '../../domain/product.schema';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useUIStore } from '../../stores/useUIStore';
 import { LibraryHistoryDrawer } from './LibraryHistoryDrawer';
 import { CellHistoryModal } from './CellHistoryModal';
 import { ProductAssetManager } from './ProductAssetManager';
@@ -105,7 +106,19 @@ export const LibraryView: React.FC = () => {
   // Modal de Fotos & Arquivos Corporativos
   const [selectedProductForAssets, setSelectedProductForAssets] = useState<Product | null>(null);
   const [selectedProductForWorkspace, setSelectedProductForWorkspace] = useState<Product | null>(null);
+  const selectedProductForWorkspaceId = useUIStore((state) => state.selectedProductForWorkspaceId);
+  const closeProductKnowledgeWorkspace = useUIStore((state) => state.closeProductKnowledgeWorkspace);
   const { loadWorkspaceAssets, productAssets } = useAssetStore();
+
+  // Sincroniza abertura do Product Knowledge Workspace disparado pelo Inspector (Emenda 14)
+  useEffect(() => {
+    if (selectedProductForWorkspaceId && products.length > 0) {
+      const found = products.find((p) => p.id === selectedProductForWorkspaceId);
+      if (found) {
+        setSelectedProductForWorkspace(found);
+      }
+    }
+  }, [selectedProductForWorkspaceId, products]);
 
   // Fecha o dropdown de opções da família ao clicar fora
   useEffect(() => {
@@ -947,7 +960,10 @@ export const LibraryView: React.FC = () => {
         <ProductKnowledgeWorkspace
           product={selectedProductForWorkspace}
           family={families.find((f) => f.id === selectedProductForWorkspace.family_id)}
-          onClose={() => setSelectedProductForWorkspace(null)}
+          onClose={() => {
+            setSelectedProductForWorkspace(null);
+            closeProductKnowledgeWorkspace();
+          }}
           availableProducts={products}
         />
       )}

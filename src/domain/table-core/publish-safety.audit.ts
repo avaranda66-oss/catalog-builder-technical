@@ -322,6 +322,26 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
                     reason: `Fonte indisponível (${binding.semanticKey}); utilizando snapshot existente como fallback.`
                   });
                 }
+
+                // B.4: Mudança de proprietário da fonte (Emenda 7: family -> product override) -> WARN
+                if (
+                  binding.sourceOwnerKind &&
+                  res.diagnostic?.sourceOwnerKind &&
+                  binding.sourceOwnerKind !== res.diagnostic.sourceOwnerKind
+                ) {
+                  issues.push({
+                    layer: 'B_RESOLUTION',
+                    severity: 'warn',
+                    pageNumber,
+                    pageId: page.id,
+                    tableId,
+                    tableTitle,
+                    rowId: row.id,
+                    colKey,
+                    code: 'SOURCE_OWNER_CHANGED',
+                    reason: `Origem do dado alterada na fonte técnica (${binding.sourceOwnerKind} -> ${res.diagnostic.sourceOwnerKind}). Revisão recomendada.`
+                  });
+                }
               }
             }
           }

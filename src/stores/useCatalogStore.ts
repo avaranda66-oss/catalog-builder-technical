@@ -55,8 +55,12 @@ import {
   TechnicalDatasetCellProjection,
   SavedViewProjection,
   generateDeterministicDatasetColumnId,
-  generateDeterministicDatasetRowId
+  generateDeterministicDatasetRowId,
+  ProductKnowledgeRuntime,
+  TableDatumResolver
 } from '../domain/table-binding';
+import { SupabaseProductKnowledgeProvider } from '../services/product-knowledge';
+import { useLibraryStore } from './useLibraryStore';
 
 export type { EditorDocumentContext };
 
@@ -316,6 +320,12 @@ interface CatalogState {
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
   handleRealtimeTemplateChange: (payload: { eventType: string; new?: any; old?: any }) => void;
+
+  // Product Knowledge Runtime & Resolution (PIM Integration)
+  knowledgeRuntime: ProductKnowledgeRuntime;
+  knowledgeProvider: SupabaseProductKnowledgeProvider;
+  getTableDatumResolver: () => TableDatumResolver;
+  preloadProductKnowledge: () => Promise<void>;
 }
 
 // Controle de Fila por Catálogo (Per-Catalog Save Queue) com Token de Geração
@@ -327,6 +337,9 @@ export interface CatalogSaveQueue {
 }
 
 const catalogSaveQueues = new Map<string, CatalogSaveQueue>();
+
+const defaultKnowledgeProvider = new SupabaseProductKnowledgeProvider();
+const defaultKnowledgeRuntime = defaultKnowledgeProvider.getRuntime();
 
 export function _resetCatalogSaveQueuesForTest() {
   catalogSaveQueues.clear();
@@ -351,6 +364,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   activePageIndex: 0,
   selectedBlockId: null,
   selectedChildId: null,
+
+  knowledgeRuntime: defaultKnowledgeRuntime,
+  knowledgeProvider: defaultKnowledgeProvider,
+  getTableDatumResolver: () => {
+    return defaultKnowledgeRuntime.getCompositeDatumResolver(
+      (id) => useLibraryStore.getState().getProduct(id)
+    );
+  },
+  preloadProductKnowledge: async () => {
+    const catalog = get().currentCatalog;
+    if (catalog) {
+      await defaultKnowledgeRuntime.preloadCatalogProductKnowledge(catalog);
+    }
+  },
 
   isSaving: false,
   isDirty: false,

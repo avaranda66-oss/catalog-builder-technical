@@ -30,6 +30,7 @@ interface UIState {
   isProductKnowledgePickerModalOpen: boolean;
   knowledgePickerTarget: KnowledgePickerTarget | null;
   zoomLevel: number;
+  selectedProductForWorkspaceId: string | null;
   
   // Actions
   setActiveTab: (tab: ActiveTab) => void;
@@ -39,6 +40,8 @@ interface UIState {
   closeAddProductToTableModal: () => void;
   openProductKnowledgePickerModal: (target: KnowledgePickerTarget) => void;
   closeProductKnowledgePickerModal: () => void;
+  openProductKnowledgeWorkspace: (productId: string) => void;
+  closeProductKnowledgeWorkspace: () => void;
   setExportPDFModalOpen: (open: boolean) => void;
   setAIAssistantOpen: (open: boolean) => void;
   openAIAssistant: () => void;
@@ -57,6 +60,7 @@ export const useUIStore = create<UIState>((set) => ({
   isProductKnowledgePickerModalOpen: false,
   knowledgePickerTarget: null,
   zoomLevel: 100,
+  selectedProductForWorkspaceId: null,
 
   setActiveTab: (activeTab) => set({ activeTab }),
   openProductDrawer: (editingProductId) => set({ isProductDrawerOpen: true, editingProductId: editingProductId || null }),
@@ -65,6 +69,8 @@ export const useUIStore = create<UIState>((set) => ({
   closeAddProductToTableModal: () => set({ isAddProductToTableModalOpen: false, targetTableBlockId: null }),
   openProductKnowledgePickerModal: (target) => set({ isProductKnowledgePickerModalOpen: true, knowledgePickerTarget: target }),
   closeProductKnowledgePickerModal: () => set({ isProductKnowledgePickerModalOpen: false, knowledgePickerTarget: null }),
+  openProductKnowledgeWorkspace: (productId) => set({ activeTab: 'library', selectedProductForWorkspaceId: productId }),
+  closeProductKnowledgeWorkspace: () => set({ selectedProductForWorkspaceId: null }),
   setExportPDFModalOpen: (isExportPDFModalOpen) => set({ isExportPDFModalOpen }),
   setAIAssistantOpen: (isAIAssistantOpen) => set({ isAIAssistantOpen }),
   openAIAssistant: () => set({ isAIAssistantOpen: true }),

@@ -7,10 +7,33 @@ import { auditCatalogPublishSafety } from '../../domain/table-core';
 
 export const ExportPDFModal: React.FC = () => {
   const { isExportPDFModalOpen, setExportPDFModalOpen } = useUIStore();
-  const { currentCatalog, syncStatus, editorContext, saveActiveDocument } = useCatalogStore();
+  const {
+    currentCatalog,
+    syncStatus,
+    editorContext,
+    saveActiveDocument,
+    knowledgeRuntime,
+    getTableDatumResolver,
+    preloadProductKnowledge
+  } = useCatalogStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(true);
+  const [runtimeStatus, setRuntimeStatus] = useState(knowledgeRuntime.getStatus());
+
+  React.useEffect(() => {
+    setRuntimeStatus(knowledgeRuntime.getStatus());
+    const unsubscribe = knowledgeRuntime.subscribe((status) => {
+      setRuntimeStatus(status);
+    });
+    return unsubscribe;
+  }, [knowledgeRuntime]);
+
+  React.useEffect(() => {
+    if (isExportPDFModalOpen && currentCatalog) {
+      preloadProductKnowledge();
+    }
+  }, [isExportPDFModalOpen, currentCatalog?.id, preloadProductKnowledge]);
 
   if (!isExportPDFModalOpen || !currentCatalog) return null;
 
@@ -18,9 +41,11 @@ export const ExportPDFModal: React.FC = () => {
   const docId = isTemplate ? (editorContext.templateId || currentCatalog.id) : currentCatalog.id;
   const docVersion = currentCatalog.version || 1;
 
-  // Auditoria de segurança de publicação em 3 camadas (Emenda 16)
-  const auditReport = auditCatalogPublishSafety({ catalog: currentCatalog, syncStatus });
-  const isExportBlocked = !auditReport.canPublish;
+  // Auditoria de segurança de publicação em 3 camadas (Emendas 15 e 16)
+  const isRuntimeLoading = runtimeStatus === 'loading';
+  const resolveDatum = !isRuntimeLoading ? getTableDatumResolver() : undefined;
+  const auditReport = auditCatalogPublishSafety({ catalog: currentCatalog, syncStatus, resolveDatum });
+  const isExportBlocked = isRuntimeLoading || !auditReport.canPublish;
 
   const handleDownloadPDF = async () => {
     if (isExportBlocked) {
@@ -109,6 +134,14 @@ export const ExportPDFModal: React.FC = () => {
         </div>
 
         <div className="mt-4 space-y-3.5 text-xs text-slate-600">
+          {/* Indicador de Runtime Loading (Emenda 15) */}
+          {isRuntimeLoading && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-none flex items-center gap-2 font-mono text-[11px]" data-testid="runtime-loading-indicator">
+              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+              <span>Sincronizando conhecimento técnico do catálogo antes da validação de publicação...</span>
+            </div>
+          )}
+
           {/* Painel de Auditoria de Publicação em 3 Camadas (Emenda 16) */}
           {auditReport.issues.length > 0 && (
             <div className="p-3 bg-slate-50 border border-slate-300 space-y-2 font-mono text-[11px]" data-testid="publish-safety-panel">
