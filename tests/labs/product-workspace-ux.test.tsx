@@ -6,12 +6,13 @@ import { MegaWorkspaceLab } from '../../src/labs/product-workspace-ux/MegaWorksp
 import { TA25N_INITIAL_SECTIONS } from '../../src/labs/product-workspace-ux/ta25n.fixture';
 import { FactGridBlock } from '../../src/labs/product-workspace-ux/components/FactGridBlock';
 import { MegaTableBlock } from '../../src/labs/product-workspace-ux/components/MegaTableBlock';
+import { SourceDrawer } from '../../src/labs/product-workspace-ux/components/SourceDrawer';
 
 describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
   // ==========================================================================
-  // FATHER TEST SCENARIOS (10 Cenários Essenciais do Usuário Industrial)
+  // FATHER TEST SCENARIOS (13 Cenários Essenciais do Usuário Industrial)
   // ==========================================================================
-  describe('THE FATHER TEST — 10 Cenários Reais de Uso Sem Jargão PIM', () => {
+  describe('THE FATHER TEST — 13 Cenários Reais de Uso Sem Jargão PIM', () => {
     it('1. "Quero descobrir a faixa do TA-25N" — Encontrado em 0-1 clique no topo', () => {
       render(<MegaWorkspaceLab />);
       // A faixa de temperatura deve estar visível de imediato no Hero
@@ -75,8 +76,8 @@ describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
         />
       );
 
-      // Clica no ícone de fonte
-      const sourceBtn = screen.getByTitle(/Fonte: EM0291-04/i);
+      // Clica no ícone de fonte (affordance direta)
+      const sourceBtn = screen.getByTitle(/fontes técnicas|Fonte: EM0291-04/i);
       fireEvent.click(sourceBtn);
 
       expect(mockOpenSource).toHaveBeenCalledWith(rangeFact);
@@ -148,6 +149,127 @@ describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
       const newOrder = result.current.sections.map((s) => s.id);
       expect(newOrder[0]).toBe('sec-metrologia');
       expect(newOrder[1]).toBe('sec-resumo');
+    });
+
+    it('11. "Existem duas fontes conflitantes; consigo perceber que o sistema não sabe qual é verdadeira?"', () => {
+      const conflictFact = (TA25N_INITIAL_SECTIONS[8].blocks[0].data as any).conflicts[0];
+      render(
+        <SourceDrawer
+          fact={conflictFact}
+          isOpen={true}
+          onClose={vi.fn()}
+        />
+      );
+
+      // O sistema exibe com clareza o alerta de divergência e neutralidade de verdade
+      expect(screen.getByText(/Fontes Divergentes Detectadas/i)).toBeInTheDocument();
+      expect(screen.getByText(/não assume arbitrariamente qual deles é o verdadeiro/i)).toBeInTheDocument();
+
+      // Ambas as fontes são listadas com seus códigos e valores alegados
+      expect(screen.getByText('EM0291-04')).toBeInTheDocument();
+      expect(screen.getByText('EM0314-01')).toBeInTheDocument();
+      expect(screen.getByText(/Valor: 140 °C/i)).toBeInTheDocument();
+      expect(screen.getByText(/Valor: 155 °C/i)).toBeInTheDocument();
+    });
+
+    it('12. "Quero esconder Peso do Resumo sem apagar Peso do produto."', () => {
+      const { result } = renderHook(() => useMegaWorkspaceState());
+
+      const pesoFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Peso');
+      expect(pesoFact).toBeDefined();
+      expect(pesoFact.isHidden).toBeFalsy();
+
+      // Esconde o fato da apresentação sem apagar os dados do produto
+      act(() => {
+        result.current.hideFact(pesoFact.id);
+      });
+
+      const hiddenFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Peso');
+      expect(hiddenFact.isHidden).toBe(true);
+
+      // O fato continua íntegro no catálogo de conhecimento (não foi deletado)
+      expect(((result.current.sections[0].blocks[0].data as any).facts).some((f: any) => f.id === pesoFact.id)).toBe(true);
+      expect(hiddenFact.value).toBe('10,5');
+
+      // Reexibe sem perdas
+      act(() => {
+        result.current.unhideFact(pesoFact.id);
+      });
+      const restoredFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Peso');
+      expect(restoredFact.isHidden).toBe(false);
+    });
+
+    it('13. "Quero mudar o nome visual Estabilidade sem alterar a identidade técnica."', () => {
+      const { result } = renderHook(() => useMegaWorkspaceState());
+
+      const stabFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Estabilidade Térmica');
+      expect(stabFact.semanticKey).toBe('temperature.stability');
+
+      // Altera o rótulo humano de exibição
+      act(() => {
+        result.current.updateFactDisplayLabel(stabFact.id, 'Estabilidade Térmica Fina (Radial)');
+      });
+
+      const updatedFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.id === stabFact.id);
+      expect(updatedFact.label).toBe('Estabilidade Térmica Fina (Radial)');
+      // A identidade técnica semântica canônica permanece estritamente idêntica
+      expect(updatedFact.semanticKey).toBe('temperature.stability');
+    });
+  });
+
+  // ==========================================================================
+  // MULTI-SOURCE & STAGED EDIT UX
+  // ==========================================================================
+  describe('MULTI-SOURCE UX & STAGED FACT EDIT', () => {
+    it('Múltiplas fontes concordantes são exibidas com badge consolidado no SourceDrawer', () => {
+      const rangeFact = (TA25N_INITIAL_SECTIONS[0].blocks[0].data as any).facts[0];
+      render(
+        <SourceDrawer
+          fact={rangeFact}
+          isOpen={true}
+          onClose={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/2 fontes técnicas concordantes/i)).toBeInTheDocument();
+      expect(screen.getByText('EM0291-04')).toBeInTheDocument();
+      expect(screen.getByText('CAT-TA-2024-V2')).toBeInTheDocument();
+    });
+
+    it('Fato sem fonte vinculada apresenta estado vazio limpo com convite de vínculo', () => {
+      const noSourceFact = {
+        id: 'f-test-nosrc',
+        label: 'Revestimento Especial',
+        value: 'Anodizado Preto',
+        originScope: 'model' as const,
+        originLabel: 'TA-25N',
+        semanticKey: 'physical.coating',
+        sources: []
+      };
+
+      render(
+        <SourceDrawer
+          fact={noSourceFact}
+          isOpen={true}
+          onClose={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/Nenhuma Fonte Vinculada/i)).toBeInTheDocument();
+      expect(screen.getByText(/\+ Vincular a um documento oficial/i)).toBeInTheDocument();
+    });
+
+    it('Staged Fact Edit salva no rascunho de trabalho com feedback para o usuário', () => {
+      const { result } = renderHook(() => useMegaWorkspaceState());
+      const pesoFact = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Peso');
+
+      act(() => {
+        result.current.stageFactEdit(pesoFact.id, { value: '11,5' }, 'model');
+      });
+
+      const updated = (result.current.sections[0].blocks[0].data as any).facts.find((f: any) => f.label === 'Peso');
+      expect(updated.value).toBe('11,5');
+      expect(result.current.undoToastMessage).toContain('rascunho de trabalho');
     });
   });
 

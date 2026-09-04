@@ -47,27 +47,46 @@ export const AIImportModal: React.FC<AIImportModalProps> = ({ isOpen, onClose })
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
-              Dados Identificados com Alta Confiança:
+              Classificação por Política de Verdade:
             </span>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-              <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl">
-                <div className="text-xl font-bold text-purple-900">84</div>
-                <div className="text-[10px] text-purple-700">Fatos Técnicos</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* 1. FACTS */}
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">Fatos Verificados</span>
+                  <span className="text-xs px-1.5 py-0.2 bg-emerald-200/80 text-emerald-900 rounded-full font-mono font-bold">84</span>
+                </div>
+                <div className="text-lg font-bold text-emerald-950">Homologados</div>
+                <p className="text-[11px] text-emerald-800 leading-tight">
+                  Evidência textual direta de 100% de precisão nos manuais técnicos oficiais.
+                </p>
               </div>
-              <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl">
-                <div className="text-xl font-bold text-purple-900">3</div>
-                <div className="text-[10px] text-purple-700">Tabelas</div>
+
+              {/* 2. CONFLICTS */}
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">Conflitos</span>
+                  <span className="text-xs px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full font-mono font-bold">2</span>
+                </div>
+                <div className="text-lg font-bold text-amber-950">Divergências</div>
+                <p className="text-[11px] text-amber-800 leading-tight">
+                  Fontes oficiais declaram valores diferentes. O sistema não assume verdade automática.
+                </p>
               </div>
-              <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl">
-                <div className="text-xl font-bold text-purple-900">7</div>
-                <div className="text-[10px] text-purple-700">Recursos</div>
-              </div>
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                <div className="text-xl font-bold text-amber-800">2</div>
-                <div className="text-[10px] text-amber-700">Divergências</div>
+
+              {/* 3. REVIEW CANDIDATES */}
+              <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider">Sugestões IA</span>
+                  <span className="text-xs px-1.5 py-0.2 bg-purple-200 text-purple-900 rounded-full font-mono font-bold">12</span>
+                </div>
+                <div className="text-lg font-bold text-purple-950">Aguardando Avaliação</div>
+                <p className="text-[11px] text-purple-800 leading-tight">
+                  Candidatos a fatos extraídos de tabelas não padronizadas que requerem aprovação prévia.
+                </p>
               </div>
             </div>
           </div>
@@ -92,8 +111,8 @@ export const AIImportModal: React.FC<AIImportModalProps> = ({ isOpen, onClose })
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-[11px] leading-relaxed flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <span>
-              Cada informação importada virá acompanhada da página e trecho textual de evidência,
-              permitindo validação posterior a qualquer momento.
+              <strong>Política de Verdade do Sistema:</strong> Sugestões da IA e divergências entre documentos
+              <strong> nunca são promovidas a fatos verificados</strong> sem decisão explícita da equipe técnica.
             </span>
           </div>
         </div>

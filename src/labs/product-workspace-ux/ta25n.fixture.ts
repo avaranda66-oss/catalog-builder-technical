@@ -75,7 +75,8 @@ export const TA25N_INITIAL_SECTIONS: WorkspaceSection[] = [
               originLabel: 'TA-25N',
               semanticKey: 'temperature.range',
               aliases: ['faixa', 'temperatura', 'range', 'span'],
-              source: TA_MANUAL_PT_SOURCE
+              source: TA_MANUAL_PT_SOURCE,
+              sources: [TA_MANUAL_PT_SOURCE, TA_COMMERCIAL_CATALOG_SOURCE]
             },
             {
               id: 'f-hero-accuracy',
@@ -87,7 +88,8 @@ export const TA25N_INITIAL_SECTIONS: WorkspaceSection[] = [
               originLabel: 'TA-25N',
               semanticKey: 'temperature.accuracy',
               aliases: ['exatidao', 'precisao', 'accuracy', 'acuracia'],
-              source: TA_MANUAL_PT_SOURCE
+              source: TA_MANUAL_PT_SOURCE,
+              sources: [TA_MANUAL_PT_SOURCE]
             },
             {
               id: 'f-hero-stability',
@@ -99,7 +101,8 @@ export const TA25N_INITIAL_SECTIONS: WorkspaceSection[] = [
               originLabel: 'TA-25N',
               semanticKey: 'temperature.stability',
               aliases: ['estabilidade', 'thermal stability', 'stability'],
-              source: TA_MANUAL_PT_SOURCE
+              source: TA_MANUAL_PT_SOURCE,
+              sources: [TA_MANUAL_PT_SOURCE]
             },
             {
               id: 'f-hero-weight',
@@ -111,7 +114,20 @@ export const TA25N_INITIAL_SECTIONS: WorkspaceSection[] = [
               originLabel: 'Linha TA',
               semanticKey: 'physical.weight',
               aliases: ['peso', 'massa', 'weight'],
-              source: TA_MANUAL_PT_SOURCE
+              source: {
+                ...TA_MANUAL_PT_SOURCE,
+                page: 15,
+                excerpt: 'O peso do calibrador da Linha TA é de aproximadamente 10,5 kg.',
+                isFamilyInherited: true
+              },
+              sources: [
+                {
+                  ...TA_MANUAL_PT_SOURCE,
+                  page: 15,
+                  excerpt: 'O peso do calibrador da Linha TA é de aproximadamente 10,5 kg.',
+                  isFamilyInherited: true
+                }
+              ]
             }
           ]
         }
@@ -809,6 +825,18 @@ export const TA25N_INITIAL_SECTIONS: WorkspaceSection[] = [
               originLabel: 'TA-25N',
               semanticKey: 'temperature.max_limit',
               aliases: ['temperatura maxima', 'max temp'],
+              sources: [
+                {
+                  ...TA_MANUAL_PT_SOURCE,
+                  claimValue: '140 °C',
+                  verifiedStatus: 'review_required'
+                },
+                {
+                  ...TA_MANUAL_EN_SOURCE,
+                  claimValue: '155 °C',
+                  verifiedStatus: 'review_required'
+                }
+              ],
               conflict: {
                 title: 'Divergência de temperatura máxima entre manuais',
                 description: 'O Manual PT (EM0291-04) define 140 °C como limite superior, enquanto o Manual EN (EM0314-01) menciona 155 °C para ciclo restrito.',

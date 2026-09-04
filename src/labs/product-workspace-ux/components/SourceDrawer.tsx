@@ -1,24 +1,38 @@
 // src/labs/product-workspace-ux/components/SourceDrawer.tsx
 import React, { useState } from 'react';
-import { X, FileText, ChevronDown, ChevronUp, ExternalLink, ShieldCheck } from 'lucide-react';
-import { FactItem } from '../types';
+import {
+  X,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+  FileQuestion,
+  Users,
+  CheckCircle2
+} from 'lucide-react';
+import { FactItem, getFactSources, getFactSourceState } from '../types';
 
 interface SourceDrawerProps {
   fact: FactItem | null;
   isOpen: boolean;
   onClose: () => void;
+  onOpenConflictReview?: (fact: FactItem) => void;
 }
 
 export const SourceDrawer: React.FC<SourceDrawerProps> = ({
   fact,
   isOpen,
-  onClose
+  onClose,
+  onOpenConflictReview
 }) => {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
-  if (!isOpen || !fact || !fact.source) return null;
+  if (!isOpen || !fact) return null;
 
-  const source = fact.source;
+  const sources = getFactSources(fact);
+  const sourceState = getFactSourceState(fact);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-2xs flex justify-end">
@@ -27,7 +41,7 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Origem da Informação
+              Origem da Informação & Evidências
             </span>
             <h3 className="text-base font-bold text-slate-900 mt-0.5">
               {fact.label}
@@ -46,62 +60,178 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
             <div className="text-xl font-bold text-slate-900 font-mono mt-0.5">
               {fact.value} {fact.unit || ''}
             </div>
+            <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
+              <span>Escopo:</span>
+              <span className="font-semibold text-slate-700">{fact.originLabel}</span>
+            </div>
           </div>
 
-          {/* Dados do Manual / Fonte */}
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-blue-50 text-[#003366] rounded-lg mt-0.5">
-                <FileText className="w-5 h-5" />
+          {/* ================================================================= */}
+          {/* CASO 1: NO SOURCE (Nenhuma fonte vinculada) */}
+          {/* ================================================================= */}
+          {sourceState === 'no_source' && (
+            <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-3 text-center">
+              <div className="mx-auto w-10 h-10 bg-slate-200/70 text-slate-500 rounded-full flex items-center justify-center">
+                <FileQuestion className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-slate-900 text-sm">
-                  {source.documentTitle}
-                </h4>
-                <div className="flex items-center gap-2 mt-1 text-slate-500 font-mono">
-                  <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">
-                    {source.documentCode}
-                  </span>
-                  <span>Página {source.page}</span>
+                <h4 className="font-bold text-slate-800 text-sm">Nenhuma Fonte Vinculada</h4>
+                <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                  Esta especificação técnica ainda não possui manual de instrução, catálogo ou certificado associado como evidência comprobatória.
+                </p>
+              </div>
+              <button
+                onClick={() => alert('Vincular a um documento do catálogo...')}
+                className="w-full py-2 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors shadow-2xs"
+              >
+                + Vincular a um documento oficial
+              </button>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* CASO 2: CONFLICTING SOURCES (Fontes Divergentes) */}
+          {/* ================================================================= */}
+          {sourceState === 'conflicting_sources' && (
+            <div className="p-4 bg-amber-50/80 border border-amber-300 rounded-xl space-y-3">
+              <div className="flex items-start gap-2.5 text-amber-900">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-sm">Atenção: Fontes Divergentes Detectadas</h4>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                    O sistema identificou documentos oficiais com valores divergentes para esta especificação e <strong>não assume arbitrariamente qual deles é o verdadeiro</strong> até que haja revisão de engenharia.
+                  </p>
                 </div>
               </div>
+
+              {onOpenConflictReview && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenConflictReview(fact);
+                  }}
+                  className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-2xs transition-colors text-center"
+                >
+                  Revisar e Decidir Valor Oficial
+                </button>
+              )}
             </div>
+          )}
 
-            {/* Trecho Transcrito / Evidência */}
-            <div className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-3.5 space-y-1.5">
-              <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
-                Trecho Oficial Identificado:
-              </span>
-              <p className="text-xs text-slate-700 leading-relaxed italic">
-                &ldquo;{source.excerpt}&rdquo;
-              </p>
+          {/* ================================================================= */}
+          {/* CASO 3: MULTIPLE AGREEING SOURCES */}
+          {/* ================================================================= */}
+          {sourceState === 'multiple_agreeing' && (
+            <div className="p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-900 font-medium">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <span className="font-bold">{sources.length} fontes técnicas concordantes</span> confirmam esta especificação no catálogo.
+              </div>
             </div>
+          )}
 
-            {/* Status de Verificação */}
-            <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 font-medium">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Verificado e homologado pela equipe de engenharia metrológica</span>
+          {/* ================================================================= */}
+          {/* CASO 4: INHERITED SOURCE */}
+          {/* ================================================================= */}
+          {sourceState === 'inherited_source' && (
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center gap-2.5 text-blue-900">
+              <Users className="w-5 h-5 text-blue-600 shrink-0" />
+              <div>
+                <span className="font-bold">Origem Compartilhada: {fact.originLabel}</span>
+                <p className="text-[11px] text-blue-800 mt-0.5">
+                  Esta evidência comprobatória foi herdada da documentação mestre da família.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Ações */}
-          <div className="pt-2 flex flex-col gap-2">
-            <button
-              onClick={() => alert(`Abrindo documento ${source.documentCode} na página ${source.page}...`)}
-              className="w-full py-2.5 px-4 bg-[#003366] hover:bg-[#00254d] text-white font-semibold rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Abrir documento na página {source.page}</span>
-            </button>
-            <button
-              onClick={() => alert('Listando todas as 94 referências deste manual...')}
-              className="w-full py-2 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors"
-            >
-              Ver todas as fontes deste produto
-            </button>
-          </div>
+          {/* LISTA DE FONTES / EVIDÊNCIAS */}
+          {sources.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                  Documentos Comprobatórios ({sources.length}):
+                </span>
+              </div>
 
-          {/* Detalhes Técnicos (Colapsável) */}
+              {sources.map((src, idx) => (
+                <div
+                  key={src.documentId || idx}
+                  className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-2.5"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-50 text-[#003366] rounded-lg mt-0.5 shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h5 className="font-bold text-slate-900 text-xs truncate">
+                        {src.documentTitle}
+                      </h5>
+                      <div className="flex items-center gap-2 mt-1 text-slate-500 font-mono text-[11px]">
+                        <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-bold">
+                          {src.documentCode}
+                        </span>
+                        {src.page && <span>Página {src.page}</span>}
+                        {src.claimValue && (
+                          <span className="font-bold text-amber-800 bg-amber-50 px-1 rounded">
+                            Valor: {src.claimValue}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {src.excerpt && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] text-slate-700 italic leading-relaxed">
+                      &ldquo;{src.excerpt}&rdquo;
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      {src.verifiedStatus === 'verified' ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Homologado
+                        </span>
+                      ) : src.verifiedStatus === 'review_required' ? (
+                        <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Revisão necessária
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">Pendente de verificação</span>
+                      )}
+                    </div>
+
+                    {src.page && (
+                      <button
+                        onClick={() => alert(`Abrindo documento ${src.documentCode} na página ${src.page}...`)}
+                        className="inline-flex items-center gap-1 text-[#003366] font-semibold hover:underline"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Abrir pág. {src.page}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Ações Globais */}
+          {sources.length > 0 && (
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={() => alert('Listando todas as referências cruzadas deste produto...')}
+                className="w-full py-2 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors"
+              >
+                Ver todas as fontes vinculadas a este calibrador
+              </button>
+            </div>
+          )}
+
+          {/* Detalhes Técnicos de Auditoria (Colapsável) */}
           <div className="border-t border-slate-200 pt-3">
             <button
               onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
@@ -113,15 +243,18 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
 
             {showTechnicalDetails && (
               <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 font-mono text-[11px] text-slate-600">
-                <div>Document ID: {source.documentId}</div>
-                <div>Status: {source.verifiedStatus}</div>
-                {source.technicalMetadata?.ocrConfidence && (
-                  <div>OCR Confidence: {(source.technicalMetadata.ocrConfidence * 100).toFixed(1)}%</div>
-                )}
-                {source.technicalMetadata?.uploadedAt && (
-                  <div>Ingested At: {source.technicalMetadata.uploadedAt}</div>
-                )}
                 <div>Semantic Target: {fact.semanticKey}</div>
+                <div>Origin Scope: {fact.originScope} ({fact.originLabel})</div>
+                <div>Sources Count: {sources.length}</div>
+                {sources.map((s, i) => (
+                  <div key={i} className="pl-2 border-l border-slate-300 space-y-0.5">
+                    <div>Doc ID: {s.documentId || 'N/A'}</div>
+                    <div>Status: {s.verifiedStatus}</div>
+                    {s.technicalMetadata?.ocrConfidence && (
+                      <div>OCR Confidence: {(s.technicalMetadata.ocrConfidence * 100).toFixed(1)}%</div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

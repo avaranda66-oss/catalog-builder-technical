@@ -27,6 +27,9 @@ export interface FactSource {
   page: number;
   excerpt: string;
   verifiedStatus: 'verified' | 'review_required' | 'unverified';
+  isFamilyInherited?: boolean;
+  claimValue?: string; // Valor específico afirmado por esta fonte
+  confidence?: number;
   technicalMetadata?: {
     uploadedAt?: string;
     checksum?: string;
@@ -56,13 +59,60 @@ export interface FactItem {
   value: string;
   unit?: string;
   isHighlighted?: boolean;
+  isHidden?: boolean; // Permite esconder do resumo/visualização sem apagar do produto
   originScope: 'model' | 'family';
   originLabel: string; // "Linha TA" ou "TA-25N"
   category?: string;
   semanticKey: string; // "temperature.stability"
   aliases?: string[];
   source?: FactSource;
+  sources?: FactSource[]; // Suporte completo a múltiplas fontes/evidências
   conflict?: FactConflictDetails;
+}
+
+export type FactSourceState =
+  | 'no_source'
+  | 'single_source'
+  | 'multiple_agreeing'
+  | 'conflicting_sources'
+  | 'inherited_source';
+
+export function getFactSources(fact: FactItem): FactSource[] {
+  if (fact.sources && fact.sources.length > 0) {
+    return fact.sources;
+  }
+  if (fact.source) {
+    return [fact.source];
+  }
+  return [];
+}
+
+export function getFactSourceState(fact: FactItem): FactSourceState {
+  const sources = getFactSources(fact);
+  if (sources.length === 0) return 'no_source';
+  if (fact.conflict || sources.some((s) => s.verifiedStatus === 'review_required')) {
+    return 'conflicting_sources';
+  }
+  if (fact.originScope === 'family' || sources.some((s) => s.isFamilyInherited)) {
+    return 'inherited_source';
+  }
+  if (sources.length > 1) {
+    return 'multiple_agreeing';
+  }
+  return 'single_source';
+}
+
+export interface StagedDatumChange {
+  datumId: string;
+  draft: Partial<FactItem>;
+  scope: 'model' | 'family';
+  stagedAt: number;
+}
+
+export interface AITruthSummary {
+  facts: Array<{ id: string; label: string; value: string; documentCode: string; confidence: number }>;
+  conflicts: Array<{ id: string; label: string; divergingValues: string[]; documentCodes: string[] }>;
+  reviewCandidates: Array<{ id: string; label: string; suggestedValue: string; reason: string }>;
 }
 
 export interface MegaTableColumn {

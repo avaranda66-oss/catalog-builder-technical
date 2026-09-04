@@ -91,20 +91,38 @@ export interface MegaWorkspaceDomainHandlers {
   onHideBlock: (blockId: string, hidden: boolean) => Promise<void> | void;
 
   // =========================================================================
-  // Fact (Datum) Editing & Creation Events
+  // Fact (Datum) Editing, Staging & Visibility Events
   // =========================================================================
 
   /**
    * Invoked when user updates a technical specification value or metadata.
+   * Blocker 7: Operates as STAGING into WorkspaceEditDraft. Does not commit directly to canonical truth.
    * @param datumId Canonical identifier of the fact
    * @param draft Modified fields: label, value, unit
    * @param scope Scope of mutation: 'model' (specific model) | 'family' (propagates to all models in line)
    */
-  onEditFact: (
+  onStageFactEdit: (
     datumId: string,
     draft: { label?: string; value: string; unit?: string },
     scope: 'model' | 'family'
   ) => Promise<void> | void;
+
+  /**
+   * Invoked when user renames the human display label of a specification without altering its canonical semanticKey.
+   * Directly matches Agent 1 updateDescriptorDisplayLabel command.
+   * @param canonicalKey Canonical machine/AI identity
+   * @param newLabel New human display name
+   */
+  onUpdateFactDisplayLabel: (canonicalKey: string, newLabel: string) => Promise<void> | void;
+
+  /**
+   * Invoked when user toggles the presentation visibility of a fact in a section.
+   * Hides the fact from active view presentation without deleting the underlying TechnicalDatum.
+   * @param sectionId Target section
+   * @param factId Unique datum identifier
+   * @param hidden Boolean visibility state
+   */
+  onToggleFactVisibility: (sectionId: string, factId: string, hidden?: boolean) => Promise<void> | void;
 
   /**
    * Invoked when user adds a new technical specification via "+ Adicionar Informação".
@@ -126,9 +144,10 @@ export interface MegaWorkspaceDomainHandlers {
 
   /**
    * Invoked when user opens the provenance drawer to inspect source citations.
+   * Blocker 6: Supports returning multiple evidences, single evidence, or empty for unreferenced facts.
    * @param datumId Identifier of the fact or sensor row
    */
-  onOpenSource: (datumId: string) => Promise<SourceEvidenceDetails> | void;
+  onOpenSource: (datumId: string) => Promise<SourceEvidenceDetails[]> | void;
 
   // =========================================================================
   // Table Creation & Mutation Events
@@ -161,27 +180,30 @@ export interface MegaWorkspaceDomainHandlers {
   ) => Promise<void> | void;
 
   // =========================================================================
-  // Semantic Identity & Safe Rename Events
+  // Semantic Identity & Safe Rename Events (Preview Only until FOUNDATION1B)
   // =========================================================================
 
   /**
    * Invoked when user requests blast-radius analysis before renaming a canonical key.
+   * Backed directly by Agent 1's planCanonicalKeyRename planner.
    * @param currentKey Current semantic key (e.g. 'temperature.stability')
    * @param proposedKey Proposed key (e.g. 'thermal.stability')
    * @returns Blast radius impact summary
    */
-  onPreviewSemanticRenameImpact: (
+  onRequestSemanticRenamePreview: (
     currentKey: string,
     proposedKey: string
   ) => Promise<SemanticImpactSummary>;
 
   /**
-   * Invoked when user executes the safe rename operation.
+   * Contract hook for future execution engine.
+   * PENDING FOUNDATION1B: Currently Agent 1 has only delivered the planner.
+   * UI operates in Preview Mode until the execution engine is delivered.
    * @param currentKey Current semantic key
    * @param newKey New semantic key
-   * @param retainOldAsAlias Whether to preserve the current key as a backward-compatible alias (defaults to true)
+   * @param retainOldAsAlias Whether to preserve the current key as a backward-compatible alias
    */
-  onRequestSemanticRename: (
+  onConfirmSemanticRename: (
     currentKey: string,
     newKey: string,
     retainOldAsAlias: boolean
@@ -189,6 +211,7 @@ export interface MegaWorkspaceDomainHandlers {
 
   /**
    * Invoked when user adds an alias to an existing semantic key.
+   * Backed directly by Agent 1's addDescriptorAliasCommand.
    * @param semanticKey Canonical key
    * @param alias New synonym or label variant
    */

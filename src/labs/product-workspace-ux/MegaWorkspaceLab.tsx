@@ -124,6 +124,7 @@ export const MegaWorkspaceLab: React.FC = () => {
               onOpenSemantic={(fact) => state.setSelectedSemanticForRename(fact)}
               onReviewConflict={(conflict) => state.setSelectedConflictForReview(conflict)}
               onToggleMegaTableFullscreen={(block) => state.setExpandedMegaTable(block)}
+              onToggleFactVisibility={(factId) => state.toggleFactVisibility(factId)}
             />
           ))}
         </main>
@@ -144,7 +145,7 @@ export const MegaWorkspaceLab: React.FC = () => {
         fact={state.selectedFactForEdit}
         isOpen={Boolean(state.selectedFactForEdit)}
         onClose={() => state.setSelectedFactForEdit(null)}
-        onSave={(id, draft, scope) => state.updateFact(id, draft, scope)}
+        onSave={(id, draft, scope) => state.stageFactEdit(id, draft, scope)}
         onOpenSource={(fact) => state.setSelectedFactForSource(fact)}
       />
 
@@ -152,6 +153,7 @@ export const MegaWorkspaceLab: React.FC = () => {
         fact={state.selectedFactForSource}
         isOpen={Boolean(state.selectedFactForSource)}
         onClose={() => state.setSelectedFactForSource(null)}
+        onOpenConflictReview={(fact) => state.setSelectedConflictForReview(fact)}
       />
 
       <ConflictReviewModal
