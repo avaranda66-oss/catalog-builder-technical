@@ -177,3 +177,110 @@ export function getBadgeVariantClasses(
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 }
+
+export function getBorderEmphasisClass(
+  emphasis?: 'none' | 'bottom_thick' | 'all_subtle' | 'accent'
+): string {
+  switch (emphasis) {
+    case 'bottom_thick':
+      return 'border-b-2 border-b-slate-700';
+    case 'all_subtle':
+      return 'border border-slate-300';
+    case 'accent':
+      return 'border-l-2 border-l-blue-600 bg-blue-50/20';
+    case 'none':
+    default:
+      return '';
+  }
+}
+
+export function getFontScaleClass(scale?: 'compact' | 'normal' | 'large'): string {
+  switch (scale) {
+    case 'compact':
+      return 'text-[8.5px]';
+    case 'large':
+      return 'text-[11.5px]';
+    case 'normal':
+    default:
+      return 'text-[10px]';
+  }
+}
+
+export function getCellPaddingTokenClass(
+  token?: 'dense' | 'normal' | 'spacious'
+): string {
+  switch (token) {
+    case 'dense':
+      return 'py-1 px-1.5';
+    case 'spacious':
+      return 'py-2.5 px-3.5';
+    case 'normal':
+    default:
+      return 'py-1.5 px-2.5';
+  }
+}
+
+export function getLineHeightClass(
+  lineHeight?: 'tight' | 'normal' | 'relaxed'
+): string {
+  switch (lineHeight) {
+    case 'tight':
+      return 'leading-tight';
+    case 'relaxed':
+      return 'leading-relaxed';
+    case 'normal':
+    default:
+      return 'leading-normal';
+  }
+}
+
+export function getBorderColorClass(token?: TableColorToken): string {
+  switch (token) {
+    case 'brand_primary':
+    case 'brand_navy':
+      return 'border-[#001f3f]';
+    case 'brand_secondary':
+      return 'border-[#003366]';
+    case 'slate_900':
+      return 'border-slate-900';
+    case 'slate_800':
+      return 'border-slate-800';
+    case 'slate_100':
+      return 'border-slate-100';
+    case 'white':
+      return 'border-white';
+    case 'accent':
+      return 'border-blue-600';
+    default:
+      return 'border-slate-200';
+  }
+}
+
+export function getOuterBorderWidthClass(
+  outerWidth?: 'none' | 'thin' | 'thick'
+): string {
+  switch (outerWidth) {
+    case 'none':
+      return 'border-0';
+    case 'thick':
+      return 'border-2';
+    case 'thin':
+    default:
+      return 'border';
+  }
+}
+
+export function getCornerRoundnessClass(
+  roundness?: 'none' | 'small' | 'medium'
+): string {
+  switch (roundness) {
+    case 'small':
+      return 'rounded-sm overflow-hidden';
+    case 'medium':
+      return 'rounded-md overflow-hidden';
+    case 'none':
+    default:
+      return '';
+  }
+}
+

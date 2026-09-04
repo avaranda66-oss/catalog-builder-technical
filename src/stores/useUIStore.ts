@@ -2,6 +2,23 @@ import { create } from 'zustand';
 
 export type ActiveTab = 'editor' | 'library' | 'catalogs';
 
+export type KnowledgePickerTarget =
+  | {
+      kind: 'cell';
+      blockId: string;
+      legacyRowId: string;
+      legacyColKey: string;
+      tableCoreCellId?: string;
+      productId?: string;
+      productModel?: string;
+    }
+  | {
+      kind: 'table';
+      blockId: string;
+      productId?: string;
+      productModel?: string;
+    };
+
 interface UIState {
   activeTab: ActiveTab;
   isProductDrawerOpen: boolean;
@@ -10,6 +27,8 @@ interface UIState {
   targetTableBlockId: string | null;
   isExportPDFModalOpen: boolean;
   isAIAssistantOpen: boolean;
+  isProductKnowledgePickerModalOpen: boolean;
+  knowledgePickerTarget: KnowledgePickerTarget | null;
   zoomLevel: number;
   
   // Actions
@@ -18,6 +37,8 @@ interface UIState {
   closeProductDrawer: () => void;
   openAddProductToTableModal: (blockId: string) => void;
   closeAddProductToTableModal: () => void;
+  openProductKnowledgePickerModal: (target: KnowledgePickerTarget) => void;
+  closeProductKnowledgePickerModal: () => void;
   setExportPDFModalOpen: (open: boolean) => void;
   setAIAssistantOpen: (open: boolean) => void;
   openAIAssistant: () => void;
@@ -33,6 +54,8 @@ export const useUIStore = create<UIState>((set) => ({
   targetTableBlockId: null,
   isExportPDFModalOpen: false,
   isAIAssistantOpen: false,
+  isProductKnowledgePickerModalOpen: false,
+  knowledgePickerTarget: null,
   zoomLevel: 100,
 
   setActiveTab: (activeTab) => set({ activeTab }),
@@ -40,6 +63,8 @@ export const useUIStore = create<UIState>((set) => ({
   closeProductDrawer: () => set({ isProductDrawerOpen: false, editingProductId: null }),
   openAddProductToTableModal: (targetTableBlockId) => set({ isAddProductToTableModalOpen: true, targetTableBlockId }),
   closeAddProductToTableModal: () => set({ isAddProductToTableModalOpen: false, targetTableBlockId: null }),
+  openProductKnowledgePickerModal: (target) => set({ isProductKnowledgePickerModalOpen: true, knowledgePickerTarget: target }),
+  closeProductKnowledgePickerModal: () => set({ isProductKnowledgePickerModalOpen: false, knowledgePickerTarget: null }),
   setExportPDFModalOpen: (isExportPDFModalOpen) => set({ isExportPDFModalOpen }),
   setAIAssistantOpen: (isAIAssistantOpen) => set({ isAIAssistantOpen }),
   openAIAssistant: () => set({ isAIAssistantOpen: true }),

@@ -38,7 +38,10 @@ export type TechnicalValueToTableLiteralResult =
  * Converte um TechnicalValue do Product Workbook em um TableCellLiteralContent de forma segura e com tipagem estrita.
  * INVARIANTE: Proibido achatar estruturas compostas/dimensionais (ex.: range, product_reference) em strings genéricas.
  */
-export function mapTechnicalValueToTableLiteral(value: TechnicalValue): TechnicalValueToTableLiteralResult {
+export function mapTechnicalValueToTableLiteral(
+  value: TechnicalValue,
+  options?: { enableV2Literals?: boolean }
+): TechnicalValueToTableLiteralResult {
   switch (value.type) {
     case 'text':
       return {
@@ -74,6 +77,12 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
       };
 
     case 'boolean':
+      if (options?.enableV2Literals) {
+        return {
+          supported: true,
+          content: { kind: 'boolean', value: value.value, format: 'sim_nao' }
+        };
+      }
       return {
         supported: false,
         reason: 'Valores booleanos exigem tratamento de apresentação/tradução e não possuem projeção semântica tabular direta nesta fase.',
@@ -81,6 +90,19 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
       };
 
     case 'range':
+      if (options?.enableV2Literals) {
+        return {
+          supported: true,
+          content: {
+            kind: 'range',
+            lower: value.lower,
+            upper: value.upper,
+            unit: value.unit,
+            lowerInclusive: value.lowerInclusive,
+            upperInclusive: value.upperInclusive
+          }
+        };
+      }
       return {
         supported: false,
         reason: 'Valores do tipo range exigem célula dimensional/composta estendida e não devem ser achatados em string silenciosamente.',
@@ -88,6 +110,16 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
       };
 
     case 'enum':
+      if (options?.enableV2Literals) {
+        return {
+          supported: true,
+          content: {
+            kind: 'enum',
+            code: value.code,
+            label: value.label
+          }
+        };
+      }
       return {
         supported: false,
         reason: `Valores do tipo enum (código: "${value.code}") não possuem projeção semântica tabular dedicada nesta fase e não devem perder código ou rótulo.`,
@@ -95,10 +127,38 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
       };
 
     case 'technical_token':
+      if (options?.enableV2Literals) {
+        return {
+          supported: true,
+          content: {
+            kind: 'technical_token',
+            token: value.token,
+            category: value.category
+          }
+        };
+      }
       return {
         supported: false,
         reason: `Tokens técnicos (token: "${value.token}") não possuem célula semântica dedicada nesta fase e não devem ser projetados como badges genéricos.`,
         unsupportedType: 'technical_token'
+      };
+
+    case 'unknown':
+      if (options?.enableV2Literals) {
+        return {
+          supported: true,
+          content: {
+            kind: 'unknown',
+            reason: value.reason
+          }
+        };
+      }
+      return {
+        supported: false,
+        reason: value.reason
+          ? `Dado técnico com valor desconhecido (unknown): ${value.reason}`
+          : 'Dado técnico com valor desconhecido (unknown).',
+        unsupportedType: 'unknown'
       };
 
     case 'product_reference':
@@ -106,15 +166,6 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
         supported: false,
         reason: `Referência ao produto "${value.targetProductId}" não possui projeção literal direta sem política explícita de navegação/composição.`,
         unsupportedType: 'product_reference'
-      };
-
-    case 'unknown':
-      return {
-        supported: false,
-        reason: value.reason
-          ? `Dado técnico com valor desconhecido (unknown): ${value.reason}`
-          : 'Dado técnico com valor desconhecido (unknown).',
-        unsupportedType: 'unknown'
       };
 
     default:
@@ -126,11 +177,16 @@ export function mapTechnicalValueToTableLiteral(value: TechnicalValue): Technica
   }
 }
 
+export function mapTechnicalValueToTableLiteralV2(value: TechnicalValue): TechnicalValueToTableLiteralResult {
+  return mapTechnicalValueToTableLiteral(value, { enableV2Literals: true });
+}
+
 /**
  * Cria uma instância pura de TableDatumResolver para dados oriundos do Product Workbook.
  */
 export function createProductWorkbookDatumResolver(
-  lookup: ProductKnowledgeLookup
+  lookup: ProductKnowledgeLookup,
+  options?: { enableV2Literals?: boolean }
 ): TableDatumResolver {
   return (reference: TableCellBoundContent): TableDatumResolutionResult | undefined => {
     // Não processa namespaces legados (ex: legacy.product_field.*)
@@ -138,8 +194,64 @@ export function createProductWorkbookDatumResolver(
       return undefined;
     }
 
+    // EMENDA 7 — SNAPSHOT OFFLINE FIRST:
+    // MODO SNAPSHOT: Snapshot existente renderiza ANTES de qualquer lookup PIM.
+    // PIM pode estar 100% offline.
+    if (reference.bindingMode === 'snapshot') {
+      const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
+      const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
+      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'approved';
+      return {
+        value: reference.snapshot,
+        status: mappedStatus,
+        diagnostic: {
+          message: knowledge ? undefined : 'Snapshot congelado renderizado offline (PIM indisponível).',
+          productRevision: knowledge?.productRevision,
+          familyRevision: knowledge?.familyRevision
+        }
+      };
+    }
+
+    // MODO REVIEW_REQUIRED: Se possuir snapshot, renderiza snapshot e marca diagnóstico
+    if (reference.bindingMode === 'review_required') {
+      const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
+      const effectiveDatum = knowledge?.effectiveData?.get(reference.datumKey);
+      const mappedStatus = effectiveDatum ? mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus) : 'unknown';
+
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: mappedStatus,
+          diagnostic: {
+            message: 'Publicação requer revisão de alteração de dados.',
+            productRevision: knowledge?.productRevision,
+            familyRevision: knowledge?.familyRevision
+          }
+        };
+      }
+      return {
+        value: { kind: 'empty' },
+        status: mappedStatus,
+        diagnostic: {
+          message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
+          productRevision: knowledge?.productRevision,
+          familyRevision: knowledge?.familyRevision
+        }
+      };
+    }
+
+    // MODO LIVE: Lookup PIM
     const knowledge = typeof lookup === 'function' ? lookup(reference.productId) : lookup.get(reference.productId);
     if (!knowledge) {
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: 'unknown',
+          diagnostic: {
+            message: `Fonte indisponível para produto "${reference.productId}"; utilizando snapshot como fallback stale.`
+          }
+        };
+      }
       return {
         value: { kind: 'empty' },
         status: 'unknown',
@@ -149,6 +261,17 @@ export function createProductWorkbookDatumResolver(
 
     const effectiveDatum = knowledge.effectiveData.get(reference.datumKey);
     if (!effectiveDatum) {
+      if (reference.snapshot) {
+        return {
+          value: reference.snapshot,
+          status: 'unknown',
+          diagnostic: {
+            message: `Chave semântica "${reference.datumKey}" não encontrada; utilizando snapshot como fallback.`,
+            productRevision: knowledge.productRevision,
+            familyRevision: knowledge.familyRevision
+          }
+        };
+      }
       return {
         value: { kind: 'empty' },
         status: 'unknown',
@@ -162,45 +285,21 @@ export function createProductWorkbookDatumResolver(
 
     const mappedStatus = mapEffectiveStatusToTableStatus(effectiveDatum.effectiveStatus);
 
-    // MODO SNAPSHOT: Preserva estritamente o snapshot persistido; o resolver NÃO o substitui
-    if (reference.bindingMode === 'snapshot') {
-      return {
-        value: reference.snapshot,
-        status: mappedStatus,
-        diagnostic: {
-          productRevision: knowledge.productRevision,
-          familyRevision: knowledge.familyRevision
-        }
-      };
-    }
-
-    // MODO REVIEW_REQUIRED: Preserva o snapshot existente se presente; se ausente, NÃO inventa valor publicado silenciosamente
-    if (reference.bindingMode === 'review_required') {
+    // Mapeia o valor técnico atual de forma conservadora e lossless
+    const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value, options);
+    if (!literalRes.supported) {
       if (reference.snapshot) {
         return {
           value: reference.snapshot,
           status: mappedStatus,
           diagnostic: {
-            message: 'Publicação requer revisão de alteração de dados.',
+            message: `${literalRes.reason} (usando snapshot como fallback).`,
+            unsupportedType: literalRes.unsupportedType,
             productRevision: knowledge.productRevision,
             familyRevision: knowledge.familyRevision
           }
         };
       }
-      return {
-        value: { kind: 'empty' },
-        status: mappedStatus,
-        diagnostic: {
-          message: 'Célula em modo review_required sem snapshot prévio; valor não materializado silenciosamente.',
-          productRevision: knowledge.productRevision,
-          familyRevision: knowledge.familyRevision
-        }
-      };
-    }
-
-    // MODO LIVE: Mapeia o valor técnico atual de forma conservadora e lossless
-    const literalRes = mapTechnicalValueToTableLiteral(effectiveDatum.datum.value);
-    if (!literalRes.supported) {
       return {
         value: { kind: 'empty' },
         status: mappedStatus,

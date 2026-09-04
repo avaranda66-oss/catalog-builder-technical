@@ -7,6 +7,7 @@ import { PageThumbnailList } from './PageThumbnailList';
 import { A4Canvas } from './A4Canvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AddProductModal } from './AddProductModal';
+import { ProductKnowledgePickerModal } from './picker/ProductKnowledgePickerModal';
 import { ExportPDFModal } from './ExportPDFModal';
 import { AIAssistantDrawer } from '../ai/AIAssistantDrawer';
 import { PresetModal } from './PresetModal';
@@ -300,6 +301,7 @@ export const EditorView: React.FC = () => {
 
       {/* Modais e Gavetas */}
       <AddProductModal />
+      <ProductKnowledgePickerModal />
       <ExportPDFModal />
       {isPresetModalOpen && (
         <PresetModal isOpen={isPresetModalOpen} onClose={() => setIsPresetModalOpen(false)} />

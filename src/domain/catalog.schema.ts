@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { StructuralSectionData, StructuralSectionDataSchema } from './canvas-layout.schema';
+import {
+  type TableCellLiteralContent,
+  TableCellLiteralContentSchema
+} from './table-values';
 
 export * from './canvas-layout.schema';
 export * from './canvas-layout.engine';
+export * from './table-values';
 
 export const BlockTypeSchema = z.enum([
   'text',
@@ -82,10 +87,24 @@ export interface TableColumnConfig {
   type?: 'text' | 'number' | 'badge';
 }
 
+export interface CatalogCellBinding {
+  sourceKind: 'product_metadata' | 'pim_datum' | 'dataset' | 'legacy';
+  productId: string;
+  semanticKey: string;
+  moduleKey?: string;
+  datasetId?: string;
+  bindingMode: 'live' | 'snapshot' | 'review_required';
+  snapshot?: TableCellLiteralContent;
+  sourceRevision?: number;
+  stale?: boolean;
+}
+
 export interface CatalogTableRow {
   id: string;
   productRefId?: string;
   localOverrides?: Record<string, string>;
+  cellValues?: Record<string, TableCellLiteralContent>;
+  cellBindings?: Record<string, CatalogCellBinding>;
   customNotes?: string;
   order?: number;
 }
@@ -282,10 +301,48 @@ export const TableColumnConfigSchema = z.object({
   type: z.enum(['text', 'number', 'badge']).optional().default('text')
 });
 
+export const CatalogCellBindingBaseSchema = z.object({
+  sourceKind: z.enum(['product_metadata', 'pim_datum', 'dataset', 'legacy']),
+  productId: z.string().min(1, 'productId cannot be empty'),
+  semanticKey: z.string(),
+  moduleKey: z.string().optional(),
+  datasetId: z.string().optional(),
+  bindingMode: z.enum(['live', 'snapshot', 'review_required']).default('live'),
+  snapshot: TableCellLiteralContentSchema.optional(),
+  sourceRevision: z.number().int().nonnegative().optional(),
+  stale: z.boolean().optional()
+});
+
+export const CatalogCellBindingSchema = CatalogCellBindingBaseSchema.superRefine((val, ctx) => {
+  if (val.bindingMode === 'snapshot' && !val.snapshot) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Snapshot is mandatory when bindingMode is "snapshot"',
+      path: ['snapshot']
+    });
+  }
+  if (val.sourceKind === 'dataset' && (!val.datasetId || val.datasetId.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'datasetId is required and cannot be empty for dataset sourceKind',
+      path: ['datasetId']
+    });
+  }
+  if (val.sourceKind === 'pim_datum' && (!val.semanticKey || val.semanticKey.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'semanticKey cannot be empty for pim_datum',
+      path: ['semanticKey']
+    });
+  }
+});
+
 export const CatalogTableRowSchema = z.object({
   id: z.string(),
   productRefId: z.string().optional().default(''),
   localOverrides: z.record(z.string()).optional().default({}),
+  cellValues: z.record(TableCellLiteralContentSchema).optional().default({}),
+  cellBindings: z.record(CatalogCellBindingSchema).optional().default({}),
   customNotes: z.string().optional().default(''),
   order: z.number().int().optional().default(0)
 });

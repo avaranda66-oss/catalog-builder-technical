@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Download, CheckCircle2, AlertCircle, Printer } from 'lucide-react';
+import { X, Download, CheckCircle2, AlertCircle, Printer, ShieldAlert } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { PDFService } from '../../services/pdf.service';
+import { auditCatalogPublishSafety } from '../../domain/table-core';
 
 export const ExportPDFModal: React.FC = () => {
   const { isExportPDFModalOpen, setExportPDFModalOpen } = useUIStore();
@@ -13,15 +14,18 @@ export const ExportPDFModal: React.FC = () => {
 
   if (!isExportPDFModalOpen || !currentCatalog) return null;
 
-  const isConflict = syncStatus === 'conflict';
   const isTemplate = editorContext.kind === 'template';
   const docId = isTemplate ? (editorContext.templateId || currentCatalog.id) : currentCatalog.id;
   const docVersion = currentCatalog.version || 1;
 
+  // Auditoria de segurança de publicação em 3 camadas (Emenda 16)
+  const auditReport = auditCatalogPublishSafety({ catalog: currentCatalog, syncStatus });
+  const isExportBlocked = !auditReport.canPublish;
+
   const handleDownloadPDF = async () => {
-    if (isConflict) {
+    if (isExportBlocked) {
       setIsSuccess(false);
-      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de exportar.');
+      setExportMessage(`Exportação bloqueada: ${auditReport.blockCount} inconsistência(s) crítica(s) encontrada(s).`);
       return;
     }
 
@@ -59,9 +63,9 @@ export const ExportPDFModal: React.FC = () => {
   };
 
   const handleOpenCleanPrintView = async () => {
-    if (isConflict) {
+    if (isExportBlocked) {
       setIsSuccess(false);
-      setExportMessage('Exportação bloqueada: resolva o conflito de sincronização antes de exportar.');
+      setExportMessage(`Exportação bloqueada: ${auditReport.blockCount} inconsistência(s) crítica(s) encontrada(s).`);
       return;
     }
 
@@ -105,10 +109,40 @@ export const ExportPDFModal: React.FC = () => {
         </div>
 
         <div className="mt-4 space-y-3.5 text-xs text-slate-600">
-          {isConflict && (
-            <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 font-mono text-[11px] flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Conflito ativo: uma nova versão foi gravada por outro usuário. Sincronize antes de exportar.</span>
+          {/* Painel de Auditoria de Publicação em 3 Camadas (Emenda 16) */}
+          {auditReport.issues.length > 0 && (
+            <div className="p-3 bg-slate-50 border border-slate-300 space-y-2 font-mono text-[11px]" data-testid="publish-safety-panel">
+              <div className="flex items-center justify-between font-bold">
+                <div className="flex items-center gap-1.5">
+                  <ShieldAlert className={`w-4 h-4 ${auditReport.blockCount > 0 ? 'text-red-600' : 'text-amber-600'}`} />
+                  <span>Auditoria de Publicação:</span>
+                </div>
+                <span className={auditReport.blockCount > 0 ? 'text-red-600' : 'text-amber-600'}>
+                  {auditReport.blockCount} Bloqueio(s) • {auditReport.warnCount} Aviso(s)
+                </span>
+              </div>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {auditReport.issues.map((issue, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-2 rounded border text-[10px] leading-tight ${
+                      issue.severity === 'block'
+                        ? 'bg-red-50 text-red-800 border-red-200'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    <div className="font-bold uppercase tracking-wider">
+                      [{issue.severity.toUpperCase()}] {issue.code}
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      Página: {issue.pageNumber ?? '—'} | Tabela: {issue.tableTitle || issue.tableId || '—'}
+                      {issue.rowId ? ` | Linha: ${issue.rowId}` : ''}
+                      {issue.colKey ? ` | Coluna: ${issue.colKey}` : ''}
+                    </div>
+                    <div className="mt-1 font-sans">{issue.reason}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -132,7 +166,7 @@ export const ExportPDFModal: React.FC = () => {
             <div 
               onClick={handleOpenCleanPrintView}
               className={`p-3 bg-blue-50/60 hover:bg-blue-50 border-2 border-[#003366] cursor-pointer transition-all flex flex-col justify-between group ${
-                isConflict ? 'opacity-50 pointer-events-none' : ''
+                isExportBlocked ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''
               }`}
             >
               <div>
@@ -153,7 +187,7 @@ export const ExportPDFModal: React.FC = () => {
             <div 
               onClick={handleDownloadPDF}
               className={`p-3 bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-slate-400 cursor-pointer transition-all flex flex-col justify-between group ${
-                isConflict ? 'opacity-50 pointer-events-none' : ''
+                isExportBlocked ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''
               }`}
             >
               <div>

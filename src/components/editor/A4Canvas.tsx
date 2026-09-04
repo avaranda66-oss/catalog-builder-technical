@@ -1027,6 +1027,42 @@ export const A4Canvas: React.FC = () => {
   // --- 2. TABELAS TÉCNICAS ---
   const TABLE_OPTIONS: BlockMenuOption[] = [
     {
+      id: 'tbl-blank-v2',
+      title: 'Tabela em Branco — V2 (Core Flexível)',
+      categoryLabel: 'Tabela Técnica',
+      badge: 'Table Core V2',
+      description: 'Tabela técnica em branco sem linhas pré-definidas. Permite adicionar linhas manuais, produtos vinculados ou dados livres.',
+      blockData: {
+        type: 'specs_table',
+        title: 'Nova Tabela Técnica',
+        tableColumns: [
+          { key: 'col_item', label: 'Item', visible: true, width: 70, isCustom: true },
+          { key: 'col_desc', label: 'Descrição / Parâmetro', visible: true, width: 220, isCustom: true },
+          { key: 'col_val', label: 'Especificação / Valor', visible: true, width: 160, isCustom: true },
+          { key: 'col_obs', label: 'Observações', visible: true, width: 150, isCustom: true }
+        ],
+        tableRows: []
+      },
+      renderPreview: () => (
+        <TechnicalTableBlock
+          block={{
+            id: 'prev-blank-table',
+            type: 'specs_table',
+            title: 'NOVA TABELA TÉCNICA (V2)',
+            tableColumns: [
+              { key: 'col_item', label: 'Item', visible: true, isCustom: true },
+              { key: 'col_desc', label: 'Descrição', visible: true, isCustom: true },
+              { key: 'col_val', label: 'Especificação', visible: true, isCustom: true },
+              { key: 'col_obs', label: 'Observações', visible: true, isCustom: true }
+            ],
+            tableRows: []
+          }}
+          pageId="prev-page"
+          isSelected={false}
+        />
+      )
+    },
+    {
       id: 'tbl-products',
       title: 'Tabela de Produtos Presys Oficial',
       categoryLabel: 'Tabela Técnica',
@@ -1043,7 +1079,7 @@ export const A4Canvas: React.FC = () => {
           { key: 'accuracy', label: 'Exatidão', visible: true, width: 100 },
           { key: 'output', label: 'Sinal Saída', visible: true, width: 120 }
         ],
-        tableRows: [{ id: `r-${Date.now()}`, productRefId: 'prod-presys-pcon-y18', localOverrides: {}, order: 0 }]
+        tableRows: []
       },
       renderPreview: () => (
         <TechnicalTableBlock

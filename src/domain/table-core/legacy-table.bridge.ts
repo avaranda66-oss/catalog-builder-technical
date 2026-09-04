@@ -25,6 +25,9 @@ export interface LegacyCellCoordinateMapping {
   productRefId?: string;
   canonicalBoundContent?: TableCellBoundContent;
   originalOverrideValue?: string;
+  isManualRow?: boolean;
+  isManualValue?: boolean;
+  cellBinding?: any;
 }
 
 /**
@@ -210,6 +213,24 @@ export function executeTableCommandOnLegacyBlock(
       } else if (command.content.kind === 'value_unit') {
         const prefix = command.content.qualifier ? `${command.content.qualifier} ` : '';
         textValue = `${prefix}${command.content.amount} ${command.content.unit}`.trim();
+      } else if (command.content.kind === 'range') {
+        const parts: string[] = [];
+        if (command.content.prefix) parts.push(command.content.prefix);
+        if (command.content.lower !== undefined && command.content.upper !== undefined) {
+          parts.push(`${command.content.lower} a ${command.content.upper}`);
+        } else if (command.content.lower !== undefined) {
+          parts.push(`≥ ${command.content.lower}`);
+        } else if (command.content.upper !== undefined) {
+          parts.push(`≤ ${command.content.upper}`);
+        }
+        if (command.content.unit) parts.push(command.content.unit);
+        textValue = parts.join(' ').trim();
+      } else if (command.content.kind === 'boolean') {
+        textValue = command.content.value ? 'Sim' : 'Não';
+      } else if (command.content.kind === 'enum') {
+        textValue = command.content.label || command.content.code;
+      } else if (command.content.kind === 'technical_token') {
+        textValue = command.content.token;
       } else if (command.content.kind === 'empty') {
         textValue = '';
       } else if (command.content.kind === 'badge') {
@@ -225,9 +246,10 @@ export function executeTableCommandOnLegacyBlock(
       // Dispara a mutação legítima de override do store legado
       context.onUpdateOverride(mapping.legacyRowId, mapping.legacyColKey, textValue);
 
+      const actionType = mapping.hasProductBinding ? 'Override' : 'Valor manual';
       return {
         success: true,
-        summary: `Override da célula [row=${mapping.legacyRowId}, col=${mapping.legacyColKey}] atualizado para "${textValue}"`,
+        summary: `${actionType} da célula [row=${mapping.legacyRowId}, col=${mapping.legacyColKey}] atualizado para "${textValue}"`,
         data: {
           affectedLegacyRowId: mapping.legacyRowId,
           affectedLegacyColKey: mapping.legacyColKey

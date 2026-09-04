@@ -29,7 +29,14 @@ import {
   getDensityClasses,
   getBorderClasses,
   getStripeClass,
-  getBadgeVariantClasses
+  getBadgeVariantClasses,
+  getBorderEmphasisClass,
+  getFontScaleClass,
+  getCellPaddingTokenClass,
+  getLineHeightClass,
+  getBorderColorClass,
+  getOuterBorderWidthClass,
+  getCornerRoundnessClass
 } from './table-tokens';
 
 /**
@@ -158,17 +165,31 @@ function renderLiteralContent(
       const resolved = resolveAsset ? resolveAsset(content.assetId) : undefined;
       if (resolved && resolved.url) {
         const alt = content.altText || content.caption || resolved.altText || '';
-        const style: React.CSSProperties = {};
-        if (content.targetWidthMm) style.maxWidth = `${content.targetWidthMm}mm`;
-        if (content.targetHeightMm) style.maxHeight = `${content.targetHeightMm}mm`;
+        const imgStyle: React.CSSProperties = {};
+        if (content.targetWidthMm) imgStyle.maxWidth = `${content.targetWidthMm}mm`;
+        if (content.targetHeightMm) imgStyle.maxHeight = `${content.targetHeightMm}mm`;
+        if (content.fit) imgStyle.objectFit = content.fit;
+        if (content.paddingMm) imgStyle.padding = `${content.paddingMm}mm`;
+
+        const alignClass =
+          content.align === 'center'
+            ? 'items-center text-center'
+            : content.align === 'right'
+            ? 'items-end text-right'
+            : 'items-start text-left';
 
         return (
-          <img
-            src={resolved.url}
-            alt={alt}
-            style={style}
-            className="inline-block object-contain"
-          />
+          <div className={`inline-flex flex-col ${alignClass}`}>
+            <img
+              src={resolved.url}
+              alt={alt}
+              style={imgStyle}
+              className={`inline-block ${content.fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            />
+            {content.caption && (
+              <span className="text-[8px] text-slate-500 mt-0.5">{content.caption}</span>
+            )}
+          </div>
         );
       }
 
@@ -189,6 +210,76 @@ function renderLiteralContent(
         );
       }
       return null;
+    }
+
+    case 'range': {
+      const parts: string[] = [];
+      if (content.prefix) parts.push(content.prefix);
+      const hasLower = content.lower !== undefined && content.lower !== null;
+      const hasUpper = content.upper !== undefined && content.upper !== null;
+      if (hasLower && hasUpper) {
+        parts.push(`${content.lower} a ${content.upper}`);
+      } else if (hasLower) {
+        parts.push(`≥ ${content.lower}`);
+      } else if (hasUpper) {
+        parts.push(`≤ ${content.upper}`);
+      }
+      if (content.unit) parts.push(content.unit);
+      return <span>{parts.join(' ').trim()}</span>;
+    }
+
+    case 'boolean': {
+      if (content.format === 'check_cross') {
+        return (
+          <span className={content.value ? 'text-emerald-700 font-bold' : 'text-slate-400 font-bold'}>
+            {content.value ? '✓' : '✗'}
+          </span>
+        );
+      }
+      if (content.format === 'dot') {
+        return (
+          <span
+            className={`inline-block w-2.5 h-2.5 rounded-full ${content.value ? 'bg-emerald-600' : 'bg-slate-300'}`}
+            title={content.value ? 'Sim' : 'Não'}
+          />
+        );
+      }
+      if (content.format === 'badge') {
+        return (
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
+              content.value
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}
+          >
+            {content.value ? 'SIM' : 'NÃO'}
+          </span>
+        );
+      }
+      if (content.format === 'yes_no') {
+        return <span>{content.value ? 'Yes' : 'No'}</span>;
+      }
+      return <span>{content.value ? 'Sim' : 'Não'}</span>;
+    }
+
+    case 'enum': {
+      return <span>{content.label || content.code}</span>;
+    }
+
+    case 'technical_token': {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-slate-100 text-slate-800 border border-slate-200">
+          {content.token}
+        </span>
+      );
+    }
+
+    case 'unknown': {
+      if (mode === 'editor' && content.reason) {
+        return <span className="text-slate-400 italic text-[9px]" title={content.reason}>—</span>;
+      }
+      return <span className="text-slate-400">—</span>;
     }
 
     default:
@@ -216,6 +307,11 @@ function renderCellContent(
     case 'value_unit':
     case 'badge':
     case 'asset_reference':
+    case 'range':
+    case 'boolean':
+    case 'enum':
+    case 'technical_token':
+    case 'unknown':
       return renderLiteralContent(content, mode, resolveAsset, onDiagnostic, tableId, cellId);
 
     case 'datum_reference': {
@@ -386,25 +482,51 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
     const colSpan = cell.colSpan && cell.colSpan > 1 ? cell.colSpan : undefined;
     const rowSpan = cell.rowSpan && cell.rowSpan > 1 ? cell.rowSpan : undefined;
 
+    const rowOverride = presentation.rowStyleOverrides?.[row.id];
+    const colOverride = presentation.columnStyleOverrides?.[col.id];
+    const cellOverride = cell.styleOverride || presentation.cellStyleOverrides?.[cell.id];
+
     // Alinhamento
-    const align = cell.styleOverride?.align ?? col.align ?? 'left';
+    const align = cellOverride?.align ?? colOverride?.align ?? col.align ?? 'left';
     let alignClass = 'text-left';
     if (align === 'center') alignClass = 'text-center';
     else if (align === 'right') alignClass = 'text-right';
 
     // Vertical align
-    const vAlign = cell.styleOverride?.verticalAlign ?? 'middle';
+    const vAlign = cellOverride?.verticalAlign ?? 'middle';
     let vAlignClass = 'align-middle';
     if (vAlign === 'top') vAlignClass = 'align-top';
     else if (vAlign === 'bottom') vAlignClass = 'align-bottom';
 
     // Tipografia e Overrides de estilo
     let fontStyleClass = '';
-    if (cell.styleOverride?.bold) fontStyleClass += ' font-bold';
-    if (cell.styleOverride?.italic) fontStyleClass += ' italic';
+    const isBold = cellOverride?.bold ?? rowOverride?.bold ?? colOverride?.bold;
+    const isItalic = cellOverride?.italic ?? rowOverride?.italic;
+    if (isBold) fontStyleClass += ' font-bold';
+    if (isItalic) fontStyleClass += ' italic';
 
-    const cellTextTokenClass = getTextColorClass(cell.styleOverride?.textColorToken);
-    const cellBgTokenClass = getBackgroundColorClass(cell.styleOverride?.backgroundColorToken);
+    const cellTextTokenClass = getTextColorClass(
+      cellOverride?.textColorToken ?? rowOverride?.textColorToken ?? colOverride?.textColorToken
+    );
+    const cellBgTokenClass = getBackgroundColorClass(
+      cellOverride?.backgroundColorToken ?? rowOverride?.backgroundToken ?? colOverride?.backgroundToken
+    );
+
+    // Preenchimento e escalas
+    const paddingClass = cellOverride?.paddingToken
+      ? getCellPaddingTokenClass(cellOverride.paddingToken)
+      : isHeaderCell && presentation.headerPadding
+      ? getCellPaddingTokenClass(presentation.headerPadding)
+      : density.cellPadding;
+
+    const fontScaleClass = cellOverride?.fontScale
+      ? getFontScaleClass(cellOverride.fontScale)
+      : '';
+
+    const effectiveBorderEmphasis = cellOverride?.borderEmphasis ?? rowOverride?.borderEmphasis;
+    const borderEmphasisClass = effectiveBorderEmphasis
+      ? getBorderEmphasisClass(effectiveBorderEmphasis)
+      : '';
 
     // Classes de seleção no Editor
     const selectionClass = isSelected
@@ -438,7 +560,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
               }
             : undefined
         }
-        className={`${density.cellPadding} ${borders.cellBorder} ${alignClass} ${vAlignClass} ${fontStyleClass} ${cellTextTokenClass} ${cellBgTokenClass} ${selectionClass}`}
+        className={`${paddingClass} ${borders.cellBorder} ${alignClass} ${vAlignClass} ${fontStyleClass} ${fontScaleClass} ${borderEmphasisClass} ${cellTextTokenClass} ${cellBgTokenClass} ${selectionClass}`}
         data-cell-id={mode === 'editor' ? cell.id : undefined}
         data-row-id={mode === 'editor' ? cell.rowId : undefined}
         data-column-id={mode === 'editor' ? cell.columnId : undefined}
@@ -457,29 +579,34 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
   };
 
   const renderRow = (row: TableRowModel, isHeaderRow: boolean) => {
-    // A5: Tratamento explícito de Linha Divisora (kind === 'divider')
-    if (row.kind === 'divider') {
+    // Tratamento de Seção Agrupada ou Divisor (kind === 'section' || kind === 'divider')
+    if (row.kind === 'section' || row.kind === 'divider') {
       const firstColId = table.columns[0]?.id;
       const firstKey = firstColId ? getCellKey(row.id, firstColId) : '';
-      const dividerCell = table.cells[firstKey];
-      const dividerText =
-        dividerCell && dividerCell.content.kind === 'text'
-          ? (dividerCell.content as TableCellTextContent).text
+      const sectionCell = table.cells[firstKey];
+      const sectionText =
+        sectionCell && sectionCell.content.kind === 'text'
+          ? (sectionCell.content as TableCellTextContent).text
           : null;
+
+      const sectionBgClass =
+        getBackgroundColorClass(presentation.sectionBackgroundToken) || 'bg-slate-100/90';
+      const sectionTextClass =
+        getTextColorClass(presentation.sectionTextColorToken) || 'text-slate-800 font-semibold uppercase tracking-wider text-[9px]';
 
       return (
         <tr
           key={row.id}
           role="separator"
-          className="border-b border-t border-slate-300 bg-slate-100/80 font-medium"
+          className={`border-b border-t border-slate-300 ${sectionBgClass} ${sectionTextClass}`}
           data-row-id={mode === 'editor' ? row.id : undefined}
-          data-row-kind="divider"
+          data-row-kind={row.kind}
         >
           <td
             colSpan={table.columns.length}
-            className="py-1 px-2.5 text-[9px] text-slate-600 tracking-wide"
+            className="py-1 px-2.5 tracking-wide"
           >
-            {dividerText}
+            {sectionText}
           </td>
         </tr>
       );
@@ -533,7 +660,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
       <table
         role="table"
         aria-label={table.title || 'Tabela Técnica'}
-        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize}`}
+        className={`w-full border-collapse ${borders.tableBorder} ${density.fontSize} ${getLineHeightClass(presentation.lineHeight)} ${getBorderColorClass(presentation.borderColorToken)} ${getOuterBorderWidthClass(presentation.outerBorderWidth)} ${getCornerRoundnessClass(presentation.cornerRoundness)}`}
         style={{ tableLayout: 'fixed' }}
       >
         {/* A7: Título opcional interno via caption para não duplicar cabeçalhos externos */}
@@ -597,7 +724,9 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
 
         {/* Rodapé estrutural (tfoot) */}
         {footerRows.length > 0 && (
-          <tfoot>{footerRows.map((row) => renderRow(row, false))}</tfoot>
+          <tfoot className="bg-slate-50/80 text-slate-500 italic text-[8.5px]">
+            {footerRows.map((row) => renderRow(row, false))}
+          </tfoot>
         )}
       </table>
     </div>
