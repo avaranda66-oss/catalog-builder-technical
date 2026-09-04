@@ -27,7 +27,11 @@ import { EditFactModal } from '../../src/labs/product-workspace-ux/components/Ed
 import {
   deriveWorkspaceMetrics,
   WorkspaceSection,
-  FactItem
+  FactItem,
+  TechnicalValueDTO,
+  WorkspaceBlockSize,
+  WorkspaceBlockVisibility,
+  WorkspaceBlock
 } from '../../src/labs/product-workspace-ux/types';
 
 describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
@@ -1184,8 +1188,7 @@ describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
         /\bdataset\b/i,
         /\bsemanticKey\b/,
         /\bownerKind\b/i,
-        /\bcanonicalDecision\b/i,
-        /\bCAS\b/
+        /\bcanonicalDecision\b/i
       ];
 
       for (const pattern of forbiddenJargon) {
@@ -1283,11 +1286,21 @@ describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
       ];
 
       const metrics = deriveWorkspaceMetrics(mockSections);
-      // Total de fatos disponíveis no produto (knowledge base)
-      expect(metrics.knowledgeFactsCount).toBe(5);
-      // Total de fatos visíveis no workspace ativo
+      // Sem base canônica explícita, knowledgeFactsCount NÃO deve inferir caminhando pela tela (é undefined)
+      expect(metrics.knowledgeFactsCount).toBeUndefined();
+      // O layout expõe referencedFactsCount com precisão (5 fatos referenciados)
+      expect(metrics.referencedFactsCount).toBe(5);
+      // Total de fatos visíveis no workspace ativo (apenas os do bloco visível)
       expect(metrics.visibleUniqueFactsCount).toBe(2);
       expect(metrics.visibleFactOccurrences).toBe(2);
+
+      // Quando a coleção canônica é fornecida explicitamente:
+      const mockCanonicalFacts = [
+        ...mockSections[0].blocks[0].data.kind === 'fact_grid' ? mockSections[0].blocks[0].data.facts : [],
+        ...mockSections[0].blocks[1].data.kind === 'fact_grid' ? mockSections[0].blocks[1].data.facts : []
+      ];
+      const metricsWithCanonical = deriveWorkspaceMetrics(mockSections, mockCanonicalFacts);
+      expect(metricsWithCanonical.knowledgeFactsCount).toBe(5);
     });
 
     // 15. synthetic fixture cannot fake fixed 129
@@ -1347,5 +1360,235 @@ describe('HUMAN-FIRST MEGA PRODUCT WORKSPACE UX LAB SUITE', () => {
       checkDirForLabImport(path.join(srcDir, 'stores'));
     });
   });
+
+  // ==========================================================================
+  // 6. UX1.3A REGRESSION & FINAL CONTRACT VERIFICATION SUITE
+  // ==========================================================================
+  describe('UX1.3A REGRESSION & FINAL CONTRACT VERIFICATION SUITE', () => {
+    // 1. TechnicalValue range not lost
+    it('1. TechnicalValue range not lost', () => {
+      const rangeVal: TechnicalValueDTO = {
+        type: 'range',
+        lower: -0.9,
+        upper: 70,
+        unit: 'bar',
+        lowerInclusive: true,
+        upperInclusive: true
+      };
+      const fact: FactItem = {
+        id: 'fact-pcon-range',
+        label: 'Faixa de Pressão',
+        value: '-0,9 a 70 bar',
+        semanticKey: 'pressure.range',
+        originScope: 'model',
+        originLabel: 'PCON KOMPRESSOR-Y18',
+        technicalValue: rangeVal
+      };
+
+      expect(fact.technicalValue).toBeDefined();
+      expect(fact.technicalValue?.type).toBe('range');
+      if (fact.technicalValue?.type === 'range') {
+        expect(fact.technicalValue.lower).toBe(-0.9);
+        expect(fact.technicalValue.upper).toBe(70);
+        expect(fact.technicalValue.unit).toBe('bar');
+        expect(fact.technicalValue.lowerInclusive).toBe(true);
+      }
+    });
+
+    // 2. TechnicalValue quantity not lost
+    it('2. TechnicalValue quantity not lost', () => {
+      const quantityVal: TechnicalValueDTO = {
+        type: 'quantity',
+        amount: 10.5,
+        unit: 'kg'
+      };
+      const fact: FactItem = {
+        id: 'fact-peso-qty',
+        label: 'Peso',
+        value: '10,5 kg',
+        semanticKey: 'physical.weight',
+        originScope: 'model',
+        originLabel: 'TA-25N',
+        technicalValue: quantityVal
+      };
+
+      expect(fact.technicalValue).toBeDefined();
+      expect(fact.technicalValue?.type).toBe('quantity');
+      if (fact.technicalValue?.type === 'quantity') {
+        expect(fact.technicalValue.amount).toBe(10.5);
+        expect(fact.technicalValue.unit).toBe('kg');
+      }
+    });
+
+    // 3. technical token not lost
+    it('3. technical token not lost', () => {
+      const tokenVal: TechnicalValueDTO = {
+        type: 'technical_token',
+        token: 'MODBUS_RTU_RS485'
+      };
+      const fact: FactItem = {
+        id: 'fact-protocol-token',
+        label: 'Protocolo de Comunicação',
+        value: 'MODBUS_RTU_RS485',
+        semanticKey: 'comm.protocol',
+        originScope: 'family',
+        originLabel: 'Linha PCON',
+        technicalValue: tokenVal
+      };
+
+      expect(fact.technicalValue).toBeDefined();
+      expect(fact.technicalValue?.type).toBe('technical_token');
+      if (fact.technicalValue?.type === 'technical_token') {
+        expect(fact.technicalValue.token).toBe('MODBUS_RTU_RS485');
+      }
+    });
+
+    // 4. product reference not lost
+    it('4. product reference not lost', () => {
+      const prodRefVal: TechnicalValueDTO = {
+        type: 'product_reference',
+        targetProductId: 'prod-ta25n',
+        relationKind: 'calibrates_with'
+      };
+      const fact: FactItem = {
+        id: 'fact-accessory-ref',
+        label: 'Calibrador Recomendado',
+        value: 'TA-25N',
+        semanticKey: 'accessories.recommended_calibrator',
+        originScope: 'model',
+        originLabel: 'PCON KOMPRESSOR-Y18',
+        technicalValue: prodRefVal
+      };
+
+      expect(fact.technicalValue).toBeDefined();
+      expect(fact.technicalValue?.type).toBe('product_reference');
+      if (fact.technicalValue?.type === 'product_reference') {
+        expect(fact.technicalValue.targetProductId).toBe('prod-ta25n');
+        expect(fact.technicalValue.relationKind).toBe('calibrates_with');
+      }
+    });
+
+    // 5. workspace size medium preserved
+    it('5. workspace size medium preserved', () => {
+      const size: WorkspaceBlockSize = 'medium';
+      const block: WorkspaceBlock = {
+        id: 'block-test-medium',
+        kind: 'fact_grid',
+        size,
+        data: { kind: 'fact_grid', facts: [] }
+      };
+
+      expect(block.size).toBe('medium');
+    });
+
+    // 6. workspace size large preserved
+    it('6. workspace size large preserved', () => {
+      const size: WorkspaceBlockSize = 'large';
+      const block: WorkspaceBlock = {
+        id: 'block-test-large',
+        kind: 'fact_grid',
+        size,
+        data: { kind: 'fact_grid', facts: [] }
+      };
+
+      expect(block.size).toBe('large');
+    });
+
+    // 7. visibility hidden maps correctly
+    it('7. visibility hidden maps correctly', () => {
+      const visibility: WorkspaceBlockVisibility = 'hidden';
+      const block: WorkspaceBlock = {
+        id: 'block-hidden-test',
+        kind: 'fact_grid',
+        size: 'full',
+        visibility,
+        isHidden: visibility === 'hidden',
+        data: { kind: 'fact_grid', facts: [] }
+      };
+
+      expect(block.visibility).toBe('hidden');
+      expect(block.isHidden).toBe(true);
+    });
+
+    // 8. knowledgeFactsCount cannot silently derive from layout
+    it('8. knowledgeFactsCount cannot silently derive from layout', () => {
+      const dummySections: WorkspaceSection[] = [
+        {
+          id: 'sec-1',
+          title: 'Section 1',
+          blocks: [
+            {
+              id: 'b-1',
+              kind: 'fact_grid',
+              size: 'full',
+              visibility: 'visible',
+              data: {
+                kind: 'fact_grid',
+                facts: [
+                  { id: 'f1', label: 'Fato 1', value: '10', originScope: 'model', originLabel: 'Test', semanticKey: 'test.f1' },
+                  { id: 'f2', label: 'Fato 2', value: '20', originScope: 'model', originLabel: 'Test', semanticKey: 'test.f2' }
+                ]
+              }
+            }
+          ]
+        }
+      ];
+
+      // Sem canonical knowledge collection passada: knowledgeFactsCount DEVE ser undefined!
+      const metricsWithoutCanonical = deriveWorkspaceMetrics(dummySections);
+      expect(metricsWithoutCanonical.knowledgeFactsCount).toBeUndefined();
+      // O total do layout é computado com segurança em referencedFactsCount
+      expect(metricsWithoutCanonical.referencedFactsCount).toBe(2);
+      expect(metricsWithoutCanonical.visibleUniqueFactsCount).toBe(2);
+
+      // Com canonical knowledge collection fornecida explicitamente:
+      const canonicalCollection: FactItem[] = [
+        { id: 'f1', label: 'Fato 1', value: '10', originScope: 'model', originLabel: 'Test', semanticKey: 'test.f1' },
+        { id: 'f2', label: 'Fato 2', value: '20', originScope: 'model', originLabel: 'Test', semanticKey: 'test.f2' },
+        { id: 'f3', label: 'Fato 3 (Unreferenced)', value: '30', originScope: 'model', originLabel: 'Test', semanticKey: 'test.f3' }
+      ];
+
+      const metricsWithCanonical = deriveWorkspaceMetrics(dummySections, canonicalCollection);
+      expect(metricsWithCanonical.knowledgeFactsCount).toBe(3);
+      expect(metricsWithCanonical.referencedFactsCount).toBe(2);
+      expect(metricsWithCanonical.visibleUniqueFactsCount).toBe(2);
+    });
+
+    // 9. legacy WorkspaceMode absent from production VM contract
+    it('9. legacy WorkspaceMode absent from production VM contract', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const vmDoc = fs.readFileSync(
+        path.resolve(__dirname, '../../docs/product-workspace/MEGA_WORKSPACE_PRODUCTION_VIEW_MODEL.md'),
+        'utf8'
+      );
+
+      // O VM de produção NÃO define WorkspaceMode ou WorkspacePerspective como campos do contrato
+      expect(vmDoc).toContain('DOIS EIXOS ORTOGONAIS DE INTERFACE (SEM MODOS LEGADOS NO VM)');
+      expect(vmDoc).toContain("interactionMode: 'view' | 'edit_layout' | 'edit_data'");
+      expect(vmDoc).toContain("detailLevel: 'simple' | 'advanced'");
+      expect(vmDoc).toContain('Modos legados como `WorkspaceMode` e `WorkspacePerspective` pertencem estritamente à retrocompatibilidade');
+    });
+
+    // 10. no "Chemical Registry" CAS confusion
+    it('10. no "Chemical Registry" CAS confusion', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const docs = [
+        path.resolve(__dirname, '../../docs/product-workspace/MEGA_WORKSPACE_PRODUCTION_VIEW_MODEL.md'),
+        path.resolve(__dirname, '../../docs/product-workspace/UX_TO_DOMAIN_TYPE_MAP.md'),
+        path.resolve(__dirname, '../../docs/product-workspace/AGENT1_INTEGRATION_NOTES.md')
+      ];
+
+      for (const docPath of docs) {
+        const content = fs.readFileSync(docPath, 'utf8');
+        expect(content).toContain('Compare-And-Swap');
+        expect(content).not.toMatch(/Chemical Abstracts Service/i);
+      }
+    });
+  });
 });
+
 

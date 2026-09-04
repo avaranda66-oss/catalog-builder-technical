@@ -1,6 +1,6 @@
 # PRODUCTION COMPONENT ADOPTION MATRIX (V1)
-> **Status:** RATIFIED BY UX1.3 (AMENDMENTS 12, 13 & 14)  
-> **Mission:** `PIM.MEGA.WORKSPACE.UX1.3`  
+> **Status:** PRE-INTEGRATION CANDIDATE (REVISED AGAINST FOUNDATION1D `3bbbc3a960136e383055f37a3602541df01050b8`)  
+> **Mission:** `PIM.MEGA.WORKSPACE.UX1.3A`  
 > **Scope:** Avaliação comparativa entre componentes existentes em produção (`src/components/library/product-workspace/**`) e os componentes validados no UX Lab (`src/labs/product-workspace-ux/components/**`).
 
 ---

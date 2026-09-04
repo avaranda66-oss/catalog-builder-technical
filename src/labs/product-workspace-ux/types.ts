@@ -8,7 +8,10 @@
  * - Desacoplado de contratos de backend/PIM
  */
 
-export type BlockSize = 'small' | 'medium' | 'large' | 'full';
+export type WorkspaceBlockSize = 'small' | 'medium' | 'large' | 'full';
+export type BlockSize = WorkspaceBlockSize;
+
+export type WorkspaceBlockVisibility = 'visible' | 'hidden';
 
 export type BlockKind =
   | 'hero_summary'
@@ -19,6 +22,54 @@ export type BlockKind =
   | 'documents'
   | 'conflicts'
   | 'notes';
+
+/**
+ * Discriminado Lossless TechnicalValue DTO (Amendment 3).
+ * Mapeia 1:1 o TechnicalValue do domínio sem degradação para uniões primitivas.
+ */
+export type TechnicalValueDTO =
+  | { readonly type: 'text'; readonly value: string }
+  | { readonly type: 'number'; readonly value: number }
+  | { readonly type: 'boolean'; readonly value: boolean }
+  | {
+      readonly type: 'quantity';
+      readonly amount: number;
+      readonly unit: string;
+      readonly qualifier?: string;
+    }
+  | {
+      readonly type: 'range';
+      readonly lower?: number;
+      readonly upper?: number;
+      readonly unit: string;
+      readonly lowerInclusive?: boolean;
+      readonly upperInclusive?: boolean;
+    }
+  | {
+      readonly type: 'enum';
+      readonly code: string;
+      readonly label?: string;
+    }
+  | {
+      readonly type: 'technical_token';
+      readonly token: string;
+      readonly category?: string;
+    }
+  | {
+      readonly type: 'asset_reference';
+      readonly assetId: string;
+      readonly mimeType?: string;
+      readonly label?: string;
+    }
+  | {
+      readonly type: 'product_reference';
+      readonly targetProductId: string;
+      readonly relationKind?: string;
+    }
+  | {
+      readonly type: 'unknown';
+      readonly reason?: string;
+    };
 
 export interface FactSource {
   documentId: string;
@@ -72,6 +123,8 @@ export interface FactItem {
   sources?: FactSource[]; // Suporte completo a múltiplas fontes/evidências
   conflict?: FactConflictDetails;
   evidenceState?: FactSourceState;
+  /** DTO estruturado completo do TechnicalValue (Amendment 3: lossless) */
+  technicalValue?: TechnicalValueDTO;
 }
 
 export type FactSourceState =
@@ -202,8 +255,11 @@ export interface WorkspaceBlock {
   kind: BlockKind;
   title?: string;
   subtitle?: string;
-  size: BlockSize;
+  size: WorkspaceBlockSize;
+  /** @deprecated Use visibility. Mantido para compatibilidade com o laboratório visual. */
   isHidden?: boolean;
+  /** Alinhado 1:1 com o domínio de produção: 'visible' | 'hidden' */
+  visibility?: WorkspaceBlockVisibility;
   data:
     | { kind: 'hero_summary'; facts: FactItem[]; heroImage?: string; headline: string }
     | { kind: 'fact_grid'; facts: FactItem[]; layoutVariant?: 'cards' | 'key_value' }
@@ -224,11 +280,16 @@ export interface WorkspaceSection {
   blocks: WorkspaceBlock[];
 }
 
+/** @deprecated LAB COMPATIBILITY ONLY. Production ViewModel uses strictly InteractionMode and DetailLevel. */
 export type WorkspacePerspective =
-  | 'standard'
-  | 'engineering'
   | 'commercial'
-  | 'documentation';
+  | 'engineering'
+  | 'metrology'
+  | 'compliance'
+  | 'standard';
+
+/** @deprecated LAB COMPATIBILITY ONLY. Production ViewModel uses strictly InteractionMode and DetailLevel. */
+export type WorkspaceMode = 'view' | 'edit_workspace';
 
 /**
  * Eixos Ortogonais de UI (Amendment 5):
@@ -237,9 +298,6 @@ export type WorkspacePerspective =
  */
 export type InteractionMode = 'view' | 'edit_layout' | 'edit_data';
 export type DetailLevel = 'simple' | 'advanced';
-
-/** @deprecated Mantido para compatibilidade com implementações existentes */
-export type WorkspaceMode = 'view' | 'edit_workspace';
 
 export interface UndoSnapshot {
   timestamp: number;
@@ -279,24 +337,40 @@ export interface SearchResultItem {
 }
 
 /**
- * Métricas formais do Workspace (Amendments 1, 2, 3, 7, 8):
- * - knowledgeFactsCount: total de fatos técnicos únicos conhecidos para este produto
+ * Métricas formais do Workspace (UX1.3 & UX1.3A):
+ * - knowledgeFactsCount: total canônico de fatos técnicos na base de conhecimento (definido APENAS quando factsById/knowledgeBaseFacts é fornecido, NUNCA por inferência de layout)
+ * - referencedFactsCount: total de fatos técnicos únicos referenciados na árvore de layout
  * - visibleUniqueFactsCount: fatos únicos atualmente referenciados na projeção visível
  * - visibleFactOccurrences: total de referências/ocorrências renderizadas em blocos e células
  * - tableFactReferencesCount: total de referências que aparecem dentro de células de tabelas
  * - tablesCount: quantidade de blocos de tabela (mega_table / table)
  * - sourcesCount: quantidade de documentos de fonte únicos (por stable documentId)
- * - conflictsCount: quantidade de fatos técnicos únicos com divergência/conflito
+ * - conflictsCount: quantidade de fatos técnicos únicos com divergência/conflito na view ativa
+ * - knowledgeConflictsCount?: quantidade canônica de conflitos na base de conhecimento
+ * - visibleConflictsCount: conflitos renderizados em blocos visíveis
  */
 export interface WorkspaceMetrics {
-  knowledgeFactsCount: number;
+  /** Total canônico de fatos técnicos na base de conhecimento (APENAS quando factsById/knowledgeBaseFacts é fornecido; zero fallback para layout) */
+  knowledgeFactsCount?: number;
+  /** Total de fatos técnicos únicos referenciados no layout (substitui inferência indevida de knowledgeFactsCount no LAB) */
+  referencedFactsCount: number;
+  /** Fatos técnicos únicos referenciados pela visualização ativa (blocos visíveis) */
   visibleUniqueFactsCount: number;
+  /** Total de ocorrências visuais de fatos renderizadas */
   visibleFactOccurrences: number;
+  /** Total de referências a fatos dentro de células de tabelas */
   tableFactReferencesCount: number;
+  /** Quantidade de blocos de tabela */
   tablesCount: number;
+  /** Quantidade de documentos de fonte únicos (por documentId) */
   sourcesCount: number;
+  /** Quantidade de fatos técnicos únicos com divergência/conflito */
   conflictsCount: number;
-  /** @deprecated Use visibleUniqueFactsCount ou knowledgeFactsCount */
+  /** Conflitos canônicos da base de conhecimento (opcional) */
+  knowledgeConflictsCount?: number;
+  /** Conflitos visíveis na tela ativa */
+  visibleConflictsCount: number;
+  /** @deprecated Use visibleUniqueFactsCount */
   uniqueFactsCount: number;
   /** @deprecated Use visibleUniqueFactsCount */
   factsCount: number;
@@ -316,7 +390,7 @@ export function deriveWorkspaceMetrics(
 
   for (const sec of sections) {
     for (const block of sec.blocks) {
-      const isBlockVisible = !block.isHidden;
+      const isBlockVisible = block.visibility !== 'hidden' && !block.isHidden;
 
       if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
         for (const fact of block.data.facts) {
@@ -385,20 +459,27 @@ export function deriveWorkspaceMetrics(
     }
   }
 
+  // Canonical rule: knowledgeFactsCount nunca é inferido caminhando pela tela.
   const knowledgeFactsCount = knowledgeBaseFacts
     ? new Set(knowledgeBaseFacts.map((f) => f.id)).size
-    : allKnownFactIds.size;
+    : undefined;
 
+  const referencedFactsCount = allKnownFactIds.size;
   const visibleUniqueFactsCount = uniqueVisibleFactIds.size;
 
   return {
     knowledgeFactsCount,
+    referencedFactsCount,
     visibleUniqueFactsCount,
     visibleFactOccurrences,
     tableFactReferencesCount,
     tablesCount,
     sourcesCount: uniqueSourceDocIds.size,
     conflictsCount: uniqueConflictFactIds.size,
+    knowledgeConflictsCount: knowledgeBaseFacts
+      ? knowledgeBaseFacts.filter((f) => Boolean(f.conflict)).length
+      : undefined,
+    visibleConflictsCount: uniqueConflictFactIds.size,
     uniqueFactsCount: visibleUniqueFactsCount,
     factsCount: visibleUniqueFactsCount
   };
