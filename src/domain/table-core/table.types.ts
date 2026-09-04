@@ -41,10 +41,6 @@ export type {
   TableCellLiteralContent
 };
 
-/**
- * Tokens semânticos fechados de cor para estilização e apresentação de tabelas.
- * Proíbe expressamente strings arbitrárias de cores, hexadecimais soltos e injeção de CSS.
- */
 export type TableColorToken =
   | 'transparent'
   | 'surface'
@@ -57,6 +53,7 @@ export type TableColorToken =
   | 'brand_primary'
   | 'brand_secondary'
   | 'brand_navy'
+  | 'technical_blue'
   | 'accent'
   | 'success'
   | 'warning'
@@ -64,7 +61,20 @@ export type TableColorToken =
   | 'white'
   | 'slate_900'
   | 'slate_800'
+  | 'slate_200'
   | 'slate_100';
+
+/**
+ * Código hexadecimal rigorosamente validado (#RGB ou #RRGGBB).
+ */
+export type HexColor = `#${string}`;
+
+/**
+ * Valor de cor tipado no Table Core V2 (Emenda 6).
+ * Aceita um token semântico OU um valor hexadecimal válido (#RGB ou #RRGGBB).
+ * Rejeita categoricamente injeção de CSS arbitrário, url(...), var(...) ou nomes livres.
+ */
+export type TableColorValue = TableColorToken | HexColor;
 
 /**
  * Especificação discriminada da largura de coluna física.
@@ -145,8 +155,8 @@ export interface TableCellStyleOverride {
   italic?: boolean;
   align?: TableHorizontalAlign;
   verticalAlign?: TableVerticalAlign;
-  textColorToken?: TableColorToken;
-  backgroundColorToken?: TableColorToken;
+  textColorToken?: TableColorValue;
+  backgroundColorToken?: TableColorValue;
   borderEmphasis?: 'none' | 'bottom_thick' | 'all_subtle' | 'accent';
   fontScale?: 'compact' | 'normal' | 'large';
   paddingToken?: 'dense' | 'normal' | 'spacious';
@@ -170,6 +180,7 @@ export interface TableCellModel {
 
 /**
  * Identificadores dos Presets de Apresentação canônicos.
+ * Preserva integralmente os 8 existentes e restaura os presets históricos oficiais.
  */
 export type TablePresetId =
   | 'presys_clean_technical'
@@ -179,7 +190,11 @@ export type TablePresetId =
   | 'presys_dark_navy'
   | 'presys_blue_comparison'
   | 'gray_technical'
-  | 'corporate_slate';
+  | 'corporate_slate'
+  | 'precision_blue'
+  | 'family_header'
+  | 'minimal_light'
+  | 'high_contrast';
 
 export type TableDensityToken = 'compact' | 'regular' | 'spacious';
 export type TableBorderToken = 'all' | 'horizontal_only' | 'outer_only' | 'none';
@@ -194,18 +209,18 @@ export type TableWidthSpec =
 
 /**
  * Configuração de Apresentação da Tabela (Desacoplada dos dados).
- * Usa tokens semânticos e unidades em mm, sem classes CSS arbitrárias.
+ * Usa tokens semânticos e unidades em mm, ou valores HEX validados.
  */
 export interface TablePresentationModel {
   presetId: TablePresetId;
   density: TableDensityToken;
   borderStyle: TableBorderToken;
   stripeStyle: TableStripeToken;
-  headerBackgroundToken: TableColorToken;   // Token semântico de cor tipado
-  headerTextColorToken: TableColorToken;    // Token semântico de cor de texto tipado
-  sectionBackgroundToken?: TableColorToken;
-  sectionTextColorToken?: TableColorToken;
-  bodyBackgroundToken?: TableColorToken;
+  headerBackgroundToken: TableColorValue;   // Token semântico ou HEX validado
+  headerTextColorToken: TableColorValue;    // Token semântico ou HEX validado
+  sectionBackgroundToken?: TableColorValue;
+  sectionTextColorToken?: TableColorValue;
+  bodyBackgroundToken?: TableColorValue;
   fontScale: 'compact' | 'normal' | 'large';
   tableWidth: TableWidthSpec;               // Especificação discriminada da largura total
   cellPadding?: 'dense' | 'normal' | 'spacious';
@@ -213,7 +228,7 @@ export interface TablePresentationModel {
   lineHeight?: 'tight' | 'normal' | 'relaxed';
   borderWidth?: 'none' | 'thin' | 'medium';
   outerBorderWidth?: 'none' | 'thin' | 'thick';
-  borderColorToken?: TableColorToken;
+  borderColorToken?: TableColorValue;
   cornerRoundness?: 'none' | 'small' | 'medium';
   rowStyleOverrides?: Record<string, TableRowStyleOverride>;
   columnStyleOverrides?: Record<string, TableColumnStyleOverride>;
@@ -222,11 +237,11 @@ export interface TablePresentationModel {
 
 /**
  * Overrides de estilo a nível de linha.
- * Usa exclusivamente tokens canônicos.
+ * Usa tokens canônicos ou HEX validado.
  */
 export interface TableRowStyleOverride {
-  backgroundToken?: TableColorToken;
-  textColorToken?: TableColorToken;
+  backgroundToken?: TableColorValue;
+  textColorToken?: TableColorValue;
   bold?: boolean;
   italic?: boolean;
   borderEmphasis?: 'none' | 'bottom_thick' | 'all_subtle' | 'accent';
@@ -235,11 +250,11 @@ export interface TableRowStyleOverride {
 
 /**
  * Overrides de estilo a nível de coluna.
- * Usa exclusivamente tokens canônicos.
+ * Usa tokens canônicos ou HEX validado.
  */
 export interface TableColumnStyleOverride {
-  backgroundToken?: TableColorToken;
-  textColorToken?: TableColorToken;
+  backgroundToken?: TableColorValue;
+  textColorToken?: TableColorValue;
   align?: TableHorizontalAlign;
   bold?: boolean;
 }

@@ -3,8 +3,11 @@
 // Concentra todas as variantes visuais em uma única camada declarativa.
 // Zero explicit any.
 
+import React from 'react';
 import {
   TableColorToken,
+  TableColorValue,
+  HexColor,
   TableDensityToken,
   TableBorderToken,
   TableStripeToken,
@@ -22,10 +25,102 @@ export interface TablePresentationStyles {
   stripeClass: string;
 }
 
+export const TABLE_COLOR_TOKEN_HEX_MAP: Record<TableColorToken, string> = {
+  transparent: 'transparent',
+  surface: '#ffffff',
+  surface_subtle: '#f8fafc',
+  surface_header: '#0f172a',
+  text_primary: '#0f172a',
+  text_secondary: '#475569',
+  text_muted: '#94a3b8',
+  text_on_header: '#ffffff',
+  brand_primary: '#001f3f',
+  brand_secondary: '#003366',
+  brand_navy: '#001f3f',
+  technical_blue: '#003366',
+  accent: '#2563eb',
+  success: '#059669',
+  warning: '#d97706',
+  critical: '#e11d48',
+  white: '#ffffff',
+  slate_900: '#0f172a',
+  slate_800: '#1e293b',
+  slate_200: '#e2e8f0',
+  slate_100: '#f1f5f9'
+};
+
+export function isHexColor(value?: string): value is HexColor {
+  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+}
+
+export function normalizeHexColor(hex: string): HexColor {
+  const clean = hex.trim().toLowerCase();
+  if (clean.length === 4) {
+    return `#${clean[1]}${clean[1]}${clean[2]}${clean[2]}${clean[3]}${clean[3]}` as HexColor;
+  }
+  return clean as HexColor;
+}
+
+export interface ResolvedTableColor {
+  className: string;
+  styleColor?: string;
+  style?: React.CSSProperties;
+}
+
 /**
- * Mapeia um TableColorToken de fundo para classe CSS do Tailwind.
+ * Resolve deterministicamente uma cor de tabela (token ou HEX) para uso em Canvas, Preview e PDF/Export.
+ * Garante paridade absoluta entre todos os renderers (Emenda 8).
  */
-export function getBackgroundColorClass(token?: TableColorToken): string {
+export function resolveTableColor(
+  value: TableColorValue | undefined,
+  type: 'bg' | 'text' | 'border'
+): ResolvedTableColor {
+  if (!value) {
+    return { className: '' };
+  }
+
+  if (isHexColor(value)) {
+    const hex = normalizeHexColor(value);
+    if (type === 'bg') {
+      return { className: '', styleColor: hex, style: { backgroundColor: hex } };
+    }
+    if (type === 'text') {
+      return { className: '', styleColor: hex, style: { color: hex } };
+    }
+    return { className: '', styleColor: hex, style: { borderColor: hex } };
+  }
+
+  // Token semântico
+  const token = value as TableColorToken;
+  const hex = TABLE_COLOR_TOKEN_HEX_MAP[token];
+
+  if (type === 'bg') {
+    return {
+      className: getBackgroundColorClass(token),
+      styleColor: hex,
+      style: hex && hex !== 'transparent' ? { backgroundColor: hex } : undefined
+    };
+  }
+  if (type === 'text') {
+    return {
+      className: getTextColorClass(token),
+      styleColor: hex,
+      style: hex ? { color: hex } : undefined
+    };
+  }
+  return {
+    className: getBorderColorClass(token),
+    styleColor: hex,
+    style: hex ? { borderColor: hex } : undefined
+  };
+}
+
+/**
+ * Mapeia um TableColorValue de fundo para classe CSS do Tailwind.
+ */
+export function getBackgroundColorClass(token?: TableColorValue): string {
+  if (!token) return '';
+  if (isHexColor(token)) return '';
   switch (token) {
     case 'surface':
       return 'bg-white';
@@ -39,10 +134,14 @@ export function getBackgroundColorClass(token?: TableColorToken): string {
       return 'bg-[#003366]';
     case 'brand_navy':
       return 'bg-[#001f3f]';
+    case 'technical_blue':
+      return 'bg-[#003366]';
     case 'slate_900':
       return 'bg-slate-900';
     case 'slate_800':
       return 'bg-slate-800';
+    case 'slate_200':
+      return 'bg-slate-200';
     case 'slate_100':
       return 'bg-slate-100';
     case 'white':
@@ -55,9 +154,11 @@ export function getBackgroundColorClass(token?: TableColorToken): string {
 }
 
 /**
- * Mapeia um TableColorToken de texto para classe CSS do Tailwind.
+ * Mapeia um TableColorValue de texto para classe CSS do Tailwind.
  */
-export function getTextColorClass(token?: TableColorToken): string {
+export function getTextColorClass(token?: TableColorValue): string {
+  if (!token) return '';
+  if (isHexColor(token)) return '';
   switch (token) {
     case 'text_primary':
       return 'text-slate-900';
@@ -70,6 +171,10 @@ export function getTextColorClass(token?: TableColorToken): string {
     case 'brand_primary':
       return 'text-[#001f3f]';
     case 'brand_secondary':
+      return 'text-[#003366]';
+    case 'brand_navy':
+      return 'text-[#001f3f]';
+    case 'technical_blue':
       return 'text-[#003366]';
     case 'accent':
       return 'text-blue-600';
@@ -85,6 +190,8 @@ export function getTextColorClass(token?: TableColorToken): string {
       return 'text-slate-900';
     case 'slate_800':
       return 'text-slate-800';
+    case 'slate_200':
+      return 'text-slate-200';
     case 'slate_100':
       return 'text-slate-100';
     default:
@@ -234,17 +341,22 @@ export function getLineHeightClass(
   }
 }
 
-export function getBorderColorClass(token?: TableColorToken): string {
+export function getBorderColorClass(token?: TableColorValue): string {
+  if (!token) return 'border-slate-200';
+  if (isHexColor(token)) return '';
   switch (token) {
     case 'brand_primary':
     case 'brand_navy':
       return 'border-[#001f3f]';
     case 'brand_secondary':
+    case 'technical_blue':
       return 'border-[#003366]';
     case 'slate_900':
       return 'border-slate-900';
     case 'slate_800':
       return 'border-slate-800';
+    case 'slate_200':
+      return 'border-slate-200';
     case 'slate_100':
       return 'border-slate-100';
     case 'white':

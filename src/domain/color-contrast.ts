@@ -72,3 +72,40 @@ export function resolveReadableForegroundTone(hex: string): ReadableForegroundTo
 
   return contrastWithBlack > contrastWithWhite ? 'dark' : 'light';
 }
+
+/**
+ * Calcula a razão de contraste WCAG 2.1 entre duas cores hexadecimais (ex: 14.5 para 14.5:1).
+ */
+export function calculateContrastRatio(colorA: string, colorB: string): number {
+  const rgbA = parseHexColor(colorA);
+  const rgbB = parseHexColor(colorB);
+  if (!rgbA || !rgbB) return 1.0;
+
+  const lA = calculateRelativeLuminance(rgbA[0], rgbA[1], rgbA[2]);
+  const lB = calculateRelativeLuminance(rgbB[0], rgbB[1], rgbB[2]);
+
+  const lighter = Math.max(lA, lB);
+  const darker = Math.min(lA, lB);
+  return Number(((lighter + 0.05) / (darker + 0.05)).toFixed(2));
+}
+
+export type ContrastStatus = 'AAA' | 'AA' | 'AA_LARGE' | 'FAIL';
+
+/**
+ * Classifica a conformidade WCAG a partir do ratio de contraste.
+ */
+export function getContrastStatus(ratio: number): ContrastStatus {
+  if (ratio >= 7) return 'AAA';
+  if (ratio >= 4.5) return 'AA';
+  if (ratio >= 3) return 'AA_LARGE';
+  return 'FAIL';
+}
+
+/**
+ * Retorna a cor de texto (#ffffff ou #0f172a) que garante o contraste máximo seguro contra o fundo fornecido.
+ */
+export function autoFixContrast(bgHex: string): string {
+  const tone = resolveReadableForegroundTone(bgHex);
+  return tone === 'dark' ? '#0f172a' : '#ffffff';
+}
+

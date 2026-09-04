@@ -93,8 +93,75 @@ export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
     sectionTextColorToken: 'slate_900',
     fontScale: 'normal',
     tableWidth: { mode: 'auto_fill' }
+  },
+  precision_blue: {
+    presetId: 'precision_blue',
+    density: 'compact',
+    borderStyle: 'all',
+    stripeStyle: 'subtle_zebra',
+    headerBackgroundToken: 'technical_blue',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'surface_subtle',
+    sectionTextColorToken: 'technical_blue',
+    fontScale: 'compact',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  family_header: {
+    presetId: 'family_header',
+    density: 'regular',
+    borderStyle: 'horizontal_only',
+    stripeStyle: 'none',
+    headerBackgroundToken: 'brand_navy',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'slate_100',
+    sectionTextColorToken: 'brand_navy',
+    fontScale: 'normal',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  minimal_light: {
+    presetId: 'minimal_light',
+    density: 'regular',
+    borderStyle: 'horizontal_only',
+    stripeStyle: 'none',
+    headerBackgroundToken: 'surface_subtle',
+    headerTextColorToken: 'slate_900',
+    fontScale: 'normal',
+    tableWidth: { mode: 'auto_fill' }
+  },
+  high_contrast: {
+    presetId: 'high_contrast',
+    density: 'compact',
+    borderStyle: 'all',
+    stripeStyle: 'high_contrast_zebra',
+    headerBackgroundToken: 'slate_900',
+    headerTextColorToken: 'white',
+    sectionBackgroundToken: 'slate_800',
+    sectionTextColorToken: 'white',
+    fontScale: 'normal',
+    tableWidth: { mode: 'auto_fill' }
   }
 };
+
+export const BUILTIN_TABLE_PRESET_IDS: readonly TablePresetId[] = [
+  'presys_clean_technical',
+  'dense_spec_matrix',
+  'model_comparison',
+  'parameter_value',
+  'presys_dark_navy',
+  'presys_blue_comparison',
+  'gray_technical',
+  'corporate_slate',
+  'precision_blue',
+  'family_header',
+  'minimal_light',
+  'high_contrast'
+] as const;
+
+export const DEFAULT_TABLE_PRESENTATION: TablePresentationModel = TABLE_PRESETS.presys_clean_technical;
+
+export function isBuiltinTablePresetId(id: string): id is TablePresetId {
+  return (BUILTIN_TABLE_PRESET_IDS as readonly string[]).includes(id);
+}
 
 /**
  * Retorna a configuração de apresentação para o preset solicitado.

@@ -44,14 +44,20 @@ describe('Table Core V2: Closed Style Token Contract', () => {
     expect(overrideRes.success).toBe(true);
   });
 
-  it('TABLE-TOKEN-2: Cor hexadecimal arbitrária "#ff0000" é estritamente rejeitada', () => {
-    const res = TableColorTokenSchema.safeParse('#ff0000');
-    expect(res.success).toBe(false);
+  it('TABLE-TOKEN-2: TableColorToken rejeita HEX mas TableCellStyleOverride aceita TableColorValue válido (#ff0000)', () => {
+    const tokenRes = TableColorTokenSchema.safeParse('#ff0000');
+    expect(tokenRes.success).toBe(false);
 
+    // Emendas 6 e 7: TableColorValue = TableColorToken | HexColor
     const overrideRes = TableCellStyleOverrideSchema.safeParse({
       textColorToken: '#ff0000'
     });
-    expect(overrideRes.success).toBe(false);
+    expect(overrideRes.success).toBe(true);
+
+    const invalidHexRes = TableCellStyleOverrideSchema.safeParse({
+      textColorToken: '#12'
+    });
+    expect(invalidHexRes.success).toBe(false);
   });
 
   it('TABLE-TOKEN-3: Nome de cor CSS arbitrário "red" é estritamente rejeitado', () => {

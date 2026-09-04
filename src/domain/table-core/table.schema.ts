@@ -98,6 +98,11 @@ export const TableCellContentSchema = z.union([
   TableCellBoundContentSchema
 ]);
 
+import {
+  HexColor,
+  TableColorValue
+} from './table.types';
+
 export const TableColorTokenSchema = z.enum([
   'transparent',
   'surface',
@@ -110,6 +115,7 @@ export const TableColorTokenSchema = z.enum([
   'brand_primary',
   'brand_secondary',
   'brand_navy',
+  'technical_blue',
   'accent',
   'success',
   'warning',
@@ -117,7 +123,24 @@ export const TableColorTokenSchema = z.enum([
   'white',
   'slate_900',
   'slate_800',
+  'slate_200',
   'slate_100'
+]);
+
+export const HexColorSchema: z.ZodType<HexColor, z.ZodTypeDef, string> = z
+  .string()
+  .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Formato de cor hexadecimal inválido (#RGB ou #RRGGBB)')
+  .transform((val): HexColor => {
+    const raw = val.toLowerCase();
+    if (raw.length === 4) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}` as HexColor;
+    }
+    return raw as HexColor;
+  }) as unknown as z.ZodType<HexColor, z.ZodTypeDef, string>;
+
+export const TableColorValueSchema: z.ZodType<TableColorValue, z.ZodTypeDef, string> = z.union([
+  TableColorTokenSchema,
+  HexColorSchema
 ]);
 
 export const TableCellStyleOverrideSchema = z.object({
@@ -125,8 +148,8 @@ export const TableCellStyleOverrideSchema = z.object({
   italic: z.boolean().optional(),
   align: TableHorizontalAlignSchema.optional(),
   verticalAlign: TableVerticalAlignSchema.optional(),
-  textColorToken: TableColorTokenSchema.optional(),
-  backgroundColorToken: TableColorTokenSchema.optional(),
+  textColorToken: TableColorValueSchema.optional(),
+  backgroundColorToken: TableColorValueSchema.optional(),
   borderEmphasis: z.enum(['none', 'bottom_thick', 'all_subtle', 'accent']).optional(),
   fontScale: z.enum(['compact', 'normal', 'large']).optional(),
   paddingToken: z.enum(['dense', 'normal', 'spacious']).optional()
@@ -151,7 +174,11 @@ export const TablePresetIdSchema = z.enum([
   'presys_dark_navy',
   'presys_blue_comparison',
   'gray_technical',
-  'corporate_slate'
+  'corporate_slate',
+  'precision_blue',
+  'family_header',
+  'minimal_light',
+  'high_contrast'
 ]);
 
 export const TableWidthSpecSchema = z.discriminatedUnion('mode', [
@@ -165,8 +192,8 @@ export const TableWidthSpecSchema = z.discriminatedUnion('mode', [
 ]);
 
 export const TableRowStyleOverrideSchema = z.object({
-  backgroundToken: TableColorTokenSchema.optional(),
-  textColorToken: TableColorTokenSchema.optional(),
+  backgroundToken: TableColorValueSchema.optional(),
+  textColorToken: TableColorValueSchema.optional(),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   borderEmphasis: z.enum(['none', 'bottom_thick', 'all_subtle', 'accent']).optional(),
@@ -174,8 +201,8 @@ export const TableRowStyleOverrideSchema = z.object({
 }).strict();
 
 export const TableColumnStyleOverrideSchema = z.object({
-  backgroundToken: TableColorTokenSchema.optional(),
-  textColorToken: TableColorTokenSchema.optional(),
+  backgroundToken: TableColorValueSchema.optional(),
+  textColorToken: TableColorValueSchema.optional(),
   align: TableHorizontalAlignSchema.optional(),
   bold: z.boolean().optional()
 }).strict();
@@ -185,11 +212,11 @@ export const TablePresentationModelSchema = z.object({
   density: z.enum(['compact', 'regular', 'spacious']).default('regular'),
   borderStyle: z.enum(['all', 'horizontal_only', 'outer_only', 'none']).default('all'),
   stripeStyle: z.enum(['none', 'subtle_zebra', 'high_contrast_zebra']).default('none'),
-  headerBackgroundToken: TableColorTokenSchema.default('slate_900'),
-  headerTextColorToken: TableColorTokenSchema.default('white'),
-  sectionBackgroundToken: TableColorTokenSchema.optional(),
-  sectionTextColorToken: TableColorTokenSchema.optional(),
-  bodyBackgroundToken: TableColorTokenSchema.optional(),
+  headerBackgroundToken: TableColorValueSchema.default('slate_900'),
+  headerTextColorToken: TableColorValueSchema.default('white'),
+  sectionBackgroundToken: TableColorValueSchema.optional(),
+  sectionTextColorToken: TableColorValueSchema.optional(),
+  bodyBackgroundToken: TableColorValueSchema.optional(),
   fontScale: z.enum(['compact', 'normal', 'large']).default('normal'),
   tableWidth: TableWidthSpecSchema.default({ mode: 'auto_fill' }),
   cellPadding: z.enum(['dense', 'normal', 'spacious']).optional(),
@@ -197,7 +224,7 @@ export const TablePresentationModelSchema = z.object({
   lineHeight: z.enum(['tight', 'normal', 'relaxed']).optional(),
   borderWidth: z.enum(['none', 'thin', 'medium']).optional(),
   outerBorderWidth: z.enum(['none', 'thin', 'thick']).optional(),
-  borderColorToken: TableColorTokenSchema.optional(),
+  borderColorToken: TableColorValueSchema.optional(),
   cornerRoundness: z.enum(['none', 'small', 'medium']).optional(),
   rowStyleOverrides: z.record(TableRowStyleOverrideSchema).optional(),
   columnStyleOverrides: z.record(TableColumnStyleOverrideSchema).optional(),
