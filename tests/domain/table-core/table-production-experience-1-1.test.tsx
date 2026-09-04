@@ -157,24 +157,22 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
     });
 
     const bindBtn = container.querySelector('[data-testid="picker-bind-cell-accuracy.reference"]') as HTMLButtonElement | null;
-    expect(bindBtn).toBeDefined();
+    expect(bindBtn).not.toBeNull();
 
-    if (bindBtn) {
-      await act(async () => {
-        bindBtn.click();
-      });
+    await act(async () => {
+      bindBtn!.click();
+    });
 
-      const updatedCatalog = useCatalogStore.getState().currentCatalog;
-      const targetRow = updatedCatalog?.pages[0].blocks[0].tableRows?.[0];
-      expect(targetRow).toBeDefined();
+    const updatedCatalog = useCatalogStore.getState().currentCatalog;
+    const targetRow = updatedCatalog?.pages[0].blocks[0].tableRows?.[0];
+    expect(targetRow).toBeDefined();
 
-      const binding = targetRow?.cellBindings?.['accuracy'];
-      expect(binding).toBeDefined();
-      expect(binding?.productId).toBe('prod-ta25n');
-      expect(binding?.semanticKey).toBe('accuracy.reference');
-      expect(binding?.sourceRevision).toBe(5);
-      expect(binding?.snapshot).toEqual({ kind: 'text', text: '±0.05 °C (Calibrado)' });
-    }
+    const binding = targetRow?.cellBindings?.['accuracy'];
+    expect(binding).toBeDefined();
+    expect(binding?.productId).toBe('prod-ta25n');
+    expect(binding?.semanticKey).toBe('accuracy.reference');
+    expect(binding?.sourceRevision).toBe(5);
+    expect(binding?.snapshot).toEqual({ kind: 'text', text: '±0.05 °C (Calibrado)' });
   });
 
   // =========================================================================
@@ -217,14 +215,12 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
     expect(container.textContent).toContain('Buscando em: TA-25N');
 
     const toggleScopeBtn = container.querySelector('[data-testid="toggle-product-scope"]') as HTMLButtonElement | null;
-    expect(toggleScopeBtn).toBeDefined();
+    expect(toggleScopeBtn).not.toBeNull();
 
-    if (toggleScopeBtn) {
-      await act(async () => {
-        toggleScopeBtn.click();
-      });
-      expect(container.textContent).toContain('Buscando em: Todos os Produtos');
-    }
+    await act(async () => {
+      toggleScopeBtn!.click();
+    });
+    expect(container.textContent).toContain('Buscando em: Todos os Produtos');
   });
 
   // =========================================================================
@@ -245,7 +241,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
 
     const mockProvider = new TestProductKnowledgeProvider([
       {
-        id: 'res-ds-ranges',
+        id: 'res-ds-ranges-01',
         kind: 'dataset',
         productId: 'prod-ta25n',
         productModel: 'TA-25N',
@@ -264,7 +260,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
     });
 
     const insertTableBtn = container.querySelector('[data-testid="picker-insert-dataset-ds-ranges-01"]');
-    expect(insertTableBtn).toBeDefined();
+    expect(insertTableBtn).not.toBeNull();
 
     const invalidCellBindBtn = container.querySelector('[data-testid="picker-bind-cell-ds-ranges-01"]');
     expect(invalidCellBindBtn).toBeNull();
