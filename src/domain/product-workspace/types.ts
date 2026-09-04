@@ -14,6 +14,7 @@ import {
   UnitCode,
   SourceDocumentType
 } from '../product-workbook/types';
+import { CatalogCellBinding } from '../catalog.schema';
 
 /**
  * Visual inspection mode for the Mega Workspace.
@@ -276,6 +277,55 @@ export interface WorkspaceDisplayOverride {
 }
 
 /**
+ * Registro Canônico de Semântica do Produto.
+ * Entidade soberana que armazena aliases para IA, descrições contextuais e labels canônicos.
+ * Totalmente desacoplada dos layouts visuais pessoais de cada usuário.
+ */
+export interface ProductSemanticRegistry {
+  readonly schemaVersion: 1;
+  readonly productId: string;
+  readonly descriptors: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
+}
+
+/**
+ * Localizador contextualizado de referências de bindings em catálogos editoriais externos.
+ */
+export interface ExternalCatalogBindingReference {
+  readonly catalogId: string;
+  readonly pageId: string;
+  readonly blockId: string;
+  readonly rowId?: string;
+  readonly cellKey?: string;
+  readonly binding: CatalogCellBinding;
+}
+
+/**
+ * Erro de integridade de referência do Workspace contra o ProductWorkbook.
+ */
+export interface WorkspaceValidationError {
+  readonly code:
+    | 'DATUM_NOT_FOUND'
+    | 'DATASET_NOT_FOUND'
+    | 'DATASET_ROW_NOT_FOUND'
+    | 'DATASET_COLUMN_NOT_FOUND'
+    | 'DATASET_CELL_NOT_FOUND'
+    | 'SOURCE_DOCUMENT_NOT_FOUND';
+  readonly message: string;
+  readonly path: string;
+  readonly entityId: string;
+}
+
+/**
+ * Relatório de validação referencial do Workspace Layout contra o Conhecimento do Produto.
+ */
+export interface WorkspaceValidationReport {
+  readonly isValid: boolean;
+  readonly errors: readonly WorkspaceValidationError[];
+}
+
+/**
  * Layout customizável do Workspace de Produto (V1).
  * Não armazena cópias de valores técnicos; apenas organiza a projeção de referências.
  * Possui ciclo de vida e revisão completamente separados da verdade técnica do ProductWorkbook.
@@ -284,7 +334,7 @@ export interface WorkspaceLayoutV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly productId: string;
-  readonly revision: number; // nonnegative integer (independente de ProductWorkbook.revision)
+  readonly revision: number; // positive integer (>= 1, autoridade de CAS e apresentação)
   readonly createdAt?: string;
   readonly updatedAt?: string;
   readonly title: string;
@@ -293,6 +343,18 @@ export interface WorkspaceLayoutV1 {
   readonly blocks: Readonly<Record<string, WorkspaceBlockDef>>;
   readonly displayOverrides?: Readonly<Record<string, WorkspaceDisplayOverride>>; // Keyed by canonicalKey
   readonly semanticDescriptors?: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey (fallback / compatibilidade)
+  readonly metadata?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Patch explícito e tipado para alterações estagiadas de layout (1:1 com TypeScript e Zod).
+ */
+export interface WorkspaceLayoutPatch {
+  readonly title?: string;
+  readonly description?: string;
+  readonly sections?: readonly WorkspaceSectionDef[];
+  readonly blocks?: Readonly<Record<string, WorkspaceBlockDef>>;
+  readonly displayOverrides?: Readonly<Record<string, WorkspaceDisplayOverride>>;
   readonly metadata?: Readonly<Record<string, string>>;
 }
 
@@ -313,7 +375,7 @@ export interface DatumChangeDraft {
 export interface WorkspaceEditDraft {
   readonly productId: string;
   readonly stagedDatumChanges: Readonly<Record<string, DatumChangeDraft>>;
-  readonly stagedLayoutChanges?: Partial<WorkspaceLayoutV1>;
+  readonly stagedLayoutChanges?: WorkspaceLayoutPatch;
 }
 
 // ============================================================================

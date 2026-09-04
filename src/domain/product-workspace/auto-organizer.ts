@@ -27,7 +27,8 @@ import {
   WorkspaceTableColumnDef,
   WorkspaceTableRowDef,
   WorkspaceTableCellDef,
-  SemanticDescriptor
+  SemanticDescriptor,
+  ProductSemanticRegistry
 } from './types';
 import { createSemanticDescriptor } from './semantics';
 
@@ -156,7 +157,6 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
   const productId = workbook.owner.id;
   const sections: WorkspaceSectionDef[] = [];
   const blocks: Record<string, WorkspaceBlockDef> = {};
-  const semanticDescriptors: Record<string, SemanticDescriptor> = {};
 
   // Coleta todos os datums efetivos (ou locais do workbook)
   const allDatums: TechnicalDatum[] = [];
@@ -166,17 +166,6 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
     }
   } else {
     allDatums.push(...Object.values(workbook.data));
-  }
-
-  // Gera descritores semânticos iniciais para cada datum
-  for (const d of allDatums) {
-    if (!semanticDescriptors[d.semanticKey]) {
-      semanticDescriptors[d.semanticKey] = createSemanticDescriptor({
-        canonicalKey: d.semanticKey,
-        displayLabel: d.label || formatHumanLabelFromKey(d.semanticKey),
-        description: d.description
-      });
-    }
   }
 
   // Identifica Datums já atribuídos a blocos para não duplicar visualmente
@@ -450,10 +439,50 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
     description: 'Layout human-first gerado com separação estrita entre autoridade de dados e apresentação.',
     sections,
     blocks,
-    semanticDescriptors,
     metadata: {
       generatedAt: now,
       autoOrganized: 'true'
     }
+  };
+}
+
+/**
+ * Cria um Registro Semântico Canônico inicial a partir dos dados do produto/família.
+ * Pertence à camada de conhecimento técnico e é totalmente desacoplado de layouts visuais.
+ */
+export function createInitialProductSemanticRegistry(
+  params: AutoOrganizeParams
+): ProductSemanticRegistry {
+  const { workbook, effectiveKnowledge } = params;
+  const productId = workbook.owner.id;
+  const descriptors: Record<string, SemanticDescriptor> = {};
+
+  const allDatums: TechnicalDatum[] = [];
+  if (effectiveKnowledge) {
+    for (const eff of effectiveKnowledge.effectiveData.values()) {
+      allDatums.push(eff.datum);
+    }
+  } else {
+    allDatums.push(...Object.values(workbook.data));
+  }
+
+  for (const d of allDatums) {
+    if (!descriptors[d.semanticKey]) {
+      descriptors[d.semanticKey] = createSemanticDescriptor({
+        canonicalKey: d.semanticKey,
+        displayLabel: d.label || formatHumanLabelFromKey(d.semanticKey),
+        description: d.description
+      });
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  return {
+    schemaVersion: 1,
+    productId,
+    descriptors,
+    createdAt: now,
+    updatedAt: now
   };
 }

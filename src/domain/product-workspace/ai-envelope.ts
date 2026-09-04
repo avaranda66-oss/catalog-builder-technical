@@ -15,7 +15,7 @@ import {
   TechnicalDatum,
   EffectiveDatumStatus
 } from '../product-workbook/types';
-import { deriveDatumStatus } from '../product-workbook/provenance.engine';
+import { deriveDatumStatus, detectEvidenceConflicts } from '../product-workbook/provenance.engine';
 import {
   AiProductKnowledgeEnvelope,
   AiDatumEnvelope,
@@ -24,6 +24,7 @@ import {
   AiConflictRecord,
   AiConflictCandidate,
   AiExcludedSummary,
+  ProductSemanticRegistry,
   WorkspaceLayoutV1
 } from './types';
 import { formatTechnicalValue } from './projection';
@@ -31,7 +32,10 @@ import { formatTechnicalValue } from './projection';
 export interface BuildAiEnvelopeParams {
   workbook: ProductWorkbookV2;
   effectiveKnowledge?: ResolvedProductKnowledge;
+  /** Registro Semântico Canônico soberano para IA (Blocker 13/16) */
+  semanticRegistry?: ProductSemanticRegistry;
   sources?: readonly SourceDocument[];
+  /** Layout opcional mantido apenas para migração e fallback de descritores legados */
   layout?: WorkspaceLayoutV1;
   /**
    * Propósito semântico de consumo.
@@ -46,7 +50,14 @@ export interface BuildAiEnvelopeParams {
  * Constrói o envelope canônico e estritamente tipado de conhecimento do produto para consumo por IA.
  */
 export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): AiProductKnowledgeEnvelope {
-  const { workbook, effectiveKnowledge, sources = [], layout, purpose = 'factual_answer' } = params;
+  const {
+    workbook,
+    effectiveKnowledge,
+    semanticRegistry,
+    sources = [],
+    layout,
+    purpose = 'factual_answer'
+  } = params;
   const productId = workbook.owner.id;
 
   const sourceMap = new Map<string, SourceDocument>();
@@ -54,7 +65,9 @@ export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): 
     sourceMap.set(s.id, s);
   }
 
-  const descriptors = layout?.semanticDescriptors || {};
+  // BLOCKER 13/16: A autoridade soberana para IA é o ProductSemanticRegistry.
+  // layout.semanticDescriptors é usado apenas como fallback secundário para migração retrocompatível.
+  const descriptors = semanticRegistry?.descriptors || layout?.semanticDescriptors || {};
 
   // Mapeamento de datasets para associar colunas/células ao datum
   const datasetMembershipMap = new Map<
@@ -232,10 +245,13 @@ export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): 
     };
 
     // ========================================================================
-    // AI TRUTH POLICY ENFORCEMENT
+    // AI TRUTH POLICY ENFORCEMENT (BLOCKER 6 & 11)
     // ========================================================================
 
-    const isConflictingWithoutResolution = status === 'conflicting' && !datum.canonicalDecision;
+    const conflictReport = detectEvidenceConflicts(datum);
+    const isConflictingWithoutResolution =
+      (status === 'conflicting' || conflictReport.hasConflict) &&
+      !conflictReport.isResolvedByCanonicalDecision;
 
     if (isConflictingWithoutResolution) {
       conflictingCount++;
@@ -255,7 +271,7 @@ export function buildAiProductKnowledgeEnvelope(params: BuildAiEnvelopeParams): 
         displayLabel,
         status: 'conflicting',
         candidates,
-        rationale: 'Conflito de fontes sem decisão canônica formal registrada.',
+        rationale: conflictReport.reason || 'Conflito de fontes sem decisão canônica formal válida registrada.',
         origin
       });
       // Conflito não resolvido NÃO entra em facts em nenhum modo

@@ -30,8 +30,8 @@ Estabelece-se formalmente a divisão de responsabilidades:
 
 ### Camada A: Product Semantic Layer / Canonical Semantic Registry (Domínio Canônico)
 - **Titularidade:** Engenharia de Produto / PIM Core.
-- **Entidades:** `SemanticDescriptor` (`canonicalKey`, `canonicalAliases`, `aiDescription`, `localeLabels`).
-- **Finalidade:** Servir como autoridade semântica para IA, busca, integrações e resolução de entidades.
+- **Entidades:** `ProductSemanticRegistry` contendo `descriptors: Record<string, SemanticDescriptor>` (`canonicalKey`, `canonicalAliases`, `aiDescription`, `localeLabels`).
+- **Finalidade:** Servir como autoridade soberana para IA, busca, integrações e resolução de entidades.
 - **Ciclo de Vida:** Estável e associado ao produto/família.
 
 ### Camada B: Workspace Display Overrides (Apresentação Humana)
@@ -48,22 +48,25 @@ Estabelece-se formalmente a divisão de responsabilidades:
    ```ts
    displayLabel =
      layout.displayOverrides?.[canonicalKey]?.customLabel ||
-     semanticDescriptor?.displayLabel ||
+     semanticRegistry?.descriptors[canonicalKey]?.displayLabel ||
      datum.label ||
      canonicalKey;
    ```
    O usuário comum tem total liberdade para renomear rótulos cosméticos na tela, sem qualquer risco de fragmentar a semântica canônica.
 
 2. **No Envelope da IA (`buildAiProductKnowledgeEnvelope`):**
-   A IA consome os aliases canônicos da Camada A (`semanticDescriptor.aliases`), garantindo que variações como *"temperatura de calibração"*, *"thermal stability"* e *"estabilidade"* continuem sendo mapeadas com precisão metrológica independente de como o usuário configurou suas abas no layout.
+   A IA consome os aliases canônicos da Camada A via `semanticRegistry.descriptors[canonicalKey].aliases`, garantindo que variações como *"temperatura de calibração"*, *"thermal stability"* e *"estabilidade"* continuem sendo mapeadas com precisão metrológica independente de como o usuário configurou suas abas no layout.
+   O layout visual NÃO dita o entendimento factual da IA.
 
 3. **No Grafo de Referências e Safe Rename (`SemanticReferenceGraph`):**
-   O planejador audita o registro canônico de aliases para garantir que nenhuma nova chave canônica colida com sinônimos já homologados.
+   O planejador audita o registro canônico de aliases (`semanticRegistry`) para garantir que nenhuma nova chave canônica colida com sinônimos já homologados.
 
 ---
 
 ## 4. Transição e Compatibilidade
 
 Para garantir transição suave e zero breaking changes no código existente:
-- O campo `semanticDescriptors?: Record<string, SemanticDescriptor>` é mantido no layout como fallback opcional de transição durante a fase de fundação.
+- O campo `layout.semanticDescriptors` é mantido apenas como fallback de leitura para layouts legados durante migração.
+- Novos layouts gerados por `autoOrganizeProductWorkspace` NÃO gravam `semanticDescriptors`.
+- O contrato canônico `ProductSemanticRegistry` assume a soberania dos descritores semânticos e aliases para IA.
 - O campo `displayOverrides?: Record<string, WorkspaceDisplayOverride>` assume formalmente a titularidade de personalizações cosméticas de tela no schema estrito `WorkspaceLayoutV1Schema`.

@@ -8,6 +8,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    env: {
+      VITE_SUPABASE_URL: 'https://mock-test.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'mock-anon-key'
+    },
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     exclude: ['**/node_modules/**', '**/.aiox-core/**', '**/.aios-core/**']
   },

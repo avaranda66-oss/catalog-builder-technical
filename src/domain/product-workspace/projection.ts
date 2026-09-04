@@ -26,14 +26,17 @@ import {
   ProjectedTableCell,
   ProjectedSourceItem,
   WorkspaceStats,
-  WorkspaceTechnicalTableDef
+  WorkspaceTechnicalTableDef,
+  ProductSemanticRegistry
 } from './types';
+import { deriveDatumStatus } from '../product-workbook/provenance.engine';
 import { autoOrganizeProductWorkspace } from './auto-organizer';
 import { matchesSemanticQuery } from './semantics';
 
 export interface BuildWorkspaceProjectionParams {
   workbook: ProductWorkbookV2;
   effectiveKnowledge?: ResolvedProductKnowledge;
+  semanticRegistry?: ProductSemanticRegistry;
   layout?: WorkspaceLayoutV1;
   sources?: readonly SourceDocument[];
   mode?: WorkspaceMode;
@@ -97,6 +100,7 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
   const {
     workbook,
     effectiveKnowledge,
+    semanticRegistry,
     sources = [],
     mode = 'simple',
     searchQuery = ''
@@ -127,13 +131,13 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
     }
   }
 
-  // Fallback / complementa com dados locais do workbook
+  // BLOCKER 12: Fallback / complementa com dados locais derivando status canônico via deriveDatumStatus(d)
   for (const d of Object.values(workbook.data)) {
     if (!datumMap.has(d.id)) {
       datumMap.set(d.id, {
         datum: d,
         origin: 'product_local',
-        status: d.status,
+        status: deriveDatumStatus(d),
         isOverride: false
       });
     }
@@ -156,8 +160,9 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
     sourceMap.set(s.id, s);
   }
 
-  // Descritores semânticos definidos no layout
-  const descriptors = layout.semanticDescriptors || {};
+  // BLOCKER 13/14/15: Descritores semânticos vêm do ProductSemanticRegistry como autoridade canônica.
+  // layout.semanticDescriptors é usado apenas como fallback secundário.
+  const descriptors = semanticRegistry?.descriptors || layout.semanticDescriptors || {};
 
   // Função auxiliar para projetar um FactItem
   function projectFactItem(datumId: string): ProjectedFactItem | null {

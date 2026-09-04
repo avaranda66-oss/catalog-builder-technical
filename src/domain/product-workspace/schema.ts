@@ -206,12 +206,22 @@ export const WorkspaceDisplayOverrideSchema = z
   })
   .strict();
 
+export const ProductSemanticRegistrySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    productId: z.string().min(1),
+    descriptors: z.record(z.string().regex(SEMANTIC_KEY_REGEX), SemanticDescriptorSchema),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional()
+  })
+  .strict();
+
 export const WorkspaceLayoutV1Schema = z
   .object({
     schemaVersion: z.literal(1),
     id: z.string().min(1),
     productId: z.string().min(1),
-    revision: z.number().int().nonnegative(),
+    revision: z.number().int().positive('Revisão persistida do layout deve ser um inteiro positivo (>= 1)'),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
     title: z.string().min(1).max(150),
@@ -224,7 +234,20 @@ export const WorkspaceLayoutV1Schema = z
   })
   .strict()
   .superRefine((layout, ctx) => {
-    // Validação de integridade referencial interna: cada blockId em cada seção deve existir em blocks
+    // 1. Validação de consistência do mapa de blocos (key == block.id)
+    for (const [key, block] of Object.entries(layout.blocks)) {
+      if (key !== block.id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Chave do mapa de blocos "${key}" não corresponde ao id do bloco "${block.id}"`,
+          path: ['blocks', key]
+        });
+      }
+    }
+
+    // 2. Validação de unicidade e integridade referencial: UM bloco pertence a EXATAMENTE UMA seção
+    const seenBlockIds = new Set<string>();
+
     for (const section of layout.sections) {
       for (const blockId of section.blockIds) {
         if (!layout.blocks[blockId]) {
@@ -234,6 +257,26 @@ export const WorkspaceLayoutV1Schema = z
             path: ['sections', section.id, 'blockIds']
           });
         }
+
+        if (seenBlockIds.has(blockId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Violação de invariante de propriedade: bloco "${blockId}" referenciado em mais de uma seção.`,
+            path: ['sections', section.id, 'blockIds']
+          });
+        }
+        seenBlockIds.add(blockId);
+      }
+    }
+
+    // 3. Validação contra blocos órfãos / lixo não referenciado
+    for (const blockId of Object.keys(layout.blocks)) {
+      if (!seenBlockIds.has(blockId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Bloco órfão não referenciado por nenhuma seção: "${blockId}"`,
+          path: ['blocks', blockId]
+        });
       }
     }
   });
@@ -254,10 +297,21 @@ export const DatumChangeDraftSchema = z
   })
   .strict();
 
+export const WorkspaceLayoutPatchSchema = z
+  .object({
+    title: z.string().min(1).max(150).optional(),
+    description: z.string().max(500).optional(),
+    sections: z.array(WorkspaceSectionDefSchema).optional(),
+    blocks: z.record(z.string(), WorkspaceBlockDefSchema).optional(),
+    displayOverrides: z.record(z.string(), WorkspaceDisplayOverrideSchema).optional(),
+    metadata: z.record(z.string(), z.string()).optional()
+  })
+  .strict();
+
 export const WorkspaceEditDraftSchema = z
   .object({
     productId: z.string().min(1),
     stagedDatumChanges: z.record(z.string(), DatumChangeDraftSchema),
-    stagedLayoutChanges: z.record(z.string(), z.unknown()).optional()
+    stagedLayoutChanges: WorkspaceLayoutPatchSchema.optional()
   })
   .strict();

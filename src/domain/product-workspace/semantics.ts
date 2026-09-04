@@ -14,7 +14,9 @@ import {
   CanonicalRenamePlan,
   RenameStepAudit,
   SemanticReferenceGraph,
-  SemanticReferenceNode
+  SemanticReferenceNode,
+  ProductSemanticRegistry,
+  ExternalCatalogBindingReference
 } from './types';
 import { CatalogCellBinding } from '../catalog.schema';
 
@@ -162,6 +164,102 @@ export function matchesSemanticQuery(descriptor: SemanticDescriptor, query: stri
 }
 
 // ============================================================================
+// CANONICAL SEMANTIC REGISTRY OPERATIONS (BLOCKER 13)
+// ============================================================================
+
+export function createProductSemanticRegistry(params: {
+  productId: string;
+  descriptors?: Record<string, SemanticDescriptor>;
+}): ProductSemanticRegistry {
+  const now = new Date().toISOString();
+  return {
+    schemaVersion: 1,
+    productId: params.productId,
+    descriptors: params.descriptors || {},
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+export function registerSemanticDescriptor(
+  registry: ProductSemanticRegistry,
+  descriptor: SemanticDescriptor
+): ProductSemanticRegistry {
+  return {
+    ...registry,
+    descriptors: {
+      ...registry.descriptors,
+      [descriptor.canonicalKey]: descriptor
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+export function updateCanonicalDisplayLabel(
+  registry: ProductSemanticRegistry,
+  canonicalKey: string,
+  newDisplayLabel: string
+): ProductSemanticRegistry {
+  const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
+    canonicalKey,
+    displayLabel: newDisplayLabel
+  });
+
+  const updated = updateDisplayLabel(existing, newDisplayLabel);
+
+  return {
+    ...registry,
+    descriptors: {
+      ...registry.descriptors,
+      [canonicalKey]: updated
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+export function addCanonicalAlias(
+  registry: ProductSemanticRegistry,
+  canonicalKey: string,
+  alias: string
+): ProductSemanticRegistry {
+  const existing = registry.descriptors[canonicalKey] || createSemanticDescriptor({
+    canonicalKey,
+    displayLabel: canonicalKey
+  });
+
+  const updated = addAlias(existing, alias);
+
+  return {
+    ...registry,
+    descriptors: {
+      ...registry.descriptors,
+      [canonicalKey]: updated
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+export function removeCanonicalAlias(
+  registry: ProductSemanticRegistry,
+  canonicalKey: string,
+  aliasToRemove: string
+): ProductSemanticRegistry {
+  const existing = registry.descriptors[canonicalKey];
+  if (!existing) return registry;
+
+  const updated = removeAlias(existing, aliasToRemove);
+
+  return {
+    ...registry,
+    descriptors: {
+      ...registry.descriptors,
+      [canonicalKey]: updated
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+// ============================================================================
 // SEMANTIC REFERENCE GRAPH ENGINE
 // ============================================================================
 
@@ -170,7 +268,8 @@ export interface BuildSemanticReferenceGraphParams {
   workbook: ProductWorkbookV2;
   resolvedKnowledge?: ResolvedProductKnowledge;
   familyWorkbook?: ProductWorkbookV2;
-  externalCatalogBindings?: readonly CatalogCellBinding[];
+  semanticRegistry?: ProductSemanticRegistry;
+  externalCatalogBindings?: readonly (CatalogCellBinding | ExternalCatalogBindingReference)[];
   isExternalIndexComplete?: boolean;
 }
 
@@ -355,15 +454,28 @@ export function buildSemanticReferenceGraph(
     }
   }
 
-  // 10. External References (CatalogCellBindings reais fora do ProductWorkbook)
+  // 10. External References (CatalogCellBindings reais fora do ProductWorkbook - Blocker 18)
   if (externalCatalogBindings) {
-    for (const binding of externalCatalogBindings) {
+    for (const item of externalCatalogBindings) {
+      const binding: CatalogCellBinding = 'binding' in item ? item.binding : item;
+      const isContextualized = 'catalogId' in item;
+
       if (binding.semanticKey === canonicalKey) {
+        const containerId = isContextualized
+          ? `${item.catalogId}:${item.pageId}:${item.blockId}`
+          : binding.productId;
+        const containerLabel = isContextualized
+          ? `Catálogo ${item.catalogId} (Página ${item.pageId}, Bloco ${item.blockId}${item.cellKey ? `, Célula ${item.cellKey}` : ''})`
+          : `Catalog Binding (${binding.sourceKind} - ${binding.bindingMode})`;
+        const path = isContextualized
+          ? `catalogs[${item.catalogId}].pages[${item.pageId}].blocks[${item.blockId}]${item.cellKey ? `.cells[${item.cellKey}]` : ''}`
+          : `catalogs[${binding.productId}].cellBindings.${canonicalKey}`;
+
         externalRefs.push({
           locationType: 'catalog_cell_binding',
-          containerId: binding.productId,
-          containerLabel: `Catalog Binding (${binding.sourceKind} - ${binding.bindingMode})`,
-          path: `catalogs[${binding.productId}].cellBindings.${canonicalKey}`,
+          containerId,
+          containerLabel,
+          path,
           isExternal: true
         });
       }
@@ -400,7 +512,8 @@ export interface PlanCanonicalRenameParams {
   workbook: ProductWorkbookV2;
   resolvedKnowledge?: ResolvedProductKnowledge;
   familyWorkbook?: ProductWorkbookV2;
-  externalCatalogBindings?: readonly CatalogCellBinding[];
+  semanticRegistry?: ProductSemanticRegistry;
+  externalCatalogBindings?: readonly (CatalogCellBinding | ExternalCatalogBindingReference)[];
   isExternalIndexComplete?: boolean;
   oldCanonicalKey: string;
   newCanonicalKey: string;
@@ -418,6 +531,7 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
     workbook,
     resolvedKnowledge,
     familyWorkbook,
+    semanticRegistry,
     externalCatalogBindings,
     isExternalIndexComplete,
     oldCanonicalKey,
@@ -447,15 +561,34 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
     errors.push(`Chave antiga "${oldCanonicalKey}" não foi encontrada nos dados do workbook.`);
   }
 
-  // Validação 3: Checagem rigorosa de colisão
+  // Validação 3: Checagem rigorosa de colisão (Blocker 17: canônicas E aliases reservados)
   const datasets = workbook.datasets || [];
   const collisionDatum = datumEntries.find((d) => d.semanticKey === newCanonicalKey);
   const collisionDataset = datasets.find((ds) => ds.semanticKey === newCanonicalKey);
-  const hasCollision = Boolean(collisionDatum || collisionDataset);
+
+  // Checa se a nova chave coincide com aliases reservados por outro descritor semântico
+  let aliasCollisionDescriptor: SemanticDescriptor | undefined;
+  if (semanticRegistry?.descriptors) {
+    for (const desc of Object.values(semanticRegistry.descriptors)) {
+      if (desc.canonicalKey !== oldCanonicalKey) {
+        if (
+          desc.aliases.map((a) => a.toLowerCase()).includes(newCanonicalKey.toLowerCase()) ||
+          desc.deprecatedAliases?.map((a) => a.toLowerCase()).includes(newCanonicalKey.toLowerCase())
+        ) {
+          aliasCollisionDescriptor = desc;
+          break;
+        }
+      }
+    }
+  }
+
+  const hasCollision = Boolean(collisionDatum || collisionDataset || aliasCollisionDescriptor);
   const conflictingTarget = collisionDatum
     ? `TechnicalDatum:${collisionDatum.id}`
     : collisionDataset
     ? `TechnicalDataset:${collisionDataset.id}`
+    : aliasCollisionDescriptor
+    ? `SemanticAlias:${aliasCollisionDescriptor.canonicalKey}`
     : undefined;
 
   if (hasCollision) {
@@ -470,6 +603,7 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
     workbook,
     resolvedKnowledge,
     familyWorkbook,
+    semanticRegistry,
     externalCatalogBindings,
     isExternalIndexComplete
   });

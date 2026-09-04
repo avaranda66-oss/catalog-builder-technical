@@ -1,8 +1,10 @@
 // src/domain/product-workspace/commands.ts
-// Pure immutable command transformations for Human Workspace Customization (PIM.MEGA.WORKSPACE.FOUNDATION1A).
-// Fundamental Rule: REMOVE != DELETE DATUM.
-// Removing a block or a datum from a layout ONLY removes its presentation reference.
-// The canonical TechnicalDatum in ProductWorkbook remains 100% intact and unmutated.
+// Pure immutable command transformations for Human Workspace Customization (PIM.MEGA.WORKSPACE.FOUNDATION1A/1B/1C).
+// Fundamental Rules:
+// 1. REMOVE != DELETE DATUM: Removing a block or a datum from a layout ONLY removes its presentation reference.
+// 2. REVISION AUTHORITY: Any layout mutation bumps layout.revision by 1 (touchWorkspaceLayout).
+// 3. NO-OP IDEMPOTENCY: Commands that result in no state change MUST NOT bump layout.revision.
+// 4. BLOCK OWNERSHIP: A WorkspaceBlock belongs to exactly ONE WorkspaceSection. Removing a section cleans its owned blocks.
 // Zero explicit any.
 
 import {
@@ -11,12 +13,29 @@ import {
   WorkspaceBlockDef,
   WorkspaceBlockSize,
   WorkspaceBlockVisibility,
+  WorkspaceDisplayOverride,
   TechnicalTableBlockDef,
   WorkspaceTechnicalTableDef,
   WorkspaceEditDraft,
   DatumChangeDraft
 } from './types';
 import { updateDisplayLabel, addAlias, removeAlias, createSemanticDescriptor } from './semantics';
+
+// ============================================================================
+// CANONICAL REVISION BUMP HELPER (BLOCKER 7)
+// ============================================================================
+
+/**
+ * Incrementa a revisão do layout e carimba timestamp de atualização UTC.
+ * Invariante: Nunca é chamado em operações NO-OP.
+ */
+export function touchWorkspaceLayout(layout: WorkspaceLayoutV1): WorkspaceLayoutV1 {
+  return {
+    ...layout,
+    revision: layout.revision + 1,
+    updatedAt: new Date().toISOString()
+  };
+}
 
 // ============================================================================
 // SECTION MUTATIONS (IMMUTABLE)
@@ -39,10 +58,12 @@ export function addSection(
     order: layout.sections.length
   };
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: [...layout.sections, newSection]
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function renameSection(
@@ -54,39 +75,56 @@ export function renameSection(
   const trimmed = newTitle.trim();
   if (!trimmed) throw new Error('Título da seção não pode ser vazio');
 
-  return {
+  const section = layout.sections.find((s) => s.id === sectionId);
+  if (!section) return layout;
+
+  const targetDescription = newDescription !== undefined ? newDescription.trim() : section.description;
+  if (section.title === trimmed && section.description === targetDescription) {
+    // NO-OP: Nenhuma alteração real
+    return layout;
+  }
+
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: layout.sections.map((sec) =>
       sec.id === sectionId
         ? {
             ...sec,
             title: trimmed,
-            description: newDescription !== undefined ? newDescription.trim() : sec.description
+            description: targetDescription
           }
         : sec
     )
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function removeSection(layout: WorkspaceLayoutV1, sectionId: string): WorkspaceLayoutV1 {
   const sectionToRemove = layout.sections.find((s) => s.id === sectionId);
-  if (!sectionToRemove) return layout;
+  if (!sectionToRemove) {
+    // NO-OP: Seção inexistente
+    return layout;
+  }
 
   const remainingSections = layout.sections
     .filter((s) => s.id !== sectionId)
     .map((s, idx) => ({ ...s, order: idx }));
 
-  // Remove também blocos órfãos pertencentes apenas a esta seção
+  // BLOCKER 8/9: Invariante de propriedade estrita: um bloco pertence a exatamente uma seção.
+  // Ao remover a seção, limpamos todos os blocos pertencentes a ela de layout.blocks para evitar dangling/órfãos.
   const remainingBlocks = { ...layout.blocks };
   for (const bId of sectionToRemove.blockIds) {
     delete remainingBlocks[bId];
   }
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: remainingSections,
     blocks: remainingBlocks
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function moveSection(
@@ -98,19 +136,25 @@ export function moveSection(
   if (index === -1) return layout;
 
   const targetIndex = direction === 'up' ? index - 1 : index + 1;
-  if (targetIndex < 0 || targetIndex >= layout.sections.length) return layout;
+  if (targetIndex < 0 || targetIndex >= layout.sections.length || index === targetIndex) {
+    // NO-OP: Já no limite
+    return layout;
+  }
 
   const newSections = [...layout.sections];
   const [removed] = newSections.splice(index, 1);
   newSections.splice(targetIndex, 0, removed);
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: newSections.map((s, idx) => ({ ...s, order: idx }))
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function reorderSections(layout: WorkspaceLayoutV1, sectionIds: readonly string[]): WorkspaceLayoutV1 {
+  const currentIds = layout.sections.map((s) => s.id);
   const sectionMap = new Map(layout.sections.map((s) => [s.id, s]));
   const orderedSections: WorkspaceSectionDef[] = [];
 
@@ -122,15 +166,25 @@ export function reorderSections(layout: WorkspaceLayoutV1, sectionIds: readonly 
     }
   }
 
-  // Anexa seções que porventura não tenham sido incluídas na lista
   for (const remaining of sectionMap.values()) {
     orderedSections.push(remaining);
   }
 
-  return {
+  const newIds = orderedSections.map((s) => s.id);
+  const isIdentical =
+    currentIds.length === newIds.length && currentIds.every((id, idx) => id === newIds[idx]);
+
+  if (isIdentical) {
+    // NO-OP: Ordem não se alterou
+    return layout;
+  }
+
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: orderedSections.map((s, idx) => ({ ...s, order: idx }))
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 // ============================================================================
@@ -145,16 +199,24 @@ export function addBlock(
   const section = layout.sections.find((s) => s.id === sectionId);
   if (!section) throw new Error(`Seção "${sectionId}" não encontrada.`);
 
-  return {
+  // Invariante de propriedade: se o bloco já pertencia a outra seção, removemos de lá primeiro
+  const sanitizedSections = layout.sections.map((s) => ({
+    ...s,
+    blockIds: s.blockIds.filter((id) => id !== block.id)
+  }));
+
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     blocks: {
       ...layout.blocks,
       [block.id]: block
     },
-    sections: layout.sections.map((s) =>
+    sections: sanitizedSections.map((s) =>
       s.id === sectionId ? { ...s, blockIds: [...s.blockIds, block.id] } : s
     )
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function removeBlock(
@@ -162,16 +224,23 @@ export function removeBlock(
   sectionId: string,
   blockId: string
 ): WorkspaceLayoutV1 {
+  if (!layout.blocks[blockId]) {
+    // NO-OP: Bloco não existe
+    return layout;
+  }
+
   const newBlocks = { ...layout.blocks };
   delete newBlocks[blockId];
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     blocks: newBlocks,
     sections: layout.sections.map((s) =>
       s.id === sectionId ? { ...s, blockIds: s.blockIds.filter((id) => id !== blockId) } : s
     )
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function renameBlock(layout: WorkspaceLayoutV1, blockId: string, newTitle: string): WorkspaceLayoutV1 {
@@ -183,34 +252,42 @@ export function renameBlock(layout: WorkspaceLayoutV1, blockId: string, newTitle
 
   switch (block.kind) {
     case 'fact_grid':
+      if (block.title === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, title: trimmed };
       break;
     case 'datum_list':
+      if (block.title === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, title: trimmed };
       break;
     case 'technical_table':
+      if (block.tableDef.title === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, tableDef: { ...block.tableDef, title: trimmed } };
       break;
     case 'dataset_view':
+      if (block.customTitle === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, customTitle: trimmed };
       break;
     case 'text_note':
+      if (block.title === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, title: trimmed };
       break;
     case 'source_group':
+      if (block.title === trimmed) return layout; // NO-OP
       updatedBlock = { ...block, title: trimmed };
       break;
     default:
       return layout;
   }
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     blocks: {
       ...layout.blocks,
       [blockId]: updatedBlock
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function moveBlock(
@@ -228,18 +305,27 @@ export function moveBlock(
 
   // Se for na mesma seção
   if (sourceSection && sourceSection.id === targetSectionId) {
+    const currentIndex = sourceSection.blockIds.indexOf(blockId);
     const ids = sourceSection.blockIds.filter((id) => id !== blockId);
     const insertAt = targetIndex !== undefined ? Math.max(0, Math.min(ids.length, targetIndex)) : ids.length;
+
+    if (currentIndex === insertAt) {
+      // NO-OP: Bloco permaneceu no mesmo índice da mesma seção
+      return layout;
+    }
+
     ids.splice(insertAt, 0, blockId);
 
-    return {
+    const updated: WorkspaceLayoutV1 = {
       ...layout,
       sections: layout.sections.map((s) => (s.id === targetSectionId ? { ...s, blockIds: ids } : s))
     };
+
+    return touchWorkspaceLayout(updated);
   }
 
   // Entre seções diferentes
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     sections: layout.sections.map((s) => {
       if (sourceSection && s.id === sourceSection.id) {
@@ -254,6 +340,8 @@ export function moveBlock(
       return s;
     })
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 /**
@@ -268,20 +356,25 @@ export function resizeBlock(
   const block = layout.blocks[blockId];
   if (!block) return layout;
 
+  if (block.size === size) {
+    // NO-OP: Tamanho já é o desejado
+    return layout;
+  }
+
   const updatedBlock: WorkspaceBlockDef = {
     ...block,
     size
   };
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
-    revision: layout.revision + 1,
-    updatedAt: new Date().toISOString(),
     blocks: {
       ...layout.blocks,
       [blockId]: updatedBlock
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 /**
@@ -296,20 +389,25 @@ export function setBlockVisibility(
   const block = layout.blocks[blockId];
   if (!block) return layout;
 
+  if (block.visibility === visibility) {
+    // NO-OP: Visibilidade já é a desejada
+    return layout;
+  }
+
   const updatedBlock: WorkspaceBlockDef = {
     ...block,
     visibility
   };
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
-    revision: layout.revision + 1,
-    updatedAt: new Date().toISOString(),
     blocks: {
       ...layout.blocks,
       [blockId]: updatedBlock
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 // ============================================================================
@@ -325,12 +423,16 @@ export function addDatumToBlock(
   if (!block) return layout;
 
   if (block.kind === 'fact_grid' || block.kind === 'datum_list') {
-    if (block.datumIds.includes(datumId)) return layout;
-    const updated = { ...block, datumIds: [...block.datumIds, datumId] };
-    return {
+    if (block.datumIds.includes(datumId)) {
+      // NO-OP: Já contém o dado
+      return layout;
+    }
+    const updatedBlock = { ...block, datumIds: [...block.datumIds, datumId] };
+    const updated: WorkspaceLayoutV1 = {
       ...layout,
-      blocks: { ...layout.blocks, [blockId]: updated }
+      blocks: { ...layout.blocks, [blockId]: updatedBlock }
     };
+    return touchWorkspaceLayout(updated);
   }
 
   return layout;
@@ -349,11 +451,16 @@ export function removeDatumFromBlock(
   if (!block) return layout;
 
   if (block.kind === 'fact_grid' || block.kind === 'datum_list') {
-    const updated = { ...block, datumIds: block.datumIds.filter((id) => id !== datumId) };
-    return {
+    if (!block.datumIds.includes(datumId)) {
+      // NO-OP: Dado não constava no bloco
+      return layout;
+    }
+    const updatedBlock = { ...block, datumIds: block.datumIds.filter((id) => id !== datumId) };
+    const updated: WorkspaceLayoutV1 = {
       ...layout,
-      blocks: { ...layout.blocks, [blockId]: updated }
+      blocks: { ...layout.blocks, [blockId]: updatedBlock }
     };
+    return touchWorkspaceLayout(updated);
   }
 
   return layout;
@@ -365,9 +472,45 @@ export function moveDatumBetweenGroups(
   sourceBlockId: string,
   targetBlockId: string
 ): WorkspaceLayoutV1 {
-  let nextLayout = removeDatumFromBlock(layout, sourceBlockId, datumId);
-  nextLayout = addDatumToBlock(nextLayout, targetBlockId, datumId);
-  return nextLayout;
+  if (sourceBlockId === targetBlockId) return layout; // NO-OP
+
+  const sourceBlock = layout.blocks[sourceBlockId];
+  const targetBlock = layout.blocks[targetBlockId];
+  if (!sourceBlock || !targetBlock) return layout;
+
+  if (
+    (sourceBlock.kind !== 'fact_grid' && sourceBlock.kind !== 'datum_list') ||
+    (targetBlock.kind !== 'fact_grid' && targetBlock.kind !== 'datum_list')
+  ) {
+    return layout;
+  }
+
+  if (!sourceBlock.datumIds.includes(datumId)) {
+    // NO-OP: Dado não existe no bloco de origem
+    return layout;
+  }
+
+  const updatedSource = {
+    ...sourceBlock,
+    datumIds: sourceBlock.datumIds.filter((id) => id !== datumId)
+  };
+  const updatedTarget = {
+    ...targetBlock,
+    datumIds: targetBlock.datumIds.includes(datumId)
+      ? targetBlock.datumIds
+      : [...targetBlock.datumIds, datumId]
+  };
+
+  const updated: WorkspaceLayoutV1 = {
+    ...layout,
+    blocks: {
+      ...layout.blocks,
+      [sourceBlockId]: updatedSource,
+      [targetBlockId]: updatedTarget
+    }
+  };
+
+  return touchWorkspaceLayout(updated);
 }
 
 // ============================================================================
@@ -390,7 +533,43 @@ export function createCustomTable(
 }
 
 // ============================================================================
-// SEMANTIC DESCRIPTOR COMMANDS
+// WORKSPACE DISPLAY OVERRIDE COMMANDS (BLOCKER 14)
+// ============================================================================
+
+/**
+ * Atualiza ou define um override de exibição visual exclusivo deste layout.
+ * Não altera nem contamina a verdade semântica canônica do produto.
+ */
+export function updateDisplayOverride(
+  layout: WorkspaceLayoutV1,
+  canonicalKey: string,
+  override: WorkspaceDisplayOverride
+): WorkspaceLayoutV1 {
+  const currentOverrides = layout.displayOverrides || {};
+  const existing = currentOverrides[canonicalKey];
+
+  if (
+    existing &&
+    existing.customLabel === override.customLabel &&
+    existing.customDescription === override.customDescription
+  ) {
+    // NO-OP: Override idêntico
+    return layout;
+  }
+
+  const updated: WorkspaceLayoutV1 = {
+    ...layout,
+    displayOverrides: {
+      ...currentOverrides,
+      [canonicalKey]: override
+    }
+  };
+
+  return touchWorkspaceLayout(updated);
+}
+
+// ============================================================================
+// SEMANTIC DESCRIPTOR COMMANDS (FALLBACK / MIGRATION COMPATIBILITY)
 // ============================================================================
 
 export function updateDescriptorDisplayLabel(
@@ -406,13 +585,15 @@ export function updateDescriptorDisplayLabel(
 
   const updatedDesc = updateDisplayLabel(currentDesc, newDisplayLabel);
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     semanticDescriptors: {
       ...currentDescriptors,
       [canonicalKey]: updatedDesc
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function addDescriptorAliasCommand(
@@ -428,13 +609,15 @@ export function addDescriptorAliasCommand(
 
   const updatedDesc = addAlias(currentDesc, alias);
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     semanticDescriptors: {
       ...currentDescriptors,
       [canonicalKey]: updatedDesc
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 export function removeDescriptorAliasCommand(
@@ -448,13 +631,15 @@ export function removeDescriptorAliasCommand(
 
   const updatedDesc = removeAlias(currentDesc, aliasToRemove);
 
-  return {
+  const updated: WorkspaceLayoutV1 = {
     ...layout,
     semanticDescriptors: {
       ...currentDescriptors,
       [canonicalKey]: updatedDesc
     }
   };
+
+  return touchWorkspaceLayout(updated);
 }
 
 // ============================================================================
