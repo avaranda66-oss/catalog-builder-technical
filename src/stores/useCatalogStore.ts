@@ -641,15 +641,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
     debugSetCatalog(mutationKind, currentCatalog, updated, { localRevision: nextRev });
 
+    const isConflict = get().syncStatus === 'conflict';
     set({
       currentCatalog: updated,
       localRevision: nextRev,
       lastMutation: mutation,
       isDirty: true,
-      syncStatus: 'dirty'
+      syncStatus: isConflict ? 'conflict' : 'dirty'
     });
 
-    void get().saveCurrentCatalog();
+    if (!isConflict) {
+      void get().saveCurrentCatalog();
+    }
   },
 
   addPage: (type = 'technical') => {
@@ -1920,6 +1923,22 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return { success: false, status: 'error', error: 'Nenhum documento ativo para salvar.' };
     }
 
+    // INCIDENT GUARD (SUPABASE.CPU.INCIDENT1): Previne storm de chamadas quando catálogo está em conflito 40001
+    if (get().syncStatus === 'conflict') {
+      const queue = getCatalogQueue(currentCatalog.id);
+      queue.hasPending = false;
+      queue.isSaving = false;
+      queue.inFlightPromise = null;
+
+      console.warn('🛡️ [STORM GUARD] saveCurrentCatalog bloqueado: catálogo em conflito de concorrência. Recarregue a versão do servidor.');
+      return {
+        success: false,
+        status: 'conflict',
+        errorCode: '40001',
+        error: 'Conflito de concorrência: recarregue a versão do servidor antes de salvar.'
+      };
+    }
+
     // MODO TEMPLATE: Agendamento de persistência debounced no TemplateStore
     if (editorContext.kind === 'template') {
       const templateId = editorContext.templateId || currentCatalog.id;
@@ -2120,6 +2139,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               errorCode: '40001',
               error: remoteRes.error || 'Este catálogo foi atualizado em outro dispositivo.'
             };
+            queue.hasPending = false;
             set({
               syncStatus: 'conflict',
               syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
@@ -2220,9 +2240,33 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo para flush.' };
     }
 
+    // INCIDENT GUARD (SUPABASE.CPU.INCIDENT1): Previne flush em estado de conflito
+    if (get().syncStatus === 'conflict') {
+      const queue = getCatalogQueue(targetId);
+      queue.hasPending = false;
+      queue.isSaving = false;
+      queue.inFlightPromise = null;
+      console.warn('🛡️ [STORM GUARD] flushCatalog bloqueado: catálogo em conflito de concorrência.');
+      return {
+        success: false,
+        status: 'conflict',
+        errorCode: '40001',
+        error: 'Conflito de concorrência: recarregue a versão do servidor antes de realizar flush.'
+      };
+    }
+
     const queue = getCatalogQueue(targetId);
     if (queue.isSaving && queue.inFlightPromise) {
       await queue.inFlightPromise;
+    }
+
+    if (get().syncStatus === 'conflict') {
+      return {
+        success: false,
+        status: 'conflict',
+        errorCode: '40001',
+        error: 'Conflito de concorrência: recarregue a versão do servidor antes de realizar flush.'
+      };
     }
 
     const current = get();
