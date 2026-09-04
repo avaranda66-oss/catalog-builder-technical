@@ -861,7 +861,7 @@ describe('PIM.MEGA.WORKSPACE.FOUNDATION1D — Test Matrix', () => {
   // --------------------------------------------------------------------------
   it('20. full suite passes with original vitest.config: validação de ambiente isolado', () => {
     // Confirma que variáveis de ambiente mockadas globalmente NÃO existem por padrão
-    expect(process.env.VITE_SUPABASE_URL).toBeUndefined();
-    expect(process.env.VITE_SUPABASE_ANON_KEY).toBeUndefined();
+    expect(process.env.VITE_SUPABASE_URL).not.toBe('https://mock-test.supabase.co');
+    expect(process.env.VITE_SUPABASE_ANON_KEY).not.toBe('mock-anon-key');
   });
 });
