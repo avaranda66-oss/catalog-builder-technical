@@ -567,26 +567,32 @@ BEGIN
 
     -- 14. Auditoria Transacional na library_change_events
     SELECT email INTO v_actor_email FROM auth.users WHERE id = v_actor;
-    v_actor_name := COALESCE(v_actor_email, 'Editor');
+    SELECT coalesce(raw_user_meta_data->>'full_name', email) INTO v_actor_name FROM auth.users WHERE id = v_actor;
+    v_actor_name := COALESCE(v_actor_name, 'Editor');
+    v_actor_email := COALESCE(v_actor_email, '');
 
     INSERT INTO public.library_change_events (
         entity_type,
         entity_id,
-        action,
         family_id,
         product_id,
-        user_id,
-        user_name,
-        details
+        action,
+        summary,
+        actor_id,
+        actor_email,
+        actor_name,
+        created_at
     ) VALUES (
-        'workbook',
-        v_saved_id,
-        CASE WHEN v_existing.id IS NULL THEN 'create' ELSE 'update' END,
+        'product_workbook',
+        v_saved_id::text,
         CASE WHEN v_owner_kind = 'family' THEN v_owner_id ELSE NULL END,
         CASE WHEN v_owner_kind = 'product' THEN v_owner_id ELSE NULL END,
+        CASE WHEN v_existing.id IS NULL THEN 'create' ELSE 'update' END,
+        format('Workbook V2 gravado para %s "%s" (Revisão %s)', v_owner_kind, v_owner_id, v_new_revision),
         v_actor,
+        v_actor_email,
         v_actor_name,
-        format('Workbook V2 gravado para %s "%s" (Revisão %s)', v_owner_kind, v_owner_id, v_new_revision)
+        now()
     );
 
     -- 15. Retorno do payload persistido com a nova revisão atualizada
@@ -697,41 +703,42 @@ BEGIN
         -- 1. Fatos técnicos em product_technical_data_index
         SELECT
             'technical_data'::TEXT AS source_index,
-            t.owner_kind,
-            t.owner_id,
+            wb.owner_kind,
+            wb.owner_id,
             NULL::TEXT AS dataset_id,
             t.module_id,
             t.semantic_key,
             t.label,
-            t.value_text AS value_formatted,
+            t.text_value AS value_formatted,
             t.unit,
             t.status,
             CASE 
                 WHEN p_query IS NULL OR trim(p_query) = '' THEN 1.0::REAL
                 ELSE ts_rank_cd(
-                    to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.value_text, '')),
+                    to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.text_value, '')),
                     plainto_tsquery('simple', p_query)
                 )::REAL
             END AS relevance
         FROM public.product_technical_data_index t
-        WHERE (p_product_id IS NULL OR (t.owner_kind = 'product' AND t.owner_id = p_product_id))
-          AND (p_family_id IS NULL OR (t.owner_kind = 'family' AND t.owner_id = p_family_id))
-          AND (p_query IS NULL OR trim(p_query) = '' OR to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.value_text, '')) @@ plainto_tsquery('simple', p_query))
+        JOIN public.product_workbooks wb ON wb.id = t.workbook_id
+        WHERE (p_product_id IS NULL OR (wb.owner_kind = 'product' AND wb.owner_id = p_product_id))
+          AND (p_family_id IS NULL OR (wb.owner_kind = 'family' AND wb.owner_id = p_family_id))
+          AND (p_query IS NULL OR trim(p_query) = '' OR to_tsvector('simple', COALESCE(t.label, '') || ' ' || COALESCE(t.semantic_key, '') || ' ' || COALESCE(t.text_value, '')) @@ plainto_tsquery('simple', p_query))
 
         UNION ALL
 
         -- 2. Células e tabelas em product_dataset_search_index
         SELECT
             'technical_dataset'::TEXT AS source_index,
-            d.owner_kind,
-            d.owner_id,
+            wb.owner_kind,
+            wb.owner_id,
             d.dataset_id,
             d.module_id,
             d.column_semantic_key AS semantic_key,
             (COALESCE(d.dataset_label, '') || ' · ' || COALESCE(d.column_label, '') || ' [' || COALESCE(d.row_label, '') || ']') AS label,
             d.projected_text AS value_formatted,
             d.projected_unit AS unit,
-            d.status,
+            d.datum_status AS status,
             CASE 
                 WHEN p_query IS NULL OR trim(p_query) = '' THEN 1.0::REAL
                 ELSE ts_rank_cd(
@@ -740,8 +747,9 @@ BEGIN
                 )::REAL
             END AS relevance
         FROM public.product_dataset_search_index d
-        WHERE (p_product_id IS NULL OR (d.owner_kind = 'product' AND d.owner_id = p_product_id))
-          AND (p_family_id IS NULL OR (d.owner_kind = 'family' AND d.owner_id = p_family_id))
+        JOIN public.product_workbooks wb ON wb.id = d.workbook_id
+        WHERE (p_product_id IS NULL OR (wb.owner_kind = 'product' AND wb.owner_id = p_product_id))
+          AND (p_family_id IS NULL OR (wb.owner_kind = 'family' AND wb.owner_id = p_family_id))
           AND (p_kind IS NULL OR d.dataset_kind = p_kind)
           AND (p_query IS NULL OR trim(p_query) = '' OR to_tsvector('simple', COALESCE(d.dataset_label, '') || ' ' || COALESCE(d.column_label, '') || ' ' || COALESCE(d.row_label, '') || ' ' || COALESCE(d.projected_text, '')) @@ plainto_tsquery('simple', p_query))
     )

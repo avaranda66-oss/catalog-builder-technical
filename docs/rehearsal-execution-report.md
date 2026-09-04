@@ -1,7 +1,7 @@
 # PostgreSQL Migration Rehearsal Execution Log (PIM.PRODUCTION.CORE1.1)
-**Data:** 2026-09-04T00:36:26.660Z  
+**Data:** 2026-09-04T01:23:40.593Z  
 **Arquivo de Rehearsal:** `supabase/rehearsals/00023_migration_rehearsal_suite.sql`  
-**SHA-256:** `c1143d868390600416ca82ff518831eebfb730f0f2ac9d8546d400f5c2a4bd20`  
+**SHA-256:** `43c40c8ae5ac9fec9bf9542a8ce727f998e464a53eb9c94cbc39f39338d8b31f`  
 **Status do Rehearsal:** Executável, Validado e Isolado  
 **Garantias Verificadas:**
 1. BEGIN / ROLLBACK isolamento transacional estrito (Zero mutação persistida).

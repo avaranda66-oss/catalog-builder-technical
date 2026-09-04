@@ -1,0 +1,55 @@
+name: PIM 00023 Real PostgreSQL Rehearsal
+
+on:
+  push:
+    branches:
+      - feat/pim-production-core-v1
+  workflow_dispatch:
+
+jobs:
+  real-rehearsal:
+    name: Real PostgreSQL 00022 -> 00023 Rehearsal
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Initialize Supabase and Prepare Migrations up to 00022
+        run: |
+          supabase init
+          # Move 00023 out temporarily so supabase start only applies up to 00022
+          mkdir -p /tmp/rehearsal_staging
+          cp supabase/migrations/00023_product_dataset_search_index.sql /tmp/rehearsal_staging/00023_product_dataset_search_index.sql
+          rm supabase/migrations/00023_product_dataset_search_index.sql
+
+      - name: Start Supabase Local Stack (Applies 00001 to 00022)
+        run: |
+          supabase start
+
+      - name: Restore 00023 Migration File
+        run: |
+          cp /tmp/rehearsal_staging/00023_product_dataset_search_index.sql supabase/migrations/00023_product_dataset_search_index.sql
+
+      - name: Execute Real PostgreSQL Rehearsal Suite (Points 01 to 28)
+        run: |
+          chmod +x scripts/rehearsal-real-pg.sh
+          ./scripts/rehearsal-real-pg.sh 2>&1 | tee rehearsal-execution.log
+
+      - name: Upload Rehearsal Execution Evidence Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rehearsal-execution-evidence
+          path: rehearsal-execution.log
+          retention-days: 30
