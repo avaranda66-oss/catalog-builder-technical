@@ -13,6 +13,7 @@ import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
 import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
+import { MegaWorkspaceLab } from './labs/product-workspace-ux';
 
 import { getSupabase } from './services/supabase.service';
 import { handleCatalogRealtimeEvent } from './services/realtime.service';
@@ -196,6 +197,15 @@ export const App: React.FC = () => {
 
   if (isPrintRoute) {
     return <PrintDocumentView />;
+  }
+
+  const isLabRoute = typeof window !== 'undefined' && (
+    window.location.pathname === '/__lab/product-workspace' ||
+    new URLSearchParams(window.location.search).get('lab') === 'product-workspace'
+  );
+
+  if (isLabRoute) {
+    return <MegaWorkspaceLab />;
   }
 
   return (
