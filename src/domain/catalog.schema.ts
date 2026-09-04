@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { StructuralSectionData, StructuralSectionDataSchema } from './canvas-layout.schema';
+import {
+  type TableCellLiteralContent,
+  TableCellLiteralContentSchema
+} from './table-values';
 
 export * from './canvas-layout.schema';
 export * from './canvas-layout.engine';
+export * from './table-values';
 
 export const BlockTypeSchema = z.enum([
   'text',
@@ -89,7 +94,7 @@ export interface CatalogCellBinding {
   moduleKey?: string;
   datasetId?: string;
   bindingMode: 'live' | 'snapshot' | 'review_required';
-  snapshot?: any; // TableCellLiteralContent
+  snapshot?: TableCellLiteralContent;
   sourceRevision?: number;
   stale?: boolean;
 }
@@ -98,6 +103,7 @@ export interface CatalogTableRow {
   id: string;
   productRefId?: string;
   localOverrides?: Record<string, string>;
+  cellValues?: Record<string, TableCellLiteralContent>;
   cellBindings?: Record<string, CatalogCellBinding>;
   customNotes?: string;
   order?: number;
@@ -302,7 +308,7 @@ export const CatalogCellBindingSchema = z.object({
   moduleKey: z.string().optional(),
   datasetId: z.string().optional(),
   bindingMode: z.enum(['live', 'snapshot', 'review_required']).default('live'),
-  snapshot: z.any().optional(),
+  snapshot: TableCellLiteralContentSchema.optional(),
   sourceRevision: z.number().int().positive().optional(),
   stale: z.boolean().optional()
 });
@@ -311,6 +317,7 @@ export const CatalogTableRowSchema = z.object({
   id: z.string(),
   productRefId: z.string().optional().default(''),
   localOverrides: z.record(z.string()).optional().default({}),
+  cellValues: z.record(TableCellLiteralContentSchema).optional().default({}),
   cellBindings: z.record(CatalogCellBindingSchema).optional().default({}),
   customNotes: z.string().optional().default(''),
   order: z.number().int().optional().default(0)
