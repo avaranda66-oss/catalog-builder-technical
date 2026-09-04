@@ -29,8 +29,8 @@ BEGIN
     ON CONFLICT (id) DO UPDATE SET role = 'editor', is_active = true;
 
     -- Fixture: Família de Teste
-    INSERT INTO public.product_families (id, name, description, created_at, updated_at)
-    VALUES (v_test_fam, 'Família Rehearsal', 'Família criada para ensaio transacional da migration 00023', now(), now())
+    INSERT INTO public.product_families (id, name, slug, description, created_at, updated_at)
+    VALUES (v_test_fam, 'Família Rehearsal', 'familia-rehearsal', 'Família criada para ensaio transacional da migration 00023', now(), now())
     ON CONFLICT (id) DO NOTHING;
 
     -- Fixture: Produtos de Teste
@@ -43,8 +43,8 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     -- Fixture: Documento Fonte Autorizado
-    INSERT INTO public.product_source_documents (id, product_id, title, document_type, revision, created_at)
-    VALUES ('doc_rehearsal_001', v_test_prod_v2, 'Manual de Engenharia Rehearsal', 'manual', 'Rev. C', now())
+    INSERT INTO public.product_source_documents (id, title, document_type, revision, created_at)
+    VALUES ('doc_rehearsal_001', 'Manual de Engenharia Rehearsal', 'manual', 'Rev. C', now())
     ON CONFLICT (id) DO NOTHING;
 
     RAISE NOTICE '[REHEARSAL][SETUP][OK] Fixtures criadas com sucesso (User, Profile, Family, Products, SourceDocument).';
