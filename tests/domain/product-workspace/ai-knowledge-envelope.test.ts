@@ -117,7 +117,7 @@ describe('AI Product Knowledge Envelope & Zero-Loss Provenance', () => {
           label: 'Anotação Interna',
           value: { type: 'text', value: 'Uso experimental em bancada' },
           evidence: [], // NENHUMA FONTE
-          status: 'draft'
+          status: 'verified'
         },
         'datum-unverified'
       )
