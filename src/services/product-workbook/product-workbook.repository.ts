@@ -200,7 +200,7 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
     if (!data) {
       throw new ProductWorkbookPersistenceError(
         'EMPTY_RESPONSE',
-        'Erro inesperado: RPC save_product_workbook_v1 retornou payload vazio.'
+        `Erro inesperado: RPC ${rpcName} retornou payload vazio.`
       );
     }
 

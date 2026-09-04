@@ -142,4 +142,34 @@ describe('PIM Core V1 — Migration 00023 & V2 Persistence Contract', () => {
     expect(fakeRpc).toHaveBeenCalledWith('get_product_workbook_v2', expect.any(Object));
     expect(fakeRpc).toHaveBeenCalledWith('get_product_workbook_v1', expect.any(Object));
   });
+
+  it('REPO-V2-NO-FALLBACK: saveWorkbook para V2 NUNCA chama save_product_workbook_v1 se RPC V2 falhar', async () => {
+    const fakeRpc = vi.fn().mockImplementation((name) => {
+      if (name === 'save_product_workbook_v2') {
+        return Promise.resolve({
+          data: null,
+          error: { code: '42883', message: 'function public.save_product_workbook_v2 does not exist' }
+        });
+      }
+      return Promise.resolve({ data: null, error: new Error('save_product_workbook_v1 should NEVER be called for V2') });
+    });
+
+    const fakeClient = { rpc: fakeRpc } as any;
+    const repo = new SupabaseProductWorkbookRepository(fakeClient);
+
+    const baseWb = createWorkbook({ owner: { kind: 'product', id: VALID_PRODUCT_UUID }, revision: 0 });
+    const wbV2 = ensureWorkbookV2(baseWb);
+    expect(wbV2.schemaVersion).toBe(2);
+
+    await expect(
+      repo.saveWorkbook({
+        workbook: wbV2,
+        expectedRevision: 0
+      })
+    ).rejects.toThrow('function public.save_product_workbook_v2 does not exist');
+
+    expect(fakeRpc).toHaveBeenCalledTimes(1);
+    expect(fakeRpc).toHaveBeenCalledWith('save_product_workbook_v2', expect.any(Object));
+    expect(fakeRpc).not.toHaveBeenCalledWith('save_product_workbook_v1', expect.any(Object));
+  });
 });
