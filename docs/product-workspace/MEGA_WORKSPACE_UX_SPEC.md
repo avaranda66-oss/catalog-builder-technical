@@ -227,9 +227,12 @@ The defining benchmark for this UX: **Can an experienced industrial instrumentat
 | 8 | "Quero criar uma tabela" | ≤ 2 clicks | **1 click** (`[+ Adicionar]` → `Tabela`) | **PASS** |
 | 9 | "Quero mudar o nome de uma seção" | ≤ 2 actions | **2 actions** (`[Editar]` → inline edit) | **PASS** |
 | 10 | "Quero mover a tabela para cima" | ≤ 2 actions | **2 actions** (`[Editar]` → click `⇡ Subir`) | **PASS** |
+| 11 | "Existem duas fontes conflitantes; consigo perceber que o sistema não sabe qual é verdadeira?" | 1 click | **1 click** (Abre `SourceDrawer` com alerta de divergência e neutralidade) | **PASS** |
+| 12 | "Quero esconder Peso do Resumo sem apagar Peso do produto." | ≤ 2 clicks | **1 click** (Clique no ícone de visibilidade sem exclusão de dados) | **PASS** |
+| 13 | "Quero mudar o nome visual Estabilidade sem alterar a identidade técnica." | ≤ 2 clicks | **2 clicks** (Altera displayLabel preservando canonicalKey) | **PASS** |
 
 ---
 
 ## 11. Conclusion & Next Phase Integration
 
-The UX Lab in `src/labs/product-workspace-ux/` demonstrates that industrial-grade density can coexist with visual elegance and intuitive operations. With the interaction contract formalised in `MEGA_WORKSPACE_INTERACTION_CONTRACT.md`, the interface is ready to be bound to Agent 1's domain foundation in `PIM.MEGA.WORKSPACE.INTEGRATION1`.
+The UX Lab in `src/labs/product-workspace-ux/` demonstrates that industrial-grade density can coexist with visual elegance, human calmness, and strict data safety. With the interaction contract and type maps formalised, the interface is ready to be bound to Agent 1's domain foundation in `PIM.MEGA.WORKSPACE.INTEGRATION1`.

@@ -236,10 +236,9 @@ export function useMegaWorkspaceState() {
     );
   }, [recordUndo]);
 
-  // Editar fato técnico existente
-  const updateFact = useCallback(
+  // Editar fato técnico existente (Internal Updater)
+  const applyFactUpdateInternal = useCallback(
     (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
-      recordUndo('Especificação técnica atualizada');
       setSections((prev) =>
         prev.map((sec) => ({
           ...sec,
@@ -285,7 +284,91 @@ export function useMegaWorkspaceState() {
         }))
       );
     },
+    []
+  );
+
+  // Editar fato técnico existente
+  const updateFact = useCallback(
+    (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
+      recordUndo('Especificação técnica atualizada');
+      applyFactUpdateInternal(factId, draft, scopeChoice);
+    },
+    [recordUndo, applyFactUpdateInternal]
+  );
+
+  // Blocker 7: Fact Editing is STAGING (não comita imediatamente no banco canônico)
+  const stageFactEdit = useCallback(
+    (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
+      recordUndo('Especificação técnica alterada no rascunho de trabalho');
+      applyFactUpdateInternal(factId, draft, scopeChoice);
+    },
+    [recordUndo, applyFactUpdateInternal]
+  );
+
+  // Blocker 10 Scenario 13: Alterar nome visual sem alterar identidade técnica semântica
+  const updateFactDisplayLabel = useCallback(
+    (factId: string, newLabel: string) => {
+      recordUndo(`Nome de exibição alterado para "${newLabel}"`);
+      setSections((prev) =>
+        prev.map((sec) => ({
+          ...sec,
+          blocks: sec.blocks.map((b) => {
+            if (b.data.kind === 'hero_summary' || b.data.kind === 'fact_grid') {
+              return {
+                ...b,
+                data: {
+                  ...b.data,
+                  facts: b.data.facts.map((f) =>
+                    f.id === factId ? { ...f, label: newLabel.trim() } : f
+                  )
+                }
+              };
+            }
+            return b;
+          })
+        }))
+      );
+    },
     [recordUndo]
+  );
+
+  // Blocker 10 Scenario 12: Esconder fato da visualização/resumo sem apagar do produto
+  const toggleFactVisibility = useCallback(
+    (factId: string, hidden?: boolean) => {
+      recordUndo('Visibilidade da especificação alterada');
+      setSections((prev) =>
+        prev.map((sec) => ({
+          ...sec,
+          blocks: sec.blocks.map((b) => {
+            if (b.data.kind === 'hero_summary' || b.data.kind === 'fact_grid') {
+              return {
+                ...b,
+                data: {
+                  ...b.data,
+                  facts: b.data.facts.map((f) =>
+                    f.id === factId
+                      ? { ...f, isHidden: hidden !== undefined ? hidden : !f.isHidden }
+                      : f
+                  )
+                }
+              };
+            }
+            return b;
+          })
+        }))
+      );
+    },
+    [recordUndo]
+  );
+
+  const hideFact = useCallback(
+    (factId: string) => toggleFactVisibility(factId, true),
+    [toggleFactVisibility]
+  );
+
+  const unhideFact = useCallback(
+    (factId: string) => toggleFactVisibility(factId, false),
+    [toggleFactVisibility]
   );
 
   // Resolver conflito
@@ -578,6 +661,11 @@ export function useMegaWorkspaceState() {
     deleteBlock,
     addFact,
     updateFact,
+    stageFactEdit,
+    updateFactDisplayLabel,
+    toggleFactVisibility,
+    hideFact,
+    unhideFact,
     resolveConflict,
     performSafeSemanticRename,
     applyAIOrganization,

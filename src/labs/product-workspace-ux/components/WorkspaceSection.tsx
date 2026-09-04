@@ -37,6 +37,7 @@ interface WorkspaceSectionProps {
   onOpenSemantic: (fact: FactItem) => void;
   onReviewConflict: (conflict: FactItem) => void;
   onToggleMegaTableFullscreen: (block: WorkspaceBlock) => void;
+  onToggleFactVisibility?: (factId: string) => void;
 }
 
 export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
@@ -56,7 +57,8 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
   onOpenSource,
   onOpenSemantic,
   onReviewConflict,
-  onToggleMegaTableFullscreen
+  onToggleMegaTableFullscreen,
+  onToggleFactVisibility
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(section.title);
@@ -263,6 +265,7 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
                     onEditFact={onEditFact}
                     onOpenSource={onOpenSource}
                     onOpenSemantic={onOpenSemantic}
+                    onToggleFactVisibility={onToggleFactVisibility}
                   />
                 )}
 
@@ -274,6 +277,7 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
                     onEditFact={onEditFact}
                     onOpenSource={onOpenSource}
                     onOpenSemantic={onOpenSemantic}
+                    onToggleFactVisibility={onToggleFactVisibility}
                   />
                 )}
 

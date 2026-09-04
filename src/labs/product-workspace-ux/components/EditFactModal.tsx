@@ -100,17 +100,15 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
 
           {/* Diálogo Humano de Herança da Linha */}
           {fact.originScope === 'family' && (
-            <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-2">
-              <div className="flex items-center gap-1.5 text-blue-900 font-bold">
-                <Users className="w-4 h-4 text-blue-700" />
-                <span>Esta informação é compartilhada com outros modelos da linha</span>
+            <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
+                <Users className="w-4 h-4 text-blue-700 shrink-0" />
+                <span>Esta informação é compartilhada pela Linha TA.</span>
               </div>
-              <p className="text-[11px] text-blue-800 leading-relaxed">
-                Ao alterar este valor, você pode aplicar apenas a este modelo específico ou propagar a alteração para todos os calibradores da família.
-              </p>
 
-              <div className="space-y-1.5 pt-1">
-                <label className="flex items-center gap-2 p-1.5 bg-white border border-blue-200 rounded-lg cursor-pointer">
+              <div className="space-y-1 pt-1">
+                <span className="block text-[11px] font-semibold text-slate-700">Alterar:</span>
+                <label className="flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-lg cursor-pointer hover:border-blue-300">
                   <input
                     type="radio"
                     name="scopeEdit"
@@ -119,11 +117,11 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
                     className="text-[#003366] focus:ring-0"
                   />
                   <span className="font-semibold text-slate-800">
-                    Alterar somente no TA-25N
+                    Somente TA-25N
                   </span>
                 </label>
 
-                <label className="flex items-center gap-2 p-1.5 bg-white border border-blue-200 rounded-lg cursor-pointer">
+                <label className="flex items-center gap-2 p-2 bg-white border border-blue-200 rounded-lg cursor-pointer hover:border-blue-300">
                   <input
                     type="radio"
                     name="scopeEdit"
@@ -132,7 +130,7 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
                     className="text-[#003366] focus:ring-0"
                   />
                   <span className="font-semibold text-slate-800">
-                    Alterar em todos os modelos desta linha
+                    Todos os modelos da Linha TA
                   </span>
                 </label>
               </div>
@@ -146,7 +144,9 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
                 <FileText className="w-4 h-4 text-slate-400" />
                 <div>
                   <div className="font-semibold text-slate-700">{fact.source.documentCode}</div>
-                  <div className="text-[11px] text-slate-500">Página {fact.source.page}</div>
+                  {fact.source.page && (
+                    <div className="text-[11px] text-slate-500">Página {fact.source.page}</div>
+                  )}
                 </div>
               </div>
               <button
@@ -159,7 +159,7 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
             </div>
           )}
 
-          {/* Ações */}
+          {/* Ações (Staged Fact Edit) */}
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -172,7 +172,7 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
               type="submit"
               className="px-4 py-2 text-xs font-semibold text-white bg-[#003366] hover:bg-[#00254d] rounded-lg shadow-xs"
             >
-              Salvar alterações
+              Salvar alteração no rascunho
             </button>
           </div>
         </form>

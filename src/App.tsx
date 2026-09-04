@@ -13,11 +13,16 @@ import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
 import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
-import { MegaWorkspaceLab } from './labs/product-workspace-ux';
 
 import { getSupabase } from './services/supabase.service';
 import { handleCatalogRealtimeEvent } from './services/realtime.service';
 import { DevRealtimeHUD } from './components/common/DevRealtimeHUD';
+
+// Lab Route: ONLY available in DEV mode via dynamic lazy import.
+// In production builds (import.meta.env.DEV === false), this is tree-shaken and completely unreachable.
+const MegaWorkspaceLabLazy = import.meta.env.DEV
+  ? React.lazy(() => import('./labs/product-workspace-ux').then((m) => ({ default: m.MegaWorkspaceLab })))
+  : null;
 
 export const App: React.FC = () => {
   const { activeTab } = useUIStore();
@@ -199,13 +204,20 @@ export const App: React.FC = () => {
     return <PrintDocumentView />;
   }
 
-  const isLabRoute = typeof window !== 'undefined' && (
-    window.location.pathname === '/__lab/product-workspace' ||
-    new URLSearchParams(window.location.search).get('lab') === 'product-workspace'
-  );
+  // DEV-ONLY: Laboratório do Mega Product Workspace
+  if (import.meta.env.DEV && MegaWorkspaceLabLazy) {
+    const isLabRoute = typeof window !== 'undefined' && (
+      window.location.pathname === '/__lab/product-workspace' ||
+      new URLSearchParams(window.location.search).get('lab') === 'product-workspace'
+    );
 
-  if (isLabRoute) {
-    return <MegaWorkspaceLab />;
+    if (isLabRoute) {
+      return (
+        <React.Suspense fallback={<div className="p-8 text-slate-600 font-sans">Carregando UX Lab...</div>}>
+          <MegaWorkspaceLabLazy />
+        </React.Suspense>
+      );
+    }
   }
 
   return (
