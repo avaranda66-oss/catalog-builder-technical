@@ -201,7 +201,6 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
   };
 
   const handleRemoveTableRow = (idx: number) => {
-    if (tableRows.length <= 1) return;
     const updated = tableRows.filter((_, i) => i !== idx);
     updateBlock(pageId, block.id, {
       customData: { ...customData, tableRows: updated }
@@ -486,19 +485,18 @@ export const InsertsVisualBlock: React.FC<InsertsVisualBlockProps> = ({
                   </td>
                 ))}
                 <td className="p-1.5 text-center no-print">
-                  {tableRows.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveTableRow(rIdx);
-                      }}
-                      className="text-slate-400 hover:text-red-600 p-0.5"
-                      data-editor-action="true"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveTableRow(rIdx);
+                    }}
+                    className="text-slate-400 hover:text-red-600 p-0.5"
+                    data-editor-action="true"
+                    title="Remover linha"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </td>
               </tr>
             ))}

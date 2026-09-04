@@ -23,7 +23,9 @@ import {
   ShieldAlert,
   AlertCircle,
   Save,
-  BookOpen
+  BookOpen,
+  Copy,
+  Clipboard
 } from 'lucide-react';
 import { ContentBlock, TableColumnConfig } from '../../../domain/catalog.schema';
 import { TableSetCellContentCommand } from '../../../domain/document-commands/table-commands.types';
@@ -34,19 +36,37 @@ import {
   LegacyTableCoordinateBridge,
   TablePresetId,
   TablePresentationModel,
-  TablePresentationTemplate,
   TableColorToken,
   TableDensityToken,
   TableBorderToken,
   TableStripeToken,
   getTablePreset
 } from '../../../domain/table-core';
+import { TableColorValue } from '../../../domain/table-core/table.types';
 import { TableCellLiteralContent } from '../../../domain/table-values';
 import {
-  getUserPresentationTemplates,
-  saveUserPresentationTemplate,
-  deleteUserPresentationTemplate
-} from '../../../services/user-presentation-templates.service';
+  CURATED_PALETTES,
+  CuratedPalette,
+  SavedPalette,
+  SavedTableStyle,
+  getSavedPalettes,
+  saveUserPalette,
+  getSavedTableStyles,
+  saveUserTableStyle,
+  applyPaletteToTable,
+  copyTableAppearance,
+  hasTableAppearanceInClipboard,
+  pasteTableAppearance,
+  resetToActivePreset,
+  resetToSystemDefault,
+  calculateContrastRatio,
+  autoFixContrast
+} from '../../../domain/appearance/catalog-appearance';
+import {
+  TABLE_COLOR_TOKEN_HEX_MAP,
+  isHexColor,
+  normalizeHexColor
+} from '../table-core/table-tokens';
 import { resolveLegacyProductField, AVAILABLE_DEFAULT_FIELDS } from '../../../domain/table-binding';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
@@ -98,10 +118,16 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
   const [inputDraft, setInputDraft] = useState<string>('');
   const [isInputDirty, setIsInputDirty] = useState<boolean>(false);
   const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
-  const [userTemplates, setUserTemplates] = useState<TablePresentationTemplate[]>([]);
+  const [isCustomizingColors, setIsCustomizingColors] = useState<boolean>(false);
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
+  const [pasteSuccess, setPasteSuccess] = useState<boolean>(false);
+  const [applyAllCount, setApplyAllCount] = useState<number | null>(null);
+  const [savedPalettesList, setSavedPalettesList] = useState<SavedPalette[]>([]);
+  const [savedStylesList, setSavedStylesList] = useState<SavedTableStyle[]>([]);
 
   useEffect(() => {
-    setUserTemplates(getUserPresentationTemplates());
+    setSavedPalettesList(getSavedPalettes());
+    setSavedStylesList(getSavedTableStyles());
   }, []);
 
   // Resolução pura do valor de origem usando resolver legado compartilhado
@@ -248,9 +274,35 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
     updateBlock(pageId, block.id, {
       customData: {
         ...(block.customData || {}),
-        presentationPresetId: presetId
+        presentationPresetId: presetId,
+        tablePresentation: updatedPres
       }
     });
+  };
+
+  const currentPresentation: TablePresentationModel =
+    (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
+
+  const toHex = (val?: TableColorValue): string => {
+    if (!val) return '#ffffff';
+    if (isHexColor(val)) return normalizeHexColor(val);
+    return TABLE_COLOR_TOKEN_HEX_MAP[val as TableColorToken] || '#ffffff';
+  };
+
+  const handleColorChange = (key: keyof TablePresentationModel, hexVal: string) => {
+    const normalized = normalizeHexColor(hexVal);
+    const updated: TablePresentationModel = {
+      ...currentPresentation,
+      [key]: normalized
+    };
+    applyTablePresentationTemplate(block.id, updated);
+  };
+
+  const handleApplyPalette = (palette: CuratedPalette | SavedPalette) => {
+    if (adaptRes.table) {
+      const updatedTable = applyPaletteToTable(adaptRes.table, palette);
+      applyTablePresentationTemplate(block.id, updatedTable.presentation);
+    }
   };
 
   // =========================================================================
@@ -871,37 +923,290 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
         </div>
       </div>
 
-      {/* Tema de Apresentação Industrial (TABLE.V2.PRESENTATION1, Emenda 9, 10, 18) */}
-      <div className="space-y-2 pt-2 border-t border-slate-200">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-          <Palette className="w-3.5 h-3.5 text-[#001f3f]" />
-          <span>Tema de Apresentação Industrial</span>
+      {/* Tema de Apresentação & Design System V2 (TABLE.V2.PRESENTATION1, Emendas 4-20) */}
+      <div className="space-y-3 pt-2 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+            <Palette className="w-3.5 h-3.5 text-[#001f3f]" />
+            <span>Design System & Apresentação</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCustomizingColors(!isCustomizingColors)}
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors ${
+              isCustomizingColors
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+          >
+            {isCustomizingColors ? 'Ocultar Cores' : 'Personalizar Cores'}
+          </button>
         </div>
-        <select
-          value={currentPresetId}
-          onChange={(e) => handlePresetChange(e.target.value as TablePresetId)}
-          className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded bg-white font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="presys_clean_technical">Presys Técnico Limpo (Padrão)</option>
-          <option value="dense_spec_matrix">Matriz Densa de Especificações</option>
-          <option value="model_comparison">Comparativo de Modelos</option>
-          <option value="parameter_value">Parâmetro & Valor (Compacto)</option>
-          <option value="presys_dark_navy">Presys Azul Marinho Oficial</option>
-          <option value="presys_blue_comparison">Presys Azul Comparativo</option>
-          <option value="gray_technical">Cinza Técnico Industrial</option>
-          <option value="corporate_slate">Ardósia Corporativa</option>
-        </select>
 
-        {/* Controles Globais de Apresentação (Densidade, Bordas, Listras) */}
+        {/* 1. Presets Canônicos Built-in (12 Presets Preservados e Restaurados) */}
+        <div>
+          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+            Preset de Apresentação
+          </label>
+          <select
+            value={currentPresetId}
+            onChange={(e) => handlePresetChange(e.target.value as TablePresetId)}
+            className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded bg-white font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="presys_clean_technical">Presys Técnico Limpo (Padrão)</option>
+            <option value="dense_spec_matrix">Matriz Densa de Especificações</option>
+            <option value="model_comparison">Comparativo de Modelos</option>
+            <option value="parameter_value">Parâmetro & Valor (Compacto)</option>
+            <option value="presys_dark_navy">Presys Azul Marinho Oficial</option>
+            <option value="presys_blue_comparison">Presys Azul Comparativo</option>
+            <option value="gray_technical">Cinza Técnico Industrial</option>
+            <option value="corporate_slate">Ardósia Corporativa</option>
+            <option value="precision_blue">Precision Blue (Classic Metrology)</option>
+            <option value="family_header">Family Header (Família & Sessão)</option>
+            <option value="minimal_light">Minimal Light (Fundo Claro)</option>
+            <option value="high_contrast">Alto Contraste (Zebra Marcada)</option>
+          </select>
+        </div>
+
+        {/* 2. Paletas de Cores Curadas & Salvas do Usuário (Emendas 9, 10) */}
+        <div>
+          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+            Paleta de Cores da Tabela
+          </label>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const palId = e.target.value;
+              if (!palId) return;
+              if (palId.startsWith('style:')) {
+                const styleId = palId.slice(6);
+                const foundStyle = savedStylesList.find((s) => s.id === styleId);
+                if (foundStyle) {
+                  applyTablePresentationTemplate(block.id, foundStyle.presentation);
+                }
+                return;
+              }
+              const curated = CURATED_PALETTES.find((p) => p.id === palId);
+              if (curated) {
+                handleApplyPalette(curated);
+                return;
+              }
+              const saved = savedPalettesList.find((p) => p.id === palId);
+              if (saved) {
+                handleApplyPalette(saved);
+              }
+            }}
+            className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded bg-white font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="" disabled>Selecione uma paleta ou estilo salvo...</option>
+            <optgroup label="Paletas Industriais Canônicas">
+              {CURATED_PALETTES.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+            {savedPalettesList.length > 0 && (
+              <optgroup label="Minhas Paletas Salvas">
+                {savedPalettesList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {savedStylesList.length > 0 && (
+              <optgroup label="Meus Estilos de Tabela Salvos">
+                {savedStylesList.map((s) => (
+                  <option key={s.id} value={`style:${s.id}`}>
+                    {s.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+
+        {/* 3. Painel de Cores Customizadas (Live Draft local, Validação HEX e WCAG Contrast) */}
+        {isCustomizingColors && (
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5">
+            <span className="text-[11px] font-bold text-slate-800 block">Personalização Livre de Cores</span>
+
+            {/* Aviso de Contraste WCAG (Emenda 20) */}
+            {(() => {
+              const bgHex = toHex(currentPresentation.headerBackgroundToken);
+              const textHex = toHex(currentPresentation.headerTextColorToken);
+              const ratio = calculateContrastRatio(textHex, bgHex);
+              const isLow = ratio < 4.5;
+              if (!isLow) return null;
+              return (
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-amber-800 font-bold">⚠ Baixo contraste no cabeçalho — {ratio}:1</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const safeColor = autoFixContrast(bgHex);
+                        handleColorChange('headerTextColorToken', safeColor);
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
+                    >
+                      Corrigir automaticamente
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-amber-700">
+                    O padrão WCAG AA recomenda razão mínima de 4.5:1 para texto padrão.
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div className="grid grid-cols-2 gap-2">
+              {/* Header BG */}
+              <div>
+                <label className="text-[9.5px] font-semibold text-slate-600 block">Fundo Cabeçalho:</label>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    type="color"
+                    value={toHex(currentPresentation.headerBackgroundToken)}
+                    onChange={(e) => handleColorChange('headerBackgroundToken', e.target.value)}
+                    className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={toHex(currentPresentation.headerBackgroundToken)}
+                    onChange={(e) => {
+                      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                        handleColorChange('headerBackgroundToken', e.target.value);
+                      }
+                    }}
+                    className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Header Text */}
+              <div>
+                <label className="text-[9.5px] font-semibold text-slate-600 block">Texto Cabeçalho:</label>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    type="color"
+                    value={toHex(currentPresentation.headerTextColorToken)}
+                    onChange={(e) => handleColorChange('headerTextColorToken', e.target.value)}
+                    className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={toHex(currentPresentation.headerTextColorToken)}
+                    onChange={(e) => {
+                      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                        handleColorChange('headerTextColorToken', e.target.value);
+                      }
+                    }}
+                    className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Border Color */}
+              <div>
+                <label className="text-[9.5px] font-semibold text-slate-600 block">Cor da Borda:</label>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    type="color"
+                    value={toHex(currentPresentation.borderColorToken)}
+                    onChange={(e) => handleColorChange('borderColorToken', e.target.value)}
+                    className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={toHex(currentPresentation.borderColorToken)}
+                    onChange={(e) => {
+                      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                        handleColorChange('borderColorToken', e.target.value);
+                      }
+                    }}
+                    className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Section BG */}
+              <div>
+                <label className="text-[9.5px] font-semibold text-slate-600 block">Fundo da Seção:</label>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    type="color"
+                    value={toHex(currentPresentation.sectionBackgroundToken)}
+                    onChange={(e) => handleColorChange('sectionBackgroundToken', e.target.value)}
+                    className="w-7 h-7 p-0 border border-slate-300 rounded cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={toHex(currentPresentation.sectionBackgroundToken)}
+                    onChange={(e) => {
+                      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(e.target.value)) {
+                        handleColorChange('sectionBackgroundToken', e.target.value);
+                      }
+                    }}
+                    className="w-20 px-1.5 py-0.5 text-[11px] font-mono border border-slate-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Ações de Salvar Paleta e Salvar Estilo (Emendas 9, 10, 11) */}
+            <div className="flex gap-2 pt-1 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  const name = window.prompt('Nome para sua paleta personalizada:');
+                  if (name && name.trim()) {
+                    saveUserPalette({
+                      name: name.trim(),
+                      headerBackground: currentPresentation.headerBackgroundToken,
+                      headerText: currentPresentation.headerTextColorToken,
+                      sectionBackground: currentPresentation.sectionBackgroundToken,
+                      sectionText: currentPresentation.sectionTextColorToken,
+                      bodyBackground: currentPresentation.bodyBackgroundToken,
+                      borderColor: currentPresentation.borderColorToken
+                    });
+                    setSavedPalettesList(getSavedPalettes());
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded"
+              >
+                <Save className="w-3 h-3" />
+                <span>Salvar Paleta</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const name = window.prompt('Nome para o seu estilo de tabela:');
+                  if (name && name.trim()) {
+                    saveUserTableStyle(name.trim(), currentPresentation);
+                    setSavedStylesList(getSavedTableStyles());
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded"
+              >
+                <Save className="w-3 h-3" />
+                <span>Salvar Estilo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 4. Densidade, Bordas e Listras */}
         <div className="grid grid-cols-3 gap-1.5 pt-1">
           <div>
             <label className="text-[9px] text-slate-500 block">Densidade:</label>
             <select
-              value={block.customData?.tablePresentation?.density || 'regular'}
+              value={currentPresentation.density}
               onChange={(e) => {
-                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
                 applyTablePresentationTemplate(block.id, {
-                  ...currentPres,
+                  ...currentPresentation,
                   density: e.target.value as TableDensityToken
                 });
               }}
@@ -915,11 +1220,10 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           <div>
             <label className="text-[9px] text-slate-500 block">Bordas:</label>
             <select
-              value={block.customData?.tablePresentation?.borderStyle || 'all'}
+              value={currentPresentation.borderStyle}
               onChange={(e) => {
-                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
                 applyTablePresentationTemplate(block.id, {
-                  ...currentPres,
+                  ...currentPresentation,
                   borderStyle: e.target.value as TableBorderToken
                 });
               }}
@@ -934,11 +1238,10 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           <div>
             <label className="text-[9px] text-slate-500 block">Zebra:</label>
             <select
-              value={block.customData?.tablePresentation?.stripeStyle || 'none'}
+              value={currentPresentation.stripeStyle}
               onChange={(e) => {
-                const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
                 applyTablePresentationTemplate(block.id, {
-                  ...currentPres,
+                  ...currentPresentation,
                   stripeStyle: e.target.value as TableStripeToken
                 });
               }}
@@ -951,66 +1254,111 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
           </div>
         </div>
 
-        {/* Salvar / Carregar Templates Personalizados (Emenda 9, 18) */}
-        <div className="pt-2 border-t border-slate-100 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-700">Templates Personalizados</span>
-            <button
-              type="button"
-              onClick={() => {
-                const name = window.prompt('Digite um nome para o seu template de apresentação:');
-                if (name && name.trim()) {
-                  const currentPres = (block.customData?.tablePresentation as TablePresentationModel) || getTablePreset(currentPresetId);
-                  saveUserPresentationTemplate({
-                    id: `tmpl_${Date.now()}`,
-                    name: name.trim(),
-                    presentation: currentPres
-                  });
-                  setUserTemplates(getUserPresentationTemplates());
-                }
-              }}
-              className="text-[10px] text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
-            >
-              <Save className="w-3 h-3" />
-              <span>Salvar Atual</span>
-            </button>
-          </div>
+        {/* 5. Ações de Reset com Semântica Clara (Emenda 12) */}
+        <div className="flex gap-2 pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => {
+              if (adaptRes.table) {
+                const resetTable = resetToActivePreset(adaptRes.table);
+                applyTablePresentationTemplate(block.id, resetTable.presentation);
+              }
+            }}
+            className="flex-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 transition-colors"
+            title="Remove custom overrides e restaura o built-in preset ativo"
+          >
+            Restaurar estilo do preset
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (adaptRes.table) {
+                const sysTable = resetToSystemDefault(adaptRes.table);
+                applyTablePresentationTemplate(block.id, sysTable.presentation);
+                updateBlock(pageId, block.id, {
+                  customData: { ...(block.customData || {}), presentationPresetId: 'presys_clean_technical' }
+                });
+              }
+            }}
+            className="flex-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 transition-colors"
+            title="Restaura o padrão do sistema (presys_clean_technical)"
+          >
+            Restaurar padrão do sistema
+          </button>
+        </div>
 
-          {userTemplates.length > 0 ? (
-            <div className="space-y-1 max-h-28 overflow-y-auto">
-              {userTemplates.map((tmpl) => (
-                <div key={tmpl.id} className="flex items-center justify-between bg-white px-2 py-1 rounded border border-slate-200 text-xs">
-                  <span className="truncate max-w-[150px] font-medium text-slate-700">{tmpl.name}</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => applyTablePresentationTemplate(block.id, tmpl.presentation)}
-                      className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded font-semibold"
-                    >
-                      Aplicar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        deleteUserPresentationTemplate(tmpl.id);
-                        setUserTemplates(getUserPresentationTemplates());
-                      }}
-                      className="text-slate-400 hover:text-red-600 p-0.5"
-                      title="Excluir template"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[10px] text-slate-400 italic">Nenhum template personalizado salvo.</p>
+        {/* 6. Copiar / Colar Aparência no Clipboard Interno (Emenda 13) */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              copyTableAppearance(currentPresentation);
+              setCopySuccess(true);
+              setTimeout(() => setCopySuccess(false), 2000);
+            }}
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded"
+          >
+            <Copy className="w-3 h-3" />
+            <span>{copySuccess ? 'Copiado!' : 'Copiar Aparência'}</span>
+          </button>
+          <button
+            type="button"
+            disabled={!hasTableAppearanceInClipboard()}
+            onClick={() => {
+              if (adaptRes.table) {
+                const pasted = pasteTableAppearance(adaptRes.table);
+                if (pasted) {
+                  applyTablePresentationTemplate(block.id, pasted.presentation);
+                  setPasteSuccess(true);
+                  setTimeout(() => setPasteSuccess(false), 2000);
+                }
+              }
+            }}
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10.5px] font-semibold rounded border ${
+              hasTableAppearanceInClipboard()
+                ? 'text-slate-800 bg-white hover:bg-slate-50 border-slate-300 cursor-pointer'
+                : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed'
+            }`}
+          >
+            <Clipboard className="w-3 h-3" />
+            <span>{pasteSuccess ? 'Colado!' : 'Colar Aparência'}</span>
+          </button>
+        </div>
+
+        {/* 7. Escopo de Aplicação: Somente Table Core V2 (Emenda 14) */}
+        <div className="pt-1.5 border-t border-slate-100 space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              const state = useCatalogStore.getState();
+              const catalog = state.currentCatalog;
+              let count = 0;
+              if (catalog && catalog.pages) {
+                for (const pg of catalog.pages) {
+                  for (const blk of pg.blocks || []) {
+                    if (blk.type === 'specs_table') {
+                      state.applyTablePresentationTemplate(blk.id, currentPresentation);
+                      count++;
+                    }
+                  }
+                }
+              }
+              setApplyAllCount(count);
+              setTimeout(() => setApplyAllCount(null), 3000);
+            }}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#003366] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+          >
+            <span>Aplicar a todas as Tabelas Técnicas V2 deste catálogo</span>
+          </button>
+          {applyAllCount !== null && (
+            <p className="text-[10px] text-center text-emerald-600 font-bold">
+              {applyAllCount} tabela(s) técnica(s) V2 atualizada(s)!
+            </p>
           )}
         </div>
 
-        <p className="text-[10px] text-slate-500">
-          Altera estilos, densidade e bordas da tabela preservando 100% dos dados e vínculos intactos.
+        <p className="text-[10px] text-slate-400">
+          Altera estilos e apresentação preservando 100% dos dados, células e vínculos intactos.
         </p>
       </div>
 
@@ -1045,7 +1393,7 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
         </button>
       </div>
 
-      {/* Gerenciador de Linhas (BOUND, HYBRID, MANUAL) */}
+      {/* Gerenciador de Linhas (BOUND, HYBRID, MANUAL + Empty State Badge + Unrestricted Delete) */}
       <div className="space-y-2 pt-2 border-t border-slate-200">
         <div className="flex items-center justify-between">
           <span className="font-bold text-slate-800 text-xs">Modelos na Tabela</span>
@@ -1066,6 +1414,9 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
               const hasOverrides = Object.keys(row.localOverrides || {}).length > 0;
               const hasCellBindings = Object.keys(row.cellBindings || {}).length > 0;
 
+              // Detecção de Linha Manual Vazia para o Inspector (Emenda 2)
+              const isManualEmpty = isManual && (!row.localOverrides || Object.values(row.localOverrides).every((v) => !v || String(v).trim().length === 0));
+
               const rowBadge = isManual
                 ? { label: 'MANUAL', class: 'bg-slate-200 text-slate-700 border-slate-300' }
                 : (hasOverrides || hasCellBindings)
@@ -1080,6 +1431,11 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                       <span className={`text-[8.5px] font-bold px-1 py-0.2 rounded border ${rowBadge.class}`}>
                         {rowBadge.label}
                       </span>
+                      {isManualEmpty && (
+                        <span className="text-[8.5px] font-semibold px-1 py-0.2 rounded border bg-amber-50 text-amber-700 border-amber-200">
+                          Ainda sem conteúdo
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] text-slate-400 truncate block">
                       {prod ? `${prod.model || prod.code} (${prod.family || 'Instrumento'})` : (row.productRefId ? 'Produto da Biblioteca' : 'Linha 100% Manual')}
@@ -1097,17 +1453,16 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
                         Desvincular
                       </button>
                     )}
-                    {rows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRowFromTable(block.id, row.id)}
-                        className="text-slate-300 hover:text-red-600 p-1 rounded transition-colors"
-                        title="Remover linha da tabela"
-                        aria-label={`Remover modelo ${rowLabel}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    {/* Exclusão sem travas: permite excluir inclusive a última linha (Emenda 2) */}
+                    <button
+                      type="button"
+                      onClick={() => removeRowFromTable(block.id, row.id)}
+                      className="text-slate-300 hover:text-red-600 p-1 rounded transition-colors"
+                      title="Remover linha da tabela"
+                      aria-label={`Remover modelo ${rowLabel}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );

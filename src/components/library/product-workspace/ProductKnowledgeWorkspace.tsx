@@ -33,6 +33,7 @@ import { WorkspaceTechnicalDataTab } from './WorkspaceTechnicalDataTab';
 import { WorkspaceTechnicalTablesTab } from './WorkspaceTechnicalTablesTab';
 import { WorkspaceDocumentsEvidenceTab } from './WorkspaceDocumentsEvidenceTab';
 import { ProductAssetManager } from '../ProductAssetManager';
+import { HumanFriendlyErrorBanner } from '../../common/HumanFriendlyErrorBanner';
 
 interface ProductKnowledgeWorkspaceProps {
   product: Product;
@@ -242,9 +243,15 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
       )}
 
       {errorMessage && (
-        <div className="bg-rose-50 border-b border-rose-200 p-3 text-xs text-rose-800 shrink-0">
-          {errorMessage}
-        </div>
+        <HumanFriendlyErrorBanner
+          title="Falha ao carregar conhecimento do produto"
+          message={errorMessage}
+          details={errorMessage}
+          onRetry={async () => {
+            await loadWorkbooks();
+          }}
+          onDismiss={() => setErrorMessage(null)}
+        />
       )}
 
       {/* 2. Barra de Abas do Workspace (Fases 10-17) */}

@@ -458,15 +458,14 @@ export const PropertiesPanel: React.FC = () => {
                               placeholder="Descrição dos furos"
                               className="flex-1 px-1.5 py-0.5 text-xs border border-slate-300 rounded bg-white"
                             />
-                            {tableRows.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => updateCustom({ tableRows: tableRows.filter((_, i) => i !== rIdx) })}
-                                className="text-slate-400 hover:text-red-600 p-0.5"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => updateCustom({ tableRows: tableRows.filter((_, i) => i !== rIdx) })}
+                              className="text-slate-400 hover:text-red-600 p-0.5"
+                              title="Remover linha"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}
