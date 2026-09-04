@@ -3,12 +3,20 @@
 // Guarantees:
 // 1. Canonical key stability for integrations & AI.
 // 2. Unrestricted human editing of display labels and aliases.
-// 3. 10-step safe canonical rename planner (no live persistence, pure domain contract).
+// 3. Complete SemanticReferenceGraph mapping internal and external reference blast radius.
+// 4. Safe canonical rename planner (Plan Only, zero live execution without total proof).
 // Zero explicit any.
 
 import { isValidSemanticKey } from '../product-workbook/schema';
 import { ProductWorkbookV2, ResolvedProductKnowledge } from '../product-workbook/types';
-import { SemanticDescriptor, CanonicalRenamePlan, RenameStepAudit } from './types';
+import {
+  SemanticDescriptor,
+  CanonicalRenamePlan,
+  RenameStepAudit,
+  SemanticReferenceGraph,
+  SemanticReferenceNode
+} from './types';
+import { CatalogCellBinding } from '../catalog.schema';
 
 /**
  * Cria um SemanticDescriptor padrão a partir de chave canônica e label inicial.
@@ -31,6 +39,13 @@ export function createSemanticDescriptor(params: {
   const trimmedLabel = displayLabel.trim();
   if (!trimmedLabel) {
     throw new Error('displayLabel não pode ser vazio');
+  }
+
+  // Validação de colisão semântica: alias não pode colidir com a chave canônica
+  for (const alias of aliases) {
+    if (alias.trim().toLowerCase() === canonicalKey.toLowerCase()) {
+      throw new Error(`Colisão de alias detectada: alias não pode ser idêntico à canonicalKey "${canonicalKey}"`);
+    }
   }
 
   const normalizedAliases = Array.from(
@@ -65,7 +80,7 @@ export function updateDisplayLabel(
   // Se o displayLabel antigo for relevante, adiciona aos aliases para não perder busca
   const oldLabel = descriptor.displayLabel.trim();
   const updatedAliases = new Set(descriptor.aliases);
-  if (oldLabel.toLowerCase() !== trimmed.toLowerCase()) {
+  if (oldLabel.toLowerCase() !== trimmed.toLowerCase() && oldLabel.toLowerCase() !== descriptor.canonicalKey.toLowerCase()) {
     updatedAliases.add(oldLabel);
   }
 
@@ -78,10 +93,25 @@ export function updateDisplayLabel(
 
 /**
  * Adiciona um novo alias/sinônimo para busca e compreensão por IA.
+ * Rejeita colisões com a chave canônica.
  */
-export function addAlias(descriptor: SemanticDescriptor, newAlias: string): SemanticDescriptor {
+export function addAlias(
+  descriptor: SemanticDescriptor,
+  newAlias: string,
+  existingCanonicalKeys?: readonly string[]
+): SemanticDescriptor {
   const trimmed = newAlias.trim();
   if (!trimmed) return descriptor;
+
+  // Rejeita colisão com a própria chave canônica
+  if (trimmed.toLowerCase() === descriptor.canonicalKey.toLowerCase()) {
+    throw new Error(`Colisão semântica: alias "${trimmed}" não pode ser idêntico à canonicalKey.`);
+  }
+
+  // Rejeita colisão com outras chaves canônicas conhecidas
+  if (existingCanonicalKeys && existingCanonicalKeys.includes(trimmed.toLowerCase())) {
+    throw new Error(`Colisão semântica: alias "${trimmed}" colide com chave canônica de produto existente.`);
+  }
 
   if (trimmed.toLowerCase() === descriptor.displayLabel.toLowerCase()) {
     return descriptor;
@@ -132,12 +162,246 @@ export function matchesSemanticQuery(descriptor: SemanticDescriptor, query: stri
 }
 
 // ============================================================================
-// CANONICAL RENAME PLANNER (10-STEP SAFE DOMAIN ARCHITECTURE)
+// SEMANTIC REFERENCE GRAPH ENGINE
+// ============================================================================
+
+export interface BuildSemanticReferenceGraphParams {
+  canonicalKey: string;
+  workbook: ProductWorkbookV2;
+  resolvedKnowledge?: ResolvedProductKnowledge;
+  familyWorkbook?: ProductWorkbookV2;
+  externalCatalogBindings?: readonly CatalogCellBinding[];
+  isExternalIndexComplete?: boolean;
+}
+
+/**
+ * Constrói o grafo exaustivo de referências para uma chave semântica.
+ * Mapeia cada ponto do sistema onde a chave canônica é lida ou escrita.
+ */
+export function buildSemanticReferenceGraph(
+  params: BuildSemanticReferenceGraphParams
+): SemanticReferenceGraph {
+  const {
+    canonicalKey,
+    workbook,
+    resolvedKnowledge,
+    familyWorkbook,
+    externalCatalogBindings,
+    isExternalIndexComplete
+  } = params;
+
+  const internalRefs: SemanticReferenceNode[] = [];
+  const externalRefs: SemanticReferenceNode[] = [];
+
+  // 1. TechnicalDatum.semanticKey
+  for (const datum of Object.values(workbook.data)) {
+    if (datum.semanticKey === canonicalKey) {
+      internalRefs.push({
+        locationType: 'technical_datum',
+        containerId: datum.id,
+        containerLabel: datum.label,
+        path: `data.${datum.id}.semanticKey`,
+        isExternal: false
+      });
+    }
+  }
+
+  // 2. TechnicalDataset.semanticKey & 3. DatasetColumn.semanticKey
+  if (workbook.datasets) {
+    for (const ds of workbook.datasets) {
+      if (ds.semanticKey === canonicalKey) {
+        internalRefs.push({
+          locationType: 'technical_dataset',
+          containerId: ds.id,
+          containerLabel: ds.label,
+          path: `datasets[${ds.id}].semanticKey`,
+          isExternal: false
+        });
+      }
+      for (const col of ds.columns) {
+        if (col.semanticKey === canonicalKey) {
+          internalRefs.push({
+            locationType: 'dataset_column',
+            containerId: `${ds.id}:${col.id}`,
+            containerLabel: `${ds.label} -> ${col.label}`,
+            path: `datasets[${ds.id}].columns[${col.id}].semanticKey`,
+            isExternal: false
+          });
+        }
+      }
+    }
+  }
+
+  // 4. SavedView.datumKeys & 5. SavedView.ordering
+  if (workbook.savedViews) {
+    for (const sv of workbook.savedViews) {
+      if (sv.datumKeys && sv.datumKeys.includes(canonicalKey)) {
+        internalRefs.push({
+          locationType: 'saved_view_datum_keys',
+          containerId: sv.id,
+          containerLabel: sv.name,
+          path: `savedViews[${sv.id}].datumKeys`,
+          isExternal: false
+        });
+      }
+
+      const svAny = sv as unknown as Record<string, unknown>;
+      const isOrderedByKey =
+        (Array.isArray(sv.ordering) && sv.ordering.includes(canonicalKey)) ||
+        (svAny.ordering as unknown) === canonicalKey ||
+        svAny.sortBy === canonicalKey ||
+        (Array.isArray(svAny.columnOrder) && svAny.columnOrder.includes(canonicalKey));
+
+      if (isOrderedByKey) {
+        internalRefs.push({
+          locationType: 'saved_view_ordering',
+          containerId: sv.id,
+          containerLabel: sv.name,
+          path: `savedViews[${sv.id}].ordering`,
+          isExternal: false
+        });
+      }
+    }
+  }
+
+  // 6. Overrides targetSemanticKey & 7. DatasetOverrides targetSemanticKey & 9. Product inherited resolution
+  if (workbook.overrides) {
+    for (const [key, ov] of Object.entries(workbook.overrides)) {
+      if (ov.targetSemanticKey === canonicalKey || key === canonicalKey) {
+        internalRefs.push({
+          locationType: 'product_override_target',
+          containerId: key,
+          containerLabel: `Product Override: ${ov.targetSemanticKey} (${ov.mode})`,
+          path: `overrides.${key}.targetSemanticKey`,
+          isExternal: false
+        });
+      }
+    }
+  }
+
+  if (workbook.datasetOverrides) {
+    for (const [key, ov] of Object.entries(workbook.datasetOverrides)) {
+      if (ov.targetSemanticKey === canonicalKey || key === canonicalKey) {
+        internalRefs.push({
+          locationType: 'dataset_override_target',
+          containerId: key,
+          containerLabel: `Dataset Override: ${ov.targetSemanticKey} (${ov.mode})`,
+          path: `datasetOverrides.${key}.targetSemanticKey`,
+          isExternal: false
+        });
+      }
+    }
+  }
+
+  if (resolvedKnowledge) {
+    // Resolução de dados e detecção de overrides em tempo de execução
+    if (resolvedKnowledge.effectiveData && resolvedKnowledge.effectiveData.has(canonicalKey)) {
+      const eff = resolvedKnowledge.effectiveData.get(canonicalKey)!;
+      if (eff.origin === 'product_override') {
+        const alreadyMapped = internalRefs.some(
+          (r) => r.locationType === 'product_override_target' && r.containerId === eff.datum.id
+        );
+        if (!alreadyMapped) {
+          internalRefs.push({
+            locationType: 'product_override_target',
+            containerId: eff.datum.id,
+            containerLabel: `Override Datum: ${eff.datum.label}`,
+            path: `resolvedKnowledge.effectiveData[${canonicalKey}]`,
+            isExternal: false
+          });
+        }
+      }
+      internalRefs.push({
+        locationType: 'inherited_resolution',
+        containerId: eff.datum.id,
+        containerLabel: `Resolved: ${eff.origin}`,
+        path: `resolvedKnowledge.effectiveData[${canonicalKey}]`,
+        isExternal: false
+      });
+    }
+
+    // Overrides de datasets
+    if (resolvedKnowledge.effectiveDatasets && resolvedKnowledge.effectiveDatasets.has(canonicalKey)) {
+      const effDs = resolvedKnowledge.effectiveDatasets.get(canonicalKey)!;
+      if (effDs.origin === 'product_override') {
+        const alreadyMapped = internalRefs.some(
+          (r) => r.locationType === 'dataset_override_target' && r.containerId === effDs.dataset.id
+        );
+        if (!alreadyMapped) {
+          internalRefs.push({
+            locationType: 'dataset_override_target',
+            containerId: effDs.dataset.id,
+            containerLabel: `Override Dataset: ${effDs.dataset.label}`,
+            path: `resolvedKnowledge.effectiveDatasets[${canonicalKey}]`,
+            isExternal: false
+          });
+        }
+      }
+    }
+  }
+
+  // 8. Family workbook references
+  if (familyWorkbook) {
+    for (const fDatum of Object.values(familyWorkbook.data)) {
+      if (fDatum.semanticKey === canonicalKey) {
+        internalRefs.push({
+          locationType: 'family_datum_reference',
+          containerId: fDatum.id,
+          containerLabel: `Family Datum: ${fDatum.label}`,
+          path: `familyWorkbook.data.${fDatum.id}.semanticKey`,
+          isExternal: false
+        });
+      }
+    }
+  }
+
+  // 10. External References (CatalogCellBindings reais fora do ProductWorkbook)
+  if (externalCatalogBindings) {
+    for (const binding of externalCatalogBindings) {
+      if (binding.semanticKey === canonicalKey) {
+        externalRefs.push({
+          locationType: 'catalog_cell_binding',
+          containerId: binding.productId,
+          containerLabel: `Catalog Binding (${binding.sourceKind} - ${binding.bindingMode})`,
+          path: `catalogs[${binding.productId}].cellBindings.${canonicalKey}`,
+          isExternal: true
+        });
+      }
+    }
+  }
+
+  const hasExternalUncertainty = isExternalIndexComplete !== true;
+  const externalStatus: 'KNOWN' | 'UNKNOWN' | 'REQUIRES_INDEX' =
+    isExternalIndexComplete === true ? 'KNOWN' : externalRefs.length > 0 ? 'UNKNOWN' : 'REQUIRES_INDEX';
+
+  const externalWarning =
+    externalStatus !== 'KNOWN'
+      ? 'Atenção: Os bindings reais de catálogos e tabelas editoriais fora do ProductWorkbook não foram indexados exaustivamente. Não é seguro executar a renomeação sem indexação reversa.'
+      : undefined;
+
+  return {
+    canonicalKey,
+    internalReferences: internalRefs,
+    externalReferences: {
+      status: externalStatus,
+      items: externalRefs,
+      warning: externalWarning
+    },
+    totalReferenceCount: internalRefs.length + externalRefs.length,
+    hasExternalUncertainty
+  };
+}
+
+// ============================================================================
+// CANONICAL RENAME PLANNER (10-STEP SAFE DOMAIN ARCHITECTURE - PLAN ONLY)
 // ============================================================================
 
 export interface PlanCanonicalRenameParams {
   workbook: ProductWorkbookV2;
   resolvedKnowledge?: ResolvedProductKnowledge;
+  familyWorkbook?: ProductWorkbookV2;
+  externalCatalogBindings?: readonly CatalogCellBinding[];
+  isExternalIndexComplete?: boolean;
   oldCanonicalKey: string;
   newCanonicalKey: string;
   rationale: string;
@@ -146,20 +410,21 @@ export interface PlanCanonicalRenameParams {
 
 /**
  * Planejador puro de renomeação controlada de uma canonicalKey.
- * Verifica os 10 pilares de segurança antes de permitir qualquer mutação futura:
- * 1. Verificação de colisão da nova chave com chaves existentes;
- * 2. Mapeamento de todos os Datums afetados;
- * 3. Preservação mandatória da chave antiga como alias para evitar quebra de integrações;
- * 4. Registro formal de auditoria com rationale e timestamp;
- * 5. Preservação de lookup de IA através do histórico de aliases;
- * 6. Mapeamento de Datasets associados que utilizam a chave em colunas ou metadata;
- * 7. Mapeamento de Saved Views que utilizam a chave;
- * 8. Mapeamento de vínculos de tabela (Table Bindings);
- * 9. Preservação de exportabilidade consistente;
- * 10. Geração de plano e instruções explícitas de rollback.
+ * Mapeia o grafo real de impacto sem executar mutações live.
+ * Fail-Closed: se houver incerteza sobre bindings externos, isExecutable = false.
  */
 export function planCanonicalRename(params: PlanCanonicalRenameParams): CanonicalRenamePlan {
-  const { workbook, oldCanonicalKey, newCanonicalKey, rationale, plannedBy } = params;
+  const {
+    workbook,
+    resolvedKnowledge,
+    familyWorkbook,
+    externalCatalogBindings,
+    isExternalIndexComplete,
+    oldCanonicalKey,
+    newCanonicalKey,
+    rationale,
+    plannedBy
+  } = params;
   const errors: string[] = [];
 
   // Validação 1: Sintaxe da nova chave
@@ -199,42 +464,38 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
     );
   }
 
-  // Mapeamento 4: Datasets afetados
-  const affectedDatasetIds: string[] = [];
-  for (const ds of datasets) {
-    if (ds.semanticKey === oldCanonicalKey) {
-      affectedDatasetIds.push(ds.id);
-    } else if (ds.columns.some((col) => col.semanticKey === oldCanonicalKey)) {
-      affectedDatasetIds.push(ds.id);
-    }
-  }
+  // Construção do Grafo Exaustivo de Referências
+  const referenceGraph = buildSemanticReferenceGraph({
+    canonicalKey: oldCanonicalKey,
+    workbook,
+    resolvedKnowledge,
+    familyWorkbook,
+    externalCatalogBindings,
+    isExternalIndexComplete
+  });
 
-  // Mapeamento 5: Saved Views afetadas
-  const affectedSavedViewIds: string[] = [];
-  if (workbook.savedViews) {
-    for (const sv of workbook.savedViews) {
-      if (sv.datumKeys.includes(oldCanonicalKey)) {
-        affectedSavedViewIds.push(sv.id);
-      }
-    }
-  }
+  // Mapeamento de Datasets afetados
+  const affectedDatasetIds = Array.from(
+    new Set(
+      referenceGraph.internalReferences
+        .filter((ref) => ref.locationType === 'technical_dataset' || ref.locationType === 'dataset_column')
+        .map((ref) => ref.containerId.split(':')[0])
+    )
+  );
 
-  // Mapeamento 6: Table Bindings (se presentes no metadata do workbook)
-  const affectedTableBindingIds: string[] = [];
-  if (workbook.metadata?.tableBindings) {
-    try {
-      const bindings = JSON.parse(workbook.metadata.tableBindings) as Record<string, string>;
-      for (const [bindingId, key] of Object.entries(bindings)) {
-        if (key === oldCanonicalKey) {
-          affectedTableBindingIds.push(bindingId);
-        }
-      }
-    } catch {
-      // metadata não contém JSON válido, ignorar
-    }
-  }
+  // Mapeamento de Saved Views afetadas
+  const affectedSavedViewIds = Array.from(
+    new Set(
+      referenceGraph.internalReferences
+        .filter((ref) => ref.locationType === 'saved_view_datum_keys' || ref.locationType === 'saved_view_ordering')
+        .map((ref) => ref.containerId)
+    )
+  );
 
-  // Validação 7: Rationale obrigatória
+  // Mapeamento de Table Bindings externos
+  const affectedTableBindingIds = referenceGraph.externalReferences.items.map((ref) => ref.containerId);
+
+  // Validação de Rationale obrigatória
   const trimmedRationale = rationale.trim();
   if (trimmedRationale.length < 5) {
     errors.push('Rationale detalhada (mínimo 5 caracteres) é obrigatória para planejar renomeação canônica.');
@@ -248,11 +509,18 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
 
   const rollbackInstructions =
     `Para reverter, aplicar plano inverso: trocar "${newCanonicalKey}" de volta para "${oldCanonicalKey}", ` +
-    `remover "${newCanonicalKey}" dos aliases e restaurar referências originais em datasets e saved views.`;
+    `remover "${newCanonicalKey}" dos aliases e restaurar referências originais em datasets, saved views e catálogos.`;
+
+  // BLOCKER 4 & 5: Fail closed para execução live
+  // O plano é válido estruturalmente se não violar regras de domínio,
+  // mas só é executável se NÃO houver incerteza em referências externas!
+  const isValid = errors.length === 0;
+  const isExecutable = isValid && !hasCollision && !referenceGraph.hasExternalUncertainty;
 
   return {
     oldCanonicalKey,
     newCanonicalKey,
+    referenceGraph,
     affectedDatumIds,
     affectedDatasetIds,
     affectedSavedViewIds,
@@ -267,7 +535,8 @@ export function planCanonicalRename(params: PlanCanonicalRenameParams): Canonica
       instructions: rollbackInstructions
     },
     auditEntry,
-    isValid: errors.length === 0,
-    validationErrors: errors
+    isValid,
+    validationErrors: errors,
+    isExecutable
   };
 }
