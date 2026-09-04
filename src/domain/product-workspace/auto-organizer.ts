@@ -437,17 +437,22 @@ export function autoOrganizeProductWorkspace(params: AutoOrganizeParams): Worksp
     });
   }
 
+  const now = new Date().toISOString();
+
   return {
     schemaVersion: 1,
     id: `layout_${productId}`,
     productId,
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
     title: `Ficha Técnica Inteligente — ${workbook.owner.id}`,
     description: 'Layout human-first gerado com separação estrita entre autoridade de dados e apresentação.',
     sections,
     blocks,
     semanticDescriptors,
     metadata: {
-      generatedAt: new Date().toISOString(),
+      generatedAt: now,
       autoOrganized: 'true'
     }
   };

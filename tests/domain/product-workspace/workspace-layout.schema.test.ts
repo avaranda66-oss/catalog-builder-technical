@@ -9,11 +9,14 @@ import {
 import { WorkspaceLayoutV1 } from '../../../src/domain/product-workspace/types';
 
 describe('Workspace Layout V1 Schema & Referential Integrity', () => {
-  it('valida com sucesso um layout V1 íntegro com seções e blocos', () => {
+  it('valida com sucesso um layout V1 íntegro com seções, blocos e revisão', () => {
     const validLayout: WorkspaceLayoutV1 = {
       schemaVersion: 1,
       id: 'layout-ta25n',
       productId: 'prod-ta25n',
+      revision: 1,
+      createdAt: '2026-09-04T10:00:00.000Z',
+      updatedAt: '2026-09-04T10:00:00.000Z',
       title: 'Ficha Técnica TA-25N',
       description: 'Layout canônico de homologação',
       sections: [
@@ -28,6 +31,8 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
         'block-facts-1': {
           id: 'block-facts-1',
           kind: 'fact_grid',
+          size: 'large',
+          visibility: 'visible',
           title: 'Destaques',
           datumIds: ['datum-range-1', 'datum-accuracy-1'],
           columns: 2
@@ -44,6 +49,7 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
       schemaVersion: 1,
       id: 'layout-ta25n',
       productId: 'prod-ta25n',
+      revision: 1,
       title: 'Ficha Técnica TA-25N',
       sections: [
         {
@@ -63,7 +69,26 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
     }
   });
 
-  it('valida descritores semânticos com regex rigoroso de chave canônica', () => {
+  it('rejeita fail-closed layout com campos arbitrários desconhecidos (strict schema)', () => {
+    const layoutWithUnknownField = {
+      schemaVersion: 1,
+      id: 'layout-ta25n',
+      productId: 'prod-ta25n',
+      revision: 1,
+      title: 'Ficha Técnica TA-25N',
+      sections: [],
+      blocks: {},
+      maliciousOrUnknownProperty: 'injected_value'
+    };
+
+    const parseResult = WorkspaceLayoutV1Schema.safeParse(layoutWithUnknownField);
+    expect(parseResult.success).toBe(false);
+    if (!parseResult.success) {
+      expect(parseResult.error.issues[0].code).toBe('unrecognized_keys');
+    }
+  });
+
+  it('valida descritores semânticos com regex rigoroso de chave canônica e strict mode', () => {
     const validDescriptor = {
       canonicalKey: 'metrology.temperature.stability',
       displayLabel: 'Estabilidade Térmica',
@@ -80,6 +105,13 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
       aliases: []
     };
     expect(SemanticDescriptorSchema.safeParse(invalidDescriptor).success).toBe(false);
+
+    // Campo desconhecido rejeitado pelo strict
+    const unknownFieldDescriptor = {
+      ...validDescriptor,
+      injectedField: 'violacao'
+    };
+    expect(SemanticDescriptorSchema.safeParse(unknownFieldDescriptor).success).toBe(false);
   });
 
   it('valida tabelas técnicas com células datum_ref e editorial_literal', () => {
@@ -102,7 +134,7 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
     expect(WorkspaceTechnicalTableDefSchema.safeParse(validTable).success).toBe(true);
   });
 
-  it('valida staging drafts de edição técnica com valores tipados', () => {
+  it('valida staging drafts com paridade total 1:1 incluindo evidence e stagedLayoutChanges', () => {
     const validDraft = {
       productId: 'prod-ta25n',
       stagedDatumChanges: {
@@ -112,11 +144,30 @@ describe('Workspace Layout V1 Schema & Referential Integrity', () => {
           oldValue: { type: 'range', lower: -25, upper: 140, unit: '°C' },
           newValue: { type: 'range', lower: -30, upper: 140, unit: '°C' },
           reason: 'Nova calibração de fábrica',
+          evidence: [
+            {
+              id: 'ev-1',
+              sourceDocumentId: 'doc-ta25-manual',
+              page: 5,
+              section: '1. Especificações',
+              observedValue: { type: 'range', lower: -30, upper: 140, unit: '°C' }
+            }
+          ],
           stagedAt: '2026-09-04T05:00:00Z'
         }
+      },
+      stagedLayoutChanges: {
+        title: 'Novo Título Proposto'
       }
     };
 
-    expect(WorkspaceEditDraftSchema.safeParse(validDraft).success).toBe(true);
+    const draftResult = WorkspaceEditDraftSchema.safeParse(validDraft);
+    expect(draftResult.success).toBe(true);
+
+    if (draftResult.success) {
+      // Prova que evidence e stagedLayoutChanges não foram descartados silenciosamente
+      expect(draftResult.data.stagedDatumChanges['datum-temp-1'].evidence?.length).toBe(1);
+      expect(draftResult.data.stagedLayoutChanges?.title).toBe('Novo Título Proposto');
+    }
   });
 });

@@ -53,6 +53,7 @@ describe('Workspace Projection Engine & Zero Copy of Truth', () => {
       schemaVersion: 1,
       id: 'layout-truth',
       productId: 'TA-25N',
+      revision: 1,
       title: 'Ficha TA-25N',
       sections: [
         {

@@ -30,6 +30,7 @@ describe('Workspace Pure Command Mutations & Immutability', () => {
       schemaVersion: 1,
       id: 'layout-base',
       productId: 'PROD-1',
+      revision: 1,
       title: 'Layout Base',
       sections: [
         { id: 'sec-1', title: 'Seção 1', blockIds: ['block-1'], order: 0 },

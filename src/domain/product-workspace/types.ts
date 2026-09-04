@@ -56,6 +56,46 @@ export interface RenameStepAudit {
 }
 
 /**
+ * Nó individual de referência semântica rastreado no grafo de impacto.
+ */
+export interface SemanticReferenceNode {
+  readonly locationType:
+    | 'technical_datum'
+    | 'technical_dataset'
+    | 'dataset_column'
+    | 'saved_view_datum_keys'
+    | 'saved_view_ordering'
+    | 'product_override_target'
+    | 'dataset_override_target'
+    | 'family_datum_reference'
+    | 'inherited_resolution'
+    | 'catalog_cell_binding'
+    | 'knowledge_picker_consumer'
+    | 'knowledge_snapshot_consumer'
+    | 'search_index_consumer';
+  readonly containerId: string;
+  readonly containerLabel?: string;
+  readonly path: string;
+  readonly isExternal: boolean;
+}
+
+/**
+ * Grafo completo de referências semânticas para cálculo exato de blast radius.
+ * Separa explicitamente referências internas comprovadas de referências externas.
+ */
+export interface SemanticReferenceGraph {
+  readonly canonicalKey: string;
+  readonly internalReferences: readonly SemanticReferenceNode[];
+  readonly externalReferences: {
+    readonly status: 'KNOWN' | 'UNKNOWN' | 'REQUIRES_INDEX';
+    readonly items: readonly SemanticReferenceNode[];
+    readonly warning?: string;
+  };
+  readonly totalReferenceCount: number;
+  readonly hasExternalUncertainty: boolean;
+}
+
+/**
  * Plano estrito de renomeação controlada de uma canonicalKey.
  * Garante que nenhuma chave seja alterada sem plano formal com checagem de colisão,
  * preservação da chave antiga como alias, integridade referencial e suporte a rollback.
@@ -63,6 +103,7 @@ export interface RenameStepAudit {
 export interface CanonicalRenamePlan {
   readonly oldCanonicalKey: string;
   readonly newCanonicalKey: string;
+  readonly referenceGraph: SemanticReferenceGraph;
   readonly affectedDatumIds: readonly string[];
   readonly affectedDatasetIds: readonly string[];
   readonly affectedSavedViewIds: readonly string[];
@@ -79,6 +120,8 @@ export interface CanonicalRenamePlan {
   readonly auditEntry: RenameStepAudit;
   readonly isValid: boolean;
   readonly validationErrors: readonly string[];
+  /** BLOCKER 4/5: O plano só é executável se não houver colisão, erros e NENHUMA incerteza em referências externas */
+  readonly isExecutable: boolean;
 }
 
 // ============================================================================
@@ -151,9 +194,14 @@ export type WorkspaceBlockKind =
   | 'source_group'
   | 'divider';
 
+export type WorkspaceBlockSize = 'small' | 'medium' | 'large' | 'full';
+export type WorkspaceBlockVisibility = 'visible' | 'hidden';
+
 export interface BaseWorkspaceBlockDef {
   readonly id: string;
   readonly kind: WorkspaceBlockKind;
+  readonly size?: WorkspaceBlockSize;
+  readonly visibility?: WorkspaceBlockVisibility;
 }
 
 export interface FactGridBlockDef extends BaseWorkspaceBlockDef {
@@ -219,18 +267,32 @@ export interface WorkspaceSectionDef {
 }
 
 /**
+ * Override de apresentação visual específico deste layout.
+ * Não altera a semântica canônica do produto.
+ */
+export interface WorkspaceDisplayOverride {
+  readonly customLabel?: string;
+  readonly customDescription?: string;
+}
+
+/**
  * Layout customizável do Workspace de Produto (V1).
  * Não armazena cópias de valores técnicos; apenas organiza a projeção de referências.
+ * Possui ciclo de vida e revisão completamente separados da verdade técnica do ProductWorkbook.
  */
 export interface WorkspaceLayoutV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly productId: string;
+  readonly revision: number; // nonnegative integer (independente de ProductWorkbook.revision)
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
   readonly title: string;
   readonly description?: string;
   readonly sections: readonly WorkspaceSectionDef[];
   readonly blocks: Readonly<Record<string, WorkspaceBlockDef>>;
-  readonly semanticDescriptors?: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey
+  readonly displayOverrides?: Readonly<Record<string, WorkspaceDisplayOverride>>; // Keyed by canonicalKey
+  readonly semanticDescriptors?: Readonly<Record<string, SemanticDescriptor>>; // Keyed by canonicalKey (fallback / compatibilidade)
   readonly metadata?: Readonly<Record<string, string>>;
 }
 
@@ -313,6 +375,8 @@ export type ProjectedBlock =
   | {
       readonly id: string;
       readonly kind: 'fact_grid';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly title?: string;
       readonly items: readonly ProjectedFactItem[];
       readonly columns: number;
@@ -320,22 +384,30 @@ export type ProjectedBlock =
   | {
       readonly id: string;
       readonly kind: 'datum_list';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly title?: string;
       readonly items: readonly ProjectedFactItem[];
     }
   | {
       readonly id: string;
       readonly kind: 'technical_table';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly table: ProjectedTable;
     }
   | {
       readonly id: string;
       readonly kind: 'dataset_view';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly table: ProjectedTable;
     }
   | {
       readonly id: string;
       readonly kind: 'text_note';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly title?: string;
       readonly content: string;
       readonly calloutVariant: 'info' | 'warning' | 'tip' | 'editorial';
@@ -343,12 +415,16 @@ export type ProjectedBlock =
   | {
       readonly id: string;
       readonly kind: 'source_group';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly title?: string;
       readonly sources: readonly ProjectedSourceItem[];
     }
   | {
       readonly id: string;
       readonly kind: 'divider';
+      readonly size?: WorkspaceBlockSize;
+      readonly visibility?: WorkspaceBlockVisibility;
       readonly spacing: 'small' | 'medium' | 'large';
     };
 
@@ -472,11 +548,65 @@ export interface AiDatumEnvelope {
   readonly hasProvenance: boolean;
 }
 
+/**
+ * Propósito semântico de consumo do envelope de conhecimento de IA.
+ * - 'factual_answer': Modo padrão seguro. Exclui drafts, deprecated e conflitos sem resolução canônica.
+ * - 'review': Permite inspecionar candidatos a revisão (drafts) em campo explicitamente separado (reviewCandidates).
+ * - 'engineering': Modo de auditoria profunda. Expõe status completos de engenharia sem consenso forçado.
+ */
+export type AiKnowledgePurpose = 'factual_answer' | 'review' | 'engineering';
+
+export interface AiConflictCandidate {
+  readonly evidenceId: string;
+  readonly sourceTitle: string;
+  readonly revision?: string;
+  readonly page?: string | number;
+  readonly section?: string;
+  readonly observedValue?: TechnicalValue;
+  readonly excerpt?: string;
+}
+
+export interface AiConflictRecord {
+  readonly datumId: string;
+  readonly canonicalSemanticKey: string;
+  readonly displayLabel: string;
+  readonly status: 'conflicting';
+  readonly candidates: readonly AiConflictCandidate[];
+  readonly rationale?: string;
+  readonly origin: DatumOrigin;
+}
+
+export interface AiExcludedSummary {
+  readonly totalExcluded: number;
+  readonly draftsCount: number;
+  readonly deprecatedCount: number;
+  readonly conflictingCount: number;
+  readonly reason: string;
+}
+
 export interface AiProductKnowledgeEnvelope {
   readonly productId: string;
   readonly productRevision?: number;
   readonly familyId?: string;
+  readonly purpose: AiKnowledgePurpose;
   readonly generatedAt: string;
+  /** Facts seguros e aprovados para respostas factuais diretas da IA */
+  readonly facts: readonly AiDatumEnvelope[];
+  /** Conflitos de fontes não resolvidos (candidatos e evidências divergentes, nunca em facts) */
+  readonly conflicts: readonly AiConflictRecord[];
+  /** Candidatos de revisão (apenas preenchido se purpose === 'review' ou 'engineering', nunca em facts) */
+  readonly reviewCandidates?: readonly AiDatumEnvelope[];
+  /** Sumário formal de fatos excluídos para proteção contra alucinações */
+  readonly excludedSummary: AiExcludedSummary;
+  /** Documentos de fonte consultados */
+  readonly sources: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly revision?: string;
+    readonly type: string;
+  }[];
+  readonly metadata?: Readonly<Record<string, string>>;
+  /** Alias para retrocompatibilidade com consumidores legados de items */
   readonly items: readonly AiDatumEnvelope[];
   readonly summary: {
     readonly totalFacts: number;

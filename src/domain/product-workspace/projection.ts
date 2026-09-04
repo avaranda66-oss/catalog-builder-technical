@@ -166,7 +166,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
 
     const { datum, origin, status, isOverride, isPendingOverride, conflictReason } = entry;
     const desc = descriptors[datum.semanticKey];
-    const displayLabel = desc?.displayLabel || datum.label || datum.semanticKey;
+    const displayOverride = layout.displayOverrides?.[datum.semanticKey];
+    const displayLabel = displayOverride?.customLabel || desc?.displayLabel || datum.label || datum.semanticKey;
     const aliases = desc?.aliases || [];
     const formatted = formatTechnicalValue(datum.value);
 
@@ -351,6 +352,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'fact_grid',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             title: blockDef.title,
             items,
             columns: blockDef.columns || 3
@@ -366,6 +369,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'datum_list',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             title: blockDef.title,
             items
           });
@@ -378,6 +383,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'technical_table',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             table
           });
           break;
@@ -390,6 +397,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
             projectedBlocks.push({
               id: blockDef.id,
               kind: 'dataset_view',
+              size: blockDef.size,
+              visibility: blockDef.visibility,
               table
             });
           }
@@ -400,6 +409,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'text_note',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             title: blockDef.title,
             content: blockDef.content,
             calloutVariant: blockDef.calloutVariant || 'info'
@@ -432,6 +443,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'source_group',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             title: blockDef.title,
             sources: projectedSources
           });
@@ -442,6 +455,8 @@ export function buildWorkspaceProjection(params: BuildWorkspaceProjectionParams)
           projectedBlocks.push({
             id: blockDef.id,
             kind: 'divider',
+            size: blockDef.size,
+            visibility: blockDef.visibility,
             spacing: blockDef.spacing || 'medium'
           });
           break;

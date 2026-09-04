@@ -9,6 +9,8 @@ import {
   WorkspaceLayoutV1,
   WorkspaceSectionDef,
   WorkspaceBlockDef,
+  WorkspaceBlockSize,
+  WorkspaceBlockVisibility,
   TechnicalTableBlockDef,
   WorkspaceTechnicalTableDef,
   WorkspaceEditDraft,
@@ -251,6 +253,62 @@ export function moveBlock(
       }
       return s;
     })
+  };
+}
+
+/**
+ * Altera o tamanho visual de um bloco (small | medium | large | full).
+ * Mutação pura e imutável que altera apenas a apresentação e incrementa a revisão do layout.
+ */
+export function resizeBlock(
+  layout: WorkspaceLayoutV1,
+  blockId: string,
+  size: WorkspaceBlockSize
+): WorkspaceLayoutV1 {
+  const block = layout.blocks[blockId];
+  if (!block) return layout;
+
+  const updatedBlock: WorkspaceBlockDef = {
+    ...block,
+    size
+  };
+
+  return {
+    ...layout,
+    revision: layout.revision + 1,
+    updatedAt: new Date().toISOString(),
+    blocks: {
+      ...layout.blocks,
+      [blockId]: updatedBlock
+    }
+  };
+}
+
+/**
+ * Altera a visibilidade de um bloco (visible | hidden).
+ * Permite que humanos ocultem blocos de sua visualização sem deletar referências nem dados canônicos.
+ */
+export function setBlockVisibility(
+  layout: WorkspaceLayoutV1,
+  blockId: string,
+  visibility: WorkspaceBlockVisibility
+): WorkspaceLayoutV1 {
+  const block = layout.blocks[blockId];
+  if (!block) return layout;
+
+  const updatedBlock: WorkspaceBlockDef = {
+    ...block,
+    visibility
+  };
+
+  return {
+    ...layout,
+    revision: layout.revision + 1,
+    updatedAt: new Date().toISOString(),
+    blocks: {
+      ...layout.blocks,
+      [blockId]: updatedBlock
+    }
   };
 }
 
