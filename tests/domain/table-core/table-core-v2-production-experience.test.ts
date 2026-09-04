@@ -391,18 +391,18 @@ describe('TABLE.PRODUCTION.EXPERIENCE1: Production Experience & Flexible Authori
             rowId: 'row-01',
             label: 'Faixa 1',
             cells: {
-              code: { kind: 'text', text: 'R-01' },
-              range: { kind: 'text', text: '0 a 1 bar' },
-              accuracy: { kind: 'text', text: '0.01% FE' }
+              code: { datumId: 'd-code-1', datumKey: 'pressure.ranges.code_1', value: { kind: 'text', text: 'R-01' } },
+              range: { datumId: 'd-range-1', datumKey: 'pressure.ranges.range_1', value: { kind: 'text', text: '0 a 1 bar' } },
+              accuracy: { datumId: 'd-acc-1', datumKey: 'pressure.ranges.acc_1', value: { kind: 'text', text: '0.01% FE' } }
             }
           },
           {
             rowId: 'row-02',
             label: 'Faixa 2',
             cells: {
-              code: { kind: 'text', text: 'R-02' },
-              range: { kind: 'text', text: '0 a 70 bar' },
-              accuracy: { kind: 'text', text: '0.01% FE' }
+              code: { datumId: 'd-code-2', datumKey: 'pressure.ranges.code_2', value: { kind: 'text', text: 'R-02' } },
+              range: { datumId: 'd-range-2', datumKey: 'pressure.ranges.range_2', value: { kind: 'text', text: '0 a 70 bar' } },
+              accuracy: { datumId: 'd-acc-2', datumKey: 'pressure.ranges.acc_2', value: { kind: 'text', text: '0.01% FE' } }
             }
           }
         ]
