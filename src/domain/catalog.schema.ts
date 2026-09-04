@@ -301,16 +301,40 @@ export const TableColumnConfigSchema = z.object({
   type: z.enum(['text', 'number', 'badge']).optional().default('text')
 });
 
-export const CatalogCellBindingSchema = z.object({
+export const CatalogCellBindingBaseSchema = z.object({
   sourceKind: z.enum(['product_metadata', 'pim_datum', 'dataset', 'legacy']),
-  productId: z.string(),
+  productId: z.string().min(1, 'productId cannot be empty'),
   semanticKey: z.string(),
   moduleKey: z.string().optional(),
   datasetId: z.string().optional(),
   bindingMode: z.enum(['live', 'snapshot', 'review_required']).default('live'),
   snapshot: TableCellLiteralContentSchema.optional(),
-  sourceRevision: z.number().int().positive().optional(),
+  sourceRevision: z.number().int().nonnegative().optional(),
   stale: z.boolean().optional()
+});
+
+export const CatalogCellBindingSchema = CatalogCellBindingBaseSchema.superRefine((val, ctx) => {
+  if (val.bindingMode === 'snapshot' && !val.snapshot) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Snapshot is mandatory when bindingMode is "snapshot"',
+      path: ['snapshot']
+    });
+  }
+  if (val.sourceKind === 'dataset' && (!val.datasetId || val.datasetId.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'datasetId is required and cannot be empty for dataset sourceKind',
+      path: ['datasetId']
+    });
+  }
+  if (val.sourceKind === 'pim_datum' && (!val.semanticKey || val.semanticKey.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'semanticKey cannot be empty for pim_datum',
+      path: ['semanticKey']
+    });
+  }
 });
 
 export const CatalogTableRowSchema = z.object({
