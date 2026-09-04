@@ -11,8 +11,10 @@ import {
   TableCellModel,
   TableCellContent,
   TableCellBoundContent,
+  TablePresentationModel,
   TablePresetId
 } from './table.types';
+import { formatTableCellLiteral } from '../table-values';
 import { getCellKey, validateTableModel } from './table.validator';
 import { getTablePreset } from './table.presets';
 import { DEFAULT_TABLE_PAGINATION_POLICY } from './table.pagination';
@@ -220,16 +222,29 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         } else if (explicitBinding.sourceKind === 'legacy' && !datumKey.startsWith('legacy.')) {
           datumKey = `legacy.product_field.${datumKey}`;
         }
-        canonicalBoundContent = {
-          kind: 'datum_reference',
-          productId: explicitBinding.productId,
-          datumKey,
-          moduleKey: explicitBinding.moduleKey,
-          datasetId: explicitBinding.datasetId,
-          sourceRevision: explicitBinding.sourceRevision,
-          bindingMode: explicitBinding.bindingMode,
-          snapshot: explicitBinding.snapshot
-        };
+        if (explicitBinding.bindingMode === 'snapshot') {
+          canonicalBoundContent = {
+            kind: 'datum_reference',
+            productId: explicitBinding.productId,
+            datumKey,
+            moduleKey: explicitBinding.moduleKey,
+            datasetId: explicitBinding.datasetId,
+            sourceRevision: explicitBinding.sourceRevision,
+            bindingMode: 'snapshot',
+            snapshot: explicitBinding.snapshot ?? { kind: 'text', text: '' }
+          };
+        } else {
+          canonicalBoundContent = {
+            kind: 'datum_reference',
+            productId: explicitBinding.productId,
+            datumKey,
+            moduleKey: explicitBinding.moduleKey,
+            datasetId: explicitBinding.datasetId,
+            sourceRevision: explicitBinding.sourceRevision,
+            bindingMode: explicitBinding.bindingMode,
+            snapshot: explicitBinding.snapshot
+          };
+        }
       } else if (!isManualRow && !col.isCustom && legacyRow.productRefId) {
         canonicalBoundContent = {
           kind: 'datum_reference',
@@ -240,8 +255,11 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         hasLegacyProductBinding = true;
       }
 
+      const typedCellValue = legacyRow.cellValues?.[col.semanticKey];
       const rawOverride = legacyRow.localOverrides?.[col.semanticKey];
-      const hasLocalValue = rawOverride !== undefined && rawOverride !== null;
+      const hasTypedValue = typedCellValue !== undefined && typedCellValue !== null;
+      const hasRawOverride = rawOverride !== undefined && rawOverride !== null;
+      const hasLocalValue = hasTypedValue || hasRawOverride;
       const isBound = Boolean(canonicalBoundContent);
 
       // Um override só existe se a célula for vinculada a uma fonte e possuir valor local
@@ -250,7 +268,14 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
 
       let content: TableCellContent = { kind: 'empty' };
 
-      if (hasLocalValue) {
+      // Precedência estrita (Emenda 4):
+      // 1. cellValues tipado
+      // 2. localOverrides legado
+      // 3. explicit cellBinding / canonicalBoundContent
+      // 4. empty
+      if (hasTypedValue && typedCellValue) {
+        content = typedCellValue;
+      } else if (hasRawOverride) {
         const textVal = String(rawOverride);
         content = textVal.trim() === '' ? { kind: 'empty' } : { kind: 'text', text: textVal };
       } else if (canonicalBoundContent) {
@@ -278,7 +303,7 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
         hasProductBinding: isBound,
         productRefId: explicitBinding?.productId || (isManualRow ? undefined : legacyRow.productRefId),
         canonicalBoundContent,
-        originalOverrideValue: hasLocalValue ? String(rawOverride) : undefined,
+        originalOverrideValue: hasLocalValue ? (hasTypedValue ? formatTableCellLiteral(typedCellValue) : String(rawOverride)) : undefined,
         isManualRow,
         isManualValue,
         cellBinding: explicitBinding
@@ -290,7 +315,8 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     warnings.push("Vinculação de produto legada mapeada sob namespace transitório 'legacy.product_field.*' para preservar integridade de chave.");
   }
 
-  const presentation = getTablePreset(presetId);
+  const customPresentation = block.customData?.tablePresentation as TablePresentationModel | undefined;
+  const presentation = customPresentation ? structuredClone(customPresentation) : getTablePreset(presetId);
 
   const tableCore: TableCoreModel = {
     id: tableId,

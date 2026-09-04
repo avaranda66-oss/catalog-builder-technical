@@ -4,9 +4,17 @@
 // Zero explicit any.
 
 import { z } from 'zod';
+import {
+  TableHorizontalAlignSchema,
+  TableVerticalAlignSchema,
+  TableCellLiteralContentSchema
+} from '../table-values';
 
-export const TableHorizontalAlignSchema = z.enum(['left', 'center', 'right']);
-export const TableVerticalAlignSchema = z.enum(['top', 'middle', 'bottom']);
+export {
+  TableHorizontalAlignSchema,
+  TableVerticalAlignSchema,
+  TableCellLiteralContentSchema
+};
 
 /**
  * Schema de ColumnWidthSpec como Discriminated Union estrita.
@@ -43,75 +51,6 @@ export const TableRowModelSchema = z.object({
   minHeightMm: z.number().positive().optional(),
   isHeader: z.boolean().optional()
 }).strict();
-
-export const TableCellLiteralContentSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('text'),
-    text: z.string()
-  }).strict(),
-  z.object({
-    kind: z.literal('number'),
-    value: z.number(),
-    format: z.object({
-      decimals: z.number().int().min(0).max(10).optional(),
-      prefix: z.string().optional(),
-      suffix: z.string().optional()
-    }).strict().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('value_unit'),
-    amount: z.number(),
-    unit: z.string().min(1, 'Unidade é obrigatória em value_unit'),
-    qualifier: z.enum(['±', '≤', '≥', '<', '>', 'typ.', 'max.', 'min.']).optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('badge'),
-    label: z.string().min(1),
-    variant: z.enum(['neutral', 'success', 'warning', 'info', 'critical']).default('neutral')
-  }).strict(),
-  z.object({
-    kind: z.literal('asset_reference'),
-    assetId: z.string().min(1, 'assetId é obrigatório'),
-    caption: z.string().optional(),
-    altText: z.string().optional(),
-    targetWidthMm: z.number().optional(),
-    targetHeightMm: z.number().optional(),
-    fit: z.enum(['contain', 'cover']).optional(),
-    align: TableHorizontalAlignSchema.optional(),
-    paddingMm: z.number().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('range'),
-    lower: z.number().optional(),
-    upper: z.number().optional(),
-    unit: z.string().optional(),
-    lowerInclusive: z.boolean().optional(),
-    upperInclusive: z.boolean().optional(),
-    prefix: z.string().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('boolean'),
-    value: z.boolean(),
-    format: z.enum(['yes_no', 'sim_nao', 'check_cross', 'dot', 'badge']).optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('enum'),
-    code: z.string().min(1),
-    label: z.string().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('technical_token'),
-    token: z.string().min(1),
-    category: z.string().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('unknown'),
-    reason: z.string().optional()
-  }).strict(),
-  z.object({
-    kind: z.literal('empty')
-  }).strict()
-]);
 
 export const TableBindingModeSchema = z.enum(['live', 'snapshot', 'review_required']);
 
@@ -219,6 +158,22 @@ export const TableWidthSpecSchema = z.discriminatedUnion('mode', [
   }).strict()
 ]);
 
+export const TableRowStyleOverrideSchema = z.object({
+  backgroundToken: TableColorTokenSchema.optional(),
+  textColorToken: TableColorTokenSchema.optional(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  borderEmphasis: z.enum(['none', 'bottom_thick', 'all_subtle', 'accent']).optional(),
+  minHeightMm: z.number().positive().optional()
+}).strict();
+
+export const TableColumnStyleOverrideSchema = z.object({
+  backgroundToken: TableColorTokenSchema.optional(),
+  textColorToken: TableColorTokenSchema.optional(),
+  align: TableHorizontalAlignSchema.optional(),
+  bold: z.boolean().optional()
+}).strict();
+
 export const TablePresentationModelSchema = z.object({
   presetId: TablePresetIdSchema.default('presys_clean_technical'),
   density: z.enum(['compact', 'regular', 'spacious']).default('regular'),
@@ -237,7 +192,10 @@ export const TablePresentationModelSchema = z.object({
   borderWidth: z.enum(['none', 'thin', 'medium']).optional(),
   outerBorderWidth: z.enum(['none', 'thin', 'thick']).optional(),
   borderColorToken: TableColorTokenSchema.optional(),
-  cornerRoundness: z.enum(['none', 'small', 'medium']).optional()
+  cornerRoundness: z.enum(['none', 'small', 'medium']).optional(),
+  rowStyleOverrides: z.record(TableRowStyleOverrideSchema).optional(),
+  columnStyleOverrides: z.record(TableColumnStyleOverrideSchema).optional(),
+  cellStyleOverrides: z.record(TableCellStyleOverrideSchema).optional()
 }).strict();
 
 export const TablePresentationTemplateSchema = z.object({

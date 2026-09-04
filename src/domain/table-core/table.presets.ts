@@ -3,7 +3,7 @@
 // Define estilos corporativos sem acoplamento com classes de frameworks CSS.
 // Zero explicit any.
 
-import { TableCoreModel, TablePresetId, TablePresentationModel } from './table.types';
+import { TableCoreModel, TablePresetId, TablePresentationModel, TablePresentationTemplate } from './table.types';
 
 export const TABLE_PRESETS: Record<TablePresetId, TablePresentationModel> = {
   presys_clean_technical: {
@@ -119,6 +119,28 @@ export function applyTablePreset(
 
   // Preserva largura fixa manual se a tabela anterior possuía uma configurada
   if (table.presentation.tableWidth.mode === 'fixed_mm') {
+    presentation.tableWidth = { ...table.presentation.tableWidth };
+  }
+
+  return {
+    ...table,
+    presentation
+  };
+}
+
+/**
+ * Aplica um modelo ou template de apresentação arbitrário à tabela de forma puramente imutável.
+ * Invariante: Garante que células, linhas, colunas e vínculos permanecem intocados.
+ */
+export function applyPresentationTemplate(
+  table: TableCoreModel,
+  templateOrModel: TablePresentationTemplate | TablePresentationModel
+): TableCoreModel {
+  const presentation: TablePresentationModel = 'presentation' in templateOrModel
+    ? structuredClone(templateOrModel.presentation)
+    : structuredClone(templateOrModel);
+
+  if (table.presentation.tableWidth.mode === 'fixed_mm' && presentation.tableWidth.mode === 'auto_fill') {
     presentation.tableWidth = { ...table.presentation.tableWidth };
   }
 
