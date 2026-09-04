@@ -15,6 +15,7 @@ import {
   TablePresetId
 } from './table.types';
 import { formatTableCellLiteral } from '../table-values';
+import { TablePresentationModelSchema } from './table.schema';
 import { getCellKey, validateTableModel } from './table.validator';
 import { getTablePreset } from './table.presets';
 import { DEFAULT_TABLE_PAGINATION_POLICY } from './table.pagination';
@@ -223,16 +224,23 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
           datumKey = `legacy.product_field.${datumKey}`;
         }
         if (explicitBinding.bindingMode === 'snapshot') {
-          canonicalBoundContent = {
-            kind: 'datum_reference',
-            productId: explicitBinding.productId,
-            datumKey,
-            moduleKey: explicitBinding.moduleKey,
-            datasetId: explicitBinding.datasetId,
-            sourceRevision: explicitBinding.sourceRevision,
-            bindingMode: 'snapshot',
-            snapshot: explicitBinding.snapshot ?? { kind: 'text', text: '' }
-          };
+          if (!explicitBinding.snapshot) {
+            warnings.push(
+              `Binding snapshot sem snapshot fornecido na célula [row=${legacyRow.id}, col=${col.semanticKey}]. Fail closed ativado.`
+            );
+            canonicalBoundContent = undefined;
+          } else {
+            canonicalBoundContent = {
+              kind: 'datum_reference',
+              productId: explicitBinding.productId,
+              datumKey,
+              moduleKey: explicitBinding.moduleKey,
+              datasetId: explicitBinding.datasetId,
+              sourceRevision: explicitBinding.sourceRevision,
+              bindingMode: 'snapshot',
+              snapshot: explicitBinding.snapshot
+            };
+          }
         } else {
           canonicalBoundContent = {
             kind: 'datum_reference',
@@ -315,8 +323,18 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
     warnings.push("Vinculação de produto legada mapeada sob namespace transitório 'legacy.product_field.*' para preservar integridade de chave.");
   }
 
-  const customPresentation = block.customData?.tablePresentation as TablePresentationModel | undefined;
-  const presentation = customPresentation ? structuredClone(customPresentation) : getTablePreset(presetId);
+  let presentation: TablePresentationModel = getTablePreset(presetId);
+  const rawCustomPresentation = block.customData?.tablePresentation;
+  if (rawCustomPresentation) {
+    const parseRes = TablePresentationModelSchema.safeParse(rawCustomPresentation);
+    if (parseRes.success) {
+      presentation = parseRes.data;
+    } else {
+      warnings.push(
+        `customData.tablePresentation malformado ignorado (falha Zod: ${parseRes.error.issues.map((i) => i.message).join(', ')}). Revertendo para preset de sistema "${presetId}".`
+      );
+    }
+  }
 
   const tableCore: TableCoreModel = {
     id: tableId,

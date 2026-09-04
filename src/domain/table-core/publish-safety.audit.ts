@@ -179,6 +179,38 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
               });
             }
 
+            // A.1b: Snapshot Mode sem snapshot -> BLOCK
+            if (binding.bindingMode === 'snapshot' && !binding.snapshot) {
+              issues.push({
+                layer: 'A_STATIC',
+                severity: 'block',
+                pageNumber,
+                pageId: page.id,
+                tableId,
+                tableTitle,
+                rowId: row.id,
+                colKey,
+                code: 'SNAPSHOT_MODE_WITHOUT_SNAPSHOT',
+                reason: `Célula com modo "snapshot" não possui snapshot tipado persistido.`
+              });
+            }
+
+            // A.1c: Dataset binding sem datasetId -> BLOCK
+            if (binding.sourceKind === 'dataset' && (!binding.datasetId || binding.datasetId.trim() === '')) {
+              issues.push({
+                layer: 'A_STATIC',
+                severity: 'block',
+                pageNumber,
+                pageId: page.id,
+                tableId,
+                tableTitle,
+                rowId: row.id,
+                colKey,
+                code: 'DATASET_BINDING_MISSING_DATASET_ID',
+                reason: `Binding de dataset na célula [${row.id}, ${colKey}] não possui datasetId válido.`
+              });
+            }
+
             // A.2: review_required sem snapshot -> BLOCK
             if (binding.bindingMode === 'review_required' && !binding.snapshot) {
               issues.push({
