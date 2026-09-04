@@ -17,16 +17,15 @@ import {
   WorkspaceBlock,
   WorkspaceMode,
   WorkspacePerspective,
+  InteractionMode,
+  DetailLevel,
   FactItem,
   BlockSize,
   UndoSnapshot,
   SearchResultItem,
   AIOrganizeDiff,
   ProductWorkspaceMetadata,
-  deriveFactsCount,
-  deriveTablesCount,
-  deriveSourcesCount,
-  deriveConflictsCount
+  deriveWorkspaceMetrics
 } from './types';
 import {
   PRODUCT_FIXTURES,
@@ -38,6 +37,8 @@ import {
 interface ProductStateSlice {
   sections: WorkspaceSection[];
   undoStack: UndoSnapshot[];
+  interactionMode: InteractionMode;
+  detailLevel: DetailLevel;
   mode: WorkspaceMode;
   perspective: WorkspacePerspective;
   undoToastMessage: string | null;
@@ -51,6 +52,8 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
       initial[key] = {
         sections: structuredClone(fixture.initialSections),
         undoStack: [],
+        interactionMode: 'view',
+        detailLevel: 'simple',
         mode: 'view',
         perspective: 'standard',
         undoToastMessage: null
@@ -84,12 +87,16 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
   const currentSlice: ProductStateSlice = productStates[activeProductId] || {
     sections: structuredClone(currentFixture.initialSections),
     undoStack: [],
+    interactionMode: 'view',
+    detailLevel: 'simple',
     mode: 'view',
     perspective: 'standard',
     undoToastMessage: null
   };
 
   const sections = currentSlice.sections;
+  const interactionMode = currentSlice.interactionMode ?? (currentSlice.mode === 'edit_workspace' ? 'edit_layout' : 'view');
+  const detailLevel = currentSlice.detailLevel ?? (currentSlice.perspective === 'engineering' ? 'advanced' : 'simple');
   const mode = currentSlice.mode;
   const perspective = currentSlice.perspective;
   const undoStack = currentSlice.undoStack;
@@ -105,13 +112,49 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
     setSelectedSemanticForRename(null);
   }, []);
 
-  // Modificadores de modo e perspectiva locais ao produto
+  // Modificadores ortogonais (Amendment 5)
+  const setInteractionMode = useCallback((newInteractionMode: InteractionMode) => {
+    setProductStates((prev) => {
+      const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      const legacyMode: WorkspaceMode = newInteractionMode === 'view' ? 'view' : 'edit_workspace';
+      return {
+        ...prev,
+        [activeProductId]: {
+          ...cur,
+          interactionMode: newInteractionMode,
+          mode: legacyMode
+        }
+      };
+    });
+  }, [activeProductId]);
+
+  const setDetailLevel = useCallback((newDetailLevel: DetailLevel) => {
+    setProductStates((prev) => {
+      const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      const legacyPerspective: WorkspacePerspective = newDetailLevel === 'advanced' ? 'engineering' : 'standard';
+      return {
+        ...prev,
+        [activeProductId]: {
+          ...cur,
+          detailLevel: newDetailLevel,
+          perspective: legacyPerspective
+        }
+      };
+    });
+  }, [activeProductId]);
+
+  // Modificadores de modo e perspectiva locais ao produto (retrocompatíveis)
   const setMode = useCallback((newMode: WorkspaceMode) => {
     setProductStates((prev) => {
       const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      const newInteractionMode: InteractionMode = newMode === 'edit_workspace' ? 'edit_layout' : 'view';
       return {
         ...prev,
-        [activeProductId]: { ...cur, mode: newMode }
+        [activeProductId]: {
+          ...cur,
+          mode: newMode,
+          interactionMode: newInteractionMode
+        }
       };
     });
   }, [activeProductId]);
@@ -119,9 +162,14 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
   const setPerspective = useCallback((newPerspective: WorkspacePerspective) => {
     setProductStates((prev) => {
       const cur = prev[activeProductId] || prev[DEFAULT_PRODUCT_ID];
+      const newDetailLevel: DetailLevel = newPerspective === 'engineering' ? 'advanced' : 'simple';
       return {
         ...prev,
-        [activeProductId]: { ...cur, perspective: newPerspective }
+        [activeProductId]: {
+          ...cur,
+          perspective: newPerspective,
+          detailLevel: newDetailLevel
+        }
       };
     });
   }, [activeProductId]);
@@ -401,7 +449,7 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
     [applyWorkspaceMutation, productMetadata]
   );
 
-  // Staged Fact Edit (Agnóstico e com rollback atômico)
+  // Staged Fact Edit (Agnóstico e com rollback atômico e sincronização de referências)
   const stageFactEdit = useCallback(
     (factId: string, draft: Partial<FactItem>, scopeChoice: 'model' | 'family') => {
       applyWorkspaceMutation(`Alteração salva no rascunho de "${draft.label || factId}"`, (prev) =>
@@ -425,6 +473,47 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
                   )
                 }
               };
+            }
+            if (b.data.kind === 'conflicts') {
+              return {
+                ...b,
+                data: {
+                  ...b.data,
+                  conflicts: b.data.conflicts.map((f) =>
+                    f.id === factId
+                      ? {
+                          ...f,
+                          ...draft,
+                          originScope: scopeChoice,
+                          originLabel: scopeChoice === 'model' ? productMetadata.name : productMetadata.familyLine
+                        }
+                      : f
+                  )
+                }
+              };
+            }
+            if (b.data.kind === 'mega_table') {
+              let changed = false;
+              const nextRows = b.data.table.rows.map((row) => {
+                let rowChanged = false;
+                const nextCells = { ...row.cells };
+                for (const colId of Object.keys(nextCells)) {
+                  const cell = nextCells[colId];
+                  if (cell.type === 'fact_ref' && cell.factId === factId) {
+                    rowChanged = true;
+                    changed = true;
+                    nextCells[colId] = {
+                      ...cell,
+                      value: draft.value !== undefined ? draft.value : cell.value,
+                      unit: draft.unit !== undefined ? draft.unit : cell.unit
+                    };
+                  }
+                }
+                return rowChanged ? { ...row, cells: nextCells } : row;
+              });
+              if (changed) {
+                return { ...b, data: { ...b.data, table: { ...b.data.table, rows: nextRows } } };
+              }
             }
             return b;
           })
@@ -752,14 +841,9 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
     return results;
   }, [sections, searchQuery]);
 
-  // Contagens dinâmicas derivadas da projeção (Amendment 2)
+  // Métricas formais derivadas da projeção (Amendments 1, 2, 3, 7, 8)
   const derivedCounts = useMemo(() => {
-    return {
-      factsCount: deriveFactsCount(sections),
-      tablesCount: deriveTablesCount(sections),
-      sourcesCount: deriveSourcesCount(sections),
-      conflictsCount: deriveConflictsCount(sections)
-    };
+    return deriveWorkspaceMetrics(sections);
   }, [sections]);
 
   return {
@@ -770,6 +854,12 @@ export function useMegaWorkspaceState(initialProductId: string = DEFAULT_PRODUCT
     productMetadata,
     derivedCounts,
     lastSearchDurationMs,
+
+    // Eixos Ortogonais de UI (Amendment 5)
+    interactionMode,
+    setInteractionMode,
+    detailLevel,
+    setDetailLevel,
 
     // Estrutura do Workspace
     sections,

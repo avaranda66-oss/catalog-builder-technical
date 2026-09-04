@@ -19,7 +19,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Plus,
-  Eye,
   Layers,
   ChevronDown,
   FileText,
@@ -28,11 +27,14 @@ import {
   X,
   Database,
   LayoutGrid,
-  FlaskConical
+  FlaskConical,
+  Pencil
 } from 'lucide-react';
 import {
   WorkspaceMode,
   WorkspacePerspective,
+  InteractionMode,
+  DetailLevel,
   SearchResultItem,
   ProductWorkspaceMetadata
 } from '../types';
@@ -47,12 +49,21 @@ interface WorkspaceHeaderProps {
     tablesCount: number;
     sourcesCount: number;
     conflictsCount: number;
+    uniqueFactsCount?: number;
+    visibleUniqueFactsCount?: number;
+    visibleFactOccurrences?: number;
+    tableFactReferencesCount?: number;
+    knowledgeFactsCount?: number;
   };
   lastSearchDurationMs?: number;
   mode: WorkspaceMode;
   setMode: (mode: WorkspaceMode) => void;
   perspective: WorkspacePerspective;
   setPerspective: (perspective: WorkspacePerspective) => void;
+  interactionMode?: InteractionMode;
+  setInteractionMode?: (m: InteractionMode) => void;
+  detailLevel?: DetailLevel;
+  setDetailLevel?: (d: DetailLevel) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   searchResults: SearchResultItem[];
@@ -74,6 +85,10 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   setMode,
   perspective,
   setPerspective,
+  interactionMode,
+  setInteractionMode,
+  detailLevel,
+  setDetailLevel,
   searchQuery,
   setSearchQuery,
   searchResults,
@@ -86,6 +101,12 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const [isProductMenuOpen, setIsProductMenuOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  const effectiveInteractionMode: InteractionMode =
+    interactionMode || (mode === 'edit_workspace' ? 'edit_layout' : 'view');
+  const effectiveDetailLevel: DetailLevel =
+    detailLevel || (perspective === 'engineering' ? 'advanced' : 'simple');
+  const isAdvanced = effectiveDetailLevel === 'advanced';
 
   const productMenuRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -120,8 +141,6 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
-
-  const isAdvancedOrEditMode = mode === 'edit_workspace' || perspective === 'engineering';
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 shadow-xs">
@@ -203,15 +222,18 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
               )}
             </div>
 
-            {/* Contador de Especificações Derivadas (Amendment 2) */}
-            <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-              {derivedCounts.factsCount} especificações ativas
+            {/* Contador de Especificações Técnicas Únicas */}
+            <span
+              title={`Fatos únicos visíveis: ${derivedCounts.visibleUniqueFactsCount ?? derivedCounts.uniqueFactsCount ?? derivedCounts.factsCount} · Ocorrências: ${derivedCounts.visibleFactOccurrences ?? derivedCounts.factsCount} · Tabelas: ${derivedCounts.tablesCount} · Fontes: ${derivedCounts.sourcesCount} · Conflitos: ${derivedCounts.conflictsCount}`}
+              className="text-xs font-normal text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 cursor-help"
+            >
+              {derivedCounts.visibleUniqueFactsCount ?? derivedCounts.uniqueFactsCount ?? derivedCounts.factsCount} informações técnicas
             </span>
 
-            {/* Revisões Desacopladas (Visíveis apenas em Modo Avançado/Engenharia) */}
-            {isAdvancedOrEditMode && (
+            {/* Revisões Desacopladas (Visíveis APENAS em Modo Avançado) */}
+            {isAdvanced && (
               <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 px-2.5 py-0.5 rounded border border-slate-200">
-                <span className="inline-flex items-center gap-1" title="Versão do layout e organização visual">
+                <span className="inline-flex items-center gap-1" title="Versão da organização visual do layout">
                   <LayoutGrid className="w-3 h-3 text-slate-400" />
                   <span>Versão da organização: <strong>v{productMetadata.layoutRevision}</strong></span>
                 </span>
@@ -310,56 +332,87 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           )}
         </div>
 
-        {/* Lado Direito: Perspectivas, Modos e Ações Principais */}
-        <div className="flex items-center gap-3">
-          {/* Seletor de Perspectiva */}
+        {/* Lado Direito: Nível de Detalhe e Modo de Ação Ortogonais (Amendment 5) */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Eixo 1: Nível de Detalhe (Simples vs Avançado) */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               type="button"
-              onClick={() => setPerspective('standard')}
+              onClick={() => {
+                if (setDetailLevel) setDetailLevel('simple');
+                setPerspective('standard');
+              }}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                perspective === 'standard'
-                  ? 'bg-white text-slate-900 shadow-2xs'
+                !isAdvanced
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Padrão
+              Simples
             </button>
             <button
               type="button"
-              onClick={() => setPerspective('engineering')}
+              onClick={() => {
+                if (setDetailLevel) setDetailLevel('advanced');
+                setPerspective('engineering');
+              }}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                perspective === 'engineering'
-                  ? 'bg-white text-slate-900 shadow-2xs'
+                isAdvanced
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Engenharia
+              Avançado
             </button>
           </div>
 
-          {/* Alternador de Modo: Visualização vs Organização */}
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'view' ? 'edit_workspace' : 'view')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1.5 ${
-              mode === 'edit_workspace'
-                ? 'bg-amber-50 border-amber-300 text-amber-900'
-                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {mode === 'edit_workspace' ? (
-              <>
-                <Eye className="w-3.5 h-3.5 text-amber-700" />
-                <span>Modo Leitura</span>
-              </>
-            ) : (
-              <>
-                <Layers className="w-3.5 h-3.5 text-slate-500" />
-                <span>Organizar Painel</span>
-              </>
-            )}
-          </button>
+          {/* Eixo 2: Modo de Interação (Visualizar vs Organizar Layout vs Editar Dados) */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                if (setInteractionMode) setInteractionMode('view');
+                setMode('view');
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                effectiveInteractionMode === 'view'
+                  ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Visualizar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (setInteractionMode) setInteractionMode('edit_layout');
+                setMode('edit_workspace');
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1 ${
+                effectiveInteractionMode === 'edit_layout'
+                  ? 'bg-white text-amber-900 shadow-2xs font-bold border border-amber-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3 h-3 text-amber-600" />
+              <span>Organizar Layout</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (setInteractionMode) setInteractionMode('edit_data');
+                setMode('view');
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1 ${
+                effectiveInteractionMode === 'edit_data'
+                  ? 'bg-white text-blue-900 shadow-2xs font-bold border border-blue-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Pencil className="w-3 h-3 text-blue-600" />
+              <span>Editar Dados</span>
+            </button>
+          </div>
 
           {/* Menu Dropdown de Ações Técnicas */}
           <div ref={addMenuRef} className="relative">

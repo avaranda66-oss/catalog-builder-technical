@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { X, FileText, Users, Bookmark } from 'lucide-react';
-import { FactItem } from '../types';
+import { FactItem, DetailLevel } from '../types';
 
 interface EditFactModalProps {
   fact: FactItem | null;
@@ -21,6 +21,7 @@ interface EditFactModalProps {
   onOpenSource: (fact: FactItem) => void;
   productName?: string;
   familyLineName?: string;
+  detailLevel?: DetailLevel;
 }
 
 export const EditFactModal: React.FC<EditFactModalProps> = ({
@@ -30,7 +31,8 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
   onSave,
   onOpenSource,
   productName = 'este modelo',
-  familyLineName = 'esta linha'
+  familyLineName = 'esta linha',
+  detailLevel = 'simple'
 }) => {
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
@@ -100,9 +102,11 @@ export const EditFactModal: React.FC<EditFactModalProps> = ({
             <h3 id="edit-fact-modal-title" className="text-base font-bold text-slate-900">
               Editar informação
             </h3>
-            <span className="text-xs text-slate-500 font-mono">
-              {fact.semanticKey}
-            </span>
+            {detailLevel === 'advanced' && (
+              <span className="text-xs text-slate-500 font-mono">
+                {fact.semanticKey}
+              </span>
+            )}
           </div>
           <button
             type="button"

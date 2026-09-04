@@ -61,6 +61,10 @@ export const MegaWorkspaceLab: React.FC = () => {
         setMode={state.setMode}
         perspective={state.perspective}
         setPerspective={state.setPerspective}
+        interactionMode={state.interactionMode}
+        setInteractionMode={state.setInteractionMode}
+        detailLevel={state.detailLevel}
+        setDetailLevel={state.setDetailLevel}
         searchQuery={state.searchQuery}
         setSearchQuery={state.setSearchQuery}
         searchResults={state.searchResults}
@@ -75,7 +79,7 @@ export const MegaWorkspaceLab: React.FC = () => {
       />
 
       {/* Barra de Notificação de Modo de Organização Ativo */}
-      {state.mode === 'edit_workspace' && (
+      {(state.interactionMode === 'edit_layout' || state.mode === 'edit_workspace') && (
         <div className="bg-amber-500 text-white text-xs font-semibold py-2 px-4 shadow-xs sticky top-[73px] z-20 flex items-center justify-between">
           <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
             <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -84,10 +88,34 @@ export const MegaWorkspaceLab: React.FC = () => {
             </span>
             <button
               type="button"
-              onClick={() => state.setMode('view')}
+              onClick={() => {
+                state.setInteractionMode('view');
+                state.setMode('view');
+              }}
               className="ml-auto px-2.5 py-1 bg-white text-amber-900 font-bold rounded hover:bg-amber-50 transition-colors"
             >
               Concluir Organização
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Barra de Notificação de Modo de Edição de Dados Ativo */}
+      {state.interactionMode === 'edit_data' && (
+        <div className="bg-blue-600 text-white text-xs font-semibold py-2 px-4 shadow-xs sticky top-[73px] z-20 flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            <span>
+              <strong>Modo de Edição de Dados Ativo:</strong> Use o botão "Editar" nos cards ou nas tabelas para ajustar valores técnicos no rascunho.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                state.setInteractionMode('view');
+              }}
+              className="ml-auto px-2.5 py-1 bg-white text-blue-900 font-bold rounded hover:bg-blue-50 transition-colors"
+            >
+              Concluir Edição de Dados
             </button>
           </div>
         </div>
@@ -127,6 +155,7 @@ export const MegaWorkspaceLab: React.FC = () => {
               key={section.id}
               section={section}
               mode={state.mode}
+              detailLevel={state.detailLevel}
               productName={state.productMetadata.name}
               onToggleCollapse={() => state.toggleSectionCollapse(section.id)}
               onRenameSection={(newTitle) => state.renameSection(section.id, newTitle)}
@@ -171,6 +200,7 @@ export const MegaWorkspaceLab: React.FC = () => {
         onClose={() => state.setSelectedFactForEdit(null)}
         productName={state.productMetadata.name}
         familyLineName={state.productMetadata.familyLine}
+        detailLevel={state.detailLevel}
         onSave={(id, draft, scope) => state.stageFactEdit(id, draft, scope)}
         onOpenSource={(fact) => state.setSelectedFactForSource(fact)}
       />
@@ -180,6 +210,7 @@ export const MegaWorkspaceLab: React.FC = () => {
         isOpen={Boolean(state.selectedFactForSource)}
         onClose={() => state.setSelectedFactForSource(null)}
         onOpenConflictReview={(fact) => state.setSelectedConflictForReview(fact)}
+        detailLevel={state.detailLevel}
       />
 
       <ConflictReviewModal
