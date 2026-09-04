@@ -15,7 +15,7 @@ import { TableDatumResolver } from './table-datum.types';
 import {
   createProductWorkbookDatumResolver,
   composeTableDatumResolvers,
-  mapTechnicalValueToTableLiteralV2
+  projectTechnicalValueFailClosed
 } from './product-workbook-datum.resolver';
 import { createLegacyProductFieldResolver, LegacyProductLike } from './legacy-product-field.resolver';
 import { ProductRegistryReader, ProductIdentity } from './product-registry-reader.types';
@@ -29,7 +29,7 @@ import {
 import { projectPimDatasetToTechnicalDatasetProjection } from './pim-dataset-projection.adapter';
 import { projectPimSavedViewToSavedViewProjection } from './pim-saved-view-projection.adapter';
 
-export type ProductKnowledgeRuntimeStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+export type ProductKnowledgeRuntimeStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
 
 export interface ProductWorkbookFetcher {
   getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
@@ -85,6 +85,13 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
   private readonly workbookCache = new Map<string, ProductWorkbook>();
   private readonly productIdentities = new Map<string, ProductIdentity>();
 
+  // Rastreamento estrito de integridade de preload (Emenda 5 & 10)
+  private referencedProductIds: string[] = [];
+  private loadedProductIds: string[] = [];
+  private failedProductIds: string[] = [];
+  private failureReasons = new Map<string, string>();
+  private knownEmptyProductIds = new Set<string>();
+
   private readonly registryReader?: ProductRegistryReader;
   private readonly workbookFetcher?: ProductWorkbookFetcher;
 
@@ -107,8 +114,36 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     return this.errorMessage;
   }
 
+  public getReferencedProductIds(): readonly string[] {
+    return this.referencedProductIds;
+  }
+
+  public getLoadedProductIds(): readonly string[] {
+    return this.loadedProductIds;
+  }
+
+  public getFailedProductIds(): readonly string[] {
+    return this.failedProductIds;
+  }
+
+  public getFailureReasons(): ReadonlyMap<string, string> {
+    return this.failureReasons;
+  }
+
+  public getKnownEmptyProductIds(): readonly string[] {
+    return Array.from(this.knownEmptyProductIds);
+  }
+
+  public getCachedWorkbook(kind: 'product' | 'family', id: string): ProductWorkbook | undefined {
+    return this.workbookCache.get(`${kind}:${id}`);
+  }
+
+  public getCachedIdentity(productId: string): ProductIdentity | undefined {
+    return this.productIdentities.get(productId);
+  }
+
   public isAvailable(): boolean {
-    return this.status === 'ready' || (this.status !== 'unavailable' && this.status !== 'error' && Boolean(this.workbookFetcher));
+    return this.status === 'ready' || this.status === 'partial' || (this.status !== 'unavailable' && this.status !== 'error' && Boolean(this.workbookFetcher));
   }
 
   public subscribe(listener: (status: ProductKnowledgeRuntimeStatus) => void): () => void {
@@ -177,11 +212,34 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
       }
     }
 
-    const pw = await this.workbookFetcher.getWorkbook({ kind: 'product', id: productId });
-    if (!pw) return null;
+    let pw: ProductWorkbook | null = null;
+    try {
+      pw = await this.workbookFetcher.getWorkbook({ kind: 'product', id: productId });
+    } catch {
+      return null;
+    }
+
+    if (!pw) {
+      // Emenda 4 & 16: Se não possui Product Workbook, mas possui Family Workbook, resolve conhecimento efetivo
+      if (familyWorkbook) {
+        const resolved = resolveEffectiveProductKnowledge({
+          productId,
+          productWorkbook: null,
+          familyWorkbook
+        });
+        this.knowledgeCache.set(productId, resolved);
+        if (this.status === 'idle') {
+          this.setStatus('ready');
+        }
+        return resolved;
+      }
+      return null;
+    }
+
     this.workbookCache.set(`product:${productId}`, pw);
 
     const resolved = resolveEffectiveProductKnowledge({
+      productId,
       productWorkbook: pw,
       familyWorkbook
     });
@@ -195,7 +253,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
   /**
    * Pré-carrega de forma assíncrona todo o conhecimento de produtos exigido por um catálogo.
-   * Totalmente imune a race conditions via verificação estrita de epoch e catalogId (Emenda 9).
+   * Totalmente imune a race conditions via commits atômicos pós-validação de epoch e catalogId (Emendas 6 e 9).
    */
   public async preloadCatalogProductKnowledge(catalog: Catalog): Promise<void> {
     const epoch = ++this.currentEpoch;
@@ -207,6 +265,12 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     }
 
     const referencedProductIds = extractReferencedProductIds(catalog);
+    this.referencedProductIds = referencedProductIds;
+    this.loadedProductIds = [];
+    this.failedProductIds = [];
+    this.failureReasons.clear();
+    this.knownEmptyProductIds.clear();
+
     if (referencedProductIds.length === 0) {
       this.setStatus('ready');
       return;
@@ -215,20 +279,25 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     this.setStatus('loading');
 
     try {
+      // Estruturas locais isoladas para evitar contaminação pré-epoch (Emenda 6 / Ponto 6)
+      const tempIdentities = new Map<string, ProductIdentity>();
+      const tempWorkbooks = new Map<string, ProductWorkbook>();
+      const tempKnowledge = new Map<string, ResolvedProductKnowledge>();
+
       // 1. Carregar identidades de produtos sem N+1 (Emenda 3 & 17)
       if (this.registryReader) {
         const identities = await this.registryReader.getProductsByIds(referencedProductIds);
         if (epoch !== this.currentEpoch || catalog.id !== this.activeCatalogId) return;
 
         for (const identity of identities) {
-          this.productIdentities.set(identity.id, identity);
+          tempIdentities.set(identity.id, identity);
         }
       }
 
       // 2. Coletar e agrupar owners únicos para produtos e famílias
       const familyIdsToLoad = new Set<string>();
       for (const productId of referencedProductIds) {
-        const identity = this.productIdentities.get(productId);
+        const identity = tempIdentities.get(productId) || this.productIdentities.get(productId);
         if (identity?.familyId) {
           familyIdsToLoad.add(identity.familyId);
         }
@@ -242,7 +311,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
             const fw = await this.workbookFetcher!.getWorkbook({ kind: 'family', id: familyId });
             if (fw) {
               familyWorkbooks.set(familyId, fw);
-              this.workbookCache.set(`family:${familyId}`, fw);
+              tempWorkbooks.set(`family:${familyId}`, fw);
             }
           } catch {
             // Falha não crítica de família individual
@@ -252,33 +321,83 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
       if (epoch !== this.currentEpoch || catalog.id !== this.activeCatalogId) return;
 
-      // 4. Buscar workbooks de produtos em paralelo
+      // 4. Buscar workbooks de produtos em paralelo com distinção rigorosa de falhas vs known-empty (Emenda 5)
+      const loadedIds: string[] = [];
+      const failedIds: string[] = [];
+      const reasons = new Map<string, string>();
+      const knownEmpty = new Set<string>();
+
       await Promise.all(
         referencedProductIds.map(async (productId) => {
+          const identity = tempIdentities.get(productId) || this.productIdentities.get(productId);
+          const familyWorkbook = identity?.familyId ? familyWorkbooks.get(identity.familyId) : undefined;
+
           try {
             const pw = await this.workbookFetcher!.getWorkbook({ kind: 'product', id: productId });
-            if (!pw) return;
-
-            this.workbookCache.set(`product:${productId}`, pw);
-
-            const identity = this.productIdentities.get(productId);
-            const familyWorkbook = identity?.familyId ? familyWorkbooks.get(identity.familyId) : undefined;
-
-            const resolved = resolveEffectiveProductKnowledge({
-              productWorkbook: pw,
-              familyWorkbook
-            });
-
-            this.knowledgeCache.set(productId, resolved);
-          } catch {
-            // Falha tratada individualmente
+            if (pw) {
+              tempWorkbooks.set(`product:${productId}`, pw);
+              const resolved = resolveEffectiveProductKnowledge({
+                productId,
+                productWorkbook: pw,
+                familyWorkbook
+              });
+              tempKnowledge.set(productId, resolved);
+              loadedIds.push(productId);
+            } else {
+              // Product workbook é legitimamente nulo (Emenda 4 & 5)
+              if (familyWorkbook) {
+                // Herança family-only válida
+                const resolved = resolveEffectiveProductKnowledge({
+                  productId,
+                  productWorkbook: null,
+                  familyWorkbook
+                });
+                tempKnowledge.set(productId, resolved);
+                loadedIds.push(productId);
+              } else {
+                // Known-empty: produto sem fatos técnicos locais nem familiares
+                knownEmpty.add(productId);
+                loadedIds.push(productId);
+              }
+            }
+          } catch (err: unknown) {
+            // Erro real de rede ou infraestrutura
+            failedIds.push(productId);
+            const msg = err instanceof Error ? err.message : 'Erro ao carregar workbook.';
+            reasons.set(productId, msg);
           }
         })
       );
 
-      if (epoch !== this.currentEpoch || catalog.id !== this.activeCatalogId) return;
+      // Validação estrita de epoch ANTES de qualquer escrita nos caches de runtime (Emenda 6 / Ponto 6)
+      if (epoch !== this.currentEpoch || catalog.id !== this.activeCatalogId) {
+        return;
+      }
 
-      this.setStatus('ready');
+      // Commit atômico nos caches oficiais
+      for (const [id, identity] of tempIdentities) {
+        this.productIdentities.set(id, identity);
+      }
+      for (const [key, wb] of tempWorkbooks) {
+        this.workbookCache.set(key, wb);
+      }
+      for (const [id, kn] of tempKnowledge) {
+        this.knowledgeCache.set(id, kn);
+      }
+
+      this.loadedProductIds = loadedIds;
+      this.failedProductIds = failedIds;
+      this.failureReasons = reasons;
+      this.knownEmptyProductIds = knownEmpty;
+
+      // Determinação de status de integridade (Emenda 5 & 10)
+      if (failedIds.length === 0) {
+        this.setStatus('ready');
+      } else if (loadedIds.length > 0) {
+        this.setStatus('partial', 'Conhecimento técnico de produtos parcialmente carregado.');
+      } else {
+        this.setStatus('error', 'Falha ao carregar conhecimento técnico dos produtos.');
+      }
     } catch (err: unknown) {
       if (epoch !== this.currentEpoch || catalog.id !== this.activeCatalogId) return;
       const message = err instanceof Error ? err.message : 'Erro ao carregar conhecimento técnico.';
@@ -348,14 +467,14 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
             (datum.description && datum.description.toLowerCase().includes(q));
 
           if (match) {
-            const literalRes = mapTechnicalValueToTableLiteralV2(datum.value);
-            const preview = literalRes.supported ? literalRes.content : { kind: 'text' as const, text: '' };
+            const preview = projectTechnicalValueFailClosed(datum.value);
 
             const sourceOwnerKind: 'product' | 'family' = eff.origin === 'family' ? 'family' : 'product';
             const sourceOwnerId = eff.origin === 'family' ? (knowledge.familyId ?? productId) : productId;
             const sourceRevision = eff.origin === 'family' ? knowledge.familyRevision : knowledge.productRevision;
 
             results.push({
+              bindable: true,
               id: datum.id,
               kind: 'datum',
               productId,
@@ -390,6 +509,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
               const sourceRevision = effDs.origin === 'family' ? knowledge.familyRevision : knowledge.productRevision;
 
               results.push({
+                bindable: true,
                 id: ds.id,
                 kind: 'dataset',
                 productId,
@@ -420,6 +540,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
             if (match) {
               results.push({
+                bindable: true,
                 id: sv.id,
                 kind: 'saved_view',
                 productId,
@@ -460,8 +581,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     const eff = knowledge.effectiveData.get(semanticKey);
     if (!eff) return undefined;
 
-    const literalRes = mapTechnicalValueToTableLiteralV2(eff.datum.value);
-    const value = literalRes.supported ? literalRes.content : ({ kind: 'text', text: '' } as const);
+    const value = projectTechnicalValueFailClosed(eff.datum.value);
 
     const sourceOwnerKind: 'product' | 'family' = eff.origin === 'family' ? 'family' : 'product';
     const sourceOwnerId = eff.origin === 'family' ? (knowledge.familyId ?? productId) : productId;
@@ -487,10 +607,17 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     if (!knowledge) return undefined;
 
     let targetDataset = productWb?.schemaVersion === 2 ? productWb.datasets.find((d) => d.id === datasetId) : undefined;
+    let structureOwnerKind: 'product' | 'family' = 'product';
+    let structureOwnerId: string = productId;
+    let structureRevision: number | undefined = knowledge.productRevision;
+
     if (!targetDataset && knowledge.effectiveDatasets) {
       for (const eff of knowledge.effectiveDatasets.values()) {
         if (eff.dataset.id === datasetId) {
           targetDataset = eff.dataset;
+          structureOwnerKind = eff.origin === 'family' ? 'family' : 'product';
+          structureOwnerId = eff.origin === 'family' ? (knowledge.familyId ?? productId) : productId;
+          structureRevision = eff.origin === 'family' ? knowledge.familyRevision : knowledge.productRevision;
           break;
         }
       }
@@ -513,7 +640,10 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
       productId,
       datums: datumsMap,
       bindingMode: 'live',
-      sourceRevision: knowledge.productRevision
+      sourceRevision: structureRevision,
+      sourceOwnerKind: structureOwnerKind,
+      sourceOwnerId: structureOwnerId,
+      effectiveKnowledge: knowledge
     });
   }
 

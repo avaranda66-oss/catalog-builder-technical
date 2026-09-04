@@ -25,18 +25,28 @@ import { deriveDatumStatus } from './provenance.engine';
  * 3. Publication/AI truth safety: Draft product overrides cannot silently overwrite approved family facts.
  */
 export function resolveEffectiveProductKnowledge(params: {
-  familyWorkbook?: ProductWorkbook;
-  productWorkbook: ProductWorkbook;
+  productId?: string;
+  familyWorkbook?: ProductWorkbook | null;
+  productWorkbook?: ProductWorkbook | null;
   policy?: ResolutionPolicy;
 }): ResolvedProductKnowledge {
   const { familyWorkbook, productWorkbook } = params;
   const policy: ResolutionPolicy = params.policy ?? 'effective_for_editing';
 
-  if (productWorkbook.owner.kind !== 'product') {
-    throw new Error('resolveEffectiveProductKnowledge exige que o workbook principal pertença a um produto.');
+  const productId =
+    params.productId ||
+    (productWorkbook && productWorkbook.owner.kind === 'product' ? productWorkbook.owner.id : undefined);
+
+  if (!productId || productId.trim() === '') {
+    throw new Error('resolveEffectiveProductKnowledge exige um productId concreto válido.');
   }
 
-  const productId = productWorkbook.owner.id;
+  if (productWorkbook && productWorkbook.owner.kind !== 'product') {
+    throw new Error('resolveEffectiveProductKnowledge exige que o productWorkbook pertença a um produto.');
+  }
+
+  const hasProductWorkbook = Boolean(productWorkbook);
+  const productRevision = productWorkbook ? productWorkbook.revision : undefined;
   const familyId = familyWorkbook?.owner.id;
 
   const effectiveData = new Map<string, EffectiveDatum>();
@@ -47,7 +57,7 @@ export function resolveEffectiveProductKnowledge(params: {
   if (familyWorkbook) {
     for (const familyDatum of Object.values(familyWorkbook.data)) {
       const semKey = familyDatum.semanticKey;
-      const override = productWorkbook.overrides?.[semKey];
+      const override = productWorkbook?.overrides?.[semKey];
 
       if (override) {
         if (override.mode === 'suppress') {
@@ -128,26 +138,28 @@ export function resolveEffectiveProductKnowledge(params: {
   }
 
   // 2. Processar dados locais do Produto (product_local)
-  for (const productDatum of Object.values(productWorkbook.data)) {
-    const semKey = productDatum.semanticKey;
+  if (productWorkbook && productWorkbook.data) {
+    for (const productDatum of Object.values(productWorkbook.data)) {
+      const semKey = productDatum.semanticKey;
 
-    // Se já foi registrado pela família, os dados do produto local não colidem
-    // (a substituição de dados da família deve ser feita via overrides explícitos)
-    if (effectiveData.has(semKey)) {
-      continue;
+      // Se já foi registrado pela família, os dados do produto local não colidem
+      // (a substituição de dados da família deve ser feita via overrides explícitos)
+      if (effectiveData.has(semKey)) {
+        continue;
+      }
+
+      const derivedStatus = deriveDatumStatus(productDatum);
+      if (derivedStatus === 'conflicting') conflictsCount++;
+
+      effectiveData.set(semKey, {
+        datum: productDatum,
+        origin: 'product_local',
+        effectiveStatus: derivedStatus,
+        productDatumId: productDatum.id,
+        overrideMode: undefined,
+        isPendingOverride: false
+      });
     }
-
-    const derivedStatus = deriveDatumStatus(productDatum);
-    if (derivedStatus === 'conflicting') conflictsCount++;
-
-    effectiveData.set(semKey, {
-      datum: productDatum,
-      origin: 'product_local',
-      effectiveStatus: derivedStatus,
-      productDatumId: productDatum.id,
-      overrideMode: undefined,
-      isPendingOverride: false
-    });
   }
 
   // 3. Mesclar e reconstruir módulos técnicos efetivos
@@ -164,12 +176,14 @@ export function resolveEffectiveProductKnowledge(params: {
   }
 
   // Adiciona módulos locais do produto
-  for (const mod of productWorkbook.modules) {
-    if (!moduleMap.has(mod.id)) {
-      moduleMap.set(mod.id, {
-        ...mod,
-        datumIds: []
-      });
+  if (productWorkbook && productWorkbook.modules) {
+    for (const mod of productWorkbook.modules) {
+      if (!moduleMap.has(mod.id)) {
+        moduleMap.set(mod.id, {
+          ...mod,
+          datumIds: []
+        });
+      }
     }
   }
 
@@ -195,11 +209,11 @@ export function resolveEffectiveProductKnowledge(params: {
       ? familyWorkbook.datasets
       : [];
   const productDatasets =
-    'datasets' in productWorkbook && Array.isArray(productWorkbook.datasets)
+    productWorkbook && 'datasets' in productWorkbook && Array.isArray(productWorkbook.datasets)
       ? productWorkbook.datasets
       : [];
   const datasetOverrides =
-    'datasetOverrides' in productWorkbook && productWorkbook.datasetOverrides
+    productWorkbook && 'datasetOverrides' in productWorkbook && productWorkbook.datasetOverrides
       ? productWorkbook.datasetOverrides
       : {};
 
@@ -262,7 +276,8 @@ export function resolveEffectiveProductKnowledge(params: {
 
   return {
     productId,
-    productRevision: productWorkbook.revision,
+    productRevision,
+    hasProductWorkbook,
     familyId,
     familyRevision: familyWorkbook?.revision,
     modules: sortedModules,

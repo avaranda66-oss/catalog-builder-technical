@@ -559,8 +559,9 @@ export type ResolutionPolicy =
  */
 export interface ResolvedProductKnowledge {
   readonly productId: string;
-  /** Persisted revision of the product workbook. */
-  readonly productRevision: number;
+  /** Persisted revision of the product workbook, if it exists. */
+  readonly productRevision?: number;
+  readonly hasProductWorkbook?: boolean;
   readonly familyId?: string;
   /** Persisted revision of the family workbook, if applicable. */
   readonly familyRevision?: number;
@@ -584,7 +585,7 @@ export interface KnowledgeFactSnapshot {
   readonly sourceCount: number;
   readonly sourceSummaries: readonly string[];
   /** Persisted/server revision of the originating workbook where this fact was persisted. */
-  readonly revision: number;
+  readonly revision?: number;
   readonly hasConflict: boolean;
   readonly candidateValues?: readonly TechnicalValue[];
 }
@@ -595,7 +596,8 @@ export interface KnowledgeFactSnapshot {
 export interface KnowledgeSnapshot {
   readonly productId: string;
   /** Persisted revision of the product workbook from which this snapshot was generated. */
-  readonly productRevision: number;
+  readonly productRevision?: number;
+  readonly hasProductWorkbook?: boolean;
   readonly generatedAt: string;
   readonly facts: ReadonlyMap<string, KnowledgeFactSnapshot>;
   readonly conflictingFacts: readonly KnowledgeFactSnapshot[];

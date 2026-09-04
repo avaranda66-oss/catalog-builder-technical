@@ -54,6 +54,8 @@ import {
   TechnicalDatasetProjection,
   TechnicalDatasetCellProjection,
   SavedViewProjection,
+  BoundTechnicalCellProjection,
+  LiteralCellProjection,
   generateDeterministicDatasetColumnId,
   generateDeterministicDatasetRowId,
   ProductKnowledgeRuntime,
@@ -1574,17 +1576,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         if (cellItem) {
           const isCellProj = typeof cellItem === 'object' && cellItem !== null && 'datumKey' in cellItem;
           const proj = isCellProj ? (cellItem as TechnicalDatasetCellProjection) : undefined;
-          const litVal: TableCellLiteralContent = proj ? proj.value : (cellItem as TableCellLiteralContent);
-          const canonicalKey = proj?.datumKey || `canonical_datum_${proj?.datumId || 'snapshot'}`;
+          // Emendas 12 & 13: FAIL CLOSED - zero fake datum keys like canonical_datum_
+          if (!proj?.datumKey) {
+            return;
+          }
 
           cellBindings[col.key] = {
             sourceKind: 'dataset',
             productId: dataset.productId,
-            semanticKey: canonicalKey,
+            semanticKey: proj.datumKey,
             datasetId: dataset.datasetId,
             bindingMode: dataset.bindingMode,
-            snapshot: litVal,
-            sourceRevision: dataset.sourceRevision
+            snapshot: proj.value,
+            sourceRevision: proj.sourceRevision ?? dataset.sourceRevision,
+            sourceOwnerKind: proj.sourceOwnerKind ?? dataset.sourceOwnerKind,
+            sourceOwnerId: proj.sourceOwnerId ?? dataset.sourceOwnerId
           };
         }
       });
@@ -1609,6 +1615,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         datasetId: dataset.datasetId,
         productId: dataset.productId,
         sourceRevision: dataset.sourceRevision,
+        sourceOwnerKind: dataset.sourceOwnerKind,
+        sourceOwnerId: dataset.sourceOwnerId,
         bindingMode: dataset.bindingMode
       }
     };
@@ -1653,25 +1661,57 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const tableRows: CatalogTableRow[] = rows.map((r, rIdx) => {
       const rowId = generateDeterministicDatasetRowId(view.id, r.rowId);
       const cellBindings: Record<string, CatalogCellBinding> = {};
+      const cellValues: Record<string, TableCellLiteralContent> = {};
 
       view.columns.forEach((col) => {
         const colKey = typeof col === 'string' ? col : col.key;
         const cellItem = r.cells[colKey];
-        if (cellItem) {
-          const isCellProj = typeof cellItem === 'object' && cellItem !== null && 'datumKey' in cellItem;
-          const proj = isCellProj ? (cellItem as TechnicalDatasetCellProjection) : undefined;
-          const litVal: TableCellLiteralContent = proj ? proj.value : (cellItem as TableCellLiteralContent);
-          const canonicalKey = proj?.datumKey || `canonical_datum_${proj?.datumId || 'snapshot'}`;
+        if (!cellItem) return;
 
-          cellBindings[colKey] = {
-            sourceKind: view.datasetId ? 'dataset' : 'pim_datum',
-            productId: view.productId,
-            semanticKey: canonicalKey,
-            datasetId: view.datasetId,
-            bindingMode: view.bindingMode || 'live',
-            snapshot: litVal,
-            sourceRevision: view.sourceRevision
-          };
+        // Discriminated union switch (Emenda 14)
+        if (typeof cellItem === 'object' && cellItem !== null) {
+          if ('kind' in cellItem) {
+            if (cellItem.kind === 'bound') {
+              const bound = cellItem as BoundTechnicalCellProjection;
+              if (bound.datumKey) {
+                cellBindings[colKey] = {
+                  sourceKind: view.datasetId ? 'dataset' : 'pim_datum',
+                  productId: view.productId,
+                  semanticKey: bound.datumKey,
+                  datasetId: view.datasetId,
+                  bindingMode: view.bindingMode || 'live',
+                  snapshot: bound.value,
+                  sourceRevision: bound.sourceRevision ?? view.sourceRevision,
+                  sourceOwnerKind: bound.sourceOwnerKind ?? view.sourceOwnerKind,
+                  sourceOwnerId: bound.sourceOwnerId ?? view.sourceOwnerId
+                };
+              }
+              return;
+            } else if (cellItem.kind === 'literal') {
+              cellValues[colKey] = (cellItem as LiteralCellProjection).value;
+              return;
+            }
+          }
+
+          // Fallback backward-compatibility para TechnicalDatasetCellProjection ou TableCellLiteralContent
+          if ('datumKey' in cellItem && (cellItem as any).datumKey) {
+            const bound = cellItem as TechnicalDatasetCellProjection;
+            cellBindings[colKey] = {
+              sourceKind: view.datasetId ? 'dataset' : 'pim_datum',
+              productId: view.productId,
+              semanticKey: bound.datumKey,
+              datasetId: view.datasetId,
+              bindingMode: view.bindingMode || 'live',
+              snapshot: bound.value,
+              sourceRevision: bound.sourceRevision ?? view.sourceRevision,
+              sourceOwnerKind: bound.sourceOwnerKind ?? view.sourceOwnerKind,
+              sourceOwnerId: bound.sourceOwnerId ?? view.sourceOwnerId
+            };
+            return;
+          }
+
+          // Literal editorial sem binding PIM (Emenda 10)
+          cellValues[colKey] = cellItem as TableCellLiteralContent;
         }
       });
 
@@ -1679,7 +1719,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         id: rowId,
         productRefId: view.productId,
         cellBindings,
-        cellValues: {},
+        cellValues,
         localOverrides: {},
         order: rIdx
       };

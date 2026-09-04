@@ -12,6 +12,8 @@ import {
 export class SupabaseProductRegistryReader implements ProductRegistryReader {
   private readonly client: SupabaseClient | null;
   private readonly cache = new Map<string, ProductIdentity>();
+  private readonly loadedFamilyIds = new Set<string>();
+  private readonly productsByFamilyCache = new Map<string, ProductIdentity[]>();
 
   constructor(client?: SupabaseClient | null) {
     this.client = client ?? null;
@@ -72,6 +74,59 @@ export class SupabaseProductRegistryReader implements ProductRegistryReader {
     }
 
     return result;
+  }
+
+  public async getProductsByFamilyIds(familyIds: string[]): Promise<ProductIdentity[]> {
+    const validFamilyIds = Array.from(new Set(familyIds.filter((id) => Boolean(id && id.trim()))));
+    if (validFamilyIds.length === 0) return [];
+
+    const missingFamilyIds = validFamilyIds.filter((fid) => !this.loadedFamilyIds.has(fid));
+
+    if (missingFamilyIds.length > 0 && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('products')
+          .select('id, code, model, name, family_id, family')
+          .in('family_id', missingFamilyIds);
+
+        if (!error && Array.isArray(data)) {
+          for (const fid of missingFamilyIds) {
+            if (!this.productsByFamilyCache.has(fid)) {
+              this.productsByFamilyCache.set(fid, []);
+            }
+            this.loadedFamilyIds.add(fid);
+          }
+
+          for (const row of data) {
+            const identity: ProductIdentity = {
+              id: row.id,
+              code: row.code || '',
+              model: row.model || undefined,
+              name: row.name || undefined,
+              familyId: row.family_id || undefined,
+              familyName: row.family || undefined
+            };
+            this.cache.set(identity.id, identity);
+            if (row.family_id) {
+              const list = this.productsByFamilyCache.get(row.family_id) || [];
+              list.push(identity);
+              this.productsByFamilyCache.set(row.family_id, list);
+            }
+          }
+        }
+      } catch {
+        // Falha segura
+      }
+    }
+
+    const results: ProductIdentity[] = [];
+    for (const fid of validFamilyIds) {
+      const list = this.productsByFamilyCache.get(fid);
+      if (list) {
+        results.push(...list);
+      }
+    }
+    return results;
   }
 
   public async getAllProducts(): Promise<ProductIdentity[]> {

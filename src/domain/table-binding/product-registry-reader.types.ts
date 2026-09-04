@@ -18,6 +18,7 @@ export interface ProductIdentity {
 export interface ProductRegistryReader {
   getProductIdentity(productId: string): Promise<ProductIdentity | null>;
   getProductsByIds(ids: string[]): Promise<ProductIdentity[]>;
+  getProductsByFamilyIds(familyIds: string[]): Promise<ProductIdentity[]>;
   getAllProducts?(): Promise<ProductIdentity[]>;
 }
 
@@ -50,6 +51,11 @@ export class InMemoryProductRegistryReader implements ProductRegistryReader {
       if (p) result.push(p);
     }
     return result;
+  }
+
+  public async getProductsByFamilyIds(familyIds: string[]): Promise<ProductIdentity[]> {
+    const famSet = new Set(familyIds);
+    return Array.from(this.products.values()).filter((p) => p.familyId && famSet.has(p.familyId));
   }
 
   public async getAllProducts(): Promise<ProductIdentity[]> {

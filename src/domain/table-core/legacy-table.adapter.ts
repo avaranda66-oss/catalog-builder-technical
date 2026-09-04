@@ -237,6 +237,8 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
               moduleKey: explicitBinding.moduleKey,
               datasetId: explicitBinding.datasetId,
               sourceRevision: explicitBinding.sourceRevision,
+              sourceOwnerKind: explicitBinding.sourceOwnerKind,
+              sourceOwnerId: explicitBinding.sourceOwnerId,
               bindingMode: 'snapshot',
               snapshot: explicitBinding.snapshot
             };
@@ -249,6 +251,8 @@ export function adaptLegacyBlockToTableCore(block: ContentBlock): LegacyAdapterR
             moduleKey: explicitBinding.moduleKey,
             datasetId: explicitBinding.datasetId,
             sourceRevision: explicitBinding.sourceRevision,
+            sourceOwnerKind: explicitBinding.sourceOwnerKind,
+            sourceOwnerId: explicitBinding.sourceOwnerId,
             bindingMode: explicitBinding.bindingMode,
             snapshot: explicitBinding.snapshot
           };

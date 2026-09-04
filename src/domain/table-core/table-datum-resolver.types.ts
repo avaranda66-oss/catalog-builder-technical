@@ -11,6 +11,7 @@ export interface TableDatumDiagnostic {
   readonly productRevision?: number;
   readonly familyRevision?: number;
   readonly unsupportedType?: string;
+  readonly diagnosticCode?: 'UNSUPPORTED_PROJECTION' | 'UNSUPPORTED_TYPE' | string;
   readonly origin?: string;
   readonly sourceOwnerKind?: 'product' | 'family';
   readonly sourceOwnerId?: string;

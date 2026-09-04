@@ -44,7 +44,13 @@ export const ExportPDFModal: React.FC = () => {
   // Auditoria de segurança de publicação em 3 camadas (Emendas 15 e 16)
   const isRuntimeLoading = runtimeStatus === 'loading';
   const resolveDatum = !isRuntimeLoading ? getTableDatumResolver() : undefined;
-  const auditReport = auditCatalogPublishSafety({ catalog: currentCatalog, syncStatus, resolveDatum });
+  const auditReport = auditCatalogPublishSafety({
+    catalog: currentCatalog,
+    syncStatus,
+    resolveDatum,
+    runtimeStatus,
+    failedProductIds: knowledgeRuntime.getFailedProductIds()
+  });
   const isExportBlocked = isRuntimeLoading || !auditReport.canPublish;
 
   const handleDownloadPDF = async () => {
@@ -139,6 +145,14 @@ export const ExportPDFModal: React.FC = () => {
             <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-none flex items-center gap-2 font-mono text-[11px]" data-testid="runtime-loading-indicator">
               <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
               <span>Sincronizando conhecimento técnico do catálogo antes da validação de publicação...</span>
+            </div>
+          )}
+
+          {/* Indicador de Runtime Parcial (Emenda 10) */}
+          {runtimeStatus === 'partial' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-none flex items-center gap-2 font-mono text-[11px]" data-testid="runtime-partial-indicator">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Conhecimento técnico de produtos parcialmente carregado. Células sem snapshot de contingência serão bloqueadas.</span>
             </div>
           )}
 

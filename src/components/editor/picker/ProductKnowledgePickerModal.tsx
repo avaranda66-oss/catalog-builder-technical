@@ -125,7 +125,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   };
 
   const handleBindToTargetCell = (item: ProductKnowledgeSearchResult) => {
-    if (!knowledgePickerTarget || knowledgePickerTarget.kind !== 'cell') return;
+    if (!knowledgePickerTarget || knowledgePickerTarget.kind !== 'cell' || !item.bindable || !item.productId) return;
     const { blockId, legacyRowId, legacyColKey } = knowledgePickerTarget;
 
     const previewSnapshot: TableCellLiteralContent | undefined =
@@ -152,7 +152,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   };
 
   const handleAddAsColumn = (item: ProductKnowledgeSearchResult) => {
-    if (!knowledgePickerTarget) return;
+    if (!knowledgePickerTarget || !item.bindable || !item.productId) return;
     const { blockId } = knowledgePickerTarget;
 
     addTableColumn(blockId, {
@@ -190,7 +190,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   };
 
   const handleInsertDatasetAsTable = async (item: ProductKnowledgeSearchResult) => {
-    if (!knowledgePickerTarget || !item.datasetId) return;
+    if (!knowledgePickerTarget || !item.bindable || !item.productId || !item.datasetId) return;
 
     setIsLoading(true);
     try {
@@ -215,7 +215,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   };
 
   const handleInsertSavedViewAsTable = async (item: ProductKnowledgeSearchResult) => {
-    if (!knowledgePickerTarget) return;
+    if (!knowledgePickerTarget || !item.bindable || !item.productId) return;
 
     setIsLoading(true);
     try {
@@ -315,6 +315,12 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
           </div>
         ) : (
           <>
+            {provider.getStatus && provider.getStatus() === 'partial' && (
+              <div data-testid="picker-partial-warning" className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Aviso: O conhecimento técnico está parcialmente indisponível. Alguns produtos podem não ser listados.</span>
+              </div>
+            )}
             <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
               {scopedProductId && (
                 <div className="flex items-center justify-between px-3 py-2 bg-blue-50/60 border border-blue-200/80 rounded-lg text-xs">
@@ -409,8 +415,19 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                               <button
                                 type="button"
                                 data-testid={`picker-bind-cell-${item.semanticKey}`}
-                                onClick={(e) => { e.stopPropagation(); handleBindToTargetCell(item); }}
-                                className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold"
+                                disabled={item.bindable === false}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (item.bindable !== false) {
+                                    handleBindToTargetCell(item);
+                                  }
+                                }}
+                                className={`px-3 py-1.5 rounded text-xs font-semibold ${
+                                  item.bindable === false
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                                title={item.bindable === false ? 'Resultado abstrato não pode ser vinculado a uma célula de produto' : 'Vincular à célula'}
                               >
                                 Vincular
                               </button>
@@ -418,8 +435,19 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                             <button
                               type="button"
                               data-testid={`picker-add-col-${item.semanticKey}`}
-                              onClick={(e) => { e.stopPropagation(); handleAddAsColumn(item); }}
-                              className="px-3 py-1.5 bg-slate-800 text-white rounded text-xs font-semibold"
+                              disabled={item.bindable === false}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (item.bindable !== false) {
+                                  handleAddAsColumn(item);
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded text-xs font-semibold ${
+                                item.bindable === false
+                                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                  : 'bg-slate-800 text-white hover:bg-slate-900'
+                              }`}
+                              title={item.bindable === false ? 'Resultado abstrato não pode ser adicionado como coluna de produto' : 'Adicionar Coluna'}
                             >
                               Coluna
                             </button>

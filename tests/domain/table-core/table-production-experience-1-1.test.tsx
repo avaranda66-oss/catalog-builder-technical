@@ -138,6 +138,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
 
     const mockProvider = new TestProductKnowledgeProvider([
       {
+        bindable: true,
         id: 'res-acc-ta25n',
         kind: 'datum',
         productId: 'prod-ta25n',
@@ -195,6 +196,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
 
     const mockProvider = new TestProductKnowledgeProvider([
       {
+        bindable: true,
         id: 'res-pressure-range',
         kind: 'datum',
         productId: 'prod-ta25n',
@@ -241,6 +243,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.1: Quality Gates & Comprehensive Audit Su
 
     const mockProvider = new TestProductKnowledgeProvider([
       {
+        bindable: true,
         id: 'res-ds-ranges-01',
         kind: 'dataset',
         productId: 'prod-ta25n',

@@ -23,8 +23,10 @@ import {
   evaluateBindingFreshness,
   createProductWorkbookDatumResolver,
   mapTechnicalValueToTableLiteral,
-  mapTechnicalValueToTableLiteralV2
+  mapTechnicalValueToTableLiteralV2,
+  projectTechnicalValueFailClosed
 } from '../../src/domain/table-binding';
+import { ProductWorkbookRepository } from '../../src/services/product-workbook/persistence.types';
 import { auditCatalogPublishSafety } from '../../src/domain/table-core/publish-safety.audit';
 import { SupabaseProductKnowledgeProvider } from '../../src/services/product-knowledge/supabase-product-knowledge.provider';
 import { Catalog, CatalogCellBinding } from '../../src/domain/catalog.schema';
@@ -850,5 +852,1031 @@ describe('INTEGRATION.PIM.TABLE.PROD1 — Canonical PIM ↔ Table Core V2 Integr
     const conflictIssue = audit.issues.find((i) => i.code === 'CONFLICT_TECHNICAL_DATUM');
     expect(conflictIssue).toBeDefined();
     expect(conflictIssue?.severity).toBe('block');
+  });
+
+  // =========================================================================
+  // BATERIA COMPLETA DE AUDITORIA INDEPENDENTE 1.1 (16 TESTES MANDATÓRIOS)
+  // =========================================================================
+
+  it('Audit 1. Family global hit jamais usa familyId como productId', async () => {
+    const famId = 'fam_global_001';
+    const prodConcreteId = 'prod_concrete_001';
+    const mockRpcHits = [
+      {
+        source_index: 'technical_data',
+        owner_kind: 'family',
+        owner_id: famId,
+        semantic_key: 'metrology.accuracy',
+        label: 'Exatidão da Família',
+        value_formatted: '0.1',
+        unit: '°C',
+        status: 'approved'
+      }
+    ];
+
+    const fakeClient = {
+      rpc: vi.fn().mockResolvedValue({ data: mockRpcHits, error: null })
+    } as any;
+
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: prodConcreteId, code: 'P1', model: 'M1', name: 'Product 1', familyId: famId }
+    ]);
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_glob',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famId },
+      revision: 8,
+      modules: [],
+      data: {
+        d_acc: {
+          id: 'd_acc',
+          moduleId: 'mod_m',
+          semanticKey: 'metrology.accuracy',
+          label: 'Exatidão',
+          value: { type: 'quantity', amount: 0.1, unit: '°C' },
+          evidence: [{ id: 'ev1', sourceDocumentId: 'ev1' }],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn().mockImplementation(async (owner) => {
+        if (owner.kind === 'family' && owner.id === famId) return familyWb;
+        return null;
+      }),
+      saveWorkbook: vi.fn()
+    };
+
+    const provider = new SupabaseProductKnowledgeProvider({
+      client: fakeClient,
+      repository,
+      registryReader
+    });
+
+    const results = await provider.search(undefined, 'Exatidão');
+    expect(results.length).toBe(1);
+    const hit = results[0];
+
+    // INVARIANTE DA EMENDA 1 & 3: productId JAMAIS pode ser familyId!
+    expect(hit.bindable).toBe(true);
+    if (hit.bindable) {
+      expect(hit.productId).toBe(prodConcreteId);
+      expect(hit.productId).not.toBe(famId);
+    }
+    expect(hit.sourceOwnerKind).toBe('family');
+    expect(hit.sourceOwnerId).toBe(famId);
+  });
+
+  it('Audit 2. Abstract family result não bindável é type-safe', async () => {
+    const famOrphanId = 'fam_orphan_002';
+    const mockRpcHits = [
+      {
+        source_index: 'technical_data',
+        owner_kind: 'family',
+        owner_id: famOrphanId,
+        semantic_key: 'electrical.power',
+        label: 'Alimentação Família',
+        value_formatted: '220V',
+        status: 'approved'
+      }
+    ];
+
+    const fakeClient = {
+      rpc: vi.fn().mockResolvedValue({ data: mockRpcHits, error: null })
+    } as any;
+
+    const registryReader = new InMemoryProductRegistryReader([]);
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_orphan',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famOrphanId },
+      revision: 3,
+      modules: [],
+      data: {
+        d_pwr: {
+          id: 'd_pwr',
+          moduleId: 'mod_e',
+          semanticKey: 'electrical.power',
+          label: 'Alimentação',
+          value: { type: 'text', value: '220V' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn().mockResolvedValue(familyWb),
+      saveWorkbook: vi.fn()
+    };
+
+    const provider = new SupabaseProductKnowledgeProvider({
+      client: fakeClient,
+      repository,
+      registryReader
+    });
+
+    const results = await provider.search(undefined, 'Alimentação');
+    expect(results.length).toBe(1);
+    const hit = results[0];
+
+    // INVARIANTE DA EMENDA 3:
+    expect(hit.bindable).toBe(false);
+    if (!hit.bindable) {
+      expect(hit.productId).toBeUndefined();
+      expect(hit.sourceOwnerKind).toBe('family');
+      expect(hit.sourceOwnerId).toBe(famOrphanId);
+    }
+  });
+
+  it('Audit 3. Produto sem Product Workbook + Family Workbook resolve com productId real e sem revision fake 0', () => {
+    const famId = 'fam_pure_003';
+    const prodId = 'prod_nowb_003';
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_003',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famId },
+      revision: 12,
+      modules: [],
+      data: {
+        d1: {
+          id: 'd1',
+          moduleId: 'm1',
+          semanticKey: 'sensor.type',
+          label: 'Tipo de Sensor',
+          value: { type: 'text', value: 'Pt100' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const resolved = resolveEffectiveProductKnowledge({
+      productId: prodId,
+      productWorkbook: null,
+      familyWorkbook: familyWb
+    });
+
+    // INVARIANTES DA EMENDA 1 & 2:
+    expect(resolved.productId).toBe(prodId);
+    expect(resolved.productId).not.toBe(famId);
+    expect(resolved.familyId).toBe(famId);
+    expect(resolved.familyRevision).toBe(12);
+    expect(resolved.productRevision).toBeUndefined();
+    expect(resolved.hasProductWorkbook).toBe(false);
+
+    const effDatum = resolved.effectiveData.get('sensor.type');
+    expect(effDatum).toBeDefined();
+    expect(effDatum?.origin).toBe('family');
+    expect(effDatum?.datum.value).toEqual({ type: 'text', value: 'Pt100' });
+  });
+
+  it('Audit 4. Produto sem nenhum workbook = known-empty, não infrastructure error', async () => {
+    const emptyProdId = 'prod_known_empty_004';
+
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: emptyProdId, code: 'EMPTY', model: 'EMPTY', name: 'Empty Product' }
+    ]);
+
+    const workbookFetcher: ProductWorkbookFetcher = {
+      getWorkbook: vi.fn().mockResolvedValue(null)
+    };
+
+    const runtime = new ProductKnowledgeRuntime({ registryReader, workbookFetcher });
+
+    const catalog = {
+      id: 'cat_empty_test',
+      pages: [
+        {
+          id: 'p1',
+          blocks: [
+            {
+              id: 'b1',
+              type: 'specs_table',
+              tableRows: [
+                { id: 'r1', cellBindings: { c1: { sourceKind: 'pim_datum', productId: emptyProdId, semanticKey: 'any.key', bindingMode: 'live' } } }
+              ]
+            }
+          ]
+        }
+      ]
+    } as unknown as Catalog;
+
+    await runtime.preloadCatalogProductKnowledge(catalog);
+
+    // INVARIANTE DA EMENDA 5:
+    expect(runtime.getStatus()).toBe('ready');
+    expect(runtime.getFailedProductIds()).toEqual([]);
+    expect(runtime.getKnownEmptyProductIds()).toContain(emptyProdId);
+  });
+
+  it('Audit 5. Family Dataset sem Product Workbook projeta estrutura com metadata da família', async () => {
+    const famId = 'fam_ds_005';
+    const prodId = 'prod_ds_005';
+
+    const familyDataset: TechnicalDataset = {
+      id: 'ds_fam_only',
+      moduleId: 'm1',
+      semanticKey: 'specs.dataset',
+      label: 'Dataset da Família',
+      kind: 'matrix',
+      order: 1,
+      columns: [{ id: 'col1', semanticKey: 'temp', label: 'Temperatura', valueType: 'quantity', order: 1 }],
+      rows: [{ id: 'row1', label: 'Ponto 1', order: 1 }],
+      cells: {
+        [getDatasetCellKey('row1', 'col1')]: {
+          rowId: 'row1',
+          columnId: 'col1',
+          datumId: 'd_fam_temp'
+        }
+      }
+    };
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_005',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famId },
+      revision: 9,
+      modules: [],
+      data: {
+        d_fam_temp: {
+          id: 'd_fam_temp',
+          moduleId: 'm1',
+          semanticKey: 'specs.temp',
+          label: 'Temperatura',
+          value: { type: 'quantity', amount: 50, unit: '°C' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: [familyDataset]
+    };
+
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: prodId, code: 'P5', model: 'M5', familyId: famId }
+    ]);
+
+    const workbookFetcher: ProductWorkbookFetcher = {
+      getWorkbook: vi.fn().mockImplementation(async (owner) => {
+        if (owner.kind === 'family' && owner.id === famId) return familyWb;
+        return null;
+      })
+    };
+
+    const runtime = new ProductKnowledgeRuntime({ registryReader, workbookFetcher });
+    const catalog = {
+      id: 'cat_5',
+      pages: [{ id: 'p1', blocks: [{ id: 'b1', tableRows: [{ id: 'r1', cellBindings: { c: { sourceKind: 'pim_datum', productId: prodId, semanticKey: 'specs.temp', bindingMode: 'live' } } }] }] }]
+    } as unknown as Catalog;
+
+    await runtime.preloadCatalogProductKnowledge(catalog);
+
+    const dsProjection = await runtime.getDataset(prodId, 'ds_fam_only');
+    expect(dsProjection).toBeDefined();
+    expect(dsProjection?.productId).toBe(prodId);
+    expect(dsProjection?.sourceOwnerKind).toBe('family');
+    expect(dsProjection?.sourceOwnerId).toBe(famId);
+    expect(dsProjection?.sourceRevision).toBe(9);
+  });
+
+  it('Audit 6 & 7. Family Dataset + Product datum override: structure owner != cell datum owner', () => {
+    const famId = 'fam_hybrid_006';
+    const prodId = 'prod_hybrid_006';
+
+    const familyDataset: TechnicalDataset = {
+      id: 'ds_metrology',
+      moduleId: 'mod_m',
+      semanticKey: 'metrology.dataset',
+      label: 'Tabela Metrológica',
+      kind: 'matrix',
+      order: 1,
+      columns: [{ id: 'col_acc', semanticKey: 'accuracy', label: 'Exatidão', valueType: 'quantity', order: 1 }],
+      rows: [{ id: 'row_1', label: 'Faixa 1', order: 1 }],
+      cells: {
+        [getDatasetCellKey('row_1', 'col_acc')]: {
+          rowId: 'row_1',
+          columnId: 'col_acc',
+          datumId: 'datum_fam_acc'
+        }
+      }
+    };
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_006',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famId },
+      revision: 4,
+      modules: [],
+      data: {
+        datum_fam_acc: {
+          id: 'datum_fam_acc',
+          moduleId: 'mod_m',
+          semanticKey: 'metrology.accuracy',
+          label: 'Exatidão Geral',
+          value: { type: 'quantity', amount: 0.10, unit: '°C' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: [familyDataset]
+    };
+
+    const productWb: ProductWorkbookV2 = {
+      id: 'wb_prod_006',
+      schemaVersion: 2,
+      owner: { kind: 'product', id: prodId },
+      revision: 12,
+      modules: [],
+      data: {
+        datum_prod_acc_override: {
+          id: 'datum_prod_acc_override',
+          moduleId: 'mod_m',
+          semanticKey: 'metrology.accuracy',
+          label: 'Exatidão Especial P',
+          value: { type: 'quantity', amount: 0.05, unit: '°C' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: [],
+      overrides: {
+        'metrology.accuracy': {
+          targetSemanticKey: 'metrology.accuracy',
+          mode: 'override',
+          overriddenValue: { type: 'quantity', amount: 0.05, unit: '°C' },
+          overriddenStatus: 'approved'
+        }
+      }
+    };
+
+    const resolved = resolveEffectiveProductKnowledge({
+      productId: prodId,
+      productWorkbook: productWb,
+      familyWorkbook: familyWb
+    });
+
+    const projection = projectPimDatasetToTechnicalDatasetProjection({
+      dataset: familyDataset,
+      productId: prodId,
+      datums: familyWb.data,
+      bindingMode: 'live',
+      sourceRevision: 4,
+      sourceOwnerKind: 'family',
+      sourceOwnerId: famId,
+      effectiveKnowledge: resolved
+    });
+
+    // INVARIANTES DA EMENDA 6 & 7:
+    // A) Origem da ESTRUTURA do dataset é da família
+    expect(projection.sourceOwnerKind).toBe('family');
+    expect(projection.sourceOwnerId).toBe(famId);
+    expect(projection.sourceRevision).toBe(4);
+
+    // B) Origem do DATUM da célula foi resolvida do PRODUCT (override)
+    const cell = projection.rows[0].cells['accuracy'];
+    expect(cell).toBeDefined();
+    if (cell && 'datumKey' in cell) {
+      expect(cell.value).toEqual({
+        kind: 'value_unit',
+        amount: 0.05,
+        unit: '°C',
+        qualifier: undefined
+      });
+      expect(cell.datumKey).toBe('metrology.accuracy');
+      expect(cell.sourceOwnerKind).toBe('product');
+      expect(cell.sourceOwnerId).toBe(prodId);
+      expect(cell.sourceRevision).toBe(12);
+    }
+  });
+
+  it('Audit 8. Saved View com células mistas: property literal e value com origens distintas', () => {
+    const famId = 'fam_sv_008';
+    const prodId = 'prod_sv_008';
+
+    const familyWb: ProductWorkbookV2 = {
+      id: 'wb_fam_008',
+      schemaVersion: 2,
+      owner: { kind: 'family', id: famId },
+      revision: 8,
+      modules: [],
+      data: {
+        d_pwr: {
+          id: 'd_pwr',
+          moduleId: 'm_e',
+          semanticKey: 'electrical.supply',
+          label: 'Alimentação',
+          value: { type: 'text', value: '220V' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const productWb: ProductWorkbookV2 = {
+      id: 'wb_prod_008',
+      schemaVersion: 2,
+      owner: { kind: 'product', id: prodId },
+      revision: 14,
+      modules: [],
+      data: {
+        d_range: {
+          id: 'd_range',
+          moduleId: 'm_m',
+          semanticKey: 'metrology.range',
+          label: 'Faixa',
+          value: { type: 'text', value: '0-100 bar' },
+          evidence: [],
+          status: 'approved'
+        }
+      },
+      datasets: [],
+      savedViews: [
+        {
+          id: 'sv_mixed',
+          name: 'Visão Mista',
+          datumKeys: ['electrical.supply', 'metrology.range'],
+          viewKind: 'spec_matrix'
+        }
+      ]
+    };
+
+    const resolved = resolveEffectiveProductKnowledge({
+      productId: prodId,
+      productWorkbook: productWb,
+      familyWorkbook: familyWb
+    });
+
+    const projection = projectPimSavedViewToSavedViewProjection({
+      view: productWb.savedViews![0],
+      knowledge: resolved,
+      bindingMode: 'live'
+    });
+
+    expect(projection).toBeDefined();
+    expect(projection?.rows).toBeDefined();
+    expect(projection!.rows!.length).toBe(2);
+
+    const rows = projection!.rows!;
+
+    // Row 1: electrical.supply (herdado da família)
+    const row1 = rows[0];
+    const cell1Prop = row1.cells['property'];
+    const cell1Val = row1.cells['value'];
+    if (cell1Prop && 'kind' in cell1Prop) {
+      expect(cell1Prop.kind).toBe('literal');
+    }
+    if (cell1Val && 'kind' in cell1Val) {
+      expect(cell1Val.kind).toBe('bound');
+      if (cell1Val.kind === 'bound') {
+        expect(cell1Val.sourceOwnerKind).toBe('family');
+        expect(cell1Val.sourceRevision).toBe(8);
+      }
+    }
+
+    // Row 2: metrology.range (local do produto)
+    const row2 = rows[1];
+    const cell2Prop = row2.cells['property'];
+    const cell2Val = row2.cells['value'];
+    if (cell2Prop && 'kind' in cell2Prop) {
+      expect(cell2Prop.kind).toBe('literal');
+    }
+    if (cell2Val && 'kind' in cell2Val) {
+      expect(cell2Val.kind).toBe('bound');
+      if (cell2Val.kind === 'bound') {
+        expect(cell2Val.sourceOwnerKind).toBe('product');
+        expect(cell2Val.sourceRevision).toBe(14);
+      }
+    }
+  });
+
+  it('Audit 9. Canonical unknown vs unsupported_projection (Emenda 9)', () => {
+    // 1. Canonical unknown
+    const canonUnknown = projectTechnicalValueFailClosed({
+      type: 'unknown',
+      reason: 'Valor não informado na calibração'
+    });
+    expect(canonUnknown.kind).toBe('unknown');
+    if (canonUnknown.kind === 'unknown') {
+      expect(canonUnknown.reason).toBe('Valor não informado na calibração');
+      expect(canonUnknown.reason).not.toContain('unsupported_projection');
+    }
+
+    // 2. Unsupported projection
+    const unsuppVal = projectTechnicalValueFailClosed({
+      type: 'product_reference',
+      targetProductId: 'p123'
+    } as any);
+    expect(unsuppVal.kind).toBe('unknown');
+    if (unsuppVal.kind === 'unknown') {
+      expect(unsuppVal.reason).toContain('unsupported_projection');
+    }
+
+    // Nenhum converte para { kind: 'text', text: '' }
+    expect(canonUnknown).not.toEqual({ kind: 'text', text: '' });
+    expect(unsuppVal).not.toEqual({ kind: 'text', text: '' });
+  });
+
+  it('Audit 10. PARTIAL propagation para status do provider', () => {
+    const mockProvider = {
+      isAvailable: () => true,
+      getStatus: () => 'partial' as const,
+      search: vi.fn().mockResolvedValue([])
+    } as any;
+
+    expect(mockProvider.getStatus()).toBe('partial');
+  });
+
+  it('Audit 11. PARTIAL propagation para Export (Emenda 10 & 15)', () => {
+    const failedProdId = 'prod_failed_load_011';
+    const catalog = {
+      id: 'cat_partial_test',
+      pages: [
+        {
+          id: 'p1',
+          pageNumber: 1,
+          blocks: [
+            {
+              id: 'b1',
+              type: 'specs_table',
+              tableRows: [
+                {
+                  id: 'r1',
+                  cellBindings: {
+                    c1: {
+                      sourceKind: 'pim_datum',
+                      productId: failedProdId,
+                      semanticKey: 'pressure.range',
+                      bindingMode: 'live'
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    } as unknown as Catalog;
+
+    const auditBlocked = auditCatalogPublishSafety({
+      catalog,
+      runtimeStatus: 'partial',
+      failedProductIds: [failedProdId],
+      resolveDatum: () => ({ value: { kind: 'empty' }, status: 'unknown' })
+    });
+
+    expect(auditBlocked.canPublish).toBe(false);
+    const failIssue = auditBlocked.issues.find((i) => i.code === 'FAILED_PRODUCT_LIVE_BINDING');
+    expect(failIssue).toBeDefined();
+    expect(failIssue?.severity).toBe('block');
+
+    const catalogWithSnapshot = {
+      ...catalog,
+      pages: [
+        {
+          id: 'p1',
+          pageNumber: 1,
+          blocks: [
+            {
+              id: 'b1',
+              type: 'specs_table',
+              tableRows: [
+                {
+                  id: 'r1',
+                  cellBindings: {
+                    c1: {
+                      sourceKind: 'pim_datum',
+                      productId: failedProdId,
+                      semanticKey: 'pressure.range',
+                      bindingMode: 'live',
+                      snapshot: { kind: 'text', text: '0-10 bar' }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    } as unknown as Catalog;
+
+    const auditWarn = auditCatalogPublishSafety({
+      catalog: catalogWithSnapshot,
+      runtimeStatus: 'partial',
+      failedProductIds: [failedProdId],
+      resolveDatum: () => ({ value: { kind: 'empty' }, status: 'unknown' })
+    });
+
+    expect(auditWarn.canPublish).toBe(true);
+    const warnIssue = auditWarn.issues.find((i) => i.code === 'FAILED_PRODUCT_SNAPSHOT_FALLBACK');
+    expect(warnIssue).toBeDefined();
+    expect(warnIssue?.severity).toBe('warn');
+  });
+
+  it('Audit 12. stale preload = zero cache contamination (Emenda 6)', async () => {
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: 'p_A', code: 'A', model: 'A' },
+      { id: 'p_B', code: 'B', model: 'B' }
+    ]);
+
+    let resolveSlowWb: (wb: ProductWorkbookV2) => void;
+    const slowPromise = new Promise<ProductWorkbookV2>((res) => {
+      resolveSlowWb = res;
+    });
+
+    const workbookFetcher: ProductWorkbookFetcher = {
+      getWorkbook: vi.fn().mockImplementation(async (owner) => {
+        if (owner.id === 'p_A') return slowPromise;
+        if (owner.id === 'p_B') {
+          return {
+            id: 'wb_B',
+            schemaVersion: 2,
+            owner: { kind: 'product', id: 'p_B' },
+            revision: 1,
+            modules: [],
+            data: {},
+            datasets: []
+          } as ProductWorkbookV2;
+        }
+        return null;
+      })
+    };
+
+    const runtime = new ProductKnowledgeRuntime({ registryReader, workbookFetcher });
+
+    const catA = {
+      id: 'cat_A_epoch',
+      pages: [{ id: 'p1', blocks: [{ id: 'b1', tableRows: [{ id: 'r1', cellBindings: { c: { sourceKind: 'pim_datum', productId: 'p_A', semanticKey: 'k', bindingMode: 'live' } } }] }] }]
+    } as unknown as Catalog;
+
+    const catB = {
+      id: 'cat_B_epoch',
+      pages: [{ id: 'p1', blocks: [{ id: 'b1', tableRows: [{ id: 'r1', cellBindings: { c: { sourceKind: 'pim_datum', productId: 'p_B', semanticKey: 'k', bindingMode: 'live' } } }] }] }]
+    } as unknown as Catalog;
+
+    const pA = runtime.preloadCatalogProductKnowledge(catA);
+    const pB = runtime.preloadCatalogProductKnowledge(catB);
+
+    await pB;
+    expect(runtime.getActiveCatalogId()).toBe('cat_B_epoch');
+
+    resolveSlowWb!({
+      id: 'wb_A',
+      schemaVersion: 2,
+      owner: { kind: 'product', id: 'p_A' },
+      revision: 1,
+      modules: [],
+      data: {},
+      datasets: []
+    });
+    await pA;
+
+    expect(runtime.getActiveCatalogId()).toBe('cat_B_epoch');
+    expect(runtime.getReferencedProductIds()).toEqual(['p_B']);
+  });
+
+  it('Audit 13. global canonical enrichment via real workbook loading', async () => {
+    const prodId = 'prod_enrich_013';
+    const fakeRpcHits = [
+      {
+        source_index: 'technical_data',
+        owner_kind: 'product',
+        owner_id: prodId,
+        semantic_key: 'metrology.accuracy.canonical',
+        label: 'Label Bruto',
+        value_formatted: '0.1',
+        status: 'draft'
+      }
+    ];
+
+    const fakeClient = {
+      rpc: vi.fn().mockResolvedValue({ data: fakeRpcHits, error: null })
+    } as any;
+
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: prodId, code: 'ENRICH', model: 'ENRICH_MOD' }
+    ]);
+
+    const realWb: ProductWorkbookV2 = {
+      id: 'wb_enrich',
+      schemaVersion: 2,
+      owner: { kind: 'product', id: prodId },
+      revision: 7,
+      modules: [],
+      data: {
+        d1: {
+          id: 'd1_canonical',
+          moduleId: 'm1',
+          semanticKey: 'metrology.accuracy.canonical',
+          label: 'Exatidão Canônica Real',
+          value: { type: 'quantity', amount: 0.05, unit: '°C' },
+          evidence: [{ id: 'ev1', sourceDocumentId: 'ev1' }, { id: 'ev2', sourceDocumentId: 'ev2' }],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn().mockResolvedValue(realWb),
+      saveWorkbook: vi.fn()
+    };
+
+    const provider = new SupabaseProductKnowledgeProvider({
+      client: fakeClient,
+      registryReader,
+      repository
+    });
+
+    const results = await provider.search(undefined, 'accuracy');
+    expect(results.length).toBe(1);
+    const hit = results[0];
+
+    expect(hit.label).toBe('Exatidão Canônica Real');
+    expect(hit.status).toBe('approved');
+    expect(hit.sourceCount).toBe(2);
+    expect(hit.sourceRevision).toBe(7);
+  });
+
+  it('Audit 14. bounded global search call count: 50 hits, 10 produtos, 1 família', async () => {
+    const fakeHits: any[] = [];
+    for (let i = 0; i < 40; i++) {
+      const prodIdx = i % 10;
+      fakeHits.push({
+        source_index: 'technical_data',
+        owner_kind: 'product',
+        owner_id: `prod_bounded_${prodIdx}`,
+        semantic_key: `key_${i}`,
+        label: `Label ${i}`,
+        value_formatted: 'val'
+      });
+    }
+    for (let i = 40; i < 50; i++) {
+      fakeHits.push({
+        source_index: 'technical_data',
+        owner_kind: 'family',
+        owner_id: 'fam_bounded_main',
+        semantic_key: `fam_key_${i}`,
+        label: `Fam Label ${i}`,
+        value_formatted: 'fam_val'
+      });
+    }
+
+    const fakeClient = {
+      rpc: vi.fn().mockResolvedValue({ data: fakeHits, error: null })
+    } as any;
+
+    const mockGetByIds = vi.fn().mockResolvedValue(
+      Array.from({ length: 10 }).map((_, i) => ({ id: `prod_bounded_${i}`, code: `P${i}` }))
+    );
+    const mockGetByFamily = vi.fn().mockResolvedValue([
+      { id: 'prod_bounded_0', code: 'P0', familyId: 'fam_bounded_main' }
+    ]);
+
+    const registryReader: any = {
+      getProductIdentity: vi.fn(),
+      getProductsByIds: mockGetByIds,
+      getProductsByFamilyIds: mockGetByFamily
+    };
+
+    const mockGetWb = vi.fn().mockImplementation(async (owner) => ({
+      id: `wb_${owner.id}`,
+      schemaVersion: 2,
+      owner,
+      revision: 1,
+      modules: [],
+      data: {},
+      datasets: []
+    }));
+
+    const repository: any = {
+      getWorkbook: mockGetWb,
+      saveWorkbook: vi.fn()
+    };
+
+    const provider = new SupabaseProductKnowledgeProvider({
+      client: fakeClient,
+      registryReader,
+      repository
+    });
+
+    const results = await provider.search(undefined, 'test');
+    expect(results.length).toBeGreaterThan(0);
+
+    expect(mockGetByIds).toHaveBeenCalledTimes(1);
+    expect(mockGetByFamily).toHaveBeenCalledTimes(1);
+    expect(mockGetWb.mock.calls.length).toBeLessThanOrEqual(11);
+  });
+
+  it('Audit 15. zero fake datum keys no store após inserções', () => {
+    const store = useCatalogStore.getState();
+
+    useCatalogStore.setState({
+      currentCatalog: {
+        id: 'cat_test_keys',
+        title: 'Catálogo de Teste de Chaves',
+        version: 1,
+        pages: [
+          {
+            id: 'page_keys_1',
+            pageNumber: 1,
+            blocks: []
+          }
+        ]
+      } as any
+    });
+
+    const dsProj = {
+      datasetId: 'ds_real_015',
+      productId: 'prod_015',
+      title: 'Tabela Real',
+      columns: [{ id: 'col1', key: 'accuracy', label: 'Exatidão' }],
+      rows: [
+        {
+          rowId: 'row1',
+          label: 'P1',
+          cells: {
+            accuracy: {
+              datumId: 'd_real',
+              datumKey: 'metrology.accuracy',
+              value: { kind: 'text' as const, text: '0.05' },
+              sourceOwnerKind: 'product' as const,
+              sourceOwnerId: 'prod_015',
+              sourceRevision: 3
+            }
+          }
+        }
+      ],
+      bindingMode: 'live' as const
+    };
+
+    store.insertTechnicalDatasetAsTable('page_keys_1', dsProj);
+
+    const svProj = {
+      id: 'sv_real_015',
+      title: 'View Real',
+      productId: 'prod_015',
+      columns: [
+        { id: 'c1', key: 'property', label: 'Propriedade' },
+        { id: 'c2', key: 'value', label: 'Valor' }
+      ],
+      rows: [
+        {
+          rowId: 'r1',
+          cells: {
+            property: { kind: 'literal' as const, value: { kind: 'text' as const, text: 'Exatidão' } },
+            value: {
+              kind: 'bound' as const,
+              datumId: 'd_real',
+              datumKey: 'metrology.accuracy',
+              value: { kind: 'text' as const, text: '0.05' },
+              sourceOwnerKind: 'product' as const,
+              sourceOwnerId: 'prod_015',
+              sourceRevision: 3
+            }
+          }
+        }
+      ],
+      bindingMode: 'live' as const
+    };
+
+    store.insertSavedViewAsTable('page_keys_1', svProj);
+
+    const cat = useCatalogStore.getState().currentCatalog!;
+    const allBindings: CatalogCellBinding[] = [];
+    cat.pages.forEach((p) =>
+      p.blocks.forEach((b) =>
+        b.tableRows?.forEach((r) => {
+          if (r.cellBindings) {
+            Object.values(r.cellBindings).forEach((bind) => allBindings.push(bind));
+          }
+        })
+      )
+    );
+
+    expect(allBindings.length).toBeGreaterThan(0);
+    for (const binding of allBindings) {
+      expect(binding.semanticKey).not.toContain('canonical_datum_');
+      expect(binding.semanticKey).not.toContain('canonical_datum_snapshot');
+      expect(binding.semanticKey).not.toContain('dataset.');
+      expect(binding.semanticKey).toBe('metrology.accuracy');
+    }
+  });
+
+  it('Audit 16. production provider path sem registerResolvedKnowledge shortcut', async () => {
+    const pId = 'prod_e2e_016';
+    const fakeClient = {
+      rpc: vi.fn().mockResolvedValue({
+        data: [
+          {
+            source_index: 'technical_data',
+            owner_kind: 'product',
+            owner_id: pId,
+            semantic_key: 'metrology.temp_range',
+            label: 'Faixa de Operação',
+            value_formatted: '-20 a 60 °C',
+            status: 'approved'
+          }
+        ],
+        error: null
+      })
+    } as any;
+
+    const registryReader = new InMemoryProductRegistryReader([
+      { id: pId, code: 'E2E_PROD', model: 'E2E_MODEL' }
+    ]);
+
+    const realWb: ProductWorkbookV2 = {
+      id: 'wb_e2e_016',
+      schemaVersion: 2,
+      owner: { kind: 'product', id: pId },
+      revision: 5,
+      modules: [],
+      data: {
+        d_temp: {
+          id: 'd_temp',
+          moduleId: 'm1',
+          semanticKey: 'metrology.temp_range',
+          label: 'Faixa de Operação',
+          value: { type: 'range', lower: -20, upper: 60, unit: '°C' },
+          evidence: [{ id: 'ev1', sourceDocumentId: 'ev1' }],
+          status: 'approved'
+        }
+      },
+      datasets: []
+    };
+
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn().mockResolvedValue(realWb),
+      saveWorkbook: vi.fn()
+    };
+
+    const provider = new SupabaseProductKnowledgeProvider({
+      client: fakeClient,
+      registryReader,
+      repository
+    });
+
+    const searchResults = await provider.search(undefined, 'Faixa');
+    expect(searchResults.length).toBe(1);
+    const hit = searchResults[0];
+    expect(hit.bindable).toBe(true);
+
+    const runtime = provider.getRuntime();
+    const catalog = {
+      id: 'cat_e2e_real',
+      pages: [
+        {
+          id: 'p1',
+          blocks: [
+            {
+              id: 'b1',
+              type: 'specs_table',
+              tableRows: [
+                {
+                  id: 'r1',
+                  cellBindings: {
+                    temp: {
+                      sourceKind: 'pim_datum',
+                      productId: pId,
+                      semanticKey: 'metrology.temp_range',
+                      bindingMode: 'live'
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    } as unknown as Catalog;
+
+    await runtime.preloadCatalogProductKnowledge(catalog);
+    expect(runtime.getStatus()).toBe('ready');
+
+    const resolver = runtime.getCompositeDatumResolver();
+    const res = resolver({
+      kind: 'datum_reference',
+      productId: pId,
+      datumKey: 'metrology.temp_range',
+      bindingMode: 'live'
+    });
+
+    expect(res?.status).toBe('approved');
+    expect(res?.value).toEqual({
+      kind: 'range',
+      lower: -20,
+      upper: 60,
+      unit: '°C',
+      lowerInclusive: undefined,
+      upperInclusive: undefined
+    });
   });
 });

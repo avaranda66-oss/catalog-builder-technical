@@ -454,6 +454,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1.2: Binding Authority, Snapshot & Saved Vi
 
     const mockProvider = new TestProductKnowledgeProvider([
       {
+        bindable: true,
         id: 'view-res-01',
         kind: 'saved_view',
         savedViewId: 'view-res-01',

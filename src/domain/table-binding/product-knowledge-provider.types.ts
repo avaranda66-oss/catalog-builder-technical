@@ -8,13 +8,11 @@ import { TableCellLiteralContent, TableBindingMode, TableHorizontalAlign } from 
 
 export type ProductKnowledgeResultKind = 'datum' | 'dataset' | 'saved_view' | 'asset';
 
-export type ProductKnowledgeProviderStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+export type ProductKnowledgeProviderStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
 
-export interface ProductKnowledgeSearchResult {
+export interface BaseProductKnowledgeSearchResult {
   readonly id: string;
   readonly kind: ProductKnowledgeResultKind;
-  readonly productId: string;
-  readonly productModel?: string;
   readonly semanticKey: string;
   readonly label: string;
   readonly description?: string;
@@ -29,6 +27,22 @@ export interface ProductKnowledgeSearchResult {
   readonly sourceOwnerId?: string;
 }
 
+export interface BindableProductKnowledgeResult extends BaseProductKnowledgeSearchResult {
+  readonly bindable: true;
+  readonly productId: string;
+  readonly productModel?: string;
+}
+
+export interface AbstractFamilyKnowledgeResult extends BaseProductKnowledgeSearchResult {
+  readonly bindable: false;
+  readonly productId?: undefined;
+  readonly productModel?: undefined;
+  readonly sourceOwnerKind: 'family';
+  readonly sourceOwnerId: string;
+}
+
+export type ProductKnowledgeSearchResult = BindableProductKnowledgeResult | AbstractFamilyKnowledgeResult;
+
 export interface ProductKnowledgeDatumResult {
   readonly productId: string;
   readonly semanticKey: string;
@@ -42,21 +56,30 @@ export interface ProductKnowledgeDatumResult {
   readonly sourceOwnerId?: string;
 }
 
-export interface SavedViewProjection {
-  readonly id: string;
-  readonly title: string;
-  readonly productId: string;
-  readonly columns: readonly TechnicalDatasetColumn[];
-  readonly rows?: readonly TechnicalDatasetRow[];
-  readonly datasetId?: string;
-  readonly bindingMode: TableBindingMode;
+export interface BoundTechnicalCellProjection {
+  readonly kind: 'bound';
+  readonly datumId: string;
+  readonly datumKey: string;
+  readonly value: TableCellLiteralContent;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
   readonly sourceRevision?: number;
 }
+
+export interface LiteralCellProjection {
+  readonly kind: 'literal';
+  readonly value: TableCellLiteralContent;
+}
+
+export type TechnicalCellProjection = BoundTechnicalCellProjection | LiteralCellProjection;
 
 export interface TechnicalDatasetCellProjection {
   readonly datumId: string;
   readonly datumKey: string;
   readonly value: TableCellLiteralContent;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
+  readonly sourceRevision?: number;
 }
 
 export interface TechnicalDatasetColumn {
@@ -71,7 +94,23 @@ export interface TechnicalDatasetColumn {
 export interface TechnicalDatasetRow {
   readonly rowId: string;
   readonly label?: string;
-  readonly cells: Record<string, TechnicalDatasetCellProjection | TableCellLiteralContent>;
+  readonly cells: Record<
+    string,
+    BoundTechnicalCellProjection | LiteralCellProjection | TechnicalDatasetCellProjection | TableCellLiteralContent
+  >;
+}
+
+export interface SavedViewProjection {
+  readonly id: string;
+  readonly title: string;
+  readonly productId: string;
+  readonly columns: readonly TechnicalDatasetColumn[];
+  readonly rows?: readonly TechnicalDatasetRow[];
+  readonly datasetId?: string;
+  readonly bindingMode: TableBindingMode;
+  readonly sourceRevision?: number;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
 }
 
 export interface TechnicalDatasetProjection {
@@ -82,6 +121,8 @@ export interface TechnicalDatasetProjection {
   readonly rows: readonly TechnicalDatasetRow[];
   readonly bindingMode: TableBindingMode;
   readonly sourceRevision?: number;
+  readonly sourceOwnerKind?: 'product' | 'family';
+  readonly sourceOwnerId?: string;
 }
 
 /**
@@ -164,7 +205,8 @@ export class TestProductKnowledgeProvider implements ProductKnowledgeProvider {
 
   async getDatum(productId: string, semanticKey: string): Promise<ProductKnowledgeDatumResult | undefined> {
     const found = this.items.find(
-      (it) => it.kind === 'datum' && it.productId === productId && it.semanticKey === semanticKey
+      (it): it is BindableProductKnowledgeResult =>
+        it.bindable && it.kind === 'datum' && it.productId === productId && it.semanticKey === semanticKey
     );
     if (!found) return undefined;
 

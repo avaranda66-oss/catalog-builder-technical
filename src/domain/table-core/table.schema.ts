@@ -61,7 +61,9 @@ export const TableCellBoundContentSchema = z.discriminatedUnion('bindingMode', [
     moduleKey: z.string().optional(),
     datasetId: z.string().optional(),
     datumKey: z.string().min(1, 'datumKey é obrigatória'),
-    sourceRevision: z.number().int().positive().optional(),
+    sourceRevision: z.number().int().nonnegative().optional(),
+    sourceOwnerKind: z.enum(['product', 'family']).optional(),
+    sourceOwnerId: z.string().optional(),
     bindingMode: z.literal('live'),
     snapshot: TableCellLiteralContentSchema.optional()
   }).strict(),
@@ -71,7 +73,9 @@ export const TableCellBoundContentSchema = z.discriminatedUnion('bindingMode', [
     moduleKey: z.string().optional(),
     datasetId: z.string().optional(),
     datumKey: z.string().min(1, 'datumKey é obrigatória'),
-    sourceRevision: z.number().int().positive().optional(),
+    sourceRevision: z.number().int().nonnegative().optional(),
+    sourceOwnerKind: z.enum(['product', 'family']).optional(),
+    sourceOwnerId: z.string().optional(),
     bindingMode: z.literal('snapshot'),
     snapshot: TableCellLiteralContentSchema // Obrigatório para modo snapshot
   }).strict(),
@@ -81,7 +85,9 @@ export const TableCellBoundContentSchema = z.discriminatedUnion('bindingMode', [
     moduleKey: z.string().optional(),
     datasetId: z.string().optional(),
     datumKey: z.string().min(1, 'datumKey é obrigatória'),
-    sourceRevision: z.number().int().positive().optional(),
+    sourceRevision: z.number().int().nonnegative().optional(),
+    sourceOwnerKind: z.enum(['product', 'family']).optional(),
+    sourceOwnerId: z.string().optional(),
     bindingMode: z.literal('review_required'),
     snapshot: TableCellLiteralContentSchema.optional()
   }).strict()

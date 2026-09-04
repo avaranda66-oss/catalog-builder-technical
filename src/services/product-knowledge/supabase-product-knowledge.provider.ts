@@ -18,7 +18,8 @@ import { ProductWorkbookRepository } from '../product-workbook/persistence.types
 import { SupabaseProductWorkbookRepository } from '../product-workbook/product-workbook.repository';
 import { SupabaseProductRegistryReader } from './supabase-product-registry.reader';
 import { getSupabase } from '../supabase.service';
-import { mapTechnicalValueToTableLiteralV2 } from '../../domain/table-binding/product-workbook-datum.resolver';
+import { projectTechnicalValueFailClosed } from '../../domain/table-binding/product-workbook-datum.resolver';
+import { ProductWorkbook } from '../../domain/product-workbook/types';
 
 export interface SupabaseProductKnowledgeProviderOptions {
   readonly client?: SupabaseClient | null;
@@ -69,17 +70,18 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
 
   /**
    * Executa busca de conhecimento de produto.
-   * Regras canônicas (Emendas 4, 5, 8, 11, 13):
-   * 1. Se houver productId especificado, a busca é escopada com autoridade efetiva pelo runtime (local + override + herdado - suprimido).
-   * 2. Se a busca for global ou o runtime ainda não tiver o produto no cache:
-   *    - Tenta a RPC canônica search_product_knowledge_v2.
-   *    - Se a RPC não estiver disponível (ex: migration 00023 ainda não aplicada live):
-   *      - Recorre ao cache do runtime sem inventar dados nem quebrar a UI.
-   *      - Se nenhuma fonte estiver disponível, falha de forma limpa (fail-closed).
-   * 3. Nunca converte erro de infraestrutura em 0 resultados legítimos (Emenda 11).
+   * Regras canônicas (Emendas 1, 3, 4, 11, 13, 15):
+   * 1. Se houver productId especificado, a busca é escopada com autoridade efetiva pelo runtime.
+   * 2. Se a busca for global:
+   *    - Executa a RPC canônica search_product_knowledge_v2.
+   *    - Enriquecimento canônico com chamadas estritamente limitadas por owners únicos (sem N+1).
+   *    - Hits de família expandem para os produtos da família via getProductsByFamilyIds.
+   *    - Famílias sem produtos concretos no catálogo retornam AbstractFamilyKnowledgeResult (bindable: false, productId: undefined).
+   *    - NUNCA atribui familyId como productId.
+   *    - Preview sempre gerado via projectTechnicalValueFailClosed.
    */
   public async search(productId: string | undefined, query: string): Promise<ProductKnowledgeSearchResult[]> {
-    // 1. Busca escopada com prioridade para conhecimento efetivo em runtime (Emenda 5)
+    // 1. Busca escopada com prioridade para conhecimento efetivo em runtime
     if (productId) {
       const resolved = this.runtime.getResolvedKnowledge(productId);
       if (resolved) {
@@ -109,7 +111,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
           error.message.includes('search_product_knowledge_v2') ||
           error.message.includes('does not exist')
         ) {
-          // Se houver conhecimento previamente carregado no runtime para este produto, busca lá
           if (productId && this.runtime.getResolvedKnowledge(productId)) {
             return this.runtime.search(productId, query);
           }
@@ -124,61 +125,225 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
         return [];
       }
 
-      // 4. Agrupamento e enriquecimento de hits (Emenda 4 & 13)
+      // 4. Agrupamento e enriquecimento de hits com autoridade canônica (Emendas 1, 3, 4, 11, 13, 15)
       const results: ProductKnowledgeSearchResult[] = [];
-      const seenDatasetIds = new Set<string>();
 
-      // Coleta identidades de produtos para os hits
-      const hitProductIds = Array.from(new Set(data.map((row) => row.owner_id).filter(Boolean)));
-      const identities = await this.registryReader.getProductsByIds(hitProductIds);
-      const identityMap = new Map(identities.map((i) => [i.id, i]));
+      // 4.1 Identificação de owners únicos
+      const productOwnerIds = new Set<string>();
+      const familyOwnerIds = new Set<string>();
 
       for (const row of data) {
-        const ownerKind = row.owner_kind;
-        const ownerId = row.owner_id;
-        const identity = identityMap.get(ownerId);
-        const productModel = identity?.model || identity?.code;
+        if (row.owner_kind === 'family' && row.owner_id) {
+          familyOwnerIds.add(row.owner_id);
+        } else if (row.owner_kind === 'product' && row.owner_id) {
+          productOwnerIds.add(row.owner_id);
+        }
+      }
 
-        // Se for hit de célula de dataset: agrupar por datasetId (Emenda 4)
-        if (row.source_index === 'technical_dataset' && row.dataset_id) {
-          if (seenDatasetIds.has(row.dataset_id)) {
-            continue;
+      // 4.2 Batch lookup de identidades no registry
+      const [productIdentities, familyProducts] = await Promise.all([
+        productOwnerIds.size > 0 ? this.registryReader.getProductsByIds(Array.from(productOwnerIds)) : Promise.resolve([]),
+        familyOwnerIds.size > 0 ? this.registryReader.getProductsByFamilyIds(Array.from(familyOwnerIds)) : Promise.resolve([])
+      ]);
+
+      const identityMap = new Map(productIdentities.map((i) => [i.id, i]));
+      const familyProductsMap = new Map<string, typeof familyProducts>();
+      for (const p of familyProducts) {
+        if (p.familyId) {
+          const list = familyProductsMap.get(p.familyId) ?? [];
+          list.push(p);
+          familyProductsMap.set(p.familyId, list);
+        }
+      }
+
+      // 4.3 Batch lookup de Workbooks (máximo 1 fetch por owner único, reusando cache de runtime)
+      const workbooksMap = new Map<string, ProductWorkbook | null>();
+      const uniqueOwners: Array<{ kind: 'product' | 'family'; id: string }> = [
+        ...Array.from(productOwnerIds).map((id) => ({ kind: 'product' as const, id })),
+        ...Array.from(familyOwnerIds).map((id) => ({ kind: 'family' as const, id }))
+      ];
+
+      await Promise.all(
+        uniqueOwners.map(async ({ kind, id }) => {
+          const cacheKey = `${kind}:${id}`;
+          const cached = this.runtime.getCachedWorkbook(kind, id);
+          if (cached) {
+            workbooksMap.set(cacheKey, cached);
+            return;
           }
-          seenDatasetIds.add(row.dataset_id);
+          try {
+            const wb = await this.repository.getWorkbook({ kind, id });
+            workbooksMap.set(cacheKey, wb);
+          } catch {
+            workbooksMap.set(cacheKey, null);
+          }
+        })
+      );
 
-          results.push({
-            id: row.dataset_id,
-            kind: 'dataset',
-            productId: ownerId,
-            productModel,
-            semanticKey: row.dataset_id,
-            label: row.label?.split(' · ')[0] || 'Dataset Técnico',
-            status: 'approved',
-            origin: ownerKind === 'family' ? 'Dataset da Família' : 'Dataset Local',
-            sourceCount: 1,
-            preview: row.value_formatted || 'Tabela de Dados',
-            datasetId: row.dataset_id,
-            sourceOwnerKind: ownerKind === 'family' ? 'family' : 'product',
-            sourceOwnerId: ownerId
-          });
+      // 4.4 Enriquecimento canônico dos hits
+      const seenDatasetKeys = new Set<string>();
+
+      for (const row of data) {
+        const ownerKind = row.owner_kind as 'product' | 'family';
+        const ownerId = row.owner_id;
+        const wb = workbooksMap.get(`${ownerKind}:${ownerId}`);
+
+        // A. Hit de Dataset
+        if (row.source_index === 'technical_dataset' && row.dataset_id) {
+          const dedupKey = `${ownerKind}:${ownerId}:${row.dataset_id}`;
+          if (seenDatasetKeys.has(dedupKey)) continue;
+          seenDatasetKeys.add(dedupKey);
+
+          const realDs = wb?.schemaVersion === 2 ? wb.datasets.find((d) => d.id === row.dataset_id) : undefined;
+          const semanticKey = realDs ? realDs.semanticKey : (row.semantic_key || row.dataset_id);
+          const label = realDs ? realDs.label : (row.label?.split(' · ')[0] || 'Dataset Técnico');
+          const description = realDs?.description;
+          const sourceCount = realDs ? realDs.rows.length : 1;
+          const preview = realDs ? `${realDs.rows.length} linhas × ${realDs.columns.length} colunas` : (row.value_formatted || 'Tabela de Dados');
+          const revision = wb?.revision;
+
+          if (ownerKind === 'product') {
+            const identity = identityMap.get(ownerId);
+            results.push({
+              bindable: true,
+              id: row.dataset_id,
+              kind: 'dataset',
+              productId: ownerId,
+              productModel: identity?.model || identity?.code,
+              semanticKey,
+              label,
+              description,
+              status: 'approved',
+              origin: 'Dataset Local',
+              sourceCount,
+              preview,
+              datasetId: row.dataset_id,
+              sourceRevision: revision,
+              sourceOwnerKind: 'product',
+              sourceOwnerId: ownerId
+            });
+          } else {
+            // ownerKind === 'family' (Emendas 1 & 3)
+            const productsInFamily = familyProductsMap.get(ownerId) ?? [];
+            if (productsInFamily.length > 0) {
+              for (const p of productsInFamily) {
+                results.push({
+                  bindable: true,
+                  id: `${p.id}_${row.dataset_id}`,
+                  kind: 'dataset',
+                  productId: p.id,
+                  productModel: p.model || p.code,
+                  semanticKey,
+                  label,
+                  description,
+                  status: 'approved',
+                  origin: 'Dataset da Família',
+                  sourceCount,
+                  preview,
+                  datasetId: row.dataset_id,
+                  sourceRevision: revision,
+                  sourceOwnerKind: 'family',
+                  sourceOwnerId: ownerId
+                });
+              }
+            } else {
+              // Resultado de família abstrato (não bindável diretamente)
+              results.push({
+                bindable: false,
+                id: `family_${ownerId}_${row.dataset_id}`,
+                kind: 'dataset',
+                productId: undefined,
+                productModel: undefined,
+                semanticKey,
+                label,
+                description,
+                status: 'approved',
+                origin: 'Dataset da Família (Abstrato)',
+                sourceCount,
+                preview,
+                datasetId: row.dataset_id,
+                sourceRevision: revision,
+                sourceOwnerKind: 'family',
+                sourceOwnerId: ownerId
+              });
+            }
+          }
           continue;
         }
 
-        // Fato técnico individual
-        results.push({
-          id: `${ownerId}_${row.semantic_key}`,
-          kind: 'datum',
-          productId: ownerId,
-          productModel,
-          semanticKey: row.semantic_key,
-          label: row.label,
-          status: row.status === 'approved' ? 'approved' : row.status === 'draft' ? 'draft' : 'unknown',
-          origin: ownerKind === 'family' ? 'Herdado da Família' : 'Dado Local',
-          sourceCount: 1,
-          preview: row.unit ? `${row.value_formatted} ${row.unit}` : row.value_formatted,
-          sourceOwnerKind: ownerKind === 'family' ? 'family' : 'product',
-          sourceOwnerId: ownerId
-        });
+        // B. Hit de TechnicalDatum individual
+        const realDatum = wb ? Object.values(wb.data).find((d) => d.semanticKey === row.semantic_key || d.id === row.semantic_key) : undefined;
+        const semanticKey = realDatum ? realDatum.semanticKey : row.semantic_key;
+        const label = realDatum ? realDatum.label : row.label;
+        const description = realDatum?.description;
+        const status = realDatum ? (realDatum.status === 'approved' ? 'approved' : realDatum.status === 'draft' ? 'draft' : 'unknown') : (row.status === 'approved' ? 'approved' : row.status === 'draft' ? 'draft' : 'unknown');
+        const sourceCount = realDatum?.evidence ? realDatum.evidence.length : 0;
+        const preview = realDatum ? projectTechnicalValueFailClosed(realDatum.value) : (row.unit ? `${row.value_formatted} ${row.unit}` : (row.value_formatted || ''));
+        const revision = wb?.revision;
+
+        if (ownerKind === 'product') {
+          const identity = identityMap.get(ownerId);
+          results.push({
+            bindable: true,
+            id: realDatum ? realDatum.id : `${ownerId}_${row.semantic_key}`,
+            kind: 'datum',
+            productId: ownerId,
+            productModel: identity?.model || identity?.code,
+            semanticKey,
+            label,
+            description,
+            status,
+            origin: 'Dado Local',
+            sourceCount,
+            preview,
+            sourceRevision: revision,
+            sourceOwnerKind: 'product',
+            sourceOwnerId: ownerId
+          });
+        } else {
+          // ownerKind === 'family' (Emendas 1 & 3)
+          const productsInFamily = familyProductsMap.get(ownerId) ?? [];
+          if (productsInFamily.length > 0) {
+            for (const p of productsInFamily) {
+              results.push({
+                bindable: true,
+                id: `${p.id}_${realDatum ? realDatum.id : row.semantic_key}`,
+                kind: 'datum',
+                productId: p.id,
+                productModel: p.model || p.code,
+                semanticKey,
+                label,
+                description,
+                status,
+                origin: 'Herdado da Família',
+                sourceCount,
+                preview,
+                sourceRevision: revision,
+                sourceOwnerKind: 'family',
+                sourceOwnerId: ownerId
+              });
+            }
+          } else {
+            // Resultado de família abstrato
+            results.push({
+              bindable: false,
+              id: `family_${ownerId}_${realDatum ? realDatum.id : row.semantic_key}`,
+              kind: 'datum',
+              productId: undefined,
+              productModel: undefined,
+              semanticKey,
+              label,
+              description,
+              status,
+              origin: 'Conhecimento da Família (Abstrato)',
+              sourceCount,
+              preview,
+              sourceRevision: revision,
+              sourceOwnerKind: 'family',
+              sourceOwnerId: ownerId
+            });
+          }
+        }
       }
 
       return results;
@@ -206,8 +371,7 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
       const target = Object.values(workbook.data).find((d) => d.semanticKey === semanticKey);
       if (!target) return undefined;
 
-      const literalRes = mapTechnicalValueToTableLiteralV2(target.value);
-      const value = literalRes.supported ? literalRes.content : ({ kind: 'text', text: '' } as const);
+      const literalValue = projectTechnicalValueFailClosed(target.value);
 
       return {
         productId,
@@ -216,7 +380,7 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
         status: target.status === 'approved' ? 'approved' : target.status === 'draft' ? 'draft' : 'unknown',
         origin: 'product_local',
         sourceCount: target.evidence?.length ?? 0,
-        value,
+        value: literalValue,
         sourceRevision: workbook.revision,
         sourceOwnerKind: 'product',
         sourceOwnerId: productId

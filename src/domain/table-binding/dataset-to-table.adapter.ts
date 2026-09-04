@@ -99,24 +99,31 @@ export function projectTechnicalDatasetToTableCore(
           }
         }
 
-        const canonicalDatumKey = cellProjection?.datumKey || `canonical_datum_${cellProjection?.datumId || 'snapshot'}`;
+        // EMENDA 13: Regra única:
+        // bound PIM cell: TechnicalDatum.semanticKey REAL obrigatório.
+        // literal cell: ZERO PIM binding.
+        const canonicalDatumKey = cellProjection?.datumKey;
 
         if (dataset.bindingMode === 'snapshot') {
-          content = {
-            kind: 'datum_reference',
-            productId: dataset.productId,
-            datasetId: dataset.datasetId,
-            datumKey: canonicalDatumKey,
-            bindingMode: 'snapshot',
-            snapshot: cellValue,
-            sourceRevision: dataset.sourceRevision
-          };
+          if (canonicalDatumKey) {
+            content = {
+              kind: 'datum_reference',
+              productId: dataset.productId,
+              datasetId: dataset.datasetId,
+              datumKey: canonicalDatumKey,
+              bindingMode: 'snapshot',
+              snapshot: cellValue,
+              sourceRevision: dataset.sourceRevision
+            };
+          } else {
+            content = cellValue;
+          }
         } else {
           content = {
             kind: 'datum_reference',
             productId: dataset.productId,
             datasetId: dataset.datasetId,
-            datumKey: canonicalDatumKey,
+            datumKey: canonicalDatumKey!,
             bindingMode: dataset.bindingMode,
             snapshot: cellValue,
             sourceRevision: dataset.sourceRevision

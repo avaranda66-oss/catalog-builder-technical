@@ -1,8 +1,10 @@
 // src/domain/table-binding/pim-saved-view-projection.adapter.ts
-// Adapter puro para conversão canônica de ProductDataView (Saved View PIM) em SavedViewProjection (Emenda 12).
+// Adapter puro para conversão canônica de ProductDataView (Saved View PIM) em SavedViewProjection (Emendas 8, 10, 11, 14).
 // Invariante estrito: Saved View NÃO é um dataset inventado.
 // As células referenciam os TechnicalDatum reais identificados em datumKeys.
-// Zero explicit any. Zero dependência de Supabase ou React.
+// Células editoriais (property) são puramente literais sem binding PIM falso.
+// Células de valor técnico (value) mantêm a source identity individual de cada datum.
+// Zero broad casts. Zero explicit any. Zero dependência de Supabase ou React.
 
 import {
   ProductDataView,
@@ -13,10 +15,11 @@ import {
   SavedViewProjection,
   TechnicalDatasetColumn,
   TechnicalDatasetRow,
-  TechnicalDatasetCellProjection
+  BoundTechnicalCellProjection,
+  LiteralCellProjection
 } from './product-knowledge-provider.types';
 import { TableBindingMode } from '../table-core/table.types';
-import { mapTechnicalValueToTableLiteralV2 } from './product-workbook-datum.resolver';
+import { projectTechnicalValueFailClosed } from './product-workbook-datum.resolver';
 
 export interface ProjectPimSavedViewParams {
   readonly view: ProductDataView;
@@ -26,9 +29,9 @@ export interface ProjectPimSavedViewParams {
 
 /**
  * Converte um ProductDataView do PIM em uma SavedViewProjection materializável pelo Table Core V2.
- * Estrutura:
- * - Coluna "property": Rótulo legível do dado técnico (literal texto).
- * - Coluna "value": Célula vinculada diretamente ao TechnicalDatum real correspondente.
+ * Estrutura discriminada (Emenda 14):
+ * - Coluna "property": Rótulo legível editorial do dado técnico (LiteralCellProjection).
+ * - Coluna "value": Célula vinculada diretamente ao TechnicalDatum real correspondente (BoundTechnicalCellProjection).
  * Fail-Closed: Se a view não contiver linhas avaliadas, retorna undefined (não finge suporte).
  */
 export function projectPimSavedViewToSavedViewProjection(
@@ -60,25 +63,36 @@ export function projectPimSavedViewToSavedViewProjection(
   // 2. Linhas geradas a partir dos fatos técnicos reais
   const rows: TechnicalDatasetRow[] = evaluated.rows.map((evaluatedRow) => {
     const datum = evaluatedRow.datum.datum;
-    const literalRes = mapTechnicalValueToTableLiteralV2(datum.value);
-    const cellValue = literalRes.supported ? literalRes.content : ({ kind: 'text', text: '' } as const);
+    const origin = evaluatedRow.datum.origin;
+    const isFamily = origin === 'family';
 
-    const cells: Record<string, TechnicalDatasetCellProjection | { kind: 'text'; text: string }> = {
+    // Identidade individual por célula do dado efetivo (Emendas 8 e 11)
+    const sourceOwnerKind: 'product' | 'family' = isFamily ? 'family' : 'product';
+    const sourceOwnerId = isFamily ? (knowledge.familyId ?? knowledge.productId) : knowledge.productId;
+    const sourceRevision = isFamily ? knowledge.familyRevision : knowledge.productRevision;
+
+    const cellValue = projectTechnicalValueFailClosed(datum.value);
+
+    const cells: Record<string, BoundTechnicalCellProjection | LiteralCellProjection> = {
       property: {
-        kind: 'text',
-        text: evaluatedRow.label
+        kind: 'literal',
+        value: { kind: 'text', text: evaluatedRow.label }
       },
       value: {
+        kind: 'bound',
         datumId: datum.id,
         datumKey: evaluatedRow.semanticKey,
-        value: cellValue
+        value: cellValue,
+        sourceOwnerKind,
+        sourceOwnerId,
+        sourceRevision
       }
     };
 
     return {
       rowId: `row_sv_${evaluatedRow.semanticKey}`,
       label: evaluatedRow.label,
-      cells: cells as Record<string, TechnicalDatasetCellProjection>
+      cells
     };
   });
 
@@ -89,6 +103,8 @@ export function projectPimSavedViewToSavedViewProjection(
     columns,
     rows,
     bindingMode,
-    sourceRevision: knowledge.productRevision
+    sourceRevision: knowledge.productRevision,
+    sourceOwnerKind: 'product',
+    sourceOwnerId: knowledge.productId
   };
 }

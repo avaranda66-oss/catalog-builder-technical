@@ -32,7 +32,12 @@ export function mapEffectiveStatusToTableStatus(status: EffectiveDatumStatus): T
 
 export type TechnicalValueToTableLiteralResult =
   | { readonly supported: true; readonly content: TableCellLiteralContent }
-  | { readonly supported: false; readonly reason: string; readonly unsupportedType: string };
+  | {
+      readonly supported: false;
+      readonly reason: string;
+      readonly unsupportedType: string;
+      readonly diagnosticCode?: 'UNSUPPORTED_PROJECTION' | 'UNSUPPORTED_TYPE';
+    };
 
 /**
  * Converte um TechnicalValue do Product Workbook em um TableCellLiteralContent de forma segura e com tipagem estrita.
@@ -165,20 +170,55 @@ export function mapTechnicalValueToTableLiteral(
       return {
         supported: false,
         reason: `Referência ao produto "${value.targetProductId}" não possui projeção literal direta sem política explícita de navegação/composição.`,
-        unsupportedType: 'product_reference'
+        unsupportedType: 'product_reference',
+        diagnosticCode: 'UNSUPPORTED_PROJECTION'
       };
 
     default:
       return {
         supported: false,
         reason: `Tipo de valor técnico "${(value as { type: string }).type}" não suportado para representação tabular direta.`,
-        unsupportedType: (value as { type: string }).type
+        unsupportedType: (value as { type: string }).type,
+        diagnosticCode: 'UNSUPPORTED_TYPE'
       };
   }
 }
 
 export function mapTechnicalValueToTableLiteralV2(value: TechnicalValue): TechnicalValueToTableLiteralResult {
   return mapTechnicalValueToTableLiteral(value, { enableV2Literals: true });
+}
+
+/**
+ * Projeta um TechnicalValue em TableCellLiteralContent de forma fail-closed (Emendas 3 e 9).
+ * - Valores suportados -> conteúdo literal tipado correspondente.
+ * - Unknown canônico -> TableCellUnknownContent explícito ({ kind: 'unknown', reason }).
+ * - Tipos não suportados (ex: product_reference) -> TableCellUnknownContent com diagnóstico explícito de projeção não suportada.
+ * - INVARIANTE: NUNCA emite { kind: 'text', text: '' } silenciosamente.
+ */
+export function projectTechnicalValueFailClosed(value: TechnicalValue): TableCellLiteralContent {
+  const literalRes = mapTechnicalValueToTableLiteralV2(value);
+  if (literalRes.supported) {
+    return literalRes.content;
+  }
+
+  if (value.type === 'unknown') {
+    return {
+      kind: 'unknown',
+      reason: value.reason || 'Dado técnico desconhecido na autoridade canônica.'
+    };
+  }
+
+  if (value.type === 'product_reference') {
+    return {
+      kind: 'unknown',
+      reason: `[unsupported_projection] Referência ao produto "${value.targetProductId}" não suportada para projeção literal direta.`
+    };
+  }
+
+  return {
+    kind: 'unknown',
+    reason: `[unsupported_projection] ${literalRes.reason}`
+  };
 }
 
 /**
@@ -349,6 +389,7 @@ export function createProductWorkbookDatumResolver(
           diagnostic: {
             message: `${literalRes.reason} (usando snapshot como fallback).`,
             unsupportedType: literalRes.unsupportedType,
+            diagnosticCode: literalRes.diagnosticCode ?? 'UNSUPPORTED_TYPE',
             productRevision: knowledge.productRevision,
             familyRevision: knowledge.familyRevision,
             currentRevision,
@@ -368,6 +409,7 @@ export function createProductWorkbookDatumResolver(
         diagnostic: {
           message: literalRes.reason,
           unsupportedType: literalRes.unsupportedType,
+          diagnosticCode: literalRes.diagnosticCode ?? 'UNSUPPORTED_TYPE',
           productRevision: knowledge.productRevision,
           familyRevision: knowledge.familyRevision,
           currentRevision,

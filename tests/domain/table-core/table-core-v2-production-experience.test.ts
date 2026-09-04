@@ -352,6 +352,7 @@ describe('TABLE.PRODUCTION.EXPERIENCE1: Production Experience & Flexible Authori
     it('deve permitir busca e recuperação no TestProductKnowledgeProvider exclusivo para testes', async () => {
       const testProvider = new TestProductKnowledgeProvider([
         {
+          bindable: true,
           id: 'k1',
           kind: 'datum',
           productId: 'prod-pcon-y18',

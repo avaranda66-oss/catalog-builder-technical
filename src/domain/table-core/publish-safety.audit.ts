@@ -34,25 +34,32 @@ export interface PublishSafetyAuditContext {
   readonly catalog: Catalog;
   readonly syncStatus?: 'idle' | 'saving' | 'synced' | 'conflict' | 'error' | 'dirty' | string;
   readonly resolveDatum?: TableDatumResolver;
+  readonly runtimeStatus?: 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
+  readonly failedProductIds?: readonly string[];
 }
 
 /**
  * Executa auditoria rigorosa de segurança de publicação em 3 camadas.
  * Regras de Bloqueio (BLOCK):
  * - Layer C: Conflito global de sincronização (syncStatus === 'conflict')
+ * - Layer C: Runtime em estado de carregamento ou erro
  * - Layer A: Binding malformado ou corrompido
  * - Layer A/B: review_required sem snapshot
  * - Layer B: Dado técnico em conflito (conflict)
  * - Layer B: Fonte ausente em live binding sem snapshot (source_missing)
+ * - Layer B: Produto com falha de preload sem snapshot (partial status)
+ * - Layer B: Valor técnico incompatível com projeção em tabela (unsupported_projection) sem snapshot
  * 
  * Regras de Alerta (WARN):
  * - review_required com snapshot existente
  * - live source_missing com fallback para snapshot existente
+ * - produto com falha de preload com snapshot existente
+ * - mudança de revisão ou proprietário da fonte
  * - dado deprecado / stale
  */
 export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): PublishSafetyAuditReport {
   const issues: PublishSafetyIssue[] = [];
-  const { catalog, syncStatus, resolveDatum } = context;
+  const { catalog, syncStatus, resolveDatum, runtimeStatus, failedProductIds } = context;
 
   // =========================================================================
   // CAMADA C: GLOBAL STORE GATE
@@ -63,6 +70,24 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
       severity: 'block',
       code: 'STORE_SYNC_CONFLICT',
       reason: 'O documento possui conflito não resolvido com o servidor. A exportação está bloqueada para prevenir perda de dados.'
+    });
+  }
+
+  if (runtimeStatus === 'loading') {
+    issues.push({
+      layer: 'C_GATE',
+      severity: 'block',
+      code: 'RUNTIME_LOADING',
+      reason: 'O conhecimento técnico dos produtos ainda está sendo carregado. Aguarde o término antes de exportar.'
+    });
+  }
+
+  if (runtimeStatus === 'error') {
+    issues.push({
+      layer: 'C_GATE',
+      severity: 'block',
+      code: 'RUNTIME_ERROR',
+      reason: 'Falha crítica no carregamento do conhecimento técnico dos produtos do catálogo.'
     });
   }
 
@@ -341,6 +366,92 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
                     code: 'SOURCE_OWNER_CHANGED',
                     reason: `Origem do dado alterada na fonte técnica (${binding.sourceOwnerKind} -> ${res.diagnostic.sourceOwnerKind}). Revisão recomendada.`
                   });
+                }
+
+                // B.5: Mudança de revisão da fonte -> WARN
+                if (
+                  binding.sourceRevision !== undefined &&
+                  res.diagnostic?.sourceRevision !== undefined &&
+                  binding.sourceRevision !== res.diagnostic.sourceRevision
+                ) {
+                  issues.push({
+                    layer: 'B_RESOLUTION',
+                    severity: 'warn',
+                    pageNumber,
+                    pageId: page.id,
+                    tableId,
+                    tableTitle,
+                    rowId: row.id,
+                    colKey,
+                    code: 'SOURCE_REVISION_CHANGED',
+                    reason: `Revisão do dado na fonte técnica divergiu (capturada: ${binding.sourceRevision}, atual: ${res.diagnostic.sourceRevision}).`
+                  });
+                }
+
+                // B.6: Projeção não suportada (Emenda 9: unsupported_projection)
+                const isUnsupported =
+                  res.diagnostic?.diagnosticCode === 'UNSUPPORTED_PROJECTION' ||
+                  (res.value.kind === 'unknown' && Boolean(res.value.reason?.includes('unsupported_projection')));
+
+                if (isUnsupported) {
+                  if (!binding.snapshot) {
+                    issues.push({
+                      layer: 'B_RESOLUTION',
+                      severity: 'block',
+                      pageNumber,
+                      pageId: page.id,
+                      tableId,
+                      tableTitle,
+                      rowId: row.id,
+                      colKey,
+                      code: 'UNSUPPORTED_PROJECTION_WITHOUT_SNAPSHOT',
+                      reason: `Valor técnico incompatível com projeção tabular direta (${binding.semanticKey}) e sem snapshot de contingência.`
+                    });
+                  } else {
+                    issues.push({
+                      layer: 'B_RESOLUTION',
+                      severity: 'warn',
+                      pageNumber,
+                      pageId: page.id,
+                      tableId,
+                      tableTitle,
+                      rowId: row.id,
+                      colKey,
+                      code: 'UNSUPPORTED_PROJECTION_WITH_SNAPSHOT',
+                      reason: `Valor técnico incompatível com projeção tabular direta (${binding.semanticKey}); utilizando snapshot anterior.`
+                    });
+                  }
+                }
+
+                // B.7: Produto com falha de preload no PIM (Emenda 10)
+                if (failedProductIds && failedProductIds.includes(binding.productId)) {
+                  if (binding.bindingMode === 'live' && !binding.snapshot) {
+                    issues.push({
+                      layer: 'B_RESOLUTION',
+                      severity: 'block',
+                      pageNumber,
+                      pageId: page.id,
+                      tableId,
+                      tableTitle,
+                      rowId: row.id,
+                      colKey,
+                      code: 'FAILED_PRODUCT_LIVE_BINDING',
+                      reason: `O produto "${binding.productId}" falhou ao ser carregado do PIM e esta célula não possui snapshot de contingência.`
+                    });
+                  } else if (binding.bindingMode === 'live' && binding.snapshot) {
+                    issues.push({
+                      layer: 'B_RESOLUTION',
+                      severity: 'warn',
+                      pageNumber,
+                      pageId: page.id,
+                      tableId,
+                      tableTitle,
+                      rowId: row.id,
+                      colKey,
+                      code: 'FAILED_PRODUCT_SNAPSHOT_FALLBACK',
+                      reason: `O produto "${binding.productId}" falhou ao ser carregado do PIM; utilizando snapshot congelado como contingência.`
+                    });
+                  }
                 }
               }
             }
