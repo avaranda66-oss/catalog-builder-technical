@@ -1,19 +1,25 @@
 // src/components/library-v2/sections/OrganizationSection.tsx
 // Seção 7 da Library V2: Organização de Módulos e Ordenação de Especificações.
+// Foco estrito em ordenação e estrutura de produto/workspace. Escape hatch para o modo clássico.
 
 import React from 'react';
 import { ContextHelpTrigger, TermHelp } from '../../guided-help/index';
 import {
-  Plus,
+  Layers,
   MoveVertical,
-  Edit2
+  ArrowUpRight,
+  Info
 } from 'lucide-react';
 
 export interface OrganizationSectionProps {
   currentFamily: string;
+  onSwitchToClassic?: () => void;
 }
 
-export const OrganizationSection: React.FC<OrganizationSectionProps> = ({ currentFamily: _currentFamily }) => {
+export const OrganizationSection: React.FC<OrganizationSectionProps> = ({
+  currentFamily: _currentFamily,
+  onSwitchToClassic
+}) => {
   const modules = [
     {
       id: 'mod-general',
@@ -69,15 +75,27 @@ export const OrganizationSection: React.FC<OrganizationSectionProps> = ({ curren
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
-          >
-            <Plus size={14} />
-            <span>Novo Módulo</span>
-          </button>
-        </div>
+        {onSwitchToClassic && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onSwitchToClassic}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+            >
+              <Layers size={14} />
+              <span>Reorganizar Módulos no Modo Clássico</span>
+              <ArrowUpRight size={13} className="text-indigo-200" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Aviso de Transparência */}
+      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3 text-xs text-slate-700">
+        <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          Esta tela reflete a estrutura de módulos técnicos e ordenação das especificações. A reorganização interativa e adição de novos capítulos de engenharia são gerenciadas diretamente no <strong>Modo Clássico</strong>.
+        </p>
       </div>
 
       {/* Lista de Módulos */}
@@ -103,20 +121,25 @@ export const OrganizationSection: React.FC<OrganizationSectionProps> = ({ curren
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Reordenar Módulo"
-              >
-                <MoveVertical size={16} />
-              </button>
-              <button
-                type="button"
-                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                title="Editar Nome do Módulo"
-              >
-                <Edit2 size={15} />
-              </button>
+              {onSwitchToClassic ? (
+                <button
+                  type="button"
+                  onClick={onSwitchToClassic}
+                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                  title="Abrir no Modo Clássico para reordenar"
+                >
+                  <MoveVertical size={13} />
+                  <span>Reordenar</span>
+                </button>
+              ) : (
+                <span
+                  className="px-2.5 py-1.5 bg-slate-50 text-slate-400 rounded-lg text-xs font-medium inline-flex items-center gap-1 cursor-not-allowed"
+                  title="Reordenação no Modo Clássico"
+                >
+                  <MoveVertical size={13} />
+                  <span>Modo Clássico</span>
+                </span>
+              )}
             </div>
           </div>
         ))}

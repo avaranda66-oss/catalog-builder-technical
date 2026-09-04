@@ -106,8 +106,8 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     const navAdv = screen.getByText('Avançado');
     fireEvent.click(navAdv);
 
-    expect(screen.getByText('Transparência Técnica & Registro Semântico')).toBeDefined();
-    expect(screen.getByText('metrology.temperature.range')).toBeDefined();
+    expect(screen.getByText('Transparência Técnica & Estrutura de Domínio')).toBeDefined();
+    expect(screen.getByText('Gerenciar no Modo Clássico')).toBeDefined();
   });
 
   it('deve alternar o Modo Aprender 🎓 ao clicar no botão do cabeçalho', () => {

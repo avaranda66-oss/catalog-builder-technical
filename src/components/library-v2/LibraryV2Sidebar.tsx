@@ -2,6 +2,7 @@
 // Menu lateral de navegação pelas 8 seções estruturadas da Library V2.
 
 import React from 'react';
+import { useLearnMode } from '../../features/guided-help';
 import {
   LayoutDashboard,
   FileSpreadsheet,
@@ -10,8 +11,10 @@ import {
   FileCheck2,
   AlertTriangle,
   FolderTree,
-  Code2
+  Code2,
+  Sparkles
 } from 'lucide-react';
+
 
 export type LibraryV2SectionId =
   | 'overview'
@@ -48,6 +51,7 @@ export const LibraryV2Sidebar: React.FC<LibraryV2SidebarProps> = ({
     conflictsCount: 0
   }
 }) => {
+  const { startTour } = useLearnMode();
   const sections = [
     {
       id: 'overview' as const,
@@ -157,6 +161,19 @@ export const LibraryV2Sidebar: React.FC<LibraryV2SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* Ação de Ajuda e Tour da Tela */}
+      <div className="p-3 border-t border-slate-200 bg-slate-50/60">
+        <button
+          type="button"
+          onClick={startTour}
+          className="w-full py-2 px-3 rounded-xl bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+          title="Iniciar o tour passo a passo guiado da interface"
+        >
+          <Sparkles size={13} className="text-amber-500" />
+          <span>Guia Rápido da Tela</span>
+        </button>
+      </div>
     </aside>
   );
 };

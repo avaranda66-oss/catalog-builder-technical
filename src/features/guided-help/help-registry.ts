@@ -1,7 +1,7 @@
 // src/features/guided-help/help-registry.ts
-// Registro Central Canônico do Sistema de Aprendizado Contextual.
-// Contém definições educativas para os 21 conceitos centrais e 8 tutoriais de tarefas práticas.
-// Zero acoplamento com mutação de dados ou persistência do PIM.
+// Registro Editorial e Educacional do Sistema de Ajuda Guiada (Guided Help Registry).
+// Contém definições educativas para os 21 conceitos explicados pela ajuda e 8 tutoriais de tarefas práticas.
+// Finalidade estritamente educacional/editorial; não substitui nem atua como autoridade canônica de domínio PIM.
 
 import { HelpConcept, HelpConceptId, TaskTutorial, TaskTutorialId, TourStep } from './types';
 

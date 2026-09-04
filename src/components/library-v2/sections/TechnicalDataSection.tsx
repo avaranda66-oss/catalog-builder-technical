@@ -1,5 +1,6 @@
 // src/components/library-v2/sections/TechnicalDataSection.tsx
 // Seção 2 da Library V2: Informações Técnicas estruturadas com herança e overrides.
+// Transparência de dados e escape hatch para o modo clássico.
 
 import React, { useState } from 'react';
 import { Product, ProductFamily } from '../../../domain/product.schema';
@@ -7,12 +8,13 @@ import { ContextHelpTrigger, TermHelp } from '../../guided-help/index';
 import {
   Plus,
   ShieldCheck,
-  FileCheck,
   Code2,
   CheckCircle2,
   Layers,
   Sparkles,
-  Tag
+  Tag,
+  ArrowUpRight,
+  Search
 } from 'lucide-react';
 
 export interface TechnicalDataSectionProps {
@@ -20,19 +22,21 @@ export interface TechnicalDataSectionProps {
   activeFamilyObj?: ProductFamily;
   selectedProduct: Product | null;
   familyColumns: readonly { key: string; label: string }[];
-  onOpenAddDatum: () => void;
-  onOpenSourceDrawer: (fieldKey: string) => void;
+  onOpenAddDatum?: () => void;
+  onOpenSourceDrawer?: (fieldKey: string) => void;
+  onSwitchToClassic?: () => void;
+  onNavigateSection?: (sectionId: string) => void;
 }
 
 export const TechnicalDataSection: React.FC<TechnicalDataSectionProps> = ({
   currentFamily,
   selectedProduct,
-  onOpenAddDatum,
-  onOpenSourceDrawer
+  onSwitchToClassic,
+  onNavigateSection
 }) => {
   const [showSemanticKeys, setShowSemanticKeys] = useState(false);
 
-  // Mapeamento padrão de especificações do produto
+  // Mapeamento de especificações do produto
   const specs = (selectedProduct?.specs || {}) as Record<string, any>;
   const standardFields = [
     { key: 'range', label: 'Faixa de Medição / Trabalho', defaultVal: specs.range || '-25 °C a 155 °C', module: 'Metrologia' },
@@ -45,6 +49,14 @@ export const TechnicalDataSection: React.FC<TechnicalDataSectionProps> = ({
   ];
 
   const modules = ['Metrologia', 'Elétrica', 'Mecânica'];
+
+  const handleInspectSources = () => {
+    if (onNavigateSection) {
+      onNavigateSection('sources');
+    } else if (onSwitchToClassic) {
+      onSwitchToClassic();
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -83,14 +95,17 @@ export const TechnicalDataSection: React.FC<TechnicalDataSectionProps> = ({
             <span>Chaves Técnicas</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenAddDatum}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
-          >
-            <Plus size={14} />
-            <span>Adicionar Informação</span>
-          </button>
+          {onSwitchToClassic && (
+            <button
+              type="button"
+              onClick={onSwitchToClassic}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
+            >
+              <Plus size={14} />
+              <span>Gerenciar Esquema no Modo Clássico</span>
+              <ArrowUpRight size={13} className="text-indigo-200" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -140,13 +155,12 @@ export const TechnicalDataSection: React.FC<TechnicalDataSectionProps> = ({
                   return (
                     <div
                       key={field.key}
-                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
+                      className="p-4 hover:bg-slate-50/70 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-slate-900">{field.label}</span>
 
-                          {/* Badge de Herança ou Override */}
                           {isOverride ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
                               <Sparkles size={11} className="text-amber-600" />
@@ -174,20 +188,20 @@ export const TechnicalDataSection: React.FC<TechnicalDataSectionProps> = ({
                           <span className="text-sm font-bold text-slate-900 font-mono block">
                             {field.defaultVal}
                           </span>
-                          <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 justify-end">
-                            <CheckCircle2 size={10} />
-                            <span>Verificado em Manual</span>
+                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 justify-end">
+                            <CheckCircle2 size={10} className="text-slate-400" />
+                            <span>Dado PIM</span>
                           </span>
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => onOpenSourceDrawer(field.key)}
-                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 text-xs font-semibold inline-flex items-center gap-1 transition-all"
-                          title="Inspecionar página e trecho da evidência documental"
+                          onClick={handleInspectSources}
+                          className="px-2.5 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 rounded-lg text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                          title="Inspecionar evidências e fontes documentais"
                         >
-                          <FileCheck size={13} className="text-indigo-600" />
-                          <span>Fonte</span>
+                          <Search size={12} />
+                          <span>Ver Fontes</span>
                         </button>
                       </div>
                     </div>

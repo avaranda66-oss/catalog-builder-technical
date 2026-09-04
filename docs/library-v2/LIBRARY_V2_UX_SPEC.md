@@ -41,7 +41,7 @@ Para garantir continuidade operacional absoluta e risco zero de quebra, a Librar
 ### Regras do Gate:
 1. **Default Seguro**: O usuário padrão sempre abre a **Library Classic**.
 2. **Opt-in Explícito**: O banner superior ou a URL `?library=v2` ativa a experiência guiada.
-3. **Persistência**: A escolha é salva em `localStorage['catalog_library_experience']`.
+3. **Sem persistência invasiva de experiência**: Toda nova abertura inicia na Library Classic por padrão. O toggle é em memória (session-local) ou explícito via URL `?library=v2`. Nenhum localStorage de seleção Classic/V2 é utilizado durante a homologação.
 4. **Retorno Imediato**: Um clique em "Modo Clássico" no topo da V2 devolve o usuário instantaneamente à Classic sem perda de contexto ou seleção.
 
 ---

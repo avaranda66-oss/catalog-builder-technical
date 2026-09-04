@@ -1,49 +1,53 @@
-# Glossário Terminológico da Biblioteca Técnica
+# Glossário de Conceitos Explicados pela Ajuda Guiada
 
-**Status**: Canônico  
+**Finalidade**: Exclusivamente Educacional / Editorial (Guided Help)  
+**Status**: Referência de Vocabulário para Usuários e Operadores  
 **Documento**: `LIBRARY_TERMINOLOGY_GLOSSARY.md`  
-**Total de Termos**: 21 Conceitos  
-**Registro de Código**: `src/features/guided-help/help-registry.ts`
+**Total de Termos**: 20 Conceitos Didáticos  
+**Fonte de Implementação**: `src/features/guided-help/help-registry.ts`
+
+> [!NOTE]
+> Este glossário tem propósito estritamente pedagógico. Ele visa traduzir a terminologia de dados industriais e metrologia para uma linguagem clara e acessível, sem substituir as definições formais de domínio mantidas pelos esquemas de engenharia (`product.schema.ts`).
 
 ---
 
-## Categoria 1: Modelo PIM & Estrutura
+## Categoria 1: Estrutura de Produtos & Catálogo
 
-### 1. Família de Produtos (`product-family`)
+### 1. Família de Produtos (`family`)
 - **Termo Técnico**: `ProductFamily`
-- **Sinônimos**: Linha, Série, Grupo de Equipamentos.
-- **Definição**: Agrupamento lógico de produtos que compartilham o mesmo princípio físico de operação, arquitetura básica e a maior parte das especificações técnicas (ex: Banhos Térmicos Série TA).
-- **Por que importa**: Evita retrabalho ao cadastrar dezenas de instrumentos que compartilham 90% das mesmas características.
+- **Sinônimos**: Linha de Produtos, Série, Grupo.
+- **Definição**: Agrupamento lógico de produtos que compartilham o mesmo princípio de funcionamento, arquitetura de engenharia e conjunto base de especificações (ex: Banhos Térmicos Série TA).
+- **Por que importa**: Evita retrabalho, pois os dados definidos na família são compartilhados com todos os modelos.
 
-### 2. Modelo Físico (`physical-model`)
+### 2. Modelo Físico (`product`)
 - **Termo Técnico**: `ProductVariant` / `Product`
 - **Sinônimos**: Código Comercial, Part Number, Modelo Real.
-- **Definição**: O item concreto que o cliente compra e que sai da linha de produção (ex: TA-25N ou TA-35N).
+- **Definição**: O instrumento concreto comercializado e fabricado (ex: TA-25N ou TA-35N).
 - **Por que importa**: Possui dimensões, faixas e alimentações elétricas específicas que constarão na nota fiscal e na folha de dados.
 
 ### 3. Fato Técnico (`technical-datum`)
 - **Termo Técnico**: `SpecificationField` / `ProductDatum`
 - **Sinônimos**: Dado Técnico, Especificação, Característica.
-- **Definição**: Uma propriedade metrológica ou de engenharia do equipamento (ex: Faixa de Temperatura, Tensão de Alimentação).
-- **Por que importa**: É a informação que o engenheiro do cliente usa para homologar o produto na planta.
+- **Definição**: Uma propriedade técnica ou metrológica do equipamento (ex: Faixa de Temperatura, Tensão de Alimentação).
+- **Por que importa**: É o valor consultado pelo cliente para selecionar e homologar o instrumento.
 
 ### 4. Chave Semântica (`semantic-key`)
 - **Termo Técnico**: `propertyKey`
 - **Sinônimos**: ID do campo, Token de propriedade.
-- **Definição**: Identificador único em formato de código de computador (ex: `specs.range`, `specs.accuracy`) usado internamente pelo sistema.
-- **Por que importa**: Garante consistência automatizada nas tabelas e integrações de catálogo sem erros de digitação.
+- **Definição**: Identificador único em formato computacional (ex: `specs.range`, `specs.accuracy`) usado internamente pelo sistema.
+- **Por que importa**: Garante consistência automatizada nas tabelas e integrações de catálogo sem ambiguidades.
 
 ### 5. Regra de Herança (`inheritance`)
 - **Termo Técnico**: `PrototypeInheritance`
 - **Sinônimos**: Propagação de valor, Valor compartilhado.
-- **Definição**: Mecanismo onde todos os modelos de uma família herdam automaticamente uma especificação definida na família-mãe.
-- **Por que importa**: Se a garantia do banho térmico for de 2 anos, basta alterar na família para que todos os 10 modelos recebam o valor instantaneamente.
+- **Definição**: Mecanismo onde os modelos físicos herdam automaticamente as propriedades definidas na família.
+- **Por que importa**: Centraliza a manutenção e garante que alterações gerais reflitam em toda a linha de produtos.
 
 ### 6. Sobrescrita / Exceção do Modelo (`override`)
 - **Termo Técnico**: `FieldOverride`
 - **Sinônimos**: Exceção técnica, Valor pontual.
-- **Definição**: Quando um modelo físico específico precisa de um valor diferente da regra geral da família (ex: o TA-35N opera até 350 °C, enquanto a família opera até 250 °C).
-- **Por que importa**: Permite flexibilidade de engenharia sem quebrar a consistência geral da família.
+- **Definição**: Situação em que um modelo físico específico possui uma especificação diferente do padrão geral da família.
+- **Por que importa**: Permite flexibilidade de engenharia para modelos de alta capacidade sem quebrar o padrão dos demais.
 
 ---
 
@@ -51,98 +55,92 @@
 
 ### 7. Faixa de Medição / Trabalho (`measurement-range`)
 - **Termo Técnico**: `OperatingRange`
-- **Sinônimos**: Span, Intervalo de trabalho.
-- **Definição**: Limite inferior e superior em que o instrumento opera com segurança e conformidade metrológica.
-- **Por que importa**: Determina onde o instrumento pode ser instalado na indústria.
+- **Sinônimos**: Span, Intervalo operacional.
+- **Definição**: Limite inferior e superior em que o instrumento opera com conformidade e segurança.
+- **Por que importa**: Determina o limite de aplicação do instrumento na planta do cliente.
 
 ### 8. Incerteza / Exatidão (`uncertainty`)
 - **Termo Técnico**: `AccuracySpecification`
 - **Sinônimos**: Tolerância, Erro máximo permitido.
 - **Definição**: Limite máximo de desvio do valor medido em relação ao padrão nacional de metrologia (ex: ± 0,1 °C).
-- **Por que importa**: Fator crítico para clientes auditados por normas como ISO/IEC 17025 e FDA.
+- **Por que importa**: Fator decisivo em auditorias de qualidade laboratorial e industrial.
 
 ### 9. Estabilidade Térmica (`stability`)
 - **Termo Técnico**: `ThermalStability`
 - **Sinônimos**: Variação temporal, Drift.
-- **Definição**: Capacidade do banho ou calibrador de manter a mesma temperatura ao longo do tempo (ex: ± 0,05 °C ao longo de 30 min).
-- **Por que importa**: Garante calibrações confiáveis e repetitivas em laboratórios.
+- **Definição**: Capacidade do equipamento de manter o valor estável ao longo do tempo durante uma medição.
+- **Por que importa**: Assegura calibrações reprodutíveis e confiáveis em laboratório.
 
 ### 10. Unidade de Engenharia (`metrological-unit`)
 - **Termo Técnico**: `UnitOfMeasure`
 - **Sinônimos**: Grandeza, Unidade SI.
 - **Definição**: Símbolo oficial de medição associado a um valor numérico (ex: °C, bar, mA, V, mm).
-- **Por que importa**: Evita desastres de interpretação como confusão entre Celsius e Fahrenheit ou Bar e PSI.
+- **Por que importa**: Evita ambiguidades entre escalas diferentes (ex: Celsius vs Fahrenheit).
 
 ### 11. Conexão ao Processo (`process-connection`)
 - **Termo Técnico**: `ProcessMounting`
 - **Sinônimos**: Rosca, Flange, Bloco equalizador, Insert.
-- **Definição**: Interface física pela qual o sensor ou calibrador se acopla ao processo ou ao termômetro a ser calibrado.
-- **Por que importa**: Garante que o usuário final compre os adaptadores e blocos compatíveis.
+- **Definição**: Acoplamento mecânico pelo qual o sensor ou calibrador se conecta ao processo industrial.
+- **Por que importa**: Garante que o cliente selecione os adaptadores e poços compatíveis.
 
 ### 12. Grau de Proteção (`protection-degree`)
 - **Termo Técnico**: `IngressProtection` / `IPRating`
-- **Sinônimos**: Norma IP, Selamento mecânico.
-- **Definição**: Classificação segundo a norma IEC 60529 que define o nível de proteção contra poeira e água (ex: IP-54, IP-67).
-- **Por que importa**: Define se o equipamento pode ficar exposto a chuva, poeira ou respingos industriais.
+- **Sinônimos**: Norma IP, Selamento de invólucro.
+- **Definição**: Classificação conforme norma IEC 60529 que define a vedação contra poeira e água (ex: IP-54).
+- **Por que importa**: Determina a adequação do instrumento a ambientes úmidos ou empoeirados.
 
 ---
 
-## Categoria 3: Governança, Fontes & Auditoria
+## Categoria 3: Governança, Fontes & Evidências
 
 ### 13. Documento de Referência Primária (`source-document`)
 - **Termo Técnico**: `SourceDocument`
 - **Sinônimos**: Fonte de verdade, Manual mestre.
-- **Definição**: Arquivo PDF oficial emitido pela engenharia (manual, folha de dados ou memorial de cálculo) do qual os fatos foram extraídos.
-- **Por que importa**: Nenhum dado entra no catálogo sem uma fonte oficial comprovada.
+- **Definição**: Arquivo técnico emitido pela engenharia (manual, folha de dados ou memorial) de onde os fatos são extraídos.
+- **Por que importa**: Garante embasamento documental auditável para cada valor publicado.
 
-### 14. Trecho de Evidência (`evidence-snippet`)
+### 14. Trecho de Evidência (`evidence`)
 - **Termo Técnico**: `EvidenceSnippet`
-- **Sinônimos**: Citação, Trecho do manual.
-- **Definição**: Recorte exato de texto ou tabela do documento original com número de página e data.
-- **Por que importa**: Permite que qualquer auditor comprove visualmente a origem de cada número no catálogo.
+- **Sinônimos**: Citação, Recorte do manual.
+- **Definição**: Trecho textual ou recorte de tabela do documento original com indicação de página e seção.
+- **Por que importa**: Permite auditoria imediata da proveniência do dado em caso de revisão.
 
-### 15. Nível de Confiança da Evidência (`confidence-score`)
-- **Termo Técnico**: `ProvenanceConfidence`
-- **Sinônimos**: Grau de certeza, Confiabilidade.
-- **Definição**: Métrica percentual que avalia a atualidade e a autoridade da fonte que informa aquele dado.
-- **Por que importa**: Sinaliza dados antigos ou extraídos de documentos provisórios que precisam de validação.
-
-### 16. Conflito Documental (`conflict`)
+### 15. Conflito Documental (`conflict`)
 - **Termo Técnico**: `DataDispute`
 - **Sinônimos**: Divergência, Inconsistência técnica.
-- **Definição**: Situação em que dois documentos oficiais informam valores diferentes para a mesma especificação técnica.
-- **Por que importa**: Impede que catálogos cheguem ao mercado com dados contraditórios.
+- **Definição**: Situação em que dois documentos ou fontes informam valores diferentes para a mesma propriedade.
+- **Por que importa**: Evita que contradições de especificações cheguem ao catálogo final.
 
-### 17. Decisão Canônica (`canonical-decision`)
+### 16. Decisão Canônica (`canonical-decision`)
 - **Termo Técnico**: `CanonicalResolution`
-- **Sinônimos**: Arbitragem de engenharia, Valor oficial.
-- **Definição**: Registro formal e imutável assinado pelo engenheiro responsável determinando qual valor é verdadeiro e qual foi descartado.
-- **Por que importa**: Cria histórico técnico perene e elimina reincidência de dúvidas.
+- **Sinônimos**: Arbitragem de engenharia, Resolução técnica.
+- **Definição**: Registro formal assinado pelo engenheiro responsável determinando o valor oficial adotado e a justificativa técnica.
+- **Por que importa**: Cria histórico imutável e resolve disputas metrológicas permanentemente.
 
-### 18. Trilha de Auditoria (`audit-trail`)
+### 17. Trilha de Auditoria (`audit-trail`)
 - **Termo Técnico**: `AuditLog`
 - **Sinônimos**: Histórico de alterações, Linha do tempo.
-- **Definição**: Registro cronológico de quem alterou qual especificação, em que data e com qual justificativa técnica.
-- **Por que importa**: Conformidade com normas de governança e rastreabilidade total de dados.
+- **Definição**: Registro cronológico de autoria, data e justificativa técnica de cada modificação.
+- **Por que importa**: Conformidade com boas práticas de governança e rastreabilidade de dados.
 
 ---
 
 ## Categoria 4: Catálogo Editorial & Publicação
 
-### 19. Bloco de Catálogo (`catalog-block`)
+### 18. Bloco de Catálogo (`catalog-block`)
 - **Termo Técnico**: `EditorialBlock`
-- **Sinônimos**: Módulo de página, Componente de layout.
-- **Definição**: Elemento visual do catálogo editorial (tabela, ficha de produto, diagrama) conectado em tempo real aos dados da biblioteca.
-- **Por que importa**: Quando um dado é atualizado na Library, todos os blocos do catálogo editorial refletem a mudança imediatamente.
+- **Sinônimos**: Componente de página, Módulo editorial.
+- **Definição**: Elemento visual do catálogo (tabela, bloco de especificações, imagem) vinculado aos dados da biblioteca.
+- **Por que importa**: Sincroniza em tempo real as atualizações de especificações com o layout das páginas.
 
-### 20. Matriz Comparativa (`comparative-matrix`)
-- **Termo Técnico**: `ComparisonTable`
+### 19. Matriz Comparativa (`dataset`)
+- **Termo Técnico**: `TechnicalDataset` / `ComparisonTable`
 - **Sinônimos**: Tabela de seleção, Grade comparativa.
-- **Definição**: Formato tabular onde as linhas são especificações e as colunas são os modelos da família, facilitando a escolha do cliente.
-- **Por que importa**: É a tabela mais consultada por engenheiros de compras industriais.
+- **Definição**: Grade onde linhas são especificações e colunas são os modelos da família, facilitando a comparação pelo comprador.
+- **Por que importa**: É a principal ferramenta de decisão em propostas técnicas comerciais.
 
-### 21. Esquema Canônico JSON-LD (`json-ld-export`)
-- **Termo Técnico**: `SchemaOrgProduct`
-- **Sinônimos**: Dados estruturados, Metadados semânticos.
-- **Definição**: Formato digital padrão da W3C / Schema.org que exporta os dados do produto para indexação em buscadores e integração com ERPs.
-- **Por que importa**: Garante interoperabilidade universal dos dados do catálogo com qualquer sistema externo.
+### 20. Módulo Técnico (`module`)
+- **Termo Técnico**: `TechnicalModule`
+- **Sinônimos**: Capítulo, Seção temática.
+- **Definição**: Agrupamento temático de fatos técnicos (ex: Metrologia, Elétrica, Mecânica) que mantém a ordem de apresentação consistente.
+- **Por que importa**: Organiza o caderno técnico em capítulos lógicos e legíveis.

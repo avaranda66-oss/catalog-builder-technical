@@ -129,6 +129,7 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
                   onSelectProduct={setSelectedProduct}
                   onOpenAddProduct={handleOpenAddProduct}
                   onNavigateSection={(sec) => setActiveSection(sec as LibraryV2SectionId)}
+                  onSwitchToClassic={onSwitchToClassic}
                 />
               )}
 
@@ -138,8 +139,8 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
                   activeFamilyObj={activeFamilyObj}
                   selectedProduct={selectedProduct}
                   familyColumns={familyColumns}
-                  onOpenAddDatum={() => alert('Formulário de nova especificação técnica')}
-                  onOpenSourceDrawer={(key) => alert(`Inspecionando fonte do campo: ${key}`)}
+                  onSwitchToClassic={onSwitchToClassic}
+                  onNavigateSection={(sec) => setActiveSection(sec as LibraryV2SectionId)}
                 />
               )}
 
@@ -148,27 +149,46 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
                   currentFamily={currentFamily}
                   activeFamilyObj={activeFamilyObj}
                   products={filteredProducts}
+                  onSwitchToClassic={onSwitchToClassic}
                 />
               )}
 
               {activeSection === 'documents' && (
-                <DocumentsSection currentFamily={currentFamily} />
+                <DocumentsSection
+                  currentFamily={currentFamily}
+                  onSwitchToClassic={onSwitchToClassic}
+                />
               )}
 
               {activeSection === 'sources' && (
-                <SourcesEvidenceSection currentFamily={currentFamily} />
+                <SourcesEvidenceSection
+                  currentFamily={currentFamily}
+                  onSwitchToClassic={onSwitchToClassic}
+                />
               )}
 
               {activeSection === 'conflicts' && (
-                <ConflictsSection currentFamily={currentFamily} />
+                <ConflictsSection
+                  currentFamily={currentFamily}
+                  onSwitchToClassic={onSwitchToClassic}
+                />
               )}
 
               {activeSection === 'organization' && (
-                <OrganizationSection currentFamily={currentFamily} />
+                <OrganizationSection
+                  currentFamily={currentFamily}
+                  onSwitchToClassic={onSwitchToClassic}
+                />
               )}
 
               {activeSection === 'advanced' && (
-                <AdvancedSection currentFamily={currentFamily} />
+                <AdvancedSection
+                  currentFamily={currentFamily}
+                  activeFamilyObj={activeFamilyObj}
+                  familyColumns={familyColumns}
+                  products={filteredProducts}
+                  onSwitchToClassic={onSwitchToClassic}
+                />
               )}
             </div>
           </main>

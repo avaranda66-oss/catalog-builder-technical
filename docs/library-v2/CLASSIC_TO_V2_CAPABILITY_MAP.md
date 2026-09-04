@@ -1,39 +1,49 @@
 # Matriz de Paridade de Capacidades: Classic vs V2 Guided
 
-**Status**: 100% de Preservação Garantida  
-**Mapeamento**: `CLASSIC_TO_V2_CAPABILITY_MAP.md`  
-**Missão**: `LIBRARY.V2.GUIDED.UX1`
+**Classificação de Status Canônica**:
+- `IMPLEMENTED`: Funcionalidade implementada, interativa e validada por testes na V2.
+- `PARTIAL`: Interface presente na V2 com capacidades fundamentais; recursos avançados direcionam para o Modo Clássico.
+- `CLASSIC-ONLY FOR NOW`: Fluxo operacional completo disponível exclusivamente no Modo Clássico; V2 oferece atalho de escape contextual.
+- `PLANNED`: Recurso no roadmap de evolução da V2; sem botão simulado ou no-op.
+- `MISSING`: Lacuna conhecida a ser tratada nas próximas iterações.
+- `NOT APPLICABLE`: Funcionalidade restrita ao ambiente legado ou não aplicável à proposta da V2.
 
 ---
 
-## 1. Princípio de Não Degradação
+## 1. Princípio de Preservação e Roteiro Honesto
 
-Nenhuma capacidade operacional da Library Classic foi removida ou simplificada na Library V2. Cada fluxo de trabalho existente no ambiente de alta complexidade possui correspondente exato na V2, enriquecido com contexto pedagógico, validações visuais e linguagem acessível.
+A Library V2 Guided não finge paridade completa imediata. Seu propósito é prover uma experiência altamente didática e acessível, mantendo o **Modo Clássico como autoridade operacional e escape hatch contínuo** para fluxos profundos de edição e engenharia de esquemas.
 
 ---
 
-## 2. Matriz Comparativa de Funcionalidades
+## 2. Matriz de Auditoria de Capacidades
 
-| Capacidade Operacional | Como é feito na Library Classic | Onde e como é feito na Library V2 | Melhoria / Ganho de UX na V2 |
+| Capacidade Operacional | Como é feito no Modo Clássico | Como é tratado na Library V2 | Status na V2 |
 |---|---|---|---|
-| **Seleção de Família de Produtos** | Dropdown compacto na barra superior | Seletor com contadores, busca e chips visuais na Seção 1 | Feedback imediato do número de modelos e integridade dos dados |
-| **Visualização de Modelos Físicos** | Tabela densa com rolagem horizontal | Grid de cards com status metrológico + Tabela detalhada na Seção 1 e 3 | Identificação rápida de modelos ativos, códigos e status de validação |
-| **Criação / Cadastro de Novo Modelo** | Botão na toolbar que abre drawer/modal | Botão primário na Seção 1 (Visão Geral) + Tutorial Guiado | Validação com ajuda contextual sobre convenção de códigos industriais |
-| **Edição de Especificações Técnicas** | Células inline ou drawer com dezenas de inputs agrupados | Seção 2 dividida em Módulos Lógicos (Metrologia, Elétrica, Mecânica) | Visualização clara de campos obrigatórios vs opcionais |
-| **Herança de Família vs Sobrescrita (Override)** | Ícones discretos de override em tabela PIM | Badges coloridos explícitos: *"Herdado da Família"* vs *"Exceção do Modelo"* | Elimina dúvidas sobre onde o dado foi originado e previne edições acidentais |
-| **Matriz Comparativa de Especificações** | Grid tabular PIM com colunas configuráveis | Seção 3 (Tabelas Técnicas) com prévia em tempo real | Tabela comparativa formatada pronta para exportação direta ao catálogo |
-| **Configuração de Colunas & Esquema** | Menu de colunas com chaves semânticas cruas | Seção 2 e Seção 3 com labels em linguagem natural e chave semântica em toggle | Chaves técnicas preservadas (ex: `specs.range`), acessíveis via botão "Exibir Chaves" |
-| **Associação de Documentos & Manuais** | Lista de anexos / drawer de upload | Seção 4 (Documentos) categorizada por tipo (Manual, Folha de Dados, Boletim) | Metadados de idioma, data e vínculo com extrator de evidências |
-| **Rastreamento de Fontes & Evidências** | Painel técnico com trechos JSON/citações | Seção 5 (Fontes & Evidências) com cards de citação e pontuação de confiança | Visualização do trecho original do manual que embasa o dado |
-| **Resolução de Conflitos & Decisões Canônicas** | Aba de conflitos no drawer de auditoria | Seção 6 (Conflitos / Revisões) com histórico imutável de arbitragens | Registro formal de valor adotado vs descartado com autor e justificativa |
-| **Organização & Taxonomia** | Menus de árvore ou propriedades de família | Seção 7 (Organização) com categorias e tags | Navegação visual por segmento de mercado e compatibilidade |
-| **Inspeção de JSON Bruto & Esquema Canônico** | Guia de depuração no rodapé | Seção 8 (Avançado) com JSON-LD formatado, cópia em um clique e diagnósticos | Auditoria de integridade técnica mantida integralmente para engenheiros seniores |
-| **Alternância entre Ambientes** | N/A (era tela única) | Botão no cabeçalho: *"Modo Clássico"* e banner na Classic | Transição fluida entre operadores especialistas e operadores em treinamento |
+| **Seleção e Troca de Família de Produtos** | Dropdown no topo da Library | Seletor com chips de famílias e contadores na Visão Geral | `IMPLEMENTED` |
+| **Visualização de Modelos Físicos** | Tabela densa com rolagem horizontal | Cards visuais com dados de identificação e seleção de modelo | `IMPLEMENTED` |
+| **Cadastro Rápido de Novo Modelo Físico** | Botão na toolbar que abre drawer/modal | Botão "+ Novo Modelo" conectado diretamente à store | `IMPLEMENTED` |
+| **Visualização de Especificações & Fatos Técnicos** | Células inline ou drawer com inputs agrupados | Seção 2 com agrupamento em Módulos (Metrologia, Elétrica, Mecânica) | `IMPLEMENTED` |
+| **Distinção Didática de Herança vs Sobrescrita** | Ícones discretos de override em tabela PIM | Badges coloridos explícitos: *"Herdado da Família"* vs *"Exceção do Modelo"* | `IMPLEMENTED` |
+| **Visualização de Matriz Comparativa** | Grid tabular configurável | Seção 3 com tabela matricial entre modelos da família ativa | `PARTIAL` |
+| **Criação de Novas Tabelas Customizadas** | Criação e amarração de datasets no PIM | Botão "Configurar Tabelas no Modo Clássico" com transição fluida | `CLASSIC-ONLY FOR NOW` |
+| **Edição Profunda de Esquema & Novas Colunas** | Modal e drawer de gerenciamento de colunas | Botão "Gerenciar Esquema no Modo Clássico" com transição fluida | `CLASSIC-ONLY FOR NOW` |
+| **Edição Inline de Células de Dados Técnicos** | Células editáveis inline com persistência | Visualização transparente; atalho para edição no Modo Clássico | `CLASSIC-ONLY FOR NOW` |
+| **Upload e Associação Real de PDFs/Manuais** | Drawer de upload e armazenamento de mídia | Visualização com marcação `[EXEMPLO DIDÁTICO]`; gestão real no Modo Clássico | `CLASSIC-ONLY FOR NOW` |
+| **Extração de Snippets & Proveniência Real** | Painel de evidências do extrator de documentos | Visualização com marcação `[EXEMPLO DIDÁTICO]`; auditoria real no Modo Clássico | `PLANNED` |
+| **Resolução de Conflitos & Decisões Canônicas** | Aba de auditoria de dados e conflitos | Trilha visual com marcação `[EXEMPLO DIDÁTICO]`; arbitragem no Modo Clássico | `PLANNED` |
+| **Reorganização Drag-and-Drop de Módulos** | Reordenação estrutural no workspace | Seção 7 com estrutura descritiva; botão "Reorganizar no Modo Clássico" | `CLASSIC-ONLY FOR NOW` |
+| **Inspeção de Esquema e Chaves de Domínio** | Guia técnica de depuração | Seção 8 com chaves reais da store (`familyColumns`, `syncStatus`) | `IMPLEMENTED` |
+| **Exportação JSON-LD (Schema.org)** | Não implementado no domínio | Indicador explícito `[Planejado / Em Homologação]` sem botões no-op | `PLANNED` |
+| **Alternância Fluida entre Modos (Gate)** | Banner de opt-in sobre a Library Classic | Botão no cabeçalho e rodapé para retorno imediato ao Modo Clássico | `IMPLEMENTED` |
+| **Sistema de Aprendizado (6 Níveis de Ajuda)** | Inexistente no modo clássico | Micro-tooltips, TermHelp, Painel Contextual, Modo Aprender, Glossário e Tour | `IMPLEMENTED` |
 
 ---
 
-## 3. Garantias Metrológicas e de Integridade
+## 3. Resumo de Cobertura
 
-1. **Mesma Fonte de Verdade**: Tanto a Library Classic quanto a Library V2 utilizam as mesmas stores (`useLibraryStore`, `useCatalogStore`) e esquemas de dados (`product.schema.ts`).
-2. **Zero Poluição de Dados**: Nenhuma propriedade temporária da UI guiada é gravada no banco ou nos objetos de domínio.
-3. **Compatibilidade Bidirecional**: Alterações efetuadas na Library V2 refletem instantaneamente se o usuário alternar para a Library Classic, e vice-versa.
+- **Capacidades Totalmente Implementadas (`IMPLEMENTED`)**: 8
+- **Capacidades Parciais (`PARTIAL`)**: 1
+- **Capacidades Mantidas no Modo Clássico com Escape Hatch (`CLASSIC-ONLY FOR NOW`)**: 5
+- **Capacidades Planejadas no Roadmap (`PLANNED`)**: 3
+- **Botões Sem Ação (NO-OP)**: **ZERO (0)** — cada botão executa ação real, aciona o Modo Clássico ou exibe estado disabled explicativo.

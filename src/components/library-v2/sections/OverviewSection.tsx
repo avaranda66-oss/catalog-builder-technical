@@ -25,6 +25,7 @@ export interface OverviewSectionProps {
   onSelectProduct: (product: Product | null) => void;
   onOpenAddProduct: () => void;
   onNavigateSection: (sectionId: string) => void;
+  onSwitchToClassic?: () => void;
 }
 
 export const OverviewSection: React.FC<OverviewSectionProps> = ({
@@ -36,7 +37,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   onSelectFamily,
   onSelectProduct,
   onOpenAddProduct,
-  onNavigateSection
+  onNavigateSection,
+  onSwitchToClassic
 }) => {
   // Produtos filtrados da família ativa
   const familyProducts = products.filter((p) => {
@@ -84,6 +86,16 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               <Plus size={15} />
               <span>Novo Modelo</span>
             </button>
+            {onSwitchToClassic && (
+              <button
+                type="button"
+                onClick={onSwitchToClassic}
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/20 transition-colors"
+                title="Alternar para a visualização clássica em tabela"
+              >
+                <span>Modo Clássico</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -140,9 +152,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               <FileCheck2 size={16} />
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900">100%</div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <span>Rastreabilidade documental</span>
+          <div className="text-2xl font-black text-slate-900">Fontes</div>
+          <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+            <span>Rastreabilidade & Provas</span>
             <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>

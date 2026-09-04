@@ -1,5 +1,6 @@
 // src/components/library-v2/sections/TechnicalTablesSection.tsx
 // Seção 3 da Library V2: Tabelas Técnicas e Datasets estruturados.
+// Visualização funcional e escape hatch para o modo clássico.
 
 import React, { useState } from 'react';
 import { Product, ProductFamily } from '../../../domain/product.schema';
@@ -9,18 +10,21 @@ import {
   FileSpreadsheet,
   Plus,
   Table2,
-  Link2
+  Link2,
+  ArrowUpRight
 } from 'lucide-react';
 
 export interface TechnicalTablesSectionProps {
   currentFamily: string;
   activeFamilyObj?: ProductFamily;
   products: readonly Product[];
+  onSwitchToClassic?: () => void;
 }
 
 export const TechnicalTablesSection: React.FC<TechnicalTablesSectionProps> = ({
   currentFamily,
-  products
+  products,
+  onSwitchToClassic
 }) => {
   const [activeTableTab, setActiveTableTab] = useState<'matrix' | 'ordering' | 'inserts'>('matrix');
 
@@ -46,15 +50,19 @@ export const TechnicalTablesSection: React.FC<TechnicalTablesSectionProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
-          >
-            <Plus size={14} />
-            <span>Nova Tabela Técnica</span>
-          </button>
-        </div>
+        {onSwitchToClassic && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onSwitchToClassic}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+            >
+              <Plus size={14} />
+              <span>Configurar Tabelas no Modo Clássico</span>
+              <ArrowUpRight size={13} className="text-indigo-200" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Seletor de Tabelas da Família */}
@@ -148,8 +156,8 @@ export const TechnicalTablesSection: React.FC<TechnicalTablesSectionProps> = ({
           whatIsIt="Esta tabela é usada para relacionar acessórios, dimensões de poços térmicos e códigos de encomenda nas páginas finais do catálogo."
           whyIsEmpty="Nenhuma tabela customizada configurada para esta família ainda. As tabelas padrão do catálogo são mantidas na especificação."
           conceptId="dataset"
-          primaryActionLabel="Criar Tabela a Partir de Gabarito"
-          onPrimaryAction={() => alert('Gabarito de tabela selecionado')}
+          primaryActionLabel={onSwitchToClassic ? 'Configurar no Modo Clássico' : undefined}
+          onPrimaryAction={onSwitchToClassic}
         />
       )}
     </div>

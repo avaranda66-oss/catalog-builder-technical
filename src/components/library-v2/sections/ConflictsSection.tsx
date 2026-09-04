@@ -1,5 +1,6 @@
 // src/components/library-v2/sections/ConflictsSection.tsx
 // Seção 6 da Library V2: Gestão de Conflitos e Decisões Canônicas de Engenharia.
+// Zero alertas simulados. Escape hatch para o Modo Clássico.
 
 import React from 'react';
 import { ContextHelpTrigger, TermHelp } from '../../guided-help/index';
@@ -7,15 +8,20 @@ import { EmptyStateV2 } from '../common/EmptyStateV2';
 import {
   CheckCircle2,
   ShieldCheck,
-  History
+  History,
+  ArrowUpRight
 } from 'lucide-react';
 
 export interface ConflictsSectionProps {
   currentFamily: string;
+  onSwitchToClassic?: () => void;
 }
 
-export const ConflictsSection: React.FC<ConflictsSectionProps> = ({ currentFamily }) => {
-  const canonicalDecisionsHistory = [
+export const ConflictsSection: React.FC<ConflictsSectionProps> = ({
+  currentFamily,
+  onSwitchToClassic
+}) => {
+  const exampleDecisionsHistory = [
     {
       id: 'dec-1',
       datumTitle: `Potência Máxima Consumida (${currentFamily || 'TA-25N'})`,
@@ -47,6 +53,17 @@ export const ConflictsSection: React.FC<ConflictsSectionProps> = ({ currentFamil
             <TermHelp helpId="canonical-decision" label="Decisão Canônica" />.
           </p>
         </div>
+
+        {onSwitchToClassic && (
+          <button
+            type="button"
+            onClick={onSwitchToClassic}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition-colors"
+          >
+            <span>Gerenciar Conflitos no Modo Clássico</span>
+            <ArrowUpRight size={13} className="text-slate-500" />
+          </button>
+        )}
       </div>
 
       {/* Estado atual de conflitos ativos */}
@@ -56,8 +73,8 @@ export const ConflictsSection: React.FC<ConflictsSectionProps> = ({ currentFamil
         whatIsIt="Esta área lista todas as informações técnicas em que duas ou mais fontes oficiais divergem (ex: potências ou pesos diferentes em manuais distintos)."
         whyIsEmpty="Todos os dados cadastrados nesta família possuem evidências convergentes ou decisões canônicas já registradas pela engenharia."
         conceptId="conflict"
-        primaryActionLabel="Auditar Fontes de Metrologia"
-        onPrimaryAction={() => alert('Auditoria executada: todos os fatos metrológicos possuem 100% de consenso documental.')}
+        primaryActionLabel={onSwitchToClassic ? 'Abrir Auditoria no Modo Clássico' : undefined}
+        onPrimaryAction={onSwitchToClassic}
       />
 
       {/* Trilha de Auditoria de Decisões Canônicas Anteriores */}
@@ -65,13 +82,15 @@ export const ConflictsSection: React.FC<ConflictsSectionProps> = ({ currentFamil
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <History size={16} className="text-indigo-600" />
-            <span>Decisões Canônicas Registradas ({canonicalDecisionsHistory.length})</span>
+            <span>Exemplo de Decisão Canônica Registrada ({exampleDecisionsHistory.length})</span>
           </span>
-          <span className="text-xs text-slate-500">Histórico de Arbitragem Técnica</span>
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
+            EXEMPLO DIDÁTICO
+          </span>
         </div>
 
         <div className="divide-y divide-slate-100">
-          {canonicalDecisionsHistory.map((dec) => (
+          {exampleDecisionsHistory.map((dec) => (
             <div key={dec.id} className="p-5 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs font-bold text-slate-900">{dec.datumTitle}</span>
