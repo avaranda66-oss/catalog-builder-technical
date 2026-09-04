@@ -9,13 +9,7 @@ import {
   X,
   Search,
   Database,
-  ShieldAlert,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  ArrowRight,
-  Filter,
-  TableProperties
+  AlertCircle
 } from 'lucide-react';
 import { useUIStore } from '../../../stores/useUIStore';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
@@ -25,6 +19,7 @@ import {
   UnavailableProductKnowledgeProvider
 } from '../../../domain/table-binding/product-knowledge-provider.types';
 import { TableCellLiteralContent } from '../../../domain/table-core/table.types';
+import { formatTableCellLiteral } from '../../../domain/table-values';
 import { CatalogCellBinding } from '../../../domain/catalog.schema';
 
 interface ProductKnowledgePickerModalProps {
@@ -44,6 +39,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
     setTableCellBinding,
     addTableColumn,
     insertTechnicalDatasetAsTable,
+    insertSavedViewAsTable,
     currentCatalog
   } = useCatalogStore();
 
@@ -53,63 +49,65 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   const [isLoading, setIsLoading] = useState(false);
   const [selectedResult, setSelectedResult] = useState<ProductKnowledgeSearchResult | null>(null);
 
-  // Escopo de produto inteligente (Emenda 11)
   const scopedProductId = knowledgePickerTarget?.productId;
   const scopedProductModel = knowledgePickerTarget?.productModel;
   const [scopeToProduct, setScopeToProduct] = useState<boolean>(Boolean(scopedProductId));
 
   useEffect(() => {
-    if (scopedProductId) {
-      setScopeToProduct(true);
-    } else {
-      setScopeToProduct(false);
-    }
-  }, [scopedProductId]);
-
-  const isAvailable = provider.isAvailable ? provider.isAvailable() : false;
-
-  useEffect(() => {
-    if (!isProductKnowledgePickerModalOpen || !isAvailable) {
-      setResults([]);
-      return;
-    }
-
-    let isMounted = true;
+    let isCancelled = false;
     setIsLoading(true);
 
-    const targetProductId = scopeToProduct && scopedProductId ? scopedProductId : undefined;
+    const targetProductId = scopeToProduct ? scopedProductId : undefined;
 
     provider
       .search(targetProductId, query)
-      .then((res: ProductKnowledgeSearchResult[]) => {
-        if (isMounted) {
-          const filtered = kindFilter === 'all'
-            ? res
-            : res.filter((r) => r.kind === kindFilter);
+      .then((items) => {
+        if (!isCancelled) {
+          const filtered =
+            kindFilter === 'all' ? items : items.filter((it) => it.kind === kindFilter);
           setResults(filtered);
-          setIsLoading(false);
+          if (filtered.length > 0 && !selectedResult) {
+            setSelectedResult(filtered[0]);
+          }
         }
       })
       .catch(() => {
-        if (isMounted) {
+        if (!isCancelled) {
           setResults([]);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
           setIsLoading(false);
         }
       });
 
     return () => {
-      isMounted = false;
+      isCancelled = true;
     };
-  }, [isProductKnowledgePickerModalOpen, query, kindFilter, isAvailable, provider, scopeToProduct, scopedProductId]);
+  }, [provider, query, kindFilter, scopeToProduct, scopedProductId, selectedResult]);
 
   if (!isProductKnowledgePickerModalOpen) return null;
 
-  // EMENDA 1 & 2: Vincular à célula com coordenadas legadas autoritativas
+  const renderPreviewValue = (preview: string | TableCellLiteralContent) => {
+    if (typeof preview === 'string') {
+      return (
+        <span className="font-mono font-medium text-xs text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+          {preview}
+        </span>
+      );
+    }
+    return (
+      <span className="font-mono font-medium text-xs text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+        {formatTableCellLiteral(preview)}
+      </span>
+    );
+  };
+
   const handleBindToTargetCell = (item: ProductKnowledgeSearchResult) => {
     if (!knowledgePickerTarget || knowledgePickerTarget.kind !== 'cell') return;
     const { blockId, legacyRowId, legacyColKey } = knowledgePickerTarget;
 
-    // Emenda 8: Persistir snapshot tipado; preview textual vira { kind: 'text', text: preview }
     const previewSnapshot: TableCellLiteralContent | undefined =
       item.preview !== undefined && item.preview !== null
         ? (typeof item.preview === 'object' && 'kind' in item.preview
@@ -127,7 +125,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
       snapshot: previewSnapshot
     };
 
-    setTableCellBinding(blockId, legacyRowId, legacyColKey, binding);
+    setTableCellBinding(blockId, legacyRowId, legacyColKey, binding, 'REPLACE_WITH_SOURCE');
     closeProductKnowledgePickerModal();
   };
 
@@ -161,13 +159,12 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
         snapshot: previewSnapshot
       };
 
-      setTableCellBinding(blockId, knowledgePickerTarget.legacyRowId, item.semanticKey, binding);
+      setTableCellBinding(blockId, knowledgePickerTarget.legacyRowId, item.semanticKey, binding, 'REPLACE_WITH_SOURCE');
     }
 
     closeProductKnowledgePickerModal();
   };
 
-  // EMENDA 2 & 17: Inserir Dataset como Tabela
   const handleInsertDatasetAsTable = async (item: ProductKnowledgeSearchResult) => {
     if (!knowledgePickerTarget || !item.datasetId) return;
 
@@ -188,7 +185,32 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
         }
       }
     } catch {
-      // Falha ao obter projeção do dataset
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInsertSavedViewAsTable = async (item: ProductKnowledgeSearchResult) => {
+    if (!knowledgePickerTarget) return;
+
+    setIsLoading(true);
+    try {
+      const viewId = item.savedViewId || item.id;
+      const viewProj = await provider.getSavedView(item.productId, viewId);
+      if (viewProj && currentCatalog) {
+        const activePage = currentCatalog.pages.find((p) =>
+          p.blocks?.some((b) => b.id === knowledgePickerTarget.blockId)
+        ) || currentCatalog.pages[0];
+
+        if (activePage) {
+          insertSavedViewAsTable(activePage.id, viewProj, {
+            title: item.label || viewProj.title
+          });
+          closeProductKnowledgePickerModal();
+          return;
+        }
+      }
+    } catch {
     } finally {
       setIsLoading(false);
     }
@@ -199,142 +221,91 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
       case 'approved':
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3" /> Aprovado
+            Aprovado
           </span>
         );
       case 'conflicting':
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-            <AlertCircle className="w-3 h-3" /> Conflito
+            Conflito
           </span>
         );
-      case 'draft':
       default:
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock className="w-3 h-3" /> Rascunho
+            Rascunho
           </span>
         );
     }
   };
 
-  const renderPreviewValue = (preview: string | TableCellLiteralContent) => {
-    if (typeof preview === 'string') {
-      return <span className="font-mono text-slate-900 text-[11px]">{preview}</span>;
-    }
-
-    switch (preview.kind) {
-      case 'text':
-        return <span className="font-medium text-slate-800 text-[11px]">{preview.text}</span>;
-      case 'number':
-        return <span className="font-mono text-slate-900 text-[11px]">{preview.value}</span>;
-      case 'value_unit':
-        return (
-          <span className="font-mono text-slate-900 text-[11px]">
-            {preview.qualifier ? `${preview.qualifier} ` : ''}
-            {preview.amount} {preview.unit}
-          </span>
-        );
-      case 'range':
-        return (
-          <span className="font-mono text-slate-900 text-[11px]">
-            {preview.lower !== undefined ? preview.lower : ''} a {preview.upper !== undefined ? preview.upper : ''}{' '}
-            {preview.unit || ''}
-          </span>
-        );
-      case 'boolean':
-        return (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-800">
-            {preview.value ? 'SIM' : 'NÃO'}
-          </span>
-        );
-      case 'technical_token':
-        return (
-          <span className="font-mono px-1.5 py-0.5 rounded text-[9px] bg-slate-100 text-slate-800 border border-slate-200">
-            {preview.token}
-          </span>
-        );
-      case 'enum':
-        return <span className="text-[11px] text-slate-700">{preview.label || preview.code}</span>;
-      default:
-        return <span className="text-slate-400 text-[11px]">—</span>;
-    }
-  };
+  const isUnavailable = provider.isAvailable && !provider.isAvailable();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" data-testid="knowledge-picker-modal">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#001f3f] text-white flex items-center justify-center shadow-sm">
-              <Database className="w-4 h-4" />
+            <div className="p-2 bg-blue-100/80 text-blue-700 rounded-lg">
+              <Database className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900 leading-none">
-                Conhecimento Técnico & PIM
+              <h2 className="text-sm font-bold text-slate-900">
+                Selecionar Conhecimento do Produto (PIM)
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Vincule pontos de dados técnicos ou datasets de produtos à tabela.
+              <p className="text-xs text-slate-500">
+                {knowledgePickerTarget?.kind === 'cell'
+                  ? `Vinculando à célula [Linha: ${knowledgePickerTarget.legacyRowId}, Coluna: ${knowledgePickerTarget.legacyColKey}]`
+                  : 'Inserindo tabela ou visão a partir do repositório técnico'}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={closeProductKnowledgePickerModal}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* FAIL-CLOSED EM PRODUÇÃO QUANDO DESCONECTADO */}
-        {!isAvailable ? (
-          <div className="p-8 flex flex-col items-center justify-center text-center space-y-3 flex-1 min-h-[300px]">
-            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
-              <ShieldAlert className="w-6 h-6" />
+        {isUnavailable ? (
+          <div className="p-8 text-center space-y-3">
+            <div className="inline-flex p-3 bg-rose-50 text-rose-600 rounded-full">
+              <AlertCircle className="w-6 h-6" />
             </div>
-            <div className="space-y-1 max-w-md">
-              <h3 className="text-base font-bold text-slate-800">
-                Conhecimento Técnico Indisponível
-              </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                O serviço de conhecimento técnico / PIM não está conectado neste ambiente.
-                Por segurança corporativa e rastreabilidade metrológica, dados simulados não são
-                exibidos como dados oficiais.
-              </p>
-            </div>
-            <div className="pt-3">
-              <button
-                type="button"
-                onClick={closeProductKnowledgePickerModal}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-              >
-                Entendido, Fechar
-              </button>
-            </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              Conhecimento técnico indisponível
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              A integração oficial com o catálogo do PIM não está ativa neste ambiente. Nenhum
+              dado fictício será apresentado para preservar a integridade das especificações.
+            </p>
+            <button
+              type="button"
+              onClick={closeProductKnowledgePickerModal}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold"
+            >
+              Fechar
+            </button>
           </div>
         ) : (
           <>
-            {/* Barra de Busca e Filtros */}
-            <div className="p-4 border-b border-slate-200 bg-white space-y-3 flex-shrink-0">
-              {/* Product Scoping Chip / Toggle (Emenda 11) */}
+            <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
               {scopedProductId && (
-                <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-100 px-3 py-1.5 rounded-lg text-xs">
-                  <div className="flex items-center gap-1.5 text-indigo-900 font-medium">
-                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>
-                      {scopeToProduct
-                        ? `Buscando em: ${scopedProductModel || scopedProductId}`
-                        : 'Buscando em: Todos os Produtos'}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between px-3 py-2 bg-blue-50/60 border border-blue-200/80 rounded-lg text-xs">
+                  <span className="text-blue-900 font-medium">
+                    {scopeToProduct
+                      ? `Buscando em: ${scopedProductModel || scopedProductId}`
+                      : 'Buscando em: Todos os Produtos'}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setScopeToProduct((prev) => !prev)}
-                    className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline ml-2"
+                    data-testid="toggle-product-scope"
+                    onClick={() => setScopeToProduct(!scopeToProduct)}
+                    className="text-blue-700 hover:text-blue-900 font-semibold underline text-[11px]"
                   >
-                    {scopeToProduct ? 'Todos os Produtos' : `Filtrar apenas por ${scopedProductModel || 'produto atual'}`}
+                    {scopeToProduct ? 'Buscar em Todos os Produtos' : `Limitar a ${scopedProductModel || scopedProductId}`}
                   </button>
                 </div>
               )}
@@ -345,39 +316,25 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar por parâmetro, código, modelo (ex: range, exatidão, PCON)..."
-                  className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder="Buscar por termo..."
+                  className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-slate-500 mr-1">Tipo:</span>
-                {(
-                  [
-                    { key: 'all', label: 'Todos' },
-                    { key: 'datum', label: 'Pontos de Dado' },
-                    { key: 'dataset', label: 'Tabelas Técnicas' },
-                    { key: 'saved_view', label: 'Visões Salvas' }
-                  ] as const
-                ).map((f) => (
+              <div className="flex gap-2">
+                {(['all', 'datum', 'dataset', 'saved_view'] as const).map((k) => (
                   <button
-                    key={f.key}
-                    type="button"
-                    onClick={() => setKindFilter(f.key)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      kindFilter === f.key
-                        ? 'bg-[#001f3f] text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                    key={k}
+                    onClick={() => setKindFilter(k)}
+                    className={`px-3 py-1 rounded text-xs font-medium ${kindFilter === k ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}
                   >
-                    {f.label}
+                    {k.toUpperCase()}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Lista de Resultados */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {isLoading ? (
                 <div className="py-12 text-center text-xs text-slate-500">
                   Consultando conhecimento técnico...
@@ -385,126 +342,80 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
               ) : results.length === 0 ? (
                 <div className="py-12 text-center space-y-1">
                   <p className="text-xs font-medium text-slate-600">Nenhum dado encontrado.</p>
-                  <p className="text-[11px] text-slate-400">
-                    Tente buscar por termos como "range", "exatidão", "pressão" ou código de modelo.
-                  </p>
                 </div>
               ) : (
                 results.map((item) => {
                   const isSelected = selectedResult?.id === item.id;
+                  const isDatum = item.kind === 'datum';
                   const isDataset = item.kind === 'dataset';
                   const isSavedView = item.kind === 'saved_view';
-                  const isDatum = item.kind === 'datum';
 
                   return (
                     <div
                       key={item.id}
                       onClick={() => setSelectedResult(item)}
-                      className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/60'
-                      }`}
+                      className={`p-3 rounded-lg border cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200'}`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1 flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-xs text-slate-900">
-                              {item.label}
-                            </span>
-                            {item.productModel && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 text-slate-700">
-                                {item.productModel}
-                              </span>
-                            )}
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                              {item.kind === 'dataset' ? 'Tabela Técnica' : item.kind === 'saved_view' ? 'Visão Salva' : 'Dado'}
-                            </span>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs">{item.label}</span>
                             {renderStatusBadge(item.status)}
                           </div>
-                          <p className="text-[11px] text-slate-500 font-mono truncate">
-                            {item.semanticKey}
-                          </p>
+                          <div className="text-[10px] text-slate-400 font-mono">{item.semanticKey}</div>
                         </div>
-
-                        <div className="text-right flex-shrink-0 space-y-1">
-                          <div>{renderPreviewValue(item.preview)}</div>
-                          {item.sourceCount > 1 && (
-                            <div className="text-[9px] text-slate-400">
-                              {item.sourceCount} fontes verificadas
-                            </div>
-                          )}
-                        </div>
+                        {renderPreviewValue(item.preview)}
                       </div>
 
-                      {/* Ações Semânticas Específicas por Tipo de Resultado (Emenda 2 & 17) */}
-                      {isSelected && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-end gap-2">
-                          {/* DATUM: Vincular à célula ou Adicionar como coluna */}
-                          {isDatum && (
-                            <>
-                              {knowledgePickerTarget?.kind === 'cell' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleBindToTargetCell(item);
-                                  }}
-                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
-                                >
-                                  <span>Vincular à Célula</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                    {isSelected && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-200 flex justify-end gap-2">
+                        {isDatum && (
+                          <>
+                            {knowledgePickerTarget?.kind === 'cell' && (
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddAsColumn(item);
-                                }}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                                data-testid={`picker-bind-cell-${item.semanticKey}`}
+                                onClick={(e) => { e.stopPropagation(); handleBindToTargetCell(item); }}
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold"
                               >
-                                <span>Adicionar como Coluna</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
+                                Vincular
                               </button>
-                            </>
-                          )}
-
-                          {/* DATASET: Inserir como Tabela Completa (PROIBIDO vincular como célula simples) */}
-                          {isDataset && (
+                            )}
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleInsertDatasetAsTable(item);
-                              }}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+                              data-testid={`picker-add-col-${item.semanticKey}`}
+                              onClick={(e) => { e.stopPropagation(); handleAddAsColumn(item); }}
+                              className="px-3 py-1.5 bg-slate-800 text-white rounded text-xs font-semibold"
                             >
-                              <TableProperties className="w-3.5 h-3.5" />
-                              <span>Inserir Dataset como Tabela</span>
+                              Coluna
                             </button>
-                          )}
-
-                          {/* SAVED VIEW: Inserir View como Tabela */}
-                          {isSavedView && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleInsertDatasetAsTable(item);
-                              }}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
-                            >
-                              <TableProperties className="w-3.5 h-3.5" />
-                              <span>Inserir View como Tabela</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                          </>
+                        )}
+                        {isDataset && (
+                          <button
+                            type="button"
+                            data-testid={`picker-insert-dataset-${item.datasetId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); handleInsertDatasetAsTable(item); }}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold"
+                          >
+                            Inserir Dataset
+                          </button>
+                        )}
+                        {isSavedView && (
+                          <button
+                            type="button"
+                            data-testid={`picker-insert-saved-view-${item.savedViewId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); handleInsertSavedViewAsTable(item); }}
+                            className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-semibold"
+                          >
+                            Inserir View
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }))}
             </div>
           </>
         )}

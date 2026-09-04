@@ -21,6 +21,7 @@ export interface ProductKnowledgeSearchResult {
   readonly sourceCount: number;
   readonly preview: string | TableCellLiteralContent;
   readonly datasetId?: string;
+  readonly savedViewId?: string;
   readonly sourceRevision?: number;
 }
 
@@ -39,7 +40,11 @@ export interface SavedViewProjection {
   readonly id: string;
   readonly title: string;
   readonly productId: string;
-  readonly columns: string[];
+  readonly columns: readonly TechnicalDatasetColumn[];
+  readonly rows?: readonly TechnicalDatasetRow[];
+  readonly datasetId?: string;
+  readonly bindingMode: TableBindingMode;
+  readonly sourceRevision?: number;
 }
 
 export interface TechnicalDatasetCellProjection {
@@ -117,6 +122,7 @@ export class UnavailableProductKnowledgeProvider implements ProductKnowledgeProv
 export class TestProductKnowledgeProvider implements ProductKnowledgeProvider {
   private readonly items: ProductKnowledgeSearchResult[] = [];
   private readonly datasets = new Map<string, TechnicalDatasetProjection>();
+  private readonly savedViews = new Map<string, SavedViewProjection>();
 
   isAvailable(): boolean {
     return true;
@@ -130,6 +136,10 @@ export class TestProductKnowledgeProvider implements ProductKnowledgeProvider {
 
   registerDataset(dataset: TechnicalDatasetProjection): void {
     this.datasets.set(`${dataset.productId}:${dataset.datasetId}`, dataset);
+  }
+
+  registerSavedView(view: SavedViewProjection): void {
+    this.savedViews.set(`${view.productId}:${view.id}`, view);
   }
 
   async search(productId: string | undefined, query: string): Promise<ProductKnowledgeSearchResult[]> {
@@ -168,11 +178,21 @@ export class TestProductKnowledgeProvider implements ProductKnowledgeProvider {
   }
 
   async getSavedView(productId: string, viewId: string): Promise<SavedViewProjection | undefined> {
+    const found = this.savedViews.get(`${productId}:${viewId}`);
+    if (found) return found;
+
     return {
       id: viewId,
       title: 'Saved View Padrão',
       productId,
-      columns: ['range', 'accuracy', 'stability']
+      columns: [
+        { key: 'range', label: 'Faixa' },
+        { key: 'accuracy', label: 'Exatidão' },
+        { key: 'stability', label: 'Estabilidade' }
+      ],
+      rows: [],
+      bindingMode: 'live',
+      sourceRevision: 1
     };
   }
 }

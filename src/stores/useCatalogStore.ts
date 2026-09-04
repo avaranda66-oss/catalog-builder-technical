@@ -53,6 +53,7 @@ import {
 import {
   TechnicalDatasetProjection,
   TechnicalDatasetCellProjection,
+  SavedViewProjection,
   generateDeterministicDatasetColumnId,
   generateDeterministicDatasetRowId
 } from '../domain/table-binding';
@@ -274,7 +275,13 @@ interface CatalogState {
   addRowToTable: (blockId: string, productRefId: string) => void;
   addManualRowToTable: (blockId: string, initialValues?: Record<string, string | TableCellLiteralContent>) => string;
   removeRowFromTable: (blockId: string, rowId: string) => void;
-  setTableCellBinding: (blockId: string, rowId: string, colKey: string, binding: CatalogCellBinding) => void;
+  setTableCellBinding: (
+    blockId: string,
+    rowId: string,
+    colKey: string,
+    binding: CatalogCellBinding,
+    policy?: 'REPLACE_WITH_SOURCE' | 'KEEP_AS_OVERRIDE'
+  ) => void;
   unlinkTableCell: (blockId: string, rowId: string, colKey: string, policy: 'keep_value' | 'clear', resolvedValue?: string | TableCellLiteralContent) => void;
   unlinkTableRow: (blockId: string, rowId: string, policy: 'keep_value' | 'clear', resolvedValues?: Record<string, string | TableCellLiteralContent>) => void;
   addTableColumn: (blockId: string, column: TableColumnConfig) => void;
@@ -283,6 +290,7 @@ interface CatalogState {
   updateTableColumn: (blockId: string, columnKey: string, updates: Partial<TableColumnConfig>) => void;
   applyTablePresentationTemplate: (blockId: string, template: TablePresentationTemplate | TablePresentationModel) => void;
   insertTechnicalDatasetAsTable: (pageId: string, dataset: TechnicalDatasetProjection, options?: { tableId?: string; title?: string }) => string;
+  insertSavedViewAsTable: (pageId: string, view: SavedViewProjection, options?: { tableId?: string; title?: string }) => string;
 
   // Persistência & Fila Single-Flight com Retorno Explícito de Resultado
   saveCurrentCatalog: () => Promise<SaveResult>;
@@ -1356,7 +1364,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     return rowId;
   },
 
-  setTableCellBinding: (blockId, rowId, colKey, binding) => {
+  setTableCellBinding: (blockId, rowId, colKey, binding, policy = 'REPLACE_WITH_SOURCE') => {
     get().commitDocumentMutation(
       (draft) => {
         for (const page of draft.pages) {
@@ -1364,12 +1372,29 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           if (block && block.tableRows) {
             block.tableRows = block.tableRows.map((r) => {
               if (r.id !== rowId) return r;
+
+              const nextBindings = {
+                ...(r.cellBindings || {}),
+                [colKey]: binding
+              };
+
+              if (policy === 'REPLACE_WITH_SOURCE') {
+                const nextCellValues = { ...(r.cellValues || {}) };
+                delete nextCellValues[colKey];
+                const nextOverrides = { ...(r.localOverrides || {}) };
+                delete nextOverrides[colKey];
+
+                return {
+                  ...r,
+                  cellBindings: nextBindings,
+                  cellValues: nextCellValues,
+                  localOverrides: nextOverrides
+                };
+              }
+
               return {
                 ...r,
-                cellBindings: {
-                  ...(r.cellBindings || {}),
-                  [colKey]: binding
-                }
+                cellBindings: nextBindings
               };
             });
             break;
@@ -1377,7 +1402,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       },
       'UPDATE_TABLE_CELL',
-      { targetId: blockId, targetRowId: rowId, fieldKey: colKey, summary: `Vínculo da célula [row=${rowId}, col=${colKey}] atualizado para ${binding.semanticKey}` }
+      { targetId: blockId, targetRowId: rowId, fieldKey: colKey, summary: `Vínculo da célula [row=${rowId}, col=${colKey}] atualizado para ${binding.semanticKey} (política: ${policy})` }
     );
   },
 
@@ -1512,12 +1537,10 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       isCustom: col.isCustom
     }));
 
-    // Cria as linhas do ContentBlock com identidade canônica e bindings persistidos (Emenda 14)
+    // Cria as linhas do ContentBlock com identidade canônica e bindings persistidos (Emenda 14, Blocker 1)
     const tableRows: CatalogTableRow[] = dataset.rows.map((r, rIdx) => {
       const rowId = generateDeterministicDatasetRowId(dataset.datasetId, r.rowId);
       const cellBindings: Record<string, CatalogCellBinding> = {};
-      const cellValues: Record<string, TableCellLiteralContent> = {};
-      const localOverrides: Record<string, string> = {};
 
       dataset.columns.forEach((col) => {
         const cellItem = r.cells[col.key];
@@ -1526,9 +1549,6 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           const proj = isCellProj ? (cellItem as TechnicalDatasetCellProjection) : undefined;
           const litVal: TableCellLiteralContent = proj ? proj.value : (cellItem as TableCellLiteralContent);
           const canonicalKey = proj?.datumKey || `canonical_datum_${proj?.datumId || 'snapshot'}`;
-
-          cellValues[col.key] = litVal;
-          localOverrides[col.key] = formatTableCellLiteral(litVal);
 
           cellBindings[col.key] = {
             sourceKind: 'dataset',
@@ -1546,8 +1566,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         id: rowId,
         productRefId: dataset.productId,
         cellBindings,
-        cellValues,
-        localOverrides,
+        cellValues: {},
+        localOverrides: {},
         order: rIdx
       };
     });
@@ -1575,6 +1595,93 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       },
       'ADD_BLOCK',
       { targetId: blockId, targetPageId: pageId, summary: `Dataset "${title}" inserido como tabela técnica` }
+    );
+
+    return blockId;
+  },
+
+  insertSavedViewAsTable: (pageId, view, options) => {
+    const blockId = options?.tableId || `tbl-sv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const title = options?.title || view.title || 'Tabela de Visão Salva';
+
+    // Cria as colunas com estabilidade
+    const tableColumns: TableColumnConfig[] = view.columns.map((col) => {
+      const colKey = typeof col === 'string' ? col : col.key;
+      const colId = typeof col === 'string' ? col : (col.id || col.key);
+      const colLabel = typeof col === 'string' ? col : col.label;
+      const widthMm = typeof col === 'string' ? undefined : col.widthMm;
+      const isCustom = typeof col === 'string' ? false : col.isCustom;
+
+      return {
+        id: generateDeterministicDatasetColumnId(view.id, colId),
+        key: colKey,
+        label: colLabel,
+        visible: true,
+        width: widthMm,
+        isCustom
+      };
+    });
+
+    const rows = view.rows || [];
+    const tableRows: CatalogTableRow[] = rows.map((r, rIdx) => {
+      const rowId = generateDeterministicDatasetRowId(view.id, r.rowId);
+      const cellBindings: Record<string, CatalogCellBinding> = {};
+
+      view.columns.forEach((col) => {
+        const colKey = typeof col === 'string' ? col : col.key;
+        const cellItem = r.cells[colKey];
+        if (cellItem) {
+          const isCellProj = typeof cellItem === 'object' && cellItem !== null && 'datumKey' in cellItem;
+          const proj = isCellProj ? (cellItem as TechnicalDatasetCellProjection) : undefined;
+          const litVal: TableCellLiteralContent = proj ? proj.value : (cellItem as TableCellLiteralContent);
+          const canonicalKey = proj?.datumKey || `canonical_datum_${proj?.datumId || 'snapshot'}`;
+
+          cellBindings[colKey] = {
+            sourceKind: view.datasetId ? 'dataset' : 'pim_datum',
+            productId: view.productId,
+            semanticKey: canonicalKey,
+            datasetId: view.datasetId,
+            bindingMode: view.bindingMode || 'live',
+            snapshot: litVal,
+            sourceRevision: view.sourceRevision
+          };
+        }
+      });
+
+      return {
+        id: rowId,
+        productRefId: view.productId,
+        cellBindings,
+        cellValues: {},
+        localOverrides: {},
+        order: rIdx
+      };
+    });
+
+    const newBlock: ContentBlock = {
+      id: blockId,
+      type: 'specs_table',
+      title,
+      tableColumns,
+      tableRows,
+      customData: {
+        savedViewId: view.id,
+        datasetId: view.datasetId,
+        productId: view.productId,
+        sourceRevision: view.sourceRevision,
+        bindingMode: view.bindingMode
+      }
+    };
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const page = draft.pages.find((p) => p.id === pageId);
+        if (page) {
+          page.blocks = [...(page.blocks || []), newBlock];
+        }
+      },
+      'ADD_BLOCK',
+      { targetId: blockId, targetPageId: pageId, summary: `Visão salva "${title}" inserida como tabela técnica` }
     );
 
     return blockId;
