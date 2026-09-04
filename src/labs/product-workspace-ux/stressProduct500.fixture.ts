@@ -136,24 +136,30 @@ const TABLE_100x15_ROWS: MegaTableRow[] = Array.from({ length: 100 }, (_, i) => 
     id: `row-100x15-${rowNum}`,
     group,
     cells: {
-      c01_id: { value: `CH-${String(rowNum).padStart(3, '0')}` },
+      c01_id: { value: `CH-${String(rowNum).padStart(3, '0')}`, type: 'editorial_literal' },
       c02_param: {
         value: `Grandeza Paramétrica Canal ${rowNum} com Compensação Multivariável Ativa`,
-        highlight: rowNum % 10 === 0
+        highlight: rowNum % 10 === 0,
+        type: 'editorial_literal'
       },
-      c03_min: { value: (rowNum * 1.5 - 50).toFixed(2) },
-      c04_nom: { value: (rowNum * 10).toFixed(1) },
-      c05_max: { value: (rowNum * 15 + 100).toFixed(2) },
-      c06_unit: { value: rowNum % 2 === 0 ? 'kPa' : 'mV' },
-      c07_res: { value: '0,0001' },
-      c08_uncert: { value: `±${(0.01 + (rowNum % 5) * 0.002).toFixed(3)}%` },
-      c09_temp_coef: { value: `${10 + (rowNum % 7)} ppm` },
-      c10_drift: { value: `< 0,02%/ano` },
-      c11_sampling: { value: `${100 + (rowNum % 10) * 10}` },
-      c12_response: { value: `${25 + (rowNum % 15)} ms` },
-      c13_protocol: { value: rowNum % 3 === 0 ? 'HART 7' : rowNum % 3 === 1 ? 'Profibus-PA' : 'Modbus TCP' },
-      c14_calib: { value: '12 meses' },
-      c15_status: { value: rowNum % 4 === 0 ? 'Auditado ISO 17025' : 'Homologado Lab' }
+      c03_min: { value: (rowNum * 1.5 - 50).toFixed(2), type: 'editorial_literal' },
+      c04_nom: {
+        value: (rowNum * 10).toFixed(1),
+        type: 'fact_ref',
+        factId: `f-stress-ch-${rowNum}`,
+        canonicalSemanticKey: `stress.channel.${rowNum}.nominal`
+      },
+      c05_max: { value: (rowNum * 15 + 100).toFixed(2), type: 'editorial_literal' },
+      c06_unit: { value: rowNum % 2 === 0 ? 'kPa' : 'mV', type: 'editorial_literal' },
+      c07_res: { value: '0,0001', type: 'editorial_literal' },
+      c08_uncert: { value: `±${(0.01 + (rowNum % 5) * 0.002).toFixed(3)}%`, type: 'editorial_literal' },
+      c09_temp_coef: { value: `${10 + (rowNum % 7)} ppm`, type: 'editorial_literal' },
+      c10_drift: { value: `< 0,02%/ano`, type: 'editorial_literal' },
+      c11_sampling: { value: `${100 + (rowNum % 10) * 10}`, type: 'editorial_literal' },
+      c12_response: { value: `${25 + (rowNum % 15)} ms`, type: 'editorial_literal' },
+      c13_protocol: { value: rowNum % 3 === 0 ? 'HART 7' : rowNum % 3 === 1 ? 'Profibus-PA' : 'Modbus TCP', type: 'editorial_literal' },
+      c14_calib: { value: '12 meses', type: 'editorial_literal' },
+      c15_status: { value: rowNum % 4 === 0 ? 'Auditado ISO 17025' : 'Homologado Lab', type: 'editorial_literal' }
     }
   };
 });
@@ -166,12 +172,17 @@ function generateAuxTable(rowsCount: number, prefix: string, groupName: string):
       id: `${prefix}-row-${idx}`,
       group: groupName,
       cells: {
-        col_id: { value: `${prefix.toUpperCase()}-${String(idx).padStart(2, '0')}` },
-        col_name: { value: `Item Técnico de Monitoramento ${idx} da Matriz de Validação` },
-        col_value: { value: `${(idx * 3.7).toFixed(2)}` },
-        col_unit: { value: 'unid' },
-        col_tol: { value: '±0,05%' },
-        col_status: { value: 'Normal' }
+        col_id: { value: `${prefix.toUpperCase()}-${String(idx).padStart(2, '0')}`, type: 'editorial_literal' },
+        col_name: { value: `Item Técnico de Monitoramento ${idx} da Matriz de Validação`, type: 'editorial_literal' },
+        col_value: {
+          value: `${(idx * 3.7).toFixed(2)}`,
+          type: 'fact_ref',
+          factId: `f-stress-${prefix}-${idx}`,
+          canonicalSemanticKey: `stress.${prefix}.${idx}.val`
+        },
+        col_unit: { value: 'unid', type: 'editorial_literal' },
+        col_tol: { value: '±0,05%', type: 'editorial_literal' },
+        col_status: { value: 'Normal', type: 'editorial_literal' }
       }
     };
   });

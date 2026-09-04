@@ -11,11 +11,12 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { FactItem, WorkspaceMode, getFactSources, getFactSourceState } from '../types';
+import { FactItem, WorkspaceMode, DetailLevel, getFactSources, getFactSourceState } from '../types';
 
 interface FactGridBlockProps {
   facts: FactItem[];
   mode?: WorkspaceMode;
+  detailLevel?: DetailLevel;
   variant?: 'hero' | 'key_value';
   onEditFact: (fact: FactItem) => void;
   onOpenSource: (fact: FactItem) => void;
@@ -26,6 +27,7 @@ interface FactGridBlockProps {
 export const FactGridBlock: React.FC<FactGridBlockProps> = ({
   facts,
   mode = 'view',
+  detailLevel = 'simple',
   variant = 'key_value',
   onEditFact,
   onOpenSource,
@@ -152,9 +154,15 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
 
             {/* Ações de Edição e Semântica */}
             <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                {fact.semanticKey}
-              </span>
+              {detailLevel === 'advanced' ? (
+                <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                  {fact.semanticKey}
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                  {fact.originLabel || 'Especificação'}
+                </span>
+              )}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {onToggleFactVisibility && mode === 'edit_workspace' && (
                   <button
@@ -165,13 +173,15 @@ export const FactGridBlock: React.FC<FactGridBlockProps> = ({
                     {fact.isHidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                   </button>
                 )}
-                <button
-                  onClick={() => onOpenSemantic(fact)}
-                  title="Ver identidade semântica e aliases"
-                  className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded"
-                >
-                  <Tag className="w-3 h-3" />
-                </button>
+                {detailLevel === 'advanced' && (
+                  <button
+                    onClick={() => onOpenSemantic(fact)}
+                    title="Ver identidade semântica e aliases"
+                    className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded"
+                  >
+                    <Tag className="w-3 h-3" />
+                  </button>
+                )}
                 <button
                   onClick={() => onEditFact(fact)}
                   title="Editar valor ou escopo no rascunho"

@@ -25,20 +25,22 @@ import {
   CheckCircle2,
   Bookmark
 } from 'lucide-react';
-import { FactItem, getFactSources, getFactSourceState } from '../types';
+import { FactItem, getFactSources, getFactSourceState, DetailLevel } from '../types';
 
 interface SourceDrawerProps {
   fact: FactItem | null;
   isOpen: boolean;
   onClose: () => void;
   onOpenConflictReview?: (fact: FactItem) => void;
+  detailLevel?: DetailLevel;
 }
 
 export const SourceDrawer: React.FC<SourceDrawerProps> = ({
   fact,
   isOpen,
   onClose,
-  onOpenConflictReview
+  onOpenConflictReview,
+  detailLevel = 'simple'
 }) => {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -196,13 +198,13 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
           )}
 
           {/* ================================================================= */}
-          {/* CASO 4: INHERITED SOURCE */}
+          {/* INFORMAÇÃO DE ORIGEM DO CONHECIMENTO (Independente do estado de evidência) */}
           {/* ================================================================= */}
-          {sourceState === 'inherited_source' && (
+          {(fact.originScope === 'family' || fact.originKind === 'family' || sources.some((s) => s.isFamilyInherited)) && (
             <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center gap-2.5 text-blue-900">
               <Users className="w-5 h-5 text-blue-600 shrink-0" />
               <div>
-                <span className="font-bold">Origem Compartilhada: {fact.originLabel}</span>
+                <span className="font-bold">Origem Compartilhada: {fact.originLabel || 'Linha'}</span>
                 <p className="text-[11px] text-blue-800 mt-0.5">
                   Esta evidência comprobatória foi herdada da documentação mestre da família de produtos.
                 </p>
@@ -298,35 +300,37 @@ export const SourceDrawer: React.FC<SourceDrawerProps> = ({
             </div>
           )}
 
-          {/* Detalhes Técnicos de Auditoria (Colapsável) */}
-          <div className="border-t border-slate-200 pt-3">
-            <button
-              type="button"
-              onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-              className="flex items-center justify-between w-full text-slate-400 hover:text-slate-600 font-semibold text-[11px]"
-            >
-              <span>Detalhes técnicos de auditoria</span>
-              {showTechnicalDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
+          {/* Detalhes Técnicos de Auditoria (Apenas em Modo Avançado) */}
+          {detailLevel === 'advanced' && (
+            <div className="border-t border-slate-200 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                className="flex items-center justify-between w-full text-slate-400 hover:text-slate-600 font-semibold text-[11px]"
+              >
+                <span>Detalhes técnicos de auditoria</span>
+                {showTechnicalDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
 
-            {showTechnicalDetails && (
-              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 font-mono text-[11px] text-slate-600">
-                <div>Semantic Target: {fact.semanticKey}</div>
-                <div>Origin Scope: {fact.originScope} ({fact.originLabel})</div>
-                <div>Origin Kind: {fact.originKind || 'product_local'}</div>
-                <div>Sources Count: {sources.length}</div>
-                {sources.map((s, i) => (
-                  <div key={i} className="pl-2 border-l border-slate-300 space-y-0.5">
-                    <div>Doc ID: {s.documentId || 'N/A'}</div>
-                    <div>Status: {s.verifiedStatus}</div>
-                    {s.technicalMetadata?.ocrConfidence && (
-                      <div>OCR Confidence: {(s.technicalMetadata.ocrConfidence * 100).toFixed(1)}%</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              {showTechnicalDetails && (
+                <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 font-mono text-[11px] text-slate-600">
+                  <div>Semantic Target: {fact.semanticKey}</div>
+                  <div>Origin Scope: {fact.originScope} ({fact.originLabel})</div>
+                  <div>Origin Kind: {fact.originKind || 'product_local'}</div>
+                  <div>Sources Count: {sources.length}</div>
+                  {sources.map((s, i) => (
+                    <div key={i} className="pl-2 border-l border-slate-300 space-y-0.5">
+                      <div>Doc ID: {s.documentId || 'N/A'}</div>
+                      <div>Status: {s.verifiedStatus}</div>
+                      {s.technicalMetadata?.ocrConfidence && (
+                        <div>OCR Confidence: {(s.technicalMetadata.ocrConfidence * 100).toFixed(1)}%</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -13,7 +13,14 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { WorkspaceSection, WorkspaceMode, BlockSize, FactItem, WorkspaceBlock } from '../types';
+import {
+  WorkspaceSection,
+  WorkspaceBlock,
+  WorkspaceMode,
+  DetailLevel,
+  BlockSize,
+  FactItem
+} from '../types';
 import { FactGridBlock } from './FactGridBlock';
 import { MegaTableBlock } from './MegaTableBlock';
 import { DocumentsBlock } from './DocumentsBlock';
@@ -22,6 +29,7 @@ import { ConflictsBlock } from './ConflictsBlock';
 interface WorkspaceSectionProps {
   section: WorkspaceSection;
   mode: WorkspaceMode;
+  detailLevel?: DetailLevel;
   onToggleCollapse: () => void;
   onRenameSection: (newTitle: string) => void;
   onMoveUp?: () => void;
@@ -44,6 +52,7 @@ interface WorkspaceSectionProps {
 export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
   section,
   mode,
+  detailLevel,
   onToggleCollapse,
   onRenameSection,
   onMoveUp,
@@ -263,6 +272,7 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
                   <FactGridBlock
                     facts={block.data.facts}
                     mode={mode}
+                    detailLevel={detailLevel}
                     variant="hero"
                     onEditFact={onEditFact}
                     onOpenSource={onOpenSource}
@@ -275,6 +285,7 @@ export const WorkspaceSectionComponent: React.FC<WorkspaceSectionProps> = ({
                   <FactGridBlock
                     facts={block.data.facts}
                     mode={mode}
+                    detailLevel={detailLevel}
                     variant="key_value"
                     onEditFact={onEditFact}
                     onOpenSource={onOpenSource}

@@ -71,14 +71,14 @@ export interface FactItem {
   source?: FactSource;
   sources?: FactSource[]; // Suporte completo a múltiplas fontes/evidências
   conflict?: FactConflictDetails;
+  evidenceState?: FactSourceState;
 }
 
 export type FactSourceState =
   | 'no_source'
   | 'single_source'
   | 'multiple_agreeing'
-  | 'conflicting_sources'
-  | 'inherited_source';
+  | 'conflicting_sources';
 
 export function getFactSources(fact: FactItem): FactSource[] {
   if (fact.sources && fact.sources.length > 0) {
@@ -95,9 +95,6 @@ export function getFactSourceState(fact: FactItem): FactSourceState {
   if (sources.length === 0) return 'no_source';
   if (fact.conflict || sources.some((s) => s.verifiedStatus === 'review_required')) {
     return 'conflicting_sources';
-  }
-  if (fact.originScope === 'family' || sources.some((s) => s.isFamilyInherited)) {
-    return 'inherited_source';
   }
   if (sources.length > 1) {
     return 'multiple_agreeing';
@@ -143,7 +140,13 @@ export interface MegaTableCellData {
   value: string;
   unit?: string;
   source?: FactSource;
+  sources?: FactSource[];
   highlight?: boolean;
+  type?: 'fact_ref' | 'editorial_literal';
+  factId?: string; // Stable TechnicalDatum identity
+  canonicalSemanticKey?: string;
+  hasConflict?: boolean;
+  status?: 'verified' | 'unverified' | 'review_required';
 }
 
 export interface MegaTableRow {
@@ -227,6 +230,15 @@ export type WorkspacePerspective =
   | 'commercial'
   | 'documentation';
 
+/**
+ * Eixos Ortogonais de UI (Amendment 5):
+ * 1. InteractionMode: Ação que o usuário está realizando no workspace.
+ * 2. DetailLevel: Nível de profundidade técnica/metrológica exibido na tela.
+ */
+export type InteractionMode = 'view' | 'edit_layout' | 'edit_data';
+export type DetailLevel = 'simple' | 'advanced';
+
+/** @deprecated Mantido para compatibilidade com implementações existentes */
 export type WorkspaceMode = 'view' | 'edit_workspace';
 
 export interface UndoSnapshot {
@@ -267,66 +279,148 @@ export interface SearchResultItem {
 }
 
 /**
- * Derived counts helpers: garante que contagens nunca sejam fonte primária estática
- * sujeita a desatualização, e sim sempre computadas dinamicamente da projeção de seções.
+ * Métricas formais do Workspace (Amendments 1, 2, 3, 7, 8):
+ * - knowledgeFactsCount: total de fatos técnicos únicos conhecidos para este produto
+ * - visibleUniqueFactsCount: fatos únicos atualmente referenciados na projeção visível
+ * - visibleFactOccurrences: total de referências/ocorrências renderizadas em blocos e células
+ * - tableFactReferencesCount: total de referências que aparecem dentro de células de tabelas
+ * - tablesCount: quantidade de blocos de tabela (mega_table / table)
+ * - sourcesCount: quantidade de documentos de fonte únicos (por stable documentId)
+ * - conflictsCount: quantidade de fatos técnicos únicos com divergência/conflito
  */
-export function deriveFactsCount(sections: WorkspaceSection[]): number {
-  let count = 0;
-  for (const sec of sections) {
-    for (const block of sec.blocks) {
-      if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
-        count += block.data.facts.length;
-      } else if (block.data.kind === 'mega_table') {
-        count += block.data.table.rows.length;
-      } else if (block.data.kind === 'table') {
-        count += block.data.table.rows.length;
-      } else if (block.data.kind === 'conflicts') {
-        count += block.data.conflicts.length;
-      }
-    }
-  }
-  return count;
+export interface WorkspaceMetrics {
+  knowledgeFactsCount: number;
+  visibleUniqueFactsCount: number;
+  visibleFactOccurrences: number;
+  tableFactReferencesCount: number;
+  tablesCount: number;
+  sourcesCount: number;
+  conflictsCount: number;
+  /** @deprecated Use visibleUniqueFactsCount ou knowledgeFactsCount */
+  uniqueFactsCount: number;
+  /** @deprecated Use visibleUniqueFactsCount */
+  factsCount: number;
 }
 
-export function deriveTablesCount(sections: WorkspaceSection[]): number {
-  let count = 0;
-  for (const sec of sections) {
-    for (const block of sec.blocks) {
-      if (block.data.kind === 'mega_table' || block.data.kind === 'table') {
-        count += 1;
-      }
-    }
-  }
-  return count;
-}
+export function deriveWorkspaceMetrics(
+  sections: WorkspaceSection[],
+  knowledgeBaseFacts?: FactItem[]
+): WorkspaceMetrics {
+  const uniqueVisibleFactIds = new Set<string>();
+  const allKnownFactIds = new Set<string>();
+  let visibleFactOccurrences = 0;
+  let tableFactReferencesCount = 0;
+  let tablesCount = 0;
+  const uniqueSourceDocIds = new Set<string>();
+  const uniqueConflictFactIds = new Set<string>();
 
-export function deriveSourcesCount(sections: WorkspaceSection[]): number {
-  const sourceDocCodes = new Set<string>();
   for (const sec of sections) {
     for (const block of sec.blocks) {
+      const isBlockVisible = !block.isHidden;
+
       if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
-        for (const f of block.data.facts) {
-          getFactSources(f).forEach((s) => sourceDocCodes.add(s.documentCode));
+        for (const fact of block.data.facts) {
+          allKnownFactIds.add(fact.id);
+          if (isBlockVisible && !fact.isHidden) {
+            uniqueVisibleFactIds.add(fact.id);
+            visibleFactOccurrences += 1;
+          }
+
+          getFactSources(fact).forEach((s) => {
+            if (s.documentId) uniqueSourceDocIds.add(s.documentId);
+          });
+
+          if (fact.conflict) {
+            uniqueConflictFactIds.add(fact.id);
+          }
         }
+      } else if (block.data.kind === 'conflicts') {
+        for (const fact of block.data.conflicts) {
+          allKnownFactIds.add(fact.id);
+          if (isBlockVisible && !fact.isHidden) {
+            uniqueVisibleFactIds.add(fact.id);
+            visibleFactOccurrences += 1;
+            uniqueConflictFactIds.add(fact.id);
+          }
+
+          getFactSources(fact).forEach((s) => {
+            if (s.documentId) uniqueSourceDocIds.add(s.documentId);
+          });
+        }
+      } else if (block.data.kind === 'mega_table') {
+        if (isBlockVisible) tablesCount += 1;
+        for (const row of block.data.table.rows) {
+          for (const cellKey of Object.keys(row.cells)) {
+            const cell = row.cells[cellKey];
+            if (cell.type === 'fact_ref' && cell.factId) {
+              allKnownFactIds.add(cell.factId);
+              if (isBlockVisible) {
+                uniqueVisibleFactIds.add(cell.factId);
+                visibleFactOccurrences += 1;
+                tableFactReferencesCount += 1;
+              }
+            }
+            if (cell.source?.documentId) {
+              uniqueSourceDocIds.add(cell.source.documentId);
+            }
+            if (cell.sources) {
+              cell.sources.forEach((s) => {
+                if (s.documentId) uniqueSourceDocIds.add(s.documentId);
+              });
+            }
+            if (cell.hasConflict && cell.factId && isBlockVisible) {
+              uniqueConflictFactIds.add(cell.factId);
+            }
+          }
+        }
+      } else if (block.data.kind === 'table') {
+        if (isBlockVisible) tablesCount += 1;
       } else if (block.data.kind === 'documents') {
-        block.data.documents.forEach((d) => sourceDocCodes.add(d.code));
+        for (const doc of block.data.documents) {
+          if (doc.id) {
+            uniqueSourceDocIds.add(doc.id);
+          }
+        }
       }
     }
   }
-  return sourceDocCodes.size;
+
+  const knowledgeFactsCount = knowledgeBaseFacts
+    ? new Set(knowledgeBaseFacts.map((f) => f.id)).size
+    : allKnownFactIds.size;
+
+  const visibleUniqueFactsCount = uniqueVisibleFactIds.size;
+
+  return {
+    knowledgeFactsCount,
+    visibleUniqueFactsCount,
+    visibleFactOccurrences,
+    tableFactReferencesCount,
+    tablesCount,
+    sourcesCount: uniqueSourceDocIds.size,
+    conflictsCount: uniqueConflictFactIds.size,
+    uniqueFactsCount: visibleUniqueFactsCount,
+    factsCount: visibleUniqueFactsCount
+  };
 }
 
+/** @deprecated Use deriveWorkspaceMetrics(sections).uniqueFactsCount */
+export function deriveFactsCount(sections: WorkspaceSection[]): number {
+  return deriveWorkspaceMetrics(sections).uniqueFactsCount;
+}
+
+/** @deprecated Use deriveWorkspaceMetrics(sections).tablesCount */
+export function deriveTablesCount(sections: WorkspaceSection[]): number {
+  return deriveWorkspaceMetrics(sections).tablesCount;
+}
+
+/** @deprecated Use deriveWorkspaceMetrics(sections).sourcesCount */
+export function deriveSourcesCount(sections: WorkspaceSection[]): number {
+  return deriveWorkspaceMetrics(sections).sourcesCount;
+}
+
+/** @deprecated Use deriveWorkspaceMetrics(sections).conflictsCount */
 export function deriveConflictsCount(sections: WorkspaceSection[]): number {
-  let count = 0;
-  for (const sec of sections) {
-    for (const block of sec.blocks) {
-      if (block.data.kind === 'conflicts') {
-        count += block.data.conflicts.length;
-      } else if (block.data.kind === 'fact_grid' || block.data.kind === 'hero_summary') {
-        count += block.data.facts.filter((f) => f.conflict != null).length;
-      }
-    }
-  }
-  return count;
+  return deriveWorkspaceMetrics(sections).conflictsCount;
 }
 
