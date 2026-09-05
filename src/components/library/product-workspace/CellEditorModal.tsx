@@ -12,7 +12,8 @@ import {
   TechnicalDatum,
   TechnicalValue,
   DatumStatus,
-  UnitCode
+  UnitCode,
+  QuantityQualifier
 } from '../../../domain/product-workbook';
 
 interface CellEditorModalProps {
@@ -37,9 +38,13 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
   onClearCell
 }) => {
   const [numericVal, setNumericVal] = useState<string>('');
+  const [quantityAmount, setQuantityAmount] = useState<string>('');
+  const [quantityQualifier, setQuantityQualifier] = useState<QuantityQualifier | ''>('');
   const [textVal, setTextVal] = useState<string>('');
   const [rangeLower, setRangeLower] = useState<string>('');
   const [rangeUpper, setRangeUpper] = useState<string>('');
+  const [rangeLowerInclusive, setRangeLowerInclusive] = useState<boolean | undefined>(undefined);
+  const [rangeUpperInclusive, setRangeUpperInclusive] = useState<boolean | undefined>(undefined);
   const [booleanVal, setBooleanVal] = useState<boolean>(true);
   const [customUnit, setCustomUnit] = useState<string>(column.unit || '');
   const [datumLabel, setDatumLabel] = useState<string>('');
@@ -58,20 +63,30 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
       const v = currentDatum.value;
       if (v.type === 'number') {
         setNumericVal(String(v.value));
+      } else if (v.type === 'quantity') {
+        setQuantityAmount(String(v.amount));
+        setCustomUnit(v.unit);
+        setQuantityQualifier(v.qualifier || '');
       } else if (v.type === 'text') {
         setTextVal(v.value);
       } else if (v.type === 'range') {
         setRangeLower(v.lower !== undefined ? String(v.lower) : '');
         setRangeUpper(v.upper !== undefined ? String(v.upper) : '');
+        setRangeLowerInclusive(v.lowerInclusive);
+        setRangeUpperInclusive(v.upperInclusive);
         if (v.unit) setCustomUnit(v.unit);
       } else if (v.type === 'boolean') {
         setBooleanVal(v.value);
       }
     } else {
       setNumericVal('');
+      setQuantityAmount('');
+      setQuantityQualifier('');
       setTextVal('');
       setRangeLower('');
       setRangeUpper('');
+      setRangeLowerInclusive(undefined);
+      setRangeUpperInclusive(undefined);
       setBooleanVal(true);
     }
   }, [isOpen, currentDatum, row, column]);
@@ -84,6 +99,18 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
 
     let finalValue: TechnicalValue;
     const unitToUse = (customUnit.trim() || column.unit) as UnitCode | undefined;
+    const supportedEditorTypes = ['number', 'quantity', 'text', 'range', 'boolean'];
+
+    if (currentDatum && !supportedEditorTypes.includes(currentDatum.value.type)) {
+      onSaveCell(currentDatum.value, datumLabel.trim() || undefined, datumStatus);
+      onClose();
+      return;
+    }
+
+    if (currentDatum && currentDatum.value.type !== column.valueType) {
+      setErrorMsg(`O tipo existente “${currentDatum.value.type}” não é compatível com a coluna “${column.valueType}”.`);
+      return;
+    }
 
     switch (column.valueType) {
       case 'number': {
@@ -95,6 +122,25 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
         finalValue = {
           type: 'number',
           value: num
+        };
+        break;
+      }
+      case 'quantity': {
+        const amount = parseFloat(quantityAmount.replace(',', '.'));
+        const unit = customUnit.trim();
+        if (Number.isNaN(amount)) {
+          setErrorMsg('Informe uma quantidade numérica válida.');
+          return;
+        }
+        if (!unit) {
+          setErrorMsg('Informe a unidade da quantidade.');
+          return;
+        }
+        finalValue = {
+          type: 'quantity',
+          amount,
+          unit: unit as UnitCode,
+          ...(quantityQualifier ? { qualifier: quantityQualifier } : {})
         };
         break;
       }
@@ -132,7 +178,9 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
           type: 'range',
           lower: lowerNum,
           upper: upperNum,
-          unit: (unitToUse || column.unit || '°C') as UnitCode
+          unit: (unitToUse || column.unit || '°C') as UnitCode,
+          ...(rangeLowerInclusive !== undefined ? { lowerInclusive: rangeLowerInclusive } : {}),
+          ...(rangeUpperInclusive !== undefined ? { upperInclusive: rangeUpperInclusive } : {})
         };
         break;
       }
@@ -144,10 +192,11 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
         break;
       }
       default: {
-        finalValue = {
-          type: 'text',
-          value: textVal.trim() || '—'
-        };
+        if (!currentDatum) {
+          setErrorMsg(`O tipo técnico “${column.valueType}” ainda não possui editor.`);
+          return;
+        }
+        finalValue = currentDatum.value;
       }
     }
 
@@ -228,6 +277,44 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
             </div>
           )}
 
+          {column.valueType === 'quantity' && (
+            <div className="space-y-1">
+              <label className="block font-bold text-slate-700">Quantidade Tipada</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={quantityAmount}
+                  onChange={(e) => setQuantityAmount(e.target.value)}
+                  placeholder="Ex: 10 ou 10,5"
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded font-mono text-xs focus:border-[#003366] focus:outline-none"
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  value={customUnit}
+                  onChange={(e) => setCustomUnit(e.target.value)}
+                  placeholder="Unidade"
+                  className="w-24 px-2 py-1.5 border border-slate-300 rounded font-mono text-xs focus:border-[#003366] focus:outline-none"
+                  aria-label="Unidade da quantidade"
+                />
+              </div>
+              <select
+                value={quantityQualifier}
+                onChange={(e) => setQuantityQualifier(e.target.value as QuantityQualifier | '')}
+                className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white focus:border-[#003366] focus:outline-none"
+                aria-label="Qualificador da quantidade"
+              >
+                <option value="">Sem qualificador</option>
+                <option value="exact">Exato</option>
+                <option value="approx">Aproximado</option>
+                <option value="min">Mínimo</option>
+                <option value="max">Máximo</option>
+                <option value="nominal">Nominal</option>
+                <option value="typical">Típico</option>
+              </select>
+            </div>
+          )}
+
           {column.valueType === 'text' && (
             <div className="space-y-1">
               <label className="block font-bold text-slate-700">Valor em Texto</label>
@@ -304,6 +391,12 @@ export const CellEditorModal: React.FC<CellEditorModalProps> = ({
                   <span>Não / Inativo (False)</span>
                 </label>
               </div>
+            </div>
+          )}
+
+          {currentDatum && (currentDatum.value.type !== column.valueType || !['number', 'quantity', 'text', 'range', 'boolean'].includes(currentDatum.value.type)) && (
+            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px]">
+              <strong>Valor técnico somente leitura.</strong> O tipo “{currentDatum.value.type}” ainda não possui editor neste modal; ao salvar, ele será preservado sem conversão.
             </div>
           )}
 
