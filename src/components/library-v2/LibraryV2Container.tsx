@@ -28,6 +28,21 @@ export interface LibraryV2ContainerProps {
   onSwitchToClassic: () => void;
 }
 
+const countPopulatedTechnicalFacts = (value: unknown): number => {
+  if (value == null) return 0;
+  if (typeof value === 'string') return value.trim().length > 0 ? 1 : 0;
+  if (Array.isArray(value)) {
+    return value.reduce<number>((total, item) => total + countPopulatedTechnicalFacts(item), 0);
+  }
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (total, item) => total + countPopulatedTechnicalFacts(item),
+      0
+    );
+  }
+  return 1;
+};
+
 export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitchToClassic }) => {
   const {
     products,
@@ -35,7 +50,8 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
     selectedFamily,
     setSelectedFamily,
     getColumnsForFamily,
-    addProduct
+    addProduct,
+    syncStatus
   } = useLibraryStore();
 
   const [activeSection, setActiveSection] = useState<LibraryV2SectionId>('overview');
@@ -51,7 +67,21 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
     (f) => f.name === currentFamily || f.slug === currentFamily || f.id === currentFamily
   );
 
-  const familyColumns = currentFamily ? getColumnsForFamily(currentFamily) : [];
+  const rawFamilyColumns = currentFamily ? getColumnsForFamily(currentFamily) : [];
+  const familyColumns = syncStatus === 'offline' && families.length === 0
+    ? []
+    : rawFamilyColumns;
+
+  const currentFamilyProducts = products.filter((p) => {
+    if (activeFamilyObj) {
+      return (
+        p.family_id === activeFamilyObj.id ||
+        (!p.family_id && p.family?.trim().toLowerCase() === activeFamilyObj.name.trim().toLowerCase())
+      );
+    }
+    return p.family === currentFamily || p.family?.toLowerCase() === currentFamily.toLowerCase();
+  });
+  const metricsProduct = selectedProduct || currentFamilyProducts[0];
 
   const filteredProducts = products.filter((p) => {
     if (!searchTerm.trim()) return true;
@@ -106,12 +136,8 @@ export const LibraryV2Container: React.FC<LibraryV2ContainerProps> = ({ onSwitch
             activeSection={activeSection}
             onSelectSection={setActiveSection}
             metrics={{
-              productsCount: products.filter((p) => p.family === currentFamily || !p.family).length,
-              specsCount: 7,
-              tablesCount: 1,
-              documentsCount: 2,
-              sourcesCount: 3,
-              conflictsCount: 0
+              productsCount: currentFamilyProducts.length,
+              specsCount: metricsProduct ? countPopulatedTechnicalFacts(metricsProduct.specs) : 0
             }}
           />
 

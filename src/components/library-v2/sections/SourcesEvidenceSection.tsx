@@ -4,10 +4,9 @@
 
 import React from 'react';
 import { ContextHelpTrigger, TermHelp } from '../../guided-help/index';
+import { EmptyStateV2 } from '../common/EmptyStateV2';
 import {
   FileCheck2,
-  BookOpen,
-  FileText,
   ArrowUpRight,
   Info
 } from 'lucide-react';
@@ -21,34 +20,6 @@ export const SourcesEvidenceSection: React.FC<SourcesEvidenceSectionProps> = ({
   currentFamily,
   onSwitchToClassic
 }) => {
-  // Exemplos didáticos para demonstrar o modelo de citação e rastreabilidade visual
-  const exampleEvidences = [
-    {
-      id: 'demo-ev-1',
-      datumLabel: `Faixa de Temperatura (${currentFamily || 'TA-25N'})`,
-      observedValue: '-25 °C a 155 °C',
-      docName: 'Manual de Instruções Série TA-N (Exemplo)',
-      page: 12,
-      section: 'Item 2.1 — Especificações Técnicas Gerais'
-    },
-    {
-      id: 'demo-ev-2',
-      datumLabel: 'Exatidão Instrumental',
-      observedValue: '± 0,1 °C',
-      docName: 'Manual de Instruções Série TA-N (Exemplo)',
-      page: 13,
-      section: 'Tabela 2.3 — Exatidão e Incertezas de Medição'
-    },
-    {
-      id: 'demo-ev-3',
-      datumLabel: 'Tensão de Alimentação',
-      observedValue: '115 / 230 Vac, 50/60 Hz',
-      docName: 'Folha de Dados Comerciais (Exemplo)',
-      page: 2,
-      section: 'Características Elétricas'
-    }
-  ];
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Banner */}
@@ -61,10 +32,10 @@ export const SourcesEvidenceSection: React.FC<SourcesEvidenceSectionProps> = ({
             <ContextHelpTrigger helpId="evidence" variant="subtle" />
           </div>
           <h2 className="text-lg font-bold text-slate-900">
-            Evidências Documentais Auditáveis
+            Fontes & Evidências
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cada informação técnica deve possuir uma <TermHelp helpId="evidence" label="Evidência Documental" /> de apoio.
+            Uma <TermHelp helpId="evidence" label="Evidência Documental" /> pode sustentar um valor quando existir um vínculo auditável carregado.
           </p>
         </div>
 
@@ -86,79 +57,21 @@ export const SourcesEvidenceSection: React.FC<SourcesEvidenceSectionProps> = ({
         <div className="space-y-1">
           <span className="font-bold block">Transparência de Metadados:</span>
           <p className="text-slate-600 leading-relaxed">
-            Os itens abaixo são <strong>exemplos didáticos</strong> que demonstram como as citações de engenharia
-            são estruturadas visualmente. O sistema <strong>não exibe pontuações artificiais de confiança</strong>.
-            A verificação formal de documentos e extração automatizada de snippets ocorre através dos fluxos de auditoria no Modo Clássico.
+            A Library V2 só apresenta procedência quando houver uma fonte realmente carregada e vinculada ao dado.
+            Na ausência dessa autoridade, a seção permanece sem registros operacionais.
           </p>
         </div>
       </div>
 
-      {/* Lista de Evidências */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-            <FileCheck2 size={16} className="text-indigo-600" />
-            <span>Exemplos de Evidências Vinculadas ({exampleEvidences.length})</span>
-          </span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
-            EXEMPLO DIDÁTICO
-          </span>
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {exampleEvidences.map((ev) => (
-            <div
-              key={ev.id}
-              className="p-5 hover:bg-indigo-50/30 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-900">{ev.datumLabel}</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
-                    EXEMPLO
-                  </span>
-                </div>
-
-                <div className="text-xs text-slate-700 font-mono font-bold bg-slate-50 p-2 rounded-lg border border-slate-200/80 inline-block">
-                  Valor Extraído: <span className="text-indigo-700">{ev.observedValue}</span>
-                </div>
-
-                <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-slate-700 flex items-center gap-1">
-                    <FileText size={12} className="text-slate-400" />
-                    {ev.docName}
-                  </span>
-                  <span>•</span>
-                  <span>Página {ev.page}</span>
-                  <span>•</span>
-                  <span>{ev.section}</span>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {onSwitchToClassic ? (
-                  <button
-                    type="button"
-                    onClick={onSwitchToClassic}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors"
-                  >
-                    <BookOpen size={13} className="text-indigo-600" />
-                    <span>Ver no Modo Clássico</span>
-                  </button>
-                ) : (
-                  <span
-                    className="px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-400 rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-not-allowed"
-                    title="Visualizador de PDF integrado em homologação."
-                  >
-                    <BookOpen size={13} />
-                    <span>PDF em Homologação</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <EmptyStateV2
+        icon={FileCheck2}
+        title="Evidências não carregadas"
+        whatIsIt="Esta área lista somente fontes e evidências realmente vinculadas aos dados técnicos."
+        whyIsEmpty={`Nenhum conjunto de evidências auditáveis foi carregado para ${currentFamily || 'a família atual'}.`}
+        conceptId="evidence"
+        primaryActionLabel={onSwitchToClassic ? 'Auditar no Modo Clássico' : undefined}
+        onPrimaryAction={onSwitchToClassic}
+      />
     </div>
   );
 };

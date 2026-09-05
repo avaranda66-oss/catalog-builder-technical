@@ -4,11 +4,10 @@
 
 import React from 'react';
 import { ContextHelpTrigger, TermHelp } from '../../guided-help/index';
+import { EmptyStateV2 } from '../common/EmptyStateV2';
 import {
   Layers,
-  MoveVertical,
-  ArrowUpRight,
-  Info
+  ArrowUpRight
 } from 'lucide-react';
 
 export interface OrganizationSectionProps {
@@ -17,44 +16,9 @@ export interface OrganizationSectionProps {
 }
 
 export const OrganizationSection: React.FC<OrganizationSectionProps> = ({
-  currentFamily: _currentFamily,
+  currentFamily,
   onSwitchToClassic
 }) => {
-  const modules = [
-    {
-      id: 'mod-general',
-      title: 'Informações Gerais & Identificação',
-      order: 1,
-      semanticKey: 'general.info',
-      fieldsCount: 4,
-      description: 'Código de pedido, modelo comercial, descrição resumida e fotos oficiais.'
-    },
-    {
-      id: 'mod-metrology',
-      title: 'Especificações Metrológicas',
-      order: 2,
-      semanticKey: 'metrology.specs',
-      fieldsCount: 7,
-      description: 'Faixa térmica, estabilidade, exatidão instrumental e poços de calibração.'
-    },
-    {
-      id: 'mod-electrical',
-      title: 'Características Elétricas & Comunicação',
-      order: 3,
-      semanticKey: 'electrical.specs',
-      fieldsCount: 5,
-      description: 'Tensão de alimentação, consumo máximo em watts e portas RS-232 / USB.'
-    },
-    {
-      id: 'mod-mechanical',
-      title: 'Construção Mecânica & Dimensões',
-      order: 4,
-      semanticKey: 'mechanical.specs',
-      fieldsCount: 6,
-      description: 'Dimensões externas (A x L x P), peso aproximado e grau de proteção IP.'
-    }
-  ];
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Banner */}
@@ -67,11 +31,10 @@ export const OrganizationSection: React.FC<OrganizationSectionProps> = ({
             <ContextHelpTrigger helpId="module" variant="subtle" />
           </div>
           <h2 className="text-lg font-bold text-slate-900">
-            Organização dos Módulos do Caderno Técnico
+            Organização Técnica
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Organize os dados em <TermHelp helpId="module" label="Módulos" /> coerentes. A ordem definida aqui é
-            a mesma adotada na diagramação das páginas do catálogo.
+            <TermHelp helpId="module" label="Módulos" /> podem estruturar informações quando uma organização real estiver carregada.
           </p>
         </div>
 
@@ -90,60 +53,15 @@ export const OrganizationSection: React.FC<OrganizationSectionProps> = ({
         )}
       </div>
 
-      {/* Aviso de Transparência */}
-      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3 text-xs text-slate-700">
-        <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          Esta tela reflete a estrutura de módulos técnicos e ordenação das especificações. A reorganização interativa e adição de novos capítulos de engenharia são gerenciadas diretamente no <strong>Modo Clássico</strong>.
-        </p>
-      </div>
-
-      {/* Lista de Módulos */}
-      <div className="space-y-3">
-        {modules.map((m) => (
-          <div
-            key={m.id}
-            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-xs transition-all flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center font-mono shrink-0">
-                #{m.order}
-              </span>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                  <span>{m.title}</span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                    {m.fieldsCount} propriedades
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">{m.description}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {onSwitchToClassic ? (
-                <button
-                  type="button"
-                  onClick={onSwitchToClassic}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium inline-flex items-center gap-1 transition-colors"
-                  title="Abrir no Modo Clássico para reordenar"
-                >
-                  <MoveVertical size={13} />
-                  <span>Reordenar</span>
-                </button>
-              ) : (
-                <span
-                  className="px-2.5 py-1.5 bg-slate-50 text-slate-400 rounded-lg text-xs font-medium inline-flex items-center gap-1 cursor-not-allowed"
-                  title="Reordenação no Modo Clássico"
-                >
-                  <MoveVertical size={13} />
-                  <span>Modo Clássico</span>
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <EmptyStateV2
+        icon={Layers}
+        title="Organização não carregada"
+        whatIsIt="Esta área apresenta módulos e sua ordenação somente quando uma estrutura real estiver disponível."
+        whyIsEmpty={`Nenhuma estrutura de módulos foi carregada para ${currentFamily || 'a família atual'}.`}
+        conceptId="module"
+        primaryActionLabel={onSwitchToClassic ? 'Reorganizar no Modo Clássico' : undefined}
+        onPrimaryAction={onSwitchToClassic}
+      />
     </div>
   );
 };

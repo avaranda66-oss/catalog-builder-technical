@@ -29,17 +29,8 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
     (p) => p.family === currentFamily || !p.family
   );
 
-  // Mapeamento baseado nas colunas REAIS configuradas na store para esta família
-  const realSchemaColumns = familyColumns.length > 0
-    ? familyColumns
-    : [
-        { key: 'code', label: 'Código Comercial (Part Number)' },
-        { key: 'model', label: 'Modelo de Engenharia' },
-        { key: 'description', label: 'Descrição Técnica' },
-        { key: 'specs.range', label: 'Faixa de Medição (Temperatura)' },
-        { key: 'specs.accuracy', label: 'Incerteza / Exatidão' },
-        { key: 'specs.powerSupply', label: 'Tensão de Alimentação' }
-      ];
+  const realSchemaColumns = familyColumns;
+  const hasKnownSyncStatus = Boolean(syncStatus);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -79,8 +70,12 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
             Status de Sincronização
           </span>
           <span className="text-sm font-mono font-bold text-slate-900 flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-emerald-600" />
-            <span>{syncStatus || 'synced'}</span>
+            {syncStatus === 'synced' ? (
+              <CheckCircle2 size={14} className="text-emerald-600" />
+            ) : (
+              <Clock size={14} className="text-slate-400" />
+            )}
+            <span>{hasKnownSyncStatus ? syncStatus : 'Desconhecido'}</span>
           </span>
         </div>
 
@@ -89,7 +84,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
             Fonte do Workspace
           </span>
           <span className="text-sm font-mono font-bold text-slate-900">
-            {workspaceSource || 'offline'}
+            {workspaceSource || 'Não carregado'}
           </span>
         </div>
 
@@ -98,7 +93,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
             Proveniência de Dados
           </span>
           <span className="text-sm font-mono font-bold text-slate-900">
-            {dataProvenance || 'demo_seed'}
+            {dataProvenance || 'Não carregado'}
           </span>
         </div>
       </div>
@@ -108,13 +103,19 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <Database size={16} className="text-indigo-600" />
-            <span>Esquema de Colunas Ativo ({realSchemaColumns.length})</span>
+            <span>Colunas disponibilizadas ({realSchemaColumns.length})</span>
           </span>
           <span className="text-xs text-slate-500 font-mono">
             Família: {activeFamilyObj?.name || currentFamily}
           </span>
         </div>
 
+        {realSchemaColumns.length === 0 ? (
+          <div className="p-8 text-center space-y-1">
+            <p className="text-sm font-bold text-slate-800">Esquema técnico não carregado</p>
+            <p className="text-xs text-slate-500">Nenhuma coluna técnica autoritativa está disponível para esta família.</p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
             <thead>
@@ -135,6 +136,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Bloco Transparente de Recursos Planejados */}
