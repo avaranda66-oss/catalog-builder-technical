@@ -28,6 +28,21 @@ export interface OverviewSectionProps {
   onSwitchToClassic?: () => void;
 }
 
+const countPopulatedTechnicalFacts = (value: unknown): number => {
+  if (value == null) return 0;
+  if (typeof value === 'string') return value.trim().length > 0 ? 1 : 0;
+  if (Array.isArray(value)) {
+    return value.reduce<number>((total, item) => total + countPopulatedTechnicalFacts(item), 0);
+  }
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (total, item) => total + countPopulatedTechnicalFacts(item),
+      0
+    );
+  }
+  return 1;
+};
+
 export const OverviewSection: React.FC<OverviewSectionProps> = ({
   currentFamily,
   activeFamilyObj,
@@ -54,7 +69,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   // Estatísticas agregadas
   const totalProducts = familyProducts.length;
   const sampleProduct = familyProducts[0];
-  const specsCount = sampleProduct ? Object.keys(sampleProduct.specs || {}).length : 0;
+  const specsCount = sampleProduct ? countPopulatedTechnicalFacts(sampleProduct.specs) : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -73,7 +88,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
             </h1>
             <p className="text-xs text-slate-300 max-w-2xl mt-1.5 leading-relaxed">
               {activeFamilyObj?.description ||
-                'Gerencie as especificações, modelos físicos e evidências técnicas desta família. Os dados definidos aqui são compartilhados automaticamente com todas as variantes.'}
+                'Consulte os modelos e as informações disponíveis para esta família. Estados sem autoridade carregada permanecem explicitamente indisponíveis.'}
             </p>
           </div>
 
@@ -152,9 +167,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               <FileCheck2 size={16} />
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900">Fontes</div>
+          <div className="text-2xl font-black text-slate-900">—</div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-            <span>Rastreabilidade & Provas</span>
+            <span>Não carregado</span>
             <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
@@ -171,9 +186,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               <AlertTriangle size={16} />
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900">0</div>
+          <div className="text-2xl font-black text-slate-900">—</div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-            <span>Nenhuma divergência ativa</span>
+            <span>Não auditado</span>
             <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
@@ -216,7 +231,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               <span>Modelos Físicos desta Família ({familyProducts.length})</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Clique em um modelo para inspecionar suas especificações ou criar exceções técnicas exclusivas.
+              Clique em um modelo para inspecionar as informações técnicas armazenadas.
             </p>
           </div>
           <div className="flex items-center gap-2">

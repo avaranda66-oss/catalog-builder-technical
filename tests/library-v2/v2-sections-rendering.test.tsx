@@ -41,15 +41,16 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     expect(screen.getAllByText('TA-35N').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('deve navegar para a Seção 2 (Informações Técnicas) e exibir herança/overrides', () => {
+  it('deve navegar para a Seção 2 (Informações Técnicas) sem fabricar módulos ou classificações', () => {
     render(<LibraryV2Container onSwitchToClassic={vi.fn()} />);
 
     const navTechData = screen.getByText('Informações Técnicas');
     fireEvent.click(navTechData);
 
     expect(screen.getByText('Informações Técnicas & Fatos')).toBeDefined();
-    expect(screen.getByText('Módulo: Metrologia')).toBeDefined();
-    expect(screen.getByText('Módulo: Elétrica')).toBeDefined();
+    expect(screen.getByText('Valores armazenados')).toBeDefined();
+    expect(screen.queryByText('Módulo: Metrologia')).toBeNull();
+    expect(screen.queryByText('Dado PIM')).toBeNull();
   });
 
   it('deve navegar para a Seção 3 (Tabelas Técnicas) e exibir matriz comparativa', () => {
@@ -60,6 +61,7 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
 
     expect(screen.getByText('Matrizes Comparativas e Tabelas de Engenharia')).toBeDefined();
     expect(screen.getByText('Matriz Comparativa de Modelos')).toBeDefined();
+    expect(screen.queryByText('Vinculada ao Produto')).toBeNull();
   });
 
   it('deve navegar para a Seção 4 (Documentos)', () => {
@@ -69,7 +71,7 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     fireEvent.click(navDocs);
 
     expect(screen.getByText('Documentos Fonte & Certificados')).toBeDefined();
-    expect(screen.getByText(/Manual de Instruções e Especificações Técnicas/i)).toBeDefined();
+    expect(screen.getByText('Documentos não carregados')).toBeDefined();
   });
 
   it('deve navegar para a Seção 5 (Fontes & Evidências)', () => {
@@ -78,7 +80,8 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     const navSources = screen.getByText('Fontes & Evidências');
     fireEvent.click(navSources);
 
-    expect(screen.getByText('Evidências Documentais Auditáveis')).toBeDefined();
+    expect(screen.getAllByText('Fontes & Evidências').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Evidências não carregadas')).toBeDefined();
   });
 
   it('deve navegar para a Seção 6 (Conflitos / Revisões)', () => {
@@ -88,7 +91,8 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     fireEvent.click(navConflicts);
 
     expect(screen.getByText('Conflitos de Evidências & Decisões Canônicas')).toBeDefined();
-    expect(screen.getByText('Nenhum Conflito Ativo no Momento')).toBeDefined();
+    expect(screen.getByText('Conflitos não auditados')).toBeDefined();
+    expect(screen.queryByText('Nenhum Conflito Ativo no Momento')).toBeNull();
   });
 
   it('deve navegar para a Seção 7 (Organização de Módulos)', () => {
@@ -97,7 +101,8 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     const navOrg = screen.getByText('Organização');
     fireEvent.click(navOrg);
 
-    expect(screen.getByText('Organização dos Módulos do Caderno Técnico')).toBeDefined();
+    expect(screen.getByText('Organização Técnica')).toBeDefined();
+    expect(screen.getByText('Organização não carregada')).toBeDefined();
   });
 
   it('deve navegar para a Seção 8 (Avançado - Modo Engenharia)', () => {
@@ -107,6 +112,8 @@ describe('LibraryV2Container - Navegação e Renderização das 8 Seções', () 
     fireEvent.click(navAdv);
 
     expect(screen.getByText('Transparência Técnica & Estrutura de Domínio')).toBeDefined();
+    expect(screen.getByText('Desconhecido')).toBeDefined();
+    expect(screen.getByText('Esquema técnico não carregado')).toBeDefined();
     expect(screen.getByText('Gerenciar no Modo Clássico')).toBeDefined();
   });
 

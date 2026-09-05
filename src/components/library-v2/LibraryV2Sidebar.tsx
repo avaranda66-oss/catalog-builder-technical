@@ -30,26 +30,19 @@ export interface LibraryV2SidebarProps {
   activeSection: LibraryV2SectionId;
   onSelectSection: (section: LibraryV2SectionId) => void;
   metrics?: {
-    productsCount: number;
-    specsCount: number;
-    tablesCount: number;
-    documentsCount: number;
-    sourcesCount: number;
-    conflictsCount: number;
+    productsCount?: number;
+    specsCount?: number;
+    tablesCount?: number;
+    documentsCount?: number;
+    sourcesCount?: number;
+    conflictsCount?: number;
   };
 }
 
 export const LibraryV2Sidebar: React.FC<LibraryV2SidebarProps> = ({
   activeSection,
   onSelectSection,
-  metrics = {
-    productsCount: 3,
-    specsCount: 7,
-    tablesCount: 1,
-    documentsCount: 2,
-    sourcesCount: 3,
-    conflictsCount: 0
-  }
+  metrics = {}
 }) => {
   const { startTour } = useLearnMode();
   const sections = [
@@ -57,43 +50,45 @@ export const LibraryV2Sidebar: React.FC<LibraryV2SidebarProps> = ({
       id: 'overview' as const,
       label: 'Visão Geral',
       icon: LayoutDashboard,
-      badge: metrics.productsCount > 0 ? `${metrics.productsCount} mod.` : undefined,
+      badge: typeof metrics.productsCount === 'number' ? `${metrics.productsCount} mod.` : undefined,
       tourAttr: 'v2-nav-overview'
     },
     {
       id: 'technical-data' as const,
       label: 'Informações Técnicas',
       icon: FileSpreadsheet,
-      badge: `${metrics.specsCount}`,
+      badge: typeof metrics.specsCount === 'number' ? `${metrics.specsCount}` : undefined,
       tourAttr: 'v2-nav-technical-data'
     },
     {
       id: 'technical-tables' as const,
       label: 'Tabelas Técnicas',
       icon: Table2,
-      badge: `${metrics.tablesCount}`,
+      badge: typeof metrics.tablesCount === 'number' ? `${metrics.tablesCount}` : undefined,
       tourAttr: 'v2-nav-technical-tables'
     },
     {
       id: 'documents' as const,
       label: 'Documentos',
       icon: FileText,
-      badge: `${metrics.documentsCount}`,
+      badge: typeof metrics.documentsCount === 'number' ? `${metrics.documentsCount}` : undefined,
       tourAttr: 'v2-nav-documents'
     },
     {
       id: 'sources' as const,
       label: 'Fontes & Evidências',
       icon: FileCheck2,
-      badge: `${metrics.sourcesCount}`,
+      badge: typeof metrics.sourcesCount === 'number' ? `${metrics.sourcesCount}` : undefined,
       tourAttr: 'v2-nav-sources'
     },
     {
       id: 'conflicts' as const,
       label: 'Conflitos / Revisões',
       icon: AlertTriangle,
-      badge: metrics.conflictsCount > 0 ? `${metrics.conflictsCount}` : '0',
-      badgeColor: metrics.conflictsCount > 0 ? 'bg-amber-100 text-amber-900 font-bold' : 'bg-slate-100 text-slate-500',
+      badge: typeof metrics.conflictsCount === 'number' ? `${metrics.conflictsCount}` : undefined,
+      badgeColor: typeof metrics.conflictsCount === 'number' && metrics.conflictsCount > 0
+        ? 'bg-amber-100 text-amber-900 font-bold'
+        : 'bg-slate-100 text-slate-500',
       tourAttr: 'v2-nav-conflicts'
     },
     {
@@ -120,7 +115,7 @@ export const LibraryV2Sidebar: React.FC<LibraryV2SidebarProps> = ({
           Navegação da Biblioteca
         </span>
         <span className="text-xs font-bold text-slate-800">
-          Estrutura Canônica
+          Estrutura da Biblioteca
         </span>
       </div>
 

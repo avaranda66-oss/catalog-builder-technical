@@ -63,14 +63,14 @@ describe('FATHER LEARNING TEST — Auto-descoberta Intuitiva 10/10', () => {
     expect(screen.getByText(/Família Ativa/i)).toBeDefined();
   });
 
-  it('2. Informação Técnica: Descobre a separação de especificações em módulos técnicos', () => {
+  it('2. Informação Técnica: Descobre onde consultar valores armazenados sem módulos inventados', () => {
     render(<LibraryV2Container onSwitchToClassic={vi.fn()} />);
     const techDataNav = screen.getByText('Informações Técnicas');
     fireEvent.click(techDataNav);
 
     expect(screen.getByText(/Informações Técnicas & Fatos/i)).toBeDefined();
-    expect(screen.getByText(/Módulo: Metrologia/i)).toBeDefined();
-    expect(screen.getByText(/Módulo: Elétrica/i)).toBeDefined();
+    expect(screen.getByText(/^Valores armazenados$/i)).toBeDefined();
+    expect(screen.queryByText(/Módulo: Metrologia/i)).toBeNull();
   });
 
   it('3. Tabela Técnica: Descobre a matriz comparativa entre modelos físicos', () => {
@@ -80,7 +80,8 @@ describe('FATHER LEARNING TEST — Auto-descoberta Intuitiva 10/10', () => {
 
     expect(screen.getByText(/Matrizes Comparativas e Tabelas de Engenharia/i)).toBeDefined();
     expect(screen.getByText(/Matriz Comparativa de Modelos/i)).toBeDefined();
-    expect(screen.getByText(/Vinculada ao Produto/i)).toBeDefined();
+    expect(screen.getByText(/^vínculo$/i)).toBeDefined();
+    expect(screen.queryByText(/Vinculada ao Produto/i)).toBeNull();
   });
 
   it('4. Origem de um Valor: Descobre a seção de evidências e procedência documental', () => {
@@ -88,23 +89,26 @@ describe('FATHER LEARNING TEST — Auto-descoberta Intuitiva 10/10', () => {
     const sourcesNav = screen.getByText(/Fontes & Evidências/i);
     fireEvent.click(sourcesNav);
 
-    expect(screen.getByText(/Evidências Documentais Auditáveis/i)).toBeDefined();
+    expect(screen.getAllByText(/^Fontes & Evidências$/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Evidências não carregadas/i)).toBeDefined();
     expect(screen.getByText(/Transparência de Metadados/i)).toBeDefined();
   });
 
-  it('5. Herança: Descobre a regra de herança de família e seu badge visual', () => {
+  it('5. Herança: Descobre o conceito sem classificar os dados ativos', () => {
     render(<LibraryV2Container onSwitchToClassic={vi.fn()} />);
     fireEvent.click(screen.getByText('Informações Técnicas'));
 
-    expect(screen.getByText(/Entenda como funciona a/i)).toBeDefined();
-    expect(screen.getAllByText(/Herdado da Família/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Conceitos disponíveis para consulta/i)).toBeDefined();
+    expect(screen.getByText(/^Herança$/i)).toBeDefined();
+    expect(screen.queryByText(/Herdado da Família/i)).toBeNull();
   });
 
-  it('6. Exceção de Modelo: Descobre o que é um Override de produto específico', () => {
+  it('6. Exceção de Modelo: Descobre o conceito de override sem badge operacional', () => {
     render(<LibraryV2Container onSwitchToClassic={vi.fn()} />);
     fireEvent.click(screen.getByText('Informações Técnicas'));
 
-    expect(screen.getByText(/Exceção do Modelo \(Override\)/i)).toBeDefined();
+    expect(screen.getByText(/^override$/i)).toBeDefined();
+    expect(screen.queryByText(/Exceção do Modelo \(Override\)/i)).toBeNull();
   });
 
   it('7. Conflito: Descobre o que são divergências documentais e Decisões Canônicas', () => {
@@ -118,12 +122,13 @@ describe('FATHER LEARNING TEST — Auto-descoberta Intuitiva 10/10', () => {
 
   it('8. Chave Semântica: Descobre onde visualizar as chaves técnicas dos dados', () => {
     render(<LibraryV2Container onSwitchToClassic={vi.fn()} />);
-    fireEvent.click(screen.getByText('Informações Técnicas'));
+    fireEvent.click(screen.getAllByText('Abrir Dados')[0]);
 
     const toggleKeysBtn = screen.getByText('Chaves Técnicas');
     fireEvent.click(toggleKeysBtn);
 
-    expect(screen.getByText(/Chave: metrology.range/i)).toBeDefined();
+    expect(screen.getByText(/Chave: specs.range/i)).toBeDefined();
+    expect(screen.queryByText(/Chave: metrology.range/i)).toBeNull();
   });
 
   it('9. Como Adicionar Informação: Descobre botão de novo modelo e atalho para o modo clássico', () => {
@@ -151,13 +156,13 @@ describe('EXPERT WORKFLOW TEST — Learn Mode OFF (Zero Penalidade)', () => {
 
     // Navegação ágil entre as seções
     fireEvent.click(screen.getByText('Informações Técnicas'));
-    expect(screen.getByText(/Módulo: Metrologia/i)).toBeDefined();
+    expect(screen.getByText(/^Valores armazenados$/i)).toBeDefined();
 
     fireEvent.click(screen.getByText('Tabelas Técnicas'));
     expect(screen.getByText(/Matriz de Modelos/i)).toBeDefined();
 
     fireEvent.click(screen.getByText('Organização'));
-    expect(screen.getByText(/Organização dos Módulos do Caderno Técnico/i)).toBeDefined();
+    expect(screen.getByText(/Organização Técnica/i)).toBeDefined();
 
     fireEvent.click(screen.getByText('Avançado'));
     expect(screen.getByText(/Transparência Técnica & Estrutura de Domínio/i)).toBeDefined();
