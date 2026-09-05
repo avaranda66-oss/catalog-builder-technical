@@ -17,9 +17,30 @@ export const PageTour: React.FC = () => {
     finishTour
   } = useLearnMode();
 
-  if (!isTourActive || !currentTourStep) return null;
-
   const isLastStep = currentTourStepIndex === totalTourSteps - 1;
+
+  React.useEffect(() => {
+    if (!isTourActive || !currentTourStep) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        skipTour();
+      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        if (isLastStep) {
+          finishTour();
+        } else {
+          nextTourStep();
+        }
+      } else if (e.key === 'ArrowLeft' && currentTourStepIndex > 0) {
+        prevTourStep();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isTourActive, currentTourStep, isLastStep, currentTourStepIndex, skipTour, nextTourStep, prevTourStep, finishTour]);
+
+  if (!isTourActive || !currentTourStep) return null;
 
   return (
     <div

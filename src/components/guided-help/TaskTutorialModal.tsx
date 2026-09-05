@@ -8,6 +8,17 @@ import { PlayCircle, X, Lightbulb, Clock, CheckCircle2 } from 'lucide-react';
 export const TaskTutorialModal: React.FC = () => {
   const { activeTutorial, closeTutorial } = useLearnMode();
 
+  React.useEffect(() => {
+    if (!activeTutorial) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeTutorial();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTutorial, closeTutorial]);
+
   if (!activeTutorial) return null;
 
   return (

@@ -47,6 +47,17 @@ export const GlossaryDrawer: React.FC = () => {
   const conceptsList = useMemo(() => Object.values(HELP_CONCEPTS_REGISTRY), []);
   const tutorialsList = useMemo(() => Object.values(TASK_TUTORIALS_REGISTRY), []);
 
+  React.useEffect(() => {
+    if (!isGlossaryOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeGlossary();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGlossaryOpen, closeGlossary]);
+
   // Filtragem dinâmica de conceitos
   const filteredConcepts = useMemo(() => {
     const term = glossarySearchTerm.trim().toLowerCase();
