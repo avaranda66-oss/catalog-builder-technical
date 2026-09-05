@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { TablePresentationModel } from '../domain/table-core';
+import { useLibraryStore } from '@/stores/useLibraryStore';
+import { useWorkbookDraftStore } from '@/stores/useWorkbookDraftStore';
 
 export type ActiveTab = 'editor' | 'library' | 'catalogs';
 
@@ -33,6 +35,7 @@ interface UIState {
   zoomLevel: number;
   selectedProductForWorkspaceId: string | null;
   tablePresentationDraft: { blockId: string; presentation: TablePresentationModel } | null;
+  navigationEpoch: number;
   
   // Actions
   setActiveTab: (tab: ActiveTab) => void;
@@ -50,7 +53,13 @@ interface UIState {
   openExportModal: () => void;
   setZoomLevel: (zoom: number) => void;
   setTablePresentationDraft: (draft: { blockId: string; presentation: TablePresentationModel } | null) => void;
+  advanceNavigationEpoch: () => number;
 }
+
+const invalidatePersistenceDiscardTokens = () => {
+  useLibraryStore.getState().invalidateDiscardTokens();
+  useWorkbookDraftStore.getState().invalidateDiscardTokens();
+};
 
 export const useUIStore = create<UIState>((set) => ({
   activeTab: 'editor',
@@ -65,20 +74,43 @@ export const useUIStore = create<UIState>((set) => ({
   zoomLevel: 100,
   selectedProductForWorkspaceId: null,
   tablePresentationDraft: null,
+  navigationEpoch: 0,
 
-  setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTab: (activeTab) => {
+    invalidatePersistenceDiscardTokens();
+    set((state) => ({ activeTab, navigationEpoch: state.navigationEpoch + 1 }));
+  },
   openProductDrawer: (editingProductId) => set({ isProductDrawerOpen: true, editingProductId: editingProductId || null }),
   closeProductDrawer: () => set({ isProductDrawerOpen: false, editingProductId: null }),
   openAddProductToTableModal: (targetTableBlockId) => set({ isAddProductToTableModalOpen: true, targetTableBlockId }),
   closeAddProductToTableModal: () => set({ isAddProductToTableModalOpen: false, targetTableBlockId: null }),
   openProductKnowledgePickerModal: (target) => set({ isProductKnowledgePickerModalOpen: true, knowledgePickerTarget: target }),
   closeProductKnowledgePickerModal: () => set({ isProductKnowledgePickerModalOpen: false, knowledgePickerTarget: null }),
-  openProductKnowledgeWorkspace: (productId) => set({ activeTab: 'library', selectedProductForWorkspaceId: productId }),
-  closeProductKnowledgeWorkspace: () => set({ selectedProductForWorkspaceId: null }),
+  openProductKnowledgeWorkspace: (productId) => {
+    invalidatePersistenceDiscardTokens();
+    set((state) => ({
+      activeTab: 'library',
+      selectedProductForWorkspaceId: productId,
+      navigationEpoch: state.navigationEpoch + 1
+    }));
+  },
+  closeProductKnowledgeWorkspace: () => {
+    invalidatePersistenceDiscardTokens();
+    set((state) => ({ selectedProductForWorkspaceId: null, navigationEpoch: state.navigationEpoch + 1 }));
+  },
   setExportPDFModalOpen: (isExportPDFModalOpen) => set({ isExportPDFModalOpen }),
   setAIAssistantOpen: (isAIAssistantOpen) => set({ isAIAssistantOpen }),
   openAIAssistant: () => set({ isAIAssistantOpen: true }),
   openExportModal: () => set({ isExportPDFModalOpen: true }),
   setZoomLevel: (zoomLevel) => set({ zoomLevel }),
-  setTablePresentationDraft: (tablePresentationDraft) => set({ tablePresentationDraft })
+  setTablePresentationDraft: (tablePresentationDraft) => set({ tablePresentationDraft }),
+  advanceNavigationEpoch: () => {
+    invalidatePersistenceDiscardTokens();
+    let next = 0;
+    set((state) => {
+      next = state.navigationEpoch + 1;
+      return { navigationEpoch: next };
+    });
+    return next;
+  }
 }));

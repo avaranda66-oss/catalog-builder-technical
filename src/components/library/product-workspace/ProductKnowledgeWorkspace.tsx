@@ -2,7 +2,7 @@
 // FASE 10-17: Workspace de Conhecimento Técnico Canônico (PIM Core V1)
 // Interface profissional, estritamente tipada e com controle de concorrência CAS.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Table,
@@ -23,10 +23,11 @@ import {
   resolveEffectiveProductKnowledge
 } from '../../../domain/product-workbook';
 import {
-  SupabaseProductWorkbookRepository,
-  WorkbookConflictError
+  SupabaseProductWorkbookRepository
 } from '../../../services/product-workbook';
 import { getSupabase } from '../../../services/supabase.service';
+import { useWorkbookDraftStore } from '@/stores/useWorkbookDraftStore';
+import { useUIStore } from '@/stores/useUIStore';
 
 import { WorkspaceSummaryTab } from './WorkspaceSummaryTab';
 import { WorkspaceTechnicalDataTab } from './WorkspaceTechnicalDataTab';
@@ -59,68 +60,57 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   availableProducts = []
 }) => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('summary');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [technicalErrorDetails, setTechnicalErrorDetails] = useState<unknown | null>(null);
-  const [conflictError, setConflictError] = useState<WorkbookConflictError | null>(null);
-
-  const [workbook, setWorkbook] = useState<ProductWorkbookV2>(() => {
-    const base = createWorkbook({
-      owner: { kind: 'product', id: product.id },
-      revision: 0
-    });
-    return ensureWorkbookV2(base);
-  });
-
+  const [familyLoading, setFamilyLoading] = useState(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
   const [familyWorkbook, setFamilyWorkbook] = useState<ProductWorkbookV2 | undefined>(undefined);
-  const repository = new SupabaseProductWorkbookRepository(getSupabase());
+  const owner = useMemo(() => ({ kind: 'product' as const, id: product.id }), [product.id]);
+  const repository = useMemo(() => new SupabaseProductWorkbookRepository(getSupabase()), []);
+  const session = useWorkbookDraftStore((state) => state.getSession(owner));
+  const loadDraft = useWorkbookDraftStore((state) => state.load);
+  const refreshDraft = useWorkbookDraftStore((state) => state.refresh);
+  const editDraft = useWorkbookDraftStore((state) => state.edit);
+  const saveDraft = useWorkbookDraftStore((state) => state.save);
+  const discardWithRefresh = useWorkbookDraftStore((state) => state.discardWithRefresh);
+  const navigationEpoch = useUIStore((state) => state.navigationEpoch);
 
-  // Carrega workbook do produto e opcionalmente da família
-  const loadWorkbooks = async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    setTechnicalErrorDetails(null);
-    setConflictError(null);
-
-    try {
-      // 1. Carrega workbook do produto
-      const prodWb = await repository.getWorkbook({ kind: 'product', id: product.id });
-      if (prodWb) {
-        setWorkbook(ensureWorkbookV2(prodWb));
-      } else {
-        // Inicializa vazio limpo (Sem defaults sintéticos — EMENDA 11)
-        const empty = createWorkbook({
-          owner: { kind: 'product', id: product.id },
-          revision: 0
-        });
-        setWorkbook(ensureWorkbookV2(empty));
-      }
-
-      // 2. Carrega workbook da família se existir
-      if (product.family_id) {
-        const famWb = await repository.getWorkbook({ kind: 'family', id: product.family_id });
-        if (famWb) {
-          setFamilyWorkbook(ensureWorkbookV2(famWb));
-        }
-      }
-
-      setIsDirty(false);
-    } catch (err: unknown) {
-      console.error('Erro ao carregar workbooks:', err);
-      const isError = err instanceof Error;
-      const humanMessage = isError ? err.message : 'Falha ao carregar workbook técnico do produto.';
-      setErrorMessage(humanMessage);
-      setTechnicalErrorDetails(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const fallbackWorkbook = useMemo(() => ensureWorkbookV2(createWorkbook({ owner, revision: 0 })), [owner]);
+  const workbook = session?.draft || fallbackWorkbook;
+  const isDirty = Boolean(session && session.localGeneration > session.acknowledgedGeneration);
+  const isSaving = Boolean(session?.inFlight);
+  const isLoading = Boolean(session?.isLoading || familyLoading);
+  const conflict = session?.conflict || null;
+  const reconciliation = session?.reconciliationRequired || null;
+  const errorMessage = session?.failure?.message || session?.loadError || familyError;
+  const technicalErrorDetails = errorMessage;
 
   useEffect(() => {
-    void loadWorkbooks();
-  }, [product.id, product.family_id]);
+    void loadDraft(owner, repository);
+  }, [loadDraft, owner, repository]);
+
+  useEffect(() => {
+    let active = true;
+    setFamilyWorkbook(undefined);
+    setFamilyError(null);
+    if (!product.family_id) return () => { active = false; };
+
+    setFamilyLoading(true);
+    void repository.getWorkbook({ kind: 'family', id: product.family_id })
+      .then((loaded) => {
+        if (!active) return;
+        setFamilyWorkbook(loaded ? ensureWorkbookV2(loaded) : undefined);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setFamilyError(error instanceof Error ? error.message : 'Falha ao carregar conhecimento da família.');
+      })
+      .finally(() => {
+        if (active) setFamilyLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [product.family_id, repository]);
 
   // Resolve conhecimento efetivo herdado
   const effectiveKnowledge: ResolvedProductKnowledge = resolveEffectiveProductKnowledge({
@@ -129,33 +119,11 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   });
 
   const handleUpdateWorkbook = (updated: ProductWorkbookV2) => {
-    setWorkbook(updated);
-    setIsDirty(true);
+    editDraft(owner, updated);
   };
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setErrorMessage(null);
-    setConflictError(null);
-
-    try {
-      const result = await repository.saveWorkbook({
-        workbook,
-        expectedRevision: workbook.revision
-      });
-
-      setWorkbook(ensureWorkbookV2(result.workbook));
-      setIsDirty(false);
-      alert('Conhecimento técnico salvo com sucesso!');
-    } catch (err: any) {
-      if (err instanceof WorkbookConflictError) {
-        setConflictError(err);
-      } else {
-        setErrorMessage(err.message || 'Falha ao salvar workbook.');
-      }
-    } finally {
-      setIsSaving(false);
-    }
+    await saveDraft(owner, repository);
   };
 
   return (
@@ -164,12 +132,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
       <header className="h-14 bg-[#002244] text-white px-4 flex items-center justify-between shrink-0 shadow-md">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              if (isDirty && !confirm('Você possui alterações não salvas. Deseja realmente sair?')) {
-                return;
-              }
-              onClose();
-            }}
+            onClick={onClose}
             className="p-1.5 rounded bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             title="Voltar à Biblioteca"
           >
@@ -191,7 +154,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
               <span>·</span>
               <span>Revisão Persistida: {workbook.revision}</span>
               {isDirty && (
-                <span className="text-amber-400 font-bold">● Alterações não salvas</span>
+                <span className="text-amber-400 font-bold">● Rascunho mantido nesta sessão</span>
               )}
             </div>
           </div>
@@ -207,7 +170,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
 
           <button
             onClick={() => void handleSave()}
-            disabled={isSaving || !isDirty}
+            disabled={isSaving || !isDirty || Boolean(conflict) || Boolean(reconciliation)}
             className={`px-4 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs ${
               isDirty
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
@@ -230,35 +193,43 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
       </header>
 
       {/* Alerta de Conflito CAS */}
-      {conflictError && (
+      {conflict && (
         <div className="bg-rose-50 border-b border-rose-200 p-3 flex items-center justify-between text-xs text-rose-900 shrink-0">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>
-              <strong>Conflito de Concorrência (CAS):</strong> Outro usuário atualizou este produto (Revisão atual: {conflictError.actualRevision ?? 'desconhecida'}).
+              <strong>Conflito de Concorrência (CAS):</strong> Outro usuário atualizou este produto (Revisão atual: {conflict.actualRevision ?? 'desconhecida'}).
             </span>
           </div>
           <button
-            onClick={() => void loadWorkbooks()}
+            onClick={() => void discardWithRefresh(owner, repository, navigationEpoch)}
             className="px-3 py-1 bg-rose-600 text-white rounded font-bold hover:bg-rose-700 cursor-pointer"
           >
-            Recarregar Dados Mais Recentes
+            Descartar alterações locais e recarregar
           </button>
+        </div>
+      )}
+
+      {reconciliation && (
+        <div className="bg-amber-50 border-b border-amber-200 p-3 text-xs text-amber-900 shrink-0 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span><strong>Reconciliação necessária:</strong> {reconciliation.message}</span>
         </div>
       )}
 
       {errorMessage && (
         <HumanFriendlyErrorBanner
-          title="Falha ao carregar conhecimento do produto"
+          title={session?.failure ? 'Falha ao salvar conhecimento do produto' : 'Falha ao carregar conhecimento do produto'}
           message={errorMessage}
           details={technicalErrorDetails as string | Record<string, unknown> | Error | null}
           onRetry={async () => {
-            await loadWorkbooks();
+            if (session?.failure) {
+              await saveDraft(owner, repository);
+            } else {
+              await refreshDraft(owner, repository);
+            }
           }}
-          onDismiss={() => {
-            setErrorMessage(null);
-            setTechnicalErrorDetails(null);
-          }}
+          onDismiss={() => setFamilyError(null)}
         />
       )}
 

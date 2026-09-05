@@ -157,6 +157,27 @@ describe('FASE 2B.1A — Library Schema Materialization, Column UX & Security Ha
   // LIB-H1: Multi-cell edits on same product consolidated into 1 CAS save
   // =========================================================================
   it('LIB-H1: Múltiplas edições rápidas no mesmo produto são consolidadas em 1 único save CAS sem auto-conflito', async () => {
+    const seedProduct = useLibraryStore.getState().products[0];
+    vi.spyOn(SupabaseService, 'listLibraryWorkspace').mockResolvedValueOnce({
+      success: true,
+      data: {
+        families: [],
+        fields: [],
+        products: [{
+          id: seedProduct.id,
+          family_id: seedProduct.family_id,
+          sku: seedProduct.code,
+          name: seedProduct.model,
+          family: seedProduct.family,
+          data: seedProduct.specs,
+          version: seedProduct.version,
+          created_at: seedProduct.createdAt,
+          updated_at: seedProduct.updatedAt
+        }],
+        events: []
+      }
+    });
+    await useLibraryStore.getState().loadWorkspace();
     const store = useLibraryStore.getState();
     const targetProduct = store.products[0];
     const initialVersion = targetProduct.version || 1;

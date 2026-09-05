@@ -24,6 +24,85 @@ export interface PendingProductEdit {
   timestamp: number;
 }
 
+export type LibrarySaveReason = 'manual' | 'automatic';
+
+interface LibraryPatch {
+  op: 'set' | 'delete';
+  path: string[];
+  value?: unknown;
+  beforeExists: boolean;
+  beforeValue?: unknown;
+}
+
+export interface LibraryInFlightSave {
+  requestId: string;
+  generation: number;
+  expectedRevision: number;
+  sentSnapshot: Product;
+  postSendDelta: LibraryPatch[];
+}
+
+export interface LibraryFailureBarrier {
+  generation: number;
+  message: string;
+  sentSnapshot: Product;
+  postSendDelta: LibraryPatch[];
+}
+
+export interface LibraryConflictBarrier {
+  message: string;
+  remoteRevision: number | null;
+  remoteSnapshot: Product | null;
+  remoteDeletion: boolean;
+}
+
+export interface LibraryReconciliationBarrier {
+  reason: 'structural-replay' | 'canonical-verification' | 'same-revision-divergence' | 'invalid-ack';
+  message: string;
+  generation: number;
+  acceptedRevision: number | null;
+  sentSnapshot: Product;
+  canonicalSnapshot: Product | null;
+  localDraft: Product;
+  postSendDelta: LibraryPatch[];
+  canonicalVerificationReadAttempted?: boolean;
+}
+
+export interface LibraryDiscardToken {
+  id: string;
+  authIdentity: string;
+  ownerKey: string;
+  epoch: number;
+  generation: number;
+  baseRevision: number | null;
+  readEpoch: number;
+  navigationEpoch: number;
+}
+
+export interface LibraryProductSession {
+  key: string;
+  ownerKey: string;
+  authIdentity: string;
+  productId: string;
+  epoch: number;
+  readEpoch: number;
+  verified: boolean;
+  baseSnapshot: Product | null;
+  baseRevision: number | null;
+  remoteSnapshot: Product | null;
+  remoteRevision: number | null;
+  remoteDeletion: boolean;
+  localGeneration: number;
+  acknowledgedGeneration: number;
+  draft: Product;
+  inFlight: LibraryInFlightSave | null;
+  pendingGeneration: number | null;
+  failure: LibraryFailureBarrier | null;
+  conflict: LibraryConflictBarrier | null;
+  reconciliationRequired: LibraryReconciliationBarrier | null;
+  discardToken: LibraryDiscardToken | null;
+}
+
 export type LibraryDataProvenance = 'cloud_official' | 'offline_cache' | 'demo_seed';
 
 interface LibraryState {
@@ -44,6 +123,7 @@ interface LibraryState {
   syncError: string | null;
   isDirty: boolean;
   isSaving: boolean;
+  productSessions: Record<string, LibraryProductSession>;
   
   // Realtime & Presence
   cellPresence: Record<string, LibraryPresenceUser[]>; // key: `${productId}:${colKey}`
@@ -77,7 +157,11 @@ interface LibraryState {
   getProduct: (id: string) => Product | undefined;
   
   // Flush & Persistência
-  flushLibraryEdits: () => Promise<boolean>;
+  flushLibraryEdits: (reason?: LibrarySaveReason) => Promise<boolean>;
+  getProductSession: (productId: string) => LibraryProductSession | undefined;
+  verifyCanonicalProductAck: (productId: string) => Promise<boolean>;
+  discardProductWithRefresh: (productId: string, navigationEpoch: number) => Promise<boolean>;
+  invalidateDiscardTokens: () => void;
   loadWorkspace: () => Promise<void>;
   loadProducts: () => Promise<void>;
   initRealtimeSubscription: () => () => void;
@@ -99,11 +183,379 @@ function getStableLibraryClientId(): string {
 
 const libraryClientInstanceId = getStableLibraryClientId();
 
-// 2. Fila de Edições Consolidada por Produto
-let debounceTimer: any = null;
-const pendingProductEdits = new Map<string, PendingProductEdit>();
-let isFlushingEdits = false;
-let hasPendingSubsequentFlush = false;
+// 2. Sessões de persistência e scheduler finito por aba
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let debounceEditSequence = 0;
+let editSequence = 0;
+let requestSequence = 0;
+let discardSequence = 0;
+let workspaceReadSequence = 0;
+let activeLibraryDrain: Promise<boolean> | null = null;
+let activeWorkspaceLoad: { authIdentity: string; promise: Promise<void> } | null = null;
+
+const PRODUCT_EDITABLE_ROOTS = ['family_id', 'code', 'model', 'family', 'description', 'specs', 'imageUrl'] as const;
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function getLibraryAuthIdentity(): string {
+  return useAuthStore.getState().userId || `session:${libraryClientInstanceId}`;
+}
+
+function getLibrarySessionKey(productId: string, authIdentity = getLibraryAuthIdentity()): string {
+  return `${authIdentity}:product:${productId}`;
+}
+
+function createLibrarySession(product: Product, authIdentity = getLibraryAuthIdentity(), verified = true): LibraryProductSession {
+  const baseRevision = Number.isInteger(product.version) && product.version > 0 ? product.version : null;
+  return {
+    key: getLibrarySessionKey(product.id, authIdentity),
+    ownerKey: `product:${product.id}`,
+    authIdentity,
+    productId: product.id,
+    epoch: 1,
+    readEpoch: 1,
+    verified: verified && baseRevision !== null,
+    baseSnapshot: cloneJson(product),
+    baseRevision,
+    remoteSnapshot: cloneJson(product),
+    remoteRevision: baseRevision,
+    remoteDeletion: false,
+    localGeneration: 0,
+    acknowledgedGeneration: 0,
+    draft: cloneJson(product),
+    inFlight: null,
+    pendingGeneration: null,
+    failure: null,
+    conflict: null,
+    reconciliationRequired: null,
+    discardToken: null
+  };
+}
+
+function getCurrentLibrarySession(state: LibraryState, productId: string): LibraryProductSession | undefined {
+  return state.productSessions[getLibrarySessionKey(productId)];
+}
+
+function patchValueKind(value: unknown): 'array' | 'object' | 'scalar' | 'missing' {
+  if (value === undefined) return 'missing';
+  if (Array.isArray(value)) return 'array';
+  if (isRecord(value)) return 'object';
+  return 'scalar';
+}
+
+function diffProductValue(before: unknown, after: unknown, path: string[], patches: LibraryPatch[]): void {
+  if (deepEqual(before, after)) return;
+
+  if (isRecord(before) && isRecord(after)) {
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    for (const key of keys) {
+      diffProductValue(before[key], after[key], [...path, key], patches);
+    }
+    return;
+  }
+
+  if (after === undefined) {
+    patches.push({
+      op: 'delete',
+      path,
+      beforeExists: before !== undefined,
+      beforeValue: cloneJson(before)
+    });
+    return;
+  }
+
+  patches.push({
+    op: 'set',
+    path,
+    value: cloneJson(after),
+    beforeExists: before !== undefined,
+    beforeValue: before === undefined ? undefined : cloneJson(before)
+  });
+}
+
+function diffProductDraft(before: Product, after: Product): LibraryPatch[] {
+  const patches: LibraryPatch[] = [];
+  for (const root of PRODUCT_EDITABLE_ROOTS) {
+    diffProductValue(before[root], after[root], [root], patches);
+  }
+  return patches;
+}
+
+function replayProductDelta(canonical: Product, patches: readonly LibraryPatch[]): { ok: true; draft: Product } | { ok: false; reason: string } {
+  const draft = cloneJson(canonical) as unknown as Record<string, unknown>;
+
+  for (const patch of patches) {
+    if (patch.path.length === 0) return { ok: false, reason: 'patch sem caminho' };
+
+    let parent: Record<string, unknown> = draft;
+    for (let index = 0; index < patch.path.length - 1; index += 1) {
+      const segment = patch.path[index];
+      const next = parent[segment];
+      if (!isRecord(next)) {
+        return { ok: false, reason: `estrutura canônica incompatível em ${patch.path.slice(0, index + 1).join('.')}` };
+      }
+      parent = next;
+    }
+
+    const leaf = patch.path[patch.path.length - 1];
+    const current = parent[leaf];
+    const currentExists = Object.prototype.hasOwnProperty.call(parent, leaf);
+
+    if (!patch.beforeExists && currentExists) {
+      return { ok: false, reason: `servidor criou alvo localmente adicionado em ${patch.path.join('.')}` };
+    }
+
+    const beforeKind = patchValueKind(patch.beforeValue);
+    const currentKind = patchValueKind(current);
+    if ((beforeKind === 'array' || beforeKind === 'object') && currentExists && currentKind !== beforeKind) {
+      return { ok: false, reason: `tipo estrutural mudou em ${patch.path.join('.')}` };
+    }
+
+    if (patch.op === 'delete') {
+      delete parent[leaf];
+    } else {
+      parent[leaf] = cloneJson(patch.value);
+    }
+  }
+
+  return { ok: true, draft: draft as unknown as Product };
+}
+
+function mapLibraryRowToProduct(row: any, fallback?: Product): Product | null {
+  if (!row || typeof row !== 'object') return null;
+  if (typeof row.id !== 'string' || typeof row.sku !== 'string' || typeof row.name !== 'string') return null;
+  if (!Number.isInteger(row.version) || row.version <= 0) return null;
+  if (!('data' in row)) return null;
+
+  const data = isRecord(row.data) ? row.data : {};
+  return {
+    id: row.id,
+    family_id: typeof row.family_id === 'string' ? row.family_id : null,
+    code: row.sku,
+    model: row.name,
+    family: typeof row.family === 'string' ? row.family : (fallback?.family || 'Geral'),
+    description: fallback?.description || row.name,
+    specs: (isRecord(data.specs) ? data.specs : data) as Product['specs'],
+    imageUrl: fallback?.imageUrl || '',
+    version: row.version,
+    createdAt: typeof row.created_at === 'string' ? row.created_at : fallback?.createdAt,
+    updatedAt: typeof row.updated_at === 'string' ? row.updated_at : fallback?.updatedAt
+  };
+}
+
+function persistedProductProjection(product: Product): unknown {
+  return {
+    id: product.id,
+    family_id: product.family_id ?? null,
+    code: product.code,
+    model: product.model,
+    family: product.family,
+    specs: product.specs,
+    version: product.version
+  };
+}
+
+function sameCanonicalProduct(a: Product, b: Product): boolean {
+  return deepEqual(persistedProductProjection(a), persistedProductProjection(b));
+}
+
+function replaceProduct(products: Product[], product: Product): Product[] {
+  let found = false;
+  const next = products.map((candidate) => {
+    if (candidate.id !== product.id) return candidate;
+    found = true;
+    return product;
+  });
+  return found ? next : [product, ...next];
+}
+
+function isSessionClean(session: LibraryProductSession): boolean {
+  return session.verified
+    && session.localGeneration === session.acknowledgedGeneration
+    && session.inFlight === null
+    && session.failure === null
+    && session.conflict === null
+    && session.reconciliationRequired === null;
+}
+
+function canAutomaticLibrarySave(session: LibraryProductSession): boolean {
+  return session.verified
+    && session.baseRevision !== null
+    && session.baseRevision > 0
+    && session.inFlight === null
+    && session.failure === null
+    && session.conflict === null
+    && session.reconciliationRequired === null
+    && session.localGeneration > session.acknowledgedGeneration;
+}
+
+function isCurrentAuthLibraryClean(sessions: Record<string, LibraryProductSession>): boolean {
+  const authIdentity = getLibraryAuthIdentity();
+  const current = Object.values(sessions).filter((session) => session.authIdentity === authIdentity);
+  return current.every(isSessionClean);
+}
+
+function applyRemoteProductObservation(
+  session: LibraryProductSession,
+  remote: Product | null,
+  remoteRevision: number | null,
+  deleted: boolean
+): LibraryProductSession {
+  const acceptsRemoteSnapshot = Boolean(
+    remote
+      && remoteRevision !== null
+      && (session.remoteRevision === null || remoteRevision >= session.remoteRevision)
+  );
+  const next: LibraryProductSession = {
+    ...session,
+    remoteSnapshot: acceptsRemoteSnapshot ? cloneJson(remote) : session.remoteSnapshot,
+    remoteRevision: remoteRevision !== null && (session.remoteRevision === null || remoteRevision >= session.remoteRevision)
+      ? remoteRevision
+      : session.remoteRevision,
+    remoteDeletion: deleted || session.remoteDeletion
+  };
+
+  if (deleted) {
+    if (isSessionClean(session)) {
+      return {
+        ...next,
+        verified: true,
+        baseSnapshot: null,
+        baseRevision: null,
+        remoteSnapshot: null,
+        remoteDeletion: true,
+        readEpoch: session.readEpoch + 1
+      };
+    }
+    if (!isSessionClean(session)) {
+      next.conflict = {
+        message: 'O produto foi removido remotamente enquanto há alterações locais.',
+        remoteRevision: next.remoteRevision,
+        remoteSnapshot: next.remoteSnapshot,
+        remoteDeletion: true
+      };
+    }
+    return next;
+  }
+
+  if (!remote || remoteRevision === null) return next;
+  if (session.baseRevision !== null && remoteRevision < session.baseRevision) return next;
+
+  if (isSessionClean(session)) {
+    if (session.baseRevision === null || remoteRevision > session.baseRevision) {
+      return {
+        ...next,
+        verified: true,
+        baseSnapshot: cloneJson(remote),
+        baseRevision: remoteRevision,
+        draft: cloneJson(remote),
+        readEpoch: session.readEpoch + 1,
+        remoteDeletion: false
+      };
+    }
+    if (remoteRevision === session.baseRevision && session.baseSnapshot && !sameCanonicalProduct(session.baseSnapshot, remote)) {
+      return {
+        ...next,
+        reconciliationRequired: {
+          reason: 'same-revision-divergence',
+          message: 'O servidor retornou conteúdo incompatível para a mesma revisão do produto.',
+          generation: session.localGeneration,
+          acceptedRevision: remoteRevision,
+          sentSnapshot: cloneJson(session.baseSnapshot),
+          canonicalSnapshot: cloneJson(remote),
+          localDraft: cloneJson(session.draft),
+          postSendDelta: []
+        }
+      };
+    }
+    return next;
+  }
+
+  if (session.baseRevision !== null && remoteRevision > session.baseRevision && session.inFlight === null) {
+    next.conflict = {
+      message: `O servidor possui revisão ${remoteRevision}, mais recente que a base local ${session.baseRevision}.`,
+      remoteRevision,
+      remoteSnapshot: cloneJson(remote),
+      remoteDeletion: false
+    };
+  }
+
+  return next;
+}
+
+function deriveLibrarySessionStatus(sessions: Record<string, LibraryProductSession>): Pick<LibraryState, 'isDirty' | 'isSaving' | 'syncStatus' | 'syncError'> {
+  const authIdentity = getLibraryAuthIdentity();
+  const current = Object.values(sessions).filter((session) => session.authIdentity === authIdentity);
+  const conflict = current.find((session) => session.conflict || session.reconciliationRequired);
+  const failure = current.find((session) => session.failure);
+  const saving = current.some((session) => session.inFlight !== null);
+  const dirty = current.some((session) => session.localGeneration > session.acknowledgedGeneration);
+  const unverified = current.some((session) => !session.verified);
+
+  if (conflict) {
+    return {
+      isDirty: dirty,
+      isSaving: saving,
+      syncStatus: 'conflict',
+      syncError: conflict.conflict?.message || conflict.reconciliationRequired?.message || 'Reconciliação necessária.'
+    };
+  }
+  if (failure) {
+    return { isDirty: dirty, isSaving: saving, syncStatus: 'error', syncError: failure.failure?.message || 'Falha ao salvar.' };
+  }
+  if (saving) return { isDirty: dirty, isSaving: true, syncStatus: 'saving', syncError: null };
+  if (dirty) return { isDirty: true, isSaving: false, syncStatus: 'dirty', syncError: null };
+  if (unverified) return { isDirty: false, isSaving: false, syncStatus: 'offline', syncError: null };
+  return { isDirty: false, isSaving: false, syncStatus: 'synced', syncError: null };
+}
+
+function recordLibraryEdit(
+  state: LibraryState,
+  productId: string,
+  updatedProduct: Product
+): Partial<LibraryState> {
+  const authIdentity = getLibraryAuthIdentity();
+  const key = getLibrarySessionKey(productId, authIdentity);
+  const visibleBaseline = state.products.find((product) => product.id === productId);
+  const existing = state.productSessions[key]
+    || (visibleBaseline
+      ? createLibrarySession(visibleBaseline, authIdentity, state.workspaceLoaded && state.dataProvenance === 'cloud_official')
+      : undefined);
+  if (!existing) return {};
+
+  const nextGeneration = existing.localGeneration + 1;
+  const patches = diffProductDraft(existing.draft, updatedProduct);
+  const nextInFlight = existing.inFlight
+    ? {
+        ...existing.inFlight,
+        postSendDelta: [...existing.inFlight.postSendDelta, ...patches]
+      }
+    : null;
+  const nextSession: LibraryProductSession = {
+    ...existing,
+    localGeneration: nextGeneration,
+    draft: cloneJson(updatedProduct),
+    inFlight: nextInFlight,
+    pendingGeneration: nextGeneration,
+    discardToken: null
+  };
+  const productSessions = { ...state.productSessions, [key]: nextSession };
+  return {
+    productSessions,
+    products: replaceProduct(state.products, updatedProduct),
+    ...deriveLibrarySessionStatus(productSessions)
+  };
+}
 
 let libraryRealtimeChannel: RealtimeChannel | null = null;
 let libraryPresenceChannel: RealtimeChannel | null = null;
@@ -141,6 +593,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   syncError: null,
   isDirty: false,
   isSaving: false,
+  productSessions: {},
   
   cellPresence: {},
   familyPresence: {},
@@ -218,8 +671,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set((state) => ({
         families: state.families.map(f => f.id === tempId ? confirmed : f),
         selectedFamily: confirmed.name,
-        syncStatus: 'synced',
-        syncError: null
+        ...deriveLibrarySessionStatus(state.productSessions)
       }));
       return { success: true, data: confirmed };
     }
@@ -282,14 +734,6 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
       const nextSelected = wasSelected ? confirmed.name : get().selectedFamily;
 
-      // Propaga novo nome para os produtos da família (canônicos e legados)
-      const updatedProducts = get().products.map(p => {
-        if (p.family_id === familyId || (p.family && p.family.trim().toLowerCase() === oldName.trim().toLowerCase())) {
-          return { ...p, family_id: familyId, family: confirmed.name };
-        }
-        return p;
-      });
-
       // Atualiza familyFields: ID é a autoridade canônica estável
       const updatedFields = { ...get().familyFields };
       const targetFields = updatedFields[familyId] || (oldName ? updatedFields[oldName] : []) || [];
@@ -299,16 +743,43 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       if (oldName && oldName !== confirmed.name) delete updatedFields[oldName];
       if (oldSlug && oldSlug !== confirmed.slug) delete updatedFields[oldSlug];
 
-      set((state) => ({
-        families: state.families.map(f => f.id === familyId ? confirmed : f),
-        products: updatedProducts,
-        familyFields: updatedFields,
-        selectedFamily: nextSelected,
-        syncStatus: 'synced',
-        syncError: null
-      }));
+      set((state) => {
+        const authIdentity = getLibraryAuthIdentity();
+        const productSessions = { ...state.productSessions };
+        const updatedProducts = state.products.map((product) => {
+          const affected = product.family_id === familyId
+            || (product.family && product.family.trim().toLowerCase() === oldName.trim().toLowerCase());
+          if (!affected) return product;
+          const key = getLibrarySessionKey(product.id, authIdentity);
+          const session = productSessions[key];
+          if (session && !isSessionClean(session)) return product;
 
-      void StorageService.saveProducts(updatedProducts);
+          const renamed = { ...product, family_id: familyId, family: confirmed.name };
+          if (session) {
+            productSessions[key] = {
+              ...session,
+              draft: { ...session.draft, family_id: familyId, family: confirmed.name },
+              baseSnapshot: session.baseSnapshot
+                ? { ...session.baseSnapshot, family_id: familyId, family: confirmed.name }
+                : null,
+              remoteSnapshot: session.remoteSnapshot
+                ? { ...session.remoteSnapshot, family_id: familyId, family: confirmed.name }
+                : null
+            };
+          }
+          return renamed;
+        });
+        return {
+          families: state.families.map(f => f.id === familyId ? confirmed : f),
+          products: updatedProducts,
+          productSessions,
+          familyFields: updatedFields,
+          selectedFamily: nextSelected,
+          ...deriveLibrarySessionStatus(productSessions)
+        };
+      });
+
+      void StorageService.saveProducts(get().products);
       return { success: true };
     }
 
@@ -356,13 +827,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       delete updatedFields[target.name];
       if (target.slug) delete updatedFields[target.slug];
 
-      set({
+      set((state) => ({
         families: remaining,
         selectedFamily: nextSelected,
         familyFields: updatedFields,
-        syncStatus: 'synced',
-        syncError: null
-      });
+        ...deriveLibrarySessionStatus(state.productSessions)
+      }));
 
       return { success: true };
     }
@@ -462,8 +932,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             [familyKey]: updated,
             ...(famObj ? { [famObj.name]: updated } : {})
           },
-          syncStatus: 'synced',
-          syncError: null
+          ...deriveLibrarySessionStatus(state.productSessions)
         };
       });
       return { success: true, data: confirmed };
@@ -508,7 +977,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
     const res = await SupabaseService.saveFamilyField({ id: fieldIdOrFamily, label: labelVal });
     if (res.success) {
-      set({ syncStatus: 'synced', syncError: null });
+      set((state) => ({ ...deriveLibrarySessionStatus(state.productSessions) }));
       return { success: true };
     }
 
@@ -536,7 +1005,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
     const res = await SupabaseService.deleteFamilyField(targetId);
     if (res.success) {
-      set({ syncStatus: 'synced', syncError: null });
+      set((state) => ({ ...deriveLibrarySessionStatus(state.productSessions) }));
       return { success: true };
     }
 
@@ -561,31 +1030,31 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
     set((state) => ({
       products: [newProduct, ...state.products],
-      isDirty: false,
       syncStatus: 'saving'
     }));
 
     const res = await SupabaseService.saveProduct(newProduct, 0, undefined, `Criação do produto ${newProduct.model}`);
     if (res.success && res.data) {
-      const confirmed: Product = {
-        id: res.data.id,
-        family_id: res.data.family_id,
-        code: res.data.sku,
-        model: res.data.name,
-        family: res.data.family,
-        description: res.data.data?.description || res.data.name,
-        specs: res.data.data?.specs || res.data.data || {},
-        imageUrl: res.data.data?.imageUrl || '',
-        version: res.data.version || 1,
-        createdAt: res.data.created_at,
-        updatedAt: res.data.updated_at
-      };
+      const confirmed = mapLibraryRowToProduct(res.data, newProduct);
+      if (!confirmed) {
+        set((state) => ({
+          products: state.products.filter((product) => product.id !== tempId),
+          syncStatus: 'error',
+          syncError: 'Resposta inválida ao criar produto.'
+        }));
+        return { success: false, error: 'Resposta inválida ao criar produto.' };
+      }
 
-      set((state) => ({
-        products: state.products.map(p => p.id === tempId ? confirmed : p),
-        syncStatus: 'synced',
-        syncError: null
-      }));
+      set((state) => {
+        const authIdentity = getLibraryAuthIdentity();
+        const session = createLibrarySession(confirmed, authIdentity, true);
+        const productSessions = { ...state.productSessions, [session.key]: session };
+        return {
+          products: state.products.map(p => p.id === tempId ? confirmed : p),
+          productSessions,
+          ...deriveLibrarySessionStatus(productSessions)
+        };
+      });
       void StorageService.saveProducts(get().products);
       return { success: true, data: confirmed };
     }
@@ -600,7 +1069,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   updateProduct: async (id, updates) => {
-    const current = get().products.find(p => p.id === id);
+    const current = get().getProductSession(id)?.draft || get().products.find(p => p.id === id);
     if (!current) return;
 
     const updatedProd: Product = {
@@ -613,35 +1082,19 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
-    set((state) => ({
-      products: state.products.map(p => p.id === id ? updatedProd : p),
-      isDirty: true,
-      syncStatus: 'dirty',
-      syncError: null
-    }));
-
-    const existingPending = pendingProductEdits.get(id);
-    if (existingPending) {
-      existingPending.latestProductSnapshot = updatedProd;
-      existingPending.timestamp = Date.now();
-    } else {
-      pendingProductEdits.set(id, {
-        productId: id,
-        latestProductSnapshot: updatedProd,
-        expectedVersion: current.version || 1,
-        changedFields: new Set(Object.keys(updates)),
-        timestamp: Date.now()
-      });
-    }
+    editSequence += 1;
+    set((state) => recordLibraryEdit(state, id, updatedProd));
 
     if (debounceTimer) clearTimeout(debounceTimer);
+    debounceEditSequence = editSequence;
     debounceTimer = setTimeout(() => {
-      void get().flushLibraryEdits();
+      debounceTimer = null;
+      void get().flushLibraryEdits('automatic');
     }, 500);
   },
 
   updateProductCell: (productId, fieldKey, value, immediateFlush = false) => {
-    const currentProd = get().products.find(p => p.id === productId);
+    const currentProd = get().getProductSession(productId)?.draft || get().products.find(p => p.id === productId);
     if (!currentProd) return;
 
     const isStandardProp = ['code', 'model', 'description', 'family', 'imageUrl'].includes(fieldKey);
@@ -659,108 +1112,552 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
-    set((state) => ({
-      products: state.products.map(p => p.id === productId ? updatedProd : p),
-      isDirty: true,
-      syncStatus: 'dirty',
-      syncError: null
-    }));
-
-    // Consolida na fila por PRODUTO (evitando auto-conflito de expectedVersion)
-    const existingPending = pendingProductEdits.get(productId);
-    if (existingPending) {
-      existingPending.latestProductSnapshot = updatedProd;
-      existingPending.changedFields.add(fieldKey);
-      existingPending.timestamp = Date.now();
-    } else {
-      pendingProductEdits.set(productId, {
-        productId,
-        latestProductSnapshot: updatedProd,
-        expectedVersion: currentProd.version || 1,
-        changedFields: new Set([fieldKey]),
-        timestamp: Date.now()
-      });
-    }
+    editSequence += 1;
+    set((state) => recordLibraryEdit(state, productId, updatedProd));
 
     if (immediateFlush) {
       if (debounceTimer) clearTimeout(debounceTimer);
-      void get().flushLibraryEdits();
+      debounceTimer = null;
+      debounceEditSequence = editSequence;
+      void get().flushLibraryEdits('automatic');
       return;
     }
 
     if (debounceTimer) clearTimeout(debounceTimer);
+    debounceEditSequence = editSequence;
     debounceTimer = setTimeout(() => {
-      void get().flushLibraryEdits();
+      debounceTimer = null;
+      void get().flushLibraryEdits('automatic');
     }, 500);
   },
 
-  flushLibraryEdits: async () => {
-    if (pendingProductEdits.size === 0) {
-      set({ isDirty: false, syncStatus: 'synced' });
-      return true;
+  getProductSession: (productId) => getCurrentLibrarySession(get(), productId),
+
+  flushLibraryEdits: async (reason = 'manual') => {
+    if (activeLibraryDrain) return activeLibraryDrain;
+
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
     }
 
-    if (isFlushingEdits) {
-      hasPendingSubsequentFlush = true;
-      return true;
+    const authIdentity = getLibraryAuthIdentity();
+    const capturedOwnerIds = Object.values(get().productSessions)
+      .filter((session) => session.authIdentity === authIdentity)
+      .filter((session) => session.localGeneration > session.acknowledgedGeneration)
+      .filter((session) => session.verified && session.baseRevision !== null && session.baseRevision > 0)
+      .filter((session) => !session.inFlight && !session.conflict && !session.reconciliationRequired)
+      .filter((session) => reason === 'manual' || !session.failure)
+      .map((session) => session.productId);
+
+    if (capturedOwnerIds.length === 0) {
+      set((state) => ({ ...deriveLibrarySessionStatus(state.productSessions) }));
+      return isCurrentAuthLibraryClean(get().productSessions);
     }
 
-    isFlushingEdits = true;
-    set({ isSaving: true, syncStatus: 'saving' });
+    const runSaveAttempt = async (productId: string, allowFailureRetry: boolean): Promise<boolean> => {
+      const session = get().productSessions[getLibrarySessionKey(productId, authIdentity)];
+      if (!session) return false;
+      if (session.authIdentity !== authIdentity || session.inFlight || session.conflict || session.reconciliationRequired) return false;
+      if (session.failure && !allowFailureRetry) return false;
+      if (!session.verified || session.baseRevision === null || session.baseRevision <= 0) return false;
+      if (session.localGeneration <= session.acknowledgedGeneration) return true;
+      if (session.remoteDeletion || (session.remoteRevision !== null && session.remoteRevision > session.baseRevision)) {
+        set((state) => {
+          const current = state.productSessions[session.key];
+          if (!current || current.epoch !== session.epoch) return {};
+          const next: LibraryProductSession = {
+            ...current,
+            conflict: {
+              message: 'Há evidência remota mais recente; o salvamento automático foi bloqueado.',
+              remoteRevision: current.remoteRevision,
+              remoteSnapshot: current.remoteSnapshot,
+              remoteDeletion: current.remoteDeletion
+            }
+          };
+          const productSessions = { ...state.productSessions, [session.key]: next };
+          return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+        });
+        return false;
+      }
 
-    // Extrai o snapshot consolidado de cada produto editado
-    const batch = Array.from(pendingProductEdits.entries());
-    pendingProductEdits.clear();
+      const generation = session.localGeneration;
+      const expectedRevision = session.baseRevision;
+      const requestId = `library-save-${++requestSequence}`;
+      const sentSnapshot = cloneJson({ ...session.draft, version: expectedRevision });
+      const changedFields = session.baseSnapshot
+        ? diffProductDraft(session.baseSnapshot, sentSnapshot).map((patch) => patch.path[0]).filter(Boolean)
+        : [];
+      const uniqueChangedFields = Array.from(new Set(changedFields));
 
-    let allSuccess = true;
-    for (const [prodId, edit] of batch) {
-      const changedFieldNames = Array.from(edit.changedFields).join(', ');
+      set((state) => {
+        const current = state.productSessions[session.key];
+        if (!current || current.epoch !== session.epoch || current.inFlight) return {};
+        const next: LibraryProductSession = {
+          ...current,
+          inFlight: {
+            requestId,
+            generation,
+            expectedRevision,
+            sentSnapshot,
+            postSendDelta: []
+          },
+          pendingGeneration: null,
+          failure: allowFailureRetry ? null : current.failure,
+          discardToken: null
+        };
+        const productSessions = { ...state.productSessions, [session.key]: next };
+        return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+      });
+
       const res = await SupabaseService.saveProduct(
-        edit.latestProductSnapshot,
-        edit.expectedVersion,
-        Array.from(edit.changedFields)[0],
-        `Edição em ${edit.latestProductSnapshot.model}: ${changedFieldNames}`
+        sentSnapshot,
+        expectedRevision,
+        uniqueChangedFields[0],
+        `Edição em ${sentSnapshot.model}: ${uniqueChangedFields.join(', ') || 'produto'}`
       );
 
-      if (res.success && res.data) {
-        const nextVersion = res.data.version || (edit.expectedVersion + 1);
-        set((state) => ({
-          products: state.products.map(p => p.id === prodId ? { ...p, version: nextVersion } : p)
-        }));
-      } else {
-        allSuccess = false;
-        if (res.conflict) {
-          set({
-            syncStatus: 'conflict',
-            syncError: `Conflito no produto ${edit.latestProductSnapshot.model}: alterado em outro dispositivo.`
-          });
-        } else {
-          set({
-            syncStatus: 'error',
-            syncError: res.error || 'Erro ao persistir alteração na biblioteca.'
-          });
-        }
-      }
-    }
+      let attemptSucceeded = false;
+      set((state) => {
+        const current = state.productSessions[session.key];
+        if (!current || current.authIdentity !== authIdentity || current.epoch !== session.epoch) return {};
+        if (!current.inFlight || current.inFlight.requestId !== requestId) return {};
 
-    isFlushingEdits = false;
-    set({
-      isSaving: false,
-      isDirty: !allSuccess || pendingProductEdits.size > 0,
-      syncStatus: allSuccess ? 'synced' : (get().syncStatus === 'conflict' ? 'conflict' : 'error')
+        const inFlight = current.inFlight;
+        if (!res.success) {
+          const next: LibraryProductSession = res.conflict
+            ? {
+                ...current,
+                inFlight: null,
+                pendingGeneration: current.localGeneration,
+                conflict: {
+                  message: `Conflito no produto ${current.draft.model}: alterado em outro dispositivo.`,
+                  remoteRevision: current.remoteRevision,
+                  remoteSnapshot: current.remoteSnapshot,
+                  remoteDeletion: current.remoteDeletion
+                },
+                discardToken: null
+              }
+            : {
+                ...current,
+                inFlight: null,
+                pendingGeneration: current.localGeneration,
+                failure: {
+                  generation: inFlight.generation,
+                  message: res.error || 'Erro ao persistir alteração na biblioteca.',
+                  sentSnapshot: cloneJson(inFlight.sentSnapshot),
+                  postSendDelta: cloneJson(inFlight.postSendDelta)
+                },
+                discardToken: null
+              };
+          const productSessions = { ...state.productSessions, [session.key]: next };
+          return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+        }
+
+        const acceptedRevision = Number.isInteger(res.data?.version) ? Number(res.data.version) : null;
+        if (acceptedRevision !== expectedRevision + 1) {
+          const next: LibraryProductSession = {
+            ...current,
+            inFlight: null,
+            pendingGeneration: current.localGeneration,
+            reconciliationRequired: {
+              reason: 'invalid-ack',
+              message: 'ACK de produto inválido ou sem a revisão CAS esperada.',
+              generation: inFlight.generation,
+              acceptedRevision,
+              sentSnapshot: cloneJson(inFlight.sentSnapshot),
+              canonicalSnapshot: null,
+              localDraft: cloneJson(current.draft),
+              postSendDelta: cloneJson(inFlight.postSendDelta),
+              canonicalVerificationReadAttempted: false
+            },
+            discardToken: null
+          };
+          const productSessions = { ...state.productSessions, [session.key]: next };
+          return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+        }
+
+        const canonical = mapLibraryRowToProduct(res.data, inFlight.sentSnapshot);
+        if (!canonical || canonical.id !== current.productId) {
+          const next: LibraryProductSession = {
+            ...current,
+            inFlight: null,
+            pendingGeneration: current.localGeneration,
+            remoteRevision: current.remoteRevision === null ? acceptedRevision : Math.max(current.remoteRevision, acceptedRevision),
+            reconciliationRequired: {
+              reason: 'canonical-verification',
+              message: 'O servidor aceitou a revisão, mas não retornou um documento canônico completo. Verificação explícita necessária.',
+              generation: inFlight.generation,
+              acceptedRevision,
+              sentSnapshot: cloneJson(inFlight.sentSnapshot),
+              canonicalSnapshot: null,
+              localDraft: cloneJson(current.draft),
+              postSendDelta: cloneJson(inFlight.postSendDelta)
+            },
+            discardToken: null
+          };
+          const productSessions = { ...state.productSessions, [session.key]: next };
+          return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+        }
+
+        const replayed = replayProductDelta(canonical, inFlight.postSendDelta);
+        if (!replayed.ok) {
+          const next: LibraryProductSession = {
+            ...current,
+            inFlight: null,
+            pendingGeneration: current.localGeneration,
+            remoteSnapshot: cloneJson(canonical),
+            remoteRevision: current.remoteRevision === null ? acceptedRevision : Math.max(current.remoteRevision, acceptedRevision),
+            reconciliationRequired: {
+              reason: 'structural-replay',
+              message: `Não foi possível reaplicar alterações pós-envio com segurança: ${replayed.reason}`,
+              generation: inFlight.generation,
+              acceptedRevision,
+              sentSnapshot: cloneJson(inFlight.sentSnapshot),
+              canonicalSnapshot: cloneJson(canonical),
+              localDraft: cloneJson(current.draft),
+              postSendDelta: cloneJson(inFlight.postSendDelta)
+            },
+            discardToken: null
+          };
+          const productSessions = { ...state.productSessions, [session.key]: next };
+          return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+        }
+
+        let conflict = current.conflict;
+        let reconciliationRequired: LibraryReconciliationBarrier | null = null;
+        if (current.remoteDeletion) {
+          conflict = {
+            message: 'O produto foi removido remotamente durante o salvamento.',
+            remoteRevision: current.remoteRevision,
+            remoteSnapshot: current.remoteSnapshot,
+            remoteDeletion: true
+          };
+        } else if (current.remoteRevision !== null && current.remoteRevision > acceptedRevision) {
+          conflict = {
+            message: `Foi observada revisão remota ${current.remoteRevision} após o ACK ${acceptedRevision}.`,
+            remoteRevision: current.remoteRevision,
+            remoteSnapshot: current.remoteSnapshot,
+            remoteDeletion: false
+          };
+        } else if (
+          current.remoteRevision === acceptedRevision
+          && current.remoteSnapshot
+          && !sameCanonicalProduct(current.remoteSnapshot, canonical)
+        ) {
+          reconciliationRequired = {
+            reason: 'same-revision-divergence',
+            message: 'O ACK e a observação remota divergem para a mesma revisão.',
+            generation: inFlight.generation,
+            acceptedRevision,
+            sentSnapshot: cloneJson(inFlight.sentSnapshot),
+            canonicalSnapshot: cloneJson(canonical),
+            localDraft: cloneJson(current.draft),
+            postSendDelta: cloneJson(inFlight.postSendDelta)
+          };
+        }
+
+        const next: LibraryProductSession = {
+          ...current,
+          verified: true,
+          baseSnapshot: cloneJson(canonical),
+          baseRevision: acceptedRevision,
+          remoteSnapshot: current.remoteRevision !== null && current.remoteRevision > acceptedRevision
+            ? current.remoteSnapshot
+            : cloneJson(canonical),
+          remoteRevision: current.remoteRevision === null ? acceptedRevision : Math.max(current.remoteRevision, acceptedRevision),
+          remoteDeletion: current.remoteDeletion,
+          acknowledgedGeneration: inFlight.generation,
+          draft: cloneJson(replayed.draft),
+          inFlight: null,
+          pendingGeneration: current.localGeneration > inFlight.generation ? current.localGeneration : null,
+          failure: null,
+          conflict,
+          reconciliationRequired,
+          discardToken: null,
+          readEpoch: current.readEpoch + 1
+        };
+        const productSessions = { ...state.productSessions, [session.key]: next };
+        attemptSucceeded = conflict === null && reconciliationRequired === null;
+        return {
+          productSessions,
+          products: authIdentity === getLibraryAuthIdentity() ? replaceProduct(state.products, next.draft) : state.products,
+          ...deriveLibrarySessionStatus(productSessions)
+        };
+      });
+
+      return attemptSucceeded;
+    };
+
+    const drain = (async () => {
+      const passOneSuccess = new Set<string>();
+      for (const productId of capturedOwnerIds) {
+        const ok = await runSaveAttempt(productId, reason === 'manual');
+        if (ok) passOneSuccess.add(productId);
+      }
+
+      for (const productId of capturedOwnerIds) {
+        if (!passOneSuccess.has(productId)) continue;
+        const session = get().productSessions[getLibrarySessionKey(productId, authIdentity)];
+        if (!session || !canAutomaticLibrarySave(session)) continue;
+        if (session.remoteDeletion || (session.remoteRevision !== null && session.baseRevision !== null && session.remoteRevision > session.baseRevision)) continue;
+        await runSaveAttempt(productId, false);
+      }
+
+      const finalCutoff = editSequence;
+      if (debounceTimer && debounceEditSequence <= finalCutoff) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      set((state) => ({ ...deriveLibrarySessionStatus(state.productSessions) }));
+      void StorageService.saveProducts(get().products);
+      return isCurrentAuthLibraryClean(get().productSessions);
+    })();
+
+    activeLibraryDrain = drain;
+    try {
+      return await drain;
+    } finally {
+      if (activeLibraryDrain === drain) activeLibraryDrain = null;
+    }
+  },
+
+  verifyCanonicalProductAck: async (productId) => {
+    const authIdentity = getLibraryAuthIdentity();
+    const key = getLibrarySessionKey(productId, authIdentity);
+    const session = get().productSessions[key];
+    const barrier = session?.reconciliationRequired;
+    if (
+      !session
+      || !barrier
+      || barrier.reason !== 'canonical-verification'
+      || barrier.acceptedRevision === null
+      || barrier.canonicalVerificationReadAttempted
+    ) return false;
+    const acceptedRevision = barrier.acceptedRevision;
+    const capturedEpoch = session.epoch;
+    const capturedReadEpoch = session.readEpoch;
+    let verificationReadAuthorized = false;
+    set((state) => {
+      const current = state.productSessions[key];
+      const currentBarrier = current?.reconciliationRequired;
+      if (
+        !current
+        || current.authIdentity !== authIdentity
+        || current.epoch !== capturedEpoch
+        || current.readEpoch !== capturedReadEpoch
+        || !currentBarrier
+        || currentBarrier.reason !== 'canonical-verification'
+        || currentBarrier.acceptedRevision !== acceptedRevision
+        || currentBarrier.canonicalVerificationReadAttempted
+      ) return {};
+      verificationReadAuthorized = true;
+      return {
+        productSessions: {
+          ...state.productSessions,
+          [key]: {
+            ...current,
+            reconciliationRequired: {
+              ...currentBarrier,
+              canonicalVerificationReadAttempted: true
+            }
+          }
+        }
+      };
+    });
+    if (!verificationReadAuthorized) return false;
+    const res = await SupabaseService.listLibraryWorkspace();
+    if (!res.success || !res.data) return false;
+    const row = res.data.products.find((product: any) => product?.id === productId);
+    if (!row) return false;
+    const canonical = mapLibraryRowToProduct(row, barrier.sentSnapshot);
+    if (!canonical) return false;
+
+    let verified = false;
+    set((state) => {
+      const current = state.productSessions[key];
+      if (!current || current.epoch !== capturedEpoch || current.readEpoch !== capturedReadEpoch) return {};
+      const currentBarrier = current.reconciliationRequired;
+      if (!currentBarrier || currentBarrier.reason !== 'canonical-verification' || currentBarrier.acceptedRevision !== acceptedRevision) return {};
+      if (canonical.version > acceptedRevision) {
+        const next: LibraryProductSession = {
+          ...current,
+          remoteSnapshot: cloneJson(canonical),
+          remoteRevision: canonical.version,
+          conflict: {
+            message: `A verificação encontrou revisão remota ${canonical.version}, superior ao ACK aceito ${acceptedRevision}.`,
+            remoteRevision: canonical.version,
+            remoteSnapshot: cloneJson(canonical),
+            remoteDeletion: false
+          }
+        };
+        const productSessions = { ...state.productSessions, [key]: next };
+        return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+      }
+      if (canonical.version !== acceptedRevision) return {};
+
+      const replayed = replayProductDelta(canonical, currentBarrier.postSendDelta);
+      if (!replayed.ok) {
+        const next: LibraryProductSession = {
+          ...current,
+          remoteSnapshot: cloneJson(canonical),
+          remoteRevision: canonical.version,
+          reconciliationRequired: {
+            ...currentBarrier,
+            reason: 'structural-replay',
+            canonicalSnapshot: cloneJson(canonical),
+            message: `Verificação canônica concluída, mas o replay é inseguro: ${replayed.reason}`
+          }
+        };
+        const productSessions = { ...state.productSessions, [key]: next };
+        return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+      }
+
+      const next: LibraryProductSession = {
+        ...current,
+        verified: true,
+        baseSnapshot: cloneJson(canonical),
+        baseRevision: canonical.version,
+        remoteSnapshot: cloneJson(canonical),
+        remoteRevision: canonical.version,
+        remoteDeletion: false,
+        acknowledgedGeneration: currentBarrier.generation,
+        draft: cloneJson(replayed.draft),
+        pendingGeneration: current.localGeneration > currentBarrier.generation ? current.localGeneration : null,
+        reconciliationRequired: null,
+        failure: null,
+        readEpoch: current.readEpoch + 1
+      };
+      const productSessions = { ...state.productSessions, [key]: next };
+      verified = true;
+      return {
+        productSessions,
+        products: replaceProduct(state.products, next.draft),
+        ...deriveLibrarySessionStatus(productSessions)
+      };
+    });
+    return verified;
+  },
+
+  discardProductWithRefresh: async (productId, navigationEpoch) => {
+    const authIdentity = getLibraryAuthIdentity();
+    const key = getLibrarySessionKey(productId, authIdentity);
+    const session = get().productSessions[key];
+    if (!session || session.inFlight) return false;
+    const token: LibraryDiscardToken = {
+      id: `library-discard-${++discardSequence}`,
+      authIdentity,
+      ownerKey: session.ownerKey,
+      epoch: session.epoch,
+      generation: session.localGeneration,
+      baseRevision: session.baseRevision,
+      readEpoch: session.readEpoch,
+      navigationEpoch
+    };
+    set((state) => {
+      const current = state.productSessions[key];
+      if (!current || current.inFlight || current.epoch !== session.epoch) return {};
+      const next = { ...current, discardToken: token };
+      return { productSessions: { ...state.productSessions, [key]: next } };
     });
 
-    void StorageService.saveProducts(get().products);
-
-    if (hasPendingSubsequentFlush || pendingProductEdits.size > 0) {
-      hasPendingSubsequentFlush = false;
-      return await get().flushLibraryEdits();
+    const res = await SupabaseService.listLibraryWorkspace();
+    if (!res.success || !res.data) {
+      set((state) => {
+        const current = state.productSessions[key];
+        if (!current || current.discardToken?.id !== token.id) return {};
+        const next = { ...current, discardToken: null };
+        const productSessions = { ...state.productSessions, [key]: next };
+        return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+      });
+      return false;
     }
 
-    return allSuccess;
+    const row = res.data.products.find((product: any) => product?.id === productId);
+    const canonical = row ? mapLibraryRowToProduct(row, session.baseSnapshot || session.draft) : null;
+    let discarded = false;
+    set((state) => {
+      const current = state.productSessions[key];
+      const currentToken = current?.discardToken;
+      if (!current || !currentToken || currentToken.id !== token.id) return {};
+      const tokenStillExact = current.authIdentity === token.authIdentity
+        && current.ownerKey === token.ownerKey
+        && current.epoch === token.epoch
+        && current.localGeneration === token.generation
+        && current.baseRevision === token.baseRevision
+        && current.readEpoch === token.readEpoch
+        && current.inFlight === null;
+      if (!tokenStillExact) return {};
+
+      const nextEpoch = current.epoch + 1;
+      if (!canonical) {
+        const next: LibraryProductSession = {
+          ...current,
+          epoch: nextEpoch,
+          readEpoch: current.readEpoch + 1,
+          verified: true,
+          baseSnapshot: null,
+          baseRevision: null,
+          remoteSnapshot: null,
+          remoteRevision: current.remoteRevision,
+          remoteDeletion: true,
+          localGeneration: 0,
+          acknowledgedGeneration: 0,
+          inFlight: null,
+          pendingGeneration: null,
+          failure: null,
+          conflict: null,
+          reconciliationRequired: null,
+          discardToken: null
+        };
+        const productSessions = { ...state.productSessions, [key]: next };
+        discarded = true;
+        return {
+          productSessions,
+          products: state.products.filter((product) => product.id !== productId),
+          ...deriveLibrarySessionStatus(productSessions)
+        };
+      }
+
+      const next: LibraryProductSession = {
+        ...createLibrarySession(canonical, authIdentity, true),
+        key,
+        ownerKey: current.ownerKey,
+        epoch: nextEpoch,
+        readEpoch: current.readEpoch + 1
+      };
+      const productSessions = { ...state.productSessions, [key]: next };
+      discarded = true;
+      return {
+        productSessions,
+        products: replaceProduct(state.products, canonical),
+        ...deriveLibrarySessionStatus(productSessions)
+      };
+    });
+    return discarded;
+  },
+
+  invalidateDiscardTokens: () => {
+    set((state) => {
+      let changed = false;
+      const productSessions = { ...state.productSessions };
+      for (const [key, session] of Object.entries(productSessions)) {
+        if (!session.discardToken) continue;
+        productSessions[key] = { ...session, discardToken: null };
+        changed = true;
+      }
+      return changed ? { productSessions } : {};
+    });
   },
 
   deleteProduct: async (id) => {
+    const existingSession = get().getProductSession(id);
+    if (existingSession && !isSessionClean(existingSession)) {
+      return {
+        success: false,
+        error: 'Este produto possui alterações locais pendentes. Salve ou descarte explicitamente o rascunho antes de excluir.'
+      };
+    }
     const previousProducts = get().products;
     set((state) => ({
       products: state.products.filter(p => p.id !== id),
@@ -770,7 +1667,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
     const res = await SupabaseService.deleteProduct(id);
     if (res.success) {
-      set({ isSaving: false, syncStatus: 'synced', syncError: null });
+      set((state) => {
+        const key = getLibrarySessionKey(id);
+        const productSessions = { ...state.productSessions };
+        delete productSessions[key];
+        return { productSessions, ...deriveLibrarySessionStatus(productSessions) };
+      });
       void StorageService.saveProducts(get().products);
       return { success: true };
     } else {
@@ -790,86 +1692,133 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   loadWorkspace: async () => {
-    try {
-      const res = await SupabaseService.listLibraryWorkspace();
-      if (res.success && res.data) {
-        const { families = [], fields = [], products = [], events = [] } = res.data;
-        
-        const fieldMap: Record<string, ProductFamilyField[]> = {};
-        fields.forEach((fld: any) => {
-          const fid = fld.family_id;
-          if (!fieldMap[fid]) fieldMap[fid] = [];
-          fieldMap[fid].push(fld);
-          
-          const parentFam = families.find((f: any) => f.id === fid);
-          if (parentFam) {
-            if (!fieldMap[parentFam.name]) fieldMap[parentFam.name] = [];
-            fieldMap[parentFam.name].push(fld);
-          }
-        });
-
-        const remoteProducts: Product[] = products.map((rp: any) => ({
-          id: rp.id,
-          family_id: rp.family_id,
-          code: rp.sku,
-          model: rp.name,
-          family: rp.family || 'Geral',
-          description: rp.data?.description || rp.name,
-          specs: rp.data?.specs || rp.data || {},
-          imageUrl: rp.data?.imageUrl || '',
-          version: rp.version || 1,
-          createdAt: rp.created_at,
-          updatedAt: rp.updated_at
-        }));
-
-        const currentSelected = get().selectedFamily;
-        const matchingFam = families.find(f => f.name === currentSelected || f.id === currentSelected || f.slug === currentSelected);
-        const activeFam = matchingFam ? matchingFam.name : (families[0]?.name || '');
-
-        // EMPTY CLOUD É VÁLIDO: se o servidor respondeu com sucesso, mantém exatamente os dados do cloud (mesmo se vazio)
-        set({
-          workspaceLoaded: true,
-          workspaceSource: 'cloud',
-          dataProvenance: 'cloud_official',
-          families,
-          familyFields: fieldMap,
-          products: remoteProducts,
-          changeEvents: events,
-          selectedFamily: activeFam,
-          syncStatus: 'synced',
-          syncError: null
-        });
-
-        void StorageService.saveProducts(remoteProducts);
-        return;
-      }
-    } catch (e) {
-      console.warn('Falha na consulta cloud da biblioteca, usando cache:', e);
+    const authIdentity = getLibraryAuthIdentity();
+    if (activeWorkspaceLoad?.authIdentity === authIdentity) {
+      return activeWorkspaceLoad.promise;
     }
 
-    // Fallback OFFLINE somente em caso de falha de conexão com Supabase
-    const saved = await StorageService.loadProducts();
-    if (saved && saved.length > 0) {
-      const derivedFamilies = Array.from(new Set(saved.map(p => p.family || 'Geral')));
-      set({
-        workspaceLoaded: true,
-        workspaceSource: 'offline',
-        dataProvenance: 'offline_cache',
-        products: saved,
-        selectedFamily: derivedFamilies[0] || '',
-        syncStatus: 'offline',
-        syncError: 'Modo Offline: exibindo cache local'
+    const readId = ++workspaceReadSequence;
+    const promise = (async () => {
+      try {
+        const res = await SupabaseService.listLibraryWorkspace();
+        if (res.success && res.data) {
+          if (readId !== workspaceReadSequence || getLibraryAuthIdentity() !== authIdentity) return;
+          const { families = [], fields = [], products = [], events = [] } = res.data;
+
+          const fieldMap: Record<string, ProductFamilyField[]> = {};
+          fields.forEach((fld: any) => {
+            const fid = fld.family_id;
+            if (!fieldMap[fid]) fieldMap[fid] = [];
+            fieldMap[fid].push(fld);
+
+            const parentFam = families.find((family: any) => family.id === fid);
+            if (parentFam) {
+              if (!fieldMap[parentFam.name]) fieldMap[parentFam.name] = [];
+              fieldMap[parentFam.name].push(fld);
+            }
+          });
+
+          const remoteProducts = products
+            .map((row: any) => mapLibraryRowToProduct(row))
+            .filter((product: Product | null): product is Product => product !== null);
+          const remoteIds = new Set(remoteProducts.map((product) => product.id));
+          const currentSelected = get().selectedFamily;
+          const matchingFam = families.find((family: any) => (
+            family.name === currentSelected || family.id === currentSelected || family.slug === currentSelected
+          ));
+          const activeFam = matchingFam ? matchingFam.name : (families[0]?.name || '');
+
+          set((state) => {
+            const productSessions = { ...state.productSessions };
+
+            for (const remoteProduct of remoteProducts) {
+              const key = getLibrarySessionKey(remoteProduct.id, authIdentity);
+              const existing = productSessions[key];
+              productSessions[key] = existing
+                ? applyRemoteProductObservation(existing, remoteProduct, remoteProduct.version, false)
+                : createLibrarySession(remoteProduct, authIdentity, true);
+            }
+
+            for (const [key, session] of Object.entries(productSessions)) {
+              if (session.authIdentity !== authIdentity || remoteIds.has(session.productId)) continue;
+              productSessions[key] = applyRemoteProductObservation(session, null, session.remoteRevision, true);
+            }
+
+            const visibleProducts: Product[] = [];
+            for (const remoteProduct of remoteProducts) {
+              const session = productSessions[getLibrarySessionKey(remoteProduct.id, authIdentity)];
+              if (session?.remoteDeletion && isSessionClean(session)) continue;
+              visibleProducts.push(session?.draft || remoteProduct);
+            }
+            for (const session of Object.values(productSessions)) {
+              if (session.authIdentity !== authIdentity || remoteIds.has(session.productId)) continue;
+              if (session.localGeneration > session.acknowledgedGeneration || session.inFlight || session.failure || session.conflict || session.reconciliationRequired) {
+                visibleProducts.push(session.draft);
+              }
+            }
+
+            return {
+              workspaceLoaded: true,
+              workspaceSource: 'cloud' as const,
+              dataProvenance: 'cloud_official' as const,
+              families,
+              familyFields: fieldMap,
+              products: visibleProducts,
+              productSessions,
+              changeEvents: events,
+              selectedFamily: activeFam,
+              ...deriveLibrarySessionStatus(productSessions)
+            };
+          });
+
+          void StorageService.saveProducts(get().products);
+          return;
+        }
+      } catch (error) {
+        console.warn('Falha na consulta cloud da biblioteca, usando cache:', error);
+      }
+
+      if (readId !== workspaceReadSequence || getLibraryAuthIdentity() !== authIdentity) return;
+      const saved = await StorageService.loadProducts();
+      if (readId !== workspaceReadSequence || getLibraryAuthIdentity() !== authIdentity) return;
+      const fallbackProducts = saved && saved.length > 0 ? saved : INITIAL_PRODUCTS;
+      const derivedFamilies = Array.from(new Set(fallbackProducts.map((product) => product.family || 'Geral')));
+
+      set((state) => {
+        let visibleProducts = [...fallbackProducts];
+        for (const session of Object.values(state.productSessions)) {
+          if (session.authIdentity !== authIdentity) continue;
+          if (session.localGeneration > session.acknowledgedGeneration || session.inFlight || session.failure || session.conflict || session.reconciliationRequired) {
+            visibleProducts = replaceProduct(visibleProducts, session.draft);
+          }
+        }
+        const derived = deriveLibrarySessionStatus(state.productSessions);
+        const hasOwnedLineage = derived.isDirty || derived.isSaving || derived.syncStatus === 'conflict' || derived.syncStatus === 'error';
+        return {
+          workspaceLoaded: true,
+          workspaceSource: 'offline' as const,
+          dataProvenance: saved && saved.length > 0 ? 'offline_cache' as const : 'demo_seed' as const,
+          products: visibleProducts,
+          selectedFamily: derivedFamilies[0] || '',
+          ...(hasOwnedLineage
+            ? derived
+            : {
+                isDirty: false,
+                isSaving: false,
+                syncStatus: 'offline' as const,
+                syncError: saved && saved.length > 0
+                  ? 'Modo Offline: exibindo cache local'
+                  : 'Modo Offline: dados de demonstração'
+              })
+        };
       });
-    } else {
-      set({
-        workspaceLoaded: true,
-        workspaceSource: 'offline',
-        dataProvenance: 'demo_seed',
-        products: INITIAL_PRODUCTS,
-        selectedFamily: 'Transmissores de Pressão Relativa',
-        syncStatus: 'offline',
-        syncError: 'Modo Offline: dados de demonstração'
-      });
+    })();
+
+    activeWorkspaceLoad = { authIdentity, promise };
+    try {
+      await promise;
+    } finally {
+      if (activeWorkspaceLoad?.promise === promise) activeWorkspaceLoad = null;
     }
   },
 
@@ -891,54 +1840,57 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
         const { eventType, new: newRec, old: oldRec } = payload;
         set((state) => {
-          if (eventType === 'INSERT') {
-            if (state.products.some(p => p.id === newRec.id)) return state;
-            const added: Product = {
-              id: newRec.id,
-              family_id: newRec.family_id,
-              code: newRec.sku,
-              model: newRec.name,
-              family: newRec.family || 'Geral',
-              description: newRec.data?.description || newRec.name,
-              specs: newRec.data?.specs || newRec.data || {},
-              imageUrl: newRec.data?.imageUrl || '',
-              version: newRec.version || 1,
-              createdAt: newRec.created_at,
-              updatedAt: newRec.updated_at
-            };
-            return { products: [added, ...state.products] };
-          }
-
-          if (eventType === 'UPDATE') {
-            const updated: Product = {
-              id: newRec.id,
-              family_id: newRec.family_id,
-              code: newRec.sku,
-              model: newRec.name,
-              family: newRec.family || 'Geral',
-              description: newRec.data?.description || newRec.name,
-              specs: newRec.data?.specs || newRec.data || {},
-              imageUrl: newRec.data?.imageUrl || '',
-              version: newRec.version || 1,
-              createdAt: newRec.created_at,
-              updatedAt: newRec.updated_at
-            };
-
+          const authIdentity = getLibraryAuthIdentity();
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const productId = newRec?.id as string | undefined;
+            if (!productId) return {};
+            const fallback = state.productSessions[getLibrarySessionKey(productId, authIdentity)]?.draft
+              || state.products.find((product) => product.id === productId);
+            const remote = mapLibraryRowToProduct(newRec, fallback);
+            if (!remote) return {};
+            const key = getLibrarySessionKey(productId, authIdentity);
+            const existing = state.productSessions[key];
+            const nextSession = existing
+              ? applyRemoteProductObservation(existing, remote, remote.version, false)
+              : createLibrarySession(remote, authIdentity, true);
+            const productSessions = { ...state.productSessions, [key]: nextSession };
             const editorName = newRec.updated_by ? 'Colaborador' : 'Servidor';
             return {
-              products: state.products.map(p => p.id === newRec.id ? updated : p),
+              productSessions,
+              products: replaceProduct(state.products, nextSession.draft),
               recentEditedCells: {
                 ...state.recentEditedCells,
-                [newRec.id]: { editorName, timestamp: Date.now() }
-              }
+                [productId]: { editorName, timestamp: Date.now() }
+              },
+              ...deriveLibrarySessionStatus(productSessions)
             };
           }
 
           if (eventType === 'DELETE') {
-            return { products: state.products.filter(p => p.id !== oldRec.id) };
+            const productId = oldRec?.id as string | undefined;
+            if (!productId) return {};
+            const key = getLibrarySessionKey(productId, authIdentity);
+            const existing = state.productSessions[key];
+            if (!existing) {
+              return { products: state.products.filter((product) => product.id !== productId) };
+            }
+            const nextSession = applyRemoteProductObservation(existing, null, existing.remoteRevision, true);
+            const productSessions = { ...state.productSessions, [key]: nextSession };
+            const keepLocalDraft = nextSession.localGeneration > nextSession.acknowledgedGeneration
+              || nextSession.inFlight !== null
+              || nextSession.failure !== null
+              || nextSession.conflict !== null
+              || nextSession.reconciliationRequired !== null;
+            return {
+              productSessions,
+              products: keepLocalDraft
+                ? replaceProduct(state.products, nextSession.draft)
+                : state.products.filter((product) => product.id !== productId),
+              ...deriveLibrarySessionStatus(productSessions)
+            };
           }
 
-          return state;
+          return {};
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'product_families' }, (payload) => {
@@ -965,12 +1917,30 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             );
             const nextSelected = wasSelected ? confirmed.name : state.selectedFamily;
 
-            // Propagação para produtos em memória
-            const updatedProducts = state.products.map(p => {
-              if (p.family_id === confirmed.id || (oldName && p.family && p.family.trim().toLowerCase() === oldName.trim().toLowerCase())) {
-                return { ...p, family_id: confirmed.id, family: confirmed.name };
+            const authIdentity = getLibraryAuthIdentity();
+            const productSessions = { ...state.productSessions };
+            const updatedProducts = state.products.map((product) => {
+              const affected = product.family_id === confirmed.id
+                || (oldName && product.family && product.family.trim().toLowerCase() === oldName.trim().toLowerCase());
+              if (!affected) return product;
+              const key = getLibrarySessionKey(product.id, authIdentity);
+              const session = productSessions[key];
+              if (session && !isSessionClean(session)) return product;
+
+              const renamed = { ...product, family_id: confirmed.id, family: confirmed.name };
+              if (session) {
+                productSessions[key] = {
+                  ...session,
+                  draft: { ...session.draft, family_id: confirmed.id, family: confirmed.name },
+                  baseSnapshot: session.baseSnapshot
+                    ? { ...session.baseSnapshot, family_id: confirmed.id, family: confirmed.name }
+                    : null,
+                  remoteSnapshot: session.remoteSnapshot
+                    ? { ...session.remoteSnapshot, family_id: confirmed.id, family: confirmed.name }
+                    : null
+                };
               }
-              return p;
+              return renamed;
             });
 
             // Atualiza familyFields: ID é autoridade estável, aliases atualizados, antigos removidos
@@ -985,8 +1955,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             return {
               families: state.families.map(f => f.id === confirmed.id ? confirmed : f),
               products: updatedProducts,
+              productSessions,
               familyFields: updatedFields,
-              selectedFamily: nextSelected
+              selectedFamily: nextSelected,
+              ...deriveLibrarySessionStatus(productSessions)
             };
           }
           if (eventType === 'DELETE') {
@@ -1109,7 +2081,43 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   resetToInitial: () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = null;
+    debounceEditSequence = 0;
+    editSequence = 0;
+    requestSequence = 0;
+    discardSequence = 0;
+    workspaceReadSequence += 1;
+    activeLibraryDrain = null;
+    activeWorkspaceLoad = null;
     StorageService.saveProducts(INITIAL_PRODUCTS);
-    set({ products: INITIAL_PRODUCTS, dataProvenance: 'demo_seed', syncStatus: 'synced' });
+    set({
+      products: INITIAL_PRODUCTS,
+      productSessions: {},
+      dataProvenance: 'demo_seed',
+      workspaceLoaded: false,
+      isDirty: false,
+      isSaving: false,
+      syncStatus: 'synced',
+      syncError: null
+    });
   }
 }));
+
+let libraryBeforeUnloadBound = false;
+const libraryBeforeUnloadHandler = (event: BeforeUnloadEvent) => {
+  event.preventDefault();
+  event.returnValue = '';
+};
+
+useLibraryStore.subscribe((state) => {
+  if (typeof window === 'undefined') return;
+  const shouldWarn = state.isDirty || state.isSaving;
+  if (shouldWarn && !libraryBeforeUnloadBound) {
+    window.addEventListener('beforeunload', libraryBeforeUnloadHandler);
+    libraryBeforeUnloadBound = true;
+  } else if (!shouldWarn && libraryBeforeUnloadBound) {
+    window.removeEventListener('beforeunload', libraryBeforeUnloadHandler);
+    libraryBeforeUnloadBound = false;
+  }
+});
