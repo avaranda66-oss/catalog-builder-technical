@@ -31,14 +31,14 @@ export const ContextHelpDrawer: React.FC = () => {
   const targetId = contextHelpId || activeConceptId;
   const concept = targetId ? HELP_CONCEPTS_REGISTRY[targetId] : null;
 
-  if (!concept) return null;
-
   const handleClose = () => {
     if (contextHelpId) closeContextHelp();
     if (activeConceptId) closeConceptDetail();
   };
 
   React.useEffect(() => {
+    if (!concept) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleClose();
@@ -46,7 +46,9 @@ export const ContextHelpDrawer: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [contextHelpId, activeConceptId]);
+  }, [concept, contextHelpId, activeConceptId]);
+
+  if (!concept) return null;
 
   return (
     <div
