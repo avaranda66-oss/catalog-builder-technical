@@ -6,7 +6,7 @@ RR018 prova recovery somente em infraestrutura descartável. O runner recusa exe
 
 1. **Stack A / clean environment:** inicia Supabase local com migrations `00001-00004`, aplica os bridges históricos já existentes, completa `00005-00023` e valida o schema resultante.
 2. **Representative fixture:** cria usuário Auth sintético, profile, família/campo, catálogo/produto/versões, workbook, source document, índices projetados, asset/vínculo e eventos de auditoria. Um PNG determinístico é enviado ao bucket local `product-assets`.
-3. **Backup:** gera dumps separados de schema e dados de `public`, dados de `auth.users`, buckets de Storage, controles não-`public` (trigger Auth + policies de Storage), cópia física do objeto Storage e manifest SHA-256.
+3. **Backup:** gera dumps separados de schema e dados de `public`, dados de `auth.users`, buckets de Storage, controles não-`public` (trigger Auth + policies de Storage), cópia física do objeto Storage e manifest SHA-256. `pg_dump`/`pg_restore` rodam dentro do container PostgreSQL descartável para usar a mesma major version do servidor.
 4. **Destroy:** executa `supabase stop --no-backup` somente no projeto temporário da Stack A.
 5. **Stack B / fresh restore:** inicia um segundo Supabase local sem migrations da aplicação e restaura schema, Auth sintético, dados e Storage exclusivamente dos artefatos produzidos na fase de backup.
 6. **Verify:** executa `rr018-verify.sql`, compara counts antes/depois e confirma o SHA-256 do objeto baixado após o restore.
@@ -26,6 +26,8 @@ RR018 não altera migrations históricas e não cria migration estrutural para e
 ## Backup artifacts policy
 
 Os artefatos de execução não são commitados. No GitHub Actions eles são publicados como `rr018-disposable-recovery-evidence` por 30 dias e incluem `public-schema.dump`, `public-data.dump`, `auth-users.sql`, `storage-buckets.sql`, `nonpublic-controls.sql`, cópia do objeto de Storage, `critical-entities.json`, `counts-before.tsv`, `counts-after.tsv`, `manifest.sha256`, `result.env` e `rr018-drill.log`.
+
+O output normal de `supabase start` é capturado em arquivo temporário e não é enviado ao log do job, evitando exposição das chaves efêmeras geradas para a stack local. Em falha de startup, somente uma versão sanitizada do log é exibida.
 
 O manifest usa SHA-256 e é verificado antes do restore. O objeto restaurado também é baixado novamente da segunda stack e seu SHA-256 precisa ser idêntico ao original.
 

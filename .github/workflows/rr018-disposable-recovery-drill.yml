@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 35
     env:
       RR018_DISPOSABLE: "1"
-      RR018_ARTIFACT_DIR: ${{ github.workspace }}/.rr018-artifacts
+      RR018_ARTIFACT_DIR: ${{ github.workspace }}/rr018-artifacts
 
     steps:
       - name: Checkout target revision
@@ -49,6 +49,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rr018-disposable-recovery-evidence
-          path: .rr018-artifacts/
+          path: rr018-artifacts/
           retention-days: 30
           if-no-files-found: warn

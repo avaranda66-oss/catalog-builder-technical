@@ -56,6 +56,9 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('auth-users.sql');
     expect(runner).toContain('source=backup-artifacts-only');
     expect(runner).toContain('sha256sum -c manifest.sha256');
+    expect(runner).toContain('docker exec "$container_id" pg_dump');
+    expect(runner).toContain('docker exec -i "$container_id" pg_restore');
+    expect(runner).toContain('sanitized startup log follows');
     expect(verify).toContain('RR018 critical entity absent');
     expect(verify).toContain('RR018 RLS disabled');
     expect(verify).toContain('RR018 physical local Storage object metadata missing');
@@ -69,5 +72,6 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(workflow).toContain('remediation/w3d-rr018-disposable-recovery-drill');
     expect(workflow).not.toContain('secrets.');
     expect(workflow).toContain('RR018_DISPOSABLE: "1"');
+    expect(workflow).toContain('github.workspace }}/rr018-artifacts');
   });
 });

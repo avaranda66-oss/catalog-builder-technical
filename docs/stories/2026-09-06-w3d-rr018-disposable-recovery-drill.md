@@ -30,6 +30,7 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - Baseline registra três bridges históricos já existentes: `db-release0-live-baseline.sql`, `db-release0-gap2-pre14.sql` e `db-release0-gap2-post14.sql`.
 - Restore usa `public-schema.dump`, `public-data.dump`, `auth-users.sql` e objeto de Storage copiado do primeiro ambiente; a fixture original não é reaplicada no segundo ambiente.
 - Workflow `.github/workflows/rr018-disposable-recovery-drill.yml` oferece `workflow_dispatch`; como workflows novos não podem ser despachados antes de existirem na default branch, o bootstrap de evidência também aceita `push` somente da branch RR018 e publica evidência por artifact.
+- Follow-up do drill usa pg_dump/pg_restore do container PostgreSQL 17 descartável, captura supabase start sem expor credenciais efêmeras e publica evidence em diretório não oculto; a chain limpa continua dependendo explicitamente dos três bridges históricos acima.
 
 ### File List
 
@@ -45,3 +46,4 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 ### Change Log
 
 - 2026-09-06: RR018 disposable recovery drill implementado para auditoria do Principal.
+- 2026-09-06: Follow-up de recovery corrige compatibilidade PostgreSQL 17, sanitização do startup local e publicação de artifacts sem alterar migrations históricas.

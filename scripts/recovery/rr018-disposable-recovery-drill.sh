@@ -9,7 +9,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SUPABASE_BIN="${REPO_ROOT}/node_modules/.bin/supabase"
 
-for tool in bash docker psql pg_dump pg_restore curl sha256sum base64; do
+for tool in bash docker psql curl sha256sum base64; do
   command -v "$tool" >/dev/null 2>&1 || { echo "RR018 missing required local tool: $tool" >&2; exit 3; }
 done
 [[ -x "$SUPABASE_BIN" ]] || { echo "RR018 requires the repository-local Supabase CLI at node_modules/.bin/supabase" >&2; exit 3; }
@@ -76,6 +76,38 @@ copy_migration_range() {
 apply_remaining_migrations() {
   local stack_dir="$1"
   (cd "$stack_dir" && "$SUPABASE_BIN" migration up --local)
+}
+
+start_stack() {
+  local stack_dir="$1"
+  local start_log="${WORK_ROOT}/supabase-start-$(basename "$stack_dir").log"
+  if ! (cd "$stack_dir" && "$SUPABASE_BIN" start >"$start_log" 2>&1); then
+    echo "RR018 local Supabase startup failed; sanitized startup log follows:" >&2
+    sed -E '/Publishable|Secret|Access Key|Secret Key|JWT|ANON_KEY|SERVICE_ROLE_KEY/d' "$start_log" >&2
+    return 1
+  fi
+  echo "[RR018] local Supabase stack started: $(basename "$stack_dir")"
+}
+
+current_db_container() {
+  local container_id
+  container_id="$(docker ps --filter 'name=supabase_db_' --format '{{.ID}}' | head -n 1)"
+  [[ -n "$container_id" ]] || { echo "RR018 disposable PostgreSQL container not found" >&2; return 1; }
+  printf '%s' "$container_id"
+}
+
+container_pg_dump() {
+  local container_id
+  container_id="$(current_db_container)"
+  docker exec "$container_id" pg_dump -U postgres -d postgres "$@"
+}
+
+container_pg_restore() {
+  local dump_file="$1"
+  shift
+  local container_id
+  container_id="$(current_db_container)"
+  docker exec -i "$container_id" pg_restore -U postgres -d postgres "$@" < "$dump_file"
 }
 
 local_status_value() {
@@ -180,7 +212,7 @@ SQL
 echo "[RR018] phase=clean-environment stack=A"
 init_stack "$STACK_A"
 copy_migration_range "$STACK_A" '0000[1-4]_*.sql'
-(cd "$STACK_A" && "$SUPABASE_BIN" start)
+start_stack "$STACK_A"
 STACK_A_STARTED=1
 
 echo "[RR018] baseline-bridge=1 path=scripts/db-release0-live-baseline.sql reason=00005_requires_media_library"
@@ -212,10 +244,10 @@ run_psql -v fixture_sha="$ASSET_SHA" -f "$REPO_ROOT/scripts/recovery/rr018-verif
 capture_counts "$ARTIFACT_DIR/counts-before.tsv"
 
 echo "[RR018] phase=backup"
-pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --format=custom --schema=public --schema-only --file="$ARTIFACT_DIR/public-schema.dump"
-pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --format=custom --schema=public --data-only --file="$ARTIFACT_DIR/public-data.dump"
-pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --data-only --inserts --table=auth.users --file="$ARTIFACT_DIR/auth-users.sql"
-pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --data-only --inserts --table=storage.buckets --file="$ARTIFACT_DIR/storage-buckets.sql"
+container_pg_dump --format=custom --schema=public --schema-only > "$ARTIFACT_DIR/public-schema.dump"
+container_pg_dump --format=custom --schema=public --data-only > "$ARTIFACT_DIR/public-data.dump"
+container_pg_dump --data-only --inserts --table=auth.users > "$ARTIFACT_DIR/auth-users.sql"
+container_pg_dump --data-only --inserts --table=storage.buckets > "$ARTIFACT_DIR/storage-buckets.sql"
 capture_nonpublic_controls "$ARTIFACT_DIR/nonpublic-controls.sql"
 download_storage_object "$STACK_A" "$BACKUP_STORAGE_FILE"
 cp "$REPO_ROOT/scripts/recovery/rr018-critical-entities.json" "$ARTIFACT_DIR/critical-entities.json"
@@ -230,13 +262,13 @@ STACK_A_STARTED=0
 echo "[RR018] phase=fresh-restore stack=B source=backup-artifacts-only"
 RESTORE_START="$(date +%s)"
 init_stack "$STACK_B"
-(cd "$STACK_B" && "$SUPABASE_BIN" start)
+start_stack "$STACK_B"
 STACK_B_STARTED=1
 
 (cd "$ARTIFACT_DIR" && sha256sum -c manifest.sha256)
-pg_restore --clean --if-exists --no-owner -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" "$ARTIFACT_DIR/public-schema.dump"
+container_pg_restore "$ARTIFACT_DIR/public-schema.dump" --clean --if-exists --no-owner
 run_psql -f "$ARTIFACT_DIR/auth-users.sql"
-pg_restore --data-only --disable-triggers --no-owner -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" "$ARTIFACT_DIR/public-data.dump"
+container_pg_restore "$ARTIFACT_DIR/public-data.dump" --data-only --disable-triggers --no-owner
 run_psql -f "$ARTIFACT_DIR/storage-buckets.sql"
 run_psql -f "$ARTIFACT_DIR/nonpublic-controls.sql"
 upload_storage_object "$STACK_B" "$BACKUP_STORAGE_FILE"
