@@ -1,0 +1,54 @@
+name: RR018 Disposable Full Recovery Drill
+
+on:
+  workflow_dispatch:
+  # Bootstrap evidence while this new workflow exists only on the remediation
+  # branch. GitHub cannot workflow_dispatch a workflow absent from the default
+  # branch, so the branch-scoped push trigger is the safe execution path here.
+  push:
+    branches:
+      - remediation/w3d-rr018-disposable-recovery-drill
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-recovery:
+    name: Disposable Supabase backup-destroy-restore-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      RR018_DISPOSABLE: "1"
+      RR018_ARTIFACT_DIR: ${{ github.workspace }}/.rr018-artifacts
+
+    steps:
+      - name: Checkout target revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install local drill tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          npm install --no-save supabase@2.116.0
+
+      - name: Execute RR018 disposable full recovery drill
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RR018_ARTIFACT_DIR"
+          chmod +x scripts/recovery/rr018-disposable-recovery-drill.sh
+          scripts/recovery/rr018-disposable-recovery-drill.sh 2>&1 | tee "$RR018_ARTIFACT_DIR/rr018-drill.log"
+
+      - name: Publish recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rr018-disposable-recovery-evidence
+          path: .rr018-artifacts/
+          retention-days: 30
+          if-no-files-found: warn

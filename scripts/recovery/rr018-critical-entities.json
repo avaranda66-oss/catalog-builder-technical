@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "recoveryRequirement": "RR018",
+  "baselineCommit": "de6ed28ed184c8a0dbfd61b5985143eab8caf9ef",
+  "criticalEntities": [
+    { "schema": "auth", "name": "users", "kind": "table", "fixtureMinimum": 1, "purpose": "synthetic auth reference" },
+    { "schema": "public", "name": "profiles", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_families", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_family_fields", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "products", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "catalogs", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "catalog_products", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "catalog_versions", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_versions", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_workbooks", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_source_documents", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_technical_data_index", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_dataset_search_index", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "assets", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "product_assets", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "audit_log", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "library_change_events", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "public", "name": "asset_audit_logs", "kind": "table", "fixtureMinimum": 1 },
+    { "schema": "storage", "name": "buckets", "kind": "table", "fixtureMinimum": 1, "fixtureSelector": "id=product-assets" },
+    { "schema": "storage", "name": "objects", "kind": "table", "fixtureMinimum": 1, "fixtureSelector": "bucket_id=product-assets,name=rr018/recovery-fixture.png" }
+  ],
+  "criticalFunctions": [
+    "public.save_product_workbook_v2(jsonb,integer)",
+    "public.get_product_workbook_v2(text,text)",
+    "public.search_product_knowledge_v2(text,uuid,uuid,text,integer)",
+    "public.link_product_asset_v1(uuid,uuid,text,boolean,text,text)",
+    "public.save_catalog_v3(jsonb,integer,text)",
+    "public.team_role()"
+  ],
+  "criticalTriggers": [
+    "trg_products_audit",
+    "trg_catalogs_audit",
+    "trg_field_definitions_audit",
+    "trg_guard_product_delete_workbook",
+    "trg_guard_family_delete_workbook",
+    "on_auth_user_created_catalog"
+  ],
+  "historicalBaselineBridges": [
+    {
+      "path": "scripts/db-release0-live-baseline.sql",
+      "reason": "migration 00005 expects public.media_library, which is absent from migrations 00001-00004"
+    },
+    {
+      "path": "scripts/db-release0-gap2-pre14.sql",
+      "reason": "reconciles historical asset/media shape before migration 00014"
+    },
+    {
+      "path": "scripts/db-release0-gap2-post14.sql",
+      "reason": "restores the reconciled historical shape after migrations 00014-00021"
+    }
+  ],
+  "storageContract": {
+    "bucket": "product-assets",
+    "path": "rr018/recovery-fixture.png",
+    "dbReference": "public.assets.storage_bucket + public.assets.storage_path",
+    "checksumColumn": "public.assets.sha256"
+  }
+}
