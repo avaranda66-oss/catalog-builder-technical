@@ -1,4 +1,5 @@
 // tests/components/library/product-workspace-v2/mega-workspace-components.test.tsx
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
@@ -122,6 +123,130 @@ describe('Mega Workspace V2 React Components Foundation', () => {
         aliases: ['estabilidade', 'deriva'],
         description: undefined
       });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+    });
+
+    it('mantém lifecycle estável em React StrictMode ao fechar e reabrir o mesmo descriptor', () => {
+      const onSave = vi.fn();
+      const onClose = vi.fn();
+      const renderEditor = (isOpen: boolean) => (
+        <React.StrictMode>
+          <SemanticEditor
+            isOpen={isOpen}
+            onClose={onClose}
+            descriptor={sampleDescriptor}
+            onSave={onSave}
+          />
+        </React.StrictMode>
+      );
+
+      const { rerender } = render(renderEditor(false));
+      expect(screen.queryByText('Identidade da Especificação')).toBeNull();
+
+      rerender(renderEditor(true));
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Estabilidade Térmica'
+      );
+      expect(screen.getByText('estabilidade')).toBeDefined();
+
+      rerender(renderEditor(false));
+      expect(screen.queryByText('Identidade da Especificação')).toBeNull();
+
+      rerender(renderEditor(true));
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Estabilidade Térmica'
+      );
+      expect(screen.getByText('estabilidade')).toBeDefined();
+    });
+
+    it('preserva o draft ativo quando o parent recria o descriptor com a mesma canonicalKey', () => {
+      const onSave = vi.fn();
+      const onClose = vi.fn();
+      const recreatedDescriptor: SemanticDescriptor = {
+        canonicalKey: sampleDescriptor.canonicalKey,
+        displayLabel: 'Label vindo de nova leitura',
+        aliases: ['fonte-recarregada'],
+        description: 'Descrição recriada pelo parent'
+      };
+
+      const { rerender } = render(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={sampleDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      const labelInput = screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement;
+      const aliasInput = screen.getByPlaceholderText(/Novo sinônimo/i) as HTMLInputElement;
+      fireEvent.change(labelInput, { target: { value: 'Draft local não salvo' } });
+      fireEvent.change(aliasInput, { target: { value: 'alias pendente' } });
+
+      rerender(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={recreatedDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Draft local não salvo'
+      );
+      expect((screen.getByPlaceholderText(/Novo sinônimo/i) as HTMLInputElement).value).toBe(
+        'alias pendente'
+      );
+    });
+
+    it('cancela sem salvar e restaura os valores de origem ao reabrir', () => {
+      const onSave = vi.fn();
+      const onClose = vi.fn();
+
+      const { rerender } = render(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={sampleDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i), {
+        target: { value: 'Draft cancelado' }
+      });
+      fireEvent.change(screen.getByPlaceholderText(/Novo sinônimo/i), {
+        target: { value: 'alias cancelado' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onSave).not.toHaveBeenCalled();
+
+      rerender(
+        <SemanticEditor
+          isOpen={false}
+          onClose={onClose}
+          descriptor={sampleDescriptor}
+          onSave={onSave}
+        />
+      );
+      rerender(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={sampleDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Estabilidade Térmica'
+      );
+      expect((screen.getByPlaceholderText(/Novo sinônimo/i) as HTMLInputElement).value).toBe('');
+      expect(screen.getByText('estabilidade')).toBeDefined();
     });
 
     it('mantém lifecycle estável e reinicializa os campos quando o descriptor muda', () => {
