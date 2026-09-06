@@ -42,9 +42,10 @@ export interface PublishSafetyAuditContext {
  * Executa auditoria rigorosa de segurança de publicação em 3 camadas.
  * Regras de Bloqueio (BLOCK):
  * - Layer C: Conflito global de sincronização (syncStatus === 'conflict')
- * - Layer C: Runtime em estado de carregamento ou erro
+ * - Layer C: Runtime em estado de carregamento, indisponível ou erro
  * - Layer A: Binding malformado ou corrompido
  * - Layer A/B: review_required sem snapshot
+ * - Layer B: Dado técnico em rascunho (draft)
  * - Layer B: Dado técnico em conflito (conflict)
  * - Layer B: Fonte ausente em live binding sem snapshot (source_missing)
  * - Layer B: Produto com falha de preload sem snapshot (partial status)
@@ -88,6 +89,15 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
       severity: 'block',
       code: 'RUNTIME_ERROR',
       reason: 'Falha crítica no carregamento do conhecimento técnico dos produtos do catálogo.'
+    });
+  }
+
+  if (runtimeStatus === 'unavailable') {
+    issues.push({
+      layer: 'C_GATE',
+      severity: 'block',
+      code: 'RUNTIME_UNAVAILABLE',
+      reason: 'A autoridade factual de conhecimento técnico está indisponível. A publicação está bloqueada até que a fonte possa ser validada.'
     });
   }
 
@@ -300,6 +310,22 @@ export function auditCatalogPublishSafety(context: PublishSafetyAuditContext): P
               });
 
               if (res) {
+                // B.0: Rascunho não é fato elegível para publicação -> BLOCK
+                if (res.status === 'draft') {
+                  issues.push({
+                    layer: 'B_RESOLUTION',
+                    severity: 'block',
+                    pageNumber,
+                    pageId: page.id,
+                    tableId,
+                    tableTitle,
+                    rowId: row.id,
+                    colKey,
+                    code: 'DRAFT_TECHNICAL_DATUM',
+                    reason: `Dado técnico em rascunho não é elegível para publicação (${binding.semanticKey}).`
+                  });
+                }
+
                 // B.1: Conflito de dados técnicos -> BLOCK
                 if (res.status === 'conflict') {
                   issues.push({

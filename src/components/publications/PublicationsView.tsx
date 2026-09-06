@@ -23,6 +23,7 @@ import { PDFService } from '../../services/pdf.service';
 import { AIService } from '../../services/ai.service';
 import { Catalog } from '../../domain/catalog.schema';
 import { isTableLikeBlock } from '../../domain/compliance-coverage';
+import { auditCatalogPublishSafety } from '../../domain/table-core';
 import { PresetModal } from '../editor/PresetModal';
 
 export const PublicationsView: React.FC = () => {
@@ -82,6 +83,29 @@ export const PublicationsView: React.FC = () => {
     }
 
     const currentConfirmed = useCatalogStore.getState().currentCatalog || currentCatalog;
+    const publishingState = useCatalogStore.getState();
+    await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(currentConfirmed);
+    const runtimeStatus = publishingState.knowledgeRuntime.getStatus();
+    const publishingAudit = auditCatalogPublishSafety({
+      catalog: currentConfirmed,
+      syncStatus: useCatalogStore.getState().syncStatus,
+      runtimeStatus,
+      failedProductIds: publishingState.knowledgeRuntime.getFailedProductIds(),
+      resolveDatum:
+        runtimeStatus === 'idle' || runtimeStatus === 'loading'
+          ? undefined
+          : publishingState.getTableDatumResolver('effective_for_publishing')
+    });
+
+    if (runtimeStatus === 'idle' || runtimeStatus === 'loading' || !publishingAudit.canPublish) {
+      setIsExporting(false);
+      setExportStatus({
+        success: false,
+        message: `Exportação bloqueada pela autoridade factual: ${publishingAudit.blockCount} inconsistência(s) crítica(s).`
+      });
+      return;
+    }
+
     console.log('[PDF EXPORT METADATA]', {
       catalogId: currentConfirmed.id,
       catalogVersion: currentConfirmed.version,

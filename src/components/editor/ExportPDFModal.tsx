@@ -42,8 +42,10 @@ export const ExportPDFModal: React.FC = () => {
   const docVersion = currentCatalog.version || 1;
 
   // Auditoria de segurança de publicação em 3 camadas (Emendas 15 e 16)
-  const isRuntimeLoading = runtimeStatus === 'loading';
-  const resolveDatum = !isRuntimeLoading ? getTableDatumResolver() : undefined;
+  const isRuntimeLoading = runtimeStatus === 'idle' || runtimeStatus === 'loading';
+  const resolveDatum = !isRuntimeLoading
+    ? getTableDatumResolver('effective_for_publishing')
+    : undefined;
   const auditReport = auditCatalogPublishSafety({
     catalog: currentCatalog,
     syncStatus,

@@ -8,6 +8,7 @@ import { Catalog } from '../catalog.schema';
 import {
   ProductWorkbook,
   ResolvedProductKnowledge,
+  ResolutionPolicy,
   WorkbookOwner,
   resolveEffectiveProductKnowledge
 } from '../product-workbook';
@@ -33,6 +34,7 @@ import { projectPimDatasetToTechnicalDatasetProjection } from './pim-dataset-pro
 import { projectPimSavedViewToSavedViewProjection } from './pim-saved-view-projection.adapter';
 
 export type ProductKnowledgeRuntimeStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
+export type ProductKnowledgeResolutionPolicy = Exclude<ResolutionPolicy, 'effective_for_ai'>;
 
 export interface ProductWorkbookFetcher {
   getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
@@ -93,6 +95,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
   /** Somente dados atualmente autoritativos. */
   private readonly knowledgeCache = new Map<string, ResolvedProductKnowledge>();
+  private readonly publishingKnowledgeCache = new Map<string, ResolvedProductKnowledge>();
   private readonly workbookCache = new Map<string, ProductWorkbook>();
   private readonly productIdentities = new Map<string, ProductIdentity>();
 
@@ -225,6 +228,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
       }
     }
     this.knowledgeCache.clear();
+    this.publishingKnowledgeCache.clear();
     this.workbookCache.clear();
     this.productIdentities.clear();
     this.knownEmptyProductIds.clear();
@@ -235,6 +239,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     const oldFamilyId = oldIdentity?.familyId;
 
     this.knowledgeCache.delete(productId);
+    this.publishingKnowledgeCache.delete(productId);
     this.workbookCache.delete(`product:${productId}`);
     this.productIdentities.delete(productId);
     this.knownEmptyProductIds.delete(productId);
@@ -244,6 +249,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
       for (const [otherProductId, identity] of this.productIdentities) {
         if (identity.familyId === oldFamilyId) {
           this.knowledgeCache.delete(otherProductId);
+          this.publishingKnowledgeCache.delete(otherProductId);
           this.knownEmptyProductIds.delete(otherProductId);
         }
       }
@@ -378,6 +384,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
   private materializeVerifiedKnowledge(productId: string): ResolvedProductKnowledge | null {
     this.knowledgeCache.delete(productId);
+    this.publishingKnowledgeCache.delete(productId);
     this.knownEmptyProductIds.delete(productId);
 
     const productState = this.getDependencyState('product', productId);
@@ -399,9 +406,17 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
       const resolved = resolveEffectiveProductKnowledge({
         productId,
         productWorkbook,
-        familyWorkbook
+        familyWorkbook,
+        policy: 'effective_for_editing'
+      });
+      const publishingResolved = resolveEffectiveProductKnowledge({
+        productId,
+        productWorkbook,
+        familyWorkbook,
+        policy: 'effective_for_publishing'
       });
       this.knowledgeCache.set(productId, resolved);
+      this.publishingKnowledgeCache.set(productId, publishingResolved);
       return resolved;
     }
 
@@ -412,9 +427,17 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
         const resolved = resolveEffectiveProductKnowledge({
           productId,
           productWorkbook: null,
-          familyWorkbook
+          familyWorkbook,
+          policy: 'effective_for_editing'
+        });
+        const publishingResolved = resolveEffectiveProductKnowledge({
+          productId,
+          productWorkbook: null,
+          familyWorkbook,
+          policy: 'effective_for_publishing'
         });
         this.knowledgeCache.set(productId, resolved);
+        this.publishingKnowledgeCache.set(productId, publishingResolved);
         return resolved;
       }
       if (familyState === 'verified_absent') {
@@ -471,6 +494,7 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
    */
   public registerResolvedKnowledge(productId: string, knowledge: ResolvedProductKnowledge): void {
     this.knowledgeCache.set(productId, knowledge);
+    this.publishingKnowledgeCache.set(productId, knowledge);
     this.setDependencyState('product', productId, 'verified_present', this.currentEpoch);
     if (this.status === 'idle') {
       this.setStatus('ready');
@@ -481,9 +505,14 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     return this.activeCatalogId;
   }
 
-  public getResolvedKnowledge(productId: string): ResolvedProductKnowledge | undefined {
+  public getResolvedKnowledge(
+    productId: string,
+    policy: ProductKnowledgeResolutionPolicy = 'effective_for_editing'
+  ): ResolvedProductKnowledge | undefined {
     if (!this.isProductInActiveScope(productId)) return undefined;
-    return this.knowledgeCache.get(productId);
+    return policy === 'effective_for_publishing'
+      ? this.publishingKnowledgeCache.get(productId)
+      : this.knowledgeCache.get(productId);
   }
 
   private startProductRead(productId: string, forceRefresh: boolean): Promise<ResolvedProductKnowledge | null> {
@@ -707,10 +736,11 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
   }
 
   public getCompositeDatumResolver(
-    getProductLegacy?: (productId: string) => LegacyProductLike | undefined | null
+    getProductLegacy?: (productId: string) => LegacyProductLike | undefined | null,
+    policy: ProductKnowledgeResolutionPolicy = 'effective_for_editing'
   ): TableDatumResolver {
     const pimResolver = createProductWorkbookDatumResolver(
-      (productId: string) => this.getResolvedKnowledge(productId),
+      (productId: string) => this.getResolvedKnowledge(productId, policy),
       { enableV2Literals: true }
     );
 

@@ -4,6 +4,8 @@ import { Catalog } from '../../domain/catalog.schema';
 import { SupabaseService } from '../../services/supabase.service';
 import { PDFService } from '../../services/pdf.service';
 import { CleanA4Document } from './CleanA4Document';
+import { auditCatalogPublishSafety } from '../../domain/table-core';
+import { useCatalogStore } from '../../stores/useCatalogStore';
 
 import { FontManager } from '../../translation/font-manager';
 
@@ -68,6 +70,29 @@ export const PrintDocumentView: React.FC = () => {
 
     let isCancelled = false;
     const preparePrint = async () => {
+      const publishingState = useCatalogStore.getState();
+      await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(documentToRender);
+      if (isCancelled) return;
+
+      const runtimeStatus = publishingState.knowledgeRuntime.getStatus();
+      const publishingAudit = auditCatalogPublishSafety({
+        catalog: documentToRender,
+        runtimeStatus,
+        failedProductIds: publishingState.knowledgeRuntime.getFailedProductIds(),
+        resolveDatum:
+          runtimeStatus === 'idle' || runtimeStatus === 'loading'
+            ? undefined
+            : publishingState.getTableDatumResolver('effective_for_publishing')
+      });
+      if (runtimeStatus === 'idle' || runtimeStatus === 'loading' || !publishingAudit.canPublish) {
+        const firstBlock = publishingAudit.issues.find((issue) => issue.severity === 'block');
+        setErrorMessage(
+          firstBlock?.reason ||
+            `Publicação bloqueada pela autoridade factual: ${publishingAudit.blockCount} inconsistência(s) crítica(s).`
+        );
+        return;
+      }
+
       try {
         const docLocale = (documentToRender as any).locale || 'pt-BR';
         const fontResult = await FontManager.ensureFontsLoadedForLocale(docLocale);

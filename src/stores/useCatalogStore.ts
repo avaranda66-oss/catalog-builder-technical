@@ -60,6 +60,7 @@ import {
   generateDeterministicDatasetColumnId,
   generateDeterministicDatasetRowId,
   ProductKnowledgeRuntime,
+  ProductKnowledgeResolutionPolicy,
   TableDatumResolver
 } from '../domain/table-binding';
 import { SupabaseProductKnowledgeProvider } from '../services/product-knowledge';
@@ -328,7 +329,7 @@ interface CatalogState {
   // Product Knowledge Runtime & Resolution (PIM Integration)
   knowledgeRuntime: ProductKnowledgeRuntime;
   knowledgeProvider: SupabaseProductKnowledgeProvider;
-  getTableDatumResolver: () => TableDatumResolver;
+  getTableDatumResolver: (policy?: ProductKnowledgeResolutionPolicy) => TableDatumResolver;
   preloadProductKnowledge: () => Promise<void>;
 }
 
@@ -371,9 +372,10 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   knowledgeRuntime: defaultKnowledgeRuntime,
   knowledgeProvider: defaultKnowledgeProvider,
-  getTableDatumResolver: () => {
+  getTableDatumResolver: (policy = 'effective_for_editing') => {
     return defaultKnowledgeRuntime.getCompositeDatumResolver(
-      (id) => useLibraryStore.getState().getProduct(id)
+      (id) => useLibraryStore.getState().getProduct(id),
+      policy
     );
   },
   preloadProductKnowledge: async () => {

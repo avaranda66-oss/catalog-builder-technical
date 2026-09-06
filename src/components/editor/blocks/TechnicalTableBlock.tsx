@@ -35,7 +35,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   } = useCatalogStore();
 
   const { getProduct } = useLibraryStore();
-  const { openAddProductToTableModal, tablePresentationDraft } = useUIStore();
+  const { openAddProductToTableModal, tablePresentationDraft, isExportPDFModalOpen } = useUIStore();
 
   const columns: TableColumnConfig[] = block.tableColumns || [];
   const rows = block.tableRows || [];
@@ -52,7 +52,10 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const isSelected = selectedBlockId === block.id;
   const selectedCellId = isSelected && !isExport ? selectedChildId : undefined;
 
-  const resolveDatum = getTableDatumResolver();
+  const isPublishingRender = Boolean(isExport || isExportPDFModalOpen);
+  const resolveDatum = getTableDatumResolver(
+    isPublishingRender ? 'effective_for_publishing' : 'effective_for_editing'
+  );
   const hasVisibleRows = adaptedTable
     ? adaptedTable.rows
         .filter((r) => !r.isHeader && r.kind !== 'header' && r.kind !== 'footer')
@@ -149,7 +152,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
                     selectEditorElement({ blockId: block.id, childId: cellId });
                   }
             }
-            resolveDatum={getTableDatumResolver()}
+            resolveDatum={resolveDatum}
             getHeaderPrintableField={(col) => `col_${col.semanticKey}_label`}
             getCellPrintableField={(_cell, row, col) => {
               const mapping = pilotAdaptResult.bridge.getByCoordinates(row.id, col.id);
