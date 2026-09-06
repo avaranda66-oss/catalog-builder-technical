@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly SOURCE_SHA='5443b249f8d3c0d6b678105de709e3465a298f1a'
 readonly SOURCE_SQL='supabase/rehearsals/source_document_cas_v2_draft.sql'
-readonly SOURCE_SQL_SHA256='711c4bffc6d2b244e9eb5185234cd6153b117edf0cb14dd40ff855b59bdf02e0'
+readonly SOURCE_SQL_SHA256='70732dcde7022b080984bba8248284810046c72af4e2af11b9fecd54d0703bf1'
 readonly BASELINE_SQL='supabase/rehearsals/rr011_disposable_db_baseline.sql'
 readonly PRE_SQL='supabase/rehearsals/rr011_disposable_db_pre_concurrency.sql'
 readonly POST_SQL='supabase/rehearsals/rr011_disposable_db_post_concurrency.sql'
@@ -28,7 +28,7 @@ fi
 
 git diff --exit-code "$SOURCE_SHA" -- "$SOURCE_SQL"
 
-actual_sql_sha256="$(sha256sum "$SOURCE_SQL" | awk '{print $1}')"
+actual_sql_sha256="$(tr -d '\r' <"$SOURCE_SQL" | sha256sum | awk '{print $1}')"
 if [[ "$actual_sql_sha256" != "$SOURCE_SQL_SHA256" ]]; then
     echo "[RR011][SOURCE-INTEGRITY][FAIL] expected $SOURCE_SQL_SHA256 got $actual_sql_sha256" >&2
     exit 66

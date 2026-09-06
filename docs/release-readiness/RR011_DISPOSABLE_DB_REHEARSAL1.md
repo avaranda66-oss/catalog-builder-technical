@@ -6,7 +6,7 @@ Status: Ready for empirical execution
 
 - Source commit: `5443b249f8d3c0d6b678105de709e3465a298f1a`.
 - SQL under test: `supabase/rehearsals/source_document_cas_v2_draft.sql`.
-- Expected SQL SHA-256: `711c4bffc6d2b244e9eb5185234cd6153b117edf0cb14dd40ff855b59bdf02e0`.
+- Expected canonical-LF SQL SHA-256: `70732dcde7022b080984bba8248284810046c72af4e2af11b9fecd54d0703bf1`.
 - The runner rejects any `DATABASE_URL` whose host is not `localhost` or `127.0.0.1`.
 - The runner explicitly rejects the production project ref `bjxqvrpbigwgabwbhtqa`.
 - No Supabase secret or live credential is required or accepted.
@@ -44,3 +44,4 @@ Production migration number remains **DEFERRED**. This audit branch does not mod
 ## Execution history
 
 - Run `34041020800` is **INVALID / NOT EMPIRICAL EVIDENCE**. A shallow checkout omitted the source commit object, so the source-integrity check exited with `fatal: bad object 5443b249f8d3c0d6b678105de709e3465a298f1a` before baseline creation. The workflow pipeline also allowed `tee` to mask that nonzero exit. The follow-up changes only the audit workflow to fetch full history and propagate pipeline failures; the SQL under test remains byte-identical.
+- Run `34041113082` is **INVALID / NOT EMPIRICAL EVIDENCE**. The now-authoritative workflow stopped with exit `66` before baseline creation because the expected SHA-256 had been measured over the Windows CRLF checkout while Actions checked out canonical LF bytes. The follow-up normalizes only carriage returns while hashing and uses the canonical-LF digest; the SQL under test remains unchanged.
