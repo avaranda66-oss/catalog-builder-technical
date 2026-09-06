@@ -1,6 +1,6 @@
 # COMPANY.READINESS.H1B.RR011 — SourceDocument CAS V2
 
-Status: In Progress
+Status: Ready for Review
 
 ## Goal
 
@@ -19,8 +19,8 @@ Replace last-write-wins SourceDocument persistence with a separate server-manage
 - [x] Realtime exposes `sourceDocumentId` and resulting persistence version as observation metadata; Realtime is not treated as ACK.
 - [x] No Wave3 editor UX is implemented.
 - [x] SQL is stored as rehearsal/draft because no production ledger number after 00023 is officially allocated.
-- [ ] GitHub Actions quality gates pass: lint, typecheck, tests, build.
-- [ ] Disposable DB rehearsal executed. (Checked only after the GitHub Actions run passes.)
+- [x] GitHub Actions quality gates pass: lint, typecheck, tests, build. (Run `34041271765`.)
+- [x] Disposable DB rehearsal executed. (Authoritative run `34041203047`.)
 
 ## Test Coverage
 

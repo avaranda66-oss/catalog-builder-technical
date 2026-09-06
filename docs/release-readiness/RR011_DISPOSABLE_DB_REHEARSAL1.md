@@ -1,6 +1,6 @@
 # COMPANY.READINESS.RR011.DISPOSABLE-DB.REHEARSAL1
 
-Status: Ready for empirical execution
+Status: Empirically verified
 
 ## Scope and safety
 
@@ -45,3 +45,5 @@ Production migration number remains **DEFERRED**. This audit branch does not mod
 
 - Run `34041020800` is **INVALID / NOT EMPIRICAL EVIDENCE**. A shallow checkout omitted the source commit object, so the source-integrity check exited with `fatal: bad object 5443b249f8d3c0d6b678105de709e3465a298f1a` before baseline creation. The workflow pipeline also allowed `tee` to mask that nonzero exit. The follow-up changes only the audit workflow to fetch full history and propagate pipeline failures; the SQL under test remains byte-identical.
 - Run `34041113082` is **INVALID / NOT EMPIRICAL EVIDENCE**. The now-authoritative workflow stopped with exit `66` before baseline creation because the expected SHA-256 had been measured over the Windows CRLF checkout while Actions checked out canonical LF bytes. The follow-up normalizes only carriage returns while hashing and uses the canonical-LF digest; the SQL under test remains unchanged.
+- Run `34041203047` is the first **AUTHORITATIVE PASS**. Head `e99f334fc307147adf1d0dee49448f8e13ccb71b`; image `postgres:17-alpine` at digest `sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73`; engine `PostgreSQL 17.11 on x86_64-pc-linux-musl`. Every mandatory RR011 marker passed, including the overlapping two-session stale writer with SQLSTATE `40001` and `actualVersion = 3`.
+- Quality Gates run `34041271765` passed on the same head: lint, typecheck, 160 test files / 1707 tests, and build.
