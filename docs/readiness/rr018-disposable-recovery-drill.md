@@ -6,10 +6,18 @@ RR018 prova recovery somente em infraestrutura descartável. O runner recusa exe
 
 1. **Stack A / clean environment:** inicia Supabase local com migrations `00001-00004`, aplica os bridges históricos já existentes, completa `00005-00023` e valida o schema resultante.
 2. **Representative fixture:** cria usuário Auth sintético, profile, família/campo, catálogo/produto/versões, workbook, source document, índices projetados, asset/vínculo e eventos de auditoria. Um PNG determinístico é enviado ao bucket local `product-assets`.
-3. **Backup:** gera dumps separados de schema e dados de `public`, dados de `auth.users`, buckets de Storage, controles não-`public` (trigger Auth + policies de Storage), cópia física do objeto Storage e manifest SHA-256. `pg_dump`/`pg_restore` rodam dentro do container PostgreSQL descartável para usar a mesma major version do servidor.
+3. **Backup:** gera dumps separados de schema e dados de `public`, dados de `auth.users`, buckets de Storage, controles não-`public` (trigger Auth + policies de Storage), cópia física do objeto Storage e manifest SHA-256. `pg_dump`/`pg_restore` rodam dentro do container PostgreSQL descartável para usar a mesma major version do servidor. O próprio PostgreSQL 17 do container executa `pg_restore -l` no dump de schema e produz o TOC bruto, a restore list e a lista auditável das entradas filtradas.
 4. **Destroy:** executa `supabase stop --no-backup` somente no projeto temporário da Stack A.
-5. **Stack B / fresh restore:** inicia um segundo Supabase local sem migrations da aplicação e restaura schema, Auth sintético, dados e Storage exclusivamente dos artefatos produzidos na fase de backup.
+5. **Stack B / fresh restore:** inicia um segundo Supabase local sem migrations da aplicação e restaura schema, Auth sintético, dados e Storage exclusivamente dos artefatos produzidos na fase de backup. Como a Stack B é fresh, o schema restore não usa `--clean`/`--if-exists`.
 6. **Verify:** executa `rr018-verify.sql`, compara counts antes/depois e confirma o SHA-256 do objeto baixado após o restore.
+
+## Fresh-schema restore e DEFAULT ACL
+
+O TOC do dump é tratado de forma explícita e fail-closed. O runner só comenta na restore list as três entradas de `DEFAULT ACL` pertencentes a `supabase_admin` no schema `public`: `DEFAULT PRIVILEGES FOR TABLES`, `DEFAULT PRIVILEGES FOR FUNCTIONS` e `DEFAULT PRIVILEGES FOR SEQUENCES`. Essas ACLs são da plataforma Supabase base, não objetos da aplicação.
+
+Antes de destruir a Stack A, o runner captura `pg_default_acl` para essas três classes. Depois de iniciar a Stack B fresh, ele captura o mesmo baseline e exige igualdade byte a byte antes do schema restore. A mesma comparação é repetida após o restore. Se o TOC contiver qualquer outra `DEFAULT ACL` de `supabase_admin`, se não contiver exatamente essas três, ou se o baseline fresh divergir, o drill falha em vez de ampliar o filtro.
+
+Entradas TOC do tipo `ACL public ...` continuam ativas na restore list; o runner compara a contagem dessas entradas antes/depois do filtro e exige que nenhuma seja removida. Não é usado `--no-acl`. As grants explícitas da aplicação permanecem cobertas por `rr018-verify.sql`, incluindo privilégios de tabela e `EXECUTE` de funções críticas.
 
 ## Baseline histórico observado
 
@@ -25,7 +33,7 @@ RR018 não altera migrations históricas e não cria migration estrutural para e
 
 ## Backup artifacts policy
 
-Os artefatos de execução não são commitados. No GitHub Actions eles são publicados como `rr018-disposable-recovery-evidence` por 30 dias e incluem `public-schema.dump`, `public-data.dump`, `auth-users.sql`, `storage-buckets.sql`, `nonpublic-controls.sql`, cópia do objeto de Storage, `critical-entities.json`, `counts-before.tsv`, `counts-after.tsv`, `manifest.sha256`, `result.env` e `rr018-drill.log`.
+Os artefatos de execução não são commitados. No GitHub Actions eles são publicados como `rr018-disposable-recovery-evidence` por 30 dias e incluem `public-schema.dump`, `public-data.dump`, `public-schema.toc.list`, `public-schema.restore.list`, `public-schema.excluded-platform-default-acl.list`, snapshots `supabase-platform-default-acl-*.tsv`, `auth-users.sql`, `storage-buckets.sql`, `nonpublic-controls.sql`, cópia do objeto de Storage, `critical-entities.json`, `counts-before.tsv`, `counts-after.tsv`, `manifest.sha256`, `result.env` e `rr018-drill.log`.
 
 O output normal de `supabase start` é capturado em arquivo temporário e não é enviado ao log do job, evitando exposição das chaves efêmeras geradas para a stack local. Em falha de startup, somente uma versão sanitizada do log é exibida.
 
@@ -61,6 +69,7 @@ O runner mede `RR018_REHEARSAL_RESTORE_DURATION_SECONDS` e `RR018_TOTAL_DRILL_DU
 RR018 não responde e não deve inferir:
 
 - PITR enabled? **NOT VERIFIED**
+- production RTO? **NOT VERIFIED**
 - retention? **NOT VERIFIED**
 - last recovery point? **NOT VERIFIED**
 - Storage backup policy? **NOT VERIFIED**

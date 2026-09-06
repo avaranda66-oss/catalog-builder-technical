@@ -59,9 +59,92 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('docker exec "$container_id" pg_dump');
     expect(runner).toContain('docker exec -i "$container_id" pg_restore');
     expect(runner).toContain('sanitized startup log follows');
+    expect(runner).toContain('[RR018] restore=schema status=ok');
+    expect(runner).toContain('[RR018] restore=auth status=ok');
+    expect(runner).toContain('[RR018] restore=data status=ok');
+    expect(runner).toContain('[RR018] restore=nonpublic-controls status=ok');
+    expect(runner).toContain('[RR018] restore=storage status=ok');
+    expect(runner).toContain('evidence=counts-after.tsv,result.env status=present');
+    expect(runner).toContain('RR018_PRODUCTION_RTO=NOT_VERIFIED');
     expect(verify).toContain('RR018 critical entity absent');
     expect(verify).toContain('RR018 RLS disabled');
     expect(verify).toContain('RR018 physical local Storage object metadata missing');
+  });
+
+  it('T1 restores a fresh public schema without destructive pg_restore clean flags', () => {
+    const runner = readFileSync(runnerPath, 'utf8');
+
+    expect(runner).not.toContain('--clean');
+    expect(runner).not.toContain('--if-exists');
+    expect(runner).toContain('public-schema.restore.list');
+    expect(runner).toContain('--use-list=');
+  });
+
+  it('T2 filters only the audited Supabase platform DEFAULT ACL entries from the schema TOC', () => {
+    const runner = readFileSync(runnerPath, 'utf8');
+
+    expect(runner).toContain('pg_restore -l');
+    expect(runner).toContain('public-schema.toc.list');
+    expect(runner).toContain('public-schema.excluded-platform-default-acl.list');
+    expect(runner).toContain('DEFAULT ACL');
+    expect(runner).toContain('supabase_admin');
+    expect(runner).toContain('TABLES|FUNCTIONS|SEQUENCES');
+    expect(runner).toContain('RR018 expected exactly 3 Supabase platform DEFAULT ACL entries');
+    expect(runner).toContain('refusing to broaden the restore filter');
+    expect(runner).toContain('application ACL TOC entries were not preserved');
+    expect(runner).toContain('supabase-platform-default-acl-before.tsv');
+    expect(runner).toContain('supabase-platform-default-acl-fresh-stack-b.tsv');
+    expect(runner).toContain('supabase-platform-default-acl-after.tsv');
+    expect(runner).not.toContain('--no-acl');
+  });
+
+  it('T3 keeps explicit application table grants under post-restore verification', () => {
+    const verify = readFileSync(verifyPath, 'utf8');
+
+    expect(verify).toContain("has_table_privilege('authenticated', 'public.product_workbooks', 'SELECT')");
+    expect(verify).toContain("has_table_privilege('authenticated', 'public.product_workbooks', 'INSERT')");
+    expect(verify).toContain('RR018 grant/function ACL invariant failed');
+  });
+
+  it('T4 keeps public policies under post-restore verification', () => {
+    const verify = readFileSync(verifyPath, 'utf8');
+
+    expect(verify).toContain("SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = v_table");
+    expect(verify).toContain('RR018 policy missing: public.%');
+  });
+
+  it('T5 keeps critical functions and EXECUTE grants under post-restore verification', () => {
+    const verify = readFileSync(verifyPath, 'utf8');
+
+    expect(verify).toContain("to_regprocedure('public.save_product_workbook_v2(jsonb,integer)')");
+    expect(verify).toContain(
+      "has_function_privilege('authenticated', 'public.save_product_workbook_v2(jsonb,integer)', 'EXECUTE')",
+    );
+    expect(verify).toContain(
+      "has_function_privilege('anon', 'public.save_product_workbook_v2(jsonb,integer)', 'EXECUTE')",
+    );
+  });
+
+  it('T6 keeps critical triggers under post-restore verification', () => {
+    const verify = readFileSync(verifyPath, 'utf8');
+
+    for (const trigger of [
+      'trg_products_audit',
+      'trg_catalogs_audit',
+      'trg_field_definitions_audit',
+      'trg_guard_product_delete_workbook',
+      'trg_guard_family_delete_workbook',
+      'on_auth_user_created_catalog',
+    ]) {
+      expect(verify).toContain(trigger);
+    }
+  });
+
+  it('T7 keeps RLS enabled on every critical public table after restore', () => {
+    const verify = readFileSync(verifyPath, 'utf8');
+
+    expect(verify).toContain('c.relrowsecurity');
+    expect(verify).toContain('RR018 RLS disabled: public.%');
   });
 
   it('keeps CI isolated to manual dispatch or the RR018 remediation branch and requests no secrets', () => {

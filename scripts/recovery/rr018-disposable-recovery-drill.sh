@@ -110,6 +110,107 @@ container_pg_restore() {
   docker exec -i "$container_id" pg_restore -U postgres -d postgres "$@" < "$dump_file"
 }
 
+container_pg_restore_list() {
+  local dump_file="$1"
+  local container_id
+  container_id="$(current_db_container)"
+  docker exec -i "$container_id" pg_restore -l < "$dump_file"
+}
+
+container_pg_restore_version() {
+  local container_id
+  container_id="$(current_db_container)"
+  docker exec "$container_id" pg_restore --version
+}
+
+container_pg_restore_with_list() {
+  local dump_file="$1"
+  local restore_list="$2"
+  shift 2
+  local container_id container_restore_list
+  container_id="$(current_db_container)"
+  container_restore_list="/tmp/rr018-public-schema.restore.list"
+  docker cp "$restore_list" "${container_id}:${container_restore_list}" >/dev/null
+  docker exec -i "$container_id" pg_restore -U postgres -d postgres --use-list="$container_restore_list" "$@" < "$dump_file"
+}
+
+build_public_schema_restore_list() {
+  local dump_file="$1"
+  local toc_file="$2"
+  local restore_list="$3"
+  local excluded_file="$4"
+  local excluded_count unexpected_platform_default_acl_count raw_application_acl_count restored_application_acl_count kind kind_count
+
+  echo "[RR018] schema-toc-tool=$(container_pg_restore_version)"
+  container_pg_restore_list "$dump_file" > "$toc_file"
+  : > "$excluded_file"
+
+  awk -v excluded_file="$excluded_file" '
+    /^;/ { print; next }
+    / DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$/ {
+      print $0 >> excluded_file
+      print ";" $0
+      next
+    }
+    { print }
+  ' "$toc_file" > "$restore_list"
+
+  excluded_count="$(wc -l < "$excluded_file" | tr -d ' ')"
+  if [[ "$excluded_count" -ne 3 ]]; then
+    echo "RR018 expected exactly 3 Supabase platform DEFAULT ACL entries, found ${excluded_count}" >&2
+    return 1
+  fi
+
+  unexpected_platform_default_acl_count="$(grep -E ' DEFAULT ACL .* supabase_admin$' "$toc_file" | grep -Evc ' DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$' || true)"
+  if [[ "$unexpected_platform_default_acl_count" -ne 0 ]]; then
+    echo "RR018 found an unexpected supabase_admin DEFAULT ACL TOC entry; refusing to broaden the restore filter" >&2
+    return 1
+  fi
+
+  for kind in TABLES FUNCTIONS SEQUENCES; do
+    kind_count="$(grep -Ec " DEFAULT ACL public DEFAULT PRIVILEGES FOR ${kind} supabase_admin$" "$excluded_file" || true)"
+    if [[ "$kind_count" -ne 1 ]]; then
+      echo "RR018 expected exactly one Supabase platform DEFAULT ACL entry for ${kind}, found ${kind_count}" >&2
+      return 1
+    fi
+  done
+
+  if grep -Eq '^[^;].* DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$' "$restore_list"; then
+    echo "RR018 restore list left a Supabase platform DEFAULT ACL entry enabled" >&2
+    return 1
+  fi
+
+  raw_application_acl_count="$(grep -Ec '^[0-9]+; [0-9]+ [0-9]+ ACL public ' "$toc_file" || true)"
+  restored_application_acl_count="$(grep -Ec '^[0-9]+; [0-9]+ [0-9]+ ACL public ' "$restore_list" || true)"
+  if [[ "$raw_application_acl_count" -eq 0 || "$raw_application_acl_count" -ne "$restored_application_acl_count" ]]; then
+    echo "RR018 application ACL TOC entries were not preserved by the narrow platform filter" >&2
+    return 1
+  fi
+
+  echo "[RR018] schema-toc platform_default_acl_excluded=${excluded_count} application_acl_preserved=${restored_application_acl_count}"
+  sed 's/^/[RR018][TOC][EXCLUDED] /' "$excluded_file"
+}
+
+capture_supabase_platform_default_acl() {
+  local destination="$1"
+  run_psql -At -F '|' -c "
+    SELECT d.defaclobjtype,
+           pg_get_userbyid(d.defaclrole),
+           n.nspname,
+           d.defaclacl::text
+    FROM pg_default_acl d
+    JOIN pg_namespace n ON n.oid = d.defaclnamespace
+    WHERE pg_get_userbyid(d.defaclrole) = 'supabase_admin'
+      AND n.nspname = 'public'
+      AND d.defaclobjtype IN ('r', 'f', 'S')
+    ORDER BY d.defaclobjtype;" > "$destination"
+
+  if [[ "$(wc -l < "$destination" | tr -d ' ')" -ne 3 ]]; then
+    echo "RR018 fresh Supabase platform DEFAULT ACL baseline is incomplete" >&2
+    return 1
+  fi
+}
+
 local_status_value() {
   local stack_dir="$1"
   local key="$2"
@@ -251,8 +352,14 @@ container_pg_dump --data-only --inserts --table=storage.buckets > "$ARTIFACT_DIR
 capture_nonpublic_controls "$ARTIFACT_DIR/nonpublic-controls.sql"
 download_storage_object "$STACK_A" "$BACKUP_STORAGE_FILE"
 cp "$REPO_ROOT/scripts/recovery/rr018-critical-entities.json" "$ARTIFACT_DIR/critical-entities.json"
+capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv"
+build_public_schema_restore_list \
+  "$ARTIFACT_DIR/public-schema.dump" \
+  "$ARTIFACT_DIR/public-schema.toc.list" \
+  "$ARTIFACT_DIR/public-schema.restore.list" \
+  "$ARTIFACT_DIR/public-schema.excluded-platform-default-acl.list"
 
-(cd "$ARTIFACT_DIR" && sha256sum public-schema.dump public-data.dump auth-users.sql storage-buckets.sql nonpublic-controls.sql storage-product-assets-rr018-recovery-fixture.png critical-entities.json > manifest.sha256)
+(cd "$ARTIFACT_DIR" && sha256sum public-schema.dump public-data.dump auth-users.sql storage-buckets.sql nonpublic-controls.sql storage-product-assets-rr018-recovery-fixture.png critical-entities.json public-schema.toc.list public-schema.restore.list public-schema.excluded-platform-default-acl.list supabase-platform-default-acl-before.tsv > manifest.sha256)
 (cd "$ARTIFACT_DIR" && sha256sum -c manifest.sha256)
 
 echo "[RR018] phase=destroy stack=A"
@@ -266,15 +373,24 @@ start_stack "$STACK_B"
 STACK_B_STARTED=1
 
 (cd "$ARTIFACT_DIR" && sha256sum -c manifest.sha256)
-container_pg_restore "$ARTIFACT_DIR/public-schema.dump" --clean --if-exists --no-owner
+capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
+diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
+container_pg_restore_with_list "$ARTIFACT_DIR/public-schema.dump" "$ARTIFACT_DIR/public-schema.restore.list" --no-owner
+echo "[RR018] restore=schema status=ok"
 run_psql -f "$ARTIFACT_DIR/auth-users.sql"
+echo "[RR018] restore=auth status=ok"
 container_pg_restore "$ARTIFACT_DIR/public-data.dump" --data-only --disable-triggers --no-owner
+echo "[RR018] restore=data status=ok"
 run_psql -f "$ARTIFACT_DIR/storage-buckets.sql"
 run_psql -f "$ARTIFACT_DIR/nonpublic-controls.sql"
+echo "[RR018] restore=nonpublic-controls status=ok"
 upload_storage_object "$STACK_B" "$BACKUP_STORAGE_FILE"
+echo "[RR018] restore=storage status=ok"
 
 echo "[RR018] phase=verify-restored"
 run_psql -v fixture_sha="$ASSET_SHA" -f "$REPO_ROOT/scripts/recovery/rr018-verify.sql"
+capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-after.tsv"
+diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-after.tsv"
 capture_counts "$ARTIFACT_DIR/counts-after.tsv"
 diff -u "$ARTIFACT_DIR/counts-before.tsv" "$ARTIFACT_DIR/counts-after.tsv"
 
@@ -297,14 +413,22 @@ RR018_REHEARSAL_RESTORE_DURATION_SECONDS=${RESTORE_DURATION}
 RR018_TOTAL_DRILL_DURATION_SECONDS=${TOTAL_DURATION}
 RR018_STORAGE_SHA256=${ASSET_SHA}
 RR018_BASELINE_BRIDGES=3
+RR018_PLATFORM_DEFAULT_ACL_EXCLUDED=3
 RR018_PRODUCTION_RPO=NOT_VERIFIED
 RR018_PRODUCTION_PITR=NOT_VERIFIED
+RR018_PRODUCTION_RTO=NOT_VERIFIED
 EOF
 
+if [[ ! -s "$ARTIFACT_DIR/counts-after.tsv" || ! -s "$ARTIFACT_DIR/result.env" ]]; then
+  echo "RR018 required closure evidence is missing" >&2
+  exit 7
+fi
+
 echo "[RR018][OK] verdict=GO_FOR_PRINCIPAL_AUDIT"
+echo "[RR018] evidence=counts-after.tsv,result.env status=present"
 echo "[RR018][METRIC] rehearsal_restore_duration_seconds=${RESTORE_DURATION}"
 echo "[RR018][METRIC] total_drill_duration_seconds=${TOTAL_DURATION}"
-echo "[RR018][LIMITATION] production_rpo_pitr_storage_backup_and_secrets_escrow=NOT_VERIFIED"
+echo "[RR018][LIMITATION] production_rpo_pitr_rto_storage_backup_and_secrets_escrow=NOT_VERIFIED"
 
 echo "[RR018] phase=destroy stack=B"
 (cd "$STACK_B" && "$SUPABASE_BIN" stop --no-backup)

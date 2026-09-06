@@ -31,6 +31,7 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - Restore usa `public-schema.dump`, `public-data.dump`, `auth-users.sql` e objeto de Storage copiado do primeiro ambiente; a fixture original não é reaplicada no segundo ambiente.
 - Workflow `.github/workflows/rr018-disposable-recovery-drill.yml` oferece `workflow_dispatch`; como workflows novos não podem ser despachados antes de existirem na default branch, o bootstrap de evidência também aceita `push` somente da branch RR018 e publica evidência por artifact.
 - Follow-up do drill usa pg_dump/pg_restore do container PostgreSQL 17 descartável, captura supabase start sem expor credenciais efêmeras e publica evidence em diretório não oculto; a chain limpa continua dependendo explicitamente dos três bridges históricos acima.
+- Restore closure remove `--clean` da Stack B fresh, materializa o TOC real com `pg_restore -l` no container PostgreSQL 17 e filtra somente as três `DEFAULT ACL` de plataforma de `supabase_admin`; ACLs explícitas da aplicação permanecem no restore e sob verificação pós-restore.
 
 ### File List
 
@@ -47,3 +48,4 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 
 - 2026-09-06: RR018 disposable recovery drill implementado para auditoria do Principal.
 - 2026-09-06: Follow-up de recovery corrige compatibilidade PostgreSQL 17, sanitização do startup local e publicação de artifacts sem alterar migrations históricas.
+- 2026-09-06: Restore closure passa a usar restore list fail-closed para excluir somente DEFAULT ACLs de plataforma já presentes na Stack B fresh, preservando grants/policies/functions/triggers/RLS da aplicação.
