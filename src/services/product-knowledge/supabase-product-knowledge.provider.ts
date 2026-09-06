@@ -69,32 +69,20 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
   }
 
   /**
-   * Executa busca de conhecimento de produto.
-   * Regras canônicas (Emendas 1, 3, 4, 11, 13, 15):
-   * 1. Se houver productId especificado, a busca é escopada com autoridade efetiva pelo runtime.
-   * 2. Se a busca for global:
-   *    - Executa a RPC canônica search_product_knowledge_v2.
-   *    - Enriquecimento canônico com chamadas estritamente limitadas por owners únicos (sem N+1).
-   *    - Hits de família expandem para os produtos da família via getProductsByFamilyIds.
-   *    - Famílias sem produtos concretos no catálogo retornam AbstractFamilyKnowledgeResult (bindable: false, productId: undefined).
-   *    - NUNCA atribui familyId como productId.
-   *    - Preview sempre gerado via projectTechnicalValueFailClosed.
+   * Quando o runtime já iniciou uma leitura escopada, seu estado de autoridade
+   * é exclusivo e impede RPC/repository de ressuscitar dado tombstonado ou falho.
+   * Um produto ainda not_loaded segue pela RPC canônica; não há autoridade local
+   * anterior a proteger nesse caso. Busca global também usa a RPC canônica.
    */
   public async search(productId: string | undefined, query: string): Promise<ProductKnowledgeSearchResult[]> {
-    // 1. Busca escopada com prioridade para conhecimento efetivo em runtime
-    if (productId) {
-      const resolved = this.runtime.getResolvedKnowledge(productId);
-      if (resolved) {
-        return this.runtime.search(productId, query);
-      }
+    if (productId && this.runtime.getDependencyState('product', productId) !== 'not_loaded') {
+      return this.runtime.search(productId, query);
     }
 
-    // 2. Se não houver cliente Supabase disponível, tenta runtime ou falha de forma segura
     if (!this.client) {
       return this.runtime.search(productId, query);
     }
 
-    // 3. Execução da RPC de busca canônica (PIM V2)
     try {
       const { data, error } = await this.client.rpc('search_product_knowledge_v2', {
         p_query: query || null,
@@ -105,15 +93,11 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
       });
 
       if (error) {
-        // Migration 00023 ainda não está live (código 42883: function does not exist)
         if (
           error.code === '42883' ||
           error.message.includes('search_product_knowledge_v2') ||
           error.message.includes('does not exist')
         ) {
-          if (productId && this.runtime.getResolvedKnowledge(productId)) {
-            return this.runtime.search(productId, query);
-          }
           this.status = 'unavailable';
           throw new Error('Repositório de Conhecimento Indisponível (RPC search_product_knowledge_v2 inexistente)');
         }
@@ -125,10 +109,7 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
         return [];
       }
 
-      // 4. Agrupamento e enriquecimento de hits com autoridade canônica (Emendas 1, 3, 4, 11, 13, 15)
       const results: ProductKnowledgeSearchResult[] = [];
-
-      // 4.1 Identificação de owners únicos
       const productOwnerIds = new Set<string>();
       const familyOwnerIds = new Set<string>();
 
@@ -140,7 +121,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
         }
       }
 
-      // 4.2 Batch lookup de identidades no registry
       const [productIdentities, familyProducts] = await Promise.all([
         productOwnerIds.size > 0 ? this.registryReader.getProductsByIds(Array.from(productOwnerIds)) : Promise.resolve([]),
         familyOwnerIds.size > 0 ? this.registryReader.getProductsByFamilyIds(Array.from(familyOwnerIds)) : Promise.resolve([])
@@ -156,8 +136,8 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
         }
       }
 
-      // 4.3 Batch lookup de Workbooks (máximo 1 fetch por owner único, reusando cache de runtime)
       const workbooksMap = new Map<string, ProductWorkbook | null>();
+      const failedOwners = new Set<string>();
       const uniqueOwners: Array<{ kind: 'product' | 'family'; id: string }> = [
         ...Array.from(productOwnerIds).map((id) => ({ kind: 'product' as const, id })),
         ...Array.from(familyOwnerIds).map((id) => ({ kind: 'family' as const, id }))
@@ -175,32 +155,35 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
             const wb = await this.repository.getWorkbook({ kind, id });
             workbooksMap.set(cacheKey, wb);
           } catch {
-            workbooksMap.set(cacheKey, null);
+            failedOwners.add(cacheKey);
           }
         })
       );
 
-      // 4.4 Enriquecimento canônico dos hits
       const seenDatasetKeys = new Set<string>();
 
       for (const row of data) {
         const ownerKind = row.owner_kind as 'product' | 'family';
         const ownerId = row.owner_id;
-        const wb = workbooksMap.get(`${ownerKind}:${ownerId}`);
+        const ownerKey = `${ownerKind}:${ownerId}`;
+        if (failedOwners.has(ownerKey)) continue;
 
-        // A. Hit de Dataset
+        const wb = workbooksMap.get(ownerKey);
+        // RPC hit sem workbook autoritativo é inconsistente/stale e não é bindável.
+        if (!wb) continue;
+
         if (row.source_index === 'technical_dataset' && row.dataset_id) {
           const dedupKey = `${ownerKind}:${ownerId}:${row.dataset_id}`;
           if (seenDatasetKeys.has(dedupKey)) continue;
           seenDatasetKeys.add(dedupKey);
 
-          const realDs = wb?.schemaVersion === 2 ? wb.datasets.find((d) => d.id === row.dataset_id) : undefined;
+          const realDs = wb.schemaVersion === 2 ? wb.datasets.find((d) => d.id === row.dataset_id) : undefined;
           const semanticKey = realDs ? realDs.semanticKey : (row.semantic_key || row.dataset_id);
           const label = realDs ? realDs.label : (row.label?.split(' · ')[0] || 'Dataset Técnico');
           const description = realDs?.description;
           const sourceCount = realDs ? realDs.rows.length : 1;
           const preview = realDs ? `${realDs.rows.length} linhas × ${realDs.columns.length} colunas` : (row.value_formatted || 'Tabela de Dados');
-          const revision = wb?.revision;
+          const revision = wb.revision;
 
           if (ownerKind === 'product') {
             const identity = identityMap.get(ownerId);
@@ -223,7 +206,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
               sourceOwnerId: ownerId
             });
           } else {
-            // ownerKind === 'family' (Emendas 1 & 3)
             const productsInFamily = familyProductsMap.get(ownerId) ?? [];
             if (productsInFamily.length > 0) {
               for (const p of productsInFamily) {
@@ -247,7 +229,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
                 });
               }
             } else {
-              // Resultado de família abstrato (não bindável diretamente)
               results.push({
                 bindable: false,
                 id: `family_${ownerId}_${row.dataset_id}`,
@@ -271,15 +252,14 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
           continue;
         }
 
-        // B. Hit de TechnicalDatum individual
-        const realDatum = wb ? Object.values(wb.data).find((d) => d.semanticKey === row.semantic_key || d.id === row.semantic_key) : undefined;
+        const realDatum = Object.values(wb.data).find((d) => d.semanticKey === row.semantic_key || d.id === row.semantic_key);
         const semanticKey = realDatum ? realDatum.semanticKey : row.semantic_key;
         const label = realDatum ? realDatum.label : row.label;
         const description = realDatum?.description;
         const status = realDatum ? (realDatum.status === 'approved' ? 'approved' : realDatum.status === 'draft' ? 'draft' : 'unknown') : (row.status === 'approved' ? 'approved' : row.status === 'draft' ? 'draft' : 'unknown');
         const sourceCount = realDatum?.evidence ? realDatum.evidence.length : 0;
         const preview = realDatum ? projectTechnicalValueFailClosed(realDatum.value) : (row.unit ? `${row.value_formatted} ${row.unit}` : (row.value_formatted || ''));
-        const revision = wb?.revision;
+        const revision = wb.revision;
 
         if (ownerKind === 'product') {
           const identity = identityMap.get(ownerId);
@@ -301,7 +281,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
             sourceOwnerId: ownerId
           });
         } else {
-          // ownerKind === 'family' (Emendas 1 & 3)
           const productsInFamily = familyProductsMap.get(ownerId) ?? [];
           if (productsInFamily.length > 0) {
             for (const p of productsInFamily) {
@@ -324,7 +303,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
               });
             }
           } else {
-            // Resultado de família abstrato
             results.push({
               bindable: false,
               id: `family_${ownerId}_${realDatum ? realDatum.id : row.semantic_key}`,
@@ -351,7 +329,6 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
       if (this.status === 'unavailable' || this.status === 'error') {
         throw err;
       }
-      // Fallback para runtime local em caso de erro de rede ou RPC se runtime estiver pronto
       if (this.runtime.isAvailable()) {
         return this.runtime.search(productId, query);
       }
@@ -360,34 +337,7 @@ export class SupabaseProductKnowledgeProvider implements ProductKnowledgeProvide
   }
 
   public async getDatum(productId: string, semanticKey: string): Promise<ProductKnowledgeDatumResult | undefined> {
-    const datum = await this.runtime.getDatum(productId, semanticKey);
-    if (datum) return datum;
-
-    // Se não estiver no runtime, busca workbook no repositório
-    try {
-      const workbook = await this.repository.getWorkbook({ kind: 'product', id: productId });
-      if (!workbook) return undefined;
-
-      const target = Object.values(workbook.data).find((d) => d.semanticKey === semanticKey);
-      if (!target) return undefined;
-
-      const literalValue = projectTechnicalValueFailClosed(target.value);
-
-      return {
-        productId,
-        semanticKey,
-        label: target.label,
-        status: target.status === 'approved' ? 'approved' : target.status === 'draft' ? 'draft' : 'unknown',
-        origin: 'product_local',
-        sourceCount: target.evidence?.length ?? 0,
-        value: literalValue,
-        sourceRevision: workbook.revision,
-        sourceOwnerKind: 'product',
-        sourceOwnerId: productId
-      };
-    } catch {
-      return undefined;
-    }
+    return this.runtime.getDatum(productId, semanticKey);
   }
 
   public async getDataset(productId: string, datasetId: string): Promise<TechnicalDatasetProjection | undefined> {

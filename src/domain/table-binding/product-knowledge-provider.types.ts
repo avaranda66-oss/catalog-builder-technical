@@ -10,6 +10,26 @@ export type ProductKnowledgeResultKind = 'datum' | 'dataset' | 'saved_view' | 'a
 
 export type ProductKnowledgeProviderStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
 
+/**
+ * Estado canônico de uma dependência de leitura.
+ * Somente verified_present e verified_absent carregam autoridade factual.
+ */
+export type ReadAuthorityState =
+  | 'not_loaded'
+  | 'loading'
+  | 'verified_present'
+  | 'verified_absent'
+  | 'failed'
+  | 'cached_unverified';
+
+export interface ReadAuthoritySnapshot {
+  readonly state: ReadAuthorityState;
+  readonly epoch: number;
+  readonly error?: string;
+}
+
+export type ProductKnowledgeDependencyKind = 'registry' | 'product' | 'family';
+
 export interface BaseProductKnowledgeSearchResult {
   readonly id: string;
   readonly kind: ProductKnowledgeResultKind;
