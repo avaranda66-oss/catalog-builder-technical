@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Checkout exact audit head
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install PostgreSQL client
         run: |
@@ -53,6 +55,7 @@ jobs:
 
       - name: Run RR011 empirical rehearsal
         run: |
+          set -o pipefail
           bash scripts/rehearsals/run-rr011-disposable-db-rehearsal.sh 2>&1 | tee rr011-disposable-db-rehearsal.log
 
       - name: Upload rehearsal evidence

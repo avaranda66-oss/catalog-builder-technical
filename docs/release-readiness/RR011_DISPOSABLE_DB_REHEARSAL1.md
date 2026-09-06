@@ -40,3 +40,7 @@ Realtime checks cover only the database contract (`REPLICA IDENTITY FULL` and pu
 - `supabase/rehearsals/rr011_disposable_db_post_concurrency.sql`
 
 Production migration number remains **DEFERRED**. This audit branch does not modify application production TypeScript or create a production migration.
+
+## Execution history
+
+- Run `34041020800` is **INVALID / NOT EMPIRICAL EVIDENCE**. A shallow checkout omitted the source commit object, so the source-integrity check exited with `fatal: bad object 5443b249f8d3c0d6b678105de709e3465a298f1a` before baseline creation. The workflow pipeline also allowed `tee` to mask that nonzero exit. The follow-up changes only the audit workflow to fetch full history and propagate pipeline failures; the SQL under test remains byte-identical.
