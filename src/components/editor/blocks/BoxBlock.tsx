@@ -8,8 +8,37 @@ interface BoxBlockProps {
   isSelected: boolean;
 }
 
+const renderInlineMarkup = (text: string): React.ReactNode[] => {
+  const nodes: React.ReactNode[] = [];
+  const markupPattern = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = markupPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    if (match[1] !== undefined) {
+      nodes.push(<strong key={`strong-${key++}`}>{match[1]}</strong>);
+    } else {
+      nodes.push(<em key={`em-${key++}`}>{match[2]}</em>);
+    }
+
+    lastIndex = markupPattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
+};
+
 export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
+  const displayText = block.textContent || 'Digite notas técnicas ou advertências metrológicas...';
 
   const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
     updateBlock(pageId, block.id, { textContent: e.currentTarget.innerText.trim() });
@@ -38,12 +67,9 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
         suppressContentEditableWarning
         onBlur={handleBlur}
         className="outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap cursor-text"
-        dangerouslySetInnerHTML={{
-          __html: (block.textContent || 'Digite notas técnicas ou advertências metrológicas...')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        }}
-      />
+      >
+        {renderInlineMarkup(displayText)}
+      </div>
     </div>
   );
 };

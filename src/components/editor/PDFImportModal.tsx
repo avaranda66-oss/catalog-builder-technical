@@ -1,16 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, Crop, Plus, ArrowLeft, ArrowRight, Check, ZoomIn, ZoomOut, Info } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { ContentBlock } from '../../domain/catalog.schema';
 import { PageInsertionSafetyModal } from './PageInsertionSafetyModal';
+import { getUntrustedPdfDocument } from '@/services/pdfjs.service';
 import {
   evaluatePageCompositionInsertion,
   PageContentInsertionSpec
 } from '../../domain/page-composition-policy';
-
-// Configura o worker do PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
 
 interface PDFImportModalProps {
   isOpen: boolean;
@@ -52,7 +49,7 @@ export const PDFImportModal: React.FC<PDFImportModalProps> = ({ isOpen, onClose 
       setIsLoading(true);
       setFileName(file.name);
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const loadingTask = getUntrustedPdfDocument(arrayBuffer);
       const doc = await loadingTask.promise;
       setPdfDoc(doc);
       setNumPages(doc.numPages);
