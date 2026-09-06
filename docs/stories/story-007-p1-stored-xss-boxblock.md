@@ -84,7 +84,7 @@ Branch: `remediation/r1-new-001-boxblock-fidelity`
 - [x] Empty content uses placeholder UI without persisting placeholder copy.
 - [x] The shared `CleanA4Document` print path keeps safe bold/italic rendering.
 - [x] No dependency or package file changed.
-- [ ] GitHub Actions gates pass on the final exact SHA.
+- [x] GitHub Actions gates pass on the implementation SHA; the documentation-only final SHA is revalidated by the same workflow.
 
 ### Implementation Notes
 
@@ -102,3 +102,11 @@ Branch: `remediation/r1-new-001-boxblock-fidelity`
 ### R1-NEW-001 Change Log
 
 - 2026-09-06: Added the two-mode BoxBlock source-fidelity boundary and permanent no-edit/edit/XSS/placeholder/print regressions.
+
+### R1-NEW-001 Validation Record
+
+- GitHub Actions run `34040544364` on implementation/story SHA `f1fffe38af31771f766f7d81a98d703331bd6dde`: PASS.
+- `npm run lint`: PASS with 0 errors and 268 pre-existing warnings.
+- `npm run typecheck`: PASS.
+- `npm test`: PASS — 162 files, 1713 tests.
+- `npm run build`: PASS.
