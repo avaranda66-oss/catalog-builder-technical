@@ -10,14 +10,15 @@ export interface SemanticEditorProps {
   onSave: (updatedDescriptor: SemanticDescriptor) => void;
 }
 
-export const SemanticEditor: React.FC<SemanticEditorProps> = ({
-  isOpen,
+type SemanticEditorContentProps = Omit<SemanticEditorProps, 'isOpen' | 'descriptor'> & {
+  descriptor: SemanticDescriptor;
+};
+
+const SemanticEditorContent: React.FC<SemanticEditorContentProps> = ({
   onClose,
   descriptor,
   onSave
 }) => {
-  if (!isOpen || !descriptor) return null;
-
   const [displayLabel, setDisplayLabel] = useState(descriptor.displayLabel);
   const [aliases, setAliases] = useState<string[]>([...descriptor.aliases]);
   const [newAlias, setNewAlias] = useState('');
@@ -209,5 +210,23 @@ export const SemanticEditor: React.FC<SemanticEditorProps> = ({
         </div>
       </div>
     </div>
+  );
+};
+
+export const SemanticEditor: React.FC<SemanticEditorProps> = ({
+  isOpen,
+  onClose,
+  descriptor,
+  onSave
+}) => {
+  if (!isOpen || !descriptor) return null;
+
+  return (
+    <SemanticEditorContent
+      key={descriptor.canonicalKey}
+      onClose={onClose}
+      descriptor={descriptor}
+      onSave={onSave}
+    />
   );
 };

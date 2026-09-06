@@ -123,6 +123,77 @@ describe('Mega Workspace V2 React Components Foundation', () => {
         description: undefined
       });
     });
+
+    it('mantém lifecycle estável e reinicializa os campos quando o descriptor muda', () => {
+      const onSave = vi.fn();
+      const onClose = vi.fn();
+      const secondDescriptor: SemanticDescriptor = {
+        canonicalKey: 'metrology.pressure.range',
+        displayLabel: 'Faixa de Pressão',
+        aliases: ['pressão'],
+        description: 'Descritor atualizado'
+      };
+
+      const { rerender } = render(
+        <SemanticEditor
+          isOpen={false}
+          onClose={onClose}
+          descriptor={null}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.queryByText('Identidade da Especificação')).toBeNull();
+
+      rerender(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={sampleDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      const labelInput = screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement;
+      expect(labelInput.value).toBe('Estabilidade Térmica');
+      fireEvent.change(labelInput, { target: { value: 'Valor temporário' } });
+
+      rerender(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={secondDescriptor}
+          onSave={onSave}
+        />
+      );
+
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Faixa de Pressão'
+      );
+      expect(screen.getByText('metrology.pressure.range')).toBeDefined();
+
+      rerender(
+        <SemanticEditor
+          isOpen={false}
+          onClose={onClose}
+          descriptor={secondDescriptor}
+          onSave={onSave}
+        />
+      );
+      expect(screen.queryByText('Identidade da Especificação')).toBeNull();
+
+      rerender(
+        <SemanticEditor
+          isOpen={true}
+          onClose={onClose}
+          descriptor={secondDescriptor}
+          onSave={onSave}
+        />
+      );
+      expect((screen.getByPlaceholderText(/Ex: Faixa de Temperatura/i) as HTMLInputElement).value).toBe(
+        'Faixa de Pressão'
+      );
+    });
   });
 
   describe('MegaWorkspaceShell Component', () => {
