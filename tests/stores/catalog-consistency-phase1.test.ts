@@ -52,6 +52,7 @@ describe('FASE 1 & 1.1 — Catalog Consistency, Hardening & Safe Realtime Suite'
       serverSavedAt: null,
       cachedAt: null,
       inFlightSave: null,
+      remoteVersionBarrier: null,
       localRevision: 0,
       lastAcknowledgedLocalRevision: 0
     });

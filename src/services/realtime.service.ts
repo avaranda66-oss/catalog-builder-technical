@@ -171,6 +171,9 @@ export async function handleCatalogRealtimeEvent(
 
     // C) Evento remoto com versão maior (outro dispositivo salvou):
     const hasUnsavedLocalEdits = state.isDirty || state.isSaving || state.localRevision > state.lastAcknowledgedLocalRevision;
+    if (remoteVersion > currentVersion) {
+      state.observeRemoteCatalogVersion(changedId, remoteVersion);
+    }
 
     if (hasUnsavedLocalEdits) {
       logHandlerDecision({
@@ -268,8 +271,8 @@ export async function handleCatalogRealtimeEvent(
 
         const nextSaved = state.savedCatalogs.map((c) => (c.id === changedId ? updatedCatalog : c));
 
+        state.setCurrentCatalog(updatedCatalog, false);
         store.setState({
-          currentCatalog: updatedCatalog,
           savedCatalogs: nextSaved,
           isDirty: false,
           localRevision: 0,

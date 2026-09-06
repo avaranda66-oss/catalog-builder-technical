@@ -85,6 +85,36 @@ export interface InFlightSaveInfo {
   capturedRevision: number;
 }
 
+interface CatalogOperationLineage {
+  identityEpoch: number;
+  sessionGeneration: number;
+  catalogId: string;
+  editorContextKey: string;
+  localRevision: number;
+  remoteVersionBarrier: number | null;
+}
+
+type CatalogSessionLineage = Pick<CatalogOperationLineage, 'identityEpoch' | 'sessionGeneration'>;
+
+let workspaceIdentityEpochSequence = 0;
+let catalogSessionGenerationSequence = 0;
+
+function issueWorkspaceIdentityEpoch(): number {
+  workspaceIdentityEpochSequence += 1;
+  return workspaceIdentityEpochSequence;
+}
+
+function issueCatalogSessionGeneration(): number {
+  catalogSessionGenerationSequence += 1;
+  return catalogSessionGenerationSequence;
+}
+
+function getEditorContextKey(context: EditorDocumentContext): string {
+  return context.kind === 'catalog'
+    ? `catalog:${context.catalogId}`
+    : `template:${context.templateId}`;
+}
+
 export function updateCanonicalUrlDocument(context: EditorDocumentContext) {
   if (typeof window === 'undefined') return;
   try {
@@ -228,6 +258,9 @@ interface CatalogState {
   lastSavedAt: string | null;
   inFlightSave: InFlightSaveInfo | null;
   realtimeStatus: string;
+  workspaceIdentityEpoch: number;
+  catalogSessionGeneration: number;
+  remoteVersionBarrier: number | null;
 
   savedCatalogs: Catalog[];
   isLoading: boolean;
@@ -303,7 +336,7 @@ interface CatalogState {
 
   // Persistência & Fila Single-Flight com Retorno Explícito de Resultado
   saveCurrentCatalog: () => Promise<SaveResult>;
-  loadWorkspace: () => Promise<{ success: boolean; catalogs: Catalog[]; errorType?: 'offline' | 'server'; error?: string }>;
+  loadWorkspace: (options?: { applyToStore?: boolean }) => Promise<{ success: boolean; catalogs: Catalog[]; errorType?: 'offline' | 'server'; error?: string }>;
   openCatalog: (id: string) => Promise<void>;
   refreshCatalog: (id: string) => Promise<void>;
   loadLatestCatalog: () => Promise<void>;
@@ -324,6 +357,7 @@ interface CatalogState {
   resolveConflictKeepLocal: () => Promise<SaveResult>;
   resolveConflictReloadServer: () => Promise<void>;
   resetWorkspaceForIdentityChange: () => void;
+  observeRemoteCatalogVersion: (catalogId: string, version: number) => void;
   handleRealtimeTemplateChange: (payload: { eventType: string; new?: any; old?: any }) => void;
 
   // Product Knowledge Runtime & Resolution (PIM Integration)
@@ -339,6 +373,8 @@ export interface CatalogSaveQueue {
   hasPending: boolean;
   inFlightPromise: Promise<SaveResult> | null;
   currentAttemptId: number;
+  identityEpoch: number;
+  sessionGeneration: number;
 }
 
 const catalogSaveQueues = new Map<string, CatalogSaveQueue>();
@@ -354,13 +390,76 @@ export function _getCatalogSaveQueueForTest(catalogId: string): CatalogSaveQueue
   return catalogSaveQueues.get(catalogId);
 }
 
-function getCatalogQueue(catalogId: string): CatalogSaveQueue {
+function captureCatalogOperationLineage(state: CatalogState, catalogId: string): CatalogOperationLineage {
+  return {
+    identityEpoch: state.workspaceIdentityEpoch,
+    sessionGeneration: state.catalogSessionGeneration,
+    catalogId,
+    editorContextKey: getEditorContextKey(state.editorContext),
+    localRevision: state.localRevision,
+    remoteVersionBarrier: state.remoteVersionBarrier
+  };
+}
+
+function captureCatalogSessionLineage(state: CatalogState): CatalogSessionLineage {
+  return {
+    identityEpoch: state.workspaceIdentityEpoch,
+    sessionGeneration: state.catalogSessionGeneration
+  };
+}
+
+function isCatalogSessionLineageCurrent(state: CatalogState, lineage: CatalogSessionLineage): boolean {
+  return state.workspaceIdentityEpoch === lineage.identityEpoch
+    && state.catalogSessionGeneration === lineage.sessionGeneration;
+}
+
+function isCatalogOperationLineageCurrent(
+  state: CatalogState,
+  lineage: CatalogOperationLineage,
+  requireExactRevision = false,
+  requireExactRemoteBarrier = false
+): boolean {
+  const revisionMatches = requireExactRevision
+    ? state.localRevision === lineage.localRevision
+    : state.localRevision >= lineage.localRevision;
+
+  return state.workspaceIdentityEpoch === lineage.identityEpoch
+    && state.catalogSessionGeneration === lineage.sessionGeneration
+    && state.currentCatalog?.id === lineage.catalogId
+    && getEditorContextKey(state.editorContext) === lineage.editorContextKey
+    && revisionMatches
+    && (!requireExactRemoteBarrier || state.remoteVersionBarrier === lineage.remoteVersionBarrier);
+}
+
+function getCatalogQueue(catalogId: string, lineage: CatalogOperationLineage): CatalogSaveQueue {
   let q = catalogSaveQueues.get(catalogId);
-  if (!q) {
-    q = { isSaving: false, hasPending: false, inFlightPromise: null, currentAttemptId: 0 };
+  if (
+    !q
+    || q.identityEpoch !== lineage.identityEpoch
+    || q.sessionGeneration !== lineage.sessionGeneration
+  ) {
+    q = {
+      isSaving: false,
+      hasPending: false,
+      inFlightPromise: null,
+      currentAttemptId: 0,
+      identityEpoch: lineage.identityEpoch,
+      sessionGeneration: lineage.sessionGeneration
+    };
     catalogSaveQueues.set(catalogId, q);
   }
   return q;
+}
+
+function beginCatalogSession(set: (partial: Partial<CatalogState>) => void): number {
+  const sessionGeneration = issueCatalogSessionGeneration();
+  catalogSaveQueues.clear();
+  set({
+    catalogSessionGeneration: sessionGeneration,
+    isSaving: false,
+    inFlightSave: null
+  });
+  return sessionGeneration;
 }
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
@@ -397,11 +496,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   lastSavedAt: null,
   inFlightSave: null,
   realtimeStatus: 'INITIALIZING',
+  workspaceIdentityEpoch: issueWorkspaceIdentityEpoch(),
+  catalogSessionGeneration: issueCatalogSessionGeneration(),
+  remoteVersionBarrier: null,
 
   savedCatalogs: [],
   isLoading: false,
 
-  setEditorContext: (editorContext) => set({ editorContext }),
+  setEditorContext: (editorContext) => {
+    if (getEditorContextKey(get().editorContext) !== getEditorContextKey(editorContext)) {
+      beginCatalogSession(set);
+    }
+    set({ editorContext });
+  },
 
   saveActiveDocument: async (): Promise<SaveResult> => {
     const { editorContext, currentCatalog } = get();
@@ -411,6 +518,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return await get().flushCatalog(editorContext.catalogId || currentCatalog?.id);
     } else if (editorContext.kind === 'template') {
       const templateId = editorContext.templateId || currentCatalog.id;
+      const operationLineage = captureCatalogOperationLineage(get(), currentCatalog.id);
       if (!templateId) {
         return { success: false, status: 'error', error: 'ID do template ausente' };
       }
@@ -423,6 +531,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         );
       }
       const res = await useTemplateStore.getState().flushTemplate(templateId);
+      if (!isCatalogOperationLineageCurrent(get(), operationLineage, true, true)) {
+        return {
+          success: false,
+          status: get().syncStatus,
+          error: 'Conclusão de salvamento de template descartada por mudança de sessão ou documento.'
+        };
+      }
       if (res.success && res.data) {
         const confirmedVersion = res.data.version || (currentCatalog.version ? currentCatalog.version + 1 : 1);
         if (get().currentCatalog) {
@@ -462,6 +577,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   openTemplateForEditing: async (templateId: string) => {
+    const sourceLineage = captureCatalogSessionLineage(get());
+    let navigationLineage: CatalogSessionLineage | null = null;
     set({ isLoading: true });
     try {
       // 1. Flush de documento anterior se dirty
@@ -472,6 +589,10 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         await useTemplateStore.getState().flushTemplate(currentCtx.templateId);
       }
 
+      if (!isCatalogSessionLineageCurrent(get(), sourceLineage)) return;
+      beginCatalogSession(set);
+      navigationLineage = captureCatalogSessionLineage(get());
+
       // 2. Localiza template na store ou no Supabase
       let template = useTemplateStore.getState().customTemplates.find((t) => t.id === templateId);
       if (!template) {
@@ -480,6 +601,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           template = res.data;
         }
       }
+
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
 
       if (!template) {
         set({
@@ -509,7 +632,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         lastAcknowledgedLocalRevision: 0,
         inFlightSave: null,
         syncStatus: 'synced',
-        syncError: null
+        syncError: null,
+        remoteVersionBarrier: null
       });
 
       updateCanonicalUrlDocument({ kind: 'template', templateId: template.id });
@@ -517,19 +641,26 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       // 4. Conecta presença no canal do template
       try {
         const { usePresenceStore } = await import('./usePresenceStore');
-        usePresenceStore.getState().initializePresence(template.id, 1, undefined, 'template');
+        if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+          usePresenceStore.getState().initializePresence(template.id, 1, undefined, 'template');
+        }
       } catch (e) {
         console.warn('Erro ao conectar presença de template:', e);
       }
     } finally {
-      set({ isLoading: false });
+      const loadingLineage = navigationLineage ?? sourceLineage;
+      if (isCatalogSessionLineageCurrent(get(), loadingLineage)) {
+        set({ isLoading: false });
+      }
     }
   },
 
   resetWorkspaceForIdentityChange: () => {
     console.log('🧹 [IDENTITY RESET] Limpando workspace em memória por troca/saída de identidade.');
+    catalogSaveQueues.clear();
     set({
       currentCatalog: null,
+      editorContext: { kind: 'catalog', catalogId: '' },
       savedCatalogs: [],
       activePageIndex: 0,
       selectedBlockId: null,
@@ -542,7 +673,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       syncStatus: 'synced',
       syncError: null,
       serverSavedAt: null,
-      cachedAt: null
+      cachedAt: null,
+      workspaceIdentityEpoch: issueWorkspaceIdentityEpoch(),
+      catalogSessionGeneration: issueCatalogSessionGeneration(),
+      remoteVersionBarrier: null
+    });
+  },
+
+  observeRemoteCatalogVersion: (catalogId, version) => {
+    if (!Number.isSafeInteger(version) || version <= 0) return;
+    const state = get();
+    if (state.currentCatalog?.id !== catalogId) return;
+    set({
+      remoteVersionBarrier: Math.max(state.remoteVersionBarrier ?? 0, version)
     });
   },
 
@@ -550,6 +693,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   setCurrentCatalog: (nextCatalog, markDirty = true) => {
     const prev = get().currentCatalog;
     debugSetCatalog('setCurrentCatalog', prev, nextCatalog, { markDirty });
+    if (!markDirty) {
+      beginCatalogSession(set);
+    }
     const nextRev = markDirty ? get().localRevision + 1 : get().localRevision;
     const mutation: MutationMetadata | null = markDirty
       ? {
@@ -565,7 +711,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       localRevision: nextRev,
       lastMutation: mutation,
       isDirty: markDirty,
-      syncStatus: markDirty ? 'dirty' : 'synced'
+      syncStatus: markDirty ? 'dirty' : 'synced',
+      ...(markDirty ? {} : { remoteVersionBarrier: null })
     });
   },
 
@@ -1924,10 +2071,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (!currentCatalog) {
       return { success: false, status: 'error', error: 'Nenhum documento ativo para salvar.' };
     }
+    const operationLineage = captureCatalogOperationLineage(get(), currentCatalog.id);
 
     // INCIDENT GUARD (SUPABASE.CPU.INCIDENT1): Previne storm de chamadas quando catálogo está em conflito 40001
     if (get().syncStatus === 'conflict') {
-      const queue = getCatalogQueue(currentCatalog.id);
+      const queue = getCatalogQueue(currentCatalog.id, operationLineage);
       queue.hasPending = false;
       queue.isSaving = false;
       queue.inFlightPromise = null;
@@ -1956,7 +2104,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
 
     // MODO CATÁLOGO: Fila Single-Flight por catálogo com Generation Token e Watchdog Recuperável
-    const queue = getCatalogQueue(currentCatalog.id);
+    const queue = getCatalogQueue(currentCatalog.id, operationLineage);
 
     if (queue.isSaving) {
       queue.hasPending = true;
@@ -1983,10 +2131,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       try {
         while (true) {
           queue.hasPending = false;
-          const catalogSnapshot = get().currentCatalog;
+          const stateBeforeFlight = get();
+          if (!isCatalogOperationLineageCurrent(stateBeforeFlight, operationLineage)) {
+            finalResult = {
+              success: false,
+              status: 'error',
+              error: 'Operação de salvamento desatualizada (stale session lineage).'
+            };
+            break;
+          }
+          const catalogSnapshot = stateBeforeFlight.currentCatalog;
           if (!catalogSnapshot || catalogSnapshot.id !== currentCatalog.id) break;
 
-          const capturedRevision = get().localRevision;
+          const capturedRevision = stateBeforeFlight.localRevision;
           const expectedVersion = catalogSnapshot.version ?? 0;
           const targetVersion = expectedVersion === 0 ? 1 : expectedVersion + 1;
 
@@ -2003,11 +2160,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           });
 
           // 1. Salva em Cache Local
+          let cacheUpdated = false;
           try {
             await StorageService.cacheCatalog(catalogSnapshot);
-            set({ cachedAt: new Date().toISOString() });
+            cacheUpdated = true;
           } catch (storageErr) {
             console.warn('Erro ao atualizar cache local:', storageErr);
+          }
+
+          if (!isCatalogOperationLineageCurrent(get(), operationLineage)) {
+            return {
+              success: false,
+              status: 'error',
+              error: 'Operação de salvamento desatualizada (stale session lineage).'
+            };
+          }
+          if (cacheUpdated) {
+            set({ cachedAt: new Date().toISOString() });
           }
 
           const mutation = get().lastMutation;
@@ -2060,13 +2229,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           cancelFlightTimer();
 
           // PROTEÇÃO CONTRA LATE COMPLETION / STALE SAVE
-          // Se o attemptId atual da fila divergir de thisAttemptId (ex: watchdog expirou ou retry iniciou),
-          // este attempt é obsoleto e NÃO PODE alterar o estado do store nem a fila!
-          if (queue.currentAttemptId !== thisAttemptId) {
+          // Attempt id só é suficiente dentro da mesma lineage. A conclusão também deve
+          // pertencer à mesma identity epoch, sessão autoritativa, catálogo e contexto.
+          if (
+            queue.currentAttemptId !== thisAttemptId
+            || !isCatalogOperationLineageCurrent(get(), operationLineage)
+          ) {
             return {
               success: false,
               status: 'error',
-              error: 'Operação de salvamento desatualizada (stale attempt discard).'
+              error: 'Operação de salvamento desatualizada (stale session lineage).'
             };
           }
 
@@ -2110,7 +2282,27 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               });
             }
 
-            const activeCurrent = get().currentCatalog;
+            const stateBeforeAck = get();
+            const remoteBarrier = stateBeforeAck.remoteVersionBarrier;
+            if (remoteBarrier !== null && remoteBarrier > confirmedVersion) {
+              finalResult = {
+                success: false,
+                status: 'conflict',
+                errorCode: '40001',
+                error: `Confirmação v${confirmedVersion} não supera a versão remota v${remoteBarrier} já observada.`
+              };
+              queue.hasPending = false;
+              set({
+                syncStatus: 'conflict',
+                syncError: 'Este catálogo foi atualizado em outro dispositivo. Suas alterações locais foram preservadas.',
+                isDirty: true,
+                isSaving: false
+              });
+              break;
+            }
+
+            const activeState = get();
+            const activeCurrent = activeState.currentCatalog;
             if (activeCurrent && activeCurrent.id === catalogSnapshot.id) {
               const nextCatalog = { ...activeCurrent, version: confirmedVersion };
               debugSetCatalog('saveCurrentCatalog:ACK', activeCurrent, nextCatalog, { confirmedVersion, capturedRevision });
@@ -2119,7 +2311,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
                 currentCatalog: nextCatalog,
                 serverSavedAt: nowIso,
                 lastSavedAt: nowIso,
-                lastAcknowledgedLocalRevision: capturedRevision
+                lastAcknowledgedLocalRevision: Math.max(
+                  activeState.lastAcknowledgedLocalRevision,
+                  capturedRevision
+                ),
+                remoteVersionBarrier: remoteBarrier !== null && confirmedVersion >= remoteBarrier
+                  ? null
+                  : remoteBarrier
               });
             }
 
@@ -2222,11 +2420,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       } finally {
         cancelFlightTimer();
-        // Limpeza SOMENTE se este attempt ainda for a autoridade ativa da fila!
+        // A fila capturada pode ser limpa localmente; o store só pode ser tocado se
+        // a lineage completa ainda for a autoridade corrente.
         if (queue.currentAttemptId === thisAttemptId) {
           queue.isSaving = false;
           queue.inFlightPromise = null;
-          set({ isSaving: false, inFlightSave: null });
+          if (isCatalogOperationLineageCurrent(get(), operationLineage)) {
+            set({ isSaving: false, inFlightSave: null });
+          }
         }
       }
       return finalResult;
@@ -2241,10 +2442,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (!targetId) {
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo para flush.' };
     }
+    const operationLineage = captureCatalogOperationLineage(get(), targetId);
 
     // INCIDENT GUARD (SUPABASE.CPU.INCIDENT1): Previne flush em estado de conflito
     if (get().syncStatus === 'conflict') {
-      const queue = getCatalogQueue(targetId);
+      const queue = getCatalogQueue(targetId, operationLineage);
       queue.hasPending = false;
       queue.isSaving = false;
       queue.inFlightPromise = null;
@@ -2257,9 +2459,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       };
     }
 
-    const queue = getCatalogQueue(targetId);
+    const queue = getCatalogQueue(targetId, operationLineage);
     if (queue.isSaving && queue.inFlightPromise) {
       await queue.inFlightPromise;
+    }
+
+    if (!isCatalogOperationLineageCurrent(get(), operationLineage)) {
+      return {
+        success: false,
+        status: 'error',
+        error: 'Operação de flush desatualizada (stale session lineage).'
+      };
     }
 
     if (get().syncStatus === 'conflict') {
@@ -2288,10 +2498,17 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   saveAsNewCatalog: async (newTitle: string): Promise<SaveResult & { newCatalogId?: string }> => {
-    const { currentCatalog, savedCatalogs } = get();
+    const { currentCatalog } = get();
     if (!currentCatalog) {
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo para duplicar/salvar como novo.' };
     }
+    const operationLineage = captureCatalogOperationLineage(get(), currentCatalog.id);
+    const sourceQueue = catalogSaveQueues.get(currentCatalog.id);
+    const sourceSaveInFlight = sourceQueue
+      && sourceQueue.identityEpoch === operationLineage.identityEpoch
+      && sourceQueue.sessionGeneration === operationLineage.sessionGeneration
+      ? sourceQueue.inFlightPromise
+      : null;
 
     const trimmedTitle = newTitle.trim();
     if (!trimmedTitle) {
@@ -2322,6 +2539,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const summaryText = `[client=${getClientInstanceId()}] [kind=CREATE_COPY] Salvar como novo catálogo "${trimmedTitle}"`;
     const remoteRes = await SupabaseService.saveCatalog(newCatalog, 0, summaryText);
 
+    if (sourceSaveInFlight) {
+      await sourceSaveInFlight;
+    }
+
+    if (!isCatalogOperationLineageCurrent(get(), operationLineage, true, true)) {
+      return {
+        success: false,
+        status: get().syncStatus,
+        error: 'Conclusão de salvar como novo descartada por mudança de sessão ou documento.'
+      };
+    }
+
     if (remoteRes.success && remoteRes.data) {
       const confirmedVersion = Number(remoteRes.data.version) || 1;
       const createdCatalog: Catalog = {
@@ -2331,12 +2560,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
       const updatedSavedList = [
         createdCatalog,
-        ...savedCatalogs.filter((c) => c.id !== newId)
+        ...get().savedCatalogs.filter((c) => c.id !== newId)
       ];
 
       debugSetCatalog('saveAsNewCatalog', currentCatalog, createdCatalog);
+      beginCatalogSession(set);
       set({
         currentCatalog: createdCatalog,
+        editorContext: { kind: 'catalog', catalogId: newId },
         savedCatalogs: updatedSavedList,
         activePageIndex: 0,
         selectedBlockId: null,
@@ -2348,6 +2579,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         inFlightSave: null,
         syncStatus: 'synced',
         syncError: null,
+        remoteVersionBarrier: null,
         serverSavedAt: new Date().toISOString(),
         lastSavedAt: new Date().toISOString()
       });
@@ -2386,15 +2618,38 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (!currentCatalog) {
       return { success: false, status: 'error', error: 'Nenhum catálogo ativo.' };
     }
-    const remoteRes = await get().loadWorkspace();
+    const resolutionLineage = captureCatalogOperationLineage(get(), currentCatalog.id);
+    const remoteRes = await get().loadWorkspace({ applyToStore: false });
+
+    if (!isCatalogOperationLineageCurrent(get(), resolutionLineage, true, true)) {
+      return {
+        success: false,
+        status: get().syncStatus,
+        error: 'Resolução de conflito desatualizada; o contexto local foi preservado.'
+      };
+    }
+
     const serverCat = remoteRes.catalogs.find((c) => c.id === currentCatalog.id);
     const serverVersion = serverCat ? serverCat.version : currentCatalog.version;
+    if (
+      resolutionLineage.remoteVersionBarrier !== null
+      && serverVersion < resolutionLineage.remoteVersionBarrier
+    ) {
+      return {
+        success: false,
+        status: 'conflict',
+        errorCode: '40001',
+        error: `A recarga retornou v${serverVersion}, abaixo da barreira remota v${resolutionLineage.remoteVersionBarrier}.`
+      };
+    }
 
+    beginCatalogSession(set);
     set({
       currentCatalog: { ...currentCatalog, version: serverVersion },
       isDirty: true,
       syncStatus: 'dirty',
-      syncError: null
+      syncError: null,
+      remoteVersionBarrier: null
     });
     return await get().saveCurrentCatalog();
   },
@@ -2402,17 +2657,31 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   resolveConflictReloadServer: async (): Promise<void> => {
     const { currentCatalog } = get();
     if (!currentCatalog) return;
-    const workspaceRes = await get().loadWorkspace();
+    const resolutionLineage = captureCatalogOperationLineage(get(), currentCatalog.id);
+    const workspaceRes = await get().loadWorkspace({ applyToStore: false });
+
+    if (!isCatalogOperationLineageCurrent(get(), resolutionLineage, true, true)) {
+      return;
+    }
+
     const targetRemote = workspaceRes.catalogs.find((c) => c.id === currentCatalog.id);
-    if (targetRemote) {
+    if (
+      targetRemote
+      && (
+        resolutionLineage.remoteVersionBarrier === null
+        || targetRemote.version >= resolutionLineage.remoteVersionBarrier
+      )
+    ) {
       debugSetCatalog('resolveConflictReloadServer', currentCatalog, targetRemote);
+      beginCatalogSession(set);
       set({
         currentCatalog: targetRemote,
         isDirty: false,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
         syncStatus: 'synced',
-        syncError: null
+        syncError: null,
+        remoteVersionBarrier: null
       });
     }
   },
@@ -2421,17 +2690,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   // FASE 1G & 1.2: WORKSPACE & REFRESH COM GUARDS DE SEGURANÇA
   // =========================================================================
 
-  loadWorkspace: async () => {
-    set({ isLoading: true });
+  loadWorkspace: async (options = {}) => {
+    const applyToStore = options.applyToStore ?? true;
+    const workspaceLineage = captureCatalogSessionLineage(get());
+    if (applyToStore) {
+      set({ isLoading: true });
+    }
     try {
       const remote = await SupabaseService.listWorkspace();
       if (remote.success && remote.data?.catalogs) {
         const remoteCatalogs: Catalog[] = remote.data.catalogs.map((rc: any) => catalogRowToCatalog(rc));
 
-        set({ savedCatalogs: remoteCatalogs });
+        if (applyToStore && isCatalogSessionLineageCurrent(get(), workspaceLineage)) {
+          set({ savedCatalogs: remoteCatalogs });
 
-        for (const cat of remoteCatalogs) {
-          void StorageService.cacheCatalog(cat);
+          for (const cat of remoteCatalogs) {
+            void StorageService.cacheCatalog(cat);
+          }
         }
         return { success: true, catalogs: remoteCatalogs };
       }
@@ -2451,14 +2726,20 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         error: err.message || 'Erro de rede'
       };
     } finally {
-      set({ isLoading: false });
+      if (applyToStore && isCatalogSessionLineageCurrent(get(), workspaceLineage)) {
+        set({ isLoading: false });
+      }
     }
   },
 
   openCatalog: async (id: string) => {
+    beginCatalogSession(set);
+    const navigationLineage = captureCatalogSessionLineage(get());
     set({ isLoading: true });
     try {
       const workspaceRes = await get().loadWorkspace();
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
+
       if (workspaceRes.success) {
         const targetRemote = workspaceRes.catalogs.find((c) => c.id === id);
         if (targetRemote) {
@@ -2475,13 +2756,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             localRevision: 0,
             lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
-            syncError: null
+            syncError: null,
+            remoteVersionBarrier: null
           });
           StorageService.setActiveCatalogId(id);
           updateCanonicalUrlDocument({ kind: 'catalog', catalogId: id });
           try {
             const { usePresenceStore } = await import('./usePresenceStore');
-            usePresenceStore.getState().initializePresence(id, 1, undefined, 'catalog');
+            if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+              usePresenceStore.getState().initializePresence(id, 1, undefined, 'catalog');
+            }
           } catch (e) {
             console.warn('Erro ao conectar presença no catálogo:', e);
           }
@@ -2497,6 +2781,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
       // Fallback offline no StorageService
       const cached = await StorageService.loadCatalog(id);
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
+
       if (cached) {
         const prev = get().currentCatalog;
         debugSetCatalog('openCatalog:Cached', prev, cached);
@@ -2511,7 +2797,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
-          syncError: 'Catálogo carregado do cache local.'
+          syncError: 'Catálogo carregado do cache local.',
+          remoteVersionBarrier: null
         });
         StorageService.setActiveCatalogId(id);
         updateCanonicalUrlDocument({ kind: 'catalog', catalogId: id });
@@ -2522,13 +2809,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         });
       }
     } finally {
-      set({ isLoading: false });
+      if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+        set({ isLoading: false });
+      }
     }
   },
 
   refreshCatalog: async (id: string) => {
     const stateAtStart = get();
     const catalogIdAtStart = stateAtStart.currentCatalog?.id;
+    const refreshLineage = captureCatalogOperationLineage(stateAtStart, catalogIdAtStart || id);
     const revisionAtStart = stateAtStart.localRevision;
     const versionAtStart = stateAtStart.currentCatalog?.version ?? 0;
 
@@ -2554,6 +2844,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const currentCatalog = currentState.currentCatalog;
 
     if (
+      !isCatalogSessionLineageCurrent(currentState, refreshLineage)
+      || currentCatalog?.id !== refreshLineage.catalogId
+      || getEditorContextKey(currentState.editorContext) !== refreshLineage.editorContextKey
+    ) {
+      return;
+    }
+
+    if (
       targetRemote &&
       currentCatalog &&
       currentCatalog.id === catalogIdAtStart &&
@@ -2561,6 +2859,10 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       !currentState.isDirty &&
       !currentState.isSaving &&
       currentState.localRevision <= currentState.lastAcknowledgedLocalRevision &&
+      (
+        currentState.remoteVersionBarrier === null
+        || targetRemote.version >= currentState.remoteVersionBarrier
+      ) &&
       targetRemote.version > versionAtStart
     ) {
       // Análise Defensiva de Delta Estrutural contra perda injustificada de blocos
@@ -2606,13 +2908,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }
 
       debugSetCatalog('refreshCatalog:SafeApply', currentCatalog, targetRemote);
+      beginCatalogSession(set);
       set({
         currentCatalog: targetRemote,
         isDirty: false,
         localRevision: 0,
         lastAcknowledgedLocalRevision: 0,
         syncStatus: 'synced',
-        syncError: null
+        syncError: null,
+        remoteVersionBarrier: null
       });
     } else {
       console.warn(`🛡️ [TOCTOU GUARD] refreshCatalog(${id}) bloqueado pós-await: mutação local durante requisição ou snapshot defasado.`);
@@ -2651,9 +2955,12 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       return;
     }
 
+    beginCatalogSession(set);
+    const navigationLineage = captureCatalogSessionLineage(get());
     set({ isLoading: true });
     try {
       const workspaceRes = await get().loadWorkspace();
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
 
       // Guard pós-await: se o usuário já editou algo enquanto a requisição rodava:
       const stateAfterAwait = get();
@@ -2678,13 +2985,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
               localRevision: 0,
               lastAcknowledgedLocalRevision: 0,
               syncStatus: 'synced',
-              syncError: null
+              syncError: null,
+              remoteVersionBarrier: null
             });
             StorageService.setActiveCatalogId(matched.id);
             updateCanonicalUrlDocument({ kind: 'catalog', catalogId: matched.id });
             try {
               const { usePresenceStore } = await import('./usePresenceStore');
-              usePresenceStore.getState().initializePresence(matched.id, 1, undefined, 'catalog');
+              if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+                usePresenceStore.getState().initializePresence(matched.id, 1, undefined, 'catalog');
+              }
             } catch (e) {
               console.warn('Erro ao conectar presença:', e);
             }
@@ -2716,13 +3026,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
             localRevision: 0,
             lastAcknowledgedLocalRevision: 0,
             syncStatus: 'synced',
-            syncError: null
+            syncError: null,
+            remoteVersionBarrier: null
           });
           StorageService.setActiveCatalogId(targetCatalog.id);
           updateCanonicalUrlDocument({ kind: 'catalog', catalogId: targetCatalog.id });
           try {
             const { usePresenceStore } = await import('./usePresenceStore');
-            usePresenceStore.getState().initializePresence(targetCatalog.id, 1, undefined, 'catalog');
+            if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+              usePresenceStore.getState().initializePresence(targetCatalog.id, 1, undefined, 'catalog');
+            }
           } catch (e) {
             console.warn('Erro ao conectar presença:', e);
           }
@@ -2735,6 +3048,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
       // Fallback offline
       const cached = await StorageService.loadCatalog(urlCatalogId || undefined);
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
+
       if (cached) {
         debugSetCatalog('loadLatestCatalog:Cached', get().currentCatalog, cached);
         set({
@@ -2747,7 +3062,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
           syncStatus: 'offline',
-          syncError: 'Operando em modo offline com cache local.'
+          syncError: 'Operando em modo offline com cache local.',
+          remoteVersionBarrier: null
         });
         updateCanonicalUrlCatalogId(cached.id);
       } else {
@@ -2762,13 +3078,16 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         }
       }
     } catch (err: any) {
+      if (!isCatalogSessionLineageCurrent(get(), navigationLineage)) return;
       console.warn('Erro no bootstrap loadLatestCatalog:', err);
       set({
         syncStatus: 'error',
         syncError: err?.message || 'Erro ao inicializar catálogo.'
       });
     } finally {
-      set({ isLoading: false });
+      if (isCatalogSessionLineageCurrent(get(), navigationLineage)) {
+        set({ isLoading: false });
+      }
     }
   },
 
@@ -2782,7 +3101,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   duplicateCatalog: async (id: string): Promise<SaveResult | null> => {
     const { savedCatalogs } = get();
+    const sourceLineage = captureCatalogSessionLineage(get());
     const source = savedCatalogs.find((c) => c.id === id) || (await StorageService.loadCatalog(id));
+    if (!isCatalogSessionLineageCurrent(get(), sourceLineage)) return null;
     if (!source) return null;
 
     const existingTitles = savedCatalogs.map((c) => c.title);
@@ -2799,18 +3120,23 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     debugSetCatalog('duplicateCatalog', get().currentCatalog, duplicated);
+    beginCatalogSession(set);
     set({
       currentCatalog: duplicated,
+      editorContext: { kind: 'catalog', catalogId: newId },
       activePageIndex: 0,
       selectedBlockId: null,
       selectedChildId: null,
       localRevision: 1,
       lastAcknowledgedLocalRevision: 0,
       isDirty: true,
-      syncStatus: 'saving'
+      syncStatus: 'saving',
+      remoteVersionBarrier: null
     });
+    const createdLineage = captureCatalogOperationLineage(get(), newId);
 
     const result = await get().saveCurrentCatalog();
+    if (!isCatalogOperationLineageCurrent(get(), createdLineage)) return result;
     if (result.success) {
       StorageService.setActiveCatalogId(newId);
       updateCanonicalUrlCatalogId(newId);
@@ -2820,22 +3146,29 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   deleteCatalog: async (id: string) => {
+    const deleteLineage = captureCatalogSessionLineage(get());
     try {
       await SupabaseService.deleteCatalog(id);
     } catch (e) {
       console.warn('Erro ao excluir no Supabase:', e);
     }
+    if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
+
     await StorageService.deleteCatalog(id);
+    if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
 
     const workspaceRes = await get().loadWorkspace();
+    if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
     const remaining = workspaceRes.catalogs;
     const { currentCatalog } = get();
 
     if (currentCatalog && currentCatalog.id === id) {
       if (remaining.length > 0) {
         debugSetCatalog('deleteCatalog:Remaining', currentCatalog, remaining[0]);
+        beginCatalogSession(set);
         set({
           currentCatalog: remaining[0],
+          editorContext: { kind: 'catalog', catalogId: remaining[0].id },
           activePageIndex: 0,
           selectedBlockId: null,
           selectedChildId: null,
@@ -2843,7 +3176,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           isSaving: false,
           localRevision: 0,
           lastAcknowledgedLocalRevision: 0,
-          syncStatus: 'synced'
+          syncStatus: 'synced',
+          remoteVersionBarrier: null
         });
         StorageService.setActiveCatalogId(remaining[0].id);
         updateCanonicalUrlCatalogId(remaining[0].id);
@@ -2867,15 +3201,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     };
 
     debugSetCatalog('createCatalogFromPreset', get().currentCatalog, newCatalog);
+    beginCatalogSession(set);
     set({
       currentCatalog: newCatalog,
+      editorContext: { kind: 'catalog', catalogId: newId },
       activePageIndex: 0,
       selectedBlockId: null,
       selectedChildId: null,
       localRevision: 1,
       lastAcknowledgedLocalRevision: 0,
       isDirty: true,
-      syncStatus: 'saving'
+      isLoading: false,
+      syncStatus: 'saving',
+      remoteVersionBarrier: null
     });
 
     const result = await get().saveCurrentCatalog();
@@ -2889,6 +3227,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   createTranslatedCatalogVersion: async (
     translatedCatalog: Catalog
   ): Promise<{ success: boolean; catalogId?: string; error?: string }> => {
+    const translationLineage = captureCatalogSessionLineage(get());
     try {
       // 1. Validação Obrigatória de Metadata de Tradução
       const meta = translatedCatalog.translationMeta;
@@ -2941,6 +3280,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         `Criação de versão traduzida (${meta.targetLocale}) a partir do catálogo v${meta.sourceCatalogVersion}`
       );
 
+      if (!isCatalogSessionLineageCurrent(get(), translationLineage)) {
+        return {
+          success: false,
+          error: 'Conclusão de tradução descartada por mudança de sessão ou documento.'
+        };
+      }
+
       if (!rpcRes.success || !rpcRes.data) {
         if (rpcRes.conflict || rpcRes.error?.includes('SOURCE_CHANGED_DURING_TRANSLATION')) {
           console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o catálogo original foi alterado concorrentemente no servidor.');
@@ -2978,10 +3324,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
       // 4. Atualização segura do StorageService local
       await StorageService.saveCatalog(confirmedCatalog);
+      if (!isCatalogSessionLineageCurrent(get(), translationLineage)) {
+        return {
+          success: false,
+          error: 'Conclusão de tradução descartada por mudança de sessão ou documento.'
+        };
+      }
       StorageService.setActiveCatalogId(newId);
 
       // 5. Atualização atômica do Zustand State e Contexto do Editor
       debugSetCatalog('createTranslatedCatalogVersion', get().currentCatalog, confirmedCatalog);
+      beginCatalogSession(set);
+      const createdLineage = captureCatalogSessionLineage(get());
       set((state) => ({
         currentCatalog: confirmedCatalog,
         savedCatalogs: [confirmedCatalog, ...state.savedCatalogs.filter((c) => c.id !== newId)],
@@ -2995,6 +3349,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         isSaving: false,
         syncStatus: 'synced',
         syncError: null,
+        remoteVersionBarrier: null,
         lastSavedAt: new Date().toISOString()
       }));
 
@@ -3004,7 +3359,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       // 7. Conecta presença em background se disponível
       try {
         const { usePresenceStore } = await import('./usePresenceStore');
-        usePresenceStore.getState().initializePresence(newId, 1, undefined, 'catalog');
+        if (isCatalogSessionLineageCurrent(get(), createdLineage)) {
+          usePresenceStore.getState().initializePresence(newId, 1, undefined, 'catalog');
+        }
       } catch (e) {
         console.warn('Erro ao conectar presença na versão traduzida:', e);
       }
@@ -3025,6 +3382,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   createTranslatedTemplateVersion: async (
     translatedTemplate: Catalog
   ): Promise<{ success: boolean; templateId?: string; error?: string }> => {
+    const translationLineage = captureCatalogSessionLineage(get());
     try {
       const meta = translatedTemplate.translationMeta;
       if (
@@ -3074,6 +3432,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         `Criação de template traduzido (${meta.targetLocale}) a partir do template v${meta.sourceCatalogVersion}`
       );
 
+      if (!isCatalogSessionLineageCurrent(get(), translationLineage)) {
+        return {
+          success: false,
+          error: 'Conclusão de tradução descartada por mudança de sessão ou documento.'
+        };
+      }
+
       if (!rpcRes.success || !rpcRes.data) {
         if (rpcRes.conflict || rpcRes.error?.includes('SOURCE_CHANGED_DURING_TRANSLATION')) {
           console.error('🚨 [TRANSLATION DRIFT GUARD] Salvamento bloqueado: o template original foi alterado concorrentemente no servidor.');
@@ -3111,6 +3476,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
       // Atualiza Zustand State e Contexto do Editor
       debugSetCatalog('createTranslatedTemplateVersion', get().currentCatalog, confirmedTemplateCatalog);
+      beginCatalogSession(set);
+      const createdLineage = captureCatalogSessionLineage(get());
       set(() => ({
         currentCatalog: confirmedTemplateCatalog,
         editorContext: { kind: 'template', templateId: newId },
@@ -3123,12 +3490,19 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         isSaving: false,
         syncStatus: 'synced',
         syncError: null,
+        remoteVersionBarrier: null,
         lastSavedAt: new Date().toISOString()
       }));
 
       // Atualiza lista de templates customizados no useTemplateStore
       try {
         const { useTemplateStore } = await import('./useTemplateStore');
+        if (!isCatalogSessionLineageCurrent(get(), createdLineage)) {
+          return {
+            success: false,
+            error: 'Conclusão de tradução descartada por mudança de sessão ou documento.'
+          };
+        }
         const customTemplatePreset: CatalogPreset = {
           id: newId,
           name: confirmedTemplateCatalog.title,
