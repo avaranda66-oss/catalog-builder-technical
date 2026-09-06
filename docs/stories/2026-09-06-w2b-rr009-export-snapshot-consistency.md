@@ -70,6 +70,12 @@ Status: Ready for Review
   - [x] Audit diff from immutable base for scope violations.
   - [x] Commit only after GREEN as `fix(readiness): pin export snapshot and version`.
   - [x] Remote push/PR is delegated to `@github-devops`; no merge.
+- [x] Task 6 — W2-B.1 isolate transient table presentation preview from publication render.
+  - [x] Add a permanent RR009 regression proving persisted presentation P1, transient same-block draft P2, editor preview P2, and clean export P1.
+  - [x] Reproduce RED on provisional base `de6ed28ed184c8a0dbfd61b5985143eab8caf9ef` before production remediation.
+  - [x] Apply `tablePresentationDraft` only on the editor render path; do not persist or clear the draft.
+  - [x] Verify other transient UI state in `TechnicalTableBlock` does not cross the same publication snapshot boundary.
+  - [x] Re-run focused RR009, RR007, RR006, export/print regressions, typecheck, lint, full tests, and build.
 
 ## Dev Notes
 
@@ -141,6 +147,9 @@ Status: Ready for Review
 - Final gates: lint exit 0 with 267 existing warnings and 0 errors; typecheck green; full test suite 169 files / 1754 tests green; production build green with existing Vite chunk/dynamic-import warnings.
 - CodeRabbit review was attempted as required by local developer governance but is unavailable: no registered CodeRabbit tool and `~/.local/bin/coderabbit` is absent in WSL. No CodeRabbit pass is claimed.
 - The DevOps-only `validate:port-denylist` gate cannot run because this repository has no such npm script; adding tooling is forbidden by this story.
+- W2-B.1 provisional base verified at `de6ed28ed184c8a0dbfd61b5985143eab8caf9ef`; RED reproduced with 1 failed / 14 passed: export rendered transient P2 width `140mm` while snapshot presentation P1 required `100mm`.
+- W2-B.1 remediation gates: focused RR009 15/15 green; RR007 4/4 green; RR006 12/12 green; export/print regressions 41/41 green; typecheck green; lint exit 0 with 267 existing warnings and 0 errors; full suite 169 files / 1755 tests green; production build green with existing Vite chunk/dynamic-import warnings.
+- W2-B.1 CodeRabbit check: no registered CodeRabbit tool is available and no Windows `coderabbit` CLI is installed; no CodeRabbit pass is claimed.
 
 ### Completion Notes List
 
@@ -150,6 +159,8 @@ Status: Ready for Review
 - Print catalog/template routes reject missing, malformed or mismatched versions rather than substituting latest.
 - Publishing datum results are eagerly materialized before preflight and the same cache-only resolver is injected into render, closing the D/E audit-to-DOM mutation window while preserving RR007 `effective_for_publishing`.
 - No persistence/history expansion, SQL, migration, RR011, dependency, lockfile or tooling changes were required.
+- W2-B.1 keeps `tablePresentationDraft` as an editor-only preview: editor rendering may use P2, while `isExport=true` renders the presentation already carried by the confirmed document snapshot (P1).
+- `isExportPDFModalOpen` was inspected as the other transient UI value consumed by `TechnicalTableBlock`; it only selects the publishing datum resolver when no override is supplied, while `isExport` already selects publishing and `resolveDatumOverride` remains authoritative for snapshot rendering.
 
 ### File List
 
@@ -171,3 +182,4 @@ Status: Ready for Review
 | --- | --- | --- | --- |
 | 2026-09-06 | 0.1 | Initial W2-B RR009 implementation story derived from the user-authorized readiness wave. | River (SM) |
 | 2026-09-06 | 1.0 | Implemented and validated RR009 snapshot/version consistency remediation; ready for principal review. | Dex (Dev) |
+| 2026-09-06 | 1.1 | Isolated transient table presentation preview from export rendering after the Principal Auditor residual RR009 counterexample. | Dex (Dev) |

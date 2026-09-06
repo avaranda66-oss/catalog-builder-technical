@@ -47,7 +47,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
   const adaptedTable = (pilotAdaptResult && pilotAdaptResult.supported) ? pilotAdaptResult.table : null;
-  if (adaptedTable && tablePresentationDraft && tablePresentationDraft.blockId === block.id) {
+  if (!isExport && adaptedTable && tablePresentationDraft && tablePresentationDraft.blockId === block.id) {
     adaptedTable.presentation = tablePresentationDraft.presentation;
   }
   const useTableCorePilot = Boolean(isPilotSpecsTable && adaptedTable);

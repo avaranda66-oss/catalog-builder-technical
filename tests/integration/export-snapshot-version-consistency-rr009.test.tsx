@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Catalog } from '../../src/domain/catalog.schema';
+import { getTablePreset } from '../../src/domain/table-core/table.presets';
 
 const mocks = vi.hoisted(() => {
   const catalogState = { current: {} as any };
@@ -51,7 +52,8 @@ vi.mock('../../src/services/supabase.service', () => ({
   }
 }));
 
-vi.mock('../../src/domain/table-core', () => ({
+vi.mock('../../src/domain/table-core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/domain/table-core')>()),
   auditCatalogPublishSafety: mocks.auditCatalogPublishSafety
 }));
 
@@ -105,6 +107,7 @@ vi.mock('../../src/components/export/CleanA4Document', () => ({
 }));
 
 import { ExportPDFModal } from '../../src/components/editor/ExportPDFModal';
+import { TechnicalTableBlock } from '../../src/components/editor/blocks/TechnicalTableBlock';
 import { PrintDocumentView } from '../../src/components/export/PrintDocumentView';
 import { PublicationsView } from '../../src/components/publications/PublicationsView';
 
@@ -202,6 +205,65 @@ afterEach(() => {
 });
 
 describe('RR009 — export snapshot and version consistency', () => {
+  it('W2-B.1: transient table presentation draft stays editor-only and cannot alter clean export', async () => {
+    const persistedPresentation = {
+      ...getTablePreset('presys_clean_technical'),
+      tableWidth: { mode: 'fixed_mm' as const, widthMm: 100 }
+    };
+    const draftPresentation = {
+      ...persistedPresentation,
+      tableWidth: { mode: 'fixed_mm' as const, widthMm: 140 }
+    };
+    const block = {
+      id: 'specs-presentation-rr009',
+      type: 'specs_table',
+      title: 'Snapshot presentation authority',
+      tableColumns: [{ key: 'pressure', label: 'Pressure', visible: true }],
+      tableRows: [
+        {
+          id: 'row-presentation-rr009',
+          localOverrides: { pressure: '10 bar' }
+        }
+      ],
+      customData: {
+        tablePresentation: persistedPresentation
+      }
+    } as any;
+    const catalog = createCatalog(2, {
+      pages: [
+        {
+          id: 'page-presentation-rr009',
+          pageNumber: 1,
+          title: 'Page 1',
+          blocks: [block]
+        }
+      ]
+    });
+    configureCatalogState(catalog);
+    mocks.uiState.current = {
+      ...mocks.uiState.current,
+      isExportPDFModalOpen: false,
+      tablePresentationDraft: {
+        blockId: block.id,
+        presentation: draftPresentation
+      },
+      openAddProductToTableModal: vi.fn()
+    };
+
+    const editorRender = render(
+      <TechnicalTableBlock block={block} pageId="page-presentation-rr009" isExport={false} />
+    );
+    expect(editorRender.container.querySelector('[data-table-mode="editor"]')).toHaveStyle({ width: '140mm' });
+    editorRender.unmount();
+
+    const { CleanA4Document: RealCleanA4Document } = await vi.importActual<
+      typeof import('../../src/components/export/CleanA4Document')
+    >('../../src/components/export/CleanA4Document');
+    const exportRender = render(<RealCleanA4Document document={catalog} />);
+
+    expect(exportRender.container.querySelector('[data-table-mode="export"]')).toHaveStyle({ width: '100mm' });
+  });
+
   it('T1/A: PublicationsView materializes a real clean publication target before PDF capture', async () => {
     const catalog = createCatalog(2);
     const state = configureCatalogState(catalog);
