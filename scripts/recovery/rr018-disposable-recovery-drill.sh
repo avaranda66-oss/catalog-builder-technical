@@ -138,26 +138,39 @@ build_public_schema_restore_list() {
   local dump_file="$1"
   local toc_file="$2"
   local restore_list="$3"
-  local excluded_file="$4"
-  local excluded_count unexpected_platform_default_acl_count raw_application_acl_count restored_application_acl_count kind kind_count
+  local excluded_default_acl_file="$4"
+  local excluded_schema_file="$5"
+  local excluded_default_acl_count excluded_schema_count unexpected_platform_default_acl_count raw_application_acl_count restored_application_acl_count kind kind_count
 
   echo "[RR018] schema-toc-tool=$(container_pg_restore_version)"
   container_pg_restore_list "$dump_file" > "$toc_file"
-  : > "$excluded_file"
+  : > "$excluded_default_acl_file"
+  : > "$excluded_schema_file"
 
-  awk -v excluded_file="$excluded_file" '
+  awk -v excluded_default_acl_file="$excluded_default_acl_file" -v excluded_schema_file="$excluded_schema_file" '
     /^;/ { print; next }
+    /^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public [^[:space:]]+$/ {
+      print $0 >> excluded_schema_file
+      print ";" $0
+      next
+    }
     / DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$/ {
-      print $0 >> excluded_file
+      print $0 >> excluded_default_acl_file
       print ";" $0
       next
     }
     { print }
   ' "$toc_file" > "$restore_list"
 
-  excluded_count="$(wc -l < "$excluded_file" | tr -d ' ')"
-  if [[ "$excluded_count" -ne 3 ]]; then
-    echo "RR018 expected exactly 3 Supabase platform DEFAULT ACL entries, found ${excluded_count}" >&2
+  excluded_schema_count="$(wc -l < "$excluded_schema_file" | tr -d ' ')"
+  if [[ "$excluded_schema_count" -ne 1 ]]; then
+    echo "RR018 expected exactly 1 fresh Supabase public SCHEMA entry, found ${excluded_schema_count}" >&2
+    return 1
+  fi
+
+  excluded_default_acl_count="$(wc -l < "$excluded_default_acl_file" | tr -d ' ')"
+  if [[ "$excluded_default_acl_count" -ne 3 ]]; then
+    echo "RR018 expected exactly 3 Supabase platform DEFAULT ACL entries, found ${excluded_default_acl_count}" >&2
     return 1
   fi
 
@@ -168,12 +181,17 @@ build_public_schema_restore_list() {
   fi
 
   for kind in TABLES FUNCTIONS SEQUENCES; do
-    kind_count="$(grep -Ec " DEFAULT ACL public DEFAULT PRIVILEGES FOR ${kind} supabase_admin$" "$excluded_file" || true)"
+    kind_count="$(grep -Ec " DEFAULT ACL public DEFAULT PRIVILEGES FOR ${kind} supabase_admin$" "$excluded_default_acl_file" || true)"
     if [[ "$kind_count" -ne 1 ]]; then
       echo "RR018 expected exactly one Supabase platform DEFAULT ACL entry for ${kind}, found ${kind_count}" >&2
       return 1
     fi
   done
+
+  if grep -Eq '^[^;].* SCHEMA - public [^[:space:]]+$' "$restore_list"; then
+    echo "RR018 restore list left the fresh Supabase public SCHEMA creation enabled" >&2
+    return 1
+  fi
 
   if grep -Eq '^[^;].* DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$' "$restore_list"; then
     echo "RR018 restore list left a Supabase platform DEFAULT ACL entry enabled" >&2
@@ -187,8 +205,24 @@ build_public_schema_restore_list() {
     return 1
   fi
 
-  echo "[RR018] schema-toc platform_default_acl_excluded=${excluded_count} application_acl_preserved=${restored_application_acl_count}"
-  sed 's/^/[RR018][TOC][EXCLUDED] /' "$excluded_file"
+  echo "[RR018] schema-toc platform_public_schema_excluded=${excluded_schema_count} platform_default_acl_excluded=${excluded_default_acl_count} application_acl_preserved=${restored_application_acl_count}"
+  sed 's/^/[RR018][TOC][EXCLUDED][PLATFORM-SCHEMA] /' "$excluded_schema_file"
+  sed 's/^/[RR018][TOC][EXCLUDED][PLATFORM-DEFAULT-ACL] /' "$excluded_default_acl_file"
+}
+
+capture_supabase_platform_public_schema() {
+  local destination="$1"
+  run_psql -At -F '|' -c "
+    SELECT n.nspname,
+           pg_get_userbyid(n.nspowner),
+           COALESCE(n.nspacl::text, '')
+    FROM pg_namespace n
+    WHERE n.nspname = 'public';" > "$destination"
+
+  if [[ "$(wc -l < "$destination" | tr -d ' ')" -ne 1 ]]; then
+    echo "RR018 fresh Supabase public schema baseline is missing or ambiguous" >&2
+    return 1
+  fi
 }
 
 capture_supabase_platform_default_acl() {
@@ -352,14 +386,16 @@ container_pg_dump --data-only --inserts --table=storage.buckets > "$ARTIFACT_DIR
 capture_nonpublic_controls "$ARTIFACT_DIR/nonpublic-controls.sql"
 download_storage_object "$STACK_A" "$BACKUP_STORAGE_FILE"
 cp "$REPO_ROOT/scripts/recovery/rr018-critical-entities.json" "$ARTIFACT_DIR/critical-entities.json"
+capture_supabase_platform_public_schema "$ARTIFACT_DIR/supabase-platform-public-schema-before.tsv"
 capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv"
 build_public_schema_restore_list \
   "$ARTIFACT_DIR/public-schema.dump" \
   "$ARTIFACT_DIR/public-schema.toc.list" \
   "$ARTIFACT_DIR/public-schema.restore.list" \
-  "$ARTIFACT_DIR/public-schema.excluded-platform-default-acl.list"
+  "$ARTIFACT_DIR/public-schema.excluded-platform-default-acl.list" \
+  "$ARTIFACT_DIR/public-schema.excluded-platform-schema.list"
 
-(cd "$ARTIFACT_DIR" && sha256sum public-schema.dump public-data.dump auth-users.sql storage-buckets.sql nonpublic-controls.sql storage-product-assets-rr018-recovery-fixture.png critical-entities.json public-schema.toc.list public-schema.restore.list public-schema.excluded-platform-default-acl.list supabase-platform-default-acl-before.tsv > manifest.sha256)
+(cd "$ARTIFACT_DIR" && sha256sum public-schema.dump public-data.dump auth-users.sql storage-buckets.sql nonpublic-controls.sql storage-product-assets-rr018-recovery-fixture.png critical-entities.json public-schema.toc.list public-schema.restore.list public-schema.excluded-platform-default-acl.list public-schema.excluded-platform-schema.list supabase-platform-public-schema-before.tsv supabase-platform-default-acl-before.tsv > manifest.sha256)
 (cd "$ARTIFACT_DIR" && sha256sum -c manifest.sha256)
 
 echo "[RR018] phase=destroy stack=A"
@@ -373,6 +409,8 @@ start_stack "$STACK_B"
 STACK_B_STARTED=1
 
 (cd "$ARTIFACT_DIR" && sha256sum -c manifest.sha256)
+capture_supabase_platform_public_schema "$ARTIFACT_DIR/supabase-platform-public-schema-fresh-stack-b.tsv"
+diff -u "$ARTIFACT_DIR/supabase-platform-public-schema-before.tsv" "$ARTIFACT_DIR/supabase-platform-public-schema-fresh-stack-b.tsv"
 capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
 diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
 container_pg_restore_with_list "$ARTIFACT_DIR/public-schema.dump" "$ARTIFACT_DIR/public-schema.restore.list" --no-owner
@@ -389,6 +427,8 @@ echo "[RR018] restore=storage status=ok"
 
 echo "[RR018] phase=verify-restored"
 run_psql -v fixture_sha="$ASSET_SHA" -f "$REPO_ROOT/scripts/recovery/rr018-verify.sql"
+capture_supabase_platform_public_schema "$ARTIFACT_DIR/supabase-platform-public-schema-after.tsv"
+diff -u "$ARTIFACT_DIR/supabase-platform-public-schema-before.tsv" "$ARTIFACT_DIR/supabase-platform-public-schema-after.tsv"
 capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-after.tsv"
 diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-after.tsv"
 capture_counts "$ARTIFACT_DIR/counts-after.tsv"
@@ -413,6 +453,7 @@ RR018_REHEARSAL_RESTORE_DURATION_SECONDS=${RESTORE_DURATION}
 RR018_TOTAL_DRILL_DURATION_SECONDS=${TOTAL_DURATION}
 RR018_STORAGE_SHA256=${ASSET_SHA}
 RR018_BASELINE_BRIDGES=3
+RR018_PLATFORM_PUBLIC_SCHEMA_EXCLUDED=1
 RR018_PLATFORM_DEFAULT_ACL_EXCLUDED=3
 RR018_PRODUCTION_RPO=NOT_VERIFIED
 RR018_PRODUCTION_PITR=NOT_VERIFIED

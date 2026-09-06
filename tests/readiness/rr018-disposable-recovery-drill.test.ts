@@ -86,6 +86,12 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('pg_restore -l');
     expect(runner).toContain('public-schema.toc.list');
     expect(runner).toContain('public-schema.excluded-platform-default-acl.list');
+    expect(runner).toContain('public-schema.excluded-platform-schema.list');
+    expect(runner).toContain('expected exactly 1 fresh Supabase public SCHEMA entry');
+    expect(runner).toContain('restore list left the fresh Supabase public SCHEMA creation enabled');
+    expect(runner).toContain('supabase-platform-public-schema-before.tsv');
+    expect(runner).toContain('supabase-platform-public-schema-fresh-stack-b.tsv');
+    expect(runner).toContain('supabase-platform-public-schema-after.tsv');
     expect(runner).toContain('DEFAULT ACL');
     expect(runner).toContain('supabase_admin');
     expect(runner).toContain('TABLES|FUNCTIONS|SEQUENCES');
@@ -95,6 +101,7 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('supabase-platform-default-acl-before.tsv');
     expect(runner).toContain('supabase-platform-default-acl-fresh-stack-b.tsv');
     expect(runner).toContain('supabase-platform-default-acl-after.tsv');
+    expect(runner).toContain('RR018_PLATFORM_PUBLIC_SCHEMA_EXCLUDED=1');
     expect(runner).not.toContain('--no-acl');
   });
 

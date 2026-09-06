@@ -32,6 +32,7 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - Workflow `.github/workflows/rr018-disposable-recovery-drill.yml` oferece `workflow_dispatch`; como workflows novos não podem ser despachados antes de existirem na default branch, o bootstrap de evidência também aceita `push` somente da branch RR018 e publica evidência por artifact.
 - Follow-up do drill usa pg_dump/pg_restore do container PostgreSQL 17 descartável, captura supabase start sem expor credenciais efêmeras e publica evidence em diretório não oculto; a chain limpa continua dependendo explicitamente dos três bridges históricos acima.
 - Restore closure remove `--clean` da Stack B fresh, materializa o TOC real com `pg_restore -l` no container PostgreSQL 17 e filtra somente as três `DEFAULT ACL` de plataforma de `supabase_admin`; ACLs explícitas da aplicação permanecem no restore e sob verificação pós-restore.
+- Run 34065962861 confirmou PostgreSQL 17.6, exatamente três DEFAULT ACLs de `supabase_admin` e 68 ACLs explícitas preservadas; follow-up também exclui fail-closed a única criação TOC do schema `public`, já presente e com baseline owner/ACL idêntico na Stack B fresh.
 
 ### File List
 
@@ -49,3 +50,4 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - 2026-09-06: RR018 disposable recovery drill implementado para auditoria do Principal.
 - 2026-09-06: Follow-up de recovery corrige compatibilidade PostgreSQL 17, sanitização do startup local e publicação de artifacts sem alterar migrations históricas.
 - 2026-09-06: Restore closure passa a usar restore list fail-closed para excluir somente DEFAULT ACLs de plataforma já presentes na Stack B fresh, preservando grants/policies/functions/triggers/RLS da aplicação.
+- 2026-09-06: Evidência do run 34065962861 refinou o restore list para excluir também a única criação do schema `public` pertencente ao baseline fresh, com snapshot before/fresh/after de owner/ACL.

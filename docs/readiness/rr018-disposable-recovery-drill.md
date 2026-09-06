@@ -13,9 +13,9 @@ RR018 prova recovery somente em infraestrutura descartável. O runner recusa exe
 
 ## Fresh-schema restore e DEFAULT ACL
 
-O TOC do dump é tratado de forma explícita e fail-closed. O runner só comenta na restore list as três entradas de `DEFAULT ACL` pertencentes a `supabase_admin` no schema `public`: `DEFAULT PRIVILEGES FOR TABLES`, `DEFAULT PRIVILEGES FOR FUNCTIONS` e `DEFAULT PRIVILEGES FOR SEQUENCES`. Essas ACLs são da plataforma Supabase base, não objetos da aplicação.
+O TOC do dump é tratado de forma explícita e fail-closed. Como toda Stack B Supabase fresh já contém o schema `public`, o runner comenta exatamente uma entrada TOC `SCHEMA - public ...` para não tentar recriá-lo. Também comenta somente as três entradas de `DEFAULT ACL` pertencentes a `supabase_admin` no schema `public`: `DEFAULT PRIVILEGES FOR TABLES`, `DEFAULT PRIVILEGES FOR FUNCTIONS` e `DEFAULT PRIVILEGES FOR SEQUENCES`. Esses quatro itens são da plataforma Supabase base, não objetos da aplicação.
 
-Antes de destruir a Stack A, o runner captura `pg_default_acl` para essas três classes. Depois de iniciar a Stack B fresh, ele captura o mesmo baseline e exige igualdade byte a byte antes do schema restore. A mesma comparação é repetida após o restore. Se o TOC contiver qualquer outra `DEFAULT ACL` de `supabase_admin`, se não contiver exatamente essas três, ou se o baseline fresh divergir, o drill falha em vez de ampliar o filtro.
+Antes de destruir a Stack A, o runner captura proprietário/ACL do schema `public` em `pg_namespace` e `pg_default_acl` para essas três classes. Depois de iniciar a Stack B fresh, ele captura os mesmos baselines e exige igualdade byte a byte antes do schema restore. As comparações são repetidas após o restore. Se não houver exatamente uma criação do schema `public`, se o TOC contiver qualquer outra `DEFAULT ACL` de `supabase_admin`, se não contiver exatamente as três esperadas, ou se algum baseline fresh divergir, o drill falha em vez de ampliar o filtro.
 
 Entradas TOC do tipo `ACL public ...` continuam ativas na restore list; o runner compara a contagem dessas entradas antes/depois do filtro e exige que nenhuma seja removida. Não é usado `--no-acl`. As grants explícitas da aplicação permanecem cobertas por `rr018-verify.sql`, incluindo privilégios de tabela e `EXECUTE` de funções críticas.
 
@@ -33,7 +33,7 @@ RR018 não altera migrations históricas e não cria migration estrutural para e
 
 ## Backup artifacts policy
 
-Os artefatos de execução não são commitados. No GitHub Actions eles são publicados como `rr018-disposable-recovery-evidence` por 30 dias e incluem `public-schema.dump`, `public-data.dump`, `public-schema.toc.list`, `public-schema.restore.list`, `public-schema.excluded-platform-default-acl.list`, snapshots `supabase-platform-default-acl-*.tsv`, `auth-users.sql`, `storage-buckets.sql`, `nonpublic-controls.sql`, cópia do objeto de Storage, `critical-entities.json`, `counts-before.tsv`, `counts-after.tsv`, `manifest.sha256`, `result.env` e `rr018-drill.log`.
+Os artefatos de execução não são commitados. No GitHub Actions eles são publicados como `rr018-disposable-recovery-evidence` por 30 dias e incluem `public-schema.dump`, `public-data.dump`, `public-schema.toc.list`, `public-schema.restore.list`, `public-schema.excluded-platform-default-acl.list`, `public-schema.excluded-platform-schema.list`, snapshots `supabase-platform-public-schema-*.tsv` e `supabase-platform-default-acl-*.tsv`, `auth-users.sql`, `storage-buckets.sql`, `nonpublic-controls.sql`, cópia do objeto de Storage, `critical-entities.json`, `counts-before.tsv`, `counts-after.tsv`, `manifest.sha256`, `result.env` e `rr018-drill.log`.
 
 O output normal de `supabase start` é capturado em arquivo temporário e não é enviado ao log do job, evitando exposição das chaves efêmeras geradas para a stack local. Em falha de startup, somente uma versão sanitizada do log é exibida.
 
