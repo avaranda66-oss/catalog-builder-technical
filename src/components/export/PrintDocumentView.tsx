@@ -4,19 +4,27 @@ import { Catalog } from '../../domain/catalog.schema';
 import { SupabaseService } from '../../services/supabase.service';
 import { PDFService } from '../../services/pdf.service';
 import { CleanA4Document } from './CleanA4Document';
-import { auditCatalogPublishSafety } from '../../domain/table-core';
+import { auditCatalogPublishSafety, type TableDatumResolver } from '../../domain/table-core';
 import { useCatalogStore } from '../../stores/useCatalogStore';
+import {
+  createPinnedPublicationDatumResolver,
+  createPublicationExportSnapshot,
+  parseRequiredPublicationVersion,
+  type PublicationExportSnapshot
+} from '../../domain/publication-export-snapshot';
 
 import { FontManager } from '../../translation/font-manager';
 
 export const PrintDocumentView: React.FC = () => {
-  const [documentToRender, setDocumentToRender] = useState<Catalog | null>(null);
+  const [documentSnapshot, setDocumentSnapshot] = useState<PublicationExportSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReadyForPrint, setIsReadyForPrint] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isExportingDirect, setIsExportingDirect] = useState(false);
+  const [publicationResolver, setPublicationResolver] = useState<TableDatumResolver | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const documentToRender: Catalog | null = documentSnapshot?.document ?? null;
 
   useEffect(() => {
     const loadDocument = async () => {
@@ -25,15 +33,33 @@ export const PrintDocumentView: React.FC = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const catalogId = urlParams.get('catalog');
       const templateId = urlParams.get('template');
+      const versionResult = parseRequiredPublicationVersion(urlParams.get('version'));
+      if (!versionResult.success) {
+        setErrorMessage(versionResult.error);
+        setIsLoading(false);
+        return;
+      }
+      const requestedVersion = versionResult.version;
 
       // 1. Exportação de Template: Carrega snapshot confirmado do Supabase
       if (templateId) {
         const res = await SupabaseService.getTemplate(templateId);
         if (res.success && res.data) {
-          const tCatalog = res.data.catalog;
+          const tCatalog = structuredClone(res.data.catalog);
           tCatalog.title = res.data.name;
           tCatalog.version = res.data.version || 1;
-          setDocumentToRender(tCatalog);
+          const snapshotResult = createPublicationExportSnapshot({
+            sourceKind: 'template',
+            sourceId: templateId,
+            document: tCatalog,
+            expectedVersion: requestedVersion
+          });
+          if (!snapshotResult.success) {
+            setErrorMessage(snapshotResult.error);
+            setIsLoading(false);
+            return;
+          }
+          setDocumentSnapshot(snapshotResult.snapshot);
           setIsLoading(false);
           return;
         } else {
@@ -47,7 +73,18 @@ export const PrintDocumentView: React.FC = () => {
       if (catalogId) {
         const res = await SupabaseService.getCatalog(catalogId);
         if (res.success && res.data) {
-          setDocumentToRender(res.data);
+          const snapshotResult = createPublicationExportSnapshot({
+            sourceKind: 'catalog',
+            sourceId: catalogId,
+            document: res.data,
+            expectedVersion: requestedVersion
+          });
+          if (!snapshotResult.success) {
+            setErrorMessage(snapshotResult.error);
+            setIsLoading(false);
+            return;
+          }
+          setDocumentSnapshot(snapshotResult.snapshot);
           setIsLoading(false);
           return;
         } else {
@@ -64,27 +101,38 @@ export const PrintDocumentView: React.FC = () => {
     void loadDocument();
   }, []);
 
-  // Aguarda carregamento explícito de webfonts e imagens para fidelidade tipográfica e vetorial
+  // Congela a mesma verdade factual que será auditada e renderizada.
   useEffect(() => {
     if (!documentToRender) return;
 
     let isCancelled = false;
-    const preparePrint = async () => {
+    const preparePublicationSnapshot = async () => {
+      setIsReadyForPrint(false);
+      setPublicationResolver(null);
       const publishingState = useCatalogStore.getState();
       await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(documentToRender);
       if (isCancelled) return;
 
       const runtimeStatus = publishingState.knowledgeRuntime.getStatus();
+      const pinnedResolver =
+        runtimeStatus === 'idle' || runtimeStatus === 'loading'
+          ? undefined
+          : createPinnedPublicationDatumResolver({
+              document: documentToRender,
+              sourceResolver: publishingState.getTableDatumResolver('effective_for_publishing')
+            });
       const publishingAudit = auditCatalogPublishSafety({
         catalog: documentToRender,
         runtimeStatus,
         failedProductIds: publishingState.knowledgeRuntime.getFailedProductIds(),
-        resolveDatum:
-          runtimeStatus === 'idle' || runtimeStatus === 'loading'
-            ? undefined
-            : publishingState.getTableDatumResolver('effective_for_publishing')
+        resolveDatum: pinnedResolver
       });
-      if (runtimeStatus === 'idle' || runtimeStatus === 'loading' || !publishingAudit.canPublish) {
+      if (
+        runtimeStatus === 'idle' ||
+        runtimeStatus === 'loading' ||
+        !pinnedResolver ||
+        !publishingAudit.canPublish
+      ) {
         const firstBlock = publishingAudit.issues.find((issue) => issue.severity === 'block');
         setErrorMessage(
           firstBlock?.reason ||
@@ -92,6 +140,24 @@ export const PrintDocumentView: React.FC = () => {
         );
         return;
       }
+
+      if (!isCancelled) {
+        setPublicationResolver(() => pinnedResolver);
+      }
+    };
+
+    void preparePublicationSnapshot();
+    return () => {
+      isCancelled = true;
+    };
+  }, [documentToRender]);
+
+  // Só prepara fontes/imagens depois que o DOM já está usando o resolver congelado.
+  useEffect(() => {
+    if (!documentToRender || !publicationResolver) return;
+
+    let isCancelled = false;
+    const preparePrintAssets = async () => {
 
       try {
         const docLocale = (documentToRender as any).locale || 'pt-BR';
@@ -143,11 +209,11 @@ export const PrintDocumentView: React.FC = () => {
       }
     };
 
-    void preparePrint();
+    void preparePrintAssets();
     return () => {
       isCancelled = true;
     };
-  }, [documentToRender]);
+  }, [documentToRender, publicationResolver]);
 
   const handleNativePrint = () => {
     window.print();
@@ -166,7 +232,14 @@ export const PrintDocumentView: React.FC = () => {
     const result = await PDFService.exportToPDF('.clean-export-page', {
       fileName,
       quality: 1.0,
-      scale: 3.5
+      scale: 3.5,
+      metadata: documentSnapshot
+        ? {
+            snapshotIdentity: documentSnapshot.identity,
+            documentId: documentSnapshot.sourceId,
+            version: documentSnapshot.version
+          }
+        : undefined
     });
 
     setIsExportingDirect(false);
@@ -204,6 +277,15 @@ export const PrintDocumentView: React.FC = () => {
         >
           Voltar ao Editor
         </button>
+      </div>
+    );
+  }
+
+  if (!publicationResolver) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-mono text-xs">
+        <RefreshCw className="w-6 h-6 animate-spin mb-3 text-blue-400" />
+        <span>VALIDANDO SNAPSHOT FACTUAL PARA IMPRESSÃO...</span>
       </div>
     );
   }
@@ -278,7 +360,7 @@ export const PrintDocumentView: React.FC = () => {
 
       {/* Área de Visualização e Renderização Limpa */}
       <main ref={containerRef} className="py-8 print:p-0 flex flex-col items-center gap-8 print:gap-0 print:block">
-        <CleanA4Document document={documentToRender} />
+        <CleanA4Document document={documentToRender} resolveDatum={publicationResolver} />
       </main>
 
       {/* Estilos Globais de Impressão A4 Estrita e Paginação Multipage */}

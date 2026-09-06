@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Printer,
   Layers,
@@ -23,8 +24,14 @@ import { PDFService } from '../../services/pdf.service';
 import { AIService } from '../../services/ai.service';
 import { Catalog } from '../../domain/catalog.schema';
 import { isTableLikeBlock } from '../../domain/compliance-coverage';
-import { auditCatalogPublishSafety } from '../../domain/table-core';
+import { auditCatalogPublishSafety, type TableDatumResolver } from '../../domain/table-core';
+import {
+  createPinnedPublicationDatumResolver,
+  createPublicationExportSnapshot,
+  type PublicationExportSnapshot
+} from '../../domain/publication-export-snapshot';
 import { PresetModal } from '../editor/PresetModal';
+import { CleanA4Document } from '../export/CleanA4Document';
 
 export const PublicationsView: React.FC = () => {
   const {
@@ -42,6 +49,10 @@ export const PublicationsView: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [exportSnapshot, setExportSnapshot] = useState<{
+    snapshot: PublicationExportSnapshot;
+    resolveDatum: TableDatumResolver;
+  } | null>(null);
 
   useEffect(() => {
     loadAllCatalogs();
@@ -73,31 +84,63 @@ export const PublicationsView: React.FC = () => {
 
     // 1. Garante que qualquer alteração pendente foi confirmada na nuvem antes do PDF
     const flushRes = await useCatalogStore.getState().flushCatalog(currentCatalog.id);
-    if (!flushRes.success && flushRes.status !== 'offline') {
+    if (!flushRes.success || flushRes.status !== 'synced') {
       setIsExporting(false);
       setExportStatus({
         success: false,
-        message: `Não foi possível confirmar a última versão na nuvem antes de exportar (${flushRes.error || 'erro de rede'}).`
+        message: `Não foi possível confirmar a última versão na nuvem antes de exportar (${flushRes.error || flushRes.status}).`
       });
       return;
     }
 
-    const currentConfirmed = useCatalogStore.getState().currentCatalog || currentCatalog;
+    const confirmedState = useCatalogStore.getState();
+    const currentConfirmed = confirmedState.currentCatalog;
+    if (!currentConfirmed || confirmedState.syncStatus !== 'synced') {
+      setIsExporting(false);
+      setExportStatus({
+        success: false,
+        message: 'A versão confirmada não está disponível em estado sincronizado para exportação.'
+      });
+      return;
+    }
+
+    const snapshotResult = createPublicationExportSnapshot({
+      sourceKind: 'catalog',
+      sourceId: currentCatalog.id,
+      document: currentConfirmed,
+      expectedVersion: flushRes.version ?? currentConfirmed.version
+    });
+    if (!snapshotResult.success) {
+      setIsExporting(false);
+      setExportStatus({ success: false, message: snapshotResult.error });
+      return;
+    }
+
+    const snapshot = snapshotResult.snapshot;
     const publishingState = useCatalogStore.getState();
-    await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(currentConfirmed);
+    await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(snapshot.document);
     const runtimeStatus = publishingState.knowledgeRuntime.getStatus();
+    const publishingResolver =
+      runtimeStatus === 'idle' || runtimeStatus === 'loading'
+        ? undefined
+        : createPinnedPublicationDatumResolver({
+            document: snapshot.document,
+            sourceResolver: publishingState.getTableDatumResolver('effective_for_publishing')
+          });
     const publishingAudit = auditCatalogPublishSafety({
-      catalog: currentConfirmed,
+      catalog: snapshot.document,
       syncStatus: useCatalogStore.getState().syncStatus,
       runtimeStatus,
       failedProductIds: publishingState.knowledgeRuntime.getFailedProductIds(),
-      resolveDatum:
-        runtimeStatus === 'idle' || runtimeStatus === 'loading'
-          ? undefined
-          : publishingState.getTableDatumResolver('effective_for_publishing')
+      resolveDatum: publishingResolver
     });
 
-    if (runtimeStatus === 'idle' || runtimeStatus === 'loading' || !publishingAudit.canPublish) {
+    if (
+      runtimeStatus === 'idle' ||
+      runtimeStatus === 'loading' ||
+      !publishingResolver ||
+      !publishingAudit.canPublish
+    ) {
       setIsExporting(false);
       setExportStatus({
         success: false,
@@ -107,21 +150,33 @@ export const PublicationsView: React.FC = () => {
     }
 
     console.log('[PDF EXPORT METADATA]', {
-      catalogId: currentConfirmed.id,
-      catalogVersion: currentConfirmed.version,
-      catalogTitle: currentConfirmed.title,
-      pagesCount: currentConfirmed.pages.length,
+      snapshotIdentity: snapshot.identity,
+      catalogId: snapshot.document.id,
+      catalogVersion: snapshot.version,
+      catalogTitle: snapshot.document.title,
+      pagesCount: snapshot.document.pages.length,
       timestamp: new Date().toISOString()
     });
 
-    const safeTitle = (currentConfirmed.title || 'Catalogo_Presys')
+    const safeTitle = (snapshot.document.title || 'Catalogo_Presys')
       .replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${safeTitle}_v${currentConfirmed.version}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const fileName = `${safeTitle}_v${snapshot.version}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
-    const result = await PDFService.exportToPDF('.a4-page-container', {
-      fileName,
-      quality: 0.95
+    flushSync(() => {
+      setExportSnapshot({ snapshot, resolveDatum: publishingResolver });
     });
+
+    const result = await PDFService.exportToPDF('.rr009-publications-export-snapshot .a4-page-container', {
+      fileName,
+      quality: 0.95,
+      metadata: {
+        snapshotIdentity: snapshot.identity,
+        documentId: snapshot.sourceId,
+        version: snapshot.version
+      }
+    });
+
+    setExportSnapshot(null);
 
     setIsExporting(false);
     if (result.success) {
@@ -142,6 +197,18 @@ export const PublicationsView: React.FC = () => {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100 p-4 sm:p-6 space-y-6">
+      {exportSnapshot && (
+        <div
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <CleanA4Document
+            document={exportSnapshot.snapshot.document}
+            className="rr009-publications-export-snapshot"
+            resolveDatum={exportSnapshot.resolveDatum}
+          />
+        </div>
+      )}
       {/* Header do Ambiente */}
       <div className="bg-white rounded-none border border-slate-300 p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">

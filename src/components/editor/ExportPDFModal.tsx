@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { X, Download, CheckCircle2, AlertCircle, Printer, ShieldAlert } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { PDFService } from '../../services/pdf.service';
-import { auditCatalogPublishSafety } from '../../domain/table-core';
+import { auditCatalogPublishSafety, type TableDatumResolver } from '../../domain/table-core';
+import {
+  createPinnedPublicationDatumResolver,
+  createPublicationExportSnapshot,
+  type PublicationExportSnapshot
+} from '../../domain/publication-export-snapshot';
+import { CleanA4Document } from '../export/CleanA4Document';
+
+interface PreparedPublicationExport {
+  snapshot: PublicationExportSnapshot;
+  resolveDatum: TableDatumResolver;
+}
 
 export const ExportPDFModal: React.FC = () => {
   const { isExportPDFModalOpen, setExportPDFModalOpen } = useUIStore();
@@ -20,6 +32,7 @@ export const ExportPDFModal: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(true);
   const [runtimeStatus, setRuntimeStatus] = useState(knowledgeRuntime.getStatus());
+  const [exportSnapshot, setExportSnapshot] = useState<PreparedPublicationExport | null>(null);
 
   React.useEffect(() => {
     setRuntimeStatus(knowledgeRuntime.getStatus());
@@ -55,6 +68,70 @@ export const ExportPDFModal: React.FC = () => {
   });
   const isExportBlocked = isRuntimeLoading || !auditReport.canPublish;
 
+  const prepareConfirmedSnapshot = async (): Promise<PreparedPublicationExport | null> => {
+    const saveRes = await saveActiveDocument();
+    if (!saveRes.success || saveRes.status !== 'synced') {
+      setIsSuccess(false);
+      setExportMessage(
+        `Não foi possível confirmar a versão para exportação (${saveRes.error || saveRes.status}).`
+      );
+      return null;
+    }
+
+    const confirmedState = useCatalogStore.getState();
+    const confirmedDocument = confirmedState.currentCatalog;
+    if (!confirmedDocument || confirmedState.syncStatus !== 'synced') {
+      setIsSuccess(false);
+      setExportMessage('A versão confirmada não está disponível em estado sincronizado para exportação.');
+      return null;
+    }
+
+    const snapshotResult = createPublicationExportSnapshot({
+      sourceKind: isTemplate ? 'template' : 'catalog',
+      sourceId: docId,
+      document: confirmedDocument,
+      expectedVersion: saveRes.version ?? confirmedDocument.version
+    });
+    if (!snapshotResult.success) {
+      setIsSuccess(false);
+      setExportMessage(snapshotResult.error);
+      return null;
+    }
+
+    const snapshot = snapshotResult.snapshot;
+    await confirmedState.knowledgeRuntime.preloadCatalogProductKnowledge(snapshot.document);
+    const confirmedRuntimeStatus = confirmedState.knowledgeRuntime.getStatus();
+    const confirmedResolver =
+      confirmedRuntimeStatus === 'idle' || confirmedRuntimeStatus === 'loading'
+        ? undefined
+        : createPinnedPublicationDatumResolver({
+            document: snapshot.document,
+            sourceResolver: confirmedState.getTableDatumResolver('effective_for_publishing')
+          });
+    const confirmedAudit = auditCatalogPublishSafety({
+      catalog: snapshot.document,
+      syncStatus: useCatalogStore.getState().syncStatus,
+      runtimeStatus: confirmedRuntimeStatus,
+      failedProductIds: confirmedState.knowledgeRuntime.getFailedProductIds(),
+      resolveDatum: confirmedResolver
+    });
+
+    if (
+      confirmedRuntimeStatus === 'idle' ||
+      confirmedRuntimeStatus === 'loading' ||
+      !confirmedResolver ||
+      !confirmedAudit.canPublish
+    ) {
+      setIsSuccess(false);
+      setExportMessage(
+        `Exportação bloqueada: ${confirmedAudit.blockCount} inconsistência(s) crítica(s) encontrada(s) no snapshot confirmado.`
+      );
+      return null;
+    }
+
+    return { snapshot, resolveDatum: confirmedResolver };
+  };
+
   const handleDownloadPDF = async () => {
     if (isExportBlocked) {
       setIsSuccess(false);
@@ -65,26 +142,34 @@ export const ExportPDFModal: React.FC = () => {
     setIsExporting(true);
     setExportMessage(null);
 
-    // 1. Garante que o documento está salvo e sincronizado
-    const saveRes = await saveActiveDocument();
-    if (!saveRes.success && saveRes.status === 'conflict') {
+    const prepared = await prepareConfirmedSnapshot();
+    if (!prepared) {
       setIsExporting(false);
-      setIsSuccess(false);
-      setExportMessage('Conflito detectado ao salvar. Resolva o conflito antes de gerar o PDF.');
       return;
     }
+    const { snapshot } = prepared;
 
-    const safeTitle = (currentCatalog.title || 'PRESYS_Catalog').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const versionStr = `v${currentCatalog.version || 1}`;
+    const safeTitle = (snapshot.document.title || 'PRESYS_Catalog').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const versionStr = `v${snapshot.version}`;
     const dateStr = new Date().toISOString().slice(0, 10);
     const fileName = `${safeTitle}_${versionStr}_${dateStr}.pdf`;
 
-    const result = await PDFService.exportToPDF('.a4-page-container', {
-      fileName,
-      quality: 1.0,
-      scale: 3.5
+    flushSync(() => {
+      setExportSnapshot(prepared);
     });
 
+    const result = await PDFService.exportToPDF('.rr009-modal-export-snapshot .a4-page-container', {
+      fileName,
+      quality: 1.0,
+      scale: 3.5,
+      metadata: {
+        snapshotIdentity: snapshot.identity,
+        documentId: snapshot.sourceId,
+        version: snapshot.version
+      }
+    });
+
+    setExportSnapshot(null);
     setIsExporting(false);
     if (result.success) {
       setIsSuccess(true);
@@ -102,22 +187,32 @@ export const ExportPDFModal: React.FC = () => {
       return;
     }
 
-    const saveRes = await saveActiveDocument();
-    if (!saveRes.success && saveRes.status === 'conflict') {
-      setIsSuccess(false);
-      setExportMessage('Conflito detectado ao salvar. Resolva o conflito antes de gerar o PDF.');
+    const prepared = await prepareConfirmedSnapshot();
+    if (!prepared) {
       return;
     }
+    const { snapshot } = prepared;
 
     setExportPDFModalOpen(false);
 
-    const confirmedVer = (useCatalogStore.getState().currentCatalog?.version) || docVersion;
-    const printUrl = `/?print=1&${isTemplate ? `template=${docId}` : `catalog=${docId}`}&version=${confirmedVer}`;
+    const printUrl = `/?print=1&${isTemplate ? `template=${docId}` : `catalog=${docId}`}&version=${snapshot.version}`;
     window.open(printUrl, '_blank');
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+      {exportSnapshot && (
+        <div
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <CleanA4Document
+            document={exportSnapshot.snapshot.document}
+            className="rr009-modal-export-snapshot"
+            resolveDatum={exportSnapshot.resolveDatum}
+          />
+        </div>
+      )}
       <div className="bg-white rounded-none shadow-2xl border border-slate-400 max-w-lg w-full p-6">
         <div className="flex items-center justify-between pb-3 border-b border-slate-300">
           <div className="flex items-center gap-2">

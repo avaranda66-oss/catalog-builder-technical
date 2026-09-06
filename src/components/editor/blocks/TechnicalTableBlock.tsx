@@ -7,7 +7,7 @@ import { useUIStore } from '../../../stores/useUIStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
-import { adaptLegacyBlockToTableCore } from '../../../domain/table-core';
+import { adaptLegacyBlockToTableCore, type TableDatumResolver } from '../../../domain/table-core';
 import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 import { TableCoreRenderer } from '../table-core';
 
@@ -16,12 +16,14 @@ interface TechnicalTableBlockProps {
   pageId: string;
   isSelected?: boolean;
   isExport?: boolean;
+  resolveDatumOverride?: TableDatumResolver;
 }
 
 export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   block,
   pageId,
-  isExport
+  isExport,
+  resolveDatumOverride
 }) => {
   const {
     selectedBlockId,
@@ -53,7 +55,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const selectedCellId = isSelected && !isExport ? selectedChildId : undefined;
 
   const isPublishingRender = Boolean(isExport || isExportPDFModalOpen);
-  const resolveDatum = getTableDatumResolver(
+  const resolveDatum = resolveDatumOverride ?? getTableDatumResolver(
     isPublishingRender ? 'effective_for_publishing' : 'effective_for_editing'
   );
   const hasVisibleRows = adaptedTable

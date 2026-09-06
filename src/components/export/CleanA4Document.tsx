@@ -27,13 +27,19 @@ import { applyBidiIsolationToElement } from '../../translation/bidi-helper';
 import { PrintLocalizationProvider } from '../../translation/PrintLocalizationContext';
 import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
 import { A4DocumentFooter } from '../shared/A4DocumentFooter';
+import type { TableDatumResolver } from '../../domain/table-core';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
   className?: string;
+  resolveDatum?: TableDatumResolver;
 }
 
-export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: catalog, className = '' }) => {
+export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
+  document: catalog,
+  className = '',
+  resolveDatum
+}) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const locale = catalog?.locale || 'pt-BR';
@@ -145,7 +151,13 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({ document: cata
                         <FeaturesListBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {(block.type === 'table' || block.type === 'specs_table') && (
-                        <TechnicalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <TechnicalTableBlock
+                          block={block}
+                          pageId={page.id}
+                          isSelected={false}
+                          isExport={true}
+                          resolveDatumOverride={resolveDatum}
+                        />
                       )}
                       {block.type === 'electrical_table' && (
                         <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} />

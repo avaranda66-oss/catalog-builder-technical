@@ -5,6 +5,11 @@ export interface PDFExportOptions {
   fileName?: string;
   quality?: number;
   scale?: number;
+  metadata?: {
+    snapshotIdentity: string;
+    documentId: string;
+    version: number;
+  };
 }
 
 export class PDFService {
@@ -143,9 +148,13 @@ export class PDFService {
 
       pdf.setProperties({
         title: options.fileName?.replace(/\.pdf$/i, '') || 'Catálogo Técnico PRESYS',
-        subject: 'Especificações Técnicas de Instrumentação e Calibração',
+        subject: options.metadata
+          ? `PRESYS export snapshot ${options.metadata.snapshotIdentity}`
+          : 'Especificações Técnicas de Instrumentação e Calibração',
         author: 'PRESYS Instrumentos e Sistemas',
-        keywords: 'PRESYS, Calibração, Instrumentação, Catálogo Técnico, PCON',
+        keywords: options.metadata
+          ? `PRESYS, Catálogo Técnico, ${options.metadata.documentId}, v${options.metadata.version}, ${options.metadata.snapshotIdentity}`
+          : 'PRESYS, Calibração, Instrumentação, Catálogo Técnico, PCON',
         creator: 'PRESYS Catalog Studio'
       });
 
