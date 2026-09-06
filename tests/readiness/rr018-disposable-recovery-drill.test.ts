@@ -62,6 +62,14 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('[RR018] restore=schema status=ok');
     expect(runner).toContain('[RR018] restore=auth status=ok');
     expect(runner).toContain('[RR018] restore=data status=ok');
+    expect(runner).not.toContain('--disable-triggers');
+    expect(runner).toContain('--single-transaction --exit-on-error');
+    expect(runner).toContain('ALTER TABLE public.products DISABLE TRIGGER trg_products_audit;');
+    expect(runner).toContain('ALTER TABLE public.catalogs DISABLE TRIGGER trg_catalogs_audit;');
+    expect(runner).toContain('ALTER TABLE public.field_definitions DISABLE TRIGGER trg_field_definitions_audit;');
+    expect(runner).toContain('ALTER TABLE public.products ENABLE TRIGGER trg_products_audit;');
+    expect(runner).toContain('ALTER TABLE public.catalogs ENABLE TRIGGER trg_catalogs_audit;');
+    expect(runner).toContain('ALTER TABLE public.field_definitions ENABLE TRIGGER trg_field_definitions_audit;');
     expect(runner).toContain('[RR018] restore=nonpublic-controls status=ok');
     expect(runner).toContain('[RR018] restore=storage status=ok');
     expect(runner).toContain('evidence=counts-after.tsv,result.env status=present');
@@ -145,6 +153,9 @@ describe('RR018 disposable recovery drill contract', () => {
     ]) {
       expect(verify).toContain(trigger);
     }
+    expect(verify).toContain("tgenabled = 'O'");
+    expect(verify).toContain('RR018 critical trigger missing or disabled');
+    expect(verify).toContain('RR018 auth profile provisioning trigger missing or disabled');
   });
 
   it('T7 keeps RLS enabled on every critical public table after restore', () => {

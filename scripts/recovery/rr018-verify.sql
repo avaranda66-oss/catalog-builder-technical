@@ -200,21 +200,25 @@ BEGIN
     RAISE EXCEPTION 'RR018 grant/function ACL invariant failed';
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_products_audit' AND NOT tgisinternal)
-     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_catalogs_audit' AND NOT tgisinternal)
-     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_field_definitions_audit' AND NOT tgisinternal)
-     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_guard_product_delete_workbook' AND NOT tgisinternal)
-     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_guard_family_delete_workbook' AND NOT tgisinternal) THEN
-    RAISE EXCEPTION 'RR018 critical trigger missing';
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_products_audit' AND NOT tgisinternal AND tgenabled = 'O')
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_catalogs_audit' AND NOT tgisinternal AND tgenabled = 'O')
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_field_definitions_audit' AND NOT tgisinternal AND tgenabled = 'O')
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_guard_product_delete_workbook' AND NOT tgisinternal AND tgenabled = 'O')
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_guard_family_delete_workbook' AND NOT tgisinternal AND tgenabled = 'O') THEN
+    RAISE EXCEPTION 'RR018 critical trigger missing or disabled';
   END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_trigger t
     JOIN pg_class c ON c.oid = t.tgrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE t.tgname = 'on_auth_user_created_catalog' AND n.nspname = 'auth' AND c.relname = 'users' AND NOT t.tgisinternal
+    WHERE t.tgname = 'on_auth_user_created_catalog'
+      AND n.nspname = 'auth'
+      AND c.relname = 'users'
+      AND NOT t.tgisinternal
+      AND t.tgenabled = 'O'
   ) THEN
-    RAISE EXCEPTION 'RR018 auth profile provisioning trigger missing';
+    RAISE EXCEPTION 'RR018 auth profile provisioning trigger missing or disabled';
   END IF;
 
   IF NOT EXISTS (

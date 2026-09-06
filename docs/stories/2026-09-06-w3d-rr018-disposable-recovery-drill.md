@@ -33,6 +33,7 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - Follow-up do drill usa pg_dump/pg_restore do container PostgreSQL 17 descartável, captura supabase start sem expor credenciais efêmeras e publica evidence em diretório não oculto; a chain limpa continua dependendo explicitamente dos três bridges históricos acima.
 - Restore closure remove `--clean` da Stack B fresh, materializa o TOC real com `pg_restore -l` no container PostgreSQL 17 e filtra somente as três `DEFAULT ACL` de plataforma de `supabase_admin`; ACLs explícitas da aplicação permanecem no restore e sob verificação pós-restore.
 - Run 34065962861 confirmou PostgreSQL 17.6, exatamente três DEFAULT ACLs de `supabase_admin` e 68 ACLs explícitas preservadas; follow-up também exclui fail-closed a única criação TOC do schema `public`, já presente e com baseline owner/ACL idêntico na Stack B fresh.
+- Run 34066930330 provou schema/auth restore com sucesso e expôs o próximo erro real no data restore: `--disable-triggers` tentou alterar triggers RI do PostgreSQL sem autoridade e o replay com triggers de auditoria ativos criou colisão em `audit_log`. O follow-up mantém FKs ativos, desabilita somente os três triggers de auditoria da aplicação durante o snapshot restore e exige que eles terminem habilitados.
 
 ### File List
 
@@ -51,3 +52,4 @@ Como responsável por readiness, quero um recovery drill executável em infraest
 - 2026-09-06: Follow-up de recovery corrige compatibilidade PostgreSQL 17, sanitização do startup local e publicação de artifacts sem alterar migrations históricas.
 - 2026-09-06: Restore closure passa a usar restore list fail-closed para excluir somente DEFAULT ACLs de plataforma já presentes na Stack B fresh, preservando grants/policies/functions/triggers/RLS da aplicação.
 - 2026-09-06: Evidência do run 34065962861 refinou o restore list para excluir também a única criação do schema `public` pertencente ao baseline fresh, com snapshot before/fresh/after de owner/ACL.
+- 2026-09-06: Evidência do run 34066930330 removeu a dependência de `--disable-triggers` no data restore; apenas os três triggers de auditoria da aplicação são pausados durante o COPY, com FK checks preservados e restore transacional/fail-closed.

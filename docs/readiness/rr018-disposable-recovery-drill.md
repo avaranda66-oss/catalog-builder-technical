@@ -19,6 +19,8 @@ Antes de destruir a Stack A, o runner captura proprietário/ACL do schema `publi
 
 Entradas TOC do tipo `ACL public ...` continuam ativas na restore list; o runner compara a contagem dessas entradas antes/depois do filtro e exige que nenhuma seja removida. Não é usado `--no-acl`. As grants explícitas da aplicação permanecem cobertas por `rr018-verify.sql`, incluindo privilégios de tabela e `EXECUTE` de funções críticas.
 
+O data restore mantém os triggers RI/FK do PostgreSQL ativos. O runner desabilita temporariamente somente os três triggers de auditoria da aplicação (`trg_products_audit`, `trg_catalogs_audit`, `trg_field_definitions_audit`) para impedir que o replay do snapshot gere novas linhas em `audit_log`, executa `pg_restore` em transação única com `--exit-on-error` e reabilita os mesmos três triggers. O verify-after exige que todos os triggers críticos, inclusive esses três e o trigger de provisionamento em `auth.users`, estejam presentes e habilitados.
+
 ## Baseline histórico observado
 
 As migrations rastreadas não são autossuficientes como cadeia limpa. O próprio rehearsal existente do repositório já exige três bridges, preservados explicitamente por RR018:

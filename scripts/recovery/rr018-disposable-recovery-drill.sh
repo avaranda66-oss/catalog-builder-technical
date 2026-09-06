@@ -134,6 +134,24 @@ container_pg_restore_with_list() {
   docker exec -i "$container_id" pg_restore -U postgres -d postgres --use-list="$container_restore_list" "$@" < "$dump_file"
 }
 
+disable_application_audit_triggers() {
+  run_psql <<'SQL'
+ALTER TABLE public.products DISABLE TRIGGER trg_products_audit;
+ALTER TABLE public.catalogs DISABLE TRIGGER trg_catalogs_audit;
+ALTER TABLE public.field_definitions DISABLE TRIGGER trg_field_definitions_audit;
+SQL
+  echo "[RR018] data-restore application_audit_triggers=disabled count=3"
+}
+
+enable_application_audit_triggers() {
+  run_psql <<'SQL'
+ALTER TABLE public.products ENABLE TRIGGER trg_products_audit;
+ALTER TABLE public.catalogs ENABLE TRIGGER trg_catalogs_audit;
+ALTER TABLE public.field_definitions ENABLE TRIGGER trg_field_definitions_audit;
+SQL
+  echo "[RR018] data-restore application_audit_triggers=enabled count=3"
+}
+
 build_public_schema_restore_list() {
   local dump_file="$1"
   local toc_file="$2"
@@ -413,11 +431,13 @@ capture_supabase_platform_public_schema "$ARTIFACT_DIR/supabase-platform-public-
 diff -u "$ARTIFACT_DIR/supabase-platform-public-schema-before.tsv" "$ARTIFACT_DIR/supabase-platform-public-schema-fresh-stack-b.tsv"
 capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
 diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
-container_pg_restore_with_list "$ARTIFACT_DIR/public-schema.dump" "$ARTIFACT_DIR/public-schema.restore.list" --no-owner
+container_pg_restore_with_list "$ARTIFACT_DIR/public-schema.dump" "$ARTIFACT_DIR/public-schema.restore.list" --no-owner --exit-on-error
 echo "[RR018] restore=schema status=ok"
 run_psql -f "$ARTIFACT_DIR/auth-users.sql"
 echo "[RR018] restore=auth status=ok"
-container_pg_restore "$ARTIFACT_DIR/public-data.dump" --data-only --disable-triggers --no-owner
+disable_application_audit_triggers
+container_pg_restore "$ARTIFACT_DIR/public-data.dump" --data-only --no-owner --single-transaction --exit-on-error
+enable_application_audit_triggers
 echo "[RR018] restore=data status=ok"
 run_psql -f "$ARTIFACT_DIR/storage-buckets.sql"
 run_psql -f "$ARTIFACT_DIR/nonpublic-controls.sql"
