@@ -66,3 +66,39 @@ As a catalog editor user, I need `BoxBlock.textContent` rendered as plain user t
 
 - 2026-09-05: Story created for `COMPANY.READINESS.SECURITY.XSS.FIX1` from the confirmed P1 remediation mission.
 - 2026-09-05: Removed the stored-XSS sink, added seven inert security regressions, and completed targeted/full validation.
+
+## R1-NEW-001 Fidelity Follow-up
+
+Base: `175639f3a53f6a0461325388540f1da1feb4f703`
+
+Branch: `remediation/r1-new-001-boxblock-fidelity`
+
+### Acceptance Criteria
+
+- [x] A focus/blur cycle without user edits does not call `updateBlock` and preserves the exact bold source `**forte**`.
+- [x] A focus/blur cycle without user edits preserves the exact italic source `*texto*`.
+- [x] Editing exposes the authoritative raw `block.textContent`, including marker characters.
+- [x] Changed raw source is persisted exactly, without trimming or reconstruction from rendered DOM text.
+- [x] Intentional removal of markup persists plain text.
+- [x] Raw HTML stays literal in display and editing modes and after commit/re-render.
+- [x] Empty content uses placeholder UI without persisting placeholder copy.
+- [x] The shared `CleanA4Document` print path keeps safe bold/italic rendering.
+- [x] No dependency or package file changed.
+- [ ] GitHub Actions gates pass on the final exact SHA.
+
+### Implementation Notes
+
+- Replaced the mixed formatted-`contentEditable` boundary with an explicit safe display mode and a controlled `textarea` editing mode.
+- The edit draft is initialized from `block.textContent` exactly and is committed only when it differs from the source captured at edit start.
+- The display renderer remains React-text-only with supported `<strong>` and `<em>` nodes; no HTML parser or sanitizer boundary was introduced.
+- Tests remain inert and use structural assertions only.
+
+### R1-NEW-001 File List
+
+- `docs/stories/story-007-p1-stored-xss-boxblock.md`
+- `src/components/editor/blocks/BoxBlock.tsx`
+- `tests/components/box-block-xss-security.test.tsx`
+
+### R1-NEW-001 Change Log
+
+- 2026-09-06: Added the two-mode BoxBlock source-fidelity boundary and permanent no-edit/edit/XSS/placeholder/print regressions.
