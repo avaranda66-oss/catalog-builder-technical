@@ -1,0 +1,65 @@
+name: RR011 Disposable DB Rehearsal
+
+on:
+  push:
+    branches:
+      - audit/rr011-disposable-db-rehearsal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rr011-disposable-postgres:
+    name: RR011 PostgreSQL CAS assertions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rr011_rehearsal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rr011_rehearsal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rr011_rehearsal
+
+    steps:
+      - name: Checkout exact audit head
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Record disposable engine and source identity
+        run: |
+          echo "workflow=${GITHUB_WORKFLOW}"
+          echo "run_id=${GITHUB_RUN_ID}"
+          echo "head_sha=${GITHUB_SHA}"
+          echo "database_image=postgres:17-alpine"
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c 'SELECT version();'
+          git rev-parse HEAD
+
+      - name: Run RR011 empirical rehearsal
+        run: |
+          bash scripts/rehearsals/run-rr011-disposable-db-rehearsal.sh 2>&1 | tee rr011-disposable-db-rehearsal.log
+
+      - name: Upload rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rr011-disposable-db-rehearsal-${{ github.run_id }}
+          path: rr011-disposable-db-rehearsal.log
+          if-no-files-found: error
+          retention-days: 30

@@ -20,7 +20,7 @@ Replace last-write-wins SourceDocument persistence with a separate server-manage
 - [x] No Wave3 editor UX is implemented.
 - [x] SQL is stored as rehearsal/draft because no production ledger number after 00023 is officially allocated.
 - [ ] GitHub Actions quality gates pass: lint, typecheck, tests, build.
-- [ ] Disposable DB rehearsal executed. (Only check if an actual disposable DB workflow is run.)
+- [ ] Disposable DB rehearsal executed. (Checked only after the GitHub Actions run passes.)
 
 ## Test Coverage
 
@@ -45,6 +45,14 @@ Replace last-write-wins SourceDocument persistence with a separate server-manage
 - `src/services/product-workbook/source-document.realtime.ts`
 - `src/services/product-workbook/index.ts`
 - `supabase/rehearsals/source_document_cas_v2_draft.sql`
+- `supabase/rehearsals/rr011_disposable_db_baseline.sql`
+- `supabase/rehearsals/rr011_disposable_db_pre_concurrency.sql`
+- `supabase/rehearsals/rr011_writer_a.sql`
+- `supabase/rehearsals/rr011_writer_b.sql`
+- `supabase/rehearsals/rr011_disposable_db_post_concurrency.sql`
+- `scripts/rehearsals/run-rr011-disposable-db-rehearsal.sh`
+- `.github/workflows/rr011-disposable-db-rehearsal.yml`
+- `docs/release-readiness/RR011_DISPOSABLE_DB_REHEARSAL1.md`
 - `tests/services/source-document-cas-v2.test.ts`
 - `docs/stories/2026-09-06-h1b-source-document-cas.md`
 
