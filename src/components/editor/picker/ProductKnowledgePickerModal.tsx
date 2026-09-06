@@ -27,15 +27,13 @@ interface ProductKnowledgePickerModalProps {
 
 const PICKER_SEARCH_DEBOUNCE_MS = 250;
 
-// A StrictMode effect replay or an immediate remount can observe the same request before it
-// settles. Sharing only in-flight work prevents duplicate PIM reads without turning this UI
-// into a stale result cache.
-const pendingPickerSearches = new WeakMap<
+type PendingPickerSearches = Map<
   ProductKnowledgeProvider,
   Map<string, Promise<ProductKnowledgeSearchResult[]>>
->();
+>;
 
 const searchProductKnowledgeOnce = (
+  pendingPickerSearches: PendingPickerSearches,
   provider: ProductKnowledgeProvider,
   productId: string | undefined,
   query: string
@@ -102,6 +100,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   const [scopeTargetId, setScopeTargetId] = useState<string | undefined>(scopedProductId);
   const searchGenerationRef = useRef(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPickerSearchesRef = useRef<PendingPickerSearches>(new Map());
 
   const results = useMemo(
     () => kindFilter === 'all' ? searchResults : searchResults.filter((item) => item.kind === kindFilter),
@@ -168,7 +167,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
 
     const targetProductId = scopeToProduct ? scopedProductId : undefined;
 
-    searchProductKnowledgeOnce(provider, targetProductId, debouncedQuery)
+    searchProductKnowledgeOnce(pendingPickerSearchesRef.current, provider, targetProductId, debouncedQuery)
       .then((items) => {
         if (!isActive || generation !== searchGenerationRef.current) return;
         setSearchResults(items);

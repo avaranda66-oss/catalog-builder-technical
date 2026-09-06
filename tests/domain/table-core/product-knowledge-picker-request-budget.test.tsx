@@ -158,7 +158,7 @@ describe('RR015: ProductKnowledgePickerModal request budget', () => {
     expect(container.textContent).not.toContain('stale-ab');
   });
 
-  it('shares an in-flight initial request across StrictMode replay and an immediate remount', async () => {
+  it('shares an in-flight initial request across StrictMode replay within the same component lifetime', async () => {
     const request = deferred<ProductKnowledgeSearchResult[]>();
     const provider = new TestProductKnowledgeProvider();
     const search = vi.spyOn(provider, 'search').mockReturnValue(request.promise);
@@ -167,13 +167,40 @@ describe('RR015: ProductKnowledgePickerModal request budget', () => {
     await renderPicker(provider, true);
     expect(search).toHaveBeenCalledTimes(1);
 
-    act(() => root?.unmount());
-    root = createRoot(container);
+    request.resolve([makeResult('settled')]);
+    await act(async () => {});
+    expect(container.textContent).toContain('settled');
+  });
+
+  it('isolates in-flight searches across real picker lifetimes', async () => {
+    const requestA = deferred<ProductKnowledgeSearchResult[]>();
+    const requestB = deferred<ProductKnowledgeSearchResult[]>();
+    const provider = new TestProductKnowledgeProvider();
+    const search = vi.spyOn(provider, 'search')
+      .mockReturnValueOnce(requestA.promise)
+      .mockReturnValueOnce(requestB.promise);
+    useUIStore.setState({ isProductKnowledgePickerModalOpen: true, knowledgePickerTarget: { kind: 'table', blockId: 'table-1' } });
+
     await renderPicker(provider);
     expect(search).toHaveBeenCalledTimes(1);
 
-    request.resolve([makeResult('settled')]);
+    act(() => root?.unmount());
+    root = createRoot(container);
+    await renderPicker(provider);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls).toEqual([
+      [undefined, ''],
+      [undefined, '']
+    ]);
+
+    requestA.resolve([makeResult('A_PRIVATE')]);
     await act(async () => {});
+    expect(container.textContent).not.toContain('A_PRIVATE');
+
+    requestB.resolve([makeResult('B_CURRENT')]);
+    await act(async () => {});
+    expect(container.textContent).toContain('B_CURRENT');
+    expect(container.textContent).not.toContain('A_PRIVATE');
   });
 
   it('makes late responses inert after unmount', async () => {
