@@ -4,7 +4,7 @@
 // Discriminated union target, Product scoping, e ações semânticas distintas (Emendas 1, 2, 8, 11, 17).
 // Zero explicit any.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Search,
@@ -24,6 +24,48 @@ import { CatalogCellBinding } from '../../../domain/catalog.schema';
 interface ProductKnowledgePickerModalProps {
   provider?: ProductKnowledgeProvider;
 }
+
+const PICKER_SEARCH_DEBOUNCE_MS = 250;
+
+// A StrictMode effect replay or an immediate remount can observe the same request before it
+// settles. Sharing only in-flight work prevents duplicate PIM reads without turning this UI
+// into a stale result cache.
+const pendingPickerSearches = new WeakMap<
+  ProductKnowledgeProvider,
+  Map<string, Promise<ProductKnowledgeSearchResult[]>>
+>();
+
+const searchProductKnowledgeOnce = (
+  provider: ProductKnowledgeProvider,
+  productId: string | undefined,
+  query: string
+): Promise<ProductKnowledgeSearchResult[]> => {
+  const key = JSON.stringify([productId ?? null, query]);
+  let pendingByQuery = pendingPickerSearches.get(provider);
+
+  if (!pendingByQuery) {
+    pendingByQuery = new Map();
+    pendingPickerSearches.set(provider, pendingByQuery);
+  }
+
+  const existing = pendingByQuery.get(key);
+  if (existing) return existing;
+
+  let request: Promise<ProductKnowledgeSearchResult[]>;
+  try {
+    request = provider.search(productId, query);
+  } catch (error) {
+    request = Promise.reject(error);
+  }
+
+  pendingByQuery.set(key, request);
+  void request.then(
+    () => pendingByQuery?.delete(key),
+    () => pendingByQuery?.delete(key)
+  );
+
+  return request;
+};
 
 export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalProps> = ({
   provider: customProvider
@@ -46,8 +88,9 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   const provider = customProvider ?? storeProvider;
 
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | 'datum' | 'dataset' | 'saved_view'>('all');
-  const [results, setResults] = useState<ProductKnowledgeSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<ProductKnowledgeSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUnavailableState, setIsUnavailableState] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -56,14 +99,66 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
   const scopedProductId = knowledgePickerTarget?.productId;
   const scopedProductModel = knowledgePickerTarget?.productModel;
   const [scopeToProduct, setScopeToProduct] = useState<boolean>(Boolean(scopedProductId));
+  const [scopeTargetId, setScopeTargetId] = useState<string | undefined>(scopedProductId);
+  const searchGenerationRef = useRef(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const results = useMemo(
+    () => kindFilter === 'all' ? searchResults : searchResults.filter((item) => item.kind === kindFilter),
+    [kindFilter, searchResults]
+  );
+
+  const clearQueryDebounce = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  };
+
+  const handleQueryChange = (nextQuery: string) => {
+    searchGenerationRef.current += 1;
+    setQuery(nextQuery);
+    clearQueryDebounce();
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedQuery(nextQuery);
+      debounceTimerRef.current = null;
+    }, PICKER_SEARCH_DEBOUNCE_MS);
+  };
+
+  useEffect(() => () => clearQueryDebounce(), []);
 
   useEffect(() => {
-    let isCancelled = false;
+    if (!isProductKnowledgePickerModalOpen) {
+      searchGenerationRef.current += 1;
+      clearQueryDebounce();
+      setQuery('');
+      setDebouncedQuery('');
+    }
+  }, [isProductKnowledgePickerModalOpen]);
+
+  useEffect(() => {
+    if (
+      isProductKnowledgePickerModalOpen &&
+      scopeTargetId !== scopedProductId
+    ) {
+      searchGenerationRef.current += 1;
+      setScopeToProduct(Boolean(scopedProductId));
+      setScopeTargetId(scopedProductId);
+    }
+  }, [isProductKnowledgePickerModalOpen, scopeTargetId, scopedProductId]);
+
+  const isScopeCurrent = scopeTargetId === scopedProductId;
+
+  useEffect(() => {
+    if (!isProductKnowledgePickerModalOpen || !isScopeCurrent) return;
+
+    let isActive = true;
+    const generation = ++searchGenerationRef.current;
 
     if (provider.isAvailable && !provider.isAvailable()) {
       setIsUnavailableState(true);
       setIsLoading(false);
-      setResults([]);
+      setSearchResults([]);
       return;
     }
 
@@ -73,39 +168,42 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
 
     const targetProductId = scopeToProduct ? scopedProductId : undefined;
 
-    provider
-      .search(targetProductId, query)
+    searchProductKnowledgeOnce(provider, targetProductId, debouncedQuery)
       .then((items) => {
-        if (!isCancelled) {
-          const filtered =
-            kindFilter === 'all' ? items : items.filter((it) => it.kind === kindFilter);
-          setResults(filtered);
-          if (filtered.length > 0 && !selectedResult) {
-            setSelectedResult(filtered[0]);
-          }
-        }
+        if (!isActive || generation !== searchGenerationRef.current) return;
+        setSearchResults(items);
       })
       .catch((err) => {
-        if (!isCancelled) {
-          setResults([]);
-          const msg = err instanceof Error ? err.message : 'Erro ao consultar conhecimento.';
-          if (msg.includes('Indisponível') || msg.includes('unavailable')) {
-            setIsUnavailableState(true);
-          } else {
-            setSearchError(msg);
-          }
+        if (!isActive || generation !== searchGenerationRef.current) return;
+        setSearchResults([]);
+        const msg = err instanceof Error ? err.message : 'Erro ao consultar conhecimento.';
+        if (msg.includes('Indisponível') || msg.includes('unavailable')) {
+          setIsUnavailableState(true);
+        } else {
+          setSearchError(msg);
         }
       })
       .finally(() => {
-        if (!isCancelled) {
+        if (isActive && generation === searchGenerationRef.current) {
           setIsLoading(false);
         }
       });
 
     return () => {
-      isCancelled = true;
+      isActive = false;
     };
-  }, [provider, query, kindFilter, scopeToProduct, scopedProductId, selectedResult]);
+  }, [
+    debouncedQuery,
+    isProductKnowledgePickerModalOpen,
+    isScopeCurrent,
+    provider,
+    scopeToProduct,
+    scopedProductId
+  ]);
+
+  useEffect(() => {
+    setSelectedResult((current) => results.find((item) => item.id === current?.id) ?? results[0] ?? null);
+  }, [results]);
 
   if (!isProductKnowledgePickerModalOpen) return null;
 
@@ -332,7 +430,10 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                   <button
                     type="button"
                     data-testid="toggle-product-scope"
-                    onClick={() => setScopeToProduct(!scopeToProduct)}
+                    onClick={() => {
+                      searchGenerationRef.current += 1;
+                      setScopeToProduct(!scopeToProduct);
+                    }}
                     className="text-blue-700 hover:text-blue-900 font-semibold underline text-[11px]"
                   >
                     {scopeToProduct ? 'Buscar em Todos os Produtos' : `Limitar a ${scopedProductModel || scopedProductId}`}
@@ -345,7 +446,7 @@ export const ProductKnowledgePickerModal: React.FC<ProductKnowledgePickerModalPr
                 <input
                   type="text"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => handleQueryChange(e.target.value)}
                   placeholder="Buscar por termo..."
                   className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
