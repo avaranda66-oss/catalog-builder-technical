@@ -8,6 +8,8 @@ import {
   SourceDocument
 } from '../../domain/product-workbook';
 
+export const MAX_SAFE_PERSISTENCE_VERSION = 9_007_199_254_740_991;
+
 export interface ProductWorkbookRow {
   readonly id: string;
   readonly owner_kind: 'product' | 'family';
@@ -24,7 +26,10 @@ export interface ProductSourceDocumentRow {
   readonly id: string;
   readonly title: string;
   readonly document_type: string;
+  /** Editorial revision from the canonical SourceDocument domain. */
   readonly revision?: string | null;
+  /** Server-managed persistence CAS version. Never part of SourceDocument. */
+  readonly version: number;
   readonly language?: string | null;
   readonly publication_date?: string | null;
   readonly file_reference?: string | null;
@@ -110,6 +115,48 @@ export class ProductWorkbookPersistenceError extends Error {
   }
 }
 
+/**
+ * Wrapper de persistência para SourceDocument. A versão CAS permanece fora do domínio canônico.
+ */
+export interface PersistedSourceDocument {
+  readonly document: SourceDocument;
+  readonly version: number;
+}
+
+export interface SaveSourceDocumentParams {
+  readonly document: SourceDocument;
+  readonly expectedVersion: number;
+}
+
+export interface SaveSourceDocumentResult extends PersistedSourceDocument {
+  readonly sourceDocumentId: string;
+}
+
+/** SQLSTATE 40001 / SOURCE_DOCUMENT_CONFLICT. */
+export class SourceDocumentConflictError extends Error {
+  public readonly code = 'SOURCE_DOCUMENT_CONFLICT' as const;
+
+  constructor(
+    message: string,
+    public readonly sourceDocumentId: string,
+    public readonly expectedVersion: number,
+    public readonly actualVersion?: number | null
+  ) {
+    super(message);
+    this.name = 'SourceDocumentConflictError';
+  }
+}
+
+/** SQLSTATE 42501 from the server-side editor authorization gate. */
+export class SourceDocumentAuthorizationError extends Error {
+  public readonly code = '42501' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourceDocumentAuthorizationError';
+  }
+}
+
 export interface ProductWorkbookRepository {
   getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
   saveWorkbook(params: SaveWorkbookParams): Promise<SaveWorkbookResult>;
@@ -117,6 +164,12 @@ export interface ProductWorkbookRepository {
 
 export interface ProductSourceDocumentRepository {
   getSourceDocument(id: string): Promise<SourceDocument | null>;
+  getPersistedSourceDocument(id: string): Promise<PersistedSourceDocument | null>;
+  /**
+   * Legacy V1 entry point retained only for source compatibility. Its database EXECUTE grant
+   * is revoked by the CAS V2 rehearsal, so it cannot remain an authenticated write bypass.
+   */
   upsertSourceDocument(document: SourceDocument): Promise<SourceDocument>;
+  saveSourceDocument(params: SaveSourceDocumentParams): Promise<SaveSourceDocumentResult>;
   listSourceDocuments(ids?: string[]): Promise<SourceDocument[]>;
 }
