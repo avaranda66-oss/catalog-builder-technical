@@ -130,7 +130,76 @@ export function renameModuleLabel(
 }
 
 /**
- * Safely removes a module and all contained data points.
+ * Applies the canonical cascade for datum removal. References are stored by
+ * datum id or semantic key, so both representations must be removed together.
+ * Unrelated views and datasets retain their original object references.
+ */
+function cascadeRemovedDatumReferences(
+  workbook: ProductWorkbook,
+  removedDatumIds: ReadonlySet<string>,
+  removedModuleId?: string
+): Pick<ProductWorkbookV2, 'datasets' | 'savedViews'> {
+  const removedSemanticKeys = new Set<string>();
+  for (const datumId of removedDatumIds) {
+    const datum = workbook.data[datumId];
+    if (datum) {
+      removedSemanticKeys.add(datum.semanticKey);
+    }
+  }
+
+  const referencesRemovedDatum = (reference: string): boolean =>
+    removedDatumIds.has(reference) || removedSemanticKeys.has(reference);
+
+  const mappedSavedViews = workbook.savedViews?.map((view) => {
+    const datumKeys = view.datumKeys.filter((datumKey) => !referencesRemovedDatum(datumKey));
+    const ordering = view.ordering?.filter((datumKey) => !referencesRemovedDatum(datumKey));
+    const moduleIds = removedModuleId
+      ? view.moduleIds?.filter((viewModuleId) => viewModuleId !== removedModuleId)
+      : view.moduleIds;
+
+    if (
+      datumKeys.length === view.datumKeys.length &&
+      (!view.ordering || ordering?.length === view.ordering.length) &&
+      (!view.moduleIds || moduleIds?.length === view.moduleIds.length)
+    ) {
+      return view;
+    }
+
+    return {
+      ...view,
+      datumKeys,
+      ...(view.ordering ? { ordering } : {}),
+      ...(view.moduleIds ? { moduleIds } : {})
+    };
+  });
+
+  const savedViews = mappedSavedViews?.every((view, index) => view === workbook.savedViews?.[index])
+    ? workbook.savedViews
+    : mappedSavedViews;
+
+  const workbookV2 = workbook as ProductWorkbookV2;
+  const mappedDatasets = workbookV2.datasets
+    ?.filter((dataset) => dataset.moduleId !== removedModuleId)
+    .map((dataset) => {
+      const cells = Object.fromEntries(
+        Object.entries(dataset.cells).filter(([, cell]) => !removedDatumIds.has(cell.datumId))
+      ) as Record<string, DatasetCell>;
+
+      return Object.keys(cells).length === Object.keys(dataset.cells).length
+        ? dataset
+        : { ...dataset, cells };
+    });
+
+  const datasets = mappedDatasets?.length === workbookV2.datasets?.length &&
+    mappedDatasets.every((dataset, index) => dataset === workbookV2.datasets[index])
+    ? workbookV2.datasets
+    : mappedDatasets;
+
+  return { datasets: datasets ?? [], savedViews };
+}
+
+/**
+ * Safely removes a module and its dependent data, datasets, and saved-view references.
  */
 export function removeModule(workbook: ProductWorkbook, moduleId: string): ProductWorkbook {
   const targetModule = workbook.modules.find((m) => m.id === moduleId);
@@ -138,16 +207,21 @@ export function removeModule(workbook: ProductWorkbook, moduleId: string): Produ
     throw new ProductWorkbookError('MODULE_NOT_FOUND', `Módulo "${moduleId}" não encontrado.`);
   }
 
+  const removedDatumIds = new Set(targetModule.datumIds);
   const updatedData = { ...workbook.data };
-  for (const datumId of targetModule.datumIds) {
+  for (const datumId of removedDatumIds) {
     delete updatedData[datumId];
   }
+
+  const cascaded = cascadeRemovedDatumReferences(workbook, removedDatumIds, moduleId);
 
   return {
     ...workbook,
     revision: workbook.revision,
-    modules: workbook.modules.filter((m) => m.id !== moduleId),
-    data: updatedData
+    modules: workbook.modules.filter((module) => module.id !== moduleId),
+    data: updatedData,
+    ...(workbook.savedViews ? { savedViews: cascaded.savedViews } : {}),
+    ...(workbook.schemaVersion === 2 ? { datasets: cascaded.datasets } : {})
   };
 }
 
@@ -1076,29 +1150,14 @@ export function deleteDatum(
     datumIds: mod.datumIds.filter((id) => id !== datumId)
   }));
 
-  // Se houver datasets, desvincula células que apontavam para este datum
-  const wbV2 = workbook as ProductWorkbookV2;
-  let updatedDatasets = wbV2.datasets;
-  if (updatedDatasets) {
-    updatedDatasets = updatedDatasets.map((ds) => {
-      let cellsChanged = false;
-      const filteredCells: Record<string, DatasetCell> = {};
-      for (const [key, cell] of Object.entries(ds.cells)) {
-        if (cell.datumId === datumId) {
-          cellsChanged = true;
-        } else {
-          filteredCells[key] = cell;
-        }
-      }
-      return cellsChanged ? { ...ds, cells: filteredCells } : ds;
-    });
-  }
+  const cascaded = cascadeRemovedDatumReferences(workbook, new Set([datumId]));
 
   return {
     ...workbook,
     revision: workbook.revision,
     modules: updatedModules,
     data: updatedData,
-    ...(updatedDatasets ? { datasets: updatedDatasets } : {})
+    ...(workbook.savedViews ? { savedViews: cascaded.savedViews } : {}),
+    ...(workbook.schemaVersion === 2 ? { datasets: cascaded.datasets } : {})
   };
 }
