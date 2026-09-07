@@ -947,7 +947,7 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     useAuthStore.setState({ userId: 'r4-new-identity', status: 'authenticated' });
     stopOld();
     const newChannel = new FakeRealtimeChannel();
-    const newCatchUp = vi.fn(async () => true);
+    const newCatchUp = vi.fn(async (_metadata?: ProductWorkbookRealtimeMetadata) => true);
     const stopNew = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(newChannel), {
       requireCatchUp: vi.fn(),
       catchUp: newCatchUp
