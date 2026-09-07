@@ -191,4 +191,133 @@ describe('AUD013 — editorial/technical column ghost data', () => {
     );
     expect(JSON.stringify(block)).toBe(before);
   });
+
+  it('T10 hybrid custom_table preserves canonical tableRows authority', () => {
+    const hybridCustom: ContentBlock = {
+      id: 'aud013-hybrid-custom',
+      type: 'custom_table',
+      tableColumns: columns,
+      customData: {
+        headers: ['A', 'B', 'C'],
+        rows: [
+          ['legacy-A1', 'legacy-B1', 'legacy-C1'],
+          ['legacy-A2', 'legacy-B2', 'legacy-C2']
+        ],
+        showLegend: true
+      },
+      tableRows: [
+        {
+          id: 'row-1',
+          localOverrides: { a: 'canonical-A1', b: 'canonical-B1', c: 'canonical-C1' },
+          cellValues: {
+            a: { kind: 'text', text: 'canonical-A1-value' },
+            b: { kind: 'text', text: 'canonical-B1-value' },
+            c: { kind: 'text', text: 'canonical-C1-value' }
+          },
+          cellBindings: {
+            c: {
+              sourceKind: 'pim_datum',
+              productId: 'product-1',
+              semanticKey: 'spec.c',
+              bindingMode: 'live'
+            }
+          }
+        },
+        {
+          id: 'row-2',
+          localOverrides: { a: 'canonical-A2', b: 'canonical-B2', c: 'canonical-C2' }
+        },
+        {
+          id: 'row-3',
+          localOverrides: { a: 'NEW-A3', b: 'NEW-B3', c: 'NEW-C3' },
+          cellBindings: {
+            a: {
+              sourceKind: 'pim_datum',
+              productId: 'product-3',
+              semanticKey: 'spec.a',
+              bindingMode: 'snapshot',
+              snapshot: { kind: 'text', text: 'NEW-A3-snapshot' }
+            },
+            b: {
+              sourceKind: 'pim_datum',
+              productId: 'product-3',
+              semanticKey: 'spec.b',
+              bindingMode: 'live'
+            }
+          }
+        }
+      ]
+    };
+
+    const updated = applyPatch(
+      hybridCustom,
+      removeLegacyTableColumn(hybridCustom, columns, 'b')
+    );
+
+    expect(updated.tableColumns?.map((column) => column.key)).toEqual(['a', 'c']);
+    expect(updated.tableRows?.map((row) => row.id)).toEqual(['row-1', 'row-2', 'row-3']);
+    expect(updated.tableRows).toHaveLength(3);
+    expect(updated.tableRows?.[0].localOverrides).toEqual({ a: 'canonical-A1', c: 'canonical-C1' });
+    expect(updated.tableRows?.[0].cellValues).toEqual({
+      a: { kind: 'text', text: 'canonical-A1-value' },
+      c: { kind: 'text', text: 'canonical-C1-value' }
+    });
+    expect(updated.tableRows?.[0].cellBindings?.c?.semanticKey).toBe('spec.c');
+    expect(updated.tableRows?.[2].localOverrides).toEqual({ a: 'NEW-A3', c: 'NEW-C3' });
+    expect(updated.tableRows?.[2].cellBindings?.a?.semanticKey).toBe('spec.a');
+    for (const row of updated.tableRows || []) {
+      expect(row.localOverrides?.b).toBeUndefined();
+      expect(row.cellValues?.b).toBeUndefined();
+      expect(row.cellBindings?.b).toBeUndefined();
+    }
+    expect(updated.customData).toEqual({ showLegend: true });
+    expect(JSON.stringify(updated)).not.toContain('legacy-A');
+  });
+
+  it('T11 real editor transition keeps materialized and appended tableRows authoritative', () => {
+    const legacyRows = [
+      ['legacy-A1', 'legacy-B1', 'legacy-C1'],
+      ['legacy-A2', 'legacy-B2', 'legacy-C2']
+    ];
+    const materializedRows = legacyRows.map((row, rowIndex) => ({
+      id: `crow-${rowIndex + 1}`,
+      order: rowIndex,
+      localOverrides: {
+        a: row[0],
+        b: row[1],
+        c: row[2]
+      }
+    }));
+    const hybridAfterInsert: ContentBlock = {
+      id: 'aud013-editor-transition',
+      type: 'custom_table',
+      tableColumns: columns,
+      customData: {
+        headers: ['A', 'B', 'C'],
+        rows: legacyRows,
+        showLegend: true
+      },
+      tableRows: [
+        ...materializedRows,
+        {
+          id: 'row-new-3',
+          order: 2,
+          localOverrides: { a: 'NEW-A3', b: 'NEW-B3', c: 'NEW-C3' },
+          cellValues: {
+            c: { kind: 'text', text: 'NEW-C3-value' }
+          }
+        }
+      ]
+    };
+
+    const updated = applyPatch(
+      hybridAfterInsert,
+      removeLegacyTableColumn(hybridAfterInsert, columns, 'b')
+    );
+
+    expect(updated.tableRows?.map((row) => row.id)).toEqual(['crow-1', 'crow-2', 'row-new-3']);
+    expect(updated.tableRows?.[2].localOverrides).toEqual({ a: 'NEW-A3', c: 'NEW-C3' });
+    expect(updated.tableRows?.[2].cellValues?.c).toEqual({ kind: 'text', text: 'NEW-C3-value' });
+    expect(updated.customData).toEqual({ showLegend: true });
+  });
 });

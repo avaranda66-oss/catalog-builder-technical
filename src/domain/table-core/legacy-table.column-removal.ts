@@ -62,9 +62,10 @@ function deriveLegacyCustomRows(
   columns: readonly TableColumnConfig[]
 ): CatalogTableRow[] | undefined {
   if (block.type !== 'custom_table') return block.tableRows;
+  if (block.tableRows !== undefined) return block.tableRows;
 
   const customRowsValue = (block.customData as Record<string, unknown> | undefined)?.rows;
-  if (!isStringMatrix(customRowsValue)) return block.tableRows;
+  if (!isStringMatrix(customRowsValue)) return undefined;
 
   return customRowsValue.map((legacyRow, rowIndex) => {
     const localOverrides: Record<string, string> = {};
