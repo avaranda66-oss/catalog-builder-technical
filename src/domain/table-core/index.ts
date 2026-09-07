@@ -12,5 +12,6 @@ export * from './table.engine';
 export * from './table.serialization';
 export * from './legacy-table.adapter';
 export * from './legacy-table.bridge';
+export * from './legacy-table.column-removal';
 export * from './table-datum-resolver.types';
 export * from './publish-safety.audit';

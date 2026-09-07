@@ -24,6 +24,7 @@ import {
 import { useCatalogStore } from '../../stores/useCatalogStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
 import { TableColumnConfig } from '../../domain/catalog.schema';
+import { removeLegacyTableColumn } from '../../domain/table-core';
 import {
   InsertCircleItem,
   InsertTableRow,
@@ -130,9 +131,12 @@ export const PropertiesPanel: React.FC = () => {
   const handleRemoveColumn = (colKey: string) => {
     if (!selectedBlock) return;
     const currentCols: TableColumnConfig[] = selectedBlock.tableColumns || [];
-    updateBlock(blockPageId, selectedBlock.id, {
-      tableColumns: currentCols.filter((c) => c.key !== colKey)
-    });
+    if (currentCols.length <= 1) return;
+    updateBlock(
+      blockPageId,
+      selectedBlock.id,
+      removeLegacyTableColumn(selectedBlock, currentCols, colKey)
+    );
   };
 
   return (

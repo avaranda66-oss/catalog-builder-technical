@@ -7,7 +7,11 @@ import { useUIStore } from '../../../stores/useUIStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TechnicalLegend } from '../../technical-table/TechnicalLegend';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
-import { adaptLegacyBlockToTableCore, type TableDatumResolver } from '../../../domain/table-core';
+import {
+  adaptLegacyBlockToTableCore,
+  removeLegacyTableColumn,
+  type TableDatumResolver
+} from '../../../domain/table-core';
 import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 import { TableCoreRenderer } from '../table-core';
 
@@ -94,7 +98,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
 
   const handleRemoveColumn = (colKey: string) => {
     if (isExport || columns.length <= 1) return;
-    updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
+    updateBlock(pageId, block.id, removeLegacyTableColumn(block, columns, colKey));
   };
 
   return (

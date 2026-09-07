@@ -5,6 +5,7 @@ import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
+import { removeLegacyTableColumn } from '../../../domain/table-core';
 
 interface CustomTableBlockProps {
   block: ContentBlock;
@@ -75,7 +76,7 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
 
   const handleRemoveColumn = (colKey: string) => {
     if (isExport || columns.length <= 1) return;
-    updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
+    updateBlock(pageId, block.id, removeLegacyTableColumn(block, columns, colKey));
   };
 
   const handleAddRow = () => {

@@ -40,7 +40,8 @@ import {
   TableDensityToken,
   TableBorderToken,
   TableStripeToken,
-  getTablePreset
+  getTablePreset,
+  removeLegacyTableColumn
 } from '../../../domain/table-core';
 import { TableColorValue } from '../../../domain/table-core/table.types';
 import { TableCellLiteralContent } from '../../../domain/table-values';
@@ -251,8 +252,7 @@ export const SpecsTableInspector: React.FC<SpecsTableInspectorProps> = ({
 
   const handleRemoveColumn = (colKey: string) => {
     if (columns.length <= 1) return;
-    const updated = columns.filter((c) => c.key !== colKey);
-    updateBlock(pageId, block.id, { tableColumns: updated });
+    updateBlock(pageId, block.id, removeLegacyTableColumn(block, columns, colKey));
   };
 
   const handleAddCustomColumn = () => {

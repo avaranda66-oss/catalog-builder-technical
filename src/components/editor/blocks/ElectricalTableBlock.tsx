@@ -5,6 +5,7 @@ import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
+import { removeLegacyTableColumn } from '../../../domain/table-core';
 
 interface ElectricalTableBlockProps {
   block: ContentBlock;
@@ -81,7 +82,7 @@ export const ElectricalTableBlock: React.FC<ElectricalTableBlockProps> = ({
 
   const handleRemoveColumn = (colKey: string) => {
     if (columns.length <= 1) return;
-    updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
+    updateBlock(pageId, block.id, removeLegacyTableColumn(block, columns, colKey));
   };
 
   return (
