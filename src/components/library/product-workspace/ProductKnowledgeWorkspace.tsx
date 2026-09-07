@@ -85,12 +85,9 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   const isLoading = Boolean(session?.isLoading || familySession?.isLoading);
   const conflict = session?.conflict || null;
   const reconciliation = session?.reconciliationRequired || null;
-<<<<<<< HEAD
   const familyError = familySession?.loadError || null;
-=======
   const isResolvingConflict = Boolean(session?.discardToken);
   const isSaveBlocked = Boolean(conflict || reconciliation);
->>>>>>> 92b81d7 (fix(readiness): clarify library conflict recovery)
   const errorMessage = session?.failure?.message || session?.loadError || familyError;
   const technicalErrorDetails = errorMessage;
 
