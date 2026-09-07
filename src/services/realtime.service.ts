@@ -1,5 +1,6 @@
 import { useCatalogStore, debugSetCatalog } from '../stores/useCatalogStore';
-import { Catalog, analyzeCatalogStructuralDelta } from '../domain/catalog.schema';
+import { analyzeCatalogStructuralDelta } from '../domain/catalog.schema';
+import { catalogRowToCatalog } from './supabase.service';
 
 export interface RealtimePayload {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE' | string;
@@ -117,17 +118,7 @@ export async function handleCatalogRealtimeEvent(
     });
 
     if (payload.new && payload.new.id) {
-      const brandData = typeof payload.new.brand === 'object' && payload.new.brand !== null ? payload.new.brand : {};
-      const updatedItem: Catalog = {
-        id: payload.new.id,
-        title: payload.new.name || brandData.title || 'Catálogo Técnico',
-        subtitle: brandData.subtitle || '',
-        themeId: brandData.themeId || 'default-technical',
-        pages: Array.isArray(brandData.pages) ? brandData.pages : [],
-        version: Number(payload.new.version) || 1,
-        createdAt: brandData.createdAt || payload.new.created_at || new Date().toISOString(),
-        updatedAt: payload.new.updated_at || new Date().toISOString()
-      };
+      const updatedItem = catalogRowToCatalog(payload.new);
 
       const existingIndex = state.savedCatalogs.findIndex((c) => c.id === changedId);
       const nextSaved = existingIndex >= 0
@@ -192,17 +183,10 @@ export async function handleCatalogRealtimeEvent(
       // Se payload.new possui brand completo via REPLICA IDENTITY FULL, analisa delta e atualiza
       if (payload.new && payload.new.brand && typeof payload.new.brand === 'object') {
         const brandData = payload.new.brand;
-        const updatedCatalog: Catalog = {
-          id: payload.new.id || currentCatalog.id,
-          title: payload.new.name || brandData.title || currentCatalog.title,
-          subtitle: brandData.subtitle ?? currentCatalog.subtitle ?? '',
-          themeId: brandData.themeId || currentCatalog.themeId || 'default-technical',
-          pages: Array.isArray(brandData.pages) ? brandData.pages : currentCatalog.pages,
-          version: remoteVersion,
-          lastMutation: brandData.lastMutation,
-          createdAt: brandData.createdAt || currentCatalog.createdAt || new Date().toISOString(),
-          updatedAt: payload.new.updated_at || new Date().toISOString()
-        };
+        const updatedCatalog = catalogRowToCatalog({
+          ...payload.new,
+          id: payload.new.id || currentCatalog.id
+        });
 
         // Análise Defensiva de Delta Estrutural: Bloqueia snapshots que removem blocos sem REMOVE_BLOCK
         const structuralDelta = analyzeCatalogStructuralDelta(currentCatalog, updatedCatalog);
