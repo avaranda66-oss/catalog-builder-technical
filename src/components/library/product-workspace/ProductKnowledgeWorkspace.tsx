@@ -85,7 +85,12 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   const isLoading = Boolean(session?.isLoading || familySession?.isLoading);
   const conflict = session?.conflict || null;
   const reconciliation = session?.reconciliationRequired || null;
+<<<<<<< HEAD
   const familyError = familySession?.loadError || null;
+=======
+  const isResolvingConflict = Boolean(session?.discardToken);
+  const isSaveBlocked = Boolean(conflict || reconciliation);
+>>>>>>> 92b81d7 (fix(readiness): clarify library conflict recovery)
   const errorMessage = session?.failure?.message || session?.loadError || familyError;
   const technicalErrorDetails = errorMessage;
 
@@ -139,7 +144,7 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
               <span>·</span>
               <span>Revisão Persistida: {workbook.revision}</span>
               {isDirty && (
-                <span className="text-amber-400 font-bold">● Rascunho mantido nesta sessão</span>
+                <span className="text-amber-400 font-bold">● Rascunho mantido nesta sessão (não salvo)</span>
               )}
             </div>
           </div>
@@ -155,9 +160,16 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
 
           <button
             onClick={() => void handleSave()}
-            disabled={isSaving || !isDirty || Boolean(conflict) || Boolean(reconciliation)}
+            disabled={isSaving || !isDirty || isSaveBlocked}
+            title={
+              conflict
+                ? 'Salvar bloqueado até descartar o rascunho local e recarregar o servidor.'
+                : reconciliation
+                  ? 'Salvar bloqueado até descartar o rascunho local e recarregar o servidor.'
+                  : undefined
+            }
             className={`px-4 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs ${
-              isDirty
+              isDirty && !isSaveBlocked
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 : 'bg-white/10 text-white/40 cursor-not-allowed'
             }`}
@@ -179,26 +191,47 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
 
       {/* Alerta de Conflito CAS */}
       {conflict && (
-        <div className="bg-rose-50 border-b border-rose-200 p-3 flex items-center justify-between text-xs text-rose-900 shrink-0">
-          <div className="flex items-center gap-2">
+        <div role="alert" className="bg-rose-50 border-b border-rose-200 p-3 flex items-center justify-between gap-4 text-xs text-rose-900 shrink-0">
+          <div id="workbook-conflict-state" className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>
-              <strong>Conflito de Concorrência (CAS):</strong> Outro usuário atualizou este produto (Revisão atual: {conflict.actualRevision ?? 'desconhecida'}).
-            </span>
+            <div className="space-y-0.5">
+              <p>
+                <strong>Alterações não salvas — conflito CAS.</strong>{' '}
+                {conflict.remoteDeletion
+                  ? 'O workbook foi removido no servidor enquanto este rascunho local ainda tinha alterações.'
+                  : `Outro usuário atualizou este produto (revisão atual: ${conflict.actualRevision ?? 'desconhecida'}).`}
+              </p>
+              <p>
+                <strong>Ação permitida:</strong> descarte o rascunho local e recarregue o servidor. Salvar ou tentar novamente permanece bloqueado; não há mesclagem automática.
+              </p>
+            </div>
           </div>
           <button
             onClick={() => void discardWithRefresh(owner, repository, navigationEpoch)}
-            className="px-3 py-1 bg-rose-600 text-white rounded font-bold hover:bg-rose-700 cursor-pointer"
+            disabled={isResolvingConflict}
+            className="px-3 py-1 bg-rose-600 text-white rounded font-bold hover:bg-rose-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shrink-0"
           >
-            Descartar alterações locais e recarregar
+            {isResolvingConflict ? 'Recarregando servidor...' : 'Descartar rascunho local e recarregar servidor'}
           </button>
         </div>
       )}
 
       {reconciliation && (
-        <div className="bg-amber-50 border-b border-amber-200 p-3 text-xs text-amber-900 shrink-0 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span><strong>Reconciliação necessária:</strong> {reconciliation.message}</span>
+        <div role="alert" className="bg-amber-50 border-b border-amber-200 p-3 text-xs text-amber-900 shrink-0 flex items-center justify-between gap-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="space-y-0.5">
+              <p><strong>Alterações não confirmadas — reconciliação necessária.</strong> {reconciliation.message}</p>
+              <p><strong>Ação permitida:</strong> descarte o rascunho local e recarregue o servidor. Salvar permanece bloqueado; não há mesclagem automática.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => void discardWithRefresh(owner, repository, navigationEpoch)}
+            disabled={isResolvingConflict}
+            className="px-3 py-1 bg-amber-600 text-white rounded font-bold hover:bg-amber-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 shrink-0"
+          >
+            {isResolvingConflict ? 'Recarregando servidor...' : 'Descartar rascunho local e recarregar servidor'}
+          </button>
         </div>
       )}
 

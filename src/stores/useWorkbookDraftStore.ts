@@ -1003,6 +1003,14 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
     try {
       const loaded = await repository.getWorkbook(owner);
       const canonical = loaded ? ensureWorkbookV2(loaded) : emptyWorkbook(owner);
+      if (authIdentity() !== token.authIdentity) {
+        set((state) => {
+          const current = state.sessions[key];
+          if (!current || current.discardToken?.id !== token.id) return {};
+          return { sessions: { ...state.sessions, [key]: { ...current, discardToken: null } } };
+        });
+        return false;
+      }
       let discarded = false;
       set((state) => {
         const current = state.sessions[key];

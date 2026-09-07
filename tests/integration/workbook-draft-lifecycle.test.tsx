@@ -407,6 +407,101 @@ describe('G1 Workbook draft/session lifecycle', () => {
     expect(session.acknowledgedGeneration).toBe(1);
   });
 
+  it('AUD-012 N5: reconnect CAS conflict keeps the local draft visibly unsaved, blocks retries, survives reopening, and only discards through a server reload', async () => {
+    const product = productFixture();
+    const base = workbookFixture();
+    const remote = cloneWorkbook({ ...base, metadata: { server: 'revision-3' } }, 3);
+    const getSpy = vi.spyOn(SupabaseProductWorkbookRepository.prototype, 'getWorkbook')
+      .mockResolvedValueOnce(base)
+      .mockResolvedValueOnce(remote);
+    const saveSpy = vi.spyOn(SupabaseProductWorkbookRepository.prototype, 'saveWorkbook')
+      .mockRejectedValueOnce(new Error('Conexão interrompida'))
+      .mockRejectedValueOnce(new WorkbookConflictError('WORKBOOK_CONFLICT Atual: 3', 1, 3, `product:${PRODUCT_ID}`));
+
+    const view = render(<ProductKnowledgeWorkspace product={product} onClose={() => undefined} />);
+    await screen.findByText(/Revisão Persistida: 1/);
+    await addModuleThroughClassic(/Especificações Metrológicas/);
+    fireEvent.click(screen.getByRole('button', { name: /Salvar Conhecimento/ }));
+    await screen.findByText(/Conexão interrompida/);
+    fireEvent.click(screen.getByRole('button', { name: /Tentar novamente/ }));
+
+    await screen.findByText(/Alterações não salvas — conflito CAS/);
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/não há mesclagem automática/i)).toBeInTheDocument();
+    const blockedSave = screen.getByRole('button', { name: /Salvar Conhecimento/ });
+    expect(blockedSave).toBeDisabled();
+    fireEvent.click(blockedSave);
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+
+    view.unmount();
+    render(<ProductKnowledgeWorkspace product={product} onClose={() => undefined} />);
+    expect(await screen.findByText(/Alterações não salvas — conflito CAS/)).toBeInTheDocument();
+    expect(getSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Descartar rascunho local e recarregar servidor/ }));
+    await screen.findByText(/Revisão Persistida: 3/);
+    expect(screen.queryByText(/Alterações não salvas — conflito CAS/)).not.toBeInTheDocument();
+    expect(getSpy).toHaveBeenCalledTimes(2);
+    const session = useWorkbookDraftStore.getState().getSession({ kind: 'product', id: PRODUCT_ID })!;
+    expect(session.draft.metadata?.server).toBe('revision-3');
+    expect(session.localGeneration).toBe(session.acknowledgedGeneration);
+  });
+
+  it('AUD-012 N5: remote deletion with a dirty draft is explicit to the user and cannot be saved as a replacement', async () => {
+    const product = productFixture();
+    const base = workbookFixture();
+    vi.spyOn(SupabaseProductWorkbookRepository.prototype, 'getWorkbook').mockResolvedValue(base);
+    const saveSpy = vi.spyOn(SupabaseProductWorkbookRepository.prototype, 'saveWorkbook');
+    render(<ProductKnowledgeWorkspace product={product} onClose={() => undefined} />);
+    await screen.findByText(/Revisão Persistida: 1/);
+    await addModuleThroughClassic(/Condições de Operação & Ambiente/);
+
+    await act(async () => {
+      await useWorkbookDraftStore.getState().refresh(
+        { kind: 'product', id: PRODUCT_ID },
+        { getWorkbook: vi.fn(async () => null), saveWorkbook: vi.fn() }
+      );
+    });
+
+    expect(await screen.findByText(/workbook foi removido no servidor/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Salvar Conhecimento/ })).toBeDisabled();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('AUD-012 N5: navigation or identity changes invalidate an in-progress discard without replacing the retained local draft', async () => {
+    const owner = { kind: 'product' as const, id: PRODUCT_ID };
+    const base = workbookFixture();
+    const navigationRead = deferred<ProductWorkbookV2 | null>();
+    const identityRead = deferred<ProductWorkbookV2 | null>();
+    const navigationRepository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(() => navigationRead.promise),
+      saveWorkbook: vi.fn()
+    };
+    const identityRepository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(() => identityRead.promise),
+      saveWorkbook: vi.fn()
+    };
+
+    await useWorkbookDraftStore.getState().load(owner, { getWorkbook: vi.fn(async () => base), saveWorkbook: vi.fn() });
+    useWorkbookDraftStore.getState().edit(owner, { ...base, metadata: { local: 'retain' } });
+    const navigationDiscard = useWorkbookDraftStore.getState().discardWithRefresh(owner, navigationRepository, 0);
+    useUIStore.getState().advanceNavigationEpoch();
+    navigationRead.resolve(cloneWorkbook({ ...base, metadata: { server: 'ignored-navigation' } }, 2));
+    await expect(navigationDiscard).resolves.toBe(false);
+    expect(useWorkbookDraftStore.getState().getSession(owner)?.draft.metadata?.local).toBe('retain');
+
+    useAuthStore.setState({ userId: 'device-a' });
+    await useWorkbookDraftStore.getState().load(owner, { getWorkbook: vi.fn(async () => base), saveWorkbook: vi.fn() });
+    useWorkbookDraftStore.getState().edit(owner, { ...base, metadata: { local: 'device-a' } });
+    const identityDiscard = useWorkbookDraftStore.getState().discardWithRefresh(owner, identityRepository, 1);
+    useAuthStore.setState({ userId: 'device-b' });
+    identityRead.resolve(cloneWorkbook({ ...base, metadata: { server: 'ignored-identity' } }, 2));
+    await expect(identityDiscard).resolves.toBe(false);
+    const retainedA = useWorkbookDraftStore.getState().sessions[`device-a:product:${PRODUCT_ID}`];
+    expect(retainedA.draft.metadata?.local).toBe('device-a');
+    expect(retainedA.discardToken).toBeNull();
+  });
+
   it('AUD-012: Classic → Mega → Classic preserves the same dirty session with zero writes; cancel does nothing and explicit discard is the only disposal path', async () => {
     const product = productFixture();
     const base = workbookFixture();
