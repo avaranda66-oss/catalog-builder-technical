@@ -8,6 +8,8 @@ interface BoxBlockProps {
   isSelected: boolean;
 }
 
+const EMPTY_PLACEHOLDER = 'Digite notas técnicas ou advertências metrológicas...';
+
 const renderInlineMarkup = (text: string): React.ReactNode[] => {
   const nodes: React.ReactNode[] = [];
   const markupPattern = /\*\*(.+?)\*\*|\*(.+?)\*/g;
@@ -38,10 +40,43 @@ const renderInlineMarkup = (text: string): React.ReactNode[] => {
 
 export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected }) => {
   const { updateBlock, setSelectedBlockId } = useCatalogStore();
-  const displayText = block.textContent || 'Digite notas técnicas ou advertências metrológicas...';
+  const sourceText = block.textContent ?? '';
+  const displayText = sourceText || EMPTY_PLACEHOLDER;
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState('');
+  const sourceAtEditStartRef = React.useRef('');
+  const editorRef = React.useRef<HTMLTextAreaElement>(null);
 
-  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
-    updateBlock(pageId, block.id, { textContent: e.currentTarget.innerText.trim() });
+  React.useLayoutEffect(() => {
+    if (!isEditing || !editorRef.current) {
+      return;
+    }
+
+    editorRef.current.focus();
+    editorRef.current.setSelectionRange(editorRef.current.value.length, editorRef.current.value.length);
+  }, [isEditing]);
+
+  React.useLayoutEffect(() => {
+    if (!isEditing || !editorRef.current) {
+      return;
+    }
+
+    editorRef.current.style.height = 'auto';
+    editorRef.current.style.height = `${editorRef.current.scrollHeight}px`;
+  }, [draft, isEditing]);
+
+  const beginEditing = () => {
+    sourceAtEditStartRef.current = sourceText;
+    setDraft(sourceText);
+    setIsEditing(true);
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+
+    if (draft !== sourceAtEditStartRef.current) {
+      updateBlock(pageId, block.id, { textContent: draft });
+    }
   };
 
   return (
@@ -61,15 +96,32 @@ export const BoxBlock: React.FC<BoxBlockProps> = ({ block, pageId, isSelected })
         borderStyle: 'solid'
       }}
     >
-      <div
-        data-printable-field="textContent"
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={handleBlur}
-        className="outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap cursor-text"
-      >
-        {renderInlineMarkup(displayText)}
-      </div>
+      {isEditing ? (
+        <textarea
+          ref={editorRef}
+          data-printable-field="textContent"
+          data-editor-mode="editing"
+          aria-label="Conteúdo da caixa"
+          value={draft}
+          placeholder={EMPTY_PLACEHOLDER}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onBlur={handleBlur}
+          rows={1}
+          className="block w-full min-h-[1.25rem] resize-none overflow-hidden border-0 bg-transparent p-0 outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap cursor-text"
+        />
+      ) : (
+        <div
+          data-printable-field="textContent"
+          data-editor-mode="display"
+          role="textbox"
+          aria-label="Conteúdo da caixa"
+          tabIndex={0}
+          onFocus={beginEditing}
+          className="outline-none text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap cursor-text"
+        >
+          {renderInlineMarkup(displayText)}
+        </div>
+      )}
     </div>
   );
 };
