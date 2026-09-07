@@ -114,6 +114,17 @@ class FakeRealtimeChannel {
     });
   }
 
+  emitWorkbookDelete(revision: number): void {
+    this.changeHandlers.get('product_workbooks')?.({
+      eventType: 'DELETE',
+      old: {
+        owner_kind: 'product',
+        owner_id: PRODUCT_ID,
+        revision
+      }
+    });
+  }
+
   emitFamilyWorkbookChange(revision: number): void {
     this.changeHandlers.get('product_workbooks')?.({
       eventType: 'UPDATE',
@@ -837,5 +848,228 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     expect(catchUp.mock.calls[0]?.[0]?.revision).toBe(2);
     expect(catchUp.mock.calls[1]?.[0]).toBeUndefined();
     stopSecond();
+  });
+
+  it('R4.1c T1: registry reassignment plus realtime catch-up preserves a dirty product draft and converges inherited authority', async () => {
+    const owner: WorkbookOwner = { kind: 'product', id: PRODUCT_ID };
+    let familyId = FAMILY_ID;
+    let remoteProduct = workbook(1, 'remote-v1');
+    const registryReader: ProductRegistryReader = {
+      getProductIdentity: vi.fn(async () => ({ id: PRODUCT_ID, code: 'R4-T1', familyId })),
+      getProductsByIds: vi.fn(async () => [{ id: PRODUCT_ID, code: 'R4-T1', familyId }]),
+      getProductsByFamilyIds: vi.fn(async () => [])
+    };
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(async (target) => {
+        if (target.kind === 'product') return clone(remoteProduct);
+        if (target.id === FAMILY_ID) return familyWorkbook(1, 'F1', FAMILY_ID);
+        if (target.id === FAMILY_ID_2) return familyWorkbook(2, 'F2', FAMILY_ID_2);
+        return null;
+      }),
+      saveWorkbook: vi.fn()
+    };
+    const runtime = new ProductKnowledgeRuntime({ registryReader, workbookFetcher: repository });
+
+    await useWorkbookDraftStore.getState().load(owner, repository);
+    useWorkbookDraftStore.getState().edit(owner, {
+      ...workbook(1, 'local-dirty'),
+      metadata: { marker: 'local-dirty' }
+    });
+    await runtime.preloadCatalogProductKnowledge(catalog());
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID);
+
+    const channel = new FakeRealtimeChannel();
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: (_reason, metadata) => {
+        useWorkbookDraftStore.getState().requireCatchUp(metadata?.owner);
+        runtime.requireRealtimeCatchUp();
+      },
+      catchUp: async (metadata) => {
+        const draftSucceeded = metadata
+          ? await useWorkbookDraftStore.getState().catchUp(metadata.owner, repository)
+          : await useWorkbookDraftStore.getState().catchUpAll(repository);
+        await runtime.catchUpActiveKnowledge();
+        return draftSucceeded && runtime.getFreshnessState() === 'fresh';
+      },
+      isProductInActiveScope: (productId) => runtime.getReferencedProductIds().includes(productId)
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await vi.waitFor(() => expect(runtime.getFreshnessState()).toBe('fresh'));
+
+    const before = useWorkbookDraftStore.getState().getSession(owner)!;
+    const dirtySnapshot = clone(before.draft);
+    const localGeneration = before.localGeneration;
+    expect(localGeneration).toBeGreaterThan(before.acknowledgedGeneration);
+
+    familyId = FAMILY_ID_2;
+    remoteProduct = workbook(2, 'remote-v2');
+    channel.emitProductRegistryChange(PRODUCT_ID);
+
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')).toBeUndefined();
+    await vi.waitFor(() => {
+      expect(runtime.getFreshnessState()).toBe('fresh');
+      expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID_2);
+      expect(useWorkbookDraftStore.getState().getSession(owner)?.conflict?.actualRevision).toBe(2);
+    });
+
+    const after = useWorkbookDraftStore.getState().getSession(owner)!;
+    expect(after.draft).toEqual(dirtySnapshot);
+    expect(after.localGeneration).toBe(localGeneration);
+    expect(after.localGeneration).toBeGreaterThan(after.acknowledgedGeneration);
+    expect(after.remoteRevision).toBe(2);
+    expect(runtime.getCachedWorkbook('family', FAMILY_ID)).toBeUndefined();
+    expect(runtime.getCachedWorkbook('family', FAMILY_ID_2)?.revision).toBe(2);
+    stop();
+  });
+
+  it('R4.1c T3: identity switch disposes a pending owner retry before it can leak into the restarted lifecycle', async () => {
+    vi.useFakeTimers();
+    const oldIdentity = 'r4-old-identity';
+    useAuthStore.setState({ userId: oldIdentity, status: 'authenticated' });
+    const oldChannel = new FakeRealtimeChannel();
+    const oldOwnerCatchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => metadata ? false : true);
+    const oldCoordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(oldChannel), {
+      requireCatchUp: vi.fn(),
+      catchUp: async (metadata) => {
+        if (useAuthStore.getState().userId !== oldIdentity) return false;
+        return oldOwnerCatchUp(metadata);
+      }
+    });
+    const stopOld = oldCoordinator.start();
+    oldChannel.emitStatus('SUBSCRIBED');
+    await oldOwnerCatchUp.mock.results[0]?.value;
+    oldOwnerCatchUp.mockClear();
+
+    oldChannel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(oldOwnerCatchUp).toHaveBeenCalledTimes(1));
+
+    useAuthStore.setState({ userId: 'r4-new-identity', status: 'authenticated' });
+    stopOld();
+    const newChannel = new FakeRealtimeChannel();
+    const newCatchUp = vi.fn(async () => true);
+    const stopNew = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(newChannel), {
+      requireCatchUp: vi.fn(),
+      catchUp: newCatchUp
+    }).start();
+    newChannel.emitStatus('SUBSCRIBED');
+    await newCatchUp.mock.results[0]?.value;
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(oldOwnerCatchUp).toHaveBeenCalledTimes(1);
+    expect(oldOwnerCatchUp.mock.calls[0]?.[0]?.revision).toBe(2);
+    expect(newCatchUp).toHaveBeenCalledTimes(1);
+    expect(newCatchUp.mock.calls[0]?.[0]).toBeUndefined();
+    stopNew();
+  });
+
+  it('R4.1c T4: a stale catch-up completion cannot resurrect a workbook after authoritative deletion', async () => {
+    const owner: WorkbookOwner = { kind: 'product', id: PRODUCT_ID };
+    const staleRead = deferred<ProductWorkbook | null>();
+    let remote: ProductWorkbook | null = workbook(1, 'remote-v1');
+    let deferNextRead = false;
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(async () => deferNextRead ? staleRead.promise : clone(remote)),
+      saveWorkbook: vi.fn()
+    };
+    await useWorkbookDraftStore.getState().load(owner, repository);
+
+    const channel = new FakeRealtimeChannel();
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: (_reason, metadata) => useWorkbookDraftStore.getState().requireCatchUp(metadata?.owner),
+      catchUp: async (metadata) => metadata
+        ? useWorkbookDraftStore.getState().catchUp(metadata.owner, repository)
+        : useWorkbookDraftStore.getState().catchUpAll(repository)
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await vi.waitFor(() => expect(useWorkbookDraftStore.getState().getSession(owner)?.freshness).toBe('fresh'));
+
+    deferNextRead = true;
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(useWorkbookDraftStore.getState().getSession(owner)?.freshness).toBe('catching_up'));
+
+    deferNextRead = false;
+    remote = null;
+    channel.emitWorkbookDelete(2);
+    expect(await useWorkbookDraftStore.getState().catchUp(owner, repository)).toBe(true);
+    const deleted = clone(useWorkbookDraftStore.getState().getSession(owner)!);
+    expect(deleted.baseRevision).toBeNull();
+    expect(deleted.remoteDeletion).toBe(true);
+    expect(deleted.draft.revision).toBe(0);
+
+    staleRead.resolve(workbook(2, 'stale-resurrection'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const final = useWorkbookDraftStore.getState().getSession(owner)!;
+    expect(final.baseRevision).toBeNull();
+    expect(final.remoteDeletion).toBe(true);
+    expect(final.draft.metadata?.marker).not.toBe('stale-resurrection');
+    expect(final.draft).toEqual(deleted.draft);
+    stop();
+  });
+
+  it('R4.1c T5: reconnect catch-up preserves an explicit conflict until discardWithRefresh replaces the draft', async () => {
+    const owner: WorkbookOwner = { kind: 'product', id: PRODUCT_ID };
+    let remote = workbook(1, 'remote-v1');
+    const saveWorkbook = vi.fn();
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(async () => clone(remote)),
+      saveWorkbook
+    };
+    const runtime = new ProductKnowledgeRuntime({ registryReader: noFamilyRegistry(), workbookFetcher: repository });
+    await runtime.preloadCatalogProductKnowledge(catalog());
+    await useWorkbookDraftStore.getState().load(owner, repository);
+    useWorkbookDraftStore.getState().edit(owner, { ...workbook(1, 'local-conflict'), metadata: { marker: 'local-conflict' } });
+
+    remote = workbook(2, 'remote-v2');
+    useWorkbookDraftStore.getState().requireCatchUp(owner);
+    await useWorkbookDraftStore.getState().catchUp(owner, repository);
+    const conflicted = useWorkbookDraftStore.getState().getSession(owner)!;
+    expect(conflicted.conflict?.actualRevision).toBe(2);
+    const localDraft = clone(conflicted.draft);
+    const localGeneration = conflicted.localGeneration;
+
+    const channel = new FakeRealtimeChannel();
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: (_reason, metadata) => {
+        useWorkbookDraftStore.getState().requireCatchUp(metadata?.owner);
+        runtime.requireRealtimeCatchUp();
+      },
+      catchUp: async (metadata) => {
+        const draftSucceeded = metadata
+          ? await useWorkbookDraftStore.getState().catchUp(metadata.owner, repository)
+          : await useWorkbookDraftStore.getState().catchUpAll(repository);
+        await runtime.catchUpActiveKnowledge();
+        return draftSucceeded && runtime.getFreshnessState() === 'fresh';
+      }
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await vi.waitFor(() => expect(runtime.getFreshnessState()).toBe('fresh'));
+
+    remote = workbook(3, 'remote-v3');
+    channel.emitStatus('CHANNEL_ERROR');
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')).toBeUndefined();
+    channel.emitStatus('SUBSCRIBED');
+    await vi.waitFor(() => {
+      expect(runtime.getFreshnessState()).toBe('fresh');
+      expect(useWorkbookDraftStore.getState().getSession(owner)?.conflict?.actualRevision).toBe(3);
+    });
+
+    const afterReconnect = useWorkbookDraftStore.getState().getSession(owner)!;
+    expect(afterReconnect.draft).toEqual(localDraft);
+    expect(afterReconnect.localGeneration).toBe(localGeneration);
+    expect(afterReconnect.localGeneration).toBeGreaterThan(afterReconnect.acknowledgedGeneration);
+    expect(await useWorkbookDraftStore.getState().save(owner, repository)).toBe(false);
+    expect(saveWorkbook).not.toHaveBeenCalled();
+
+    expect(await useWorkbookDraftStore.getState().discardWithRefresh(owner, repository, 0)).toBe(true);
+    const discarded = useWorkbookDraftStore.getState().getSession(owner)!;
+    expect(discarded.draft.metadata?.marker).toBe('remote-v3');
+    expect(discarded.baseRevision).toBe(3);
+    expect(discarded.conflict).toBeNull();
+    stop();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  Catalog,
   ContentBlock,
   ContentBlockSchema,
   TableColumnConfig
@@ -10,6 +11,7 @@ import {
   removeLegacyTableColumn,
   validateTableModel
 } from '../../../src/domain/table-core';
+import { StorageService } from '../../../src/services/storage.service';
 
 const columns: TableColumnConfig[] = [
   { key: 'a', label: 'A', visible: true, isCustom: true },
@@ -319,5 +321,116 @@ describe('AUD013 — editorial/technical column ghost data', () => {
     expect(updated.tableRows?.[2].localOverrides).toEqual({ a: 'NEW-A3', c: 'NEW-C3' });
     expect(updated.tableRows?.[2].cellValues?.c).toEqual({ kind: 'text', text: 'NEW-C3-value' });
     expect(updated.customData).toEqual({ showLegend: true });
+  });
+
+  it('R4.1c T8: hybrid custom_table column removal survives the real catalog cache/load round-trip without legacy resurrection', async () => {
+    const hybrid: ContentBlock = {
+      id: 'r4-t8-hybrid',
+      type: 'custom_table',
+      tableColumns: columns,
+      customData: {
+        headers: ['A', 'B', 'C'],
+        rows: [
+          ['legacy-A1', 'legacy-B1', 'legacy-C1'],
+          ['legacy-A2', 'legacy-B2', 'legacy-C2']
+        ],
+        showLegend: true
+      },
+      tableRows: [
+        {
+          id: 'canonical-row-1',
+          localOverrides: { a: 'A1', b: 'B1', c: 'C1' },
+          cellValues: {
+            a: { kind: 'text', text: 'A1-value' },
+            b: { kind: 'text', text: 'B1-value' },
+            c: { kind: 'text', text: 'C1-value' }
+          },
+          cellBindings: {
+            b: {
+              sourceKind: 'pim_datum',
+              productId: 'product-1',
+              semanticKey: 'spec.b',
+              bindingMode: 'live'
+            },
+            c: {
+              sourceKind: 'pim_datum',
+              productId: 'product-1',
+              semanticKey: 'spec.c',
+              bindingMode: 'snapshot',
+              snapshot: { kind: 'text', text: 'C1-snapshot' }
+            }
+          }
+        },
+        {
+          id: 'canonical-row-2',
+          localOverrides: { a: 'A2', b: 'B2', c: 'C2' }
+        },
+        {
+          id: 'canonical-row-3-new',
+          localOverrides: { a: 'NEW-A3', b: 'NEW-B3', c: 'NEW-C3' },
+          cellValues: { c: { kind: 'text', text: 'NEW-C3-value' } },
+          cellBindings: {
+            a: {
+              sourceKind: 'pim_datum',
+              productId: 'product-3',
+              semanticKey: 'spec.a',
+              bindingMode: 'live'
+            },
+            b: {
+              sourceKind: 'pim_datum',
+              productId: 'product-3',
+              semanticKey: 'spec.b',
+              bindingMode: 'live'
+            }
+          }
+        }
+      ]
+    };
+    const updated = applyPatch(hybrid, removeLegacyTableColumn(hybrid, columns, 'b'));
+    const catalog: Catalog = {
+      id: 'r4-t8-roundtrip-catalog',
+      title: 'R4 T8 roundtrip',
+      subtitle: '',
+      themeId: 'default-technical',
+      pages: [{ id: 'r4-t8-page', pageNumber: 1, pageType: 'technical', title: '', blocks: [updated] }],
+      sourceLocale: 'pt-BR',
+      locale: 'pt-BR',
+      createdAt: '2026-09-07T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+      version: 1
+    };
+
+    await StorageService.cacheCatalog(catalog);
+    const reloaded = await StorageService.loadCatalog(catalog.id);
+    await StorageService.deleteCatalog(catalog.id);
+
+    const block = reloaded?.pages[0]?.blocks[0];
+    expect(block?.tableColumns?.map((column) => column.key)).toEqual(['a', 'c']);
+    expect(block?.tableRows?.map((row) => row.id)).toEqual([
+      'canonical-row-1',
+      'canonical-row-2',
+      'canonical-row-3-new'
+    ]);
+    expect(block?.tableRows?.[0].localOverrides).toEqual({ a: 'A1', c: 'C1' });
+    expect(block?.tableRows?.[0].cellValues).toEqual({
+      a: { kind: 'text', text: 'A1-value' },
+      c: { kind: 'text', text: 'C1-value' }
+    });
+    expect(block?.tableRows?.[0].cellBindings).toEqual({
+      c: {
+        sourceKind: 'pim_datum',
+        productId: 'product-1',
+        semanticKey: 'spec.c',
+        bindingMode: 'snapshot',
+        snapshot: { kind: 'text', text: 'C1-snapshot' }
+      }
+    });
+    expect(block?.tableRows?.[2].localOverrides).toEqual({ a: 'NEW-A3', c: 'NEW-C3' });
+    expect(block?.tableRows?.[2].cellValues).toEqual({ c: { kind: 'text', text: 'NEW-C3-value' } });
+    expect(block?.tableRows?.[2].cellBindings?.a?.semanticKey).toBe('spec.a');
+    expect(block?.tableRows?.some((row) => Object.prototype.hasOwnProperty.call(row.localOverrides ?? {}, 'b'))).toBe(false);
+    expect(block?.tableRows?.some((row) => Object.prototype.hasOwnProperty.call(row.cellValues ?? {}, 'b'))).toBe(false);
+    expect(block?.tableRows?.some((row) => Object.prototype.hasOwnProperty.call(row.cellBindings ?? {}, 'b'))).toBe(false);
+    expect(block?.customData).toEqual({ showLegend: true });
   });
 });
