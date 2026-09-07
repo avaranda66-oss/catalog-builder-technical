@@ -27,6 +27,7 @@ import {
 } from '../../../services/product-workbook';
 import { getSupabase } from '../../../services/supabase.service';
 import { useWorkbookDraftStore } from '@/stores/useWorkbookDraftStore';
+import { activeEditingContext, createWorkbookSaveTarget } from '@/stores/activeEditingContext';
 import { useUIStore } from '@/stores/useUIStore';
 
 import { WorkspaceSummaryTab } from './WorkspaceSummaryTab';
@@ -98,6 +99,11 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   useEffect(() => {
     if (familyOwner) void loadDraft(familyOwner, repository);
   }, [familyOwner, loadDraft, repository]);
+
+  useEffect(() => {
+    const generation = activeEditingContext.activateWorkbook(product.id, createWorkbookSaveTarget(owner, repository));
+    return () => activeEditingContext.release(generation);
+  }, [owner, product.id, repository]);
 
   // Resolve conhecimento efetivo herdado
   const effectiveKnowledge: ResolvedProductKnowledge = resolveEffectiveProductKnowledge({

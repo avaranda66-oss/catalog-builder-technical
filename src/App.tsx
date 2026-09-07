@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useUIStore } from './stores/useUIStore';
 import { useLibraryStore } from './stores/useLibraryStore';
 import { useCatalogStore } from './stores/useCatalogStore';
+import { activeEditingContext } from './stores/activeEditingContext';
 import { useMediaStore } from './stores/useMediaStore';
 import { useTemplateStore } from './stores/useTemplateStore';
 import { useAssetStore } from './stores/useAssetStore';
@@ -54,14 +55,7 @@ export const App: React.FC = () => {
     const handleGlobalSaveShortcut = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        const tab = useUIStore.getState().activeTab;
-        if (tab === 'library') {
-          console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> flushLibraryEdits');
-          void useLibraryStore.getState().flushLibraryEdits();
-        } else {
-          console.log('⌨️ [SHORTCUT] Ctrl+S / Cmd+S acionado -> saveActiveDocument');
-          void useCatalogStore.getState().saveActiveDocument();
-        }
+        void activeEditingContext.save();
       }
     };
 
