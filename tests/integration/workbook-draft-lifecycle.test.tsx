@@ -23,6 +23,9 @@ import {
 } from '@/services/product-workbook';
 import { SupabaseProductWorkbookRepository } from '@/services/product-workbook/product-workbook.repository';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { activeEditingContext } from '@/stores/activeEditingContext';
+import { useCatalogStore } from '@/stores/useCatalogStore';
+import { useLibraryStore } from '@/stores/useLibraryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useWorkbookDraftStore } from '@/stores/useWorkbookDraftStore';
 
@@ -114,6 +117,7 @@ async function addModuleThroughClassic(templateName: RegExp) {
 describe('G1 Workbook draft/session lifecycle', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    activeEditingContext.release();
     useWorkbookDraftStore.getState().resetForTests();
     useAuthStore.setState({
       status: 'authenticated',
@@ -570,5 +574,38 @@ describe('G1 Workbook draft/session lifecycle', () => {
     expect(pSession.localGeneration).toBe(1);
     expect(pSession.baseRevision).toBe(1);
     expect(saveWorkbook).not.toHaveBeenCalled();
+  });
+
+  it('C2 React lifecycle: P → Q → stale P cleanup → unmount Q → Library fallback', async () => {
+    const productP = productFixture(PRODUCT_ID);
+    const productQ = productFixture(PRODUCT_Q_ID);
+    const baseP = workbookFixture(PRODUCT_ID, 1);
+    const baseQ = workbookFixture(PRODUCT_Q_ID, 7);
+    vi.spyOn(SupabaseProductWorkbookRepository.prototype, 'getWorkbook')
+      .mockImplementation(async (owner: WorkbookOwner) => owner.id === PRODUCT_ID ? cloneWorkbook(baseP) : cloneWorkbook(baseQ));
+    const libraryFlush = vi.spyOn(useLibraryStore.getState(), 'flushLibraryEdits').mockResolvedValue(true);
+    const catalogSave = vi.spyOn(useCatalogStore.getState(), 'saveActiveDocument').mockResolvedValue({
+      success: true,
+      status: 'synced'
+    });
+
+    const view = render(<ProductKnowledgeWorkspace product={productP} onClose={() => undefined} />);
+    await waitFor(() => expect(activeEditingContext.get()?.resourceId).toBe(PRODUCT_ID));
+    const pGeneration = activeEditingContext.get()!.generation;
+
+    view.rerender(<ProductKnowledgeWorkspace product={productQ} onClose={() => undefined} />);
+    await waitFor(() => expect(activeEditingContext.get()?.resourceId).toBe(PRODUCT_Q_ID));
+    const qGeneration = activeEditingContext.get()!.generation;
+    expect(qGeneration).toBeGreaterThan(pGeneration);
+
+    activeEditingContext.release(pGeneration);
+    expect(activeEditingContext.get()?.resourceId).toBe(PRODUCT_Q_ID);
+
+    view.unmount();
+    expect(activeEditingContext.get()).toBeNull();
+
+    await activeEditingContext.save();
+    expect(libraryFlush).toHaveBeenCalledTimes(1);
+    expect(catalogSave).not.toHaveBeenCalled();
   });
 });
