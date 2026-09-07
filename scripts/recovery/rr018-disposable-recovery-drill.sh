@@ -45,10 +45,10 @@ STACK_B_STARTED=0
 cleanup() {
   set +e
   if [[ "$STACK_A_STARTED" == "1" && -d "$STACK_A" ]]; then
-    (cd "$STACK_A" && "$SUPABASE_BIN" stop --no-backup >/dev/null 2>&1) || true
+    (cd "$STACK_A" && "$SUPABASE_BIN" stop --no-backup >/dev/null 2>&1)
   fi
   if [[ "$STACK_B_STARTED" == "1" && -d "$STACK_B" ]]; then
-    (cd "$STACK_B" && "$SUPABASE_BIN" stop --no-backup >/dev/null 2>&1) || true
+    (cd "$STACK_B" && "$SUPABASE_BIN" stop --no-backup >/dev/null 2>&1)
   fi
 }
 trap cleanup EXIT
@@ -158,7 +158,7 @@ build_public_schema_restore_list() {
   local restore_list="$3"
   local excluded_default_acl_file="$4"
   local excluded_schema_file="$5"
-  local excluded_default_acl_count excluded_schema_count unexpected_platform_default_acl_count raw_application_acl_count restored_application_acl_count kind kind_count
+  local excluded_default_acl_count excluded_schema_count all_default_acl_count raw_application_acl_count restored_application_acl_count postgres_platform_default_acl_count role kind kind_count
 
   echo "[RR018] schema-toc-tool=$(container_pg_restore_version)"
   container_pg_restore_list "$dump_file" > "$toc_file"
@@ -192,16 +192,31 @@ build_public_schema_restore_list() {
     return 1
   fi
 
-  unexpected_platform_default_acl_count="$(grep -E ' DEFAULT ACL .* supabase_admin$' "$toc_file" | grep -Evc ' DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) supabase_admin$' || true)"
-  if [[ "$unexpected_platform_default_acl_count" -ne 0 ]]; then
-    echo "RR018 found an unexpected supabase_admin DEFAULT ACL TOC entry; refusing to broaden the restore filter" >&2
+  all_default_acl_count="$(awk '/ DEFAULT ACL / { count++ } END { print count + 0 }' "$toc_file")"
+  if [[ "$all_default_acl_count" -ne 6 ]]; then
+    echo "RR018 expected exactly 6 platform DEFAULT ACL TOC entries, found ${all_default_acl_count}; refusing to broaden the restore filter" >&2
     return 1
   fi
 
+  for role in postgres supabase_admin; do
+    for kind in TABLES FUNCTIONS SEQUENCES; do
+      kind_count="$(awk -v role="$role" -v kind="$kind" '$0 ~ (" DEFAULT ACL public DEFAULT PRIVILEGES FOR " kind " " role "$") { count++ } END { print count + 0 }' "$toc_file")"
+      if [[ "$kind_count" -ne 1 ]]; then
+        echo "RR018 expected exactly one platform DEFAULT ACL entry for ${role}/${kind}, found ${kind_count}" >&2
+        return 1
+      fi
+    done
+  done
+
+  postgres_platform_default_acl_count="$(awk '/ DEFAULT ACL public DEFAULT PRIVILEGES FOR (TABLES|FUNCTIONS|SEQUENCES) postgres$/ { count++ } END { print count + 0 }' "$toc_file")"
+  if [[ "$postgres_platform_default_acl_count" -ne 3 ]]; then
+    echo "RR018 expected exactly 3 PostgreSQL/Supabase postgres DEFAULT ACL entries, found ${postgres_platform_default_acl_count}" >&2
+    return 1
+  fi
   for kind in TABLES FUNCTIONS SEQUENCES; do
-    kind_count="$(grep -Ec " DEFAULT ACL public DEFAULT PRIVILEGES FOR ${kind} supabase_admin$" "$excluded_default_acl_file" || true)"
+    kind_count="$(awk -v kind="$kind" '$0 !~ /^;/ && $0 ~ (" DEFAULT ACL public DEFAULT PRIVILEGES FOR " kind " postgres$") { count++ } END { print count + 0 }' "$restore_list")"
     if [[ "$kind_count" -ne 1 ]]; then
-      echo "RR018 expected exactly one Supabase platform DEFAULT ACL entry for ${kind}, found ${kind_count}" >&2
+      echo "RR018 restore list must preserve exactly one postgres DEFAULT ACL entry for ${kind}, found ${kind_count}" >&2
       return 1
     fi
   done
@@ -216,14 +231,14 @@ build_public_schema_restore_list() {
     return 1
   fi
 
-  raw_application_acl_count="$(grep -Ec '^[0-9]+; [0-9]+ [0-9]+ ACL public ' "$toc_file" || true)"
-  restored_application_acl_count="$(grep -Ec '^[0-9]+; [0-9]+ [0-9]+ ACL public ' "$restore_list" || true)"
+  raw_application_acl_count="$(awk '/^[0-9]+; [0-9]+ [0-9]+ ACL public / { count++ } END { print count + 0 }' "$toc_file")"
+  restored_application_acl_count="$(awk '/^[0-9]+; [0-9]+ [0-9]+ ACL public / { count++ } END { print count + 0 }' "$restore_list")"
   if [[ "$raw_application_acl_count" -eq 0 || "$raw_application_acl_count" -ne "$restored_application_acl_count" ]]; then
     echo "RR018 application ACL TOC entries were not preserved by the narrow platform filter" >&2
     return 1
   fi
 
-  echo "[RR018] schema-toc platform_public_schema_excluded=${excluded_schema_count} platform_default_acl_excluded=${excluded_default_acl_count} application_acl_preserved=${restored_application_acl_count}"
+  echo "[RR018] schema-toc platform_public_schema_excluded=${excluded_schema_count} platform_default_acl_excluded=${excluded_default_acl_count} platform_postgres_default_acl_preserved=${postgres_platform_default_acl_count} application_acl_preserved=${restored_application_acl_count}"
   sed 's/^/[RR018][TOC][EXCLUDED][PLATFORM-SCHEMA] /' "$excluded_schema_file"
   sed 's/^/[RR018][TOC][EXCLUDED][PLATFORM-DEFAULT-ACL] /' "$excluded_default_acl_file"
 }
@@ -245,6 +260,7 @@ capture_supabase_platform_public_schema() {
 
 capture_supabase_platform_default_acl() {
   local destination="$1"
+  local role objtype class_count
   run_psql -At -F '|' -c "
     SELECT d.defaclobjtype,
            pg_get_userbyid(d.defaclrole),
@@ -252,15 +268,47 @@ capture_supabase_platform_default_acl() {
            d.defaclacl::text
     FROM pg_default_acl d
     JOIN pg_namespace n ON n.oid = d.defaclnamespace
-    WHERE pg_get_userbyid(d.defaclrole) = 'supabase_admin'
-      AND n.nspname = 'public'
-      AND d.defaclobjtype IN ('r', 'f', 'S')
-    ORDER BY d.defaclobjtype;" > "$destination"
+    WHERE n.nspname = 'public'
+    ORDER BY pg_get_userbyid(d.defaclrole), d.defaclobjtype;" > "$destination"
 
-  if [[ "$(wc -l < "$destination" | tr -d ' ')" -ne 3 ]]; then
-    echo "RR018 fresh Supabase platform DEFAULT ACL baseline is incomplete" >&2
+  if [[ "$(wc -l < "$destination" | tr -d ' ')" -ne 6 ]]; then
+    echo "RR018 expected exactly 6 public DEFAULT ACL baseline entries" >&2
     return 1
   fi
+
+  for role in postgres supabase_admin; do
+    for objtype in r f S; do
+      class_count="$(awk -F '|' -v role="$role" -v objtype="$objtype" '$1 == objtype && $2 == role && $3 == "public" { count++ } END { print count + 0 }' "$destination")"
+      if [[ "$class_count" -ne 1 ]]; then
+        echo "RR018 public DEFAULT ACL baseline must contain exactly one ${role}/${objtype} entry, found ${class_count}" >&2
+        return 1
+      fi
+    done
+  done
+}
+
+suspend_postgres_platform_default_acl_for_schema_restore() {
+  run_psql <<'SQL'
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role;
+SQL
+
+  run_psql -At -c "
+    SELECT count(*)
+    FROM pg_default_acl d
+    JOIN pg_namespace n ON n.oid = d.defaclnamespace
+    CROSS JOIN LATERAL aclexplode(d.defaclacl) acl
+    WHERE pg_get_userbyid(d.defaclrole) = 'postgres'
+      AND n.nspname = 'public'
+      AND d.defaclobjtype IN ('r', 'f', 'S')
+      AND pg_get_userbyid(acl.grantee) IN ('anon', 'authenticated', 'service_role');" \
+    | grep -qx '0' || {
+      echo "RR018 failed to suspend postgres platform DEFAULT ACL grants for schema object creation" >&2
+      return 1
+    }
+
+  echo "[RR018] schema-restore postgres_platform_default_acl=suspended_nonowner_grants"
 }
 
 local_status_value() {
@@ -431,7 +479,10 @@ capture_supabase_platform_public_schema "$ARTIFACT_DIR/supabase-platform-public-
 diff -u "$ARTIFACT_DIR/supabase-platform-public-schema-before.tsv" "$ARTIFACT_DIR/supabase-platform-public-schema-fresh-stack-b.tsv"
 capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
 diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-fresh-stack-b.tsv"
+suspend_postgres_platform_default_acl_for_schema_restore
 container_pg_restore_with_list "$ARTIFACT_DIR/public-schema.dump" "$ARTIFACT_DIR/public-schema.restore.list" --no-owner --exit-on-error
+capture_supabase_platform_default_acl "$ARTIFACT_DIR/supabase-platform-default-acl-after-schema.tsv"
+diff -u "$ARTIFACT_DIR/supabase-platform-default-acl-before.tsv" "$ARTIFACT_DIR/supabase-platform-default-acl-after-schema.tsv"
 echo "[RR018] restore=schema status=ok"
 run_psql -f "$ARTIFACT_DIR/auth-users.sql"
 echo "[RR018] restore=auth status=ok"
@@ -475,9 +526,17 @@ RR018_STORAGE_SHA256=${ASSET_SHA}
 RR018_BASELINE_BRIDGES=3
 RR018_PLATFORM_PUBLIC_SCHEMA_EXCLUDED=1
 RR018_PLATFORM_DEFAULT_ACL_EXCLUDED=3
+RR018_PLATFORM_POSTGRES_DEFAULT_ACL_PRESERVED=3
+RR018_PLATFORM_DEFAULT_ACL_BASELINE=EQUAL
+RR018_VERIFY_AFTER=PASS
+RR018_APPLICATION_GRANTS=PASS
 RR018_PRODUCTION_RPO=NOT_VERIFIED
 RR018_PRODUCTION_PITR=NOT_VERIFIED
 RR018_PRODUCTION_RTO=NOT_VERIFIED
+RR018_PRODUCTION_RETENTION=NOT_VERIFIED
+RR018_PRODUCTION_LAST_RESTORE_POINT=NOT_VERIFIED
+RR018_PRODUCTION_STORAGE_BACKUP_POLICY=NOT_VERIFIED
+RR018_PRODUCTION_SECRETS_CONFIG_ESCROW=NOT_VERIFIED
 EOF
 
 if [[ ! -s "$ARTIFACT_DIR/counts-after.tsv" || ! -s "$ARTIFACT_DIR/result.env" ]]; then

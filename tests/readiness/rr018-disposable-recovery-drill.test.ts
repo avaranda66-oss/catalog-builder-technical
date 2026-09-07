@@ -104,13 +104,30 @@ describe('RR018 disposable recovery drill contract', () => {
     expect(runner).toContain('supabase_admin');
     expect(runner).toContain('TABLES|FUNCTIONS|SEQUENCES');
     expect(runner).toContain('RR018 expected exactly 3 Supabase platform DEFAULT ACL entries');
+    expect(runner).toContain('RR018 expected exactly 6 platform DEFAULT ACL TOC entries');
+    expect(runner).toContain('RR018 expected exactly 3 PostgreSQL/Supabase postgres DEFAULT ACL entries');
+    expect(runner).toContain('expected exactly one platform DEFAULT ACL entry for ${role}/${kind}');
+    expect(runner).toContain('restore list must preserve exactly one postgres DEFAULT ACL entry');
     expect(runner).toContain('refusing to broaden the restore filter');
     expect(runner).toContain('application ACL TOC entries were not preserved');
     expect(runner).toContain('supabase-platform-default-acl-before.tsv');
     expect(runner).toContain('supabase-platform-default-acl-fresh-stack-b.tsv');
+    expect(runner).toContain('supabase-platform-default-acl-after-schema.tsv');
     expect(runner).toContain('supabase-platform-default-acl-after.tsv');
+    expect(runner).toContain('for role in postgres supabase_admin; do');
+    expect(runner).toContain('for objtype in r f S; do');
+    expect(runner).toContain('RR018 expected exactly 6 public DEFAULT ACL baseline entries');
+    expect(runner).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated, service_role;');
+    expect(runner).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated, service_role;');
+    expect(runner).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role;');
+    expect(runner).toContain('schema-restore postgres_platform_default_acl=suspended_nonowner_grants');
     expect(runner).toContain('RR018_PLATFORM_PUBLIC_SCHEMA_EXCLUDED=1');
+    expect(runner).toContain('RR018_PLATFORM_POSTGRES_DEFAULT_ACL_PRESERVED=3');
+    expect(runner).toContain('RR018_PLATFORM_DEFAULT_ACL_BASELINE=EQUAL');
+    expect(runner).toContain('RR018_VERIFY_AFTER=PASS');
+    expect(runner).toContain('RR018_APPLICATION_GRANTS=PASS');
     expect(runner).not.toContain('--no-acl');
+    expect(runner).not.toContain('|| true');
   });
 
   it('T3 keeps explicit application table grants under post-restore verification', () => {
