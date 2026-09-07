@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Ready for Review
 
 ## Story
 
@@ -137,7 +137,7 @@ The story is complete only when all of the following pass:
 - [x] `npm run typecheck`
 - [x] `npm test`
 - [x] `npm run build`
-- [ ] remote CI
+- [x] remote CI
 
 ## Definition of Done
 
@@ -145,7 +145,7 @@ The story is complete only when all of the following pass:
 - [x] R2 and T8–T13 are implemented and covered by focused tests.
 - [x] No prohibited architecture or scope changes were introduced.
 - [x] All local validation gates pass.
-- [ ] Remote CI passes.
+- [x] Remote CI passes.
 - [x] Story checklist is updated during development.
 - [x] File List is updated by the implementing agent to reflect the actual files changed.
 
@@ -192,6 +192,7 @@ The story is complete only when all of the following pass:
 - `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check`: exit 0. Lint retains 267 warnings and zero errors; build retains existing Vite chunk/import warnings.
 - CodeRabbit CLI pre-commit review attempted through WSL; `~/.local/bin/coderabbit` is unavailable on this host.
 - Migration `supabase/migrations/00022_product_workbook_persistence.sql` remains byte-identical to the base; SHA-256 `E47D44EAE3D5AD82AF55E9EEDA51D78476CFE8E8AF172D839D6D73228661EA03`.
+- Remote GitHub Actions `Quality Gates` run `34070718425` for code commit `f64e6804a2ee15c8e4061c9312803aeb1abaa4c9`: success (lint, typecheck, tests, build).
 
 ### Completion Notes List
 
@@ -208,3 +209,4 @@ The story is complete only when all of the following pass:
 | 2026-09-06 | 0.1.0 | Story prepared for W3-E.1 / AUD012 registry freshness and retry closure. | River (SM) |
 | 2026-09-06 | 0.2.0 | Development started; deterministic RED coverage added for R1/R2. | Dex (Dev) |
 | 2026-09-06 | 0.9.0 | R1/R2 implemented and all local gates passed; awaiting remote CI. | Dex (Dev) |
+| 2026-09-06 | 1.0.0 | Remote Quality Gates passed for the implementation; story moved to Ready for Review. | Dex (Dev) |
