@@ -3148,18 +3148,67 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   deleteCatalog: async (id: string) => {
     const deleteLineage = captureCatalogSessionLineage(get());
-    try {
-      await SupabaseService.deleteCatalog(id);
-    } catch (e) {
-      console.warn('Erro ao excluir no Supabase:', e);
+    const stateAtStart = get();
+    if (
+      stateAtStart.currentCatalog?.id === id
+      && stateAtStart.remoteVersionBarrier !== null
+      && stateAtStart.remoteVersionBarrier > (stateAtStart.currentCatalog.version ?? 0)
+    ) {
+      set({
+        syncStatus: 'conflict',
+        syncError: 'O catálogo possui uma versão remota mais nova. Recarregue ou resolva o conflito antes de excluir.'
+      });
+      return;
     }
+
+    const remoteDelete = await SupabaseService.deleteCatalog(id);
     if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
+
+    if (!remoteDelete.success) {
+      set({
+        syncStatus: 'error',
+        syncError: remoteDelete.error || 'Falha ao confirmar a exclusão do catálogo no servidor.'
+      });
+      return;
+    }
+
+    // A partir deste ponto a exclusão já foi confirmada pela autoridade remota.
+    // Invalida loads iniciados antes do ACK para impedir ressurreição por snapshot antigo.
+    beginCatalogSession(set);
+    const acknowledgedDeleteLineage = captureCatalogSessionLineage(get());
 
     await StorageService.deleteCatalog(id);
-    if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
+    if (!isCatalogSessionLineageCurrent(get(), acknowledgedDeleteLineage)) return;
+
+    set({
+      savedCatalogs: get().savedCatalogs.filter((catalog) => catalog.id !== id)
+    });
 
     const workspaceRes = await get().loadWorkspace();
-    if (!isCatalogSessionLineageCurrent(get(), deleteLineage)) return;
+    if (!isCatalogSessionLineageCurrent(get(), acknowledgedDeleteLineage)) return;
+
+    if (!workspaceRes.success) {
+      const currentCatalog = get().currentCatalog;
+      if (currentCatalog?.id === id) {
+        set({
+          currentCatalog: null,
+          editorContext: { kind: 'catalog', catalogId: '' },
+          activePageIndex: 0,
+          selectedBlockId: null,
+          selectedChildId: null,
+          isDirty: false,
+          syncStatus: 'error',
+          syncError: workspaceRes.error || 'Exclusão confirmada, mas não foi possível reconciliar o workspace.'
+        });
+      } else {
+        set({
+          syncStatus: 'error',
+          syncError: workspaceRes.error || 'Exclusão confirmada, mas não foi possível reconciliar o workspace.'
+        });
+      }
+      return;
+    }
+
     const remaining = workspaceRes.catalogs;
     const { currentCatalog } = get();
 
