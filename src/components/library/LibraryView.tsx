@@ -137,18 +137,6 @@ export const LibraryView: React.FC = () => {
     };
   }, [loadWorkspace, loadWorkspaceAssets, initRealtimeSubscription, currentUserId]);
 
-  // Listener para Ctrl+S na Biblioteca
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        void flushLibraryEdits();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [flushLibraryEdits]);
-
   // Handlers para Renomear e Excluir Família
   const handleConfirmRenameFamily = async (newName: string) => {
     if (!familyToRename) return;

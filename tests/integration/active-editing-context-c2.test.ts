@@ -189,6 +189,7 @@ describe('C2 Active Editing Context save routing', () => {
     const save = activeEditingContext.save();
     const beforeAck = useWorkbookDraftStore.getState().getSession(owner)!;
     expect(beforeAck.inFlight).not.toBeNull();
+    expect(beforeAck.baseRevision).toBe(1);
     expect(beforeAck.acknowledgedGeneration).toBe(0);
     expect(beforeAck.localGeneration).toBe(1);
     expect(saveWorkbook).toHaveBeenCalledTimes(1);
