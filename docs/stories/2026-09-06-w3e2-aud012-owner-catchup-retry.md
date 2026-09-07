@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Ready for Review
 
 ## Story
 
@@ -44,12 +44,12 @@ The existing freshness model, registry invalidation, global reconnect retry, dra
   - [x] Ensure newer pending metadata supersedes older failed work before retry.
   - [x] Cancel owner retry timers/state on coordinator stop.
 
-- [ ] **3. Regression protection and validation**
+- [x] **3. Regression protection and validation**
   - [x] Preserve W3-E/W3-E.1 behavior and exact-notification deduplication.
   - [x] Keep changes inside `product-workbook.realtime.ts`, focused W3-E tests, and this story unless an App change is strictly necessary.
   - [x] Do not modify `useCatalogStore`, `useLibraryStore`, `ProductKnowledgeRuntime`, `ProductKnowledgePicker`, SQL, migrations, `00022`, RR011, or export behavior.
   - [x] Run W3-E/E.1/E.2, AUD012 W3-A, RR006, RR007, RR009, RR011, workbook lifecycle, lint, typecheck, full tests, build, and `git diff --check`.
-  - [ ] Verify remote `Quality Gates` for the exact pushed SHA.
+  - [x] Verify remote `Quality Gates` for the exact pushed SHA.
 
 ## Dev Notes
 
@@ -86,7 +86,7 @@ The existing freshness model, registry invalidation, global reconnect retry, dra
 - [x] `npm test`
 - [x] `npm run build`
 - [x] `git diff --check`
-- [ ] remote `Quality Gates` for exact pushed SHA
+- [x] remote `Quality Gates` for exact pushed SHA
 
 ## File List
 
@@ -109,7 +109,7 @@ The existing freshness model, registry invalidation, global reconnect retry, dra
 - `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check`: exit 0. Lint retains 267 warnings and zero errors; build retains existing Vite chunk/import warnings.
 - CodeRabbit CLI pre-commit review attempted through WSL; `~/.local/bin/coderabbit` is unavailable on this host.
 - Migration `supabase/migrations/00022_product_workbook_persistence.sql` remains byte-identical to the base; SHA-256 `E47D44EAE3D5AD82AF55E9EEDA51D78476CFE8E8AF172D839D6D73228661EA03`.
-- Remote `Quality Gates`: pending push/CI verification.
+- Remote GitHub Actions `Quality Gates` run `34078412612` for implementation commit `2393756483e8cbe9c8f3aedb8e04e8906f19e16e`: success (lint, typecheck, tests, build).
 
 ### Completion Notes List
 
@@ -125,3 +125,4 @@ The existing freshness model, registry invalidation, global reconnect retry, dra
 | --- | --- | --- | --- |
 | 2026-09-06 | 0.1.0 | Story prepared from the approved W3-E.2 / AUD012 owner-specific retry specification; development started. | River (SM) / Dex (Dev) |
 | 2026-09-07 | 0.9.0 | Owner-specific retry implemented and all local/frozen gates passed; awaiting remote Quality Gates. | Dex (Dev) |
+| 2026-09-07 | 1.0.0 | Remote Quality Gates passed for the implementation; story moved to Ready for Review. | Dex (Dev) |
