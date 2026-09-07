@@ -409,7 +409,7 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     expect(runtime.getResolvedKnowledge(PRODUCT_ID)?.productRevision).toBe(3);
   });
 
-  it('deduplicates an exact repeated notification while its authoritative reread is in flight', async () => {
+  it('W3-E.2 T9: deduplicates an exact repeated notification while its authoritative reread is in flight', async () => {
     const channel = new FakeRealtimeChannel();
     const catchUpDeferred = deferred<void>();
     const catchUp = vi.fn(async (_metadata?: ProductWorkbookRealtimeMetadata) => catchUpDeferred.promise);
@@ -533,7 +533,7 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     stop();
   });
 
-  it('W3-E.1 R2 T8-T11: failed global catch-up stays fail-closed and retries successfully without a new WAL event', async () => {
+  it('W3-E.1 R2 T8-T11 / W3-E.2 T10: failed global catch-up stays fail-closed and retries successfully without a new WAL event', async () => {
     vi.useFakeTimers();
     const owner: WorkbookOwner = { kind: 'product', id: PRODUCT_ID };
     let failDraft = false;
@@ -623,5 +623,219 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     stop();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(catchUp).toHaveBeenCalledTimes(2);
+  });
+
+  it('W3-E.2 T1/T2: false keeps owner work pending and retries without a new WAL event until success', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    let ownerAttempts = 0;
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => {
+      if (!metadata) return true;
+      ownerAttempts += 1;
+      return ownerAttempts >= 2;
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    expect(catchUp.mock.calls[0]?.[0]?.revision).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(catchUp.mock.calls[1]?.[0]?.revision).toBe(2);
+    await catchUp.mock.results[1]?.value;
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('W3-E.2 T3: an owner catch-up exception stays pending and retries like false', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    let ownerAttempts = 0;
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => {
+      if (!metadata) return true;
+      ownerAttempts += 1;
+      if (ownerAttempts === 1) throw new Error('transient owner reread failure');
+      return true;
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(catchUp.mock.calls[1]?.[0]?.revision).toBe(2);
+    stop();
+  });
+
+  it('W3-E.2 T4: a newer owner revision supersedes failed metadata before the retry runs', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    let ownerAttempts = 0;
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => {
+      if (!metadata) return true;
+      ownerAttempts += 1;
+      return ownerAttempts >= 2;
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    channel.emitWorkbookChange(3);
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(catchUp.mock.calls[1]?.[0]?.revision).toBe(3);
+    stop();
+  });
+
+  it('W3-E.2 T5: same-owner notifications coalesce behind one scheduled retry without a storm', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    let ownerAttempts = 0;
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => {
+      if (!metadata) return true;
+      ownerAttempts += 1;
+      return ownerAttempts >= 2;
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    channel.emitWorkbookChange(3);
+    channel.emitWorkbookChange(4);
+    channel.emitWorkbookChange(5);
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(catchUp.mock.calls[1]?.[0]?.revision).toBe(5);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('W3-E.2 T6: distinct owners retry independently while one owner retry remains in flight', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    const productRetry = deferred<boolean>();
+    const attempts = new Map<string, number>();
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => {
+      if (!metadata) return true;
+      const key = `${metadata.owner.kind}:${metadata.owner.id}`;
+      const attempt = (attempts.get(key) ?? 0) + 1;
+      attempts.set(key, attempt);
+      if (attempt === 1) return false;
+      if (metadata.owner.kind === 'product') return productRetry.promise;
+      return true;
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    channel.emitFamilyWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(catchUp).toHaveBeenCalledTimes(4);
+    expect(attempts.get(`product:${PRODUCT_ID}`)).toBe(2);
+    expect(attempts.get(`family:${FAMILY_ID}`)).toBe(2);
+    expect(catchUp.mock.calls[3]?.[0]?.owner.kind).toBe('family');
+
+    productRetry.resolve(true);
+    await productRetry.promise;
+    stop();
+  });
+
+  it('W3-E.2 T7: stop makes an already-scheduled owner retry inert', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => metadata ? false : true);
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    stop();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(catchUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('W3-E.2 T8: a retry from a disposed lifecycle cannot leak into a restarted coordinator lifecycle', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    const catchUp = vi.fn(async (metadata?: ProductWorkbookRealtimeMetadata) => metadata ? false : true);
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp
+    });
+
+    const stopFirst = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    catchUp.mockClear();
+    channel.emitWorkbookChange(2);
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(1));
+    stopFirst();
+
+    const stopSecond = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await vi.waitFor(() => expect(catchUp).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(catchUp.mock.calls[0]?.[0]?.revision).toBe(2);
+    expect(catchUp.mock.calls[1]?.[0]).toBeUndefined();
+    stopSecond();
   });
 });
