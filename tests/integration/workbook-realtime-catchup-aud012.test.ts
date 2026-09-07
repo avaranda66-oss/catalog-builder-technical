@@ -20,6 +20,8 @@ import { useWorkbookDraftStore } from '@/stores/useWorkbookDraftStore';
 
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111';
 const FAMILY_ID = '22222222-2222-4222-8222-222222222222';
+const FAMILY_ID_2 = '33333333-3333-4333-8333-333333333333';
+const OUTSIDE_PRODUCT_ID = '44444444-4444-4444-8444-444444444444';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -39,9 +41,9 @@ function workbook(revision: number, marker: string): ProductWorkbookV2 {
   return { ...created, metadata: { marker } };
 }
 
-function familyWorkbook(revision: number, marker: string): ProductWorkbookV2 {
+function familyWorkbook(revision: number, marker: string, familyId = FAMILY_ID): ProductWorkbookV2 {
   const created = ensureWorkbookV2(createWorkbook({
-    owner: { kind: 'family', id: FAMILY_ID },
+    owner: { kind: 'family', id: familyId },
     revision
   }));
   return { ...created, metadata: { marker } };
@@ -73,16 +75,17 @@ function noFamilyRegistry(): ProductRegistryReader {
 }
 
 class FakeRealtimeChannel {
-  private changeHandler?: (payload: ProductWorkbookRealtimePayload) => void;
+  private readonly changeHandlers = new Map<string, (payload: ProductWorkbookRealtimePayload) => void>();
   private statusHandler?: (status: string, error?: Error) => void;
 
   on(
     _type: 'postgres_changes',
-    filter: { event: '*'; schema: 'public'; table: 'product_workbooks' },
+    filter: { event: '*'; schema: 'public'; table: 'product_workbooks' | 'products' },
     handler: (payload: ProductWorkbookRealtimePayload) => void
   ): this {
-    expect(filter).toMatchObject({ schema: 'public', table: 'product_workbooks' });
-    this.changeHandler = handler;
+    expect(filter.schema).toBe('public');
+    expect(['product_workbooks', 'products']).toContain(filter.table);
+    this.changeHandlers.set(filter.table, handler);
     return this;
   }
 
@@ -96,7 +99,7 @@ class FakeRealtimeChannel {
   }
 
   emitWorkbookChange(revision: number): void {
-    this.changeHandler?.({
+    this.changeHandlers.get('product_workbooks')?.({
       eventType: 'UPDATE',
       new: {
         owner_kind: 'product',
@@ -112,7 +115,7 @@ class FakeRealtimeChannel {
   }
 
   emitFamilyWorkbookChange(revision: number): void {
-    this.changeHandler?.({
+    this.changeHandlers.get('product_workbooks')?.({
       eventType: 'UPDATE',
       new: {
         owner_kind: 'family',
@@ -123,6 +126,20 @@ class FakeRealtimeChannel {
         owner_kind: 'family',
         owner_id: FAMILY_ID,
         revision: Math.max(1, revision - 1)
+      }
+    });
+  }
+
+  emitProductRegistryChange(productId: string): void {
+    this.changeHandlers.get('products')?.({
+      eventType: 'UPDATE',
+      new: {
+        id: productId,
+        family_id: FAMILY_ID_2
+      },
+      old: {
+        id: productId,
+        family_id: FAMILY_ID
       }
     });
   }
@@ -137,6 +154,7 @@ function fakeRealtimeClient(channel: FakeRealtimeChannel) {
 
 describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     useWorkbookDraftStore.getState().resetForTests();
     useAuthStore.setState({
@@ -413,5 +431,197 @@ describe('AUD012 W3-E — workbook realtime and reconnect catch-up', () => {
     eventFlight.resolve();
     await eventFlight.promise;
     stop();
+  });
+
+  it('W3-E.1 R1 T1-T5/T7: registry signals revoke immediately, reread authority, and reject a pre-signal stale completion', async () => {
+    let familyId = FAMILY_ID;
+    const staleRegistryRead = deferred<{ id: string; code: string; familyId: string } | null>();
+    let useStaleRegistryRead = false;
+    const registryReader: ProductRegistryReader = {
+      getProductIdentity: vi.fn(async () => (
+        useStaleRegistryRead
+          ? staleRegistryRead.promise
+          : { id: PRODUCT_ID, code: 'AUD012-W3E1', familyId }
+      )),
+      getProductsByIds: vi.fn(async (ids: string[]) => (
+        ids.includes(PRODUCT_ID)
+          ? [{ id: PRODUCT_ID, code: 'AUD012-W3E1', familyId }]
+          : []
+      )),
+      getProductsByFamilyIds: vi.fn(async () => [])
+    };
+    const getWorkbook = vi.fn(async (owner: WorkbookOwner): Promise<ProductWorkbook | null> => {
+      if (owner.kind === 'product') return null;
+      if (owner.id === FAMILY_ID) return familyWorkbook(1, 'F1', FAMILY_ID);
+      if (owner.id === FAMILY_ID_2) return familyWorkbook(2, 'F2', FAMILY_ID_2);
+      return null;
+    });
+    const runtime = new ProductKnowledgeRuntime({
+      registryReader,
+      workbookFetcher: { getWorkbook }
+    });
+    await runtime.preloadCatalogProductKnowledge(catalog());
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID);
+
+    const channel = new FakeRealtimeChannel();
+    const catchUp = vi.fn(async () => {
+      await runtime.catchUpActiveKnowledge();
+      return runtime.getFreshnessState() === 'fresh';
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: () => runtime.requireRealtimeCatchUp(),
+      catchUp,
+      isProductInActiveScope: (productId: string) => runtime.getReferencedProductIds().includes(productId)
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    expect(runtime.getFreshnessState()).toBe('fresh');
+
+    familyId = FAMILY_ID_2;
+    channel.emitProductRegistryChange(PRODUCT_ID);
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')).toBeUndefined();
+
+    await vi.waitFor(() => {
+      expect(runtime.getFreshnessState()).toBe('fresh');
+      expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID_2);
+    });
+    expect(getWorkbook).toHaveBeenCalledWith(
+      { kind: 'family', id: FAMILY_ID_2 },
+      { bypassInFlight: true }
+    );
+
+    useStaleRegistryRead = true;
+    const staleRefresh = runtime.refreshProductKnowledge(PRODUCT_ID);
+    await vi.waitFor(() => expect(registryReader.getProductIdentity).toHaveBeenCalledTimes(1));
+
+    familyId = FAMILY_ID;
+    channel.emitProductRegistryChange(PRODUCT_ID);
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')).toBeUndefined();
+
+    await vi.waitFor(() => {
+      expect(runtime.getFreshnessState()).toBe('fresh');
+      expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID);
+    });
+
+    staleRegistryRead.resolve({ id: PRODUCT_ID, code: 'AUD012-W3E1', familyId: FAMILY_ID_2 });
+    await staleRefresh;
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.familyId).toBe(FAMILY_ID);
+    stop();
+  });
+
+  it('W3-E.1 R1 T6: a registry signal outside active factual scope does not schedule another catch-up', async () => {
+    const channel = new FakeRealtimeChannel();
+    const requireCatchUp = vi.fn();
+    const catchUp = vi.fn(async () => true);
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp,
+      catchUp,
+      isProductInActiveScope: (productId: string) => productId === PRODUCT_ID
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    expect(requireCatchUp).toHaveBeenCalledTimes(1);
+
+    channel.emitProductRegistryChange(OUTSIDE_PRODUCT_ID);
+    await Promise.resolve();
+
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    expect(requireCatchUp).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('W3-E.1 R2 T8-T11: failed global catch-up stays fail-closed and retries successfully without a new WAL event', async () => {
+    vi.useFakeTimers();
+    const owner: WorkbookOwner = { kind: 'product', id: PRODUCT_ID };
+    let failDraft = false;
+    let failRuntime = false;
+    let remoteRevision = 1;
+    const repository: ProductWorkbookRepository = {
+      getWorkbook: vi.fn(async () => {
+        if (failDraft) throw new Error('draft catch-up transient failure');
+        return workbook(remoteRevision, `draft-${remoteRevision}`);
+      }),
+      saveWorkbook: vi.fn()
+    };
+    const runtimeGetWorkbook = vi.fn(async (): Promise<ProductWorkbook | null> => {
+      if (failRuntime) throw new Error('runtime catch-up transient failure');
+      return workbook(remoteRevision, `runtime-${remoteRevision}`);
+    });
+    const runtime = new ProductKnowledgeRuntime({
+      registryReader: noFamilyRegistry(),
+      workbookFetcher: { getWorkbook: runtimeGetWorkbook }
+    });
+
+    await useWorkbookDraftStore.getState().load(owner, repository);
+    await runtime.preloadCatalogProductKnowledge(catalog());
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.productRevision).toBe(1);
+
+    failDraft = true;
+    failRuntime = true;
+    remoteRevision = 2;
+    const channel = new FakeRealtimeChannel();
+    const catchUp = vi.fn(async () => {
+      const draftSucceeded = await useWorkbookDraftStore.getState().catchUpAll(repository);
+      await runtime.catchUpActiveKnowledge();
+      return draftSucceeded && runtime.getFreshnessState() === 'fresh';
+    });
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: () => {
+        useWorkbookDraftStore.getState().requireCatchUp();
+        runtime.requireRealtimeCatchUp();
+      },
+      catchUp
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+
+    expect(useWorkbookDraftStore.getState().getSession(owner)?.freshness).toBe('failed');
+    expect(runtime.getFreshnessState()).toBe('failed');
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')).toBeUndefined();
+    await expect(useWorkbookDraftStore.getState().save(owner, repository)).resolves.toBe(false);
+
+    failDraft = false;
+    failRuntime = false;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    await catchUp.mock.results[1]?.value;
+
+    expect(useWorkbookDraftStore.getState().getSession(owner)?.freshness).toBe('fresh');
+    expect(runtime.getFreshnessState()).toBe('fresh');
+    expect(runtime.getResolvedKnowledge(PRODUCT_ID, 'effective_for_publishing')?.productRevision).toBe(2);
+    stop();
+  });
+
+  it('W3-E.1 R2 T12/T13: retry is cancelable and multiple registry events coalesce behind one scheduled retry', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeRealtimeChannel();
+    const catchUp = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    const coordinator = new ProductWorkbookRealtimeCoordinator(fakeRealtimeClient(channel), {
+      requireCatchUp: vi.fn(),
+      catchUp,
+      isProductInActiveScope: () => true
+    });
+    const stop = coordinator.start();
+    channel.emitStatus('SUBSCRIBED');
+    await catchUp.mock.results[0]?.value;
+    expect(catchUp).toHaveBeenCalledTimes(1);
+
+    channel.emitProductRegistryChange(PRODUCT_ID);
+    channel.emitProductRegistryChange(PRODUCT_ID);
+    channel.emitProductRegistryChange(PRODUCT_ID);
+    await vi.advanceTimersByTimeAsync(249);
+    expect(catchUp).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+
+    stop();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(catchUp).toHaveBeenCalledTimes(2);
   });
 });

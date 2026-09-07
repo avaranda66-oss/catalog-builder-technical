@@ -113,15 +113,21 @@ export const App: React.FC = () => {
           workbookRuntime.requireRealtimeCatchUp();
         },
         catchUp: async (metadata) => {
-          if (!isCurrentRealtimeIdentity()) return;
+          if (!isCurrentRealtimeIdentity()) return false;
           const draftCatchUp = metadata
             ? useWorkbookDraftStore.getState().catchUp(metadata.owner, workbookRepository)
             : useWorkbookDraftStore.getState().catchUpAll(workbookRepository);
-          await Promise.all([
+          const [draftSucceeded] = await Promise.all([
             draftCatchUp,
             workbookRuntime.catchUpActiveKnowledge()
           ]);
-        }
+          if (!isCurrentRealtimeIdentity()) return false;
+          return draftSucceeded && workbookRuntime.getFreshnessState() === 'fresh';
+        },
+        isProductInActiveScope: (productId) => (
+          isCurrentRealtimeIdentity()
+          && workbookRuntime.getReferencedProductIds().includes(productId)
+        )
       }
     );
     const unsubWorkbookRealtime = workbookRealtime.start();

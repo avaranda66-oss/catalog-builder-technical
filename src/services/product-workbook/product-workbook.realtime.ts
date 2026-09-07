@@ -16,13 +16,14 @@ export type ProductWorkbookCatchUpReason = 'initial' | 'disconnect' | 'event';
 
 export interface ProductWorkbookRealtimeSink {
   requireCatchUp(reason: ProductWorkbookCatchUpReason, metadata?: ProductWorkbookRealtimeMetadata): void;
-  catchUp(metadata?: ProductWorkbookRealtimeMetadata): Promise<void>;
+  catchUp(metadata?: ProductWorkbookRealtimeMetadata): Promise<boolean | void>;
+  isProductInActiveScope?(productId: string): boolean;
 }
 
 export interface ProductWorkbookRealtimeChannel {
   on(
     type: 'postgres_changes',
-    filter: { event: '*'; schema: 'public'; table: 'product_workbooks' },
+    filter: { event: '*'; schema: 'public'; table: 'product_workbooks' | 'products' },
     callback: (payload: ProductWorkbookRealtimePayload) => void
   ): ProductWorkbookRealtimeChannel;
   subscribe(callback: (status: string, error?: Error) => void): ProductWorkbookRealtimeChannel;
@@ -67,6 +68,17 @@ function ownerKey(metadata: ProductWorkbookRealtimeMetadata): string {
   return `${metadata.owner.kind}:${metadata.owner.id}`;
 }
 
+function registryProductId(payload: ProductWorkbookRealtimePayload): string | null {
+  const candidates = [payload.new?.id, payload.old?.id];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
+  }
+  return null;
+}
+
+const GLOBAL_RETRY_BASE_DELAY_MS = 250;
+const GLOBAL_RETRY_MAX_DELAY_MS = 4_000;
+
 /**
  * Coordinates WAL notifications and reconnects without ever accepting WAL rows
  * as factual truth. Every accepted notification causes an authoritative reread.
@@ -79,6 +91,8 @@ export class ProductWorkbookRealtimeCoordinator {
   private globalCatchUpRequired = false;
   private globalCatchUpGeneration = 0;
   private globalFlight: Promise<void> | null = null;
+  private globalRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private globalRetryAttempt = 0;
   private readonly ownerFlights = new Map<string, Promise<void>>();
   private readonly pendingOwners = new Map<string, ProductWorkbookRealtimeMetadata>();
   private readonly seenNotifications = new Set<string>();
@@ -103,6 +117,11 @@ export class ProductWorkbookRealtimeCoordinator {
         { event: '*', schema: 'public', table: 'product_workbooks' },
         (payload) => this.handleNotification(payload, lifecycle)
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        (payload) => this.handleRegistryNotification(payload, lifecycle)
+      )
       .subscribe((status) => this.handleStatus(status, lifecycle));
 
     return () => this.stop();
@@ -112,15 +131,30 @@ export class ProductWorkbookRealtimeCoordinator {
     if (!this.isCurrent(lifecycle)) return;
 
     if (status === 'SUBSCRIBED') {
+      const reconnected = !this.subscribed;
       this.subscribed = true;
+      if (reconnected) this.cancelGlobalRetry(true);
       if (this.globalCatchUpRequired) this.scheduleGlobalCatchUp(lifecycle);
       return;
     }
 
     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
       this.subscribed = false;
+      this.cancelGlobalRetry();
       this.requireGlobalCatchUp('disconnect');
     }
+  }
+
+  private handleRegistryNotification(payload: ProductWorkbookRealtimePayload, lifecycle: number): void {
+    if (!this.isCurrent(lifecycle)) return;
+
+    const productId = registryProductId(payload);
+    if (productId && this.sink.isProductInActiveScope && !this.sink.isProductInActiveScope(productId)) {
+      return;
+    }
+
+    this.requireGlobalCatchUp('event');
+    if (this.subscribed) this.scheduleGlobalCatchUp(lifecycle);
   }
 
   private handleNotification(payload: ProductWorkbookRealtimePayload, lifecycle: number): void {
@@ -145,21 +179,31 @@ export class ProductWorkbookRealtimeCoordinator {
     this.scheduleOwnerCatchUp(key, lifecycle);
   }
 
-  private requireGlobalCatchUp(reason: 'initial' | 'disconnect'): void {
+  private requireGlobalCatchUp(reason: ProductWorkbookCatchUpReason): void {
     this.globalCatchUpRequired = true;
     this.globalCatchUpGeneration += 1;
     this.sink.requireCatchUp(reason);
   }
 
   private scheduleGlobalCatchUp(lifecycle: number): void {
-    if (this.globalFlight || !this.subscribed || !this.globalCatchUpRequired || !this.isCurrent(lifecycle)) return;
+    if (
+      this.globalFlight
+      || this.globalRetryTimer
+      || !this.subscribed
+      || !this.globalCatchUpRequired
+      || !this.isCurrent(lifecycle)
+    ) return;
 
     let failed = false;
     const request = (async () => {
       while (this.isCurrent(lifecycle) && this.subscribed && this.globalCatchUpRequired) {
         const generation = this.globalCatchUpGeneration;
         try {
-          await this.sink.catchUp();
+          const succeeded = await this.sink.catchUp();
+          if (succeeded === false) {
+            failed = true;
+            return;
+          }
         } catch {
           failed = true;
           return;
@@ -167,6 +211,7 @@ export class ProductWorkbookRealtimeCoordinator {
         if (!this.isCurrent(lifecycle)) return;
         if (generation === this.globalCatchUpGeneration) {
           this.globalCatchUpRequired = false;
+          this.globalRetryAttempt = 0;
         }
       }
     })();
@@ -174,12 +219,43 @@ export class ProductWorkbookRealtimeCoordinator {
     const tracked = request.finally(() => {
       if (this.globalFlight === tracked) {
         this.globalFlight = null;
-        if (!failed && this.isCurrent(lifecycle) && this.subscribed && this.globalCatchUpRequired) {
+        if (failed && this.isCurrent(lifecycle) && this.subscribed && this.globalCatchUpRequired) {
+          this.scheduleGlobalRetry(lifecycle);
+        } else if (this.isCurrent(lifecycle) && this.subscribed && this.globalCatchUpRequired) {
           this.scheduleGlobalCatchUp(lifecycle);
         }
       }
     });
     this.globalFlight = tracked;
+  }
+
+  private scheduleGlobalRetry(lifecycle: number): void {
+    if (
+      this.globalRetryTimer
+      || !this.subscribed
+      || !this.globalCatchUpRequired
+      || !this.isCurrent(lifecycle)
+    ) return;
+
+    const delay = Math.min(
+      GLOBAL_RETRY_BASE_DELAY_MS * (2 ** Math.min(this.globalRetryAttempt, 4)),
+      GLOBAL_RETRY_MAX_DELAY_MS
+    );
+    this.globalRetryAttempt += 1;
+    this.globalRetryTimer = setTimeout(() => {
+      this.globalRetryTimer = null;
+      if (this.isCurrent(lifecycle) && this.subscribed && this.globalCatchUpRequired) {
+        this.scheduleGlobalCatchUp(lifecycle);
+      }
+    }, delay);
+  }
+
+  private cancelGlobalRetry(resetAttempt = false): void {
+    if (this.globalRetryTimer) {
+      clearTimeout(this.globalRetryTimer);
+      this.globalRetryTimer = null;
+    }
+    if (resetAttempt) this.globalRetryAttempt = 0;
   }
 
   private scheduleOwnerCatchUp(key: string, lifecycle: number): void {
@@ -218,6 +294,7 @@ export class ProductWorkbookRealtimeCoordinator {
     this.active = false;
     this.subscribed = false;
     this.lifecycleGeneration += 1;
+    this.cancelGlobalRetry(true);
     this.pendingOwners.clear();
     this.seenNotifications.clear();
     const channel = this.channel;
