@@ -160,10 +160,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
                         />
                       )}
                       {block.type === 'electrical_table' && (
-                        <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} />
+                        <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'accessories_table' && (
-                        <AccessoriesTableBlock block={block} pageId={page.id} isSelected={false} />
+                        <AccessoriesTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'ordering_codes' && (
                         <OrderingCodesBlock block={block} pageId={page.id} isSelected={false} />
