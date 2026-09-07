@@ -110,6 +110,7 @@ export interface WorkbookDraftSession {
   discardToken: WorkbookDiscardToken | null;
   loadError: string | null;
   isLoading: boolean;
+  freshness: 'fresh' | 'catchup_required' | 'catching_up' | 'failed';
 }
 
 interface WorkbookDraftState {
@@ -117,6 +118,9 @@ interface WorkbookDraftState {
   getSession: (owner: WorkbookOwner) => WorkbookDraftSession | undefined;
   load: (owner: WorkbookOwner, repository: ProductWorkbookRepository) => Promise<boolean>;
   refresh: (owner: WorkbookOwner, repository: ProductWorkbookRepository) => Promise<boolean>;
+  requireCatchUp: (owner?: WorkbookOwner) => void;
+  catchUp: (owner: WorkbookOwner, repository: ProductWorkbookRepository) => Promise<boolean>;
+  catchUpAll: (repository: ProductWorkbookRepository) => Promise<boolean>;
   edit: (owner: WorkbookOwner, draft: ProductWorkbookV2) => void;
   save: (owner: WorkbookOwner, repository: ProductWorkbookRepository) => Promise<boolean>;
   discardWithRefresh: (owner: WorkbookOwner, repository: ProductWorkbookRepository, navigationEpoch: number) => Promise<boolean>;
@@ -362,7 +366,8 @@ function createSession(owner: WorkbookOwner, workbook: ProductWorkbookV2, identi
     reconciliationRequired: null,
     discardToken: null,
     loadError: null,
-    isLoading: false
+    isLoading: false,
+    freshness: 'fresh'
   };
 }
 
@@ -527,6 +532,7 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
         set((state) => {
           const current = state.sessions[key];
           if (!current || current.epoch !== capturedEpoch) return {};
+          if (existing && current.readEpoch !== capturedReadEpoch) return {};
           return { sessions: { ...state.sessions, [key]: { ...current, isLoading: false, loadError: message } } };
         });
         return false;
@@ -564,7 +570,10 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
         set((state) => {
           const current = state.sessions[key];
           if (!current || current.epoch !== capturedEpoch || current.readEpoch !== capturedReadEpoch) return {};
-          const next = applyRemoteEvidence(current, canonical);
+          const next = {
+            ...applyRemoteEvidence(current, canonical),
+            freshness: 'fresh' as const
+          };
           accepted = true;
           return { sessions: { ...state.sessions, [key]: next } };
         });
@@ -573,8 +582,18 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
         const message = error instanceof Error ? error.message : 'Falha ao atualizar workbook.';
         set((state) => {
           const current = state.sessions[key];
-          if (!current || current.epoch !== capturedEpoch) return {};
-          return { sessions: { ...state.sessions, [key]: { ...current, isLoading: false, loadError: message } } };
+          if (!current || current.epoch !== capturedEpoch || current.readEpoch !== capturedReadEpoch) return {};
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                isLoading: false,
+                loadError: message,
+                freshness: current.freshness === 'fresh' ? 'fresh' : 'failed'
+              }
+            }
+          };
         });
         return false;
       }
@@ -585,6 +604,144 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
     } finally {
       if (activeLoads.get(key) === promise) activeLoads.delete(key);
     }
+  },
+
+  requireCatchUp: (owner) => {
+    const identity = authIdentity();
+    const exactOwnerKey = owner ? ownerKey(owner) : null;
+    set((state) => {
+      let changed = false;
+      const sessions = { ...state.sessions };
+      for (const [key, session] of Object.entries(sessions)) {
+        if (session.authIdentity !== identity) continue;
+        if (exactOwnerKey && session.ownerKey !== exactOwnerKey) continue;
+        sessions[key] = {
+          ...session,
+          readEpoch: session.readEpoch + 1,
+          freshness: 'catchup_required',
+          isLoading: false
+        };
+        changed = true;
+      }
+      return changed ? { sessions } : {};
+    });
+  },
+
+  catchUp: async (owner, repository) => {
+    const identity = authIdentity();
+    const key = sessionKey(owner, identity);
+    let session = get().sessions[key];
+    if (!session) return true;
+
+    if (session.freshness === 'fresh') {
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current || current.authIdentity !== identity) return {};
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              readEpoch: current.readEpoch + 1,
+              freshness: 'catchup_required' as const
+            }
+          }
+        };
+      });
+      session = get().sessions[key];
+      if (!session) return true;
+    }
+
+    const capturedEpoch = session.epoch;
+    const capturedReadEpoch = session.readEpoch;
+    const flightKey = `${key}:catchup:${capturedReadEpoch}`;
+    const active = activeLoads.get(flightKey);
+    if (active) return active;
+
+    set((state) => {
+      const current = state.sessions[key];
+      if (
+        !current
+        || current.authIdentity !== identity
+        || current.epoch !== capturedEpoch
+        || current.readEpoch !== capturedReadEpoch
+      ) return {};
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...current,
+            freshness: 'catching_up',
+            isLoading: true,
+            loadError: null
+          }
+        }
+      };
+    });
+
+    const promise = (async () => {
+      try {
+        const loaded = await repository.getWorkbook(owner, { bypassInFlight: true });
+        const canonical = loaded ? ensureWorkbookV2(loaded) : null;
+        let accepted = false;
+        set((state) => {
+          const current = state.sessions[key];
+          if (
+            !current
+            || current.authIdentity !== identity
+            || current.epoch !== capturedEpoch
+            || current.readEpoch !== capturedReadEpoch
+          ) return {};
+          const next: WorkbookDraftSession = {
+            ...applyRemoteEvidence(current, canonical),
+            freshness: 'fresh'
+          };
+          accepted = true;
+          return { sessions: { ...state.sessions, [key]: next } };
+        });
+        return accepted;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Falha no catch-up autoritativo do workbook.';
+        set((state) => {
+          const current = state.sessions[key];
+          if (
+            !current
+            || current.authIdentity !== identity
+            || current.epoch !== capturedEpoch
+            || current.readEpoch !== capturedReadEpoch
+          ) return {};
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                freshness: 'failed',
+                isLoading: false,
+                loadError: message
+              }
+            }
+          };
+        });
+        return false;
+      }
+    })();
+
+    activeLoads.set(flightKey, promise);
+    try {
+      return await promise;
+    } finally {
+      if (activeLoads.get(flightKey) === promise) activeLoads.delete(flightKey);
+    }
+  },
+
+  catchUpAll: async (repository) => {
+    const identity = authIdentity();
+    const owners = Object.values(get().sessions)
+      .filter((session) => session.authIdentity === identity)
+      .map((session) => session.owner);
+    if (owners.length === 0) return true;
+    const results = await Promise.all(owners.map((owner) => get().catchUp(owner, repository)));
+    return results.every(Boolean);
   },
 
   edit: (owner, draft) => {
@@ -620,6 +777,7 @@ export const useWorkbookDraftStore = create<WorkbookDraftState>((set, get) => ({
     const initial = get().sessions[key];
     if (!initial || initial.inFlight) return false;
     if (!initial.verified || initial.baseRevision === null) return false;
+    if (initial.freshness !== 'fresh') return false;
     if (initial.conflict || initial.reconciliationRequired) return false;
     if (initial.localGeneration <= initial.acknowledgedGeneration) return true;
     if (initial.remoteDeletion || (initial.remoteRevision !== null && initial.remoteRevision > initial.baseRevision)) {

@@ -60,12 +60,14 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   availableProducts = []
 }) => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('summary');
-  const [familyLoading, setFamilyLoading] = useState(false);
-  const [familyError, setFamilyError] = useState<string | null>(null);
-  const [familyWorkbook, setFamilyWorkbook] = useState<ProductWorkbookV2 | undefined>(undefined);
   const owner = useMemo(() => ({ kind: 'product' as const, id: product.id }), [product.id]);
+  const familyOwner = useMemo(
+    () => product.family_id ? ({ kind: 'family' as const, id: product.family_id }) : null,
+    [product.family_id]
+  );
   const repository = useMemo(() => new SupabaseProductWorkbookRepository(getSupabase()), []);
   const session = useWorkbookDraftStore((state) => state.getSession(owner));
+  const familySession = useWorkbookDraftStore((state) => familyOwner ? state.getSession(familyOwner) : undefined);
   const loadDraft = useWorkbookDraftStore((state) => state.load);
   const refreshDraft = useWorkbookDraftStore((state) => state.refresh);
   const editDraft = useWorkbookDraftStore((state) => state.edit);
@@ -75,11 +77,15 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
 
   const fallbackWorkbook = useMemo(() => ensureWorkbookV2(createWorkbook({ owner, revision: 0 })), [owner]);
   const workbook = session?.draft || fallbackWorkbook;
+  const familyWorkbook = familySession?.verified && (familySession.baseRevision ?? 0) > 0
+    ? familySession.draft
+    : undefined;
   const isDirty = Boolean(session && session.localGeneration > session.acknowledgedGeneration);
   const isSaving = Boolean(session?.inFlight);
-  const isLoading = Boolean(session?.isLoading || familyLoading);
+  const isLoading = Boolean(session?.isLoading || familySession?.isLoading);
   const conflict = session?.conflict || null;
   const reconciliation = session?.reconciliationRequired || null;
+  const familyError = familySession?.loadError || null;
   const errorMessage = session?.failure?.message || session?.loadError || familyError;
   const technicalErrorDetails = errorMessage;
 
@@ -88,29 +94,8 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
   }, [loadDraft, owner, repository]);
 
   useEffect(() => {
-    let active = true;
-    setFamilyWorkbook(undefined);
-    setFamilyError(null);
-    if (!product.family_id) return () => { active = false; };
-
-    setFamilyLoading(true);
-    void repository.getWorkbook({ kind: 'family', id: product.family_id })
-      .then((loaded) => {
-        if (!active) return;
-        setFamilyWorkbook(loaded ? ensureWorkbookV2(loaded) : undefined);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setFamilyError(error instanceof Error ? error.message : 'Falha ao carregar conhecimento da família.');
-      })
-      .finally(() => {
-        if (active) setFamilyLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [product.family_id, repository]);
+    if (familyOwner) void loadDraft(familyOwner, repository);
+  }, [familyOwner, loadDraft, repository]);
 
   // Resolve conhecimento efetivo herdado
   const effectiveKnowledge: ResolvedProductKnowledge = resolveEffectiveProductKnowledge({
@@ -225,11 +210,12 @@ export const ProductKnowledgeWorkspace: React.FC<ProductKnowledgeWorkspaceProps>
           onRetry={async () => {
             if (session?.failure) {
               await saveDraft(owner, repository);
+            } else if (familyError && familyOwner) {
+              await refreshDraft(familyOwner, repository);
             } else {
               await refreshDraft(owner, repository);
             }
           }}
-          onDismiss={() => setFamilyError(null)}
         />
       )}
 

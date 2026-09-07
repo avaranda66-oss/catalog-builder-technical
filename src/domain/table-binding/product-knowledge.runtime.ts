@@ -34,10 +34,11 @@ import { projectPimDatasetToTechnicalDatasetProjection } from './pim-dataset-pro
 import { projectPimSavedViewToSavedViewProjection } from './pim-saved-view-projection.adapter';
 
 export type ProductKnowledgeRuntimeStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
+export type ProductKnowledgeFreshnessState = 'fresh' | 'catchup_required' | 'catching_up' | 'failed';
 export type ProductKnowledgeResolutionPolicy = Exclude<ResolutionPolicy, 'effective_for_ai'>;
 
 export interface ProductWorkbookFetcher {
-  getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
+  getWorkbook(owner: WorkbookOwner, options?: { bypassInFlight?: boolean }): Promise<ProductWorkbook | null>;
 }
 
 export interface ProductKnowledgeRuntimeOptions {
@@ -115,7 +116,11 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
   private readonly workbookFetcher?: ProductWorkbookFetcher;
 
   private currentEpoch = 0;
+  private authorityGeneration = 0;
+  private freshnessState: ProductKnowledgeFreshnessState = 'fresh';
+  private catchUpFlight: { generation: number; promise: Promise<void> } | null = null;
   private activeCatalogId?: string;
+  private activeCatalog?: Catalog;
   private activeProductIds?: Set<string>;
 
   private readonly listeners = new Set<(status: ProductKnowledgeRuntimeStatus) => void>();
@@ -131,6 +136,10 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
   public getErrorMessage(): string | undefined {
     return this.errorMessage;
+  }
+
+  public getFreshnessState(): ProductKnowledgeFreshnessState {
+    return this.freshnessState;
   }
 
   public getReferencedProductIds(): readonly string[] {
@@ -270,7 +279,9 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     this.workbookCache.delete(ownerKey);
     this.setDependencyState(dependencyKind, owner.id, 'loading', epoch);
 
-    const request = this.workbookFetcher.getWorkbook(owner)
+    const request = this.workbookFetcher.getWorkbook(owner, {
+      bypassInFlight: this.freshnessState !== 'fresh'
+    })
       .then((workbook) => {
         if (!this.isCurrentEpoch(epoch)) return workbook;
         if (workbook) {
@@ -509,10 +520,87 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     productId: string,
     policy: ProductKnowledgeResolutionPolicy = 'effective_for_editing'
   ): ResolvedProductKnowledge | undefined {
+    if (this.freshnessState !== 'fresh') return undefined;
     if (!this.isProductInActiveScope(productId)) return undefined;
     return policy === 'effective_for_publishing'
       ? this.publishingKnowledgeCache.get(productId)
       : this.knowledgeCache.get(productId);
+  }
+
+  /**
+   * Revokes all factual authority immediately when a Realtime gap or workbook
+   * notification means cached knowledge may be stale. Incrementing currentEpoch
+   * also makes every read completion started before this point non-authoritative.
+   */
+  public requireRealtimeCatchUp(): void {
+    this.authorityGeneration += 1;
+    this.currentEpoch += 1;
+    this.freshnessState = 'catchup_required';
+    this.invalidateAllAuthorityForOwnerSwitch();
+    if (this.workbookFetcher) {
+      this.setStatus('loading');
+    } else {
+      this.setStatus('unavailable', 'Workbook fetcher não configurado.');
+    }
+  }
+
+  /**
+   * Performs one authoritative reread for the active catalog. Calls for the same
+   * authority generation share a single flight; a newer invalidation supersedes
+   * the older completion through the existing runtime epoch guards.
+   */
+  public catchUpActiveKnowledge(): Promise<void> {
+    const generation = this.authorityGeneration;
+    if (this.catchUpFlight?.generation === generation) return this.catchUpFlight.promise;
+
+    const request = (async () => {
+      if (!this.activeCatalog) {
+        if (generation === this.authorityGeneration) {
+          this.freshnessState = 'fresh';
+          if (this.status === 'loading') this.setStatus('ready');
+        }
+        return;
+      }
+
+      this.freshnessState = 'catching_up';
+      await this.preloadCatalogProductKnowledge(this.activeCatalog);
+      if (generation !== this.authorityGeneration) return;
+      if (this.status === 'error' || this.status === 'unavailable') {
+        this.freshnessState = 'failed';
+      }
+    })();
+
+    const tracked = request.finally(() => {
+      if (this.catchUpFlight?.generation === generation && this.catchUpFlight.promise === tracked) {
+        this.catchUpFlight = null;
+      }
+    });
+    this.catchUpFlight = { generation, promise: tracked };
+    return tracked;
+  }
+
+  /**
+   * Identity changes revoke the complete runtime scope. Pending operations remain
+   * harmless because their captured currentEpoch can no longer commit.
+   */
+  public resetForIdentityChange(): void {
+    this.authorityGeneration += 1;
+    this.currentEpoch += 1;
+    this.activeCatalogId = undefined;
+    this.activeCatalog = undefined;
+    this.activeProductIds = undefined;
+    this.referencedProductIds = [];
+    this.loadedProductIds = [];
+    this.failedProductIds = [];
+    this.failureReasons.clear();
+    this.knownEmptyProductIds.clear();
+    this.dependencyStates.clear();
+    this.knowledgeCache.clear();
+    this.publishingKnowledgeCache.clear();
+    this.workbookCache.clear();
+    this.productIdentities.clear();
+    this.freshnessState = 'fresh';
+    this.setStatus('idle');
   }
 
   private startProductRead(productId: string, forceRefresh: boolean): Promise<ResolvedProductKnowledge | null> {
@@ -641,11 +729,12 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
 
   public preloadCatalogProductKnowledge(catalog: Catalog): Promise<void> {
     const referencedProductIds = extractReferencedProductIds(catalog);
-    const signature = `${catalog.id}:${[...referencedProductIds].sort().join(',')}`;
+    const authorityGeneration = this.authorityGeneration;
+    const signature = `${authorityGeneration}:${catalog.id}:${[...referencedProductIds].sort().join(',')}`;
     const existing = this.preloadFlights.get(signature);
     if (existing) return existing;
 
-    const request = this.preloadCatalogProductKnowledgeInternal(catalog, referencedProductIds);
+    const request = this.preloadCatalogProductKnowledgeInternal(catalog, referencedProductIds, authorityGeneration);
     const tracked = request.finally(() => {
       if (this.preloadFlights.get(signature) === tracked) {
         this.preloadFlights.delete(signature);
@@ -655,9 +744,14 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     return tracked;
   }
 
-  private async preloadCatalogProductKnowledgeInternal(catalog: Catalog, referencedProductIds: string[]): Promise<void> {
+  private async preloadCatalogProductKnowledgeInternal(
+    catalog: Catalog,
+    referencedProductIds: string[],
+    authorityGeneration: number
+  ): Promise<void> {
     const epoch = ++this.currentEpoch;
     this.activeCatalogId = catalog.id;
+    this.activeCatalog = catalog;
     this.activeProductIds = new Set(referencedProductIds);
     this.invalidateAllAuthorityForOwnerSwitch();
 
@@ -667,11 +761,13 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     this.failureReasons.clear();
 
     if (!this.workbookFetcher) {
+      if (authorityGeneration === this.authorityGeneration) this.freshnessState = 'failed';
       this.setStatus('unavailable', 'Workbook fetcher não configurado.');
       return;
     }
 
     if (referencedProductIds.length === 0) {
+      if (authorityGeneration === this.authorityGeneration) this.freshnessState = 'fresh';
       this.setStatus('ready');
       return;
     }
@@ -679,7 +775,11 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     this.setStatus('loading');
 
     await this.readRegistryBatch(referencedProductIds, epoch);
-    if (!this.isCurrentEpoch(epoch) || catalog.id !== this.activeCatalogId) return;
+    if (
+      !this.isCurrentEpoch(epoch)
+      || authorityGeneration !== this.authorityGeneration
+      || catalog.id !== this.activeCatalogId
+    ) return;
 
     const familyIds = new Set<string>();
     for (const productId of referencedProductIds) {
@@ -697,7 +797,11 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     }
     await Promise.allSettled(reads);
 
-    if (!this.isCurrentEpoch(epoch) || catalog.id !== this.activeCatalogId) return;
+    if (
+      !this.isCurrentEpoch(epoch)
+      || authorityGeneration !== this.authorityGeneration
+      || catalog.id !== this.activeCatalogId
+    ) return;
 
     const loadedIds: string[] = [];
     const failedIds: string[] = [];
@@ -727,10 +831,13 @@ export class ProductKnowledgeRuntime implements ProductKnowledgeProvider {
     this.knownEmptyProductIds = knownEmpty;
 
     if (failedIds.length === 0) {
+      if (authorityGeneration === this.authorityGeneration) this.freshnessState = 'fresh';
       this.setStatus('ready');
     } else if (loadedIds.length > 0) {
+      if (authorityGeneration === this.authorityGeneration) this.freshnessState = 'failed';
       this.setStatus('partial', 'Conhecimento técnico de produtos parcialmente carregado.');
     } else {
+      if (authorityGeneration === this.authorityGeneration) this.freshnessState = 'failed';
       this.setStatus('error', 'Falha ao carregar conhecimento técnico dos produtos.');
     }
   }

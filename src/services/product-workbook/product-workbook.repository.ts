@@ -34,7 +34,10 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
     this.client = client ?? null;
   }
 
-  public getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null> {
+  public getWorkbook(
+    owner: WorkbookOwner,
+    options?: { bypassInFlight?: boolean }
+  ): Promise<ProductWorkbook | null> {
     if (!this.client) {
       return Promise.reject(new ProductWorkbookPersistenceError('CLIENT_NOT_INITIALIZED', 'Supabase client não inicializado.'));
     }
@@ -54,8 +57,12 @@ export class SupabaseProductWorkbookRepository implements ProductWorkbookReposit
     }
 
     const key = `${owner.kind}:${owner.id}`;
-    const existing = this.inFlightReads.get(key);
-    if (existing) return existing;
+    if (!options?.bypassInFlight) {
+      const existing = this.inFlightReads.get(key);
+      if (existing) return existing;
+    } else {
+      return this.readWorkbookPhysical(owner);
+    }
 
     const physicalRead = this.readWorkbookPhysical(owner);
     const tracked = physicalRead.finally(() => {

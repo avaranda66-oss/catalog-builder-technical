@@ -13,9 +13,15 @@ import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
 import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
+import { useWorkbookDraftStore } from './stores/useWorkbookDraftStore';
 
 import { getSupabase } from './services/supabase.service';
 import { handleCatalogRealtimeEvent } from './services/realtime.service';
+import {
+  ProductWorkbookRealtimeCoordinator,
+  SupabaseProductWorkbookRepository,
+  type ProductWorkbookRealtimeClient
+} from './services/product-workbook';
 import { DevRealtimeHUD } from './components/common/DevRealtimeHUD';
 
 // Lab Route: ONLY available in DEV mode via dynamic lazy import.
@@ -89,6 +95,36 @@ export const App: React.FC = () => {
     // 3. Sincronização em Tempo Real Segura com Status Callback
     const supabase = getSupabase();
     if (!supabase) return () => unsubAssetRealtime();
+
+    const workbookRepository = new SupabaseProductWorkbookRepository(supabase);
+    const workbookRuntime = useCatalogStore.getState().knowledgeRuntime;
+    const realtimeIdentity = userId;
+    const isCurrentRealtimeIdentity = () => (
+      Boolean(realtimeIdentity)
+      && useAuthStore.getState().status === 'authenticated'
+      && useAuthStore.getState().userId === realtimeIdentity
+    );
+    const workbookRealtime = new ProductWorkbookRealtimeCoordinator(
+      supabase as unknown as ProductWorkbookRealtimeClient,
+      {
+        requireCatchUp: (_reason, metadata) => {
+          if (!isCurrentRealtimeIdentity()) return;
+          useWorkbookDraftStore.getState().requireCatchUp(metadata?.owner);
+          workbookRuntime.requireRealtimeCatchUp();
+        },
+        catchUp: async (metadata) => {
+          if (!isCurrentRealtimeIdentity()) return;
+          const draftCatchUp = metadata
+            ? useWorkbookDraftStore.getState().catchUp(metadata.owner, workbookRepository)
+            : useWorkbookDraftStore.getState().catchUpAll(workbookRepository);
+          await Promise.all([
+            draftCatchUp,
+            workbookRuntime.catchUpActiveKnowledge()
+          ]);
+        }
+      }
+    );
+    const unsubWorkbookRealtime = workbookRealtime.start();
 
     const clientId = typeof window !== 'undefined' && window.sessionStorage
       ? window.sessionStorage.getItem('cb_client_instance_id') || 'client'
@@ -166,6 +202,7 @@ export const App: React.FC = () => {
         timestamp: new Date().toISOString()
       });
       unsubAssetRealtime();
+      unsubWorkbookRealtime();
       void supabase.removeChannel(channel);
       if (rawChannel) {
         void supabase.removeChannel(rawChannel);

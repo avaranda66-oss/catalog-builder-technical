@@ -658,6 +658,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   resetWorkspaceForIdentityChange: () => {
     console.log('🧹 [IDENTITY RESET] Limpando workspace em memória por troca/saída de identidade.');
     catalogSaveQueues.clear();
+    defaultKnowledgeRuntime.resetForIdentityChange();
     set({
       currentCatalog: null,
       editorContext: { kind: 'catalog', catalogId: '' },

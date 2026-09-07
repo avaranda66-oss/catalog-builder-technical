@@ -3,5 +3,6 @@
 
 export * from './persistence.types';
 export * from './product-workbook.repository';
+export * from './product-workbook.realtime';
 export * from './source-document.repository';
 export * from './source-document.realtime';

@@ -158,7 +158,7 @@ export class SourceDocumentAuthorizationError extends Error {
 }
 
 export interface ProductWorkbookRepository {
-  getWorkbook(owner: WorkbookOwner): Promise<ProductWorkbook | null>;
+  getWorkbook(owner: WorkbookOwner, options?: { bypassInFlight?: boolean }): Promise<ProductWorkbook | null>;
   saveWorkbook(params: SaveWorkbookParams): Promise<SaveWorkbookResult>;
 }
 
