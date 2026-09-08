@@ -11,6 +11,11 @@ import {
   type PublicationExportSnapshot
 } from '../../domain/publication-export-snapshot';
 import { CleanA4Document } from '../export/CleanA4Document';
+import {
+  auditLayoutPreflight,
+  waitForLayoutPreflight,
+  type LayoutPreflightReport
+} from '../../domain/layout-preflight';
 
 interface PreparedPublicationExport {
   snapshot: PublicationExportSnapshot;
@@ -33,6 +38,7 @@ export const ExportPDFModal: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(true);
   const [runtimeStatus, setRuntimeStatus] = useState(knowledgeRuntime.getStatus());
   const [exportSnapshot, setExportSnapshot] = useState<PreparedPublicationExport | null>(null);
+  const exportLayoutPreflightRef = React.useRef<LayoutPreflightReport | null>(null);
 
   React.useEffect(() => {
     setRuntimeStatus(knowledgeRuntime.getStatus());
@@ -155,13 +161,24 @@ export const ExportPDFModal: React.FC = () => {
     const fileName = `${safeTitle}_${versionStr}_${dateStr}.pdf`;
 
     flushSync(() => {
+      exportLayoutPreflightRef.current = null;
       setExportSnapshot(prepared);
     });
+
+    const layoutPreflight = await waitForLayoutPreflight(() => exportLayoutPreflightRef.current);
+    if (!layoutPreflight.canPublish) {
+      setExportSnapshot(null);
+      setIsExporting(false);
+      setIsSuccess(false);
+      setExportMessage(`Exportação bloqueada pelo layout físico: ${layoutPreflight.blockCount} defeito(s).`);
+      return;
+    }
 
     const result = await PDFService.exportToPDF('.rr009-modal-export-snapshot .a4-page-container', {
       fileName,
       quality: 1.0,
       scale: 3.5,
+      layoutPreflight,
       metadata: {
         snapshotIdentity: snapshot.identity,
         documentId: snapshot.sourceId,
@@ -210,6 +227,14 @@ export const ExportPDFModal: React.FC = () => {
             document={exportSnapshot.snapshot.document}
             className="rr009-modal-export-snapshot"
             resolveDatum={exportSnapshot.resolveDatum}
+            onLayoutPreflightChange={(_report, plan, isComplete) => {
+              if (isComplete) {
+                exportLayoutPreflightRef.current = auditLayoutPreflight(
+                  exportSnapshot.snapshot.document,
+                  plan.flowPlan
+                );
+              }
+            }}
           />
         </div>
       )}
