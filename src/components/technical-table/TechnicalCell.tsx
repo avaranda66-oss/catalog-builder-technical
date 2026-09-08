@@ -76,7 +76,8 @@ export const TechnicalCell: React.FC<TechnicalCellProps> = ({
 
   const handleBlur = (e: React.FocusEvent<HTMLSpanElement>) => {
     if (onBlur) {
-      onBlur(e.currentTarget.innerText.trim());
+      const text = (e.currentTarget.innerText ?? e.currentTarget.textContent ?? '').trim();
+      onBlur(text);
     }
   };
 
@@ -141,7 +142,7 @@ export const TechnicalCell: React.FC<TechnicalCellProps> = ({
           contentEditable={isEditable}
           suppressContentEditableWarning
           onBlur={handleBlur}
-          className={`outline-none font-mono text-[11px] px-1 py-0.5 rounded-none transition-colors select-text ${
+          className={`outline-none font-mono text-[11px] px-1 py-0.5 rounded-none transition-colors select-text whitespace-pre-line ${
             isNumeric ? 'tabular-nums' : ''
           } ${
             divergence?.hasDivergence
