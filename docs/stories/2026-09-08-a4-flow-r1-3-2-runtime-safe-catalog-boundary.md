@@ -1,6 +1,6 @@
 # A4.FLOW.R1.3.2 — Runtime-Safe Catalog Boundary
 
-Status: Approved
+Status: Ready for Review
 
 ## Executor Assignment
 
@@ -41,22 +41,22 @@ Status: Approved
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Freeze baseline and audit the full consumption/hydration graph (AC: 1–7).
-  - [ ] Record clean status, exact SHA, baseline typecheck, and baseline full test results.
-  - [ ] Map `page.blocks`, `currentCatalog.pages`, hydration/load, store, preflight/planner, editor, thumbnail, export, and print consumers.
-- [ ] Task 2 — Add factual R132 RED counterproof (AC: 1–7).
-  - [ ] Create `tests/flow/a4-flow-r1-3-2-runtime-boundary.test.tsx` covering R132-T1..T7 through real boundaries/components.
-  - [ ] Record the pre-fix failure mode without fabricating already-solved findings.
-- [ ] Task 3 — Implement one typed runtime-safe catalog hydration boundary (AC: 1–3, 6–7).
-  - [ ] Normalize runtime `page.blocks` to arrays.
-  - [ ] Retain typed malformed-source diagnostics outside editable content and compose them into publication preflight.
-  - [ ] Preserve valid and nullish legacy semantics.
-- [ ] Task 4 — Prove real editor and browser survival (AC: 3–5).
-  - [ ] Exercise production `PageThumbnailList` and `A4Canvas` through store/hydration.
-  - [ ] Add a production-editor malformed fixture/browser assertion that exits non-zero on React/uncaught/white-screen/publishable corruption.
-- [ ] Task 5 — Verify, document, commit, and deliver without merge (AC: 1–7).
-  - [ ] Run focused R132 tests, full test/lint/typecheck/build, diff check, R1.3.1 regressions, and PRESYS browser proof.
-  - [ ] Audit forbidden scope, update this story record/file list, create logical commits, push, and open the stacked PR against `remediation/a4-flow-r1-3-1-final-counterproof`.
+- [x] Task 1 — Freeze baseline and audit the full consumption/hydration graph (AC: 1–7).
+  - [x] Record clean status, exact SHA, baseline typecheck, and baseline full test results.
+  - [x] Map `page.blocks`, `currentCatalog.pages`, hydration/load, store, preflight/planner, editor, thumbnail, export, and print consumers.
+- [x] Task 2 — Add factual R132 RED counterproof (AC: 1–7).
+  - [x] Create `tests/flow/a4-flow-r1-3-2-runtime-boundary.test.tsx` covering R132-T1..T7 through real boundaries/components.
+  - [x] Record the pre-fix failure mode without fabricating already-solved findings.
+- [x] Task 3 — Implement one typed runtime-safe catalog hydration boundary (AC: 1–3, 6–7).
+  - [x] Normalize runtime `page.blocks` to arrays.
+  - [x] Retain typed malformed-source diagnostics outside editable content and compose them into publication preflight.
+  - [x] Preserve valid and nullish legacy semantics.
+- [x] Task 4 — Prove real editor and browser survival (AC: 3–5).
+  - [x] Exercise production `PageThumbnailList` and `A4Canvas` through store/hydration.
+  - [x] Add a production-editor malformed fixture/browser assertion that exits non-zero on React/uncaught/white-screen/publishable corruption.
+- [x] Task 5 — Verify, document, commit, and deliver without merge (AC: 1–7).
+  - [x] Run focused R132 tests, full test/lint/typecheck/build, diff check, R1.3.1 regressions, and PRESYS browser proof.
+  - [x] Audit forbidden scope, update this story record/file list, create logical commits, push, and open the stacked PR against `remediation/a4-flow-r1-3-1-final-counterproof`.
 
 ## Dev Notes
 
@@ -84,19 +84,44 @@ Status: Approved
 
 ### Agent Model Used
 
-- Pending implementation.
+- OpenAI Codex (GPT-5).
 
 ### Debug Log References
 
-- Pending implementation.
+- Baseline at `97ae660dcc6ab8a4cd31b8c2895b8d050b1ee826`: clean status; `npm run typecheck` passed; `npm test` passed 193 files / 2,018 tests with 1 skipped.
+- Factual RED: focused R132 suite failed 8 tests and passed 3 before the production boundary; production failures included `PageThumbnailList` `.slice is not a function` and `A4Canvas` `.some is not a function`.
+- Focused GREEN: R132 + R1.3.1 + R1.3 suites passed 3 files / 42 tests.
+- Final GREEN: `npm run typecheck`, `npm run lint` (0 errors; repository warnings only), `npm test` (194 files / 2,029 passed, 1 skipped), `npm run build`, direct lint of the new lab route, `node --check tests/browser/presys-a4-physical.mjs`, and `git diff --check` passed.
+- Browser evidence ran against exact code SHA `157f63f26e96648fc7c703f91dadb4e22f12f919`: 0 physical failures, 0 row defects, 0 blocked valid catalogs, 0 runtime editor errors, malformed string/object fixtures runtime-safe and fail-closed.
+- CodeRabbit CLI was unavailable and CodeRabbit integration is disabled by repository configuration; manual diff review and the complete local gate set were used.
 
 ### Completion Notes List
 
-- Pending implementation.
+- Added `hydrateCatalogSource`, the shared persisted/source-to-runtime boundary used by Supabase row hydration, template hydration, storage loads, and the public catalog store setter.
+- Non-null/non-array `page.blocks` become runtime-safe empty arrays while typed `MALFORMED_PAGE_BLOCKS` provenance remains top-level catalog metadata and blocks preflight publication. Nullish values remain compatible and non-diagnostic; valid arrays remain unchanged.
+- Consumption audit confirmed direct array consumers in `PageThumbnailList`, `A4Canvas`, `PropertiesPanel`, publications, store mutations, render planning, composition policy, export/print, and audit paths. Store-level hydration now protects these ordinary consumers instead of scattering component guards.
+- Added R132-T1..T7 unit/integration counterproof and a dev/E2E-only browser route that traverses persisted-row hydration, the real Zustand setter, `PageThumbnailList`, and `A4Canvas`.
+- Extended the existing PRESYS physical runner without replacing prior evidence. TA-25N, TA-35N, and TA-50N each retained 12 rendered pages with zero missing or duplicate canonical rows.
+- No SQL, migrations, RLS, dependency, lockfile, auth, Presence/C3, Commands, Undo/Redo, Table Studio, `main`, merge, or unrelated product change was made.
 
 ### File List
 
 - `docs/stories/2026-09-08-a4-flow-r1-3-2-runtime-safe-catalog-boundary.md`
+- `docs/qa/evidence/a4-flow-r1-1/presys-a4-physical.json`
+- `docs/qa/evidence/a4-flow-r1-3/presys-a4-physical.json`
+- `docs/qa/evidence/a4-flow-r1-3-2/presys-a4-physical.json`
+- `docs/qa/evidence/a4-flow-r1-3-2/production-editor-malformed-object.png`
+- `docs/qa/evidence/a4-flow-r1-3-2/production-editor-malformed-string.png`
+- `src/domain/catalog.schema.ts`
+- `src/domain/layout-preflight.ts`
+- `src/labs/a4-runtime-boundary-proof/A4RuntimeBoundaryProofPage.tsx`
+- `src/main.tsx`
+- `src/services/storage.service.ts`
+- `src/services/supabase.service.ts`
+- `src/stores/useCatalogStore.ts`
+- `tests/browser/presys-a4-physical.mjs`
+- `tests/flow/a4-flow-r1-3-1-counterproof.test.tsx`
+- `tests/flow/a4-flow-r1-3-2-runtime-boundary.test.tsx`
 
 ## QA Results
 
@@ -107,3 +132,4 @@ Status: Approved
 | Date | Version | Description | Author |
 | --- | --- | --- | --- |
 | 2026-09-08 | 0.1 | Registered the user-authorized R1.3.2 runtime-safe catalog boundary and exact counterproof contract. | River (SM) |
+| 2026-09-08 | 1.0 | Implemented and verified the typed runtime boundary, production-editor counterproof, and exact-SHA browser evidence. | Dex (Dev) |

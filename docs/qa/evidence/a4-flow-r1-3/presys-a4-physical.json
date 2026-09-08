@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-08T20:39:19.115Z",
-  "gitHeadSha": "db9a28882196efe92377cff86f7b7f9647468faa",
+  "generatedAt": "2026-09-08T22:47:04.122Z",
+  "gitHeadSha": "157f63f26e96648fc7c703f91dadb4e22f12f919",
   "baseUrl": "http://127.0.0.1:4174",
   "evidence": [
     {
@@ -1462,6 +1462,69 @@
       "duplicateRows": []
     }
   },
+  "runtimeBoundaryEvidence": [
+    {
+      "fixtureKind": "string",
+      "runtimeSafe": true,
+      "canPublish": false,
+      "diagnosticCount": 1,
+      "status": "BLOCKED:3",
+      "issues": [
+        {
+          "code": "MALFORMED_PAGE_BLOCKS",
+          "severity": "block",
+          "pageNumber": 1,
+          "message": "Página 1 continha estrutura de blocos malformada (string); o runtime recebeu uma lista vazia segura."
+        },
+        {
+          "code": "LAYOUT_MEASUREMENT_MISSING",
+          "severity": "block",
+          "pageNumber": 2,
+          "message": "Folha autoral \"Known-good renderable page\" ainda não possui medição física atual."
+        },
+        {
+          "code": "LAYOUT_MEASUREMENT_MISSING",
+          "severity": "block",
+          "pageNumber": 2,
+          "message": "Bloco \"text\" ainda não possui medição física atual."
+        }
+      ],
+      "thumbnailAlive": true,
+      "canvasAlive": true,
+      "renderedPages": 2
+    },
+    {
+      "fixtureKind": "object",
+      "runtimeSafe": true,
+      "canPublish": false,
+      "diagnosticCount": 1,
+      "status": "BLOCKED:3",
+      "issues": [
+        {
+          "code": "MALFORMED_PAGE_BLOCKS",
+          "severity": "block",
+          "pageNumber": 1,
+          "message": "Página 1 continha estrutura de blocos malformada (object); o runtime recebeu uma lista vazia segura."
+        },
+        {
+          "code": "LAYOUT_MEASUREMENT_MISSING",
+          "severity": "block",
+          "pageNumber": 2,
+          "message": "Folha autoral \"Known-good renderable page\" ainda não possui medição física atual."
+        },
+        {
+          "code": "LAYOUT_MEASUREMENT_MISSING",
+          "severity": "block",
+          "pageNumber": 2,
+          "message": "Bloco \"text\" ainda não possui medição física atual."
+        }
+      ],
+      "thumbnailAlive": true,
+      "canvasAlive": true,
+      "renderedPages": 2
+    }
+  ],
+  "runtimeEditorErrors": [],
   "dynamicDogfood": {
     "baselinePageCount": 12,
     "canonicalPageCount": 8,
@@ -2703,7 +2766,8 @@
       "delayedImageReady": true,
       "failedImageReady": true,
       "malformedBlocked": true,
-      "terminalSectionBlocked": true
+      "terminalSectionBlocked": true,
+      "runtimeBoundarySafe": true
     }
   }
 }
