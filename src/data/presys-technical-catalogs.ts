@@ -22,7 +22,8 @@ export interface PresysModelSpecs {
   weight: string;
   dimensions: string;
   caseCode: string;
-  heroImage: string;
+  heroImage?: string;
+  productAssetStatus: 'OFFICIAL_SOURCE' | 'PRESYS_PRODUCT_ASSET_PENDING';
 }
 
 export const PRESYS_SPECS: Record<'TA-25N' | 'TA-35N' | 'TA-50N', PresysModelSpecs> = {
@@ -42,7 +43,8 @@ export const PRESYS_SPECS: Record<'TA-25N' | 'TA-35N' | 'TA-50N', PresysModelSpe
     weight: '10.5 kg',
     dimensions: '260 x 200 x 305 mm',
     caseCode: '06.01.1031-00',
-    heroImage: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85'
+    heroImage: '/assets/presys/ta-25n-official.jpg',
+    productAssetStatus: 'OFFICIAL_SOURCE'
   },
   'TA-35N': {
     model: 'TA-35N',
@@ -60,7 +62,7 @@ export const PRESYS_SPECS: Record<'TA-25N' | 'TA-35N' | 'TA-50N', PresysModelSpe
     weight: '10.5 kg',
     dimensions: '315 x 200 x 305 mm',
     caseCode: '06.01.1031-00',
-    heroImage: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=1400&q=85'
+    productAssetStatus: 'PRESYS_PRODUCT_ASSET_PENDING'
   },
   'TA-50N': {
     model: 'TA-50N',
@@ -78,7 +80,7 @@ export const PRESYS_SPECS: Record<'TA-25N' | 'TA-35N' | 'TA-50N', PresysModelSpe
     weight: '12.5 kg',
     dimensions: '315 x 200 x 305 mm',
     caseCode: '06.01.1032-00',
-    heroImage: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=85'
+    productAssetStatus: 'PRESYS_PRODUCT_ASSET_PENDING'
   }
 };
 
@@ -116,7 +118,9 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
             brandSubtitle: 'METROLOGIA & INSTRUMENTAÇÃO INDUSTRIAL',
             overview: `Calibrador de temperatura tipo bloco seco de alta exatidão com padrão interno, calibrador multissinais elétrico incorporado para medição de DUT e controle térmico automatizado para calibração de sensores com emissão direta de relatórios.`,
             footerLeft: 'www.presys.com.br · vendas@presys.com.br',
-            footerRight: 'PRESYS INSTRUMENTS · ISO/IEC 17025 ACCREDITED'
+            footerRight: 'PRESYS INSTRUMENTS · ISO/IEC 17025 ACCREDITED',
+            productAssetStatus: specs.productAssetStatus,
+            productAssetSource: specs.heroImage ? 'presys-ta-folder (official PDF)' : undefined
           }
         }
       ]
