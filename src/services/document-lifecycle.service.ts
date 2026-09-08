@@ -2,6 +2,7 @@
 // Serviço Central de Domínio para Ciclo de Vida Unificado dos Documentos (Catálogo × Template × Duplicação × Variantes Localizadas)
 
 import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
+import { normalizeNewDocumentCoverExclusivity } from '@/domain/page-composition-policy';
 import { EditorDocumentContext, useCatalogStore } from '@/stores/useCatalogStore';
 import { useTemplateStore } from '@/stores/useTemplateStore';
 import { StorageService } from './storage.service';
@@ -197,8 +198,8 @@ export class DocumentLifecycleService {
         || ('name' in templateOrPreset ? templateOrPreset.name : '')
         || 'Novo Catálogo Técnico';
 
-      // 4. Montagem da entidade candidata em memória (sem alterar o estado global do editor)
-      const candidateCatalog: Catalog = {
+      // 4. Montagem da entidade candidata em memória (com normalização de exclusividade para novo documento)
+      const rawCandidate: Catalog = {
         ...structuredClone(sourceCatalog),
         id: newId,
         title: resolvedTitle,
@@ -208,6 +209,8 @@ export class DocumentLifecycleService {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+
+      const { normalizedCatalog: candidateCatalog } = normalizeNewDocumentCoverExclusivity(rawCandidate);
 
       // 5. PERSISTÊNCIA CLOUD-FIRST: Envia para o Supabase ANTES de trocar o contexto do editor
       const cloudRes = await SupabaseService.saveCatalog(candidateCatalog, 0);

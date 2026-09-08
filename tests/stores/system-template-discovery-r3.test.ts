@@ -80,7 +80,7 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
     const ta25n = useTemplateStore.getState().systemTemplates.find((t) => t.id === 'preset-presys-ta-25n-datasheet');
     expect(ta25n).toBeDefined();
     expect(ta25n?.name).toBe('PRESYS TA-25N — Datasheet Técnico');
-    expect(ta25n?.catalog.pages).toHaveLength(6);
+    expect(ta25n?.catalog.pages).toHaveLength(8);
   });
 
   // R3-T4: TA-35N visible after cloud load
@@ -95,7 +95,7 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
     const ta35n = useTemplateStore.getState().systemTemplates.find((t) => t.id === 'preset-presys-ta-35n-datasheet');
     expect(ta35n).toBeDefined();
     expect(ta35n?.name).toBe('PRESYS TA-35N — Datasheet Técnico');
-    expect(ta35n?.catalog.pages).toHaveLength(6);
+    expect(ta35n?.catalog.pages).toHaveLength(8);
   });
 
   // R3-T5: TA-50N visible after cloud load
@@ -110,7 +110,7 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
     const ta50n = useTemplateStore.getState().systemTemplates.find((t) => t.id === 'preset-presys-ta-50n-datasheet');
     expect(ta50n).toBeDefined();
     expect(ta50n?.name).toBe('PRESYS TA-50N — Datasheet Técnico');
-    expect(ta50n?.catalog.pages).toHaveLength(6);
+    expect(ta50n?.catalog.pages).toHaveLength(8);
   });
 
   // R3-T6: cloud-only system template retained
@@ -219,10 +219,10 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
 
     const activeCatalog = useCatalogStore.getState().currentCatalog;
     expect(activeCatalog).not.toBeNull();
-    expect(activeCatalog?.pages).toHaveLength(6);
+    expect(activeCatalog?.pages).toHaveLength(8);
     expect(activeCatalog?.title).toBe('TA-25N Produção');
     // Verifica poço e faixa do TA-25N
-    const heroSpec = activeCatalog?.pages[3].blocks.find((b) => b.id.includes('hero-specs'));
+    const heroSpec = activeCatalog?.pages.flatMap((p) => p.blocks).find((b) => b.id.includes('hero-specs'));
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '-25 °C to +155 °C')).toBe(true);
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '200 W')).toBe(true);
   });
@@ -241,8 +241,8 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
     expect(res.success).toBe(true);
 
     const activeCatalog = useCatalogStore.getState().currentCatalog;
-    expect(activeCatalog?.pages).toHaveLength(6);
-    const heroSpec = activeCatalog?.pages[3].blocks.find((b) => b.id.includes('hero-specs'));
+    expect(activeCatalog?.pages).toHaveLength(8);
+    const heroSpec = activeCatalog?.pages.flatMap((p) => p.blocks).find((b) => b.id.includes('hero-specs'));
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '-35 °C to +155 °C')).toBe(true);
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '300 W')).toBe(true);
   });
@@ -261,8 +261,8 @@ describe('PRESYS.R3 — System Template Discovery Regression Matrix (R3-T1 to R3
     expect(res.success).toBe(true);
 
     const activeCatalog = useCatalogStore.getState().currentCatalog;
-    expect(activeCatalog?.pages).toHaveLength(6);
-    const heroSpec = activeCatalog?.pages[3].blocks.find((b) => b.id.includes('hero-specs'));
+    expect(activeCatalog?.pages).toHaveLength(8);
+    const heroSpec = activeCatalog?.pages.flatMap((p) => p.blocks).find((b) => b.id.includes('hero-specs'));
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '-50 °C to +155 °C')).toBe(true);
     expect(heroSpec?.tableRows?.some((r) => r.localOverrides?.value === '400 W')).toBe(true);
   });

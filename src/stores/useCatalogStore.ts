@@ -295,9 +295,11 @@ interface CatalogState {
   moveStructuralSectionOnPage: (pageId: string, sectionId: string, direction: 'up' | 'down') => void;
   reorderStructuralSectionOnPage: (pageId: string, sectionId: string, targetIndex: number) => void;
 
-  // Composição de Páginas e Workflow Safety (Fase 3A.6)
+  // Composição de Páginas e Workflow Safety (Fase 3A.6 / A4.FLOW.R1)
   insertContentOnNewPageAfter: (sourcePageId: string, spec: PageContentInsertionSpec) => void;
   moveNonCoverBlocksToNewPage: (pageId: string) => boolean;
+  moveBlockToNextPage: (pageId: string, blockId: string) => boolean;
+  moveBlockToPreviousPage: (pageId: string, blockId: string) => boolean;
 
   // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
   commitDocumentMutation: (
@@ -1105,6 +1107,90 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         activePageIndex: sourcePageIndex + 1
       });
     }
+
+    return true;
+  },
+
+  moveBlockToNextPage: (pageId, blockId) => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return false;
+
+    const sourcePageIndex = currentCatalog.pages.findIndex((p) => p.id === pageId);
+    if (sourcePageIndex === -1) return false;
+
+    const sourcePage = currentCatalog.pages[sourcePageIndex];
+    const block = sourcePage.blocks.find((b) => b.id === blockId);
+    if (!block) return false;
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const dSource = draft.pages.find((p) => p.id === pageId);
+        if (!dSource) return;
+        dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
+
+        const nextPageIndex = sourcePageIndex + 1;
+        if (nextPageIndex < draft.pages.length) {
+          const dNext = draft.pages[nextPageIndex];
+          dNext.blocks = [block, ...(dNext.blocks || [])];
+        } else {
+          const newPageId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const newPage: CatalogPage = {
+            id: newPageId,
+            pageNumber: draft.pages.length + 1,
+            pageType: 'technical',
+            title: `Folha ${draft.pages.length + 1}`,
+            blocks: [block]
+          };
+          draft.pages.push(newPage);
+        }
+
+        draft.pages.forEach((p, idx) => {
+          p.pageNumber = idx + 1;
+        });
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: blockId,
+        targetPageId: pageId,
+        summary: `Bloco ${blockId} movido para a folha seguinte`
+      }
+    );
+
+    return true;
+  },
+
+  moveBlockToPreviousPage: (pageId, blockId) => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return false;
+
+    const sourcePageIndex = currentCatalog.pages.findIndex((p) => p.id === pageId);
+    if (sourcePageIndex <= 0) return false;
+
+    const sourcePage = currentCatalog.pages[sourcePageIndex];
+    const block = sourcePage.blocks.find((b) => b.id === blockId);
+    if (!block) return false;
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const dSource = draft.pages.find((p) => p.id === pageId);
+        if (!dSource) return;
+        dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
+
+        const prevPageIndex = sourcePageIndex - 1;
+        const dPrev = draft.pages[prevPageIndex];
+        dPrev.blocks = [...(dPrev.blocks || []), block];
+
+        draft.pages.forEach((p, idx) => {
+          p.pageNumber = idx + 1;
+        });
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: blockId,
+        targetPageId: pageId,
+        summary: `Bloco ${blockId} movido para a folha anterior`
+      }
+    );
 
     return true;
   },

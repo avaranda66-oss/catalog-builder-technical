@@ -107,14 +107,18 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
                 {/* Conteúdo Editorial da Página em Altura Natural */}
                 <div
                   data-a4-block-flow-content
-                  className="space-y-3 flex flex-col h-auto min-h-full"
+                  className={`flex flex-col ${
+                    isSingleFullCover ? 'p-0 h-full w-full space-y-0' : 'space-y-3 h-auto min-h-full'
+                  }`}
                 >
                   {page.blocks?.map((block) => (
                     <div
                       key={block.id}
                       data-block-id={block.id}
                       data-block-type={block.type}
-                      className="export-block-wrapper relative"
+                      className={`export-block-wrapper relative ${
+                        isSingleFullCover ? 'h-full w-full' : ''
+                      }`}
                       style={{ zIndex: block.position?.zIndex || 1 }}
                     >
                       {block.type === 'full_page_cover' && (

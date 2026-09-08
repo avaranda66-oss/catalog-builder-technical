@@ -81,6 +81,7 @@ interface EditorA4PageItemProps {
   tableOptions: BlockMenuOption[];
   structureOptions: BlockMenuOption[];
   onRecoverMixedCover?: (pageId: string) => void;
+  onMoveBlockToNextPage?: (pageId: string, blockId: string) => void;
 }
 
 const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
@@ -106,7 +107,8 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
   headerOptions,
   tableOptions,
   structureOptions,
-  onRecoverMixedCover
+  onRecoverMixedCover,
+  onMoveBlockToNextPage
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -329,7 +331,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
             )}
           </div>
 
-          {/* 4. Alternador de Preenchimento Inteligente A4 */}
+          {/* 4. Alternador de Distribuição Vertical A4 */}
           <button
             onClick={onToggleAutoFit}
             className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-none border transition-colors shadow-2xs ${
@@ -337,10 +339,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 ? 'bg-blue-50 text-blue-900 border-blue-300'
                 : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
             }`}
-            title="Adjusts vertical spacing to fill the 297mm A4 sheet harmoniously"
+            title="Distribui o espaçamento vertical entre os blocos para preencher harmonicamente a folha A4"
           >
             <Maximize2 className="w-3 h-3 text-[#003366]" />
-            <span>{isAutoFit ? 'Auto-Fit Active' : 'Auto-Fit Off'}</span>
+            <span>{isAutoFit ? 'Distribuir Espaço (Ativo)' : 'Distribuir Espaço'}</span>
           </button>
 
           {/* Excluir Folha */}
@@ -402,6 +404,11 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           result={overflowGuard}
           onRecoverMixedCover={onRecoverMixedCover ? () => onRecoverMixedCover(page.id) : undefined}
           isRecoveryEligible={evaluateMixedCoverRecovery(page).eligible}
+          onMoveOffendingBlock={
+            page.blocks && page.blocks.length > 1 && onMoveBlockToNextPage
+              ? () => onMoveBlockToNextPage(page.id, page.blocks[page.blocks.length - 1].id)
+              : undefined
+          }
         />
 
         {/* Viewport Documental Canônico (Fase 3A.5C) */}
@@ -684,6 +691,7 @@ export const A4Canvas: React.FC = () => {
     insertStructuralSection,
     insertContentOnNewPageAfter,
     moveNonCoverBlocksToNewPage,
+    moveBlockToNextPage,
     reorderStructuralSectionOnPage,
     addPage,
     removePage
@@ -1425,6 +1433,7 @@ export const A4Canvas: React.FC = () => {
             tableOptions={TABLE_OPTIONS}
             structureOptions={STRUCTURE_OPTIONS}
             onRecoverMixedCover={moveNonCoverBlocksToNewPage}
+            onMoveBlockToNextPage={moveBlockToNextPage}
           />
         );
       })}

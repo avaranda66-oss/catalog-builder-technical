@@ -91,7 +91,7 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
 
   const pages: CatalogPage[] = [
     // =========================================================================
-    // PÁGINA 1 — CAPA TÉCNICA MINIMALISTA & DESTAQUES
+    // PÁGINA 1 — CAPA TÉCNICA EXCLUSIVA (FULL PAGE COVER ONLY)
     // =========================================================================
     {
       id: `p1-${modelKey}-cover`,
@@ -118,7 +118,19 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
             footerLeft: 'www.presys.com.br · vendas@presys.com.br',
             footerRight: 'PRESYS INSTRUMENTS · ISO/IEC 17025 ACCREDITED'
           }
-        },
+        }
+      ]
+    },
+
+    // =========================================================================
+    // PÁGINA 2 — DESTAQUES METROLÓGICOS (QUICK SPECS)
+    // =========================================================================
+    {
+      id: `p2-${modelKey}-quickspecs`,
+      pageNumber: 2,
+      pageType: 'technical',
+      title: `Destaques Metrológicos ${modelKey}`,
+      blocks: [
         buildTableBlockFromPreset(
           `b2-${modelKey}-quickspec`,
           'quick_spec',
@@ -140,11 +152,11 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
     },
 
     // =========================================================================
-    // PÁGINA 2 — ESPECIFICAÇÕES DE MEDIÇÃO ELÉTRICA & ENTRADAS
+    // PÁGINA 3 — ESPECIFICAÇÕES DE MEDIÇÃO ELÉTRICA & ENTRADAS
     // =========================================================================
     {
-      id: `p2-${modelKey}-inputs`,
-      pageNumber: 2,
+      id: `p3-${modelKey}-inputs`,
+      pageNumber: 3,
       pageType: 'technical',
       title: 'Especificações Elétricas e Entradas',
       blocks: [
@@ -291,11 +303,11 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
     },
 
     // =========================================================================
-    // PÁGINA 3 — AUTOMAÇÃO, TAREFAS E METROLOGIA 4.0
+    // PÁGINA 4 — AUTOMAÇÃO, TAREFAS E METROLOGIA 4.0
     // =========================================================================
     {
-      id: `p3-${modelKey}-automation`,
-      pageNumber: 3,
+      id: `p4-${modelKey}-automation`,
+      pageNumber: 4,
       pageType: 'technical',
       title: 'Automação, Conectividade e Metrologia 4.0',
       blocks: [
@@ -494,11 +506,11 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
     },
 
     // =========================================================================
-    // PÁGINA 4 — ESPECIFICAÇÕES TÉCNICAS PRINCIPAIS DO BLOCO SECO (HERO TABLE)
+    // PÁGINA 5 — ESPECIFICAÇÕES TÉCNICAS PRINCIPAIS DO BLOCO SECO (HERO TABLE)
     // =========================================================================
     {
-      id: `p4-${modelKey}-specs`,
-      pageNumber: 4,
+      id: `p5-${modelKey}-specs`,
+      pageNumber: 5,
       pageType: 'technical',
       title: `Especificações Técnicas ${modelKey}`,
       blocks: [
@@ -709,11 +721,11 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
     },
 
     // =========================================================================
-    // PÁGINA 5 — MATRIZ DE INSERTOS (SÉRIE N)
+    // PÁGINA 6 — MATRIZ DE INSERTOS (SÉRIE N)
     // =========================================================================
     {
-      id: `p5-${modelKey}-inserts`,
-      pageNumber: 5,
+      id: `p6-${modelKey}-inserts`,
+      pageNumber: 6,
       pageType: 'technical',
       title: 'Matriz de Insertos Mecânicos',
       blocks: [
@@ -882,13 +894,13 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
     },
 
     // =========================================================================
-    // PÁGINA 6 — FORNECIMENTO PADRÃO, ACESSÓRIOS E CODIFICAÇÃO DE PEDIDO
+    // PÁGINA 7 — FORNECIMENTO PADRÃO E ACESSÓRIOS
     // =========================================================================
     {
-      id: `p6-${modelKey}-ordering`,
-      pageNumber: 6,
+      id: `p7-${modelKey}-delivery`,
+      pageNumber: 7,
       pageType: 'technical',
-      title: 'Fornecimento Padrão, Acessórios e Código de Pedido',
+      title: 'Fornecimento Padrão e Acessórios',
       blocks: [
         buildTableBlockFromPreset(
           `b11-${modelKey}-std-delivery`,
@@ -1061,7 +1073,19 @@ export function buildPresysTechnicalCatalog(modelKey: 'TA-25N' | 'TA-35N' | 'TA-
           {
             title: 'CÓDIGOS DE ACESSÓRIOS E PEÇAS DE REPOSIÇÃO'
           }
-        ),
+        )
+      ]
+    },
+
+    // =========================================================================
+    // PÁGINA 8 — ESTRUTURA DE CODIFICAÇÃO DE PEDIDO
+    // =========================================================================
+    {
+      id: `p8-${modelKey}-ordering`,
+      pageNumber: 8,
+      pageType: 'technical',
+      title: 'Código de Pedido',
+      blocks: [
         buildTableBlockFromPreset(
           `b13-${modelKey}-ordering-info`,
           'ordering_information',
