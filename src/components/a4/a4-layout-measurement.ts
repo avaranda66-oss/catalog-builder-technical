@@ -17,6 +17,10 @@ const getLogicalScale = (page: HTMLElement) => {
 
 const selectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
+export function getPrintableMeasureRoot(blockElement: HTMLElement): HTMLElement {
+  return blockElement.querySelector<HTMLElement>('[data-a4-measure-root]') ?? blockElement;
+}
+
 export function measureCanonicalA4Pages(root: HTMLElement, catalog: Catalog): PageLayoutFact[] {
   const facts: PageLayoutFact[] = [];
   for (const page of catalog.pages) {
@@ -39,16 +43,17 @@ export function measureCanonicalA4Pages(root: HTMLElement, catalog: Catalog): Pa
       ? measuredGapsPx.reduce((sum, gap) => sum + gap, 0) / measuredGapsPx.length
       : 0;
 
+    const pageBlocks = Array.isArray(page.blocks) ? page.blocks : [];
     facts.push({
       pageId: page.id,
       pageNumber: page.pageNumber,
       usableHeightMm: pxToMm(viewport.clientHeight),
       usableWidthMm: pxToMm(viewport.clientWidth),
       blockGapMm: pxToMm(blockGapPx),
-      blocks: page.blocks.flatMap((block) => {
+      blocks: pageBlocks.flatMap((block) => {
         const blockElement = blockElements.find((element) => element.dataset.canonicalBlockId === block.id);
         if (!blockElement) return [];
-        const measureRoot = blockElement.querySelector<HTMLElement>('[data-a4-measure-root]') ?? blockElement;
+        const measureRoot = getPrintableMeasureRoot(blockElement);
         const measuredHeightMm = pxToMm(pxHeight(measureRoot, scale));
         const measuredWidthMm = pxToMm(pxWidth(measureRoot, scale));
         const canonicalRowIds = new Set(block.tableRows?.map((row) => row.id) ?? []);
@@ -149,7 +154,19 @@ export function verifyRenderedA4Plan(root: HTMLElement, renderPlan: A4RenderPlan
         continue;
       }
 
-      const domRowIds = Array.from(blockElement.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
+      const rowElements = Array.from(blockElement.querySelectorAll<HTMLElement>('[data-canonical-row-id]'));
+      for (const rowEl of rowElements) {
+        const declaredBlockId = rowEl.getAttribute('data-canonical-block-id');
+        if (declaredBlockId && declaredBlockId !== renderBlock.canonicalBlockId) {
+          flowPlan.unresolvedIssues.push({
+            pageNumber: renderPage.pageNumber,
+            code: 'ROW_CLIPPED',
+            message: `Linha canônica ${rowEl.dataset.canonicalRowId} pertence ao bloco ${declaredBlockId}, mas foi renderizada sob o bloco ${renderBlock.canonicalBlockId} na folha física ${renderPage.pageNumber}.`
+          });
+        }
+      }
+
+      const domRowIds = rowElements
         .map((element) => element.dataset.canonicalRowId)
         .filter((id): id is string => Boolean(id));
 
@@ -173,41 +190,70 @@ export function verifyRenderedA4Plan(root: HTMLElement, renderPlan: A4RenderPlan
     }
   }
 
-  // P1-F: Verificação de multiset global no documento inteiro
-  // Cada linha de dados canônica esperada deve aparecer exatamente uma vez
-  const allRenderedRowIds = Array.from(root.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
-    .map((element) => element.dataset.canonicalRowId)
-    .filter((id): id is string => Boolean(id));
+  // P1-F / R131: Verificação de multiset global no documento inteiro escopada por bloco canônico
+  // Cada par (canonicalBlockId, rowId) esperado deve aparecer exatamente uma vez
+  const renderedScopedCounts = new Map<string, number>();
+  const renderedRowElements = Array.from(root.querySelectorAll<HTMLElement>('[data-canonical-row-id]'));
 
-  const rowCounts = new Map<string, number>();
-  for (const id of allRenderedRowIds) {
-    rowCounts.set(id, (rowCounts.get(id) ?? 0) + 1);
+  for (const element of renderedRowElements) {
+    const rowId = element.dataset.canonicalRowId;
+    if (!rowId) continue;
+    const containingBlock = element.closest<HTMLElement>('[data-canonical-block-id]');
+    const containingBlockId = containingBlock?.getAttribute('data-canonical-block-id') || '';
+    const declaredBlockId = element.getAttribute('data-canonical-block-id') || containingBlockId;
+
+    if (declaredBlockId && containingBlockId && declaredBlockId !== containingBlockId) {
+      flowPlan.unresolvedIssues.push({
+        pageNumber: 1,
+        code: 'TABLE_ROW_LOSS',
+        message: `A linha canônica ${rowId} pertencente ao bloco ${declaredBlockId} apareceu sob o bloco ${containingBlockId}.`
+      });
+    }
+
+    const scopedKey = `${containingBlockId}::${rowId}`;
+    renderedScopedCounts.set(scopedKey, (renderedScopedCounts.get(scopedKey) ?? 0) + 1);
   }
 
-  const allExpectedRowIds = new Set<string>();
+  const expectedScopedRowKeys = new Set<string>();
   for (const renderPage of renderPlan.pages) {
     for (const renderBlock of renderPage.blocks) {
       if (renderBlock.slice) {
         for (const rowId of renderBlock.slice.includedRowIds) {
-          allExpectedRowIds.add(rowId);
+          expectedScopedRowKeys.add(`${renderBlock.canonicalBlockId}::${rowId}`);
+        }
+      } else if (renderBlock.block?.tableRows) {
+        for (const row of renderBlock.block.tableRows) {
+          expectedScopedRowKeys.add(`${renderBlock.canonicalBlockId}::${row.id}`);
         }
       }
     }
   }
 
-  for (const rowId of allExpectedRowIds) {
-    const count = rowCounts.get(rowId) ?? 0;
+  for (const scopedKey of expectedScopedRowKeys) {
+    const count = renderedScopedCounts.get(scopedKey) ?? 0;
+    const [blockId, rowId] = scopedKey.split('::');
     if (count > 1) {
       flowPlan.unresolvedIssues.push({
         pageNumber: 1,
         code: 'TABLE_ROW_DUPLICATION',
-        message: `A linha canônica ${rowId} foi renderizada ${count} vezes no documento físico (duplicata detectada).`
+        message: `A linha canônica ${rowId} do bloco ${blockId} foi renderizada ${count} vezes no documento físico (duplicata detectada).`
       });
     } else if (count === 0) {
       flowPlan.unresolvedIssues.push({
         pageNumber: 1,
         code: 'TABLE_ROW_LOSS',
-        message: `A linha canônica ${rowId} esperada na paginação não está presente no documento físico renderizado.`
+        message: `A linha canônica ${rowId} do bloco ${blockId} esperada na paginação não está presente no documento físico renderizado.`
+      });
+    }
+  }
+
+  for (const [scopedKey, count] of renderedScopedCounts.entries()) {
+    if (!expectedScopedRowKeys.has(scopedKey) && count > 0) {
+      const [blockId, rowId] = scopedKey.split('::');
+      flowPlan.unresolvedIssues.push({
+        pageNumber: 1,
+        code: 'TABLE_ROW_DUPLICATION',
+        message: `A linha canônica ${rowId} foi renderizada indevidamente sob o bloco ${blockId}.`
       });
     }
   }

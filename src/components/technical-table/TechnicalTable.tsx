@@ -250,7 +250,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
           <div />
         )}
 
-        {isEditable && (
+        {isEditable && Boolean(onToggleLegend) && (
           <button
             type="button"
             onClick={(e) => {

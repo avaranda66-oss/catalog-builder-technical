@@ -121,6 +121,26 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
       }}
       className={`relative ${isSelected && !isExport ? 'ring-2 ring-blue-600' : ''}`}
     >
+      {/* Ações Editor-Only (Fora do Measure Root Físico) */}
+      {!isExport && (
+        <div className="flex items-center justify-end mb-1 no-print" data-editor-action="true">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddCustomColumn();
+            }}
+            className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-[#003366] font-medium px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors"
+            data-editor-action="true"
+            title="Adicionar coluna personalizada"
+          >
+            <Columns className="w-3 h-3 text-[#003366]" />
+            <span>+ Coluna</span>
+          </button>
+        </div>
+      )}
+
+      {/* Printable Measure Root (Fisicamente Fiel ao Export/PDF, incluindo padding e borda) */}
       <div
         data-a4-measure-root="true"
         className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
@@ -128,35 +148,18 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
         }`}
       >
         {/* Header Técnico da Tabela */}
-      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
-        <h3
-          data-printable-field="title"
-          contentEditable={!isExport}
-          suppressContentEditableWarning
-          onBlur={handleTitleBlur}
-          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5"
-        >
-          <TableIcon className="w-3.5 h-3.5 text-[#003366]" />
-          <span>{block.title || 'Tabela de Especificações Técnicas'}</span>
-        </h3>
-
-        {!isExport && (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddCustomColumn();
-              }}
-              className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-[#003366] font-medium px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors"
-              title="Adicionar coluna personalizada"
-            >
-              <Columns className="w-3 h-3 text-[#003366]" />
-              <span>+ Coluna</span>
-            </button>
-          </div>
-        )}
-      </div>
+        <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
+          <h3
+            data-printable-field="title"
+            contentEditable={!isExport}
+            suppressContentEditableWarning
+            onBlur={handleTitleBlur}
+            className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5"
+          >
+            <TableIcon className="w-3.5 h-3.5 text-[#003366]" />
+            <span>{block.title || 'Tabela de Especificações Técnicas'}</span>
+          </h3>
+        </div>
 
       {/* Motor de Tabela: Table Core V2 Pilot para specs_table, fallback seguro para TechnicalTable */}
       {useTableCorePilot && adaptedTable && pilotAdaptResult?.supported ? (

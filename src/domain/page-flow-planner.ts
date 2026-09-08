@@ -32,7 +32,8 @@ export type PageFlowIssueCode =
   | 'TABLE_ROW_LOSS'
   | 'TABLE_ROW_DUPLICATION'
   | 'MALFORMED_TABLE_STRUCTURE'
-  | 'MALFORMED_PAGE_BLOCKS';
+  | 'MALFORMED_PAGE_BLOCKS'
+  | 'LAYOUT_UNSTABLE';
 
 export interface BlockLayoutFact {
   blockId: string;
@@ -196,7 +197,7 @@ export function computePageFlowPlan(
         contentHeightMm = 0;
       };
 
-      if (!Array.isArray(page.blocks)) {
+      if (page.blocks !== undefined && page.blocks !== null && !Array.isArray(page.blocks)) {
         const message = `Folha ${projectedPages.length + 1} contém blocos em formato inválido.`;
         currentIssues.push({ code: 'MALFORMED_PAGE_BLOCKS', message, severity: 'error' });
         addUnresolved(projectedPages.length + 1, 'MALFORMED_PAGE_BLOCKS', message);
@@ -235,7 +236,7 @@ export function computePageFlowPlan(
               availableHeightOnFirstPageMm: firstPageAvailableMm,
               availableHeightOnSubsequentPagesMm: usableHeightMm
             },
-            { autoSplitOnOverflow: false, ...options.tablePaginationPolicy },
+            { ...options.tablePaginationPolicy, autoSplitOnOverflow: false },
             manualBreaks
           );
           tablePaginationPlans[block.id] = tablePlan;
@@ -318,7 +319,7 @@ export function computePageFlowPlan(
       currentIsCover = false;
     };
 
-    if (!Array.isArray(page.blocks)) {
+    if (page.blocks !== undefined && page.blocks !== null && !Array.isArray(page.blocks)) {
       const message = `Folha ${projectedPages.length + 1} contém blocos em formato inválido.`;
       currentIssues.push({ code: 'MALFORMED_PAGE_BLOCKS', message, severity: 'error' });
       addUnresolved(projectedPages.length + 1, 'MALFORMED_PAGE_BLOCKS', message);
