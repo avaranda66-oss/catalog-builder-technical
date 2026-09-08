@@ -159,7 +159,20 @@ export function normalizeNewDocumentCoverExclusivity(
   }
 
   const newPages: CatalogPage[] = [];
+  const reservedPageIds = new Set(catalog.pages.map((page) => page.id));
   let modified = false;
+
+  const deterministicContinuationId = (sourcePageId: string) => {
+    const base = `page-${sourcePageId}-cover-continuation`;
+    let candidate = base;
+    let suffix = 2;
+    while (reservedPageIds.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    reservedPageIds.add(candidate);
+    return candidate;
+  };
 
   for (let i = 0; i < catalog.pages.length; i++) {
     const page = catalog.pages[i];
@@ -177,7 +190,7 @@ export function normalizeNewDocumentCoverExclusivity(
       });
 
       // Nova folha para o conteúdo restante imediatamente após a capa
-      const continuationPageId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const continuationPageId = deterministicContinuationId(page.id);
       newPages.push({
         id: continuationPageId,
         pageNumber: newPages.length + 1,

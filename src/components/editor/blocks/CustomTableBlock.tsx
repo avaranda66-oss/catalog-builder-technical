@@ -23,7 +23,7 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   isExport,
   slice
 }) => {
-  const { updateBlock, setSelectedBlockId, updateCellOverride } = useCatalogStore();
+  const { updateBlock, setSelectedBlockId, updateCellOverride, setManualTableBreak } = useCatalogStore();
   const { getProduct } = useLibraryStore();
 
   const customHeaders: string[] | undefined = block.customData?.headers;
@@ -55,6 +55,7 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   const rows: CatalogTableRow[] = slice
     ? allRows.filter((r) => slice.includedRowIds.includes(r.id))
     : allRows;
+  const manualBreakRowIds: string[] = block.customData?.manualBreakRowIds ?? [];
 
   const family: TableVisualFamily = (block.customData?.tableFamily as TableVisualFamily) || 'monochrome';
   const density = (block.customData?.density as 'compact' | 'regular' | 'spacious') || 'compact';
@@ -97,14 +98,14 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
         col1: 'Novo Parâmetro',
         col2: 'Valor ou Especificação'
       },
-      order: rows.length
+      order: allRows.length
     };
-    updateBlock(pageId, block.id, { tableRows: [...rows, newRow] });
+    updateBlock(pageId, block.id, { tableRows: [...allRows, newRow] });
   };
 
   const handleRemoveRow = (rowId: string) => {
     if (isExport) return;
-    updateBlock(pageId, block.id, { tableRows: rows.filter((r) => r.id !== rowId) });
+    updateBlock(pageId, block.id, { tableRows: allRows.filter((r) => r.id !== rowId) });
   };
 
   return (
@@ -168,13 +169,25 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
         family={family}
         density={density}
         columnGroups={columnGroups}
-        legendConfig={legendConfig}
+        legendConfig={slice && !slice.isLastPage ? { ...legendConfig, showLegend: false } : legendConfig}
         isEditable={!isExport}
         onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
         onRemoveRow={handleRemoveRow}
+        manualBreakRowIds={manualBreakRowIds}
+        onToggleManualBreak={(rowId, enabled) => setManualTableBreak(block.id, rowId, enabled)}
         onRemoveColumn={handleRemoveColumn}
         onRenameColumn={handleColumnLabelBlur}
       />
+
+      <p
+        className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
+          slice?.footnoteNotice ? '' : 'invisible'
+        }`}
+        data-table-continuation-notice
+        aria-hidden={!slice?.footnoteNotice}
+      >
+        {slice?.footnoteNotice ?? null}
+      </p>
 
       {/* Rodapé de Ações do Editor */}
       {!isExport && (

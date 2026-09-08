@@ -28,6 +28,28 @@ export interface LayoutPreflightReport {
   readonly issues: readonly LayoutPreflightIssue[];
 }
 
+export async function waitForLayoutPreflight(
+  readCurrent: () => LayoutPreflightReport | null,
+  timeoutMs = 8000
+): Promise<LayoutPreflightReport> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const current = readCurrent();
+    if (current) return current;
+    await new Promise<void>((resolve) => setTimeout(resolve, 16));
+  }
+  return {
+    canPublish: false,
+    blockCount: 1,
+    warnCount: 0,
+    issues: [{
+      code: 'LAYOUT_MEASUREMENT_MISSING',
+      severity: 'block',
+      message: 'A medição física do layout não convergiu dentro do prazo de publicação.'
+    }]
+  };
+}
+
 /**
  * Audita o plano de layout projetado para garantir qualidade e conformidade física de impressão A4.
  */
@@ -50,21 +72,41 @@ export function auditLayoutPreflight(
         pageNumber,
         message: `Página ${pageNumber} contém uma Capa A4 exclusiva misturada com outros ${blocks.length - 1} blocos de conteúdo.`
       });
+      issues.push({
+        code: 'MIXED_FULL_PAGE_COVER',
+        severity: 'block',
+        pageNumber,
+        message: `Página ${pageNumber} viola o contrato físico de capa exclusiva.`
+      });
     }
   });
 
-  // 2. Se houver plano de layout projetado (PageFlowPlan)
-  if (plan) {
-    if (plan.hasUnresolvedOverflow) {
-      for (const unres of plan.unresolvedIssues) {
-        if (unres.code === 'VERTICAL_OVERFLOW' || unres.code === 'UNRESOLVED_OVERSIZED_BLOCK') {
-          issues.push({
-            code: unres.code,
-            severity: 'block',
-            pageNumber: unres.pageNumber,
-            message: unres.message
-          });
-        }
+  // 2. A ausência de um plano físico atual nunca equivale a aprovação de layout.
+  if (!plan) {
+    issues.push({
+      code: 'LAYOUT_MEASUREMENT_MISSING',
+      severity: 'block',
+      message: 'A publicação final exige um plano de layout derivado de medições físicas atuais.'
+    });
+  } else {
+    const blockingPlanCodes = new Set([
+      'VERTICAL_OVERFLOW',
+      'UNRESOLVED_OVERSIZED_BLOCK',
+      'UNRESOLVED_OVERSIZED_ROW',
+      'LAYOUT_MEASUREMENT_MISSING',
+      'ROW_CLIPPED',
+      'TABLE_ROW_LOSS',
+      'TABLE_ROW_DUPLICATION'
+    ]);
+
+    for (const unres of plan.unresolvedIssues) {
+      if (blockingPlanCodes.has(unres.code)) {
+        issues.push({
+          code: unres.code,
+          severity: 'block',
+          pageNumber: unres.pageNumber,
+          message: unres.message
+        });
       }
     }
 
@@ -89,6 +131,14 @@ export function auditLayoutPreflight(
           severity: 'block',
           tableId,
           message: `A tabela ${tableId} contém linhas cuja altura excede uma folha A4 inteira.`
+        });
+      }
+      if (tPlan.hasDuplicateRowIds) {
+        issues.push({
+          code: 'TABLE_ROW_DUPLICATION',
+          severity: 'block',
+          tableId,
+          message: `A tabela ${tableId} contém IDs canônicos duplicados: ${(tPlan.duplicateRowIds || []).join(', ')}.`
         });
       }
     }

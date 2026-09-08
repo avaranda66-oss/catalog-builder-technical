@@ -1,35 +1,41 @@
-// src/domain/page-flow-planner.ts
-// Motor Puro de Fluxo Inteligente de Páginas A4 (Smart A4 Page Flow / A4.FLOW.R1).
-// Separa rigorosamente:
-// 1. DOCUMENT MODEL (Persistência canônica única)
-// 2. LAYOUT PLAN (Mapeamento derivado/efêmero para folhas A4 físicas)
-// 3. RENDER PLAN (Projeções do Editor e Exportação PDF)
-// Totalmente desacoplado de React, Zustand, DOM e banco de dados.
-
-import { Catalog, ContentBlock } from './catalog.schema';
+import type { Catalog, CatalogPage, ContentBlock } from './catalog.schema';
+import { getPageContentBox } from './page-geometry';
 import {
-  TablePaginationMeasurementInput,
-  TablePaginationPlan,
-  TablePaginationSlice,
+  type TablePaginationMeasurementInput,
+  type TablePaginationPlan,
+  type TablePaginationSlice,
   computeTablePaginationPlan
 } from './table-core/table.pagination';
-import { TablePaginationPolicy } from './table-core/table.types';
+import type { TablePaginationPolicy } from './table-core/table.types';
 
 export type FlowMode = 'smart' | 'manual';
-
 export type TableDensityToken = 'comfortable' | 'compact' | 'dense';
 
 export const READABILITY_FLOOR = {
-  minFontSizePt: 8,                    // 8pt (~10.6px em 96 DPI)
+  minFontSizePt: 8,
   minLineHeight: 1.15,
-  minCellPaddingVerticalMm: 0.5,       // ~2px
-  minCellPaddingHorizontalMm: 1.0      // ~4px
+  minCellPaddingVerticalMm: 0.5,
+  minCellPaddingHorizontalMm: 1
 } as const;
+
+/** R1.1 does not advertise density selection without measured candidates. */
+export const COMPACTION_DEFERRED = true as const;
+
+export type PageFlowIssueCode =
+  | 'MIXED_FULL_PAGE_COVER'
+  | 'VERTICAL_OVERFLOW'
+  | 'HORIZONTAL_OVERFLOW'
+  | 'UNRESOLVED_OVERSIZED_BLOCK'
+  | 'UNRESOLVED_OVERSIZED_ROW'
+  | 'LAYOUT_MEASUREMENT_MISSING'
+  | 'ROW_CLIPPED'
+  | 'TABLE_ROW_LOSS'
+  | 'TABLE_ROW_DUPLICATION';
 
 export interface BlockLayoutFact {
   blockId: string;
   blockType: string;
-  measuredHeightMm: number;
+  measuredHeightMm?: number;
   measuredWidthMm?: number;
   isSplittableTable?: boolean;
   tableMeasurement?: TablePaginationMeasurementInput;
@@ -41,28 +47,33 @@ export interface PageLayoutFact {
   pageNumber: number;
   usableHeightMm: number;
   usableWidthMm: number;
+  /** Actual residual spacing between root block boxes in the printable flow. */
+  blockGapMm?: number;
   blocks: BlockLayoutFact[];
 }
 
 export interface ProjectedBlock {
-  id: string;                          // Identificador da projeção (ex: `${canonicalBlockId}-slice-0`)
-  canonicalBlockId: string;            // Autoridade canônica única no documento
+  id: string;
+  canonicalPageId: string;
+  canonicalBlockId: string;
   canonicalBlockType: string;
   isContinuationSlice?: boolean;
   sliceIndex?: number;
   totalSlices?: number;
-  slice?: TablePaginationSlice;        // Dados da fatia se for tabela particionada
+  slice?: TablePaginationSlice;
   density?: TableDensityToken;
 }
 
 export interface ProjectedPage {
   pageId: string;
+  canonicalPageId: string;
   pageNumber: number;
   isCover: boolean;
+  isDerivedContinuation: boolean;
   blocks: ProjectedBlock[];
   hasOverflow: boolean;
   overflowMm: number;
-  issues: Array<{ code: string; message: string; severity: 'warning' | 'error' }>;
+  issues: Array<{ code: PageFlowIssueCode; message: string; severity: 'warning' | 'error' }>;
 }
 
 export interface PageFlowPlan {
@@ -70,346 +81,339 @@ export interface PageFlowPlan {
   projectedPages: ProjectedPage[];
   totalProjectedPages: number;
   tablePaginationPlans: Record<string, TablePaginationPlan>;
+  measurementStatus: 'ready' | 'missing';
   hasUnresolvedOverflow: boolean;
   hasHorizontalOverflow: boolean;
-  unresolvedIssues: Array<{ pageNumber: number; code: string; message: string }>;
+  unresolvedIssues: Array<{ pageNumber: number; code: PageFlowIssueCode; message: string }>;
 }
 
 export interface PageFlowPlannerOptions {
   flowMode?: FlowMode;
   tablePaginationPolicy?: Partial<TablePaginationPolicy>;
-  manualTableBreaks?: Record<string, string[]>; // tableId -> rowIds
+  manualTableBreaks?: Record<string, string[]>;
 }
 
+const TECHNICAL_CONTENT_BOX = getPageContentBox();
+const DEFAULT_TECHNICAL_HEIGHT_MM = TECHNICAL_CONTENT_BOX.availableHeightMm;
+const DEFAULT_TECHNICAL_WIDTH_MM = TECHNICAL_CONTENT_BOX.availableWidthMm;
+const TOLERANCE_MM = 1;
+
+const isTableBlock = (block: ContentBlock, fact?: BlockLayoutFact) =>
+  fact?.isSplittableTable ?? ['custom_table', 'specs_table', 'table'].includes(block.type);
+
+const densityFor = (block: ContentBlock, fact?: BlockLayoutFact): TableDensityToken => {
+  const requested = fact?.density ?? block.customData?.density;
+  return requested === 'comfortable' || requested === 'dense' || requested === 'compact'
+    ? requested
+    : 'compact';
+};
+
+const manualBreaksFor = (block: ContentBlock, options: PageFlowPlannerOptions): string[] =>
+  options.manualTableBreaks?.[block.id] ?? block.customData?.manualBreakRowIds ?? [];
+
+const projectedBlock = (
+  canonicalPageId: string,
+  block: ContentBlock,
+  fact?: BlockLayoutFact,
+  slice?: TablePaginationSlice,
+  totalSlices?: number
+): ProjectedBlock => ({
+  id: slice ? `flow:${canonicalPageId}:${block.id}:slice:${slice.sliceIndex}` : block.id,
+  canonicalPageId,
+  canonicalBlockId: block.id,
+  canonicalBlockType: block.type,
+  isContinuationSlice: Boolean(slice && slice.sliceIndex > 0),
+  sliceIndex: slice?.sliceIndex,
+  totalSlices,
+  slice,
+  density: densityFor(block, fact)
+});
+
 /**
- * Computa o plano de fluxo determinístico de páginas A4.
- * Invariantes:
- * 1. Não muta o documento canônico de entrada.
- * 2. Em modo MANUAL, preserva a composição exata das páginas sem mover blocos ou fatiar tabelas.
- * 3. Em modo SMART, aplica a ordem de estratégias contratada:
- *    Mover Bloco Inteiro -> Paginar Tabela -> Compactar Densidade -> Fail Closed.
- * 4. Idempotente e determinístico: mesmo input de fatos medidos gera o mesmo plano.
+ * Pure page-flow authority. Authored page boundaries are preserved; only overflow generated
+ * inside an authored page creates deterministic view-only continuation pages.
  */
 export function computePageFlowPlan(
   catalog: Catalog,
   measuredPages: PageLayoutFact[],
   options: PageFlowPlannerOptions = {}
 ): PageFlowPlan {
-  const flowMode: FlowMode = options.flowMode ?? 'smart';
-  const tablePlans: Record<string, TablePaginationPlan> = {};
-  const unresolvedIssues: Array<{ pageNumber: number; code: string; message: string }> = [];
-
-  const factsByPageId = new Map<string, PageLayoutFact>();
-  for (const p of measuredPages) {
-    factsByPageId.set(p.pageId, p);
-  }
-
-  // Se o modo for MANUAL, projeta 1:1 sem reflow automático, diagnosticando overflows
-  if (flowMode === 'manual') {
-    const projectedPages: ProjectedPage[] = [];
-
-    for (let pageIdx = 0; pageIdx < catalog.pages.length; pageIdx++) {
-      const page = catalog.pages[pageIdx];
-      const pageNumber = pageIdx + 1;
-      const fact = factsByPageId.get(page.id);
-
-      const usableHeightMm = fact?.usableHeightMm ?? 260;
-      const usableWidthMm = fact?.usableWidthMm ?? 190;
-      const isCover = page.blocks?.some((b) => b.type === 'full_page_cover') ?? false;
-
-      let totalContentHeightMm = 0;
-      let pageHasHorizontalOverflow = false;
-      const issues: Array<{ code: string; message: string; severity: 'warning' | 'error' }> = [];
-
-      const blocks: ProjectedBlock[] = (page.blocks || []).map((b) => {
-        const bFact = fact?.blocks.find((bf) => bf.blockId === b.id);
-        const h = bFact?.measuredHeightMm ?? 0;
-        totalContentHeightMm += h;
-
-        if (bFact?.measuredWidthMm && bFact.measuredWidthMm > usableWidthMm && !isCover) {
-          pageHasHorizontalOverflow = true;
-          issues.push({
-            code: 'HORIZONTAL_OVERFLOW',
-            message: `Bloco "${b.title || b.type}" excede a largura útil da folha A4.`,
-            severity: 'error'
-          });
-        }
-
-        return {
-          id: b.id,
-          canonicalBlockId: b.id,
-          canonicalBlockType: b.type,
-          density: (b.customData?.density as TableDensityToken) || 'compact'
-        };
-      });
-
-      const overflowMm = isCover ? 0 : Math.max(0, Number((totalContentHeightMm - usableHeightMm).toFixed(1)));
-      const hasOverflow = overflowMm > 1.0; // 1mm de tolerância contra subpixel rounding
-
-      if (hasOverflow) {
-        issues.push({
-          code: 'VERTICAL_OVERFLOW',
-          message: `Conteúdo excede a altura útil da folha em ~${overflowMm} mm.`,
-          severity: 'warning'
-        });
-        unresolvedIssues.push({
-          pageNumber,
-          code: 'VERTICAL_OVERFLOW',
-          message: `Folha ${pageNumber} excede o limite vertical por ${overflowMm} mm.`
-        });
-      }
-
-      if (pageHasHorizontalOverflow) {
-        unresolvedIssues.push({
-          pageNumber,
-          code: 'HORIZONTAL_OVERFLOW',
-          message: `Folha ${pageNumber} possui conteúdo que excede a largura da folha.`
-        });
-      }
-
-      projectedPages.push({
-        pageId: page.id,
-        pageNumber,
-        isCover,
-        blocks,
-        hasOverflow,
-        overflowMm,
-        issues
-      });
-    }
-
-    return {
-      flowMode: 'manual',
-      projectedPages,
-      totalProjectedPages: projectedPages.length,
-      tablePaginationPlans: tablePlans,
-      hasUnresolvedOverflow: unresolvedIssues.some((i) => i.code === 'VERTICAL_OVERFLOW'),
-      hasHorizontalOverflow: unresolvedIssues.some((i) => i.code === 'HORIZONTAL_OVERFLOW'),
-      unresolvedIssues
-    };
-  }
-
-  // =========================================================================
-  // MODO SMART FLOW — Resolução Determinística de Layout
-  // =========================================================================
+  const flowMode: FlowMode = options.flowMode ?? catalog.layoutFlowMode ?? 'smart';
+  const factsByPageId = new Map(measuredPages.map((fact) => [fact.pageId, fact]));
+  const tablePaginationPlans: Record<string, TablePaginationPlan> = {};
   const projectedPages: ProjectedPage[] = [];
+  const unresolvedIssues: PageFlowPlan['unresolvedIssues'] = [];
 
-  // Fila linear de blocos canônicos com fatos medidos
-  interface BlockQueueItem {
-    block: ContentBlock;
-    fact?: BlockLayoutFact;
-    originPageId: string;
-    originPageType?: string;
-  }
-
-  const blockQueue: BlockQueueItem[] = [];
-
-  for (const page of catalog.pages) {
-    const pFact = factsByPageId.get(page.id);
-    for (const b of page.blocks || []) {
-      const bFact = pFact?.blocks.find((bf) => bf.blockId === b.id);
-      blockQueue.push({
-        block: b,
-        fact: bFact,
-        originPageId: page.id,
-        originPageType: page.pageType
-      });
+  const addUnresolved = (pageNumber: number, code: PageFlowIssueCode, message: string) => {
+    if (!unresolvedIssues.some((issue) => issue.pageNumber === pageNumber && issue.code === code && issue.message === message)) {
+      unresolvedIssues.push({ pageNumber, code, message });
     }
-  }
-
-  // Configuração física padrão de página A4
-  const firstPageFact = catalog.pages[0] ? factsByPageId.get(catalog.pages[0].id) : undefined;
-  const standardUsableHeightMm = firstPageFact?.usableHeightMm ?? 260; // 297mm - margens 2x15mm - header/footer
-  const standardUsableWidthMm = firstPageFact?.usableWidthMm ?? 190;  // 210mm - margens 2x10mm
-
-  let currentPageNumber = 1;
-  let currentProjectedBlocks: ProjectedBlock[] = [];
-  let currentAvailableHeightMm = standardUsableHeightMm;
-  let currentPageIsCover = false;
-  let currentPageIssues: Array<{ code: string; message: string; severity: 'warning' | 'error' }> = [];
-
-  const finalizePage = () => {
-    if (currentProjectedBlocks.length === 0 && projectedPages.length > 0) return;
-
-    projectedPages.push({
-      pageId: `projected-page-${currentPageNumber}`,
-      pageNumber: currentPageNumber,
-      isCover: currentPageIsCover,
-      blocks: currentProjectedBlocks,
-      hasOverflow: false,
-      overflowMm: 0,
-      issues: currentPageIssues
-    });
-
-    currentPageNumber++;
-    currentProjectedBlocks = [];
-    currentAvailableHeightMm = standardUsableHeightMm;
-    currentPageIsCover = false;
-    currentPageIssues = [];
   };
 
-  for (let qIdx = 0; qIdx < blockQueue.length; qIdx++) {
-    const item = blockQueue[qIdx];
-    const { block, fact } = item;
-    const isCoverBlock = block.type === 'full_page_cover';
+  if (flowMode === 'manual') {
+    for (let pageIndex = 0; pageIndex < catalog.pages.length; pageIndex += 1) {
+      const page = catalog.pages[pageIndex];
+      const fact = factsByPageId.get(page.id);
+      const isCover = page.blocks.some((block) => block.type === 'full_page_cover');
+      const usableHeightMm = fact?.usableHeightMm ?? (isCover ? 297 : DEFAULT_TECHNICAL_HEIGHT_MM);
+      const usableWidthMm = fact?.usableWidthMm ?? (isCover ? 210 : DEFAULT_TECHNICAL_WIDTH_MM);
+      const blockGapMm = fact?.blockGapMm ?? 0;
+      let currentBlocks: ProjectedBlock[] = [];
+      let currentIssues: ProjectedPage['issues'] = [];
+      let contentHeightMm = 0;
+      let continuationIndex = 0;
+      let continuationAnchor = page.blocks[0]?.id ?? 'empty';
 
-    // Se é capa A4 de página inteira: deve ocupar a folha com 100% de exclusividade
-    if (isCoverBlock) {
-      if (currentProjectedBlocks.length > 0) {
-        finalizePage();
-      }
-
-      currentPageIsCover = true;
-      currentProjectedBlocks.push({
-        id: block.id,
-        canonicalBlockId: block.id,
-        canonicalBlockType: block.type
-      });
-      finalizePage();
-      continue;
-    }
-
-    // Se a página corrente é uma capa (e este bloco não é capa): fechar a página de capa imediatamente
-    if (currentPageIsCover) {
-      finalizePage();
-    }
-
-    const blockHeightMm = fact?.measuredHeightMm ?? 40; // Fallback seguro
-    const blockWidthMm = fact?.measuredWidthMm ?? 190;
-
-    // Verificação de largura horizontal
-    if (blockWidthMm > standardUsableWidthMm) {
-      currentPageIssues.push({
-        code: 'HORIZONTAL_OVERFLOW',
-        message: `Bloco "${block.title || block.type}" ultrapassa a largura útil da folha A4.`,
-        severity: 'error'
-      });
-      unresolvedIssues.push({
-        pageNumber: currentPageNumber,
-        code: 'HORIZONTAL_OVERFLOW',
-        message: `Folha ${currentPageNumber} contém bloco excedendo a largura útil.`
-      });
-    }
-
-    // Caso 1: O bloco cabe no espaço restante da folha corrente
-    if (blockHeightMm <= currentAvailableHeightMm) {
-      currentProjectedBlocks.push({
-        id: block.id,
-        canonicalBlockId: block.id,
-        canonicalBlockType: block.type,
-        density: fact?.density || (block.customData?.density as TableDensityToken) || 'compact'
-      });
-      currentAvailableHeightMm -= blockHeightMm;
-      continue;
-    }
-
-    // Caso 2: O bloco não cabe no espaço restante
-    // Estratégia 1: Se for bloco atômico (não tabela fatiável) e couber em uma folha em branco,
-    // move o bloco inteiro para a próxima folha.
-    const isSplittableTable = fact?.isSplittableTable ?? (block.type === 'custom_table' || block.type === 'specs_table' || block.type === 'table');
-
-    if (!isSplittableTable && currentProjectedBlocks.length > 0 && blockHeightMm <= standardUsableHeightMm) {
-      finalizePage();
-      currentProjectedBlocks.push({
-        id: block.id,
-        canonicalBlockId: block.id,
-        canonicalBlockType: block.type
-      });
-      currentAvailableHeightMm -= blockHeightMm;
-      continue;
-    }
-
-    // Estratégia 2: Se for Tabela V2 fatiável, computar plano de paginação
-    if (isSplittableTable && fact?.tableMeasurement) {
-      const manualBreaks = options.manualTableBreaks?.[block.id];
-      const tableInput: TablePaginationMeasurementInput = {
-        ...fact.tableMeasurement,
-        availableHeightOnFirstPageMm: currentAvailableHeightMm,
-        availableHeightOnSubsequentPagesMm: standardUsableHeightMm
+      const finishManualPage = () => {
+        const physicalPageNumber = projectedPages.length + 1;
+        const overflowMm = isCover ? 0 : Math.max(0, Number((contentHeightMm - usableHeightMm).toFixed(2)));
+        const hasOverflow = overflowMm > TOLERANCE_MM;
+        if (hasOverflow) {
+          const message = `Folha ${physicalPageNumber} excede o limite vertical por ${overflowMm} mm.`;
+          currentIssues.push({ code: 'VERTICAL_OVERFLOW', message, severity: 'error' });
+          addUnresolved(physicalPageNumber, 'VERTICAL_OVERFLOW', message);
+        }
+        projectedPages.push({
+          pageId: continuationIndex === 0 ? page.id : `flow:${page.id}:${continuationAnchor}:${continuationIndex}`,
+          canonicalPageId: page.id,
+          pageNumber: physicalPageNumber,
+          isCover,
+          isDerivedContinuation: continuationIndex > 0,
+          blocks: currentBlocks,
+          hasOverflow,
+          overflowMm,
+          issues: currentIssues
+        });
+        continuationIndex += 1;
+        currentBlocks = [];
+        currentIssues = [];
+        contentHeightMm = 0;
       };
 
-      const plan = computeTablePaginationPlan(tableInput, options.tablePaginationPolicy, manualBreaks);
-      tablePlans[block.id] = plan;
-
-      if (plan.hasUnresolvedOversizedRow) {
-        unresolvedIssues.push({
-          pageNumber: currentPageNumber,
-          code: 'UNRESOLVED_OVERSIZED_ROW',
-          message: `Tabela ${block.title || block.id} contém linha(s) maior(es) que uma folha inteira.`
-        });
+      if (!fact && page.blocks.length > 0) {
+        const message = `Folha ${projectedPages.length + 1} ainda não possui medição física atual.`;
+        currentIssues.push({ code: 'LAYOUT_MEASUREMENT_MISSING', message, severity: 'error' });
+        addUnresolved(projectedPages.length + 1, 'LAYOUT_MEASUREMENT_MISSING', message);
       }
 
-      // Distribui as fatias da tabela nas páginas
-      for (let sIdx = 0; sIdx < plan.slices.length; sIdx++) {
-        const slice = plan.slices[sIdx];
-
-        if (sIdx > 0) {
-          finalizePage();
+      page.blocks.forEach((block) => {
+        const blockFact = fact?.blocks.find((candidate) => candidate.blockId === block.id);
+        continuationAnchor = block.id;
+        const gapMm = currentBlocks.length > 0 ? blockGapMm : 0;
+        if (blockFact?.measuredHeightMm == null) {
+          const message = `Bloco "${block.title || block.type}" ainda não possui medição física atual.`;
+          currentIssues.push({ code: 'LAYOUT_MEASUREMENT_MISSING', message, severity: 'error' });
+          addUnresolved(projectedPages.length + 1, 'LAYOUT_MEASUREMENT_MISSING', message);
+          currentBlocks.push(projectedBlock(page.id, block, blockFact));
+          return;
         }
 
-        currentProjectedBlocks.push({
-          id: `${block.id}-slice-${slice.sliceIndex}`,
-          canonicalBlockId: block.id,
-          canonicalBlockType: block.type,
-          isContinuationSlice: slice.sliceIndex > 0,
-          sliceIndex: slice.sliceIndex,
-          totalSlices: plan.slices.length,
-          slice,
-          density: fact?.density || 'compact'
-        });
+        if (!isCover && blockFact?.measuredWidthMm != null && blockFact.measuredWidthMm > usableWidthMm + TOLERANCE_MM) {
+          const message = `Bloco "${block.title || block.type}" excede a largura útil da folha A4.`;
+          currentIssues.push({ code: 'HORIZONTAL_OVERFLOW', message, severity: 'error' });
+          addUnresolved(projectedPages.length + 1, 'HORIZONTAL_OVERFLOW', message);
+        }
 
-        currentAvailableHeightMm -= slice.totalSliceHeightMm;
-      }
+        const manualBreaks = manualBreaksFor(block, options);
+        if (manualBreaks.length > 0 && isTableBlock(block, blockFact) && blockFact.tableMeasurement) {
+          const firstPageAvailableMm = Math.max(0, usableHeightMm - contentHeightMm - gapMm);
+          const tablePlan = computeTablePaginationPlan({
+            ...blockFact.tableMeasurement,
+            availableHeightOnFirstPageMm: firstPageAvailableMm,
+            availableHeightOnSubsequentPagesMm: usableHeightMm
+          }, options.tablePaginationPolicy, manualBreaks);
+          tablePaginationPlans[block.id] = tablePlan;
 
-      continue;
+          if (tablePlan.hasUnresolvedOversizedRow) {
+            const message = `Tabela ${block.title || block.id} contém linha maior que uma folha técnica.`;
+            currentIssues.push({ code: 'UNRESOLVED_OVERSIZED_ROW', message, severity: 'error' });
+            addUnresolved(projectedPages.length + 1, 'UNRESOLVED_OVERSIZED_ROW', message);
+          }
+          if (tablePlan.hasDuplicateRowIds) {
+            const message = `Tabela ${block.title || block.id} contém IDs de linha canônica duplicados.`;
+            currentIssues.push({ code: 'TABLE_ROW_DUPLICATION', message, severity: 'error' });
+            addUnresolved(projectedPages.length + 1, 'TABLE_ROW_DUPLICATION', message);
+          }
+
+          tablePlan.slices.forEach((slice, sliceIndex) => {
+            if (sliceIndex > 0) finishManualPage();
+            currentBlocks.push(projectedBlock(page.id, block, blockFact, slice, tablePlan.slices.length));
+            contentHeightMm += slice.totalSliceHeightMm + (sliceIndex === 0 ? gapMm : 0);
+          });
+          return;
+        }
+
+        contentHeightMm += Math.max(0, blockFact.measuredHeightMm) + gapMm;
+        currentBlocks.push(projectedBlock(page.id, block, blockFact));
+      });
+
+      finishManualPage();
     }
-
-    // Se o bloco é atômico e sozinho já excede uma folha A4 em branco: Fail Closed com diagnóstico
-    if (blockHeightMm > standardUsableHeightMm) {
-      if (currentProjectedBlocks.length > 0) {
-        finalizePage();
-      }
-
-      currentPageIssues.push({
-        code: 'UNRESOLVED_OVERSIZED_BLOCK',
-        message: `Bloco "${block.title || block.type}" é maior que uma página A4 inteira e não suporta particionamento.`,
-        severity: 'error'
-      });
-
-      unresolvedIssues.push({
-        pageNumber: currentPageNumber,
-        code: 'UNRESOLVED_OVERSIZED_BLOCK',
-        message: `Bloco "${block.title || block.type}" excede a folha A4 inteira.`
-      });
-
-      currentProjectedBlocks.push({
-        id: block.id,
-        canonicalBlockId: block.id,
-        canonicalBlockType: block.type
-      });
-      finalizePage();
-      continue;
-    }
-
-    // Fallback: move bloco para próxima folha
-    finalizePage();
-    currentProjectedBlocks.push({
-      id: block.id,
-      canonicalBlockId: block.id,
-      canonicalBlockType: block.type
-    });
-    currentAvailableHeightMm -= blockHeightMm;
+  } else {
+    for (const page of catalog.pages) planSmartAuthoredPage(page);
   }
 
-  finalizePage();
+  function planSmartAuthoredPage(page: CatalogPage) {
+    const fact = factsByPageId.get(page.id);
+    const pageHasCover = page.blocks.some((block) => block.type === 'full_page_cover');
+    const usableHeightMm = fact?.usableHeightMm ?? (pageHasCover ? 297 : DEFAULT_TECHNICAL_HEIGHT_MM);
+    const usableWidthMm = fact?.usableWidthMm ?? (pageHasCover ? 210 : DEFAULT_TECHNICAL_WIDTH_MM);
+    const technicalFact = measuredPages.find((candidate) => candidate.pageId !== page.id && candidate.usableWidthMm < 210);
+    const technicalHeightMm = page.pageType === 'cover' ? (technicalFact?.usableHeightMm ?? DEFAULT_TECHNICAL_HEIGHT_MM) : usableHeightMm;
+    const technicalWidthMm = page.pageType === 'cover' ? (technicalFact?.usableWidthMm ?? DEFAULT_TECHNICAL_WIDTH_MM) : usableWidthMm;
+    const blockGapMm = fact?.blockGapMm ?? 0;
+    let currentBlocks: ProjectedBlock[] = [];
+    let currentIssues: ProjectedPage['issues'] = [];
+    let currentAvailableMm = pageHasCover ? usableHeightMm : technicalHeightMm;
+    let currentIsCover = false;
+    let continuationIndex = 0;
+    let continuationAnchor = page.blocks[0]?.id ?? 'empty';
+
+    const finishPage = () => {
+      if (currentBlocks.length === 0 && page.blocks.length > 0) return;
+      const isDerivedContinuation = continuationIndex > 0;
+      projectedPages.push({
+        pageId: isDerivedContinuation ? `flow:${page.id}:${continuationAnchor}:${continuationIndex}` : page.id,
+        canonicalPageId: page.id,
+        pageNumber: projectedPages.length + 1,
+        isCover: currentIsCover,
+        isDerivedContinuation,
+        blocks: currentBlocks,
+        hasOverflow: currentIssues.some((issue) => issue.code === 'VERTICAL_OVERFLOW' || issue.code.startsWith('UNRESOLVED_')),
+        overflowMm: 0,
+        issues: currentIssues
+      });
+      continuationIndex += 1;
+      currentBlocks = [];
+      currentIssues = [];
+      currentAvailableMm = technicalHeightMm;
+      currentIsCover = false;
+    };
+
+    if (page.blocks.length === 0) {
+      finishPage();
+      return;
+    }
+
+    if (!fact) {
+      addUnresolved(projectedPages.length + 1, 'LAYOUT_MEASUREMENT_MISSING', `Folha autoral "${page.title || page.id}" ainda não possui medição física atual.`);
+    }
+
+    for (const block of page.blocks) {
+      const blockFact = fact?.blocks.find((candidate) => candidate.blockId === block.id);
+      continuationAnchor = block.id;
+
+      if (block.type === 'full_page_cover') {
+        if (currentBlocks.length > 0) finishPage();
+        currentIsCover = true;
+        currentBlocks.push(projectedBlock(page.id, block, blockFact));
+        finishPage();
+        continue;
+      }
+
+      const targetPageNumber = projectedPages.length + 1;
+      if (blockFact?.measuredHeightMm == null) {
+        const message = `Bloco "${block.title || block.type}" ainda não possui medição física atual.`;
+        currentIssues.push({ code: 'LAYOUT_MEASUREMENT_MISSING', message, severity: 'error' });
+        addUnresolved(targetPageNumber, 'LAYOUT_MEASUREMENT_MISSING', message);
+        currentBlocks.push(projectedBlock(page.id, block, blockFact));
+        continue;
+      }
+
+      if (blockFact.measuredWidthMm != null && blockFact.measuredWidthMm > technicalWidthMm + TOLERANCE_MM) {
+        const message = `Bloco "${block.title || block.type}" ultrapassa a largura útil da folha A4.`;
+        currentIssues.push({ code: 'HORIZONTAL_OVERFLOW', message, severity: 'error' });
+        addUnresolved(targetPageNumber, 'HORIZONTAL_OVERFLOW', message);
+      }
+
+      const gapMm = currentBlocks.length > 0 ? blockGapMm : 0;
+      const blockHeightMm = Math.max(0, blockFact.measuredHeightMm);
+      const breaks = manualBreaksFor(block, options);
+      const mustPaginate = isTableBlock(block, blockFact) && Boolean(blockFact.tableMeasurement) && (blockHeightMm + gapMm > currentAvailableMm || breaks.length > 0);
+
+      if (!mustPaginate && blockHeightMm + gapMm <= currentAvailableMm) {
+        currentAvailableMm -= blockHeightMm + gapMm;
+        currentBlocks.push(projectedBlock(page.id, block, blockFact));
+        continue;
+      }
+
+      if (mustPaginate && blockFact.tableMeasurement) {
+        let firstPageAvailableMm = Math.max(0, currentAvailableMm - gapMm);
+        const baseMm = blockFact.tableMeasurement.headerHeightMm + (blockFact.tableMeasurement.fixedChromeHeightMm ?? 0);
+        const firstRowMm = blockFact.tableMeasurement.rowHeights[0]?.measuredHeightMm ?? 0;
+        if (currentBlocks.length > 0 && firstPageAvailableMm < baseMm + firstRowMm) {
+          finishPage();
+          firstPageAvailableMm = technicalHeightMm;
+        }
+
+        const tablePlan = computeTablePaginationPlan({
+          ...blockFact.tableMeasurement,
+          availableHeightOnFirstPageMm: firstPageAvailableMm,
+          availableHeightOnSubsequentPagesMm: technicalHeightMm
+        }, options.tablePaginationPolicy, breaks);
+        tablePaginationPlans[block.id] = tablePlan;
+
+        if (tablePlan.hasUnresolvedOversizedRow) {
+          const message = `Tabela ${block.title || block.id} contém linha maior que uma folha técnica.`;
+          currentIssues.push({ code: 'UNRESOLVED_OVERSIZED_ROW', message, severity: 'error' });
+          addUnresolved(projectedPages.length + 1, 'UNRESOLVED_OVERSIZED_ROW', message);
+        }
+        if (tablePlan.hasDuplicateRowIds) {
+          const message = `Tabela ${block.title || block.id} contém IDs de linha canônica duplicados.`;
+          currentIssues.push({ code: 'TABLE_ROW_DUPLICATION', message, severity: 'error' });
+          addUnresolved(projectedPages.length + 1, 'TABLE_ROW_DUPLICATION', message);
+        }
+
+        tablePlan.slices.forEach((slice, slicePosition) => {
+          if (slicePosition > 0) finishPage();
+          currentBlocks.push(projectedBlock(page.id, block, blockFact, slice, tablePlan.slices.length));
+          currentAvailableMm -= slice.totalSliceHeightMm + (slicePosition === 0 ? gapMm : 0);
+          if (currentAvailableMm < -TOLERANCE_MM) {
+            const message = `Fatia ${slice.sliceIndex + 1} da tabela ${block.title || block.id} excede a folha técnica.`;
+            currentIssues.push({ code: 'VERTICAL_OVERFLOW', message, severity: 'error' });
+            addUnresolved(projectedPages.length + 1, 'VERTICAL_OVERFLOW', message);
+          }
+        });
+        continue;
+      }
+
+      if (isTableBlock(block, blockFact) && !blockFact.tableMeasurement) {
+        const message = `Tabela "${block.title || block.id}" não possui medição física de linhas e chrome.`;
+        currentIssues.push({ code: 'LAYOUT_MEASUREMENT_MISSING', message, severity: 'error' });
+        addUnresolved(targetPageNumber, 'LAYOUT_MEASUREMENT_MISSING', message);
+      }
+
+      if (currentBlocks.length > 0) finishPage();
+      currentBlocks.push(projectedBlock(page.id, block, blockFact));
+      currentAvailableMm -= blockHeightMm;
+      if (blockHeightMm > technicalHeightMm + TOLERANCE_MM) {
+        const message = `Bloco "${block.title || block.type}" excede uma folha A4 inteira e não suporta particionamento.`;
+        currentIssues.push({ code: 'UNRESOLVED_OVERSIZED_BLOCK', message, severity: 'error' });
+        addUnresolved(projectedPages.length + 1, 'UNRESOLVED_OVERSIZED_BLOCK', message);
+      }
+    }
+
+    if (currentBlocks.length > 0) finishPage();
+  }
+
+  const unresolvedVerticalCodes = new Set<PageFlowIssueCode>([
+    'VERTICAL_OVERFLOW',
+    'UNRESOLVED_OVERSIZED_BLOCK',
+    'UNRESOLVED_OVERSIZED_ROW',
+    'LAYOUT_MEASUREMENT_MISSING',
+    'ROW_CLIPPED',
+    'TABLE_ROW_LOSS',
+    'TABLE_ROW_DUPLICATION'
+  ]);
 
   return {
-    flowMode: 'smart',
+    flowMode,
     projectedPages,
     totalProjectedPages: projectedPages.length,
-    tablePaginationPlans: tablePlans,
-    hasUnresolvedOverflow: unresolvedIssues.some((i) => i.code === 'VERTICAL_OVERFLOW' || i.code === 'UNRESOLVED_OVERSIZED_BLOCK'),
-    hasHorizontalOverflow: unresolvedIssues.some((i) => i.code === 'HORIZONTAL_OVERFLOW'),
+    tablePaginationPlans,
+    measurementStatus: unresolvedIssues.some((issue) => issue.code === 'LAYOUT_MEASUREMENT_MISSING') ? 'missing' : 'ready',
+    hasUnresolvedOverflow: unresolvedIssues.some((issue) => unresolvedVerticalCodes.has(issue.code)),
+    hasHorizontalOverflow: unresolvedIssues.some((issue) => issue.code === 'HORIZONTAL_OVERFLOW'),
     unresolvedIssues
   };
 }

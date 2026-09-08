@@ -24,6 +24,8 @@ export interface TableRowMeasurement {
 
 export interface TablePaginationMeasurementInput {
   tableId: string;
+  /** Title, outer border, legend/notice allowance and other non-row printable chrome. */
+  fixedChromeHeightMm?: number;
   headerHeightMm: number;
   rowHeights: TableRowMeasurement[];
   availableHeightOnFirstPageMm: number;
@@ -50,6 +52,8 @@ export interface TablePaginationPlan {
   totalPagesRequired: number;
   hasUnresolvedOversizedRow?: boolean;
   unresolvedOversizedRowIds?: string[];
+  hasDuplicateRowIds?: boolean;
+  duplicateRowIds?: string[];
 }
 
 /**
@@ -89,10 +93,16 @@ export function computeTablePaginationPlan(
 
   const slices: TablePaginationSlice[] = [];
   const unresolvedOversizedRowIds: string[] = [];
+  const duplicateRowIds = rows
+    .map((row) => row.rowId)
+    .filter((rowId, index, all) => all.indexOf(rowId) !== index)
+    .filter((rowId, index, all) => all.indexOf(rowId) === index);
+  const fixedChromeHeightMm = Math.max(0, input.fixedChromeHeightMm ?? 0);
+  const baseSliceHeightMm = input.headerHeightMm + fixedChromeHeightMm;
 
   let currentSliceIndex = 0;
   let currentIncludedRowIds: string[] = [];
-  let currentSliceHeightMm = input.headerHeightMm;
+  let currentSliceHeightMm = baseSliceHeightMm;
   let currentAvailableHeightMm = input.availableHeightOnFirstPageMm;
 
   for (let i = 0; i < rows.length; i++) {
@@ -100,7 +110,7 @@ export function computeTablePaginationPlan(
     const rowHeight = Math.max(0, row.measuredHeightMm);
 
     // Diagnóstico de linha individual maior que uma folha A4 em branco
-    if (rowHeight > input.availableHeightOnSubsequentPagesMm) {
+    if (baseSliceHeightMm + rowHeight > input.availableHeightOnSubsequentPagesMm) {
       if (!unresolvedOversizedRowIds.includes(row.rowId)) {
         unresolvedOversizedRowIds.push(row.rowId);
       }
@@ -122,7 +132,7 @@ export function computeTablePaginationPlan(
       currentSliceIndex++;
       currentIncludedRowIds = [];
       const repeatHeader = policy.repeatHeaderOnBreak;
-      currentSliceHeightMm = repeatHeader ? input.headerHeightMm : 0;
+      currentSliceHeightMm = fixedChromeHeightMm + (repeatHeader ? input.headerHeightMm : 0);
       currentAvailableHeightMm = input.availableHeightOnSubsequentPagesMm;
     }
 
@@ -147,7 +157,7 @@ export function computeTablePaginationPlan(
         currentSliceIndex++;
         currentIncludedRowIds = [];
         const repeatHeader = policy.repeatHeaderOnBreak;
-        currentSliceHeightMm = repeatHeader ? input.headerHeightMm : 0;
+        currentSliceHeightMm = fixedChromeHeightMm + (repeatHeader ? input.headerHeightMm : 0);
         currentAvailableHeightMm = input.availableHeightOnSubsequentPagesMm;
       }
     }
@@ -167,7 +177,7 @@ export function computeTablePaginationPlan(
       currentSliceIndex++;
       currentIncludedRowIds = [];
       const repeatHeader = policy.repeatHeaderOnBreak;
-      currentSliceHeightMm = repeatHeader ? input.headerHeightMm : 0;
+      currentSliceHeightMm = fixedChromeHeightMm + (repeatHeader ? input.headerHeightMm : 0);
       currentAvailableHeightMm = input.availableHeightOnSubsequentPagesMm;
     }
 
@@ -206,6 +216,8 @@ export function computeTablePaginationPlan(
     slices,
     totalPagesRequired: totalSlices,
     hasUnresolvedOversizedRow: unresolvedOversizedRowIds.length > 0,
-    unresolvedOversizedRowIds
+    unresolvedOversizedRowIds,
+    hasDuplicateRowIds: duplicateRowIds.length > 0,
+    duplicateRowIds
   };
 }

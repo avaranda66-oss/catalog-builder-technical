@@ -300,6 +300,8 @@ interface CatalogState {
   moveNonCoverBlocksToNewPage: (pageId: string) => boolean;
   moveBlockToNextPage: (pageId: string, blockId: string) => boolean;
   moveBlockToPreviousPage: (pageId: string, blockId: string) => boolean;
+  setLayoutFlowMode: (mode: 'smart' | 'manual') => void;
+  setManualTableBreak: (blockId: string, rowId: string, enabled: boolean) => void;
 
   // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
   commitDocumentMutation: (
@@ -1121,6 +1123,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const sourcePage = currentCatalog.pages[sourcePageIndex];
     const block = sourcePage.blocks.find((b) => b.id === blockId);
     if (!block) return false;
+    const nextPageIndex = sourcePageIndex + 1;
+    const destination = currentCatalog.pages[nextPageIndex];
+    if (destination && !evaluatePageCompositionInsertion(destination, block.type).isSafe) return false;
 
     get().commitDocumentMutation(
       (draft) => {
@@ -1128,16 +1133,18 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         if (!dSource) return;
         dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
 
-        const nextPageIndex = sourcePageIndex + 1;
         if (nextPageIndex < draft.pages.length) {
           const dNext = draft.pages[nextPageIndex];
           dNext.blocks = [block, ...(dNext.blocks || [])];
+          if (dNext.blocks.length === 1) dNext.pageType = block.type === 'full_page_cover' ? 'cover' : 'technical';
         } else {
-          const newPageId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const newPageId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? `page-${crypto.randomUUID()}`
+            : `page-${Date.now().toString(36)}`;
           const newPage: CatalogPage = {
             id: newPageId,
             pageNumber: draft.pages.length + 1,
-            pageType: 'technical',
+            pageType: block.type === 'full_page_cover' ? 'cover' : 'technical',
             title: `Folha ${draft.pages.length + 1}`,
             blocks: [block]
           };
@@ -1156,6 +1163,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }
     );
 
+    set({ activePageIndex: Math.min(nextPageIndex, get().currentCatalog!.pages.length - 1), selectedBlockId: blockId });
+
     return true;
   },
 
@@ -1169,6 +1178,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const sourcePage = currentCatalog.pages[sourcePageIndex];
     const block = sourcePage.blocks.find((b) => b.id === blockId);
     if (!block) return false;
+    const prevPageIndex = sourcePageIndex - 1;
+    const destination = currentCatalog.pages[prevPageIndex];
+    if (!evaluatePageCompositionInsertion(destination, block.type).isSafe) return false;
 
     get().commitDocumentMutation(
       (draft) => {
@@ -1176,9 +1188,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
         if (!dSource) return;
         dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
 
-        const prevPageIndex = sourcePageIndex - 1;
         const dPrev = draft.pages[prevPageIndex];
         dPrev.blocks = [...(dPrev.blocks || []), block];
+        if (dPrev.blocks.length === 1) dPrev.pageType = block.type === 'full_page_cover' ? 'cover' : 'technical';
 
         draft.pages.forEach((p, idx) => {
           p.pageNumber = idx + 1;
@@ -1192,7 +1204,41 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       }
     );
 
+    set({ activePageIndex: prevPageIndex, selectedBlockId: blockId });
+
     return true;
+  },
+
+  setLayoutFlowMode: (mode) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        draft.layoutFlowMode = mode;
+      },
+      'MANUAL_EDIT',
+      { summary: `Modo de fluxo A4 alterado para ${mode}` }
+    );
+  },
+
+  setManualTableBreak: (blockId, rowId, enabled) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks.find((candidate) => candidate.id === blockId);
+          if (!block) continue;
+          const current = new Set<string>(block.customData?.manualBreakRowIds ?? []);
+          if (enabled) current.add(rowId);
+          else current.delete(rowId);
+          block.customData = { ...(block.customData || {}), manualBreakRowIds: [...current] };
+          break;
+        }
+      },
+      'MANUAL_EDIT',
+      {
+        targetId: blockId,
+        targetRowId: rowId,
+        summary: `${enabled ? 'Adicionada' : 'Removida'} quebra manual antes da linha ${rowId}`
+      }
+    );
   },
 
   duplicateStructuralSection: (pageId, sectionId) => {

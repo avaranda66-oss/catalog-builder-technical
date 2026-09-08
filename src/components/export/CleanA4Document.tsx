@@ -1,5 +1,5 @@
 import React from 'react';
-import { Catalog, CatalogPage } from '../../domain/catalog.schema';
+import { Catalog } from '../../domain/catalog.schema';
 import { TextBlock } from '../editor/blocks/TextBlock';
 import { ImageBlock } from '../editor/blocks/ImageBlock';
 import { BoxBlock } from '../editor/blocks/BoxBlock';
@@ -28,19 +28,32 @@ import { PrintLocalizationProvider } from '../../translation/PrintLocalizationCo
 import { getCanonicalPagePaddingCss } from '../../domain/page-geometry';
 import { A4DocumentFooter } from '../shared/A4DocumentFooter';
 import type { TableDatumResolver } from '../../domain/table-core';
+import type { A4RenderPlan } from '../../domain/a4-render-plan';
+import type { LayoutPreflightReport } from '../../domain/layout-preflight';
+import { useMeasuredA4RenderPlan } from '../a4/useMeasuredA4RenderPlan';
 
 export interface CleanA4DocumentProps {
   document: Catalog;
   className?: string;
   resolveDatum?: TableDatumResolver;
+  renderPlan?: A4RenderPlan;
+  onLayoutPreflightChange?: (report: LayoutPreflightReport, plan: A4RenderPlan, isComplete: boolean) => void;
 }
 
 export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
   document: catalog,
   className = '',
-  resolveDatum
+  resolveDatum,
+  renderPlan: suppliedRenderPlan,
+  onLayoutPreflightChange
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const measured = useMeasuredA4RenderPlan(
+    catalog,
+    containerRef,
+    catalog.layoutFlowMode === 'manual' ? 'manual' : 'smart'
+  );
+  const renderPlan = suppliedRenderPlan ?? measured.renderPlan;
 
   const locale = catalog?.locale || 'pt-BR';
   const direction = FontManager.getDirectionForLocale(locale);
@@ -51,6 +64,10 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
       applyBidiIsolationToElement(containerRef.current);
     }
   }, [catalog, direction]);
+
+  React.useEffect(() => {
+    onLayoutPreflightChange?.(measured.layoutPreflight, renderPlan, measured.isLayoutComplete);
+  }, [measured.isLayoutComplete, measured.layoutPreflight, onLayoutPreflightChange, renderPlan]);
 
   if (!catalog || !catalog.pages || catalog.pages.length === 0) {
     return null;
@@ -63,16 +80,20 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
         lang={locale}
         dir={direction}
         className={`clean-export-root ${className}`}
+        data-layout-state={measured.isLayoutReady ? 'ready' : measured.layoutPreflight.canPublish ? 'pending' : 'blocked'}
+        data-layout-block-count={measured.layoutPreflight.blockCount}
         style={{ fontFamily }}
       >
-      {catalog.pages.map((page: CatalogPage, index: number) => {
-        const isSingleFullCover =
-          page.blocks?.length === 1 && page.blocks[0].type === 'full_page_cover';
+      {renderPlan.pages.map((renderPage, index: number) => {
+        const isSingleFullCover = renderPage.isCover && renderPage.blocks.length === 1;
 
         return (
           <div
-            key={page.id || `export-page-${index}`}
-            data-page-id={page.id}
+            key={renderPage.id || `export-page-${index}`}
+            data-a4-page
+            data-a4-page-id={renderPage.id}
+            data-page-id={renderPage.id}
+            data-canonical-page-id={renderPage.canonicalPageId}
             data-page-index={index}
             lang={locale}
             dir={direction}
@@ -111,10 +132,11 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
                     isSingleFullCover ? 'p-0 h-full w-full space-y-0' : 'space-y-3 h-auto min-h-full'
                   }`}
                 >
-                  {page.blocks?.map((block) => (
+                  {renderPage.blocks.map(({ block, slice, id: projectedBlockId }) => (
                     <div
-                      key={block.id}
+                      key={projectedBlockId}
                       data-block-id={block.id}
+                      data-canonical-block-id={block.id}
                       data-block-type={block.type}
                       className={`export-block-wrapper relative ${
                         isSingleFullCover ? 'h-full w-full' : ''
@@ -122,73 +144,74 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
                       style={{ zIndex: block.position?.zIndex || 1 }}
                     >
                       {block.type === 'full_page_cover' && (
-                        <FullPageCoverBlock block={block} pageId={page.id} isSelected={false} />
+                        <FullPageCoverBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                       {block.type === 'bottom_header' && (
-                        <BottomHeaderBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <BottomHeaderBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'matrix_spec_table' && (
-                        <MatrixSpecTableBlock block={block} pageId={page.id} isSelected={false} />
+                        <MatrixSpecTableBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                       {block.type === 'software_connectivity' && (
-                        <SoftwareConnectivityBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <SoftwareConnectivityBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'structural_section' && (
-                        <StructuralSectionBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <StructuralSectionBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'hero_banner' && (
-                        <HeroBannerBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <HeroBannerBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'additel_two_col_hero' && (
-                        <AdditelTwoColBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <AdditelTwoColBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'fluke_header' && (
-                        <FlukeHeaderBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <FlukeHeaderBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'inserts_visual' && (
-                        <InsertsVisualBlock block={block} pageId={page.id} isSelected={false} />
+                        <InsertsVisualBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                       {block.type === 'multi_mode_calibrator' && (
-                        <MultiModeCalibratorBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <MultiModeCalibratorBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'features_list' && (
-                        <FeaturesListBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <FeaturesListBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {(block.type === 'table' || block.type === 'specs_table') && (
                         <TechnicalTableBlock
                           block={block}
-                          pageId={page.id}
+                          pageId={renderPage.canonicalPageId}
                           isSelected={false}
                           isExport={true}
                           resolveDatumOverride={resolveDatum}
+                          slice={slice}
                         />
                       )}
                       {block.type === 'electrical_table' && (
-                        <ElectricalTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <ElectricalTableBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'accessories_table' && (
-                        <AccessoriesTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <AccessoriesTableBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'ordering_codes' && (
-                        <OrderingCodesBlock block={block} pageId={page.id} isSelected={false} />
+                        <OrderingCodesBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                       {block.type === 'image_gallery' && (
-                        <ImageGalleryBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <ImageGalleryBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'contact_footer' && (
-                        <ContactFooterBlock block={block} pageId={page.id} isSelected={false} />
+                        <ContactFooterBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                       {block.type === 'custom_table' && (
-                        <CustomTableBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <CustomTableBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} slice={slice} />
                       )}
                       {block.type === 'text' && (
-                        <TextBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <TextBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'image' && (
-                        <ImageBlock block={block} pageId={page.id} isSelected={false} isExport={true} />
+                        <ImageBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} isExport={true} />
                       )}
                       {block.type === 'box' && (
-                        <BoxBlock block={block} pageId={page.id} isSelected={false} />
+                        <BoxBlock block={block} pageId={renderPage.canonicalPageId} isSelected={false} />
                       )}
                     </div>
                   ))}
@@ -199,7 +222,7 @@ export const CleanA4Document: React.FC<CleanA4DocumentProps> = ({
               {!isSingleFullCover && (
                 <A4DocumentFooter
                   locale={locale}
-                  pageNumber={page.pageNumber || index + 1}
+                  pageNumber={renderPage.pageNumber}
                   localizedSystemStrings={catalog.localizedSystemStrings}
                 />
               )}

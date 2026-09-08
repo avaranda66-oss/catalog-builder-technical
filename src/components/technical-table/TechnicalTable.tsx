@@ -5,7 +5,7 @@ import { TechnicalCell } from './TechnicalCell';
 import { TechnicalLegend, TableLegendConfig } from './TechnicalLegend';
 import { getEffectiveValue, getFieldDivergence } from '../../domain/divergence';
 import { Product } from '../../domain/product.schema';
-import { Trash2, BookOpen } from 'lucide-react';
+import { Trash2, BookOpen, Scissors } from 'lucide-react';
 
 export interface ColumnGroupConfig {
   id: string;
@@ -25,6 +25,8 @@ interface TechnicalTableProps {
   onUpdateCell?: (rowId: string, colKey: string, newVal: string) => void;
   onRestoreCell?: (rowId: string, colKey: string) => void;
   onRemoveRow?: (rowId: string) => void;
+  manualBreakRowIds?: string[];
+  onToggleManualBreak?: (rowId: string, enabled: boolean) => void;
   onRemoveColumn?: (colKey: string) => void;
   onRenameColumn?: (colKey: string, newLabel: string) => void;
   onToggleLegend?: (show: boolean) => void;
@@ -45,6 +47,8 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   onUpdateCell,
   onRestoreCell,
   onRemoveRow,
+  manualBreakRowIds = [],
+  onToggleManualBreak,
   onRemoveColumn,
   onRenameColumn,
   onToggleLegend,
@@ -146,6 +150,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                 return (
                   <tr
                     key={row.id}
+                    data-canonical-row-id={row.id}
                     className={`${tokens.sectionBg || 'bg-slate-100/90 border-y border-slate-300'} select-none`}
                   >
                     <td
@@ -164,6 +169,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
               return (
                 <tr
                   key={row.id}
+                  data-canonical-row-id={row.id}
                   className={`transition-colors group hover:bg-slate-100/50 ${
                     isEven ? 'bg-white' : tokens.zebraBg
                   }`}
@@ -192,7 +198,23 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
 
                   {/* Ação de exclusão de linha */}
                   {isEditable && onRemoveRow && (
-                    <td className="py-1.5 px-1 text-center w-8 align-middle">
+                    <td className="py-1.5 px-1 text-center w-8 align-middle whitespace-nowrap">
+                      {onToggleManualBreak && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleManualBreak(row.id, !manualBreakRowIds.includes(row.id));
+                          }}
+                          className={`opacity-0 group-hover:opacity-100 p-0.5 transition-opacity ${
+                            manualBreakRowIds.includes(row.id) ? 'text-blue-700 opacity-100' : 'text-slate-400 hover:text-blue-700'
+                          }`}
+                          title="Quebrar página antes desta linha"
+                          aria-label="Quebrar página antes desta linha"
+                        >
+                          <Scissors className="w-3 h-3" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {

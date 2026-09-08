@@ -235,6 +235,7 @@ export interface Catalog {
   createdAt: string;
   updatedAt: string;
   version: number;
+  layoutFlowMode?: 'smart' | 'manual';
   lastMutation?: MutationMetadata;
   [key: string]: any;
 }
@@ -438,7 +439,8 @@ export const CatalogSchema = z.object({
   localizedSystemStrings: z.record(z.string()).optional(),
   createdAt: z.string().datetime().or(z.string()),
   updatedAt: z.string().datetime().or(z.string()),
-  version: z.number().int().default(1)
+  version: z.number().int().default(1),
+  layoutFlowMode: z.enum(['smart', 'manual']).optional().default('smart')
 }).passthrough();
 
 export const CatalogPresetSchema = z.object({

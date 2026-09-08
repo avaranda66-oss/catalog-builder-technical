@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Printer, Download, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Catalog } from '../../domain/catalog.schema';
 import { SupabaseService } from '../../services/supabase.service';
@@ -12,6 +12,11 @@ import {
   parseRequiredPublicationVersion,
   type PublicationExportSnapshot
 } from '../../domain/publication-export-snapshot';
+import {
+  auditLayoutPreflight,
+  type LayoutPreflightReport
+} from '../../domain/layout-preflight';
+import type { A4RenderPlan } from '../../domain/a4-render-plan';
 
 import { FontManager } from '../../translation/font-manager';
 
@@ -23,8 +28,24 @@ export const PrintDocumentView: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isExportingDirect, setIsExportingDirect] = useState(false);
   const [publicationResolver, setPublicationResolver] = useState<TableDatumResolver | null>(null);
+  const [layoutPreflight, setLayoutPreflight] = useState<LayoutPreflightReport | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const documentToRender: Catalog | null = documentSnapshot?.document ?? null;
+  const handleLayoutPreflightChange = useCallback((
+    _report: LayoutPreflightReport,
+    plan: A4RenderPlan,
+    isComplete: boolean
+  ) => {
+    if (!documentToRender || !isComplete) {
+      setLayoutPreflight(null);
+      return;
+    }
+    const audited = auditLayoutPreflight(documentToRender, plan.flowPlan);
+    setLayoutPreflight(audited);
+    if (!audited.canPublish) {
+      setErrorMessage(`Publicação bloqueada pelo layout físico: ${audited.blockCount} defeito(s).`);
+    }
+  }, [documentToRender]);
 
   useEffect(() => {
     const loadDocument = async () => {
@@ -108,6 +129,7 @@ export const PrintDocumentView: React.FC = () => {
     let isCancelled = false;
     const preparePublicationSnapshot = async () => {
       setIsReadyForPrint(false);
+      setLayoutPreflight(null);
       setPublicationResolver(null);
       const publishingState = useCatalogStore.getState();
       await publishingState.knowledgeRuntime.preloadCatalogProductKnowledge(documentToRender);
@@ -154,7 +176,7 @@ export const PrintDocumentView: React.FC = () => {
 
   // Só prepara fontes/imagens depois que o DOM já está usando o resolver congelado.
   useEffect(() => {
-    if (!documentToRender || !publicationResolver) return;
+    if (!documentToRender || !publicationResolver || !layoutPreflight?.canPublish) return;
 
     let isCancelled = false;
     const preparePrintAssets = async () => {
@@ -213,14 +235,21 @@ export const PrintDocumentView: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [documentToRender, publicationResolver]);
+  }, [documentToRender, layoutPreflight, publicationResolver]);
 
   const handleNativePrint = () => {
+    if (!layoutPreflight?.canPublish) {
+      setStatusMessage('Impressão bloqueada: o layout físico A4 ainda não foi aprovado.');
+      return;
+    }
     window.print();
   };
 
   const handleDownloadDirectPDF = async () => {
-    if (!documentToRender) return;
+    if (!documentToRender || !layoutPreflight?.canPublish) {
+      setStatusMessage('PDF bloqueado: o layout físico A4 ainda não foi aprovado.');
+      return;
+    }
     setIsExportingDirect(true);
     setStatusMessage(null);
 
@@ -233,6 +262,7 @@ export const PrintDocumentView: React.FC = () => {
       fileName,
       quality: 1.0,
       scale: 3.5,
+      layoutPreflight,
       metadata: documentSnapshot
         ? {
             snapshotIdentity: documentSnapshot.identity,
@@ -340,7 +370,7 @@ export const PrintDocumentView: React.FC = () => {
 
           <button
             onClick={handleDownloadDirectPDF}
-            disabled={isExportingDirect || !isReadyForPrint}
+            disabled={isExportingDirect || !isReadyForPrint || !layoutPreflight?.canPublish}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-none text-xs font-mono font-bold transition-colors disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5 text-blue-400" />
@@ -349,7 +379,7 @@ export const PrintDocumentView: React.FC = () => {
 
           <button
             onClick={handleNativePrint}
-            disabled={!isReadyForPrint}
+            disabled={!isReadyForPrint || !layoutPreflight?.canPublish}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded-none text-xs font-mono font-bold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -360,7 +390,11 @@ export const PrintDocumentView: React.FC = () => {
 
       {/* Área de Visualização e Renderização Limpa */}
       <main ref={containerRef} className="py-8 print:p-0 flex flex-col items-center gap-8 print:gap-0 print:block">
-        <CleanA4Document document={documentToRender} resolveDatum={publicationResolver} />
+        <CleanA4Document
+          document={documentToRender}
+          resolveDatum={publicationResolver}
+          onLayoutPreflightChange={handleLayoutPreflightChange}
+        />
       </main>
 
       {/* Estilos Globais de Impressão A4 Estrita e Paginação Multipage */}
