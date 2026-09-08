@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { PresenceService, ParticipantSession, PresenceConnectionStatus } from '../services/presence.service';
 import { getClientInstanceId } from './useCatalogStore';
+import { useAuthStore } from './useAuthStore';
 
 export interface PresenceState {
   presenceStatus: PresenceConnectionStatus;
@@ -48,11 +49,17 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   ) => {
     if (!documentId) return;
 
-    // Se já está conectado no mesmo documento, apenas sincroniza localização
+    const activeSession = PresenceService.getCurrentSession();
+    const currentUserId = useAuthStore.getState().userId || 'anon_user';
+    const currentClientInstanceId = getClientInstanceId();
+
+    // Reusa somente quando documento e identidade ainda pertencem à mesma sessão.
     if (
       get().activeCatalogId === documentId &&
       get().documentKind === kind &&
-      get().presenceStatus === 'connected'
+      get().presenceStatus === 'connected' &&
+      activeSession?.userId === currentUserId &&
+      activeSession.clientInstanceId === currentClientInstanceId
     ) {
       get().trackLocation(pageNumber, pageId);
       return;

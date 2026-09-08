@@ -84,6 +84,7 @@ class PresenceServiceClass {
   private reconnectAttempt: number = 0;
   private isExplicitlyLeaving: boolean = false;
   private lastSubscribedStatus: PresenceConnectionStatus = 'disconnected';
+  private sessionGeneration: number = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -96,7 +97,7 @@ class PresenceServiceClass {
       window.addEventListener('online', () => {
         if (this.activeTarget && this.lastSubscribedStatus !== 'connected') {
           console.log('[PRESENCE] Conexão de rede restaurada (online event) -> reconectando...');
-          this.reconnect();
+          this.reconnect(this.sessionGeneration);
         }
       });
       window.addEventListener('offline', () => {
@@ -126,7 +127,15 @@ class PresenceServiceClass {
     this.onStatusChangeCallback = cb;
   }
 
-  private notifyStatus(status: PresenceConnectionStatus) {
+  private ownsSession(generation: number, channel?: RealtimeChannel): boolean {
+    return (
+      generation === this.sessionGeneration &&
+      (!channel || channel === this.activeChannel)
+    );
+  }
+
+  private notifyStatus(status: PresenceConnectionStatus, generation: number = this.sessionGeneration) {
+    if (!this.ownsSession(generation)) return;
     this.lastSubscribedStatus = status;
     if (this.onStatusChangeCallback) {
       this.onStatusChangeCallback(status);
@@ -140,14 +149,18 @@ class PresenceServiceClass {
     onSync?: (participants: Record<string, ParticipantSession>) => void,
     onStatusChange?: (status: PresenceConnectionStatus) => void
   ): RealtimeChannel | null {
-    if (onSync) this.onSyncCallback = onSync;
-    if (onStatusChange) this.onStatusChangeCallback = onStatusChange;
-
     const supabase = getSupabase();
     if (!supabase || typeof (supabase as any).channel !== 'function') {
+      this.onSyncCallback = onSync ?? null;
+      this.onStatusChangeCallback = onStatusChange ?? null;
       this.notifyStatus('error');
       return null;
     }
+
+    const authState = useAuthStore.getState();
+    const userId = authState.userId || 'anon_user';
+    const clientInstanceId = getClientInstanceId();
+    const presenceKey = `${userId}:${clientInstanceId}`;
 
     // Se já está no mesmo canal com sucesso ou conectando, apenas atualiza localização
     if (
@@ -155,26 +168,29 @@ class PresenceServiceClass {
       this.activeTarget &&
       this.activeTarget.kind === target.kind &&
       this.activeTarget.id === target.id &&
+      this.currentTrackPayload?.presenceKey === presenceKey &&
       (this.lastSubscribedStatus === 'connected' || this.lastSubscribedStatus === 'connecting')
     ) {
+      if (onSync) this.onSyncCallback = onSync;
+      if (onStatusChange) this.onStatusChangeCallback = onStatusChange;
       void this.updateLocation(initialPageNumber, initialPageId);
+      onStatusChange?.(this.lastSubscribedStatus);
       return this.activeChannel;
     }
 
     // Se estava em outro documento, faz cleanup anterior
-    if (this.activeChannel) {
-      this.leave();
+    if (this.activeChannel || this.activeTarget || this.currentTrackPayload) {
+      void this.leave();
     }
 
+    const generation = ++this.sessionGeneration;
     this.isExplicitlyLeaving = false;
     this.reconnectAttempt = 0;
-    this.activeTarget = target;
-    this.notifyStatus('connecting');
+    this.activeTarget = { ...target };
+    this.onSyncCallback = onSync ?? null;
+    this.onStatusChangeCallback = onStatusChange ?? null;
+    this.notifyStatus('connecting', generation);
 
-    const authState = useAuthStore.getState();
-    const userId = authState.userId || 'anon_user';
-    const clientInstanceId = getClientInstanceId();
-    const presenceKey = `${userId}:${clientInstanceId}`;
     const displayLabel = buildDisplayLabel(authState.email || undefined);
     const color = getParticipantColor(presenceKey);
     const avatarText = formatInitials(displayLabel);
@@ -188,7 +204,7 @@ class PresenceServiceClass {
       avatarText,
       documentKind: target.kind,
       documentId: target.id,
-      catalogId: target.kind === 'catalog' ? target.id : undefined,
+      ...(target.kind === 'catalog' ? { catalogId: target.id } : {}),
       pageId: initialPageId,
       pageNumber: initialPageNumber,
       blockId: null,
@@ -200,12 +216,16 @@ class PresenceServiceClass {
     };
 
     this.currentTrackPayload = initialSession;
-    return this.setupChannel(target, presenceKey);
+    return this.setupChannel(target, presenceKey, generation);
   }
 
-  private setupChannel(target: DocumentPresenceTarget, presenceKey: string): RealtimeChannel | null {
+  private setupChannel(
+    target: DocumentPresenceTarget,
+    presenceKey: string,
+    generation: number
+  ): RealtimeChannel | null {
     const supabase = getSupabase();
-    if (!supabase) return null;
+    if (!supabase || !this.ownsSession(generation)) return null;
 
     const channelName = `presence:${target.kind}:${target.id}`;
     const channel = supabase.channel(channelName, {
@@ -215,9 +235,14 @@ class PresenceServiceClass {
         }
       }
     });
+    if (!channel) {
+      this.notifyStatus('error', generation);
+      return null;
+    }
 
     channel
       .on('presence', { event: 'sync' }, () => {
+        if (!this.ownsSession(generation, channel)) return;
         const presenceState = channel.presenceState<ParticipantSession>();
         const flattened: Record<string, ParticipantSession> = {};
         const now = Date.now();
@@ -246,43 +271,54 @@ class PresenceServiceClass {
       })
       .subscribe(async (status) => {
         console.log(`[PRESENCE STATUS] Canal: ${channelName} -> ${status}`);
+        if (!this.ownsSession(generation, channel)) return;
         
         if (status === 'SUBSCRIBED') {
           this.reconnectAttempt = 0;
-          this.notifyStatus('connected');
-          this.startHeartbeat();
+          this.notifyStatus('connected', generation);
+          this.startHeartbeat(generation, channel);
 
           // Retrack imediato do payload ativo
-          if (this.currentTrackPayload) {
+          const payload = this.currentTrackPayload;
+          if (payload) {
             try {
-              await channel.track(this.currentTrackPayload);
+              await channel.track(payload);
             } catch (err) {
               console.warn('[PRESENCE TRACK ERROR]', err);
             }
           }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           if (!this.isExplicitlyLeaving) {
-            this.notifyStatus('reconnecting');
-            this.scheduleReconnect();
+            this.notifyStatus('reconnecting', generation);
+            this.scheduleReconnect(generation, channel);
           }
         }
       });
 
+    if (!this.ownsSession(generation)) {
+      void supabase.removeChannel(channel);
+      return null;
+    }
     this.activeChannel = channel;
     return channel;
   }
 
-  private startHeartbeat(): void {
+  private startHeartbeat(generation: number, channel: RealtimeChannel): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(async () => {
-      if (this.activeChannel && this.currentTrackPayload && this.lastSubscribedStatus === 'connected') {
+      if (
+        this.ownsSession(generation, channel) &&
+        this.currentTrackPayload &&
+        this.lastSubscribedStatus === 'connected'
+      ) {
         const nowIso = new Date().toISOString();
-        this.currentTrackPayload = {
+        const payload: ParticipantSession = {
           ...this.currentTrackPayload,
           lastSeenAt: nowIso
         };
+        this.currentTrackPayload = payload;
         try {
-          await this.activeChannel.track(this.currentTrackPayload);
+          await channel.track(payload);
         } catch (err) {
           console.warn('[PRESENCE HEARTBEAT ERROR]', err);
         }
@@ -297,8 +333,12 @@ class PresenceServiceClass {
     }
   }
 
-  private scheduleReconnect(): void {
-    if (this.isExplicitlyLeaving || !this.activeTarget) return;
+  private scheduleReconnect(generation: number, channel: RealtimeChannel): void {
+    if (
+      !this.ownsSession(generation, channel) ||
+      this.isExplicitlyLeaving ||
+      !this.activeTarget
+    ) return;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -309,33 +349,35 @@ class PresenceServiceClass {
     console.log(`[PRESENCE] Agendando reconexão em ${delay}ms (tentativa ${this.reconnectAttempt})...`);
 
     this.reconnectTimer = setTimeout(() => {
-      this.reconnect();
+      if (!this.ownsSession(generation)) return;
+      this.reconnectTimer = null;
+      this.reconnect(generation);
     }, delay);
   }
 
-  private reconnect(): void {
-    if (this.isExplicitlyLeaving || !this.activeTarget) return;
+  private reconnect(generation: number): void {
+    if (!this.ownsSession(generation) || this.isExplicitlyLeaving || !this.activeTarget) return;
 
     console.log('[PRESENCE] Tentando reconectar ao canal de presença...');
-    const target = this.activeTarget;
+    const target = { ...this.activeTarget };
+    const presenceKey = this.currentTrackPayload?.presenceKey;
+    if (!presenceKey) return;
 
     // Remove canal antigo se existir
-    if (this.activeChannel) {
+    const previousChannel = this.activeChannel;
+    if (previousChannel) {
       try {
         const supabase = getSupabase();
-        if (supabase) supabase.removeChannel(this.activeChannel);
+        if (supabase) void supabase.removeChannel(previousChannel);
       } catch (e) {
         // ignore
       }
-      this.activeChannel = null;
+      if (this.ownsSession(generation, previousChannel)) {
+        this.activeChannel = null;
+      }
     }
 
-    const authState = useAuthStore.getState();
-    const userId = authState.userId || 'anon_user';
-    const clientInstanceId = getClientInstanceId();
-    const presenceKey = `${userId}:${clientInstanceId}`;
-
-    this.setupChannel(target, presenceKey);
+    this.setupChannel(target, presenceKey, generation);
   }
 
   public subscribeToCatalog(
@@ -359,11 +401,14 @@ class PresenceServiceClass {
     blockType?: string | null,
     activity: 'viewing' | 'editing' = 'viewing'
   ): Promise<void> {
-    if (!this.currentTrackPayload) return;
+    const generation = this.sessionGeneration;
+    const channel = this.activeChannel;
+    const currentPayload = this.currentTrackPayload;
+    if (!currentPayload || !this.ownsSession(generation)) return;
 
     const nowIso = new Date().toISOString();
-    this.currentTrackPayload = {
-      ...this.currentTrackPayload,
+    const updatedPayload: ParticipantSession = {
+      ...currentPayload,
       pageNumber,
       pageId,
       blockId: blockId ?? null,
@@ -372,10 +417,11 @@ class PresenceServiceClass {
       lastInteractionAt: nowIso,
       lastSeenAt: nowIso
     };
+    this.currentTrackPayload = updatedPayload;
 
-    if (this.activeChannel && this.lastSubscribedStatus === 'connected') {
+    if (channel && this.ownsSession(generation, channel) && this.lastSubscribedStatus === 'connected') {
       try {
-        await this.activeChannel.track(this.currentTrackPayload);
+        await channel.track(updatedPayload);
       } catch (err) {
         console.warn('[PRESENCE TRACK ERROR]', err);
       }
@@ -383,6 +429,13 @@ class PresenceServiceClass {
   }
 
   public async leave(): Promise<void> {
+    const leavingChannel = this.activeChannel;
+    const statusCallback = this.onStatusChangeCallback;
+    const hadActiveSession = Boolean(
+      leavingChannel || this.activeTarget || this.currentTrackPayload || this.lastSubscribedStatus !== 'disconnected'
+    );
+    if (!hadActiveSession) return;
+
     this.isExplicitlyLeaving = true;
     this.stopHeartbeat();
     if (this.reconnectTimer) {
@@ -390,10 +443,20 @@ class PresenceServiceClass {
       this.reconnectTimer = null;
     }
 
-    if (this.activeChannel) {
+    ++this.sessionGeneration;
+    this.activeChannel = null;
+    this.activeTarget = null;
+    this.currentTrackPayload = null;
+    this.onSyncCallback = null;
+    this.onStatusChangeCallback = null;
+    this.reconnectAttempt = 0;
+    this.lastSubscribedStatus = 'disconnected';
+    statusCallback?.('disconnected');
+
+    if (leavingChannel) {
       try {
         // untrack explícito antes de fechar o canal para evitar ghost session
-        await this.activeChannel.untrack();
+        await leavingChannel.untrack();
       } catch (err) {
         // ignore
       }
@@ -401,26 +464,41 @@ class PresenceServiceClass {
       try {
         const supabase = getSupabase();
         if (supabase) {
-          supabase.removeChannel(this.activeChannel);
+          await supabase.removeChannel(leavingChannel);
         }
       } catch (err) {
         console.warn('[PRESENCE LEAVE ERROR]', err);
       }
-      this.activeChannel = null;
-      this.activeTarget = null;
-      this.currentTrackPayload = null;
-      this.notifyStatus('disconnected');
     }
   }
 
   private leaveSync(): void {
+    const leavingChannel = this.activeChannel;
+    const hadActiveSession = Boolean(
+      leavingChannel || this.activeTarget || this.currentTrackPayload || this.lastSubscribedStatus !== 'disconnected'
+    );
+    if (!hadActiveSession) return;
+
     this.isExplicitlyLeaving = true;
     this.stopHeartbeat();
-    if (this.activeChannel) {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    ++this.sessionGeneration;
+    this.activeChannel = null;
+    this.activeTarget = null;
+    this.currentTrackPayload = null;
+    this.onSyncCallback = null;
+    this.onStatusChangeCallback = null;
+    this.reconnectAttempt = 0;
+    this.lastSubscribedStatus = 'disconnected';
+
+    if (leavingChannel) {
       try {
-        void this.activeChannel.untrack();
+        void leavingChannel.untrack();
         const supabase = getSupabase();
-        if (supabase) supabase.removeChannel(this.activeChannel);
+        if (supabase) void supabase.removeChannel(leavingChannel);
       } catch (e) {
         // ignore
       }

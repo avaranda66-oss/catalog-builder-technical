@@ -26,6 +26,10 @@ export const CollaboratorPresenceBar: React.FC = () => {
   const uniqueUsers = getUniqueUsersCount ? getUniqueUsersCount() : 1;
   const totalSessions = getTotalSessionsCount ? getTotalSessionsCount() : 1;
   const isTemplate = editorContext?.kind === 'template';
+  const documentKind = isTemplate ? 'template' : 'catalog';
+  const documentId = isTemplate
+    ? editorContext.templateId
+    : (editorContext?.catalogId || currentCatalog?.id);
 
   // Label amigável e preciso que diferencia pessoas de sessões abertas
   const getDisplayCountLabel = () => {
@@ -62,15 +66,15 @@ export const CollaboratorPresenceBar: React.FC = () => {
 
   // Inicializa ou atualiza presença quando o catálogo muda
   useEffect(() => {
-    if (currentCatalog?.id) {
+    if (currentCatalog?.id && documentId) {
       const activePage = currentCatalog.pages[activePageIndex];
-      initializePresence(currentCatalog.id, activePageIndex + 1, activePage?.id);
+      initializePresence(documentId, activePageIndex + 1, activePage?.id, documentKind);
     }
-  }, [currentCatalog?.id, initializePresence]);
+  }, [currentCatalog?.id, documentId, documentKind, initializePresence]);
 
   // Atualiza a localização (página/bloco) do usuário local
   useEffect(() => {
-    if (currentCatalog?.id && (presenceStatus === 'connected' || presenceStatus === 'connecting')) {
+    if (currentCatalog && documentId && (presenceStatus === 'connected' || presenceStatus === 'connecting')) {
       const activePage = currentCatalog.pages[activePageIndex];
       const selectedBlock = activePage?.blocks?.find((b) => b.id === selectedBlockId);
       trackLocation(
@@ -80,7 +84,7 @@ export const CollaboratorPresenceBar: React.FC = () => {
         selectedBlock?.type
       );
     }
-  }, [currentCatalog?.id, activePageIndex, selectedBlockId, presenceStatus, trackLocation]);
+  }, [documentId, activePageIndex, selectedBlockId, presenceStatus, trackLocation]);
 
   if (!currentCatalog) return null;
 
