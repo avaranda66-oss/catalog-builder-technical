@@ -1,6 +1,6 @@
 # C3 — Presence Session Identity & Async Lifecycle Hardening
 
-Status: InReview
+Status: Done
 
 ## Executor Assignment
 
@@ -128,6 +128,7 @@ Forbidden scope:
 ### File List
 
 - `docs/stories/2026-09-07-c3-presence-session-lifecycle.md`
+- `docs/qa/gates/c3-presence-session-lifecycle.yml`
 - `src/components/editor/CollaboratorPresenceBar.tsx`
 - `src/services/presence.service.ts`
 - `src/stores/usePresenceStore.ts`
@@ -141,3 +142,56 @@ Forbidden scope:
 | 2026-09-07 | 0.1.0 | Registered the user-authorized C3 lifecycle remediation and T1–T12 matrix. | River (SM) |
 | 2026-09-07 | 0.2.0 | Advanced the complete user-supplied mission to Ready for Dev. | River (SM) |
 | 2026-09-08 | 1.0.0 | Hardened Presence session ownership, restored template identity, and completed local gates. | Dex (Dev) |
+| 2026-09-08 | 1.0.1 | QA Gate PASS — Status: InReview → Done. | Quinn (QA) |
+
+## QA Results
+
+### Review Date: 2026-09-08
+
+### Reviewed By: Quinn (Test Architect)
+
+### Reviewed Revision: 2dbc2d6572694b81d02078662439cc493d3a8ced
+
+### Code Quality Assessment
+
+PASS. Captured resource ownership and the monotonic session generation jointly prevent stale asynchronous work from mutating the active session. The implementation remains scoped to Presence lifecycle and the two callers required for auth-aware deduplication and canonical template identity.
+
+### Refactoring Performed
+
+None. No QA code changes were required.
+
+### Compliance Check
+
+- Coding Standards: ✓ Strict TypeScript and no new lint warnings.
+- Project Structure: ✓ Changes remain in the existing Presence service/store/component paths.
+- Testing Strategy: ✓ Deterministic mocked-channel RED→GREEN coverage plus focused and full regressions.
+- All ACs Met: ✓ AC 1–14 trace to C3-T1–T13 and existing lifecycle regressions.
+
+### Improvements Checklist
+
+- [x] Delayed leave owns and removes only its captured channel.
+- [x] Late status/sync callbacks, reconnect timers, and heartbeat callbacks are inert.
+- [x] Catalog and template payload/channel contracts are distinct and preserved.
+- [x] Same-target reuse checks auth/client identity and avoids duplicate channels.
+- [x] Explicit and synchronous leave paths detach ownership safely.
+
+### Security Review
+
+No security regression found. Identity changes cannot accept stale Presence callbacks, and authentication authority was not redesigned.
+
+### Performance Considerations
+
+Generation/channel checks are O(1); the implementation retains a single active heartbeat and reconnect timer.
+
+### Files Modified During Review
+
+- `docs/qa/gates/c3-presence-session-lifecycle.yml`
+- `docs/stories/2026-09-07-c3-presence-session-lifecycle.md`
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/c3-presence-session-lifecycle.yml
+
+### Lifecycle Transition
+
+PASS: InReview → Done.

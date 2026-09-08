@@ -1,0 +1,34 @@
+schema: 1
+story: 'C3'
+story_title: 'Presence Session Identity & Async Lifecycle Hardening'
+gate: PASS
+status_reason: 'All lifecycle and identity acceptance criteria have deterministic RED-to-GREEN coverage, with no blocking reliability, security, performance, or maintainability findings.'
+reviewer: 'Quinn (Test Architect)'
+reviewed_revision: '2dbc2d6572694b81d02078662439cc493d3a8ced'
+updated: '2026-09-08T12:02:44Z'
+top_issues: []
+waiver: { active: false }
+quality_score: 100
+expires: '2026-09-22T12:02:44Z'
+evidence:
+  tests_reviewed: 1895
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    ac_gaps: []
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Auth/client identity replacement is isolated without changing authentication authority or exposing new data.'
+  performance:
+    status: PASS
+    notes: 'Ownership checks are constant-time and retain one active heartbeat and reconnect timer.'
+  reliability:
+    status: PASS
+    notes: 'Captured-channel cleanup plus generation/channel guards cover delayed leave, callbacks, reconnect, heartbeat, and unload paths.'
+  maintainability:
+    status: PASS
+    notes: 'The mechanism remains local to PresenceService and uses existing document target contracts.'
+recommendations:
+  immediate: []
+  future: []
