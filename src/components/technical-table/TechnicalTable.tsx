@@ -33,6 +33,7 @@ interface TechnicalTableProps {
   onUpdateLegendItem?: (markerType: any, newLabel: string) => void;
   onUpdateLegendTitle?: (newTitle: string) => void;
   className?: string;
+  firstRowId?: string;
 }
 
 export const TechnicalTable: React.FC<TechnicalTableProps> = ({
@@ -54,7 +55,8 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   onToggleLegend,
   onUpdateLegendItem,
   onUpdateLegendTitle,
-  className = ''
+  className = '',
+  firstRowId
 }) => {
   const tokens = TABLE_VISUAL_FAMILIES[family] || TABLE_VISUAL_FAMILIES.monochrome;
   const visibleColumns = columns.filter((c) => c.visible !== false);
@@ -199,7 +201,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                   {/* Ação de exclusão de linha */}
                   {isEditable && onRemoveRow && (
                     <td className="py-1.5 px-1 text-center w-8 align-middle whitespace-nowrap">
-                      {onToggleManualBreak && (
+                      {onToggleManualBreak && !(firstRowId ? row.id === firstRowId : idx === 0) && (
                         <button
                           type="button"
                           onClick={(e) => {

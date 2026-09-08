@@ -9,7 +9,8 @@ export const DEFAULT_TABLE_PAGINATION_POLICY: TablePaginationPolicy = {
   allowRowSplit: false,           // Invariante: Nunca fatiar uma linha de dados ao meio
   repeatHeaderOnBreak: true,     // Repetir cabeçalho na folha seguinte
   keepHeaderWithFirstRow: true,  // Evitar cabeçalho solitário na última linha da página
-  minOrphanRows: 1               // Não deixar linha órfã desacompanhada
+  minOrphanRows: 1,               // Não deixar linha órfã desacompanhada
+  autoSplitOnOverflow: true
 };
 
 /**
@@ -54,6 +55,7 @@ export interface TablePaginationPlan {
   unresolvedOversizedRowIds?: string[];
   hasDuplicateRowIds?: boolean;
   duplicateRowIds?: string[];
+  hasMalformedTerminalSection?: boolean;
 }
 
 /**
@@ -78,8 +80,18 @@ export function computeTablePaginationPlan(
     ...policyOverrides
   };
 
-  const manualBreaksSet = new Set(manualBreakRowIds || []);
   const rows = input.rowHeights || [];
+  const rowIds = new Set(rows.map((row) => row.rowId));
+
+  // P1-E & P2-A: Apenas IDs de linha existentes podem quebrar, e a primeira linha nunca cria quebra
+  const manualBreaksSet = new Set(
+    (manualBreakRowIds || [])
+      .filter((id) => rowIds.has(id))
+      .filter((id) => rows.length > 0 && id !== rows[0].rowId)
+  );
+
+  const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+  const hasMalformedTerminalSection = Boolean(lastRow && lastRow.kind === 'section');
 
   if (rows.length === 0) {
     return {
@@ -87,7 +99,8 @@ export function computeTablePaginationPlan(
       policy,
       slices: [],
       totalPagesRequired: 0,
-      hasUnresolvedOversizedRow: false
+      hasUnresolvedOversizedRow: false,
+      hasMalformedTerminalSection: false
     };
   }
 
@@ -105,6 +118,8 @@ export function computeTablePaginationPlan(
   let currentSliceHeightMm = baseSliceHeightMm;
   let currentAvailableHeightMm = input.availableHeightOnFirstPageMm;
 
+  const autoSplit = policy.autoSplitOnOverflow !== false;
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowHeight = Math.max(0, row.measuredHeightMm);
@@ -116,7 +131,7 @@ export function computeTablePaginationPlan(
       }
     }
 
-    // Verifica quebra manual antes desta linha
+    // Verifica quebra manual antes desta linha (apenas se já houver linhas na fatia atual)
     const isManualBreak = manualBreaksSet.has(row.rowId);
     if (isManualBreak && currentIncludedRowIds.length > 0) {
       // Fecha a fatia corrente e inicia uma nova
@@ -137,9 +152,8 @@ export function computeTablePaginationPlan(
     }
 
     // Proteção de Cabeçalho de Seção (FLOW-T29 / FLOW-T30):
-    // Se a linha é uma seção e tem pelo menos um filho seguinte,
-    // verifica se ambos cabem na fatia corrente. Se não couberem e a fatia já tiver linhas, move a seção.
-    if (row.kind === 'section' && i + 1 < rows.length) {
+    // Se autoSplit estiver ativo e a linha for seção com filho seguinte, move para nova fatia se não couberem ambos
+    if (autoSplit && row.kind === 'section' && i + 1 < rows.length) {
       const nextChildRow = rows[i + 1];
       const combinedSectionMm = rowHeight + Math.max(0, nextChildRow.measuredHeightMm);
 
@@ -162,8 +176,8 @@ export function computeTablePaginationPlan(
       }
     }
 
-    // Verificação de estouro de altura normal
-    if (currentSliceHeightMm + rowHeight > currentAvailableHeightMm && currentIncludedRowIds.length > 0) {
+    // Verificação de estouro de altura normal (apenas se autoSplit estiver ativo)
+    if (autoSplit && currentSliceHeightMm + rowHeight > currentAvailableHeightMm && currentIncludedRowIds.length > 0) {
       // Fecha a fatia corrente
       slices.push({
         sliceIndex: currentSliceIndex,
@@ -218,6 +232,7 @@ export function computeTablePaginationPlan(
     hasUnresolvedOversizedRow: unresolvedOversizedRowIds.length > 0,
     unresolvedOversizedRowIds,
     hasDuplicateRowIds: duplicateRowIds.length > 0,
-    duplicateRowIds
+    duplicateRowIds,
+    hasMalformedTerminalSection
   };
 }

@@ -115,79 +115,85 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
         e.stopPropagation();
         setSelectedBlockId(block.id);
       }}
-      className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
-        isSelected && !isExport ? 'ring-2 ring-blue-600' : isExport ? 'shadow-none' : 'hover:border-slate-400'
-      }`}
+      className={`relative ${isSelected && !isExport ? 'ring-2 ring-blue-600' : ''}`}
     >
-      {/* Header Técnico */}
-      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
-        <div>
-          {block.badgeText && (
-            <span className="text-[8.5px] font-black uppercase tracking-wider text-[#003366] bg-blue-50 px-1.5 py-0.5 border border-blue-200 mb-0.5 inline-block">
-              {block.badgeText}
-            </span>
-          )}
-          <h3
-            data-printable-field="title"
-            contentEditable={!isExport}
-            suppressContentEditableWarning
-            onBlur={handleTitleBlur}
-            className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
-          >
-            <Grid3X3 className="w-3.5 h-3.5 text-[#003366]" />
-            <span>{block.title || 'TABELA PERSONALIZADA DE ESPECIFICAÇÕES'}</span>
-          </h3>
-          {block.subtitle && (
-            <p className="text-[9.5px] text-slate-500 font-sans mt-0.5 px-1">
-              {block.subtitle}
-            </p>
+      <div
+        data-a4-measure-root="true"
+        className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
+          isExport ? 'shadow-none' : 'hover:border-slate-400'
+        }`}
+      >
+        {/* Header Técnico */}
+        <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
+          <div>
+            {block.badgeText && (
+              <span className="text-[8.5px] font-black uppercase tracking-wider text-[#003366] bg-blue-50 px-1.5 py-0.5 border border-blue-200 mb-0.5 inline-block">
+                {block.badgeText}
+              </span>
+            )}
+            <h3
+              data-printable-field="title"
+              contentEditable={!isExport}
+              suppressContentEditableWarning
+              onBlur={handleTitleBlur}
+              className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
+            >
+              <Grid3X3 className="w-3.5 h-3.5 text-[#003366]" />
+              <span>{block.title || 'TABELA PERSONALIZADA DE ESPECIFICAÇÕES'}</span>
+            </h3>
+            {block.subtitle && (
+              <p className="text-[9.5px] text-slate-500 font-sans mt-0.5 px-1">
+                {block.subtitle}
+              </p>
+            )}
+          </div>
+
+          {!isExport && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddColumn();
+              }}
+              className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
+              data-editor-action="true"
+              title="Adicionar coluna"
+            >
+              <Columns className="w-3 h-3" />
+              <span>+ Coluna</span>
+            </button>
           )}
         </div>
 
-        {!isExport && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAddColumn();
-            }}
-            className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
-            data-editor-action="true"
-            title="Adicionar coluna"
-          >
-            <Columns className="w-3 h-3" />
-            <span>+ Coluna</span>
-          </button>
-        )}
+        {/* Motor Unificado de Tabela */}
+        <TechnicalTable
+          columns={columns}
+          rows={rows}
+          getProduct={getProduct}
+          family={family}
+          density={density}
+          columnGroups={columnGroups}
+          legendConfig={slice && !slice.isLastPage ? { ...legendConfig, showLegend: false } : legendConfig}
+          isEditable={!isExport}
+          onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
+          onRemoveRow={handleRemoveRow}
+          manualBreakRowIds={manualBreakRowIds}
+          onToggleManualBreak={(rowId, enabled) => setManualTableBreak(block.id, rowId, enabled)}
+          onRemoveColumn={handleRemoveColumn}
+          onRenameColumn={handleColumnLabelBlur}
+          firstRowId={allRows[0]?.id}
+        />
+
+        <p
+          className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
+            slice?.footnoteNotice ? '' : 'invisible'
+          }`}
+          data-table-continuation-notice
+          aria-hidden={!slice?.footnoteNotice}
+        >
+          {slice?.footnoteNotice ?? null}
+        </p>
       </div>
-
-      {/* Motor Unificado de Tabela */}
-      <TechnicalTable
-        columns={columns}
-        rows={rows}
-        getProduct={getProduct}
-        family={family}
-        density={density}
-        columnGroups={columnGroups}
-        legendConfig={slice && !slice.isLastPage ? { ...legendConfig, showLegend: false } : legendConfig}
-        isEditable={!isExport}
-        onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
-        onRemoveRow={handleRemoveRow}
-        manualBreakRowIds={manualBreakRowIds}
-        onToggleManualBreak={(rowId, enabled) => setManualTableBreak(block.id, rowId, enabled)}
-        onRemoveColumn={handleRemoveColumn}
-        onRenameColumn={handleColumnLabelBlur}
-      />
-
-      <p
-        className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
-          slice?.footnoteNotice ? '' : 'invisible'
-        }`}
-        data-table-continuation-notice
-        aria-hidden={!slice?.footnoteNotice}
-      >
-        {slice?.footnoteNotice ?? null}
-      </p>
 
       {/* Rodapé de Ações do Editor */}
       {!isExport && (

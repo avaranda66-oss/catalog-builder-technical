@@ -346,6 +346,7 @@ export const CatalogCellBindingSchema = CatalogCellBindingBaseSchema.superRefine
 
 export const CatalogTableRowSchema = z.object({
   id: z.string(),
+  kind: z.enum(['data', 'header', 'footer', 'divider', 'section']).optional(),
   productRefId: z.string().optional().default(''),
   localOverrides: z.record(z.string()).optional().default({}),
   cellValues: z.record(TableCellLiteralContentSchema).optional().default({}),

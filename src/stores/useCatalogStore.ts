@@ -2095,6 +2095,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
           const block = page.blocks?.find((b) => b.id === blockId);
           if (block && block.tableRows) {
             block.tableRows = block.tableRows.filter((r) => r.id !== rowId);
+            if (Array.isArray(block.customData?.manualBreakRowIds)) {
+              block.customData.manualBreakRowIds = block.customData.manualBreakRowIds.filter((id) => id !== rowId);
+            }
             break;
           }
         }
