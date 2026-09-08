@@ -1,9 +1,9 @@
 // src/domain/page-composition-policy.ts
-// Política Pura de Composição de Páginas e Inserção Segura (Fase 3A.6)
-// Define regras simétricas para prevenir e recuperar sobreposições entre capas inteiras e blocos em fluxo.
-// NOTA ROADMAP: Esta política é provisória até a introdução do Page Composition / Layers System definitivo.
+// Política Pura de Composição de Páginas e Inserção Segura (Fase 3A.6 / A4.FLOW.R1)
+// Invariante: FULL_PAGE_COVER_IS_PAGE_EXCLUSIVE.
+// Uma página com full_page_cover deve conter unicamente a capa, sem outros blocos de fluxo.
 
-import { CatalogPage, ContentBlock, BlockType } from './catalog.schema';
+import { Catalog, CatalogPage, ContentBlock, BlockType } from './catalog.schema';
 
 export type CompositionSafetyResult =
   | { isSafe: true }
@@ -99,5 +99,108 @@ export function evaluateMixedCoverRecovery(
     eligible,
     coverCount,
     nonCoverCount
+  };
+}
+
+export interface CatalogCoverExclusivityViolation {
+  pageId: string;
+  pageNumber: number;
+  coverCount: number;
+  nonCoverBlocksCount: number;
+}
+
+export interface CatalogCoverExclusivityValidationResult {
+  isExclusive: boolean;
+  violations: CatalogCoverExclusivityViolation[];
+}
+
+/**
+ * Valida o invariante FULL_PAGE_COVER_IS_PAGE_EXCLUSIVE em todo o catálogo.
+ * Se uma folha possui full_page_cover, ela deve conter estritamente e unicamente esse bloco.
+ */
+export function validateCatalogCoverExclusivity(
+  catalog: Catalog | undefined | null
+): CatalogCoverExclusivityValidationResult {
+  if (!catalog || !catalog.pages || catalog.pages.length === 0) {
+    return { isExclusive: true, violations: [] };
+  }
+
+  const violations: CatalogCoverExclusivityViolation[] = [];
+
+  for (const page of catalog.pages) {
+    const recovery = evaluateMixedCoverRecovery(page);
+    if (recovery.coverCount > 0 && recovery.nonCoverCount > 0) {
+      violations.push({
+        pageId: page.id,
+        pageNumber: page.pageNumber,
+        coverCount: recovery.coverCount,
+        nonCoverBlocksCount: recovery.nonCoverCount
+      });
+    }
+  }
+
+  return {
+    isExclusive: violations.length === 0,
+    violations
+  };
+}
+
+/**
+ * Normaliza a exclusividade de capas A4 APENAS para novos documentos/templates/presets
+ * antes de sua persistência inicial. NÃO deve ser acionada silenciosamente ao carregar documentos existentes.
+ * Separa os blocos que não são capa para uma nova folha técnica imediatamente após a capa.
+ */
+export function normalizeNewDocumentCoverExclusivity(
+  catalog: Catalog
+): { normalizedCatalog: Catalog; modified: boolean } {
+  const validation = validateCatalogCoverExclusivity(catalog);
+  if (validation.isExclusive) {
+    return { normalizedCatalog: catalog, modified: false };
+  }
+
+  const newPages: CatalogPage[] = [];
+  let modified = false;
+
+  for (let i = 0; i < catalog.pages.length; i++) {
+    const page = catalog.pages[i];
+    const hasCover = page.blocks?.some((b) => b.type === 'full_page_cover');
+
+    if (hasCover && page.blocks.length > 1) {
+      modified = true;
+      const covers = page.blocks.filter((b) => b.type === 'full_page_cover');
+      const nonCovers = page.blocks.filter((b) => b.type !== 'full_page_cover');
+
+      // Folha da Capa: exclusivamente os blocos de capa
+      newPages.push({
+        ...page,
+        blocks: covers
+      });
+
+      // Nova folha para o conteúdo restante imediatamente após a capa
+      const continuationPageId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      newPages.push({
+        id: continuationPageId,
+        pageNumber: newPages.length + 1,
+        pageType: 'technical',
+        title: `${page.title || 'Conteúdo Técnico'} (Continuação)`,
+        blocks: nonCovers
+      });
+    } else {
+      newPages.push(page);
+    }
+  }
+
+  // Renumera as páginas sequencialmente
+  const renumberedPages = newPages.map((p, idx) => ({
+    ...p,
+    pageNumber: idx + 1
+  }));
+
+  return {
+    normalizedCatalog: {
+      ...catalog,
+      pages: renumberedPages
+    },
+    modified
   };
 }

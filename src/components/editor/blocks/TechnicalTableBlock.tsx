@@ -14,6 +14,7 @@ import {
 } from '../../../domain/table-core';
 import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 import { TableCoreRenderer } from '../table-core';
+import { TablePaginationSlice } from '../../../domain/table-core/table.pagination';
 
 interface TechnicalTableBlockProps {
   block: ContentBlock;
@@ -21,13 +22,15 @@ interface TechnicalTableBlockProps {
   isSelected?: boolean;
   isExport?: boolean;
   resolveDatumOverride?: TableDatumResolver;
+  slice?: TablePaginationSlice;
 }
 
 export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   block,
   pageId,
   isExport,
-  resolveDatumOverride
+  resolveDatumOverride,
+  slice
 }) => {
   const {
     selectedBlockId,
@@ -44,13 +47,19 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const { openAddProductToTableModal, tablePresentationDraft, isExportPDFModalOpen } = useUIStore();
 
   const columns: TableColumnConfig[] = block.tableColumns || [];
-  const rows = block.tableRows || [];
+  const rawRows = block.tableRows || [];
+  const rows = slice ? rawRows.filter((r) => slice.includedRowIds.includes(r.id)) : rawRows;
   const family: TableVisualFamily = (block.style?.family as TableVisualFamily) || 'monochrome';
 
   // Pilot Table Core V2 para specs_table (CORE.T2B.1 / CORE.T2C.1)
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
   const adaptedTable = (pilotAdaptResult && pilotAdaptResult.supported) ? pilotAdaptResult.table : null;
+  if (slice && adaptedTable) {
+    adaptedTable.rows = adaptedTable.rows.filter(
+      (r) => r.isHeader || r.kind === 'header' || slice.includedRowIds.includes(r.id)
+    );
+  }
   if (!isExport && adaptedTable && tablePresentationDraft && tablePresentationDraft.blockId === block.id) {
     adaptedTable.presentation = tablePresentationDraft.presentation;
   }
