@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, CheckCircle2, ArrowRight, LayoutTemplate, Package, Bookmark, Layers, Trash2, Loader2, Pencil, FilePlus, Plus } from 'lucide-react';
 import { useCatalogStore } from '../../stores/useCatalogStore';
-import { useTemplateStore } from '../../stores/useTemplateStore';
+import { useTemplateStore, reconcileSystemTemplates } from '../../stores/useTemplateStore';
 import { SYSTEM_PRESETS } from '../../data/presets';
 import { CatalogPreset } from '../../domain/catalog.schema';
 import { DocumentLifecycleService } from '../../services/document-lifecycle.service';
@@ -36,10 +36,12 @@ export const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose }) => 
 
   if (!isOpen) return null;
 
-  const layoutTemplates = (systemTemplates.length > 0 ? systemTemplates : SYSTEM_PRESETS).filter(
+  const effectiveSystemTemplates = reconcileSystemTemplates(SYSTEM_PRESETS, systemTemplates);
+
+  const layoutTemplates = effectiveSystemTemplates.filter(
     (p) => p.category === 'layout_template' || !p.category
   );
-  const officialCatalogs = (systemTemplates.length > 0 ? systemTemplates : SYSTEM_PRESETS).filter(
+  const officialCatalogs = effectiveSystemTemplates.filter(
     (p) => p.category === 'official_product_catalog'
   );
 
