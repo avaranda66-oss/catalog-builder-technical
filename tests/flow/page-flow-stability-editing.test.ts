@@ -184,7 +184,7 @@ describe('A4.FLOW.R1 — Reflow Stability & Idempotence (FLOW-T22 a FLOW-T25)', 
     // Antes da fonte (fallback height):
     const unreadyFacts: PageLayoutFact[] = standardFacts.map(f => ({
       ...f,
-      blocks: f.blocks.map(b => ({ ...b, measuredHeightMm: b.measuredHeightMm * 1.05 }))
+      blocks: f.blocks.map(b => ({ ...b, measuredHeightMm: (b.measuredHeightMm ?? 0) * 1.05 }))
     }));
     const planBefore = computePageFlowPlan(ta25n, unreadyFacts);
     expect(planBefore.totalProjectedPages).toBeGreaterThan(0);
@@ -346,12 +346,12 @@ describe('A4.FLOW.R1 — Publication Preflight Gates (FASE G)', () => {
     expect(report.issues.some(i => i.code === 'COVER_EXCLUSIVITY_VIOLATION')).toBe(true);
   });
 
-  it('Aprova publicação nos catálogos canônicos corrigidos da PRESYS', () => {
+  it('Falha fechada nos catálogos PRESYS enquanto a medição física atual não foi fornecida', () => {
     for (const model of ['TA-25N', 'TA-35N', 'TA-50N'] as const) {
       const cat = buildPresysTechnicalCatalog(model);
       const report = auditLayoutPreflight(cat);
-      expect(report.canPublish).toBe(true);
-      expect(report.blockCount).toBe(0);
+      expect(report.canPublish).toBe(false);
+      expect(report.issues.some((issue) => issue.code === 'LAYOUT_MEASUREMENT_MISSING')).toBe(true);
     }
   });
 });
