@@ -54,6 +54,37 @@ function getOrCreateTemplateQueue(templateId: string, initialVersion: number = 1
   return q;
 }
 
+/**
+ * Reconcilia os presets de sistema embutidos no repositório com os templates de sistema da nuvem.
+ * Propriedades:
+ * 1. Determinístico e imutável (não altera arrays de entrada).
+ * 2. Presets embutidos (localPresets) são preservados na íntegra.
+ * 3. Em colisão de ID, o preset do repositório prevalece (repositório autoritativo para IDs nativos).
+ * 4. Templates de sistema exclusivos da nuvem (IDs novos) são anexados de forma estável.
+ * 5. Deduplicação garantida.
+ */
+export function reconcileSystemTemplates(
+  localPresets: readonly CatalogPreset[],
+  cloudSystem: readonly CatalogPreset[]
+): CatalogPreset[] {
+  const localMap = new Map<string, CatalogPreset>();
+  for (const lp of localPresets) {
+    localMap.set(lp.id, lp);
+  }
+
+  const result: CatalogPreset[] = [...localPresets];
+
+  const seenCloudIds = new Set<string>();
+  for (const cs of cloudSystem) {
+    if (!localMap.has(cs.id) && !seenCloudIds.has(cs.id)) {
+      seenCloudIds.add(cs.id);
+      result.push(cs);
+    }
+  }
+
+  return result;
+}
+
 export const useTemplateStore = create<TemplateState>((set, get) => ({
   customTemplates: [],
   systemTemplates: SYSTEM_PRESETS,
@@ -72,7 +103,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
 
         set({
           customTemplates: cloudCustom,
-          systemTemplates: cloudSystem.length > 0 ? cloudSystem : SYSTEM_PRESETS,
+          systemTemplates: reconcileSystemTemplates(SYSTEM_PRESETS, cloudSystem),
           syncStatus: 'synced',
           isLoading: false
         });
@@ -335,16 +366,32 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
       if (!newTemplate.isSystem) {
         const existing = get().customTemplates.filter((t) => t.id !== newTemplate.id);
         set({ customTemplates: [newTemplate, ...existing] });
+      } else {
+        const currentCloud = get().systemTemplates.filter((t) => !SYSTEM_PRESETS.some((sp) => sp.id === t.id));
+        const nextCloud = [newTemplate, ...currentCloud.filter((t) => t.id !== newTemplate.id)];
+        set({ systemTemplates: reconcileSystemTemplates(SYSTEM_PRESETS, nextCloud) });
       }
     } else if (eventType === 'UPDATE' && payload.new) {
       const updated = templateRowToCatalogPreset(payload.new);
       if (!updated.isSystem) {
         const nextList = get().customTemplates.map((t) => (t.id === updated.id ? updated : t));
         set({ customTemplates: nextList });
+      } else {
+        const currentCloud = get().systemTemplates.filter((t) => !SYSTEM_PRESETS.some((sp) => sp.id === t.id));
+        const nextCloud = currentCloud.map((t) => (t.id === updated.id ? updated : t));
+        set({ systemTemplates: reconcileSystemTemplates(SYSTEM_PRESETS, nextCloud) });
       }
     } else if (eventType === 'DELETE' && payload.old?.id) {
-      const nextList = get().customTemplates.filter((t) => t.id !== payload.old.id);
-      set({ customTemplates: nextList });
+      const deletedId = payload.old.id;
+      const nextCustom = get().customTemplates.filter((t) => t.id !== deletedId);
+      const isBuiltin = SYSTEM_PRESETS.some((sp) => sp.id === deletedId);
+      if (!isBuiltin) {
+        const currentCloud = get().systemTemplates.filter((t) => !SYSTEM_PRESETS.some((sp) => sp.id === t.id));
+        const nextCloud = currentCloud.filter((t) => t.id !== deletedId);
+        set({ customTemplates: nextCustom, systemTemplates: reconcileSystemTemplates(SYSTEM_PRESETS, nextCloud) });
+      } else {
+        set({ customTemplates: nextCustom });
+      }
     }
   }
 }));
