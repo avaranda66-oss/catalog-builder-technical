@@ -7,22 +7,25 @@ import { measureCanonicalA4Pages, verifyRenderedA4Plan } from './a4-layout-measu
 
 const canonicalMeasurementPlan = (catalog: Catalog, flowMode: FlowMode): PageFlowPlan => ({
   flowMode,
-  projectedPages: catalog.pages.map((page, pageIndex) => ({
-    pageId: page.id,
-    canonicalPageId: page.id,
-    pageNumber: pageIndex + 1,
-    isCover: page.blocks.length === 1 && page.blocks[0]?.type === 'full_page_cover',
-    isDerivedContinuation: false,
-    blocks: page.blocks.map((block) => ({
-      id: block.id,
+  projectedPages: catalog.pages.map((page, pageIndex) => {
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+    return {
+      pageId: page.id,
       canonicalPageId: page.id,
-      canonicalBlockId: block.id,
-      canonicalBlockType: block.type
-    })),
-    hasOverflow: false,
-    overflowMm: 0,
-    issues: []
-  })),
+      pageNumber: pageIndex + 1,
+      isCover: blocks.length === 1 && blocks[0]?.type === 'full_page_cover',
+      isDerivedContinuation: false,
+      blocks: blocks.map((block) => ({
+        id: block.id,
+        canonicalPageId: page.id,
+        canonicalBlockId: block.id,
+        canonicalBlockType: block.type
+      })),
+      hasOverflow: false,
+      overflowMm: 0,
+      issues: []
+    };
+  }),
   totalProjectedPages: catalog.pages.length,
   tablePaginationPlans: {},
   measurementStatus: 'missing',
@@ -43,13 +46,24 @@ export function useMeasuredA4RenderPlan(
   rootRef: React.RefObject<HTMLElement | null>,
   flowMode: FlowMode
 ): MeasuredA4RenderPlanState {
+  const runtimeCatalog = React.useMemo<Catalog>(() => {
+    if (catalog.pages.every((page) => Array.isArray(page.blocks))) return catalog;
+    return {
+      ...catalog,
+      pages: catalog.pages.map((page) => ({
+        ...page,
+        blocks: Array.isArray(page.blocks) ? page.blocks : []
+      }))
+    };
+  }, [catalog]);
+
   const initialRenderPlan = React.useMemo(
-    () => buildA4RenderPlan(catalog, canonicalMeasurementPlan(catalog, flowMode)),
-    [catalog, flowMode]
+    () => buildA4RenderPlan(runtimeCatalog, canonicalMeasurementPlan(runtimeCatalog, flowMode)),
+    [runtimeCatalog, flowMode]
   );
   const [renderPlan, setRenderPlan] = React.useState<A4RenderPlan>(initialRenderPlan);
   const [phase, setPhase] = React.useState<'measure' | 'verify' | 'ready'>('measure');
-  const documentKey = `${catalog.id}:${catalog.version}:${catalog.updatedAt}:${flowMode}`;
+  const documentKey = `${runtimeCatalog.id}:${runtimeCatalog.version}:${runtimeCatalog.updatedAt}:${flowMode}`;
   const previousKey = React.useRef(documentKey);
   const isCurrentDocument = previousKey.current === documentKey;
 
@@ -73,8 +87,8 @@ export function useMeasuredA4RenderPlan(
       frame = requestAnimationFrame(() => {
         if (cancelled || !rootRef.current) return;
         if (phase === 'measure') {
-          const facts = measureCanonicalA4Pages(rootRef.current, catalog);
-          const next = buildA4RenderPlan(catalog, computePageFlowPlan(catalog, facts, { flowMode }));
+          const facts = measureCanonicalA4Pages(rootRef.current, runtimeCatalog);
+          const next = buildA4RenderPlan(runtimeCatalog, computePageFlowPlan(runtimeCatalog, facts, { flowMode }));
           setRenderPlan(next);
           setPhase('verify');
         } else if (phase === 'verify') {
@@ -88,13 +102,13 @@ export function useMeasuredA4RenderPlan(
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [catalog, flowMode, phase, rootRef]);
+  }, [flowMode, phase, rootRef, runtimeCatalog]);
 
   const layoutPreflight = React.useMemo(
     () => phase === 'ready' && isCurrentDocument
-      ? auditLayoutPreflight(catalog, renderPlan.flowPlan)
-      : auditLayoutPreflight(catalog),
-    [catalog, isCurrentDocument, phase, renderPlan]
+      ? auditLayoutPreflight(runtimeCatalog, renderPlan.flowPlan)
+      : auditLayoutPreflight(runtimeCatalog),
+    [isCurrentDocument, phase, renderPlan, runtimeCatalog]
   );
 
   return {
