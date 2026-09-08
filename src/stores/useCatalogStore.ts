@@ -13,6 +13,7 @@ import {
   generateUniqueCatalogTitle,
   analyzeCatalogStructuralDelta,
   resolveDocumentLocale,
+  hydrateCatalogSource,
   EditorDocumentContext
 } from '../domain/catalog.schema';
 import {
@@ -696,8 +697,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   // FASE 1.1: setCurrentCatalog é um SETTER PURO sem side-effects de rede
   setCurrentCatalog: (nextCatalog, markDirty = true) => {
+    const runtimeCatalog = hydrateCatalogSource(nextCatalog).catalog;
     const prev = get().currentCatalog;
-    debugSetCatalog('setCurrentCatalog', prev, nextCatalog, { markDirty });
+    debugSetCatalog('setCurrentCatalog', prev, runtimeCatalog, { markDirty });
     if (!markDirty) {
       beginCatalogSession(set);
     }
@@ -706,13 +708,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       ? {
           kind: 'MANUAL_EDIT',
           clientInstanceId: getClientInstanceId(),
-          summary: `Catálogo alterado para "${nextCatalog.title}"`,
+          summary: `Catálogo alterado para "${runtimeCatalog.title}"`,
           timestamp: new Date().toISOString()
         }
       : null;
 
     set({
-      currentCatalog: nextCatalog,
+      currentCatalog: runtimeCatalog,
       localRevision: nextRev,
       lastMutation: mutation,
       isDirty: markDirty,

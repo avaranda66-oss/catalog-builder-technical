@@ -1,6 +1,6 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { Product, ProductSchema } from '../domain/product.schema';
-import { Catalog, CatalogSchema } from '../domain/catalog.schema';
+import { Catalog, CatalogSchema, hydrateCatalogSource } from '../domain/catalog.schema';
 import { z } from 'zod';
 
 const DB_NAME = 'catalog_builder_db';
@@ -110,19 +110,19 @@ export class StorageService {
       if (db) {
         if (targetId) {
           const catalog = await db.get('catalogs', targetId);
-          if (catalog) return CatalogSchema.parse(catalog);
+          if (catalog) return CatalogSchema.parse(hydrateCatalogSource(catalog).catalog);
         }
         // Se não achou pelo ID, pega o primeiro
         const all = await db.getAll('catalogs');
         if (all && all.length > 0) {
-          return CatalogSchema.parse(all[0]);
+          return CatalogSchema.parse(hydrateCatalogSource(all[0]).catalog);
         }
       }
 
       if (targetId) {
         const raw = localStorage.getItem(`cb_catalog_${targetId}`);
         if (raw) {
-          return CatalogSchema.parse(JSON.parse(raw));
+          return CatalogSchema.parse(hydrateCatalogSource(JSON.parse(raw)).catalog);
         }
       }
     } catch (err) {
@@ -137,7 +137,7 @@ export class StorageService {
       if (db) {
         const catalogs = await db.getAll('catalogs');
         if (catalogs && catalogs.length > 0) {
-          return z.array(CatalogSchema).parse(catalogs);
+          return catalogs.map((catalog) => CatalogSchema.parse(hydrateCatalogSource(catalog).catalog));
         }
       }
       const catalogs: Catalog[] = [];
@@ -146,7 +146,7 @@ export class StorageService {
         if (key && key.startsWith('cb_catalog_')) {
           const raw = localStorage.getItem(key);
           if (raw) {
-            catalogs.push(CatalogSchema.parse(JSON.parse(raw)));
+            catalogs.push(CatalogSchema.parse(hydrateCatalogSource(JSON.parse(raw)).catalog));
           }
         }
       }

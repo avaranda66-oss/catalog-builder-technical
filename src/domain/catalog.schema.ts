@@ -222,6 +222,23 @@ export interface CatalogTranslationMeta {
   humanEdited?: boolean;
 }
 
+export type CatalogSourceDiagnosticCode = 'MALFORMED_PAGE_BLOCKS';
+
+export type CatalogSourceValueType = 'string' | 'number' | 'object' | 'boolean' | 'bigint' | 'function' | 'symbol';
+
+/**
+ * Provenance retained when persisted/source catalog data cannot satisfy a runtime invariant.
+ * Diagnostics live beside catalog metadata and never masquerade as editable ContentBlock data.
+ */
+export interface CatalogSourceDiagnostic {
+  code: CatalogSourceDiagnosticCode;
+  pageId: string;
+  pageNumber: number;
+  sourcePath: string;
+  receivedType: CatalogSourceValueType;
+  message: string;
+}
+
 export interface Catalog {
   id: string;
   title: string;
@@ -236,6 +253,7 @@ export interface Catalog {
   updatedAt: string;
   version: number;
   layoutFlowMode?: 'smart' | 'manual';
+  sourceDiagnostics?: CatalogSourceDiagnostic[];
   lastMutation?: MutationMetadata;
   [key: string]: any;
 }
@@ -428,6 +446,15 @@ export const CatalogTranslationMetaSchema = z.object({
   humanEdited: z.boolean().optional()
 });
 
+export const CatalogSourceDiagnosticSchema = z.object({
+  code: z.literal('MALFORMED_PAGE_BLOCKS'),
+  pageId: z.string(),
+  pageNumber: z.number().int().positive(),
+  sourcePath: z.string(),
+  receivedType: z.enum(['string', 'number', 'object', 'boolean', 'bigint', 'function', 'symbol']),
+  message: z.string()
+});
+
 export const CatalogSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -438,11 +465,85 @@ export const CatalogSchema = z.object({
   locale: z.string().optional().default('pt-BR'),
   translationMeta: CatalogTranslationMetaSchema.optional(),
   localizedSystemStrings: z.record(z.string()).optional(),
+  sourceDiagnostics: z.array(CatalogSourceDiagnosticSchema).optional(),
   createdAt: z.string().datetime().or(z.string()),
   updatedAt: z.string().datetime().or(z.string()),
   version: z.number().int().default(1),
   layoutFlowMode: z.enum(['smart', 'manual']).optional().default('smart')
 }).passthrough();
+
+export interface CatalogHydrationResult {
+  catalog: Catalog;
+  diagnostics: CatalogSourceDiagnostic[];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const isCatalogSourceDiagnostic = (value: unknown): value is CatalogSourceDiagnostic => (
+  CatalogSourceDiagnosticSchema.safeParse(value).success
+);
+
+const diagnosticKey = (diagnostic: CatalogSourceDiagnostic) => (
+  `${diagnostic.code}:${diagnostic.pageId}:${diagnostic.sourcePath}`
+);
+
+/**
+ * The single persisted/source -> runtime boundary for Catalog page blocks.
+ * It deliberately performs only boundary normalization here; full schema validation remains
+ * the responsibility of callers such as StorageService.
+ */
+export function hydrateCatalogSource(source: unknown): CatalogHydrationResult {
+  if (!isRecord(source)) {
+    throw new TypeError('Catalog hydration requires an object source.');
+  }
+
+  const existingDiagnostics = Array.isArray(source.sourceDiagnostics)
+    ? source.sourceDiagnostics.filter(isCatalogSourceDiagnostic)
+    : [];
+  const discoveredDiagnostics: CatalogSourceDiagnostic[] = [];
+  const sourcePages = Array.isArray(source.pages) ? source.pages : [];
+  const pages = sourcePages.map((rawPage, pageIndex) => {
+    if (!isRecord(rawPage)) return rawPage;
+
+    const rawBlocks = rawPage.blocks;
+    if (rawBlocks === undefined || rawBlocks === null) {
+      return { ...rawPage, blocks: [] };
+    }
+    if (Array.isArray(rawBlocks)) {
+      return rawPage;
+    }
+
+    const pageNumber = typeof rawPage.pageNumber === 'number' && Number.isInteger(rawPage.pageNumber) && rawPage.pageNumber > 0
+      ? rawPage.pageNumber
+      : pageIndex + 1;
+    const pageId = typeof rawPage.id === 'string' ? rawPage.id : `page-${pageNumber}`;
+    const receivedType = typeof rawBlocks as CatalogSourceValueType;
+    discoveredDiagnostics.push({
+      code: 'MALFORMED_PAGE_BLOCKS',
+      pageId,
+      pageNumber,
+      sourcePath: `pages[${pageIndex}].blocks`,
+      receivedType,
+      message: `Página ${pageNumber} continha estrutura de blocos malformada (${receivedType}); o runtime recebeu uma lista vazia segura.`
+    });
+    return { ...rawPage, blocks: [] };
+  });
+
+  const diagnosticsByKey = new Map<string, CatalogSourceDiagnostic>();
+  for (const diagnostic of [...existingDiagnostics, ...discoveredDiagnostics]) {
+    diagnosticsByKey.set(diagnosticKey(diagnostic), diagnostic);
+  }
+  const diagnostics = [...diagnosticsByKey.values()];
+  const catalog = {
+    ...source,
+    pages,
+    ...(diagnostics.length > 0 ? { sourceDiagnostics: diagnostics } : { sourceDiagnostics: undefined })
+  } as unknown as Catalog;
+
+  return { catalog, diagnostics };
+}
 
 export const CatalogPresetSchema = z.object({
   id: z.string(),

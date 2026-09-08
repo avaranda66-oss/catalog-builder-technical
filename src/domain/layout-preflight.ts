@@ -59,11 +59,21 @@ export function auditLayoutPreflight(
 ): LayoutPreflightReport {
   const issues: LayoutPreflightIssue[] = [];
 
+  for (const diagnostic of catalog.sourceDiagnostics ?? []) {
+    if (diagnostic.code !== 'MALFORMED_PAGE_BLOCKS') continue;
+    issues.push({
+      code: diagnostic.code,
+      severity: 'block',
+      pageNumber: diagnostic.pageNumber,
+      message: diagnostic.message
+    });
+  }
+
   // 1. Verificação Estática de Exclusividade de Capa e Formato dos Blocos
   catalog.pages.forEach((page, idx) => {
     const pageNumber = idx + 1;
     if (page.blocks !== undefined && page.blocks !== null && !Array.isArray(page.blocks)) {
-      issues.push({
+      if (!issues.some((issue) => issue.code === 'MALFORMED_PAGE_BLOCKS' && issue.pageNumber === pageNumber)) issues.push({
         code: 'MALFORMED_PAGE_BLOCKS',
         severity: 'block',
         pageNumber,

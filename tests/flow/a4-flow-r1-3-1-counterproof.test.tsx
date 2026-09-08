@@ -194,7 +194,7 @@ describe('A4.FLOW.R1.3.1 — Principal Counterproof Test Matrix', () => {
     expect(preflight.issues.some((i) => i.code === 'MALFORMED_PAGE_BLOCKS')).toBe(false);
   });
 
-  it('R131-T5: corrupted non-array blocks survive to diagnostic boundary and block publication', () => {
+  it('R131-T5: corrupted non-array blocks survive as typed diagnostics and block publication', () => {
     const rawCorruptRow = {
       id: 'corrupt-cat',
       name: 'Corrupt Cat',
@@ -206,8 +206,11 @@ describe('A4.FLOW.R1.3.1 — Principal Counterproof Test Matrix', () => {
     };
 
     const catalog = catalogRowToCatalog(rawCorruptRow);
-    // Preserved on catalog as diagnostic authority
-    expect(Array.isArray(catalog.pages[0].blocks)).toBe(false);
+    // R1.3.2 strengthens the boundary: runtime content is safe while provenance survives.
+    expect(catalog.pages[0].blocks).toEqual([]);
+    expect(catalog.sourceDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'MALFORMED_PAGE_BLOCKS', receivedType: 'object' })
+    ]));
 
     // Preflight detects the corruption and blocks publication
     const preflight = auditLayoutPreflight(catalog);
