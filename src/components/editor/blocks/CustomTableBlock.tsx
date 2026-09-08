@@ -5,7 +5,6 @@ import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
 import { TechnicalTable } from '../../technical-table/TechnicalTable';
 import { TableVisualFamily } from '../../technical-table/table-tokens';
-import { removeLegacyTableColumn } from '../../../domain/table-core';
 
 interface CustomTableBlockProps {
   block: ContentBlock;
@@ -50,6 +49,9 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
   ];
 
   const family: TableVisualFamily = (block.customData?.tableFamily as TableVisualFamily) || 'monochrome';
+  const density = (block.customData?.density as 'compact' | 'regular' | 'spacious') || 'compact';
+  const columnGroups = block.customData?.columnGroups;
+  const legendConfig = block.customData?.legendConfig;
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLHeadingElement>) => {
     if (isExport) return;
@@ -76,7 +78,7 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
 
   const handleRemoveColumn = (colKey: string) => {
     if (isExport || columns.length <= 1) return;
-    updateBlock(pageId, block.id, removeLegacyTableColumn(block, columns, colKey));
+    updateBlock(pageId, block.id, { tableColumns: columns.filter((c) => c.key !== colKey) });
   };
 
   const handleAddRow = () => {
@@ -110,16 +112,28 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
     >
       {/* Header Técnico */}
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
-        <h3
-          data-printable-field="title"
-          contentEditable={!isExport}
-          suppressContentEditableWarning
-          onBlur={handleTitleBlur}
-          className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
-        >
-          <Grid3X3 className="w-3.5 h-3.5 text-[#003366]" />
-          <span>{block.title || 'TABELA PERSONALIZADA DE ESPECIFICAÇÕES'}</span>
-        </h3>
+        <div>
+          {block.badgeText && (
+            <span className="text-[8.5px] font-black uppercase tracking-wider text-[#003366] bg-blue-50 px-1.5 py-0.5 border border-blue-200 mb-0.5 inline-block">
+              {block.badgeText}
+            </span>
+          )}
+          <h3
+            data-printable-field="title"
+            contentEditable={!isExport}
+            suppressContentEditableWarning
+            onBlur={handleTitleBlur}
+            className="text-xs font-bold text-slate-900 uppercase tracking-wider outline-none focus:bg-slate-100 rounded-none px-1 flex items-center gap-1.5 cursor-text"
+          >
+            <Grid3X3 className="w-3.5 h-3.5 text-[#003366]" />
+            <span>{block.title || 'TABELA PERSONALIZADA DE ESPECIFICAÇÕES'}</span>
+          </h3>
+          {block.subtitle && (
+            <p className="text-[9.5px] text-slate-500 font-sans mt-0.5 px-1">
+              {block.subtitle}
+            </p>
+          )}
+        </div>
 
         {!isExport && (
           <button
@@ -144,6 +158,9 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
         rows={rows}
         getProduct={getProduct}
         family={family}
+        density={density}
+        columnGroups={columnGroups}
+        legendConfig={legendConfig}
         isEditable={!isExport}
         onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
         onRemoveRow={handleRemoveRow}

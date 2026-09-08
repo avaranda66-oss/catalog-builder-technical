@@ -16,8 +16,9 @@ export interface ColumnGroupConfig {
 interface TechnicalTableProps {
   columns: TableColumnConfig[];
   rows: CatalogTableRow[];
-  getProduct: (id: string) => Product | undefined;
+  getProduct?: (id: string) => Product | undefined;
   family?: TableVisualFamily;
+  density?: 'compact' | 'regular' | 'spacious';
   columnGroups?: ColumnGroupConfig[];
   legendConfig?: TableLegendConfig;
   isEditable?: boolean;
@@ -35,8 +36,9 @@ interface TechnicalTableProps {
 export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   columns,
   rows,
-  getProduct,
+  getProduct = () => undefined,
   family = 'monochrome',
+  density = 'compact',
   columnGroups,
   legendConfig,
   isEditable = true,
@@ -53,6 +55,11 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   const tokens = TABLE_VISUAL_FAMILIES[family] || TABLE_VISUAL_FAMILIES.monochrome;
   const visibleColumns = columns.filter((c) => c.visible !== false);
 
+  const isCompact = density === 'compact';
+  const tableFontSize = isCompact ? 'text-[10px]' : 'text-[11px]';
+  const headerPadding = isCompact ? 'py-1.5 px-2' : 'py-2 px-2.5';
+  const cellPadding = isCompact ? 'py-1 px-2' : 'py-1.5 px-2.5';
+
   // Legenda é opcional — o estado inicial vem do config externo (default: oculta)
   const [showLegend, setShowLegend] = useState(legendConfig?.showLegend ?? false);
 
@@ -65,7 +72,7 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
   return (
     <div className={`w-full overflow-hidden rounded-none select-none ${className}`}>
       <div className={`overflow-x-auto ${tokens.borderOuter} bg-white rounded-none shadow-none`}>
-        <table className="w-full text-left border-collapse text-[11px] font-sans">
+        <table className={`w-full text-left border-collapse ${tableFontSize} font-sans`}>
           {/* Cabeçalho de Grupos Superiores (Opcional) */}
           {columnGroups && columnGroups.length > 0 && (
             <thead>
@@ -90,8 +97,8 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
               {visibleColumns.map((col) => (
                 <th
                   key={col.key}
-                  className="py-2 px-2.5 border-r border-slate-300/80 last:border-r-0 group relative select-none"
-                  style={{ width: col.width ? `${col.width}px` : 'auto' }}
+                  className={`${headerPadding} border-r border-slate-300/80 last:border-r-0 group relative select-none`}
+                  style={{ width: col.width ? (typeof col.width === 'number' ? `${col.width}px` : col.width) : 'auto' }}
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span
@@ -128,6 +135,29 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
           {/* Linhas de Dados */}
           <tbody className="divide-y divide-slate-200">
             {rows.map((row, idx) => {
+              const isSection = row.kind === 'section' || (row as any).isSection === true || row.localOverrides?._isSection === 'true';
+
+              if (isSection) {
+                const sectionTitle =
+                  row.localOverrides?._sectionTitle ||
+                  (row.localOverrides && Object.values(row.localOverrides)[0]) ||
+                  row.customNotes ||
+                  '';
+                return (
+                  <tr
+                    key={row.id}
+                    className={`${tokens.sectionBg || 'bg-slate-100/90 border-y border-slate-300'} select-none`}
+                  >
+                    <td
+                      colSpan={visibleColumns.length + (isEditable && onRemoveRow ? 1 : 0)}
+                      className={`py-1 px-2.5 text-[9.5px] font-black uppercase tracking-wider ${tokens.sectionTextColor || 'text-slate-900'}`}
+                    >
+                      {sectionTitle}
+                    </td>
+                  </tr>
+                );
+              }
+
               const product = row.productRefId ? getProduct(row.productRefId) : undefined;
               const isEven = idx % 2 === 0;
 
@@ -146,10 +176,11 @@ export const TechnicalTable: React.FC<TechnicalTableProps> = ({
                       <td
                         key={col.key}
                         data-printable-field={`row_${row.id}_ov_${col.key}`}
-                        className="py-1.5 px-2.5 border-r border-slate-200 last:border-r-0 align-middle"
+                        className={`${cellPadding} border-r border-slate-200 last:border-r-0 align-middle`}
                       >
                         <TechnicalCell
                           value={effectiveVal}
+                          align={col.align}
                           divergence={divergence || undefined}
                           isEditable={isEditable}
                           onBlur={(newVal) => onUpdateCell?.(row.id, col.key, newVal)}

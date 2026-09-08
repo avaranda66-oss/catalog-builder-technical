@@ -26,6 +26,8 @@ export interface TableStyleTokens {
   headerFontWeight: string;
   zebraBg: string;
   accentColor: string;
+  sectionBg: string;
+  sectionTextColor: string;
 }
 
 export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> = {
@@ -40,7 +42,9 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
     headerTextColor: 'text-slate-950',
     headerFontWeight: 'font-bold uppercase tracking-wider',
     zebraBg: 'bg-slate-50/60',
-    accentColor: '#1e293b'
+    accentColor: '#1e293b',
+    sectionBg: 'bg-slate-100/90 border-y border-slate-300',
+    sectionTextColor: 'text-slate-900'
   },
 
   // 2. Additel Style: Precision grid and metrology blue
@@ -54,7 +58,9 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
     headerTextColor: 'text-white',
     headerFontWeight: 'font-extrabold uppercase tracking-wide',
     zebraBg: 'bg-blue-50/30',
-    accentColor: '#003366'
+    accentColor: '#003366',
+    sectionBg: 'bg-blue-100/80 border-y border-blue-300',
+    sectionTextColor: 'text-[#003366]'
   },
 
   // 3. Presys Style: Family bar and technical lines
@@ -68,7 +74,9 @@ export const TABLE_VISUAL_FAMILIES: Record<TableVisualFamily, TableStyleTokens> 
     headerTextColor: 'text-slate-900',
     headerFontWeight: 'font-bold uppercase tracking-wider',
     zebraBg: 'bg-slate-50/50',
-    accentColor: '#003366'
+    accentColor: '#003366',
+    sectionBg: 'bg-slate-200/90 border-y border-slate-300',
+    sectionTextColor: 'text-slate-900'
   }
 };
 

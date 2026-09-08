@@ -85,6 +85,7 @@ export interface TableColumnConfig {
   width?: number;
   isCustom?: boolean;
   type?: 'text' | 'number' | 'badge';
+  align?: 'left' | 'center' | 'right';
 }
 
 export interface CatalogCellBinding {
@@ -109,6 +110,7 @@ export interface CatalogTableRow {
   cellBindings?: Record<string, CatalogCellBinding>;
   customNotes?: string;
   order?: number;
+  kind?: 'data' | 'header' | 'footer' | 'divider' | 'section';
 }
 
 export interface FeatureItem {
