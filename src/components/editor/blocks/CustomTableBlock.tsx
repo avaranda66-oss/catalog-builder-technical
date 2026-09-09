@@ -117,6 +117,26 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
       }}
       className={`relative ${isSelected && !isExport ? 'ring-2 ring-blue-600' : ''}`}
     >
+      {/* Ações Editor-Only (Fora do Measure Root Físico) */}
+      {!isExport && (
+        <div className="flex items-center justify-end mb-1 no-print" data-editor-action="true">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddColumn();
+            }}
+            className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors"
+            data-editor-action="true"
+            title="Adicionar coluna"
+          >
+            <Columns className="w-3 h-3" />
+            <span>+ Coluna</span>
+          </button>
+        </div>
+      )}
+
+      {/* Printable Measure Root (Fisicamente Fiel ao Export/PDF, incluindo padding e borda) */}
       <div
         data-a4-measure-root="true"
         className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
@@ -147,22 +167,6 @@ export const CustomTableBlock: React.FC<CustomTableBlockProps> = ({
               </p>
             )}
           </div>
-
-          {!isExport && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddColumn();
-              }}
-              className="flex items-center gap-1 text-[9px] font-bold text-slate-700 hover:text-[#003366] px-2 py-0.5 border border-slate-300 rounded-none bg-slate-50 transition-colors no-print"
-              data-editor-action="true"
-              title="Adicionar coluna"
-            >
-              <Columns className="w-3 h-3" />
-              <span>+ Coluna</span>
-            </button>
-          )}
         </div>
 
         {/* Motor Unificado de Tabela */}

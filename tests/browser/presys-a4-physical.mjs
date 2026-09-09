@@ -240,6 +240,28 @@ const run = async () => {
     await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
     const delayedImageEvidence = await readPhysicalEvidence(page);
 
+    // Prova de Asset / Imagem já falhada (Already-Failed Image Determinism)
+    await page.getByRole('button', { name: 'TA-25N' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-a4-physical-proof]')?.getAttribute('data-proof-model') === 'TA-25N');
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    await page.getByRole('button', { name: 'Imagem com falha' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    const failedImageEvidence = await readPhysicalEvidence(page);
+
+    // Prova de Blocos Malformados (Corruption Fail-Closed)
+    await page.getByRole('button', { name: 'Blocos malformados' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-a4-physical-proof]')?.getAttribute('data-proof-model') === 'Legacy');
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    const malformedEvidence = await readPhysicalEvidence(page);
+
+    // Prova de Seção Terminal (Malformed Table Structure Fail-Closed)
+    await page.getByRole('button', { name: 'TA-25N' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-a4-physical-proof]')?.getAttribute('data-proof-model') === 'TA-25N');
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    await page.getByRole('button', { name: 'Seção terminal' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    const terminalSectionEvidence = await readPhysicalEvidence(page);
+
     const failures = evidence.flatMap((entry) => entry.pages.filter((physicalPage) => physicalPage.status !== 'PASS'));
     const rowDefects = evidence.filter((entry) => entry.rowConservation.missingRows.length || entry.rowConservation.duplicateRows.length);
     const blocked = evidence.filter((entry) => entry.layoutState !== 'ready' || entry.layoutBlockCount !== 0);
@@ -250,6 +272,9 @@ const run = async () => {
       evidence,
       legacyEvidence,
       delayedImageEvidence,
+      failedImageEvidence,
+      malformedEvidence,
+      terminalSectionEvidence,
       dynamicDogfood: {
         baselinePageCount,
         canonicalPageCount,
@@ -276,7 +301,17 @@ const run = async () => {
         pageCountAfterDelete,
         afterDeleteEvidence
       },
-      summary: { failures: failures.length, rowDefects: rowDefects.length, blockedCatalogs: blocked.length }
+      summary: {
+        failures: failures.length,
+        rowDefects: rowDefects.length,
+        blockedCatalogs: blocked.length,
+        adversarialGating: {
+          delayedImageReady: delayedImageEvidence.layoutState === 'ready',
+          failedImageReady: failedImageEvidence.layoutState === 'ready',
+          malformedBlocked: malformedEvidence.layoutBlockCount > 0,
+          terminalSectionBlocked: terminalSectionEvidence.layoutBlockCount > 0
+        }
+      }
     };
     await fs.mkdir(evidenceDirR13, { recursive: true });
     await fs.writeFile(path.join(evidenceDir, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
@@ -312,6 +347,32 @@ const run = async () => {
     }
     if (pageCountAfterDelete > smartPageCount || afterDeleteEvidence.rowConservation.missingRows.length || afterDeleteEvidence.rowConservation.duplicateRows.length) {
       throw new Error('Deleting dynamic rows did not reflow safely.');
+    }
+
+    // Semantic assertions for adversarial proof fixtures
+    if (!legacyEvidence.pages.length) {
+      throw new Error('Legacy catalog failed to render any pages (white-screen regression).');
+    }
+    if (delayedImageEvidence.layoutState !== 'ready' || delayedImageEvidence.layoutBlockCount !== 0) {
+      throw new Error(`Delayed image failed to reach ready publication state: ${delayedImageEvidence.layoutState} (blocked: ${delayedImageEvidence.layoutBlockCount})`);
+    }
+    if (failedImageEvidence.layoutState !== 'ready' || failedImageEvidence.layoutBlockCount !== 0) {
+      throw new Error(`Already-failed image did not resolve deterministically to ready state: ${failedImageEvidence.layoutState}`);
+    }
+    if (!malformedEvidence.pages.length) {
+      throw new Error('Malformed blocks catalog caused white screen / fatal render failure.');
+    }
+    if (!malformedEvidence.issues.some((issue) => issue.code === 'MALFORMED_PAGE_BLOCKS')) {
+      throw new Error('Malformed blocks did not produce MALFORMED_PAGE_BLOCKS preflight issue.');
+    }
+    if (malformedEvidence.layoutState === 'ready' && malformedEvidence.layoutBlockCount === 0) {
+      throw new Error('Malformed blocks catalog was allowed to publish (should be BLOCKED).');
+    }
+    if (!terminalSectionEvidence.issues.some((issue) => issue.code === 'MALFORMED_TABLE_STRUCTURE')) {
+      throw new Error('Terminal section table did not produce MALFORMED_TABLE_STRUCTURE preflight issue.');
+    }
+    if (terminalSectionEvidence.layoutState === 'ready' && terminalSectionEvidence.layoutBlockCount === 0) {
+      throw new Error('Terminal section table was allowed to publish (should be BLOCKED).');
     }
   } finally {
     await browser.close();

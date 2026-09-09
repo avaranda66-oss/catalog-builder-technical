@@ -62,7 +62,7 @@ export function auditLayoutPreflight(
   // 1. Verificação Estática de Exclusividade de Capa e Formato dos Blocos
   catalog.pages.forEach((page, idx) => {
     const pageNumber = idx + 1;
-    if (!Array.isArray(page.blocks)) {
+    if (page.blocks !== undefined && page.blocks !== null && !Array.isArray(page.blocks)) {
       issues.push({
         code: 'MALFORMED_PAGE_BLOCKS',
         severity: 'block',
@@ -71,7 +71,7 @@ export function auditLayoutPreflight(
       });
       return;
     }
-    const blocks = page.blocks;
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
     const coverBlock = blocks.find((b) => b.type === 'full_page_cover');
 
     if (coverBlock && blocks.length > 1) {
@@ -105,7 +105,10 @@ export function auditLayoutPreflight(
       'LAYOUT_MEASUREMENT_MISSING',
       'ROW_CLIPPED',
       'TABLE_ROW_LOSS',
-      'TABLE_ROW_DUPLICATION'
+      'TABLE_ROW_DUPLICATION',
+      'MALFORMED_TABLE_STRUCTURE',
+      'MALFORMED_PAGE_BLOCKS',
+      'LAYOUT_UNSTABLE'
     ]);
 
     for (const unres of plan.unresolvedIssues) {

@@ -964,7 +964,9 @@ export function catalogRowToCatalog(row: any): Catalog {
     pages: Array.isArray(payload.pages)
       ? payload.pages.map((page: any) => ({
           ...page,
-          blocks: Array.isArray(page?.blocks) ? page.blocks : []
+          blocks: (page?.blocks === undefined || page?.blocks === null)
+            ? []
+            : page.blocks
         }))
       : []
   };
@@ -990,7 +992,9 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
       pages: Array.isArray(layoutConfig.pages)
         ? layoutConfig.pages.map((page: any) => ({
             ...page,
-            blocks: Array.isArray(page?.blocks) ? page.blocks : []
+            blocks: (page?.blocks === undefined || page?.blocks === null)
+              ? []
+              : page.blocks
           }))
         : []
     } : {

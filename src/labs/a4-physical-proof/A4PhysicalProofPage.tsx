@@ -192,6 +192,62 @@ export const A4PhysicalProofPage: React.FC = () => {
     }));
   };
 
+  const addFailedImage = () => {
+    beginMutation();
+    setCatalog((current) => ({
+      ...current,
+      version: current.version + 1,
+      updatedAt: new Date().toISOString(),
+      pages: current.pages.map((p, idx) => idx === 1 ? {
+        ...p,
+        blocks: [
+          {
+            id: `failed-img-${Date.now()}`,
+            type: 'image',
+            customData: {
+              url: 'data:image/svg+xml;utf8,<svg-malformed-asset-fail-immediately'
+            }
+          },
+          ...p.blocks
+        ]
+      } : p)
+    }));
+  };
+
+  const selectMalformedBlocks = () => {
+    beginMutation();
+    setModel('Legacy' as any);
+    setCatalog({
+      id: 'malformed-blocks-catalog',
+      title: 'Malformed Blocks Catalog',
+      themeId: 'default',
+      pages: [{
+        id: 'malformed-p1',
+        pageNumber: 1,
+        pageType: 'technical',
+        title: 'Malformed Page',
+        blocks: 'INVALID_STRING_BLOCKS' as any
+      }],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      version: 1
+    });
+  };
+
+  const addTerminalSection = () => {
+    beginMutation();
+    setCatalog((current) => updateLongestTable(current, (block) => {
+      const rows = block.tableRows ?? [];
+      const terminalSection = {
+        id: `terminal-section-${Date.now()}`,
+        order: rows.length,
+        kind: 'section' as const,
+        label: 'Seção Terminal Inválida'
+      };
+      return { ...block, tableRows: [...rows, terminalSection] };
+    }));
+  };
+
   return (
     <div
       data-a4-physical-proof
@@ -205,6 +261,7 @@ export const A4PhysicalProofPage: React.FC = () => {
           <button key={candidate} type="button" onClick={() => selectModel(candidate)}>{candidate}</button>
         ))}
         <button type="button" onClick={selectLegacy}>Legacy</button>
+        <button type="button" onClick={selectMalformedBlocks}>Blocos malformados</button>
         <button type="button" onClick={() => setMode('smart')}>Inteligente</button>
         <button type="button" onClick={() => setMode('manual')}>Manual</button>
         <button type="button" onClick={addRows}>Adicionar linhas</button>
@@ -213,6 +270,8 @@ export const A4PhysicalProofPage: React.FC = () => {
         <button type="button" onClick={addTallCell}>Editar célula longa</button>
         <button type="button" onClick={addLongCode}>Código horizontal adversarial</button>
         <button type="button" onClick={addDelayedImage}>Imagem atrasada</button>
+        <button type="button" onClick={addFailedImage}>Imagem com falha</button>
+        <button type="button" onClick={addTerminalSection}>Seção terminal</button>
         <output
           data-proof-status
           data-layout-ready={Boolean(layout?.canPublish)}
