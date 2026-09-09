@@ -14,6 +14,9 @@ import { useTranslationStore } from './stores/useTranslationStore';
 const A4PhysicalProofPage = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true'
   ? React.lazy(() => import('./labs/a4-physical-proof/A4PhysicalProofPage'))
   : null;
+const A4RuntimeBoundaryProofPage = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true'
+  ? React.lazy(() => import('./labs/a4-runtime-boundary-proof/A4RuntimeBoundaryProofPage'))
+  : null;
 
 if (typeof window !== 'undefined') {
   const isDebugE2E = import.meta.env.DEV || import.meta.env.VITE_E2E_BUILD === 'true';
@@ -32,10 +35,17 @@ if (typeof window !== 'undefined') {
 const isA4PhysicalProofRoute = typeof window !== 'undefined'
   && window.location.pathname === '/__a4-physical-proof'
   && A4PhysicalProofPage;
+const isA4RuntimeBoundaryProofRoute = typeof window !== 'undefined'
+  && window.location.pathname === '/__a4-runtime-boundary-proof'
+  && A4RuntimeBoundaryProofPage;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isA4PhysicalProofRoute && A4PhysicalProofPage ? (
+    {isA4RuntimeBoundaryProofRoute && A4RuntimeBoundaryProofPage ? (
+      <React.Suspense fallback={<div>Carregando prova do limite de runtime...</div>}>
+        <A4RuntimeBoundaryProofPage />
+      </React.Suspense>
+    ) : isA4PhysicalProofRoute && A4PhysicalProofPage ? (
       <React.Suspense fallback={<div>Carregando prova física A4...</div>}>
         <A4PhysicalProofPage />
       </React.Suspense>

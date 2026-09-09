@@ -15,6 +15,7 @@ const gitHeadSha = (() => {
 const baseUrl = process.env.A4_PROOF_BASE_URL || 'http://127.0.0.1:4174';
 const evidenceDir = path.join(root, 'docs', 'qa', 'evidence', 'a4-flow-r1-1');
 const evidenceDirR13 = path.join(root, 'docs', 'qa', 'evidence', 'a4-flow-r1-3');
+const evidenceDirR132 = path.join(root, 'docs', 'qa', 'evidence', 'a4-flow-r1-3-2');
 const models = ['TA-25N', 'TA-35N', 'TA-50N'];
 
 const waitForServer = async () => {
@@ -124,9 +125,17 @@ const run = async () => {
   }
   const context = await browser.newContext({ viewport: { width: 1440, height: 1200 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
-  page.on('pageerror', (error) => console.error('[browser pageerror]', error));
+  const runtimeEditorErrors = [];
+  let captureRuntimeEditorErrors = false;
+  page.on('pageerror', (error) => {
+    console.error('[browser pageerror]', error);
+    if (captureRuntimeEditorErrors) runtimeEditorErrors.push(`pageerror: ${error.message}`);
+  });
   page.on('console', (message) => {
-    if (message.type() === 'error') console.error('[browser console]', message.text());
+    if (message.type() === 'error') {
+      console.error('[browser console]', message.text());
+      if (captureRuntimeEditorErrors) runtimeEditorErrors.push(`console: ${message.text()}`);
+    }
   });
   const evidence = [];
 
@@ -262,6 +271,35 @@ const run = async () => {
     await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
     const terminalSectionEvidence = await readPhysicalEvidence(page);
 
+    // R1.3.2: persisted malformed source -> real hydration/store -> production editor components.
+    const runtimeBoundaryEvidence = [];
+    await fs.mkdir(evidenceDirR132, { recursive: true });
+    captureRuntimeEditorErrors = true;
+    for (const fixtureKind of ['string', 'object']) {
+      await page.goto(`${baseUrl}/__a4-runtime-boundary-proof?kind=${fixtureKind}`, { waitUntil: 'domcontentloaded' });
+      const proofRoot = page.locator('[data-a4-runtime-boundary-proof]');
+      await proofRoot.waitFor();
+      await page.locator('#canvas-scroll-container').waitFor();
+      await page.getByText(`Folha 1: Malformed ${fixtureKind} source`).waitFor();
+      const fixtureEvidence = await proofRoot.evaluate((element) => ({
+        fixtureKind: element.getAttribute('data-fixture-kind'),
+        runtimeSafe: element.getAttribute('data-runtime-safe') === 'true',
+        canPublish: element.getAttribute('data-can-publish') === 'true',
+        diagnosticCount: Number(element.getAttribute('data-diagnostic-count') || 0),
+        status: document.querySelector('[data-runtime-boundary-status]')?.textContent,
+        issues: JSON.parse(document.querySelector('[data-runtime-boundary-status]')?.getAttribute('data-proof-issues') || '[]'),
+        thumbnailAlive: Boolean(document.querySelector('aside')),
+        canvasAlive: Boolean(document.querySelector('#canvas-scroll-container')),
+        renderedPages: document.querySelectorAll('[data-a4-page]').length
+      }));
+      runtimeBoundaryEvidence.push(fixtureEvidence);
+      await page.screenshot({
+        path: path.join(evidenceDirR132, `production-editor-malformed-${fixtureKind}.png`),
+        fullPage: true
+      });
+    }
+    captureRuntimeEditorErrors = false;
+
     const failures = evidence.flatMap((entry) => entry.pages.filter((physicalPage) => physicalPage.status !== 'PASS'));
     const rowDefects = evidence.filter((entry) => entry.rowConservation.missingRows.length || entry.rowConservation.duplicateRows.length);
     const blocked = evidence.filter((entry) => entry.layoutState !== 'ready' || entry.layoutBlockCount !== 0);
@@ -275,6 +313,8 @@ const run = async () => {
       failedImageEvidence,
       malformedEvidence,
       terminalSectionEvidence,
+      runtimeBoundaryEvidence,
+      runtimeEditorErrors,
       dynamicDogfood: {
         baselinePageCount,
         canonicalPageCount,
@@ -309,13 +349,23 @@ const run = async () => {
           delayedImageReady: delayedImageEvidence.layoutState === 'ready',
           failedImageReady: failedImageEvidence.layoutState === 'ready',
           malformedBlocked: malformedEvidence.layoutBlockCount > 0,
-          terminalSectionBlocked: terminalSectionEvidence.layoutBlockCount > 0
+          terminalSectionBlocked: terminalSectionEvidence.layoutBlockCount > 0,
+          runtimeBoundarySafe: runtimeBoundaryEvidence.every((entry) => (
+            entry.runtimeSafe
+            && !entry.canPublish
+            && entry.diagnosticCount > 0
+            && entry.thumbnailAlive
+            && entry.canvasAlive
+            && entry.renderedPages > 0
+            && entry.issues.some((issue) => issue.code === 'MALFORMED_PAGE_BLOCKS')
+          ))
         }
       }
     };
     await fs.mkdir(evidenceDirR13, { recursive: true });
     await fs.writeFile(path.join(evidenceDir, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
     await fs.writeFile(path.join(evidenceDirR13, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
+    await fs.writeFile(path.join(evidenceDirR132, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
 
     if (failures.length || rowDefects.length || blocked.length) {
       throw new Error(`Physical acceptance failed: ${JSON.stringify(report.summary)}`);
@@ -373,6 +423,12 @@ const run = async () => {
     }
     if (terminalSectionEvidence.layoutState === 'ready' && terminalSectionEvidence.layoutBlockCount === 0) {
       throw new Error('Terminal section table was allowed to publish (should be BLOCKED).');
+    }
+    if (runtimeEditorErrors.length > 0) {
+      throw new Error(`Production editor emitted uncaught/React errors for malformed source: ${runtimeEditorErrors.join(' | ')}`);
+    }
+    if (!report.summary.adversarialGating.runtimeBoundarySafe) {
+      throw new Error(`Production editor runtime-boundary proof failed: ${JSON.stringify(runtimeBoundaryEvidence)}`);
     }
   } finally {
     await browser.close();

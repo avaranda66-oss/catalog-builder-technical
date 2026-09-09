@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Catalog, CatalogPreset } from '@/domain/catalog.schema';
+import { Catalog, CatalogPreset, hydrateCatalogSource } from '@/domain/catalog.schema';
 import { Product, ProductFamily } from '@/domain/product.schema';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -953,7 +953,7 @@ export function catalogRowToCatalog(row: any): Catalog {
     ? Number(row.version)
     : (payload.version ?? 1);
 
-  return {
+  return hydrateCatalogSource({
     ...payload,
     id: row.id || payload.id,
     title: row.name || row.title || payload.title || 'Catálogo Sem Título',
@@ -961,15 +961,8 @@ export function catalogRowToCatalog(row: any): Catalog {
     createdAt: row.created_at || row.createdAt || payload.createdAt || new Date().toISOString(),
     updatedAt: row.updated_at || row.updatedAt || payload.updatedAt || new Date().toISOString(),
     themeId: payload.themeId || 'default-technical',
-    pages: Array.isArray(payload.pages)
-      ? payload.pages.map((page: any) => ({
-          ...page,
-          blocks: (page?.blocks === undefined || page?.blocks === null)
-            ? []
-            : page.blocks
-        }))
-      : []
-  };
+    pages: Array.isArray(payload.pages) ? payload.pages : []
+  }).catalog;
 }
 
 export function templateRowToCatalogPreset(row: any): CatalogPreset {
@@ -978,6 +971,24 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
   const version = typeof row.version === 'number' ? row.version : (layoutConfig.version || 1);
   const resolvedName = row.name || layoutConfig.title || 'Template Sem Nome';
 
+  const catalog = layoutConfig.pages
+    ? hydrateCatalogSource({
+        ...layoutConfig,
+        title: resolvedName,
+        version,
+        pages: Array.isArray(layoutConfig.pages) ? layoutConfig.pages : []
+      }).catalog
+    : {
+        id: row.id,
+        title: resolvedName,
+        subtitle: '',
+        themeId: 'default-technical',
+        pages: [],
+        version,
+        createdAt: row.created_at || new Date().toISOString(),
+        updatedAt: row.updated_at || row.created_at || new Date().toISOString()
+      };
+
   return {
     id: row.id,
     name: resolvedName,
@@ -985,28 +996,7 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
     category: designTokens.category || 'layout_template',
     isSystem: row.is_system ?? false,
     version,
-    catalog: layoutConfig.pages ? {
-      ...layoutConfig,
-      title: resolvedName,
-      version,
-      pages: Array.isArray(layoutConfig.pages)
-        ? layoutConfig.pages.map((page: any) => ({
-            ...page,
-            blocks: (page?.blocks === undefined || page?.blocks === null)
-              ? []
-              : page.blocks
-          }))
-        : []
-    } : {
-      id: row.id,
-      title: resolvedName,
-      subtitle: '',
-      themeId: 'default-technical',
-      pages: [],
-      version,
-      createdAt: row.created_at || new Date().toISOString(),
-      updatedAt: row.updated_at || row.created_at || new Date().toISOString()
-    },
+    catalog,
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || row.created_at || new Date().toISOString()
   };
