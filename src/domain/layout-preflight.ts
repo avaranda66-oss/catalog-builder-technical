@@ -61,11 +61,14 @@ export function auditLayoutPreflight(
 
   for (const diagnostic of catalog.sourceDiagnostics ?? []) {
     if (diagnostic.code !== 'MALFORMED_PAGE_BLOCKS') continue;
+    const currentPageIndex = catalog.pages.findIndex((page) => page.id === diagnostic.pageId);
+    if (currentPageIndex === -1) continue;
+    const currentPageNumber = currentPageIndex + 1;
     issues.push({
       code: diagnostic.code,
       severity: 'block',
-      pageNumber: diagnostic.pageNumber,
-      message: diagnostic.message
+      pageNumber: currentPageNumber,
+      message: `Página ${currentPageNumber} possui corrupção de origem não resolvida em blocks (${diagnostic.receivedType}); o runtime usa uma lista vazia segura.`
     });
   }
 

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-08T22:47:04.122Z",
-  "gitHeadSha": "157f63f26e96648fc7c703f91dadb4e22f12f919",
+  "generatedAt": "2026-09-09T03:29:36.386Z",
+  "gitHeadSha": "2153e6ea8e34115289fd351cdae3b3c5a97b2f3b",
   "baseUrl": "http://127.0.0.1:4174",
   "evidence": [
     {
@@ -1474,7 +1474,7 @@
           "code": "MALFORMED_PAGE_BLOCKS",
           "severity": "block",
           "pageNumber": 1,
-          "message": "Página 1 continha estrutura de blocos malformada (string); o runtime recebeu uma lista vazia segura."
+          "message": "Página 1 possui corrupção de origem não resolvida em blocks (string); o runtime usa uma lista vazia segura."
         },
         {
           "code": "LAYOUT_MEASUREMENT_MISSING",
@@ -1504,7 +1504,7 @@
           "code": "MALFORMED_PAGE_BLOCKS",
           "severity": "block",
           "pageNumber": 1,
-          "message": "Página 1 continha estrutura de blocos malformada (object); o runtime recebeu uma lista vazia segura."
+          "message": "Página 1 possui corrupção de origem não resolvida em blocks (object); o runtime usa uma lista vazia segura."
         },
         {
           "code": "LAYOUT_MEASUREMENT_MISSING",
