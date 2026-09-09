@@ -13,7 +13,7 @@ Editor profissional de páginas finitas, com posicionamento livre entre objetos 
 
 Fluxo principal: Meus catálogos → Novo a partir de modelo → Editar páginas → Conferir pendências → Salvar → Pré-visualizar → Baixar PDF. “Modelos” são páginas/catálogos editáveis; “estilos de tabela” só alteram aparência; “componentes” inserem composições reutilizáveis.
 
-FATHER-USABLE V1 inclui texto rico, imagem, tabela, formas simples, linhas, grupos, estilos, presets/templates, Undo/Redo, recuperação local, salvamento remoto, PDF, AI Translation e basic read-only sharing. A experiência para usuário não técnico usa termos editoriais, sem exibir schema, resolver, binding, CAS ou IDs. FOUNDATION-PROOF-01 implementa apenas o subconjunto necessário para provar a fundação editorial e não é ainda essa experiência de produto.
+FATHER-USABLE V1 inclui texto rico, imagem, tabela, formas simples, linhas, grupos, estilos, presets/templates, Undo/Redo, recuperação local, salvamento remoto, PDF, AI Translation e basic read-only sharing. **Undo/Redo** e **local recovery** são `V1 DISPOSITION: MUST-CANDIDATE` / `DECISION STATUS: PROPOSED`: o primeiro garante reversão segura de ações editoriais e o segundo protege trabalho ainda não confirmado contra reload/crash/interrupção; nenhum deles é inferido de save/reopen. A experiência para usuário não técnico usa termos editoriais, sem exibir schema, resolver, binding, CAS ou IDs. FOUNDATION-PROOF-01 implementa apenas o subconjunto necessário para provar a fundação editorial e não é ainda essa experiência de produto.
 
 ## Canvas e interface propostos
 
@@ -128,6 +128,40 @@ Regra inviolável: **MEASUREMENT NEVER MUTATES AUTHORED FRAME.** Measurement pod
 Resolver estilo: defaults do documento → estilo do objeto → overrides específicos. Tabelas detalham precedência própria. Font-size/borda em pt, dimensões e padding em mm, line-height como multiplicador; opacity entre 0 e 1. Cores RGB hex validadas ou token resolvido; sem CSS livre. Gradientes e sombras não bloqueiam FATHER-USABLE V1; somente entram após prova de impressão.
 
 Regras: nenhuma referência quebrada; IDs únicos por documento; grupos só na mesma página, sem aninhamento ou membro em dois grupos; largura/altura positivas e finitas. Cruzar safe area gera WARNING sem reposicionamento; qualquer objeto fora dos limites físicos gera ERROR. Número da página é derivado da ordem, não persistido em textos fixos: usar campo dinâmico pageNumber/pageCount no renderer.
+
+## Aritmética física determinística — FOUNDATION REQUIRED, PROPOSED
+
+Toda geometria contratada usa milímetros na API/editor, mas cálculo e igualdade geométrica usam uma unidade inteira canônica. Definição: `PHYSICAL_UNIT_MM = 0.0001 mm` (um décimo de micrômetro; `10_000` unidades por mm). Essa escala preserva exatamente valores autorais com quatro casas decimais, inclusive o valor histórico `8.4667 mm` quando ele aparece como dado, é muito mais fina que a resolução física relevante de impressão/tela e mantém dimensões editoriais muito abaixo de `Number.MAX_SAFE_INTEGER` quando representadas como inteiros. Não usar `BigInt`, epsilon local ou acumulação binária em mm para decidir geometria.
+
+Contrato canônico:
+
+1. **Entrada de domínio:** campos públicos continuam em mm e devem ser `number` finito. `Column.flex.weight` é inteiro positivo seguro; peso fracionário não entra no solver canônico e deve ser normalizado por comando explícito antes dele.
+2. **Representação interna:** `PhysicalLengthU` é inteiro seguro em unidades de `0.0001 mm`. Todas as somas, subtrações, limites, comparações e conservação do solver usam `U`. Toda soma/produto intermediário também deve permanecer `Number.isSafeInteger`; se não permanecer, retornar `PHYSICAL_ARITHMETIC_OVERFLOW / ERROR`, sem fallback float/BigInt local inventado pelo implementador.
+3. **Conversão de mm autoral:** converter o `number` para sua representação decimal ECMAScript, inclusive forma exponencial quando produzida por `Number.prototype.toString`, interpretar os dígitos decimalmente e quantizar para `U` com **round half away from zero** na quinta casa decimal. É proibido `Math.round(mm * 10000 + epsilon)` ou epsilon equivalente. A quantização ocorre na fronteira de comando/importação; measurement nunca regrava frame autoral.
+4. **Medição CSS:** fatos vindos do DOM devem ser lidos no espaço editorial não transformado. CSS px é convertido pela razão exata `1 CSS px = 127/480 mm`; aplicar a razão sobre a representação decimal do valor medido e então a mesma quantização para `U`. `devicePixelRatio`, zoom do editor e pixels físicos não participam.
+5. **Arredondamento do solver:** divisões proporcionais produzem quociente inteiro por floor para a parcela base não negativa; o resto permanece inteiro e é tratado pela regra de resíduo abaixo. Nenhum arredondamento intermediário volta a mm.
+6. **Conservação:** em sucesso, `sum(widthsU) === availableInnerWidthU` exatamente. Se mínimos/fixed excedem a largura, ou máximos impedem preencher a largura exata, retornar `TABLE_WIDTH_INFEASIBLE`.
+7. **Resíduo determinístico:** depois de congelar colunas que atingiram `max`, calcular para cada flex elegível `q = floor(remainingU * weight / totalWeight)` e `r = (remainingU * weight) mod totalWeight`. Distribuir unidades residuais por `r` decrescente; empate pela ordem estável das colunas no modelo. Repetir após qualquer cap, nunca violar min/max. Se nenhuma coluna elegível puder receber o resíduo, falhar com `TABLE_WIDTH_INFEASIBLE`.
+8. **Saída:** converter `U` para mm somente na API/renderização por divisão por `10_000`; serialização de evidência usa decimal exato com no máximo quatro casas. O vetor inteiro `widthsU` é a autoridade de igualdade.
+9. **Igualdade em teste:** geometria normalizada é comparada por igualdade inteira exata; não existe epsilon. Para inputs idênticos, `widthsU` e sua serialização decimal devem ser idênticos independentemente de viewport, zoom ou renderer.
+
+## Igualdade de layout e estabilidade — FOUNDATION REQUIRED, PROPOSED
+
+`LAYOUT_UNSTABLE` compara snapshots de fatos físicos normalizados, nunca `DOMRect` bruto. O renderer produz uma coleção ordenada de `PhysicalLayoutFact`; cada dimensão/posição usa `PhysicalLengthU` do contrato acima. O conjunto mínimo, quando aplicável, é:
+
+```ts
+type PhysicalLayoutFact =
+  | { kind:'page'; pageId:string; widthU:number; heightU:number }
+  | { kind:'object'; pageId:string; objectId:string; xU:number; yU:number; widthU:number; heightU:number }
+  | { kind:'table'; pageId:string; objectId:string; tableId:string; innerWidthU:number; renderedIntrinsicHeightU:number; columnWidthsU:number[] }
+  | { kind:'row'; pageId:string; tableId:string; rowId:string; yU:number; heightU:number }
+  | { kind:'cell'; pageId:string; tableId:string; cellId:string; xU:number; yU:number; widthU:number; heightU:number; intrinsicContentWidthU:number; intrinsicContentHeightU:number; textFlowSignature?:string }
+  | { kind:'annotation'; pageId:string; tableId:string; annotationId:string; xU:number; yU:number; widthU:number; heightU:number; intrinsicContentHeightU:number; textFlowSignature?:string };
+```
+
+`textFlowSignature`, quando há texto que pode quebrar linha, representa a sequência ordenada de fragmentos de linha associada aos IDs/offsets semânticos do conteúdo e às suas caixas normalizadas em `U`; assim uma quebra de linha real não fica invisível só porque a altura externa permaneceu igual. Fatos são ordenados por `kind` e IDs estáveis, nunca por ordem incidental do DOM.
+
+Após `required fonts loaded`, `required assets resolved` e `images decoded successfully`, o runner força a leitura de layout pela própria medição, captura snapshot A, executa preflight somente-leitura e captura snapshot B da mesma árvore/revisão/manifesto sem timer. **STABLE** significa: mesmo conjunto de chaves e igualdade exata de todos os inteiros, listas e `textFlowSignature` normalizados. Qualquer fato ausente/novo ou valor normalizado diferente é `LAYOUT_UNSTABLE / ERROR`. Ruído bruto inferior ao contrato só é estável quando normaliza para os mesmos fatos; não existe tolerância adicional. Mudança real de line flow, altura de row, dimensão intrínseca de imagem, métrica de fonte, bounds ou page assignment é instabilidade. `setTimeout`/sleep nunca prova estabilidade.
 
 Cabeçalhos/rodapés no MVP são composições instanciadas a partir de template, com objetos bloqueados por padrão. Ao inserir/reordenar páginas, somente campos de numeração derivam. “Aplicar cabeçalho a páginas selecionadas” é comando explícito com preview, não vínculo vivo que altera tudo inesperadamente.
 

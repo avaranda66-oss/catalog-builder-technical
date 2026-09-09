@@ -104,19 +104,19 @@ resolveColumns(table, availableInnerWidthMm)
    | { ok: false, code, details }
 ```
 
-Invariantes: cada width > 0; `minWidth` respeitado; fixed respeitado; flex distribui somente espaço restante; arredondamento determinístico; conservação da largura; zero DOM authority. Para o mesmo modelo e largura a saída é independente de viewport, zoom e renderer.
+Invariantes: cada width > 0; `minWidth` respeitado; fixed respeitado; flex distribui somente espaço restante; arredondamento determinístico; conservação da largura; zero DOM authority. Para o mesmo modelo e largura a saída é independente de viewport, zoom e renderer. O solver usa obrigatoriamente `PhysicalLengthU` (`0.0001 mm`) e a normalização definida em D3; `weight` deve ser inteiro positivo seguro; igualdade e conservação são inteiras, sem epsilon. Overflow de qualquer soma/produto inteiro retorna `PHYSICAL_ARITHMETIC_OVERFLOW / ERROR`.
 
 MVP persiste fixed ou flex com min/max. Não existe `auto` persistido que varie de significado entre browsers. “Ajustar ao conteúdo” é ação explícita que mede com fontes prontas, mostra preview e grava larguras fixed. Assim cobre a intenção de auto sem tornar a medição autoridade oculta do documento.
 
-1. Validar largura disponível, min/max, pesos, fixed dentro dos limites; todos finitos e positivos.
+1. Normalizar largura disponível, min/max e fixed para `PhysicalLengthU`; validar limites e `weight` inteiro positivo seguro.
 2. Reservar fixed. Para flex, começar no minMm.
 3. Se fixed + mínimos flex exceder disponível: `TABLE_WIDTH_INFEASIBLE`; não retornar sucesso com coluna zero.
-4. Distribuir o residual entre flex proporcionalmente a weight; congelar as que atingirem max e repetir com as restantes.
+4. Distribuir o residual entre flex proporcionalmente a weight em inteiros; para cada rodada usar `q=floor(remainingU*weight/totalWeight)` e resto inteiro. Congelar as que atingirem max e repetir com as restantes.
 5. Se todas atingirem max e sobrar largura, informar inviabilidade da largura exata. Não inserir espaço invisível na grade nem esticar fixed.
 6. Se só há fixed, a soma deve fechar a largura interna. “Ajustar tabela às colunas” altera o frame explicitamente; “Ajustar colunas à largura” propõe novas larguras respeitando limites.
-7. Cálculo em precisão plena; arredondamento determinístico somente na saída. O resíduo numérico é atribuído de modo estável a flex elegível sem violar limites, preservando a largura disponível dentro da precisão contratada.
+7. Distribuir unidades residuais por resto decrescente; empate pela ordem estável das colunas no modelo. Em sucesso `sum(widthsU) === availableInnerWidthU` exatamente. Converter para mm apenas na fronteira de saída por `/ 10_000`; testes comparam o vetor inteiro, não floats.
 
-Contraexemplo obrigatório: `available = 100 mm`, fixed A = 70, fixed B = 50, flex C min = 20. Resultado: ERROR (`TABLE_WIDTH_INFEASIBLE` ou código equivalente). É proibido retornar valid + warning ou `C = 0`.
+Contraexemplo obrigatório: `available = 100 mm`, fixed A = 70, fixed B = 50, flex C min = 20. Resultado: ERROR `TABLE_WIDTH_INFEASIBLE`. É proibido retornar valid + warning ou `C = 0`.
 
 Arraste de divisor interno preserva largura total e modifica o par adjacente. Preview limitado por min/max; ao soltar, as duas colunas viram fixed nas medidas escolhidas. Se inviável, rejeitar sem alterar. Redimensionar frame preserva fixed e redistribui flex; com todas fixed, orientar “Ajustar colunas à largura”, não inventar escala de fonte.
 
@@ -131,7 +131,7 @@ Não há largura mínima universal de leitura. Preset fornece limites explícito
 - Inserir linha/coluna estritamente dentro de um span o expande e cria células vazias; fora do span desloca a região pelo deslocamento das linhas/colunas, preservando IDs. Inserir imediatamente antes da primeira ou depois da última linha não expande.
 - MVP rejeita excluir/reordenar uma linha/coluna que intersecte uma mescla: `MERGE_INTERSECTION`. Inspector oferece desfazer mesclagem e tentar novamente. Operação conjunta Unmerge + Delete pode ser uma transação explícita, sem silenciosamente transferir valores.
 - Copiar região inteira remapeia IDs e spans; seleção parcial de merge é rejeitada com orientação de selecionar toda a região. Colar TSV em região com merge é rejeitado na V1; valores existentes não são apagados sem transação reversível.
-- Última linha de corpo/última coluna: manter ao menos uma coluna e uma linha de corpo, ou remover a tabela explicitamente. Header vazio não é uma tabela comercial válida.
+- Validação estrutural canônica exige IDs válidos/únicos, ao menos uma coluna, ao menos uma linha total, topologia completa de células para a grade e integridade de spans/`coveredBy`/mesclas. **Nenhuma linha `header` é obrigatória.** Uma tabela só com linhas `body`/`section` pode ser estruturalmente válida. Preset, template ou policy de publicação/conteúdo pode exigir um ou mais headers, mas essa exigência fica fora do Table Engine canônico. Remover a última coluna ou a última linha total requer remover a tabela explicitamente.
 
 Essas regras alteram algumas operações existentes. Reutilizar testes de perda de dados, mas escrever testes novos para a política documentada; não afirmar que o legado já faz tudo isso.
 
@@ -149,4 +149,4 @@ Conteúdo semântico nunca é alterado para caber. `technicalCode` possui polít
 
 ## Provas mínimas
 
-Roundtrip de schema; preservação de IDs e collision-safe cell key; merge/unmerge sem perda; `coveredBy` fail-closed; inserção interior ao span; rejeição de exclusão/reorder conflitante; coluna inviável sem zero; conservação de largura; bordas; `ROW_CONTENT_OVERFLOW`; `TABLE_CONTENT_OVERFLOW`; captions/notes/footnotes participando da geometria; imagem lenta/falha; decimal/código nowrap intacto; três tabelas independentes; Undo atômico; paridade screen/print. As referências e critérios estão no plano de execução.
+Roundtrip de schema; preservação de IDs e collision-safe cell key; merge/unmerge sem perda; `coveredBy` fail-closed; inserção interior ao span; rejeição de exclusão/reorder conflitante; **tabela headerless válida roundtrip/renderiza sem header sintético quando policy permite**; coluna inviável sem zero; conservação inteira exata de largura; bordas; `ROW_CONTENT_OVERFLOW`; `TABLE_CONTENT_OVERFLOW`; captions/notes/footnotes participando da geometria; imagem lenta/falha; decimal/código nowrap intacto; três tabelas independentes; Undo atômico; paridade screen/print. As referências e critérios estão no plano de execução.

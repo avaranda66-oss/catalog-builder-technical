@@ -1,7 +1,7 @@
 # Estado e passagem de contexto
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
@@ -14,11 +14,13 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Repositório: `avaranda66-oss/catalog-builder-technical`.
 - Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
 - Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
+- PR #12: OPEN, NOT MERGED. Head recebido para este follow-up R0.1.1: `eb86bca9357676a19a344313bfea73021168ff5f`.
+- Required GitHub check `Lint, typecheck, tests, build`: SUCCESS em `eb86bca9357676a19a344313bfea73021168ff5f`. Esse é o gate factual do head de entrada desta emenda; o novo head R0.1.1 deve executar o mesmo check antes do handoff final.
 - Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
 - Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
 - VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
 - Pacote: sete documentos temáticos, README e uma foundation proof; a proposta R0.1 documenta a fronteira proof/V1, geometria autoral, contrato de tabelas, severidade, readiness/parity/PDF e promoção do lab para auditoria Principal. Nenhuma dessas decisões está congelada por este PR.
-- Próximo passo após auditoria independente: executar FOUNDATION-PROOF-01. FATHER-USABLE V1 continua produto posterior à proof e inclui AI Translation + basic read-only sharing.
+- Próximo passo após auditoria independente: executar FOUNDATION-PROOF-01. FATHER-USABLE V1 continua produto posterior à proof e inclui Undo/Redo, local recovery, AI Translation e basic read-only sharing como MUST-CANDIDATE — PROPOSED.
 - Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
 
 ## Publication closure evidence
@@ -30,7 +32,7 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - `npm test`: PASS, 196 test files; 2.046 tests passed / 1 skipped.
 - `npm run build`: PASS; 2.292 modules transformed, built in 16.81s; warnings não bloqueantes de imports mistos/chunk >500 kB.
 - Diff safety: production code NO; package NO; lockfile NO; Supabase NO; Legacy runtime NO.
-- GitHub Quality Gate: PENDING until PR execution; local gates are not CI evidence.
+- GitHub Quality Gate do head de entrada R0.1.1 `eb86bca9357676a19a344313bfea73021168ff5f`: required check `Lint, typecheck, tests, build` SUCCESS. PR #12 permanece OPEN e NOT MERGED. O novo head criado por esta emenda precisa de nova execução do mesmo gate antes do handoff.
 
 ## Decisões arquiteturais R0.1
 
@@ -43,7 +45,7 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 | ADR-05 | PROPOSED — FOUNDATION REQUIRED | Mesma árvore editorial para screen e PDF Chromium; editor futuro só adiciona overlays externos | Captura raster integral e renderer PDF paralelo violam parity/text layer |
 | ADR-06 | PROPOSED | Documento JSON + CAS + recuperação local; assets separados | SQL por célula precoce aumenta custo; last-write-wins perde alterações |
 | ADR-07 | PROPOSED | Presets/componentes copiados com proveniência | Instâncias vivas introduzem propagação e conflitos antes de necessidade comprovada |
-| ADR-08 | PROPOSED | FOUNDATION-PROOF-01 exclui IA/sharing/PIM/presence; AI Translation + basic read-only sharing são FATHER-USABLE V1 MUST-CANDIDATE; PIM/Presence/realtime/AI authoring/automation ficam POST-V1 | Evita confundir proof técnica com fronteira real de produto |
+| ADR-08 | PROPOSED | FOUNDATION-PROOF-01 exclui IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing são FATHER-USABLE V1 MUST-CANDIDATE; PIM/Presence/realtime/AI authoring/automation ficam POST-V1 | Evita confundir proof técnica com fronteira real de produto e explicita que reversão/recovery não são inferidos de save/reopen |
 | ADR-09 | PROPOSED — FOUNDATION REQUIRED | GO da proof promove/move o núcleo do lab para `src/vnext/domain/`, `src/vnext/render/`, `src/vnext/editor/` | Lab engine + production engine em paralelo reconstruiria o motor |
 
 Todas as decisões acima são PROPOSED e dependem de auditoria Principal; `FOUNDATION REQUIRED` indica força da recomendação para a prova, não freeze status. Revisar D3/D4/D5 em conjunto; não aprovar schema separadamente de geometria, annotations, histórico e exportação.
@@ -80,7 +82,7 @@ O legado já tem auth, persistência, templates, tradução e muitos testes. Uma
 
 ## Checklist de revisão da fundação
 
-- [ ] Conferir fronteira proposta: proof sem IA/sharing/PIM/presence; AI Translation + basic read-only sharing como FATHER-USABLE V1 MUST-CANDIDATE; demais itens POST-V1 PROPOSED.
+- [ ] Conferir fronteira proposta: proof sem IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing como FATHER-USABLE V1 MUST-CANDIDATE; demais itens POST-V1 PROPOSED.
 - [ ] Reproduzir inspeção das páginas difíceis e dimensões dos PDFs.
 - [ ] Revisar os paths de reaproveitamento e evitar imports transitivos do legado.
 - [ ] Conferir frame completo, table height fixo, RowHeightPolicy, solver de colunas e annotations sem autoridades concorrentes.

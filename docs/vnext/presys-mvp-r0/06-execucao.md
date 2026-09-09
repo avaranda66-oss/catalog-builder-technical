@@ -9,7 +9,7 @@ BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
 ## Limite de escopo — PROPOSED
 
-FOUNDATION-PROOF-01 é a prova proposta da fundação editorial e do PDF difícil antes de ampliar produto. Nessa prova, AI Translation, Sharing, PIM, Presence e AI authoring agent são OUT OF SCOPE. Isso não os classifica todos como pós-V1: para FATHER-USABLE V1, Catalog create/edit, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e um único advanced table engine têm V1 DISPOSITION: MUST-CANDIDATE e DECISION STATUS: PROPOSED. Central PIM/product knowledge, Presence, realtime co-editing, autonomous AI catalog authoring e deeper workflow automation ficam POST-V1/LATER como proposta.
+FOUNDATION-PROOF-01 é a prova proposta da fundação editorial e do PDF difícil antes de ampliar produto. Nessa prova, AI Translation, Sharing, PIM, Presence e AI authoring agent são OUT OF SCOPE. Isso não os classifica todos como pós-V1: para FATHER-USABLE V1, Catalog create/edit, Undo/Redo, local recovery, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e um único advanced table engine têm V1 DISPOSITION: MUST-CANDIDATE e DECISION STATUS: PROPOSED. Central PIM/product knowledge, Presence, realtime co-editing, autonomous AI catalog authoring e deeper workflow automation ficam POST-V1/LATER como proposta.
 
 Não há prazo, custo, throughput ou limite de páginas prometido sem medição.
 
@@ -30,10 +30,10 @@ Todos os requisitos abaixo estão propostos e ainda não implementados no núcle
 | TABLE-06 | Annotations tipadas, referências válidas e divisão explícita por comando | D4 | FOUNDATION-PROOF-01 | T-NOTE/T-SPLIT |
 | STYLE-01 | Tipografia, cores, bordas, padding editáveis; riqueza solicitada | D3/D4 | proof + FATHER-USABLE V1 | G01–G05/T-FATHER |
 | UX-01 | Seleção, geometria, alinhamento, teclado e zoom | D3 | 05,07 | T-EDITOR |
-| UX-02 | Undo/Redo e ações atômicas; confiabilidade do editor | D3 | 03,05,07 | T-HISTORY |
+| UX-02 | Undo/Redo e ações atômicas; confiabilidade do editor | D3 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-HISTORY |
 | COMP-01 | Presets/templates reutilizáveis | D3 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-PRESET/T-FATHER |
 | DOC-01 | Schema estrito, IDs estáveis e importação explícita | D3 | 02,03 | T-SCHEMA |
-| PERSIST-01 | Salvar/reabrir, recuperação local, conflitos visíveis | D5 | 08,10,11 | T-RECOVERY/T-CAS |
+| PERSIST-01 | Salvar/reabrir, recuperação local, conflitos visíveis | D5 | local recovery: FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-RECOVERY/T-CAS |
 | PUB-01 | PDF Chromium A4, mesma árvore screen/print, sem clipping/rasterização de página/tabela | D5 | FOUNDATION-PROOF-01 | T-PDF/T-PARITY-01/G01–G05 |
 | PUB-02 | Exportar revisão identificada e manifesto de assets/fontes | D5 | 08,11 | T-SNAPSHOT |
 | REL-01 | Erros explícitos e conteúdo pendente distinto de erro físico | D5 | 02,08,11 | T-PREFLIGHT |
@@ -65,7 +65,7 @@ Golden visual inicial deverá ser aprovado por inspeção do resultado em tela e
 | O1: promover o núcleo comprovado | MVP-02/03/04 | Começar movendo/promovendo o core aprovado do lab para `src/vnext/domain/`, `src/vnext/render/`, `src/vnext/editor/`; um engine only |
 | O2: editor útil | MVP-05/06/07 | Objetos e tabelas ricos, posicionamento e edição coerentes |
 | O3: durabilidade e produto | MVP-08/09/10 | Recovery, biblioteca/modelos e salvamento autenticado |
-| O4: FATHER-USABLE V1 | MVP-11/12 + stories executáveis de AI Translation e basic read-only sharing | PDF integrado, save/reopen, presets/templates, tradução IA protegida, sharing read-only e tarefa real por usuário não técnico |
+| O4: FATHER-USABLE V1 | MVP-11/12 + stories executáveis de AI Translation e basic read-only sharing | PDF integrado, Undo/Redo, local recovery, save/reopen, presets/templates, tradução IA protegida, sharing read-only e tarefa real por usuário não técnico |
 | POST-V1 | PIM central, Presence, realtime co-editing, autonomous AI authoring, deeper workflow automation | Incrementos através dos seams previstos, sem contaminar a foundation proof |
 
 ```mermaid
@@ -112,7 +112,7 @@ Somente FOUNDATION-PROOF-01 está detalhado como pacote executável completo em 
 | MVP-09 / médio | `editor/library`, `presets`; repository port e instanciador | Criar/abrir/duplicar catálogo/template; IDs remapeados; editar instância não muda preset; ainda pode testar repo fake |
 | MVP-10 / alto | `persistence/supabase`, testes de integração e migrações aprovadas separadamente | Dois clientes salvando N: só um vence; tenant B negado; idempotência; não reutiliza tabelas legadas como autoridade |
 | MVP-11 / alto | `publication/`, `src/vnext/render/preflight`, integração UI; snapshot/manifest/export port | Edição durante export, imagem lenta/quebrada, fonte ausente, `LAYOUT_UNSTABLE` e conteúdo fora da página; PDF Chromium identificado, mesma árvore/frames |
-| MVP-12 / revisão humana | `tests/vnext/browser`, goldens e registro de aceite; inclui verificação das stories V1 de tradução/sharing | Usuário não técnico executa jornada completa FATHER-USABLE; reabre igual; quatro gates; tradução IA e sharing read-only presentes; sem pendências bloqueantes |
+| MVP-12 / revisão humana | `tests/vnext/browser`, goldens e registro de aceite; inclui verificação das stories V1 de tradução/sharing | Usuário não técnico executa jornada completa FATHER-USABLE; Undo/Redo e recovery local funcionam; reabre igual; quatro gates; tradução IA e sharing read-only presentes; sem pendências bloqueantes |
 
 Cada novo pacote deve especificar arquivos exatos dentro dessas áreas, contratos já existentes, comandos focados, efeitos permitidos e artefatos esperados. Qualquer necessidade de mudar domínio, migração ou interface pública sai da categoria de implementação rotineira.
 
@@ -137,4 +137,4 @@ Registrar assistência necessária, erros, duração observada e dúvidas. Não 
 
 Ensaiar 1 página difícil e catálogos de 20 e 50 páginas como cenários, não limites de produto. Medir tempo de abrir, edição de célula, resposta do arraste, uso de memória, exportação e tamanho do PDF no computador real. Virtualizar páginas fora de vista no editor depois de medir; nunca excluir conteúdo da exportação para otimizar.
 
-Durante a transição o legado pode seguir disponível para fluxos ainda não promovidos, mas FATHER-USABLE V1 só recebe esse nome quando AI Translation e basic read-only sharing estiverem presentes junto de create/edit, save/reopen, presets/templates, advanced table engine e PDF. PIM central, Presence, realtime co-editing, autonomous AI authoring e deeper workflow automation permanecem POST-V1.
+Durante a transição o legado pode seguir disponível para fluxos ainda não promovidos, mas FATHER-USABLE V1 só recebe esse nome quando Undo/Redo, local recovery, AI Translation e basic read-only sharing estiverem presentes junto de create/edit, save/reopen, presets/templates, advanced table engine e PDF. Undo/Redo e local recovery são MUST-CANDIDATE — PROPOSED; recovery protege trabalho entre saves confirmados, não é sinônimo de save/reopen. PIM central, Presence, realtime co-editing, autonomous AI authoring e deeper workflow automation permanecem POST-V1.

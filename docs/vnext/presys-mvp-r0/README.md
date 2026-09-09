@@ -19,14 +19,14 @@ Nome canônico da prova técnica antes chamada de MVP-01. O filename histórico 
 
 ### FATHER-USABLE V1
 
-Primeira versão utilizável por pessoa não técnica. Ela deve permitir criar/editar catálogo, salvar/reabrir, usar presets/templates, operar um único motor avançado de tabela, gerar PDF, traduzir com IA e compartilhar uma visão básica read-only.
+Primeira versão utilizável por pessoa não técnica. Ela deve permitir criar/editar catálogo, desfazer/refazer com segurança, recuperar trabalho local após interrupção, salvar/reabrir, usar presets/templates, operar um único motor avançado de tabela, gerar PDF, traduzir com IA e compartilhar uma visão básica read-only.
 
 ## Prioridades de produto propostas
 
 | Horizonte | Disposição recomendada | Decision status |
 |---|---|---|
 | FOUNDATION-PROOF-01 | FOUNDATION REQUIRED — AI Translation, Sharing, PIM, Presence e AI authoring agent OUT OF SCOPE | PROPOSED |
-| FATHER-USABLE V1 | Catalog create/edit, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e one advanced table engine: MUST-CANDIDATE | PROPOSED |
+| FATHER-USABLE V1 | Catalog create/edit, Undo/Redo, local recovery, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e one advanced table engine: MUST-CANDIDATE | PROPOSED |
 | POST-V1 / LATER | central PIM/product knowledge; Presence; realtime co-editing; autonomous AI catalog authoring; deeper workflow automation | PROPOSED |
 
 Os seams de extensão para itens posteriores permanecem arquiteturalmente previstos, mas não contaminam FOUNDATION-PROOF-01. AI Translation e sharing não são recomendados para depois da V1: sua disposição V1 é MUST-CANDIDATE, com decisão ainda PROPOSED.
@@ -60,7 +60,7 @@ Um runner local reproduzível monta G01–G05 com modelo estruturado, mede somen
 
 ## Resultado mínimo de FATHER-USABLE V1
 
-Uma pessoa não técnica consegue criar/editar catálogo, salvar e reabrir, usar presets/templates, operar o motor avançado de tabela, gerar PDF, solicitar tradução por IA com proteção do conteúdo técnico e compartilhar uma visão read-only básica. Esses requisitos são de produto e não são exigidos para declarar a foundation proof tecnicamente GREEN.
+Uma pessoa não técnica consegue criar/editar catálogo, desfazer/refazer alterações, recuperar um draft local após interrupção, salvar e reabrir, usar presets/templates, operar o motor avançado de tabela, gerar PDF, solicitar tradução por IA com proteção do conteúdo técnico e compartilhar uma visão read-only básica. **Undo/Redo** e **local recovery** têm `V1 DISPOSITION: MUST-CANDIDATE` / `DECISION STATUS: PROPOSED`: save/reopen protege revisões persistidas, mas não substitui reversão segura nem recuperação de trabalho ainda não confirmado. Esses requisitos são de produto e não são exigidos para declarar a foundation proof tecnicamente GREEN.
 
 ## Leitura e autoridade
 

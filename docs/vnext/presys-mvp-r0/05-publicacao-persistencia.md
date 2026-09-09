@@ -11,7 +11,7 @@ BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
 FOUNDATION-PROOF-01 usa HTML/CSS editorial com impressão Chromium/browser PDF controlada. É proibido usar como mecanismo da prova: `html2canvas`, screenshot-as-PDF, PNG full-page, PNG full-table ou o atual `PDFService.exportToPDF()`. Raster é permitido somente para conteúdo naturalmente imagem, como fotografia de produto.
 
-O PDF final deve preservar text layer, códigos, unidades, símbolos, bordas finas, número de página, image content e notes/footnotes/captions. Texto extraível sozinho não prova que a tabela não foi rasterizada: um PDF pode conter uma imagem da tabela e texto auxiliar/overlay ainda extraível. O runner deve inspecionar o conteúdo PDF e a composição da página; `pdfjs-dist` 4.10.38 já existe no baseline e deve ser usado quando adequado para essa inspeção.
+O PDF final deve preservar text layer, códigos, unidades, símbolos, bordas finas, número de página, image content e notes/footnotes/captions. Texto extraível sozinho não prova que a tabela não foi rasterizada: um PDF pode conter uma imagem da tabela e texto auxiliar/overlay ainda extraível. O runner deve usar `pdfjs-dist` 4.10.38 já presente no baseline para inspeção estrutural/textual do PDF; outra ferramenta existente pode complementar evidência visual/objetos, mas não substituir essa inspeção mínima.
 
 O legado tem dois caminhos distintos: `window.print()` e html2canvas + jsPDF. Neste último cada folha vira PNG. Aumentar scale melhora resolução raster, mas não devolve texto pesquisável nem garante linhas finas ou baixo tamanho de arquivo. A existência de print nativo é reaproveitável; a integração atual não comprova um job reproduzível com assets congelados.
 
@@ -32,13 +32,13 @@ Referências técnicas: [Playwright page.pdf](https://playwright.dev/docs/api/cl
 7. Confirmar **images decoded successfully**.
 8. Executar measurement.
 9. Produzir layout report/preflight da mesma revisão/manifesto.
-10. Executar stability check. Se uma medição após resources-ready/preflight mudar inesperadamente geometria final relevante, emitir `LAYOUT_UNSTABLE / ERROR` e falhar a prova.
+10. Executar stability check pelo contrato `PhysicalLayoutFact` de D3: capturar dois snapshots normalizados da mesma árvore/revisão/manifesto após resources-ready, com preflight somente-leitura entre eles. Qualquer diferença normalizada gera `LAYOUT_UNSTABLE / ERROR`; igualdade inteira exata gera STABLE.
 11. Gerar PDF Chromium controlado.
 12. Inspecionar estrutura/conteúdo do PDF, extrair texto e validar páginas.
 13. Renderizar as páginas **a partir do PDF final** para PNG e fazer inspeção visual. Screenshot de screen pode ser adicional para `T-PARITY-01`, nunca substituto da evidência do PDF.
 14. Persistir artefato/metadata quando aplicável. Exportação nunca altera autoria, seleção, frame, estilo, conteúdo ou ordem.
 
-Sequência mínima de readiness: `render → required fonts loaded → required assets resolved → images decoded successfully → measurement → layout report/preflight → stability check → PDF`. `setTimeout` não prova readiness. Falha de required asset/font é ERROR.
+Sequência mínima de readiness: `render → required fonts loaded → required assets resolved → images decoded successfully → measurement → layout report/preflight → stability check → PDF`. `setTimeout` não prova readiness. Falha de required asset/font é ERROR. O stability check não possui epsilon próprio: posições, dimensões, alturas intrínsecas, widths de coluna e line-flow facts são normalizados para `PhysicalLengthU = 0.0001 mm` conforme D3 antes de comparar. Ruído bruto só é ignorado quando cai no mesmo valor normalizado; reflow, row-height change, late image intrinsic-size change e late font/layout change são bloqueantes quando alteram qualquer fato canônico.
 
 A primeira prova é CLI local. No produto, o adapter de exportação pode chamar um worker Chromium isolado. Não se promete que caiba na função Vercel existente sem medir memória, duração, binário e tamanho do job. A escolha final de hospedagem do worker é uma questão empírica de FOUNDATION-PROOF-01, não motivo para adiar a prova local.
 
@@ -55,6 +55,7 @@ Para FOUNDATION-PROOF-01, `ERROR` é blocking e impede GREEN/PDF final nos segui
 - impossible table column geometry;
 - column width <= 0;
 - column below min width;
+- `PHYSICAL_ARITHMETIC_OVERFLOW`;
 - `TABLE_CONTENT_OVERFLOW`;
 - `ROW_CONTENT_OVERFLOW` para FIXED_MM;
 - invalid merge;
@@ -107,7 +108,7 @@ Extração futura: mover módulos VNext e dependências declaradas, exportar doc
 
 ## Extensões de FATHER-USABLE V1 e POST-V1
 
-FATHER-USABLE V1 inclui save/reopen com identidade/CAS, **basic read-only sharing** e **AI Translation**. Sharing publica snapshot imutável: o link referencia snapshot, não documento vivo; revogar/expirar corta novos acessos; republicar troca o ponteiro somente por comando explícito. Essa capacidade é read-only e não implica coedição.
+FATHER-USABLE V1 inclui save/reopen com identidade/CAS, **Undo/Redo**, **local recovery**, **basic read-only sharing** e **AI Translation**. Undo/Redo e local recovery são `MUST-CANDIDATE — PROPOSED`: reversão segura cobre ações editoriais; recovery cobre trabalho ainda não confirmado e portanto não é substituído por save/reopen. Sharing publica snapshot imutável: o link referencia snapshot, não documento vivo; revogar/expirar corta novos acessos; republicar troca o ponteiro somente por comando explícito. Essa capacidade é read-only e não implica coedição.
 
 AI Translation extrai leaves com identidade `{objectId, cellId?, paragraphId, runId}` e `sourceHash`. Códigos, números/unidades, normas, modelos e outros runs técnicos são protegidos. A saída cobre somente IDs permitidos, preserva tokens e passa revisão; fonte alterada marca tradução stale e nunca apaga edição humana revisada. V1 DISPOSITION: MUST-CANDIDATE; DECISION STATUS: PROPOSED. Permanece OUT OF SCOPE em FOUNDATION-PROOF-01.
 
