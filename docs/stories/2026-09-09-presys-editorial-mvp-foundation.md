@@ -26,7 +26,8 @@ Como responsável pelo produto PRESYS, quero transformar o pacote documental R0 
 - [x] Atualizar o pacote compacto R0.1 sem criar novos documentos temáticos.
 - [x] Rodar gates locais finais desta branch e registrar resultados abaixo.
 - [x] Registrar Principal final freeze audit: VNEXT GO; FOUNDATION-PROOF-01 FROZEN / READY FOR IMPLEMENTATION; produção não implementada; merge não autorizado.
-- [ ] Executar FOUNDATION-PROOF-01 e obter verdict empírico da proof (trabalho posterior).
+- [x] Executar FOUNDATION-PROOF-01 e obter verdict empírico da proof em PR #13; implementation head verificado `c8808adf0dd3a9dbc4473aafc2f4007267ff67df`, 67/67 focused proof tests e Principal code/math/artifact verdict GO.
+- [x] Registrar memória institucional durável para reconstrução sem chat: PROJECT-STATE, PRINCIPAL-HANDOFF e blueprint de Editor UX/Future AI.
 
 ## Escopo e verificação
 
@@ -62,6 +63,9 @@ Esses resultados são gates locais. GitHub Quality Gate só pode ser registrado 
 - `docs/vnext/presys-mvp-r0/07-estado-e-riscos.md`
 - `docs/vnext/presys-mvp-r0/tasks/MVP-01-prova-editorial.md`
 - `docs/vnext/presys-mvp-r0/evidence/source-inventory.json`
+- `docs/vnext/PROJECT-STATE.md`
+- `docs/vnext/PRINCIPAL-HANDOFF.md`
+- `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`
 
 ## Handoff
 

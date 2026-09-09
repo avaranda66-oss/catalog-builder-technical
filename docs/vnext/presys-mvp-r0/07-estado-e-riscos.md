@@ -1,5 +1,7 @@
 # Estado e passagem de contexto
 
+> **HISTORICAL R0.1 FOUNDATION RECORD.** O estado operacional atual e a próxima ação canônica estão em [`../PROJECT-STATE.md`](../PROJECT-STATE.md). A memória intelectual durável está em [`../PRINCIPAL-HANDOFF.md`](../PRINCIPAL-HANDOFF.md). Não usar os SHAs/"próximo passo" históricos abaixo sem revalidar Git/GitHub.
+
 STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
 PRINCIPAL REVIEW: APPROVED
 FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01

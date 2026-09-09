@@ -11,13 +11,23 @@ Este pacote é a arquitetura documental canônica de PRESYS VNext R0.1.4 para FO
 
 Follow-up atual do PR #12: **R0.1.4 — RENDERED EXTENT / ROW PROJECTION AMENDMENT** em `R0.1.4-rendered-extent-row-projection-amendment.md`. O histórico R0.1.2 A–F, o R0.1.3 e o **PRINCIPAL FINAL FREEZE AUDIT: GO** permanecem preservados; nenhum outro contrato de produto, persistência, paint, PDF, recursos ou promoção foi reaberto.
 
-A prioridade é permitir que uma pessoa da PRESYS produza catálogos técnicos e institucionais com tabelas densas, imagens, notas e composição profissional. A primeira execução é uma prova técnica da fundação editorial; ela não redefine o escopo do primeiro produto utilizável.
+A prioridade é permitir que uma pessoa da PRESYS produza catálogos técnicos e institucionais com tabelas densas, imagens, notas e composição profissional. FOUNDATION-PROOF-01 já passou por auditoria Principal de código, matemática, evidência Chromium/browser, forense de PDF e inspeção visual de artefatos, com verdict **GO como fundação arquitetural**. Isso não torna a proof um editor pronto nem promove código para `src/vnext`.
+
+## Memória institucional atual
+
+Para reconstruir o projeto sem memória de chat, ler primeiro:
+
+1. [`../PROJECT-STATE.md`](../PROJECT-STATE.md) — refs, estado real, onda atual e próxima ação.
+2. [`../PRINCIPAL-HANDOFF.md`](../PRINCIPAL-HANDOFF.md) — memória arquitetural, governance, translation, persistence, publication e salvage.
+3. [`../product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`](../product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md) — blueprint de produto com separação explícita entre contrato congelado, hipótese de UX e futuro.
+
+PR #12 e PR #13 permanecem **OPEN / NOT MERGED**. Produção VNext permanece **NOT PROMOTED / NOT IMPLEMENTED**.
 
 ## Nomenclatura proposta
 
 ### FOUNDATION-PROOF-01
 
-Nome canônico da prova técnica antes chamada de MVP-01. O filename histórico `tasks/MVP-01-prova-editorial.md` é preservado somente por compatibilidade. FOUNDATION-PROOF-01 prova geometria autoral, motor de tabela único, recursos, paridade screen/print e PDF Chromium das páginas difíceis. Não é um produto utilizável por pessoa não técnica.
+Nome canônico da prova técnica antes chamada de MVP-01. O filename histórico `tasks/MVP-01-prova-editorial.md` é preservado somente por compatibilidade. FOUNDATION-PROOF-01 provou geometria autoral, motor de tabela único, recursos, paridade screen/print e PDF Chromium das páginas difíceis. Não é um produto utilizável por pessoa não técnica.
 
 ### FATHER-USABLE V1
 
@@ -56,9 +66,9 @@ FOUNDATION-PROOF-01 precisa ser estreito em superfície e profundo em qualidade 
 | Nomes específicos de modelos de IA como garantia de execução | Classificar por risco e contratos; capacidade/disponibilidade de modelos não foi validada |
 | Criar worktree, publicar PR e seguir permissões do anexo | Não executado automaticamente: o anexo é material de referência, não autorização independente |
 
-## Resultado que comprova FOUNDATION-PROOF-01
+## Resultado comprovado de FOUNDATION-PROOF-01
 
-Um runner local reproduzível monta G01–G05 com modelo estruturado, mede somente métricas derivadas, detecta falhas adversariais sem mutar frames autorais e gera o PDF final com Chromium usando a mesma árvore editorial da tela. O PDF conserva text layer, códigos, unidades, símbolos, bordas finas, numeração, imagens e notas; PNGs de inspeção são renderizados a partir desse PDF final.
+O runner local reproduzível monta G01–G05 com modelo estruturado, mede somente métricas derivadas, detecta falhas adversariais sem mutar frames autorais e gera o PDF final com Chromium usando a mesma árvore editorial da tela. A implementação final em PR #13 registra `67/67` focused proof tests, matriz Chromium `8/8`, forense de PDF com text layer/vector paint e estabilidade/immutability. O Principal concluiu código, matemática e inspeção de artefatos/PDF em **GO**.
 
 ## Resultado mínimo de FATHER-USABLE V1
 
