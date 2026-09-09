@@ -630,6 +630,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
           style={Object.keys(sectionInlineStyle).length > 0 ? sectionInlineStyle : undefined}
           className={`border-b border-t border-slate-300 ${resolvedSectionBg.className || 'bg-slate-100/90'} ${resolvedSectionText.className || 'text-slate-800 font-semibold uppercase tracking-wider text-[9px]'}`}
           data-row-id={mode === 'editor' ? row.id : undefined}
+          data-canonical-row-id={row.id}
           data-row-kind={row.kind}
         >
           <td
@@ -657,6 +658,7 @@ export const TableCoreRenderer: React.FC<TableCoreRendererProps> = ({
         style={Object.keys(rowStyle).length > 0 ? rowStyle : undefined}
         className={isHeaderRow ? `${resolvedHeaderBg.className} ${resolvedHeaderText.className}` : stripe}
         data-row-id={mode === 'editor' ? row.id : undefined}
+        data-canonical-row-id={row.id}
         data-row-kind={row.kind}
       >
         {table.columns.map((col) => {

@@ -11,6 +11,7 @@ export interface OverflowWarningBannerProps {
   result: PageVerticalOverflowResult;
   onRecoverMixedCover?: () => void;
   isRecoveryEligible?: boolean;
+  onMoveOffendingBlock?: () => void;
 }
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
@@ -31,7 +32,8 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 export const OverflowWarningBanner: React.FC<OverflowWarningBannerProps> = ({
   result,
   onRecoverMixedCover,
-  isRecoveryEligible = false
+  isRecoveryEligible = false,
+  onMoveOffendingBlock
 }) => {
   const hasOverflow = result.overflowY && result.overflowMm > 0;
   const hasMixedCover = result.issues.some((i) => i.code === 'MIXED_FULL_PAGE_COVER');
@@ -70,6 +72,17 @@ export const OverflowWarningBanner: React.FC<OverflowWarningBannerProps> = ({
           )}
         </div>
       </div>
+
+      {hasOverflow && onMoveOffendingBlock && (
+        <button
+          type="button"
+          data-testid="btn-move-overflow-block"
+          onClick={onMoveOffendingBlock}
+          className="px-2.5 py-1 text-[11px] font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-none transition-colors flex-shrink-0 shadow-sm ml-2"
+        >
+          Mover bloco para próxima folha
+        </button>
+      )}
 
       {hasMixedCover && isRecoveryEligible && onRecoverMixedCover && (
         <button

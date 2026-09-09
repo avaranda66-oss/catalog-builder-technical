@@ -262,7 +262,7 @@ export const FullPageCoverBlock: React.FC<FullPageCoverBlockProps> = ({
         setSelectedBlockId(block.id);
         setSelectedLayerId(null);
       }}
-      className={`relative w-[794px] h-[1123px] min-h-[1123px] bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none transition-all rounded-none ${
+      className={`relative w-full h-full min-h-full bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none transition-all rounded-none ${
         isSelected ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-slate-500'
       }`}
       style={{ boxSizing: 'border-box' }}

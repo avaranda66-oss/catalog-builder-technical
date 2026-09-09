@@ -295,9 +295,13 @@ interface CatalogState {
   moveStructuralSectionOnPage: (pageId: string, sectionId: string, direction: 'up' | 'down') => void;
   reorderStructuralSectionOnPage: (pageId: string, sectionId: string, targetIndex: number) => void;
 
-  // Composição de Páginas e Workflow Safety (Fase 3A.6)
+  // Composição de Páginas e Workflow Safety (Fase 3A.6 / A4.FLOW.R1)
   insertContentOnNewPageAfter: (sourcePageId: string, spec: PageContentInsertionSpec) => void;
   moveNonCoverBlocksToNewPage: (pageId: string) => boolean;
+  moveBlockToNextPage: (pageId: string, blockId: string) => boolean;
+  moveBlockToPreviousPage: (pageId: string, blockId: string) => boolean;
+  setLayoutFlowMode: (mode: 'smart' | 'manual') => void;
+  setManualTableBreak: (blockId: string, rowId: string, enabled: boolean) => void;
 
   // Manipulação de Linhas, Colunas e Overrides Locais em Tabelas
   commitDocumentMutation: (
@@ -1107,6 +1111,134 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
 
     return true;
+  },
+
+  moveBlockToNextPage: (pageId, blockId) => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return false;
+
+    const sourcePageIndex = currentCatalog.pages.findIndex((p) => p.id === pageId);
+    if (sourcePageIndex === -1) return false;
+
+    const sourcePage = currentCatalog.pages[sourcePageIndex];
+    const block = sourcePage.blocks.find((b) => b.id === blockId);
+    if (!block) return false;
+    const nextPageIndex = sourcePageIndex + 1;
+    const destination = currentCatalog.pages[nextPageIndex];
+    if (destination && !evaluatePageCompositionInsertion(destination, block.type).isSafe) return false;
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const dSource = draft.pages.find((p) => p.id === pageId);
+        if (!dSource) return;
+        dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
+
+        if (nextPageIndex < draft.pages.length) {
+          const dNext = draft.pages[nextPageIndex];
+          dNext.blocks = [block, ...(dNext.blocks || [])];
+          if (dNext.blocks.length === 1) dNext.pageType = block.type === 'full_page_cover' ? 'cover' : 'technical';
+        } else {
+          const newPageId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? `page-${crypto.randomUUID()}`
+            : `page-${Date.now().toString(36)}`;
+          const newPage: CatalogPage = {
+            id: newPageId,
+            pageNumber: draft.pages.length + 1,
+            pageType: block.type === 'full_page_cover' ? 'cover' : 'technical',
+            title: `Folha ${draft.pages.length + 1}`,
+            blocks: [block]
+          };
+          draft.pages.push(newPage);
+        }
+
+        draft.pages.forEach((p, idx) => {
+          p.pageNumber = idx + 1;
+        });
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: blockId,
+        targetPageId: pageId,
+        summary: `Bloco ${blockId} movido para a folha seguinte`
+      }
+    );
+
+    set({ activePageIndex: Math.min(nextPageIndex, get().currentCatalog!.pages.length - 1), selectedBlockId: blockId });
+
+    return true;
+  },
+
+  moveBlockToPreviousPage: (pageId, blockId) => {
+    const { currentCatalog } = get();
+    if (!currentCatalog) return false;
+
+    const sourcePageIndex = currentCatalog.pages.findIndex((p) => p.id === pageId);
+    if (sourcePageIndex <= 0) return false;
+
+    const sourcePage = currentCatalog.pages[sourcePageIndex];
+    const block = sourcePage.blocks.find((b) => b.id === blockId);
+    if (!block) return false;
+    const prevPageIndex = sourcePageIndex - 1;
+    const destination = currentCatalog.pages[prevPageIndex];
+    if (!evaluatePageCompositionInsertion(destination, block.type).isSafe) return false;
+
+    get().commitDocumentMutation(
+      (draft) => {
+        const dSource = draft.pages.find((p) => p.id === pageId);
+        if (!dSource) return;
+        dSource.blocks = dSource.blocks.filter((b) => b.id !== blockId);
+
+        const dPrev = draft.pages[prevPageIndex];
+        dPrev.blocks = [...(dPrev.blocks || []), block];
+        if (dPrev.blocks.length === 1) dPrev.pageType = block.type === 'full_page_cover' ? 'cover' : 'technical';
+
+        draft.pages.forEach((p, idx) => {
+          p.pageNumber = idx + 1;
+        });
+      },
+      'REORDER_BLOCKS',
+      {
+        targetId: blockId,
+        targetPageId: pageId,
+        summary: `Bloco ${blockId} movido para a folha anterior`
+      }
+    );
+
+    set({ activePageIndex: prevPageIndex, selectedBlockId: blockId });
+
+    return true;
+  },
+
+  setLayoutFlowMode: (mode) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        draft.layoutFlowMode = mode;
+      },
+      'MANUAL_EDIT',
+      { summary: `Modo de fluxo A4 alterado para ${mode}` }
+    );
+  },
+
+  setManualTableBreak: (blockId, rowId, enabled) => {
+    get().commitDocumentMutation(
+      (draft) => {
+        for (const page of draft.pages) {
+          const block = page.blocks.find((candidate) => candidate.id === blockId);
+          if (!block) continue;
+          const current = new Set<string>(block.customData?.manualBreakRowIds ?? []);
+          if (enabled) current.add(rowId);
+          else current.delete(rowId);
+          block.customData = { ...(block.customData || {}), manualBreakRowIds: [...current] };
+          break;
+        }
+      },
+      'MANUAL_EDIT',
+      {
+        targetId: blockId,
+        targetRowId: rowId,
+        summary: `${enabled ? 'Adicionada' : 'Removida'} quebra manual antes da linha ${rowId}`
+      }
+    );
   },
 
   duplicateStructuralSection: (pageId, sectionId) => {

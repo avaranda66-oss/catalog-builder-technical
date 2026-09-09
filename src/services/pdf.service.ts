@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import type { LayoutPreflightReport } from '../domain/layout-preflight';
 
 export interface PDFExportOptions {
   fileName?: string;
@@ -10,6 +11,7 @@ export interface PDFExportOptions {
     documentId: string;
     version: number;
   };
+  layoutPreflight?: LayoutPreflightReport;
 }
 
 export class PDFService {
@@ -47,6 +49,13 @@ export class PDFService {
     document.body.classList.add('pdf-export-mode');
 
     try {
+      if (!options.layoutPreflight) {
+        throw new Error('LAYOUT_PREFLIGHT_REQUIRED: a exportação final exige preflight físico atual.');
+      }
+      if (!options.layoutPreflight.canPublish) {
+        throw new Error(`LAYOUT_PREFLIGHT_BLOCKED: ${options.layoutPreflight.blockCount} defeito(s) físico(s) bloqueiam a exportação final.`);
+      }
+
       if (document.fonts) {
         await document.fonts.ready;
       }

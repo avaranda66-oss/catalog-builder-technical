@@ -51,6 +51,19 @@ import {
   evaluateMixedCoverRecovery,
   PageContentInsertionSpec
 } from '../../domain/page-composition-policy';
+import { useMeasuredA4RenderPlan } from '../a4/useMeasuredA4RenderPlan';
+import type { TablePaginationSlice } from '../../domain/table-core/table.pagination';
+
+// useMeasuredA4RenderPlan delegates the canonical projection bridge to buildA4RenderPlan.
+const EMPTY_CATALOG: Catalog = {
+  id: 'a4-empty',
+  title: '',
+  themeId: 'default',
+  pages: [],
+  createdAt: '',
+  updatedAt: '',
+  version: 0
+};
 
 interface BlockMenuOption extends HoverTooltipItem {
   blockData?: Omit<ContentBlock, 'id'>;
@@ -59,7 +72,12 @@ interface BlockMenuOption extends HoverTooltipItem {
 
 interface EditorA4PageItemProps {
   page: CatalogPage;
+  renderPageId: string;
   pageIndex: number;
+  canonicalPageIndex: number;
+  totalPhysicalPages: number;
+  isDerivedContinuation: boolean;
+  blockSlices: Record<string, TablePaginationSlice | undefined>;
   currentCatalog: Catalog;
   isAutoFit: boolean;
   onToggleAutoFit: () => void;
@@ -81,11 +99,17 @@ interface EditorA4PageItemProps {
   tableOptions: BlockMenuOption[];
   structureOptions: BlockMenuOption[];
   onRecoverMixedCover?: (pageId: string) => void;
+  onMoveBlockToNextPage?: (pageId: string, blockId: string) => void;
 }
 
 const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
   page,
+  renderPageId,
   pageIndex,
+  canonicalPageIndex,
+  totalPhysicalPages,
+  isDerivedContinuation,
+  blockSlices,
   currentCatalog,
   isAutoFit,
   onToggleAutoFit,
@@ -106,7 +130,8 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
   headerOptions,
   tableOptions,
   structureOptions,
-  onRecoverMixedCover
+  onRecoverMixedCover,
+  onMoveBlockToNextPage
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -127,9 +152,13 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
 
   return (
     <div
-      id={`page-container-${page.id}`}
+      id={`page-container-${renderPageId}`}
+      data-a4-page
+      data-a4-page-id={renderPageId}
+      data-canonical-page-id={page.id}
+      data-canonical-page-index={canonicalPageIndex}
       data-page-index={pageIndex}
-      data-page-id={page.id}
+      data-page-id={renderPageId}
       className={`flex flex-col items-center space-y-2 flex-shrink-0 print:m-0 print:p-0 print:space-y-0 relative ${
         isMenuOpenForThisPage ? 'z-30' : 'z-0'
       }`}
@@ -143,10 +172,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
       >
         <div className="flex items-center gap-2.5">
           <span className="px-2 py-0.5 bg-[#003366] text-white rounded text-[10px] font-mono font-bold">
-            FOLHA {page.pageNumber} DE {currentCatalog.pages.length}
+            FOLHA {pageIndex + 1} DE {totalPhysicalPages}
           </span>
           <span className="text-xs font-bold text-slate-800">
-            {page.title || `Página ${page.pageNumber}`}
+            {page.title || `Página ${pageIndex + 1}`}{isDerivedContinuation ? ' — Continuação' : ''}
           </span>
           <span className="text-[10px] text-slate-400 font-mono">
             (210 mm × 297 mm)
@@ -329,7 +358,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
             )}
           </div>
 
-          {/* 4. Alternador de Preenchimento Inteligente A4 */}
+          {/* 4. Alternador de Distribuição Vertical A4 */}
           <button
             onClick={onToggleAutoFit}
             className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-none border transition-colors shadow-2xs ${
@@ -337,10 +366,10 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 ? 'bg-blue-50 text-blue-900 border-blue-300'
                 : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
             }`}
-            title="Adjusts vertical spacing to fill the 297mm A4 sheet harmoniously"
+            title="Distribui o espaçamento vertical entre os blocos para preencher harmonicamente a folha A4"
           >
             <Maximize2 className="w-3 h-3 text-[#003366]" />
-            <span>{isAutoFit ? 'Auto-Fit Active' : 'Auto-Fit Off'}</span>
+            <span>{isAutoFit ? 'Distribuir Espaço (Ativo)' : 'Distribuir Espaço'}</span>
           </button>
 
           {/* Excluir Folha */}
@@ -393,7 +422,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
         style={{ padding: getCanonicalPagePaddingCss(isSingleFullCover) }}
         onClick={(e) => {
           e.stopPropagation();
-          onSetActivePageIndex(pageIndex);
+          onSetActivePageIndex(canonicalPageIndex);
           onSelectEditorElement({ blockId: null, childId: null });
         }}
       >
@@ -402,6 +431,11 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
           result={overflowGuard}
           onRecoverMixedCover={onRecoverMixedCover ? () => onRecoverMixedCover(page.id) : undefined}
           isRecoveryEligible={evaluateMixedCoverRecovery(page).eligible}
+          onMoveOffendingBlock={
+            overflowGuard.firstOffendingBlockId && onMoveBlockToNextPage
+              ? () => onMoveBlockToNextPage(page.id, overflowGuard.firstOffendingBlockId!)
+              : undefined
+          }
         />
 
         {/* Viewport Documental Canônico (Fase 3A.5C) */}
@@ -458,11 +492,12 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                 <div
                   key={block.id}
                   data-block-id={block.id}
+                  data-canonical-block-id={block.id}
                   data-block-type={block.type}
                   data-block-index={blockIndex}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSetActivePageIndex(pageIndex);
+                    onSetActivePageIndex(canonicalPageIndex);
                     onSelectEditorElement({ blockId: block.id, childId: null });
                   }}
                   onDragOver={(e) => {
@@ -534,17 +569,17 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                     <StructuralSectionInteractionFrame
                       block={block}
                       pageId={page.id}
-                      pageIndex={pageIndex}
+                      pageIndex={canonicalPageIndex}
                       blockIndex={blockIndex}
                       totalBlocks={page.blocks?.length || 0}
                       isSelected={isSelected}
                       selectedChildId={isSelected ? selectedChildId : null}
                       onSelectSection={() => {
-                        onSetActivePageIndex(pageIndex);
+                        onSetActivePageIndex(canonicalPageIndex);
                         onSelectEditorElement({ blockId: block.id, childId: null });
                       }}
                       onSelectCard={(childId) => {
-                        onSetActivePageIndex(pageIndex);
+                        onSetActivePageIndex(canonicalPageIndex);
                         onSelectEditorElement({ blockId: block.id, childId });
                       }}
                     />
@@ -568,7 +603,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                     <FeaturesListBlock block={block} pageId={page.id} isSelected={isSelected} />
                   )}
                   {(block.type === 'table' || block.type === 'specs_table') && (
-                    <TechnicalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                    <TechnicalTableBlock block={block} pageId={page.id} isSelected={isSelected} slice={blockSlices[block.id]} />
                   )}
                   {block.type === 'electrical_table' && (
                     <ElectricalTableBlock block={block} pageId={page.id} isSelected={isSelected} />
@@ -586,7 +621,7 @@ const EditorA4PageItem: React.FC<EditorA4PageItemProps> = ({
                     <ContactFooterBlock block={block} pageId={page.id} isSelected={isSelected} />
                   )}
                   {block.type === 'custom_table' && (
-                    <CustomTableBlock block={block} pageId={page.id} isSelected={isSelected} />
+                    <CustomTableBlock block={block} pageId={page.id} isSelected={isSelected} slice={blockSlices[block.id]} />
                   )}
                   {block.type === 'text' && (
                     <TextBlock block={block} pageId={page.id} isSelected={isSelected} />
@@ -684,6 +719,8 @@ export const A4Canvas: React.FC = () => {
     insertStructuralSection,
     insertContentOnNewPageAfter,
     moveNonCoverBlocksToNewPage,
+    moveBlockToNextPage,
+    setLayoutFlowMode,
     reorderStructuralSectionOnPage,
     addPage,
     removePage
@@ -707,6 +744,13 @@ export const A4Canvas: React.FC = () => {
   const isProgrammaticScrollRef = useRef<boolean>(false);
   const programmaticScrollTimerRef = useRef<any>(null);
   const locationBroadcastTimerRef = useRef<any>(null);
+  const flowMode = currentCatalog?.layoutFlowMode === 'manual' ? 'manual' : 'smart';
+  const { renderPlan: measuredRenderPlan, layoutPreflight } = useMeasuredA4RenderPlan(
+    currentCatalog ?? EMPTY_CATALOG,
+    scrollContainerRef,
+    flowMode
+  );
+  const projectedPages = measuredRenderPlan.pages;
 
   // Listener para scroll programático disparado pela thumbnail
   useEffect(() => {
@@ -786,12 +830,14 @@ export const A4Canvas: React.FC = () => {
           }
 
           if (shouldSwitch) {
-            setActivePageIndex(bestIndex);
+            const bestEntry = entriesMap.get(bestIndex);
+            const canonicalIndex = Number(bestEntry?.target.getAttribute('data-canonical-page-index') ?? bestIndex);
+            setActivePageIndex(canonicalIndex);
 
             // Consistência: se o bloco selecionado não pertencer à nova página, desseleciona
             const { selectedBlockId, setSelectedBlockId, currentCatalog } = useCatalogStore.getState();
             if (selectedBlockId && currentCatalog) {
-              const newActivePage = currentCatalog.pages[bestIndex];
+              const newActivePage = currentCatalog.pages[canonicalIndex];
               const blockBelongs = newActivePage?.blocks?.some((b) => b.id === selectedBlockId);
               if (!blockBelongs) {
                 setSelectedBlockId(null);
@@ -804,12 +850,12 @@ export const A4Canvas: React.FC = () => {
             }
             locationBroadcastTimerRef.current = setTimeout(() => {
               const cat = useCatalogStore.getState().currentCatalog;
-              const newPage = cat?.pages[bestIndex];
+              const newPage = cat?.pages[canonicalIndex];
               if (newPage) {
                 const selBlockId = useCatalogStore.getState().selectedBlockId;
                 const selBlock = newPage.blocks?.find((b) => b.id === selBlockId);
                 usePresenceStore.getState().trackLocation(
-                  bestIndex + 1,
+                  canonicalIndex + 1,
                   newPage.id,
                   selBlock ? selBlockId : null,
                   selBlock ? selBlock.type : null
@@ -1383,6 +1429,39 @@ export const A4Canvas: React.FC = () => {
         setHoveredTooltip(null);
       }}
     >
+      <div className="sticky top-0 z-50 w-[794px] border border-slate-300 bg-white px-3 py-2 shadow-sm no-print" data-testid="a4-flow-mode-control">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-700">Modo de Fluxo</span>
+          <div className="flex border border-slate-300" role="group" aria-label="Modo de Fluxo">
+            <button
+              type="button"
+              aria-pressed={flowMode === 'smart'}
+              onClick={(event) => {
+                event.stopPropagation();
+                setLayoutFlowMode('smart');
+              }}
+              className={`px-3 py-1 text-[11px] font-semibold ${flowMode === 'smart' ? 'bg-[#003366] text-white' : 'bg-white text-slate-700'}`}
+            >
+              Inteligente
+            </button>
+            <button
+              type="button"
+              aria-pressed={flowMode === 'manual'}
+              onClick={(event) => {
+                event.stopPropagation();
+                setLayoutFlowMode('manual');
+              }}
+              className={`border-l border-slate-300 px-3 py-1 text-[11px] font-semibold ${flowMode === 'manual' ? 'bg-[#003366] text-white' : 'bg-white text-slate-700'}`}
+            >
+              Manual
+            </button>
+          </div>
+          <span className={`text-[10px] font-mono ${layoutPreflight.canPublish ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {layoutPreflight.canPublish ? 'Layout físico validado' : `Preflight: ${layoutPreflight.blockCount} bloqueio(s)`}
+          </span>
+        </div>
+      </div>
+
       {/* Floating Tooltip Hover Preview de Alta Resolução */}
       <BlockHoverTooltip
         item={hoveredTooltip}
@@ -1392,15 +1471,28 @@ export const A4Canvas: React.FC = () => {
         }
       />
 
-      {currentCatalog.pages.map((page: CatalogPage, pageIndex: number) => {
+      {projectedPages.map((renderPage, pageIndex: number) => {
+        const page: CatalogPage = {
+          ...renderPage.canonicalPage,
+          pageNumber: renderPage.pageNumber,
+          blocks: renderPage.blocks.map((renderBlock) => renderBlock.block)
+        };
+        const blockSlices = Object.fromEntries(
+          renderPage.blocks.map((renderBlock) => [renderBlock.canonicalBlockId, renderBlock.slice])
+        );
         const isAutoFit = autoFitPages[page.id] ?? true;
         const isMenuOpenForThisPage = Boolean(activeMenuPageId === page.id && activeDropdown);
 
         return (
           <EditorA4PageItem
-            key={page.id}
+            key={renderPage.id}
             page={page}
+            renderPageId={renderPage.id}
             pageIndex={pageIndex}
+            canonicalPageIndex={renderPage.canonicalPageIndex}
+            totalPhysicalPages={projectedPages.length}
+            isDerivedContinuation={renderPage.isDerivedContinuation}
+            blockSlices={blockSlices}
             currentCatalog={currentCatalog}
             isAutoFit={isAutoFit}
             onToggleAutoFit={() => handleToggleAutoFit(page.id)}
@@ -1411,8 +1503,8 @@ export const A4Canvas: React.FC = () => {
               setActiveDropdown(activeDropdown === dropdown && isMenuOpenForThisPage ? null : dropdown);
             }}
             onSelectMenuOption={(opt) => handleSelectMenuOption(page.id, opt)}
-            onRemovePage={() => removePage(page.id)}
-            canRemovePage={currentCatalog.pages.length > 1}
+            onRemovePage={() => removePage(renderPage.canonicalPageId)}
+            canRemovePage={currentCatalog.pages.length > 1 && !renderPage.isDerivedContinuation}
             selectedBlockId={selectedBlockId}
             selectedChildId={selectedChildId}
             onSelectEditorElement={selectEditorElement}
@@ -1425,6 +1517,7 @@ export const A4Canvas: React.FC = () => {
             tableOptions={TABLE_OPTIONS}
             structureOptions={STRUCTURE_OPTIONS}
             onRecoverMixedCover={moveNonCoverBlocksToNewPage}
+            onMoveBlockToNextPage={moveBlockToNextPage}
           />
         );
       })}

@@ -6,10 +6,10 @@ describe('useCatalogStore', () => {
     useCatalogStore.getState().createCatalogFromPreset('Catálogo de Teste TA-25N', 'preset-presys-ta-25n-datasheet');
   });
 
-  it('deve inicializar com o preset oficial do TA-25N contendo 6 páginas', () => {
+  it('deve inicializar com o preset oficial do TA-25N contendo 8 páginas', () => {
     const catalog = useCatalogStore.getState().currentCatalog;
     expect(catalog).not.toBeNull();
-    expect(catalog?.pages.length).toBe(6);
+    expect(catalog?.pages.length).toBe(8);
     expect(catalog?.pages[0].pageType).toBe('cover');
     expect(catalog?.pages[1].pageType).toBe('technical');
     expect(catalog?.pages[2].pageType).toBe('technical');

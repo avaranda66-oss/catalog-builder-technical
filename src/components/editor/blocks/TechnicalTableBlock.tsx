@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Columns, Table as TableIcon } from 'lucide-react';
+import { Plus, Columns, Scissors, Table as TableIcon } from 'lucide-react';
 import { ContentBlock, TableColumnConfig } from '../../../domain/catalog.schema';
 import { useCatalogStore } from '../../../stores/useCatalogStore';
 import { useLibraryStore } from '../../../stores/useLibraryStore';
@@ -14,6 +14,7 @@ import {
 } from '../../../domain/table-core';
 import { isTableRowVisuallyEmpty } from '../../../domain/table-core/table.empty-row-policy';
 import { TableCoreRenderer } from '../table-core';
+import { TablePaginationSlice } from '../../../domain/table-core/table.pagination';
 
 interface TechnicalTableBlockProps {
   block: ContentBlock;
@@ -21,13 +22,15 @@ interface TechnicalTableBlockProps {
   isSelected?: boolean;
   isExport?: boolean;
   resolveDatumOverride?: TableDatumResolver;
+  slice?: TablePaginationSlice;
 }
 
 export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   block,
   pageId,
   isExport,
-  resolveDatumOverride
+  resolveDatumOverride,
+  slice
 }) => {
   const {
     selectedBlockId,
@@ -37,6 +40,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
     updateCellOverride,
     restoreCellToLibrary,
     removeRowFromTable,
+    setManualTableBreak,
     getTableDatumResolver
   } = useCatalogStore();
 
@@ -44,13 +48,20 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
   const { openAddProductToTableModal, tablePresentationDraft, isExportPDFModalOpen } = useUIStore();
 
   const columns: TableColumnConfig[] = block.tableColumns || [];
-  const rows = block.tableRows || [];
+  const rawRows = block.tableRows || [];
+  const rows = slice ? rawRows.filter((r) => slice.includedRowIds.includes(r.id)) : rawRows;
+  const manualBreakRowIds: string[] = block.customData?.manualBreakRowIds ?? [];
   const family: TableVisualFamily = (block.style?.family as TableVisualFamily) || 'monochrome';
 
   // Pilot Table Core V2 para specs_table (CORE.T2B.1 / CORE.T2C.1)
   const isPilotSpecsTable = block.type === 'specs_table';
   const pilotAdaptResult = isPilotSpecsTable ? adaptLegacyBlockToTableCore(block) : null;
   const adaptedTable = (pilotAdaptResult && pilotAdaptResult.supported) ? pilotAdaptResult.table : null;
+  if (slice && adaptedTable) {
+    adaptedTable.rows = adaptedTable.rows.filter(
+      (r) => r.isHeader || r.kind === 'header' || slice.includedRowIds.includes(r.id)
+    );
+  }
   if (!isExport && adaptedTable && tablePresentationDraft && tablePresentationDraft.blockId === block.id) {
     adaptedTable.presentation = tablePresentationDraft.presentation;
   }
@@ -175,7 +186,7 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
               <p className="text-[11px] text-slate-500 mt-0.5">Adicione uma linha no painel lateral.</p>
             </div>
           )}
-          {block.customData?.showLegend && (
+          {block.customData?.showLegend && (!slice || slice.isLastPage) && (
             <TechnicalLegend
               config={{
                 showLegend: true,
@@ -260,10 +271,44 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
           onUpdateCell={(rowId, colKey, newVal) => updateCellOverride(block.id, rowId, colKey, newVal)}
           onRestoreCell={(rowId, colKey) => restoreCellToLibrary(block.id, rowId, colKey)}
           onRemoveRow={(rowId) => removeRowFromTable(block.id, rowId)}
+          manualBreakRowIds={manualBreakRowIds}
+          onToggleManualBreak={(rowId, enabled) => setManualTableBreak(block.id, rowId, enabled)}
           onRemoveColumn={handleRemoveColumn}
           onRenameColumn={handleColumnLabelBlur}
         />
       )}
+
+      {!isExport && useTableCorePilot && rows.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1 no-print" data-editor-action="true">
+          {rows.map((row, index) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setManualTableBreak(block.id, row.id, !manualBreakRowIds.includes(row.id));
+              }}
+              className={`flex items-center gap-1 border px-1.5 py-0.5 text-[9px] ${
+                manualBreakRowIds.includes(row.id) ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-500'
+              }`}
+              title="Quebrar página antes desta linha"
+            >
+              <Scissors className="h-2.5 w-2.5" />
+              <span>Quebrar antes da linha {index + 1}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p
+        className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
+          slice?.footnoteNotice ? '' : 'invisible'
+        }`}
+        data-table-continuation-notice
+        aria-hidden={!slice?.footnoteNotice}
+      >
+        {slice?.footnoteNotice ?? null}
+      </p>
 
       {/* Rodapé da Tabela: Inserir Produtos (Apenas no Modo Editor) */}
       {!isExport && (

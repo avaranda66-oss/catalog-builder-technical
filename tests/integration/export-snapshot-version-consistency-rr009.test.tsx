@@ -71,16 +71,39 @@ vi.mock('../../src/translation/font-manager', () => ({
   }
 }));
 
-vi.mock('../../src/components/export/CleanA4Document', () => ({
+vi.mock('../../src/components/export/CleanA4Document', async () => {
+  const React = await import('react');
+  const measuredPlan = {
+    flowPlan: {
+      flowMode: 'smart',
+      projectedPages: [],
+      totalProjectedPages: 0,
+      tablePaginationPlans: {},
+      measurementStatus: 'ready',
+      hasUnresolvedOverflow: false,
+      hasHorizontalOverflow: false,
+      unresolvedIssues: []
+    },
+    pages: [],
+    hasIntegrityDefect: false
+  };
+  const measuredReport = { canPublish: true, blockCount: 0, warnCount: 0, issues: [] };
+  return {
   CleanA4Document: ({
     document: catalog,
     className = '',
-    resolveDatum
+    resolveDatum,
+    onLayoutPreflightChange
   }: {
     document: Catalog;
     className?: string;
     resolveDatum?: (reference: any) => { value?: { kind?: string; text?: string } } | undefined;
+    onLayoutPreflightChange?: (report: any, plan: any, isComplete: boolean) => void;
   }) => {
+    React.useEffect(() => {
+      onLayoutPreflightChange?.(measuredReport, measuredPlan, true);
+    }, [onLayoutPreflightChange]);
+
     const technicalValue = resolveDatum?.({
       kind: 'datum_reference',
       productId: 'product-rr009',
@@ -104,7 +127,8 @@ vi.mock('../../src/components/export/CleanA4Document', () => ({
       </div>
     );
   }
-}));
+  };
+});
 
 import { ExportPDFModal } from '../../src/components/editor/ExportPDFModal';
 import { TechnicalTableBlock } from '../../src/components/editor/blocks/TechnicalTableBlock';

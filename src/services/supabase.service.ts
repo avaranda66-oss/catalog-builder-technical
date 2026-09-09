@@ -961,7 +961,12 @@ export function catalogRowToCatalog(row: any): Catalog {
     createdAt: row.created_at || row.createdAt || payload.createdAt || new Date().toISOString(),
     updatedAt: row.updated_at || row.updatedAt || payload.updatedAt || new Date().toISOString(),
     themeId: payload.themeId || 'default-technical',
-    pages: Array.isArray(payload.pages) ? payload.pages : []
+    pages: Array.isArray(payload.pages)
+      ? payload.pages.map((page: any) => ({
+          ...page,
+          blocks: Array.isArray(page?.blocks) ? page.blocks : []
+        }))
+      : []
   };
 }
 
@@ -978,7 +983,17 @@ export function templateRowToCatalogPreset(row: any): CatalogPreset {
     category: designTokens.category || 'layout_template',
     isSystem: row.is_system ?? false,
     version,
-    catalog: layoutConfig.pages ? { ...layoutConfig, title: resolvedName, version } : {
+    catalog: layoutConfig.pages ? {
+      ...layoutConfig,
+      title: resolvedName,
+      version,
+      pages: Array.isArray(layoutConfig.pages)
+        ? layoutConfig.pages.map((page: any) => ({
+            ...page,
+            blocks: Array.isArray(page?.blocks) ? page.blocks : []
+          }))
+        : []
+    } : {
       id: row.id,
       title: resolvedName,
       subtitle: '',

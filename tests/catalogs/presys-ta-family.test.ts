@@ -243,8 +243,8 @@ describe('PRESYS TA Family Content Matrix (R2-C1 to R2-C12)', () => {
     expect(ta35Preset).toBeDefined();
     expect(ta50Preset).toBeDefined();
 
-    expect(ta25Preset?.catalog.pages.length).toBe(6);
-    expect(ta35Preset?.catalog.pages.length).toBe(6);
-    expect(ta50Preset?.catalog.pages.length).toBe(6);
+    expect(ta25Preset?.catalog.pages.length).toBe(8);
+    expect(ta35Preset?.catalog.pages.length).toBe(8);
+    expect(ta50Preset?.catalog.pages.length).toBe(8);
   });
 });
