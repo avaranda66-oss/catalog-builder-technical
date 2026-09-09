@@ -59,10 +59,19 @@ export function auditLayoutPreflight(
 ): LayoutPreflightReport {
   const issues: LayoutPreflightIssue[] = [];
 
-  // 1. Verificação Estática de Exclusividade de Capa
+  // 1. Verificação Estática de Exclusividade de Capa e Formato dos Blocos
   catalog.pages.forEach((page, idx) => {
     const pageNumber = idx + 1;
-    const blocks = page.blocks || [];
+    if (!Array.isArray(page.blocks)) {
+      issues.push({
+        code: 'MALFORMED_PAGE_BLOCKS',
+        severity: 'block',
+        pageNumber,
+        message: `Página ${pageNumber} contém estrutura de blocos malformada (não é array).`
+      });
+      return;
+    }
+    const blocks = page.blocks;
     const coverBlock = blocks.find((b) => b.type === 'full_page_cover');
 
     if (coverBlock && blocks.length > 1) {

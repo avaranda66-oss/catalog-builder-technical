@@ -242,7 +242,8 @@ export const TablePaginationPolicySchema = z.object({
   allowRowSplit: z.boolean().default(false),
   repeatHeaderOnBreak: z.boolean().default(true),
   keepHeaderWithFirstRow: z.boolean().default(true),
-  minOrphanRows: z.number().int().min(1).default(1)
+  minOrphanRows: z.number().int().min(1).default(1),
+  autoSplitOnOverflow: z.boolean().optional()
 }).strict();
 
 export const TableCoreModelSchema = z.object({

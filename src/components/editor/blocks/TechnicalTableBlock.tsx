@@ -119,11 +119,15 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
         e.stopPropagation();
         selectEditorElement({ blockId: block.id, childId: null });
       }}
-      className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
-        isSelected && !isExport ? 'ring-2 ring-blue-600' : isExport ? 'shadow-none' : 'hover:border-slate-400'
-      }`}
+      className={`relative ${isSelected && !isExport ? 'ring-2 ring-blue-600' : ''}`}
     >
-      {/* Header Técnico da Tabela */}
+      <div
+        data-a4-measure-root="true"
+        className={`relative p-2 bg-white rounded-none border border-slate-300 transition-all ${
+          isExport ? 'shadow-none' : 'hover:border-slate-400'
+        }`}
+      >
+        {/* Header Técnico da Tabela */}
       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
         <h3
           data-printable-field="title"
@@ -275,40 +279,45 @@ export const TechnicalTableBlock: React.FC<TechnicalTableBlockProps> = ({
           onToggleManualBreak={(rowId, enabled) => setManualTableBreak(block.id, rowId, enabled)}
           onRemoveColumn={handleRemoveColumn}
           onRenameColumn={handleColumnLabelBlur}
+          firstRowId={rawRows[0]?.id}
         />
       )}
 
+        <p
+          className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
+            slice?.footnoteNotice ? '' : 'invisible'
+          }`}
+          data-table-continuation-notice
+          aria-hidden={!slice?.footnoteNotice}
+        >
+          {slice?.footnoteNotice ?? null}
+        </p>
+      </div>
+
       {!isExport && useTableCorePilot && rows.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1 no-print" data-editor-action="true">
-          {rows.map((row, index) => (
-            <button
-              key={row.id}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setManualTableBreak(block.id, row.id, !manualBreakRowIds.includes(row.id));
-              }}
-              className={`flex items-center gap-1 border px-1.5 py-0.5 text-[9px] ${
-                manualBreakRowIds.includes(row.id) ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-500'
-              }`}
-              title="Quebrar página antes desta linha"
-            >
-              <Scissors className="h-2.5 w-2.5" />
-              <span>Quebrar antes da linha {index + 1}</span>
-            </button>
-          ))}
+          {rows.map((row, index) => {
+            if (index === 0) return null; // P2-A: First-row manual break disabled
+            return (
+              <button
+                key={row.id}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setManualTableBreak(block.id, row.id, !manualBreakRowIds.includes(row.id));
+                }}
+                className={`flex items-center gap-1 border px-1.5 py-0.5 text-[9px] ${
+                  manualBreakRowIds.includes(row.id) ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-500'
+                }`}
+                title="Quebrar página antes desta linha"
+              >
+                <Scissors className="h-2.5 w-2.5" />
+                <span>Quebrar antes da linha {index + 1}</span>
+              </button>
+            );
+          })}
         </div>
       )}
-
-      <p
-        className={`mt-1 h-3 overflow-hidden whitespace-nowrap text-[9px] font-semibold italic text-slate-500 ${
-          slice?.footnoteNotice ? '' : 'invisible'
-        }`}
-        data-table-continuation-notice
-        aria-hidden={!slice?.footnoteNotice}
-      >
-        {slice?.footnoteNotice ?? null}
-      </p>
 
       {/* Rodapé da Tabela: Inserir Produtos (Apenas no Modo Editor) */}
       {!isExport && (

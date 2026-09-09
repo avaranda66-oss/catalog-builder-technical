@@ -48,13 +48,14 @@ export function measureCanonicalA4Pages(root: HTMLElement, catalog: Catalog): Pa
       blocks: page.blocks.flatMap((block) => {
         const blockElement = blockElements.find((element) => element.dataset.canonicalBlockId === block.id);
         if (!blockElement) return [];
-        const measuredHeightMm = pxToMm(pxHeight(blockElement, scale));
-        const measuredWidthMm = pxToMm(pxWidth(blockElement, scale));
+        const measureRoot = blockElement.querySelector<HTMLElement>('[data-a4-measure-root]') ?? blockElement;
+        const measuredHeightMm = pxToMm(pxHeight(measureRoot, scale));
+        const measuredWidthMm = pxToMm(pxWidth(measureRoot, scale));
         const canonicalRowIds = new Set(block.tableRows?.map((row) => row.id) ?? []);
-        const rowElements = Array.from(blockElement.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
+        const rowElements = Array.from(measureRoot.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
           .filter((element) => canonicalRowIds.has(element.dataset.canonicalRowId || ''))
           .filter((element, index, all) => all.findIndex((candidate) => candidate.dataset.canonicalRowId === element.dataset.canonicalRowId) === index);
-        const headerElements = Array.from(blockElement.querySelectorAll<HTMLElement>('thead'));
+        const headerElements = Array.from(measureRoot.querySelectorAll<HTMLElement>('thead'));
         const headerHeightPx = headerElements.reduce((sum, element) => sum + pxHeight(element, scale), 0);
         const rowHeights = rowElements.map((element) => ({
           rowId: element.dataset.canonicalRowId || '',
@@ -90,7 +91,13 @@ export function measureCanonicalA4Pages(root: HTMLElement, catalog: Catalog): Pa
 }
 
 export function verifyRenderedA4Plan(root: HTMLElement, renderPlan: A4RenderPlan): A4RenderPlan {
-  const runtimeCodes = new Set<PageFlowIssueCode>(['VERTICAL_OVERFLOW', 'HORIZONTAL_OVERFLOW', 'ROW_CLIPPED']);
+  const runtimeCodes = new Set<PageFlowIssueCode>([
+    'VERTICAL_OVERFLOW',
+    'HORIZONTAL_OVERFLOW',
+    'ROW_CLIPPED',
+    'TABLE_ROW_LOSS',
+    'TABLE_ROW_DUPLICATION'
+  ]);
   const flowPlan = {
     ...renderPlan.flowPlan,
     unresolvedIssues: renderPlan.flowPlan.unresolvedIssues.filter((issue) => !runtimeCodes.has(issue.code))
@@ -98,9 +105,7 @@ export function verifyRenderedA4Plan(root: HTMLElement, renderPlan: A4RenderPlan
 
   for (const renderPage of renderPlan.pages) {
     const pageElement = root.querySelector<HTMLElement>(`[data-a4-page-id="${selectorValue(renderPage.id)}"]`);
-    const viewport = pageElement?.querySelector<HTMLElement>('[data-a4-block-flow-viewport]');
-    const content = pageElement?.querySelector<HTMLElement>('[data-a4-block-flow-content]');
-    if (!pageElement || !viewport || !content || viewport.clientHeight <= 0 || viewport.clientWidth <= 0) {
+    if (!pageElement) {
       flowPlan.unresolvedIssues.push({
         pageNumber: renderPage.pageNumber,
         code: 'LAYOUT_MEASUREMENT_MISSING',
@@ -108,37 +113,102 @@ export function verifyRenderedA4Plan(root: HTMLElement, renderPlan: A4RenderPlan
       });
       continue;
     }
-    if (content.scrollHeight > viewport.clientHeight + 1) {
-      flowPlan.unresolvedIssues.push({
-        pageNumber: renderPage.pageNumber,
-        code: 'VERTICAL_OVERFLOW',
-        message: `A folha física ${renderPage.pageNumber} excede verticalmente o viewport renderizado.`
-      });
+
+    const viewport = pageElement.querySelector<HTMLElement>('[data-a4-block-flow-viewport]');
+    const content = pageElement.querySelector<HTMLElement>('[data-a4-block-flow-content]');
+    if (viewport && content && viewport.clientHeight > 0 && viewport.clientWidth > 0) {
+      if (content.scrollHeight > viewport.clientHeight + 1) {
+        flowPlan.unresolvedIssues.push({
+          pageNumber: renderPage.pageNumber,
+          code: 'VERTICAL_OVERFLOW',
+          message: `A folha física ${renderPage.pageNumber} excede verticalmente o viewport renderizado.`
+        });
+      }
+      if (content.scrollWidth > viewport.clientWidth + 1) {
+        flowPlan.unresolvedIssues.push({
+          pageNumber: renderPage.pageNumber,
+          code: 'HORIZONTAL_OVERFLOW',
+          message: `A folha física ${renderPage.pageNumber} excede horizontalmente o viewport renderizado.`
+        });
+      }
     }
-    if (content.scrollWidth > viewport.clientWidth + 1) {
-      flowPlan.unresolvedIssues.push({
-        pageNumber: renderPage.pageNumber,
-        code: 'HORIZONTAL_OVERFLOW',
-        message: `A folha física ${renderPage.pageNumber} excede horizontalmente o viewport renderizado.`
-      });
+
+    // P1-F: Verificação exata de ordem, multiplicidade e fatias no DOM por página física
+    for (const renderBlock of renderPage.blocks) {
+      if (!renderBlock.slice) continue;
+      const expectedRowIds = renderBlock.slice.includedRowIds;
+      const blockElement = pageElement.querySelector<HTMLElement>(
+        `[data-canonical-block-id="${selectorValue(renderBlock.canonicalBlockId)}"]`
+      );
+      if (!blockElement) {
+        flowPlan.unresolvedIssues.push({
+          pageNumber: renderPage.pageNumber,
+          code: 'ROW_CLIPPED',
+          message: `Bloco canônico ${renderBlock.canonicalBlockId} não encontrado na folha física ${renderPage.pageNumber}.`
+        });
+        continue;
+      }
+
+      const domRowIds = Array.from(blockElement.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
+        .map((element) => element.dataset.canonicalRowId)
+        .filter((id): id is string => Boolean(id));
+
+      let exactMatch = domRowIds.length === expectedRowIds.length;
+      if (exactMatch) {
+        for (let i = 0; i < domRowIds.length; i++) {
+          if (domRowIds[i] !== expectedRowIds[i]) {
+            exactMatch = false;
+            break;
+          }
+        }
+      }
+
+      if (!exactMatch) {
+        flowPlan.unresolvedIssues.push({
+          pageNumber: renderPage.pageNumber,
+          code: 'ROW_CLIPPED',
+          message: `Fatia da tabela ${renderBlock.canonicalBlockId} na folha ${renderPage.pageNumber} diverge da ordem, multiplicidade ou conteúdo esperado.`
+        });
+      }
     }
   }
 
-  const renderedRowIds = Array.from(root.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
+  // P1-F: Verificação de multiset global no documento inteiro
+  // Cada linha de dados canônica esperada deve aparecer exatamente uma vez
+  const allRenderedRowIds = Array.from(root.querySelectorAll<HTMLElement>('[data-canonical-row-id]'))
     .map((element) => element.dataset.canonicalRowId)
     .filter((id): id is string => Boolean(id));
+
+  const rowCounts = new Map<string, number>();
+  for (const id of allRenderedRowIds) {
+    rowCounts.set(id, (rowCounts.get(id) ?? 0) + 1);
+  }
+
+  const allExpectedRowIds = new Set<string>();
   for (const renderPage of renderPlan.pages) {
     for (const renderBlock of renderPage.blocks) {
-      if (!renderBlock.slice) continue;
-      for (const rowId of renderBlock.slice.includedRowIds) {
-        if (!renderedRowIds.includes(rowId)) {
-          flowPlan.unresolvedIssues.push({
-            pageNumber: renderPage.pageNumber,
-            code: 'ROW_CLIPPED',
-            message: `A linha ${rowId} não está presente no DOM físico da fatia renderizada.`
-          });
+      if (renderBlock.slice) {
+        for (const rowId of renderBlock.slice.includedRowIds) {
+          allExpectedRowIds.add(rowId);
         }
       }
+    }
+  }
+
+  for (const rowId of allExpectedRowIds) {
+    const count = rowCounts.get(rowId) ?? 0;
+    if (count > 1) {
+      flowPlan.unresolvedIssues.push({
+        pageNumber: 1,
+        code: 'TABLE_ROW_DUPLICATION',
+        message: `A linha canônica ${rowId} foi renderizada ${count} vezes no documento físico (duplicata detectada).`
+      });
+    } else if (count === 0) {
+      flowPlan.unresolvedIssues.push({
+        pageNumber: 1,
+        code: 'TABLE_ROW_LOSS',
+        message: `A linha canônica ${rowId} esperada na paginação não está presente no documento físico renderizado.`
+      });
     }
   }
 

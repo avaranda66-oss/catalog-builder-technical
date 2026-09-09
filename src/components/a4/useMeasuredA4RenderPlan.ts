@@ -39,6 +39,51 @@ export interface MeasuredA4RenderPlanState {
   layoutPreflight: LayoutPreflightReport;
   isLayoutComplete: boolean;
   isLayoutReady: boolean;
+  generationToken: string;
+}
+
+export async function waitForPhysicalAssetsReady(root: HTMLElement): Promise<void> {
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      /* physical audit remains fail-closed */
+    }
+  }
+
+  if (typeof root.querySelectorAll !== 'function') return;
+
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+  if (images.length === 0) return;
+
+  const pending = images.map((img) => {
+    if (img.complete && img.naturalWidth > 0) {
+      if (typeof img.decode === 'function') {
+        return img.decode().catch(() => {});
+      }
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (resolved) return;
+        resolved = true;
+        img.removeEventListener('load', onLoad);
+        img.removeEventListener('error', onError);
+        if (typeof img.decode === 'function') {
+          img.decode().catch(() => {}).finally(() => resolve());
+        } else {
+          resolve();
+        }
+      };
+      const onLoad = () => done();
+      const onError = () => done();
+      img.addEventListener('load', onLoad);
+      img.addEventListener('error', onError);
+    });
+  });
+
+  await Promise.all(pending);
 }
 
 export function useMeasuredA4RenderPlan(
@@ -63,6 +108,10 @@ export function useMeasuredA4RenderPlan(
   );
   const [renderPlan, setRenderPlan] = React.useState<A4RenderPlan>(initialRenderPlan);
   const [phase, setPhase] = React.useState<'measure' | 'verify' | 'ready'>('measure');
+  const [generationTokenCount, setGenerationTokenCount] = React.useState<number>(0);
+  const revalidationsCountRef = React.useRef(0);
+  const lastVerifiedHeightsRef = React.useRef<Map<HTMLElement, number>>(new Map());
+
   const documentKey = `${runtimeCatalog.id}:${runtimeCatalog.version}:${runtimeCatalog.updatedAt}:${flowMode}`;
   const previousKey = React.useRef(documentKey);
   const isCurrentDocument = previousKey.current === documentKey;
@@ -70,8 +119,11 @@ export function useMeasuredA4RenderPlan(
   React.useLayoutEffect(() => {
     if (previousKey.current === documentKey) return;
     previousKey.current = documentKey;
+    revalidationsCountRef.current = 0;
+    lastVerifiedHeightsRef.current.clear();
     setRenderPlan(initialRenderPlan);
     setPhase('measure');
+    setGenerationTokenCount((c) => c + 1);
   }, [documentKey, initialRenderPlan]);
 
   React.useLayoutEffect(() => {
@@ -81,9 +133,7 @@ export function useMeasuredA4RenderPlan(
     let frame = 0;
 
     const run = async () => {
-      if (typeof document !== 'undefined' && document.fonts?.ready) {
-        try { await document.fonts.ready; } catch { /* physical audit remains fail-closed */ }
-      }
+      await waitForPhysicalAssetsReady(root);
       frame = requestAnimationFrame(() => {
         if (cancelled || !rootRef.current) return;
         if (phase === 'measure') {
@@ -93,6 +143,10 @@ export function useMeasuredA4RenderPlan(
           setPhase('verify');
         } else if (phase === 'verify') {
           setRenderPlan((current) => verifyRenderedA4Plan(rootRef.current!, current));
+          const blockMap = new Map<HTMLElement, number>();
+          const blocks = rootRef.current.querySelectorAll<HTMLElement>('[data-block-id], [data-canonical-block-id]');
+          blocks.forEach((el) => blockMap.set(el, el.offsetHeight));
+          lastVerifiedHeightsRef.current = blockMap;
           setPhase('ready');
         }
       });
@@ -104,6 +158,61 @@ export function useMeasuredA4RenderPlan(
     };
   }, [flowMode, phase, rootRef, runtimeCatalog]);
 
+  // P1-A: Invalidação de geração física se assets ou dimensões mudarem após verificação
+  React.useEffect(() => {
+    if (phase !== 'ready' || !rootRef.current) return;
+    const root = rootRef.current;
+    let observer: ResizeObserver | null = null;
+
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver((entries) => {
+        if (revalidationsCountRef.current >= 5) return; // Limite de convergência
+        let hasMaterialChange = false;
+        for (const entry of entries) {
+          const target = entry.target as HTMLElement;
+          const previousHeight = lastVerifiedHeightsRef.current.get(target);
+          if (previousHeight === undefined) {
+            lastVerifiedHeightsRef.current.set(target, target.offsetHeight);
+          } else if (Math.abs(target.offsetHeight - previousHeight) > 1) { // Guardado por igualdade (>1px)
+            hasMaterialChange = true;
+            break;
+          }
+        }
+        if (hasMaterialChange) {
+          revalidationsCountRef.current += 1;
+          setPhase('measure');
+          setGenerationTokenCount((c) => c + 1);
+        }
+      });
+
+      const blocks = root.querySelectorAll<HTMLElement>('[data-block-id], [data-canonical-block-id]');
+      blocks.forEach((el) => observer?.observe(el));
+    }
+
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+    const handleImageLoadOrError = () => {
+      if (revalidationsCountRef.current < 5) {
+        revalidationsCountRef.current += 1;
+        setPhase('measure');
+        setGenerationTokenCount((c) => c + 1);
+      }
+    };
+    images.forEach((img) => {
+      if (!img.complete) {
+        img.addEventListener('load', handleImageLoadOrError, { once: true });
+        img.addEventListener('error', handleImageLoadOrError, { once: true });
+      }
+    });
+
+    return () => {
+      observer?.disconnect();
+      images.forEach((img) => {
+        img.removeEventListener('load', handleImageLoadOrError);
+        img.removeEventListener('error', handleImageLoadOrError);
+      });
+    };
+  }, [phase, rootRef]);
+
   const layoutPreflight = React.useMemo(
     () => phase === 'ready' && isCurrentDocument
       ? auditLayoutPreflight(runtimeCatalog, renderPlan.flowPlan)
@@ -111,10 +220,13 @@ export function useMeasuredA4RenderPlan(
     [isCurrentDocument, phase, renderPlan, runtimeCatalog]
   );
 
+  const generationToken = `${documentKey}:gen-${generationTokenCount}:${phase}`;
+
   return {
     renderPlan,
     layoutPreflight,
     isLayoutComplete: phase === 'ready' && isCurrentDocument,
-    isLayoutReady: phase === 'ready' && isCurrentDocument && layoutPreflight.canPublish
+    isLayoutReady: phase === 'ready' && isCurrentDocument && layoutPreflight.canPublish,
+    generationToken
   };
 }

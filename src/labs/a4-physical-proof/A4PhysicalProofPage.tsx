@@ -13,7 +13,7 @@ const updateLongestTable = (
   source: Catalog,
   update: (block: ContentBlock) => ContentBlock
 ): Catalog => {
-  const tables = source.pages.flatMap((page) => page.blocks.filter((block) => block.tableRows?.length));
+  const tables = source.pages.flatMap((page) => (page.blocks ?? []).filter((block) => Boolean(block && block.tableRows?.length)));
   const longest = tables.sort((left, right) => (right.tableRows?.length ?? 0) - (left.tableRows?.length ?? 0))[0];
   if (!longest) return source;
   return {
@@ -22,14 +22,14 @@ const updateLongestTable = (
     updatedAt: new Date().toISOString(),
     pages: source.pages.map((page) => ({
       ...page,
-      blocks: page.blocks.map((block) => block.id === longest.id ? update(block) : block)
+      blocks: (page.blocks ?? []).map((block) => block.id === longest.id ? update(block) : block)
     }))
   };
 };
 
 const canonicalTableRows = (catalog: Catalog) => Object.fromEntries(
-  catalog.pages.flatMap((page) => page.blocks)
-    .filter((block) => block.tableRows?.length)
+  catalog.pages.flatMap((page) => page.blocks ?? [])
+    .filter((block) => Boolean(block && block.tableRows?.length))
     .map((block) => [block.id, block.tableRows!.map((row) => row.id)])
 );
 
@@ -151,6 +151,47 @@ export const A4PhysicalProofPage: React.FC = () => {
     }));
   };
 
+  const selectLegacy = () => {
+    beginMutation();
+    setModel('Legacy' as any);
+    setCatalog({
+      id: 'legacy-hydrated-catalog',
+      title: 'Legacy Catalog',
+      themeId: 'default',
+      pages: [{
+        id: 'legacy-p1',
+        pageNumber: 1,
+        pageType: 'technical',
+        title: 'Legacy Page'
+      } as any],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      version: 1
+    });
+  };
+
+  const addDelayedImage = () => {
+    beginMutation();
+    setCatalog((current) => ({
+      ...current,
+      version: current.version + 1,
+      updatedAt: new Date().toISOString(),
+      pages: current.pages.map((p, idx) => idx === 1 ? {
+        ...p,
+        blocks: [
+          {
+            id: `delayed-img-${Date.now()}`,
+            type: 'image',
+            customData: {
+              url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="%23003366"/><text x="50%" y="50%" fill="white" font-size="16" text-anchor="middle" dy=".3em">Delayed Asset</text></svg>'
+            }
+          },
+          ...p.blocks
+        ]
+      } : p)
+    }));
+  };
+
   return (
     <div
       data-a4-physical-proof
@@ -163,6 +204,7 @@ export const A4PhysicalProofPage: React.FC = () => {
         {MODELS.map((candidate) => (
           <button key={candidate} type="button" onClick={() => selectModel(candidate)}>{candidate}</button>
         ))}
+        <button type="button" onClick={selectLegacy}>Legacy</button>
         <button type="button" onClick={() => setMode('smart')}>Inteligente</button>
         <button type="button" onClick={() => setMode('manual')}>Manual</button>
         <button type="button" onClick={addRows}>Adicionar linhas</button>
@@ -170,10 +212,12 @@ export const A4PhysicalProofPage: React.FC = () => {
         <button type="button" onClick={addManualBreak}>Quebrar página antes desta linha</button>
         <button type="button" onClick={addTallCell}>Editar célula longa</button>
         <button type="button" onClick={addLongCode}>Código horizontal adversarial</button>
+        <button type="button" onClick={addDelayedImage}>Imagem atrasada</button>
         <output
           data-proof-status
           data-layout-ready={Boolean(layout?.canPublish)}
           data-page-count={renderPlan?.pages.length ?? 0}
+          data-proof-issues={JSON.stringify(layout?.issues || [])}
         >
           {layout ? `${layout.canPublish ? 'PASS' : 'BLOCKED'}:${layout.blockCount}` : 'MEASURING'}
         </output>

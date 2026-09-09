@@ -1,12 +1,20 @@
-import { spawn } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { chromium } from 'playwright';
 
 const root = process.cwd();
+const gitHeadSha = (() => {
+  try {
+    return execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+  } catch {
+    return 'UNKNOWN';
+  }
+})();
 const baseUrl = process.env.A4_PROOF_BASE_URL || 'http://127.0.0.1:4174';
 const evidenceDir = path.join(root, 'docs', 'qa', 'evidence', 'a4-flow-r1-1');
+const evidenceDirR13 = path.join(root, 'docs', 'qa', 'evidence', 'a4-flow-r1-3');
 const models = ['TA-25N', 'TA-35N', 'TA-50N'];
 
 const waitForServer = async () => {
@@ -93,6 +101,7 @@ const readPhysicalEvidence = async (page) => page.evaluate(() => {
     model: rootElement?.getAttribute('data-proof-model'),
     layoutState: document.querySelector('.clean-export-root')?.getAttribute('data-layout-state'),
     layoutBlockCount: Number(document.querySelector('.clean-export-root')?.getAttribute('data-layout-block-count') || 0),
+    issues: JSON.parse(document.querySelector('[data-proof-status]')?.getAttribute('data-proof-issues') || '[]'),
     pages: pages.map(({ rowIds: _rowIds, ...entry }) => entry),
     rowConservation: {
       canonicalCount: expectedRows.length,
@@ -216,13 +225,31 @@ const run = async () => {
     const pageCountAfterDelete = Number(await page.locator('[data-proof-status]').getAttribute('data-page-count'));
     const afterDeleteEvidence = await readPhysicalEvidence(page);
 
+    // Prova de Catálogo Legado (White-screen regression prevention)
+    await page.getByRole('button', { name: 'Legacy' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-a4-physical-proof]')?.getAttribute('data-proof-model') === 'Legacy');
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    const legacyEvidence = await readPhysicalEvidence(page);
+    await page.locator('[data-a4-page]').first().screenshot({ path: path.join(evidenceDir, 'legacy-cover.png') });
+
+    // Prova de Asset / Imagem Atrasada Adversarial
+    await page.getByRole('button', { name: 'TA-25N' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-a4-physical-proof]')?.getAttribute('data-proof-model') === 'TA-25N');
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    await page.getByRole('button', { name: 'Imagem atrasada' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-proof-status]')?.textContent !== 'MEASURING');
+    const delayedImageEvidence = await readPhysicalEvidence(page);
+
     const failures = evidence.flatMap((entry) => entry.pages.filter((physicalPage) => physicalPage.status !== 'PASS'));
     const rowDefects = evidence.filter((entry) => entry.rowConservation.missingRows.length || entry.rowConservation.duplicateRows.length);
     const blocked = evidence.filter((entry) => entry.layoutState !== 'ready' || entry.layoutBlockCount !== 0);
     const report = {
       generatedAt: new Date().toISOString(),
+      gitHeadSha,
       baseUrl,
       evidence,
+      legacyEvidence,
+      delayedImageEvidence,
       dynamicDogfood: {
         baselinePageCount,
         canonicalPageCount,
@@ -251,7 +278,9 @@ const run = async () => {
       },
       summary: { failures: failures.length, rowDefects: rowDefects.length, blockedCatalogs: blocked.length }
     };
+    await fs.mkdir(evidenceDirR13, { recursive: true });
     await fs.writeFile(path.join(evidenceDir, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
+    await fs.writeFile(path.join(evidenceDirR13, 'presys-a4-physical.json'), `${JSON.stringify(report, null, 2)}\n`);
 
     if (failures.length || rowDefects.length || blocked.length) {
       throw new Error(`Physical acceptance failed: ${JSON.stringify(report.summary)}`);

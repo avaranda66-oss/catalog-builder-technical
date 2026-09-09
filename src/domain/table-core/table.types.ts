@@ -278,6 +278,7 @@ export interface TablePaginationPolicy {
   repeatHeaderOnBreak: boolean;    // Repetir cabeçalhos em folhas seguintes
   keepHeaderWithFirstRow: boolean; // Evitar cabeçalho órfão no fim da página
   minOrphanRows: number;           // Mínimo de linhas para permitir continuação
+  autoSplitOnOverflow?: boolean;   // Se true (default), divide automaticamente por altura. Se false (modo manual), divide apenas em quebras explícitas.
 }
 
 /**
