@@ -12,10 +12,10 @@ Open http://localhost:5198. No production route or deployment. Refresh resets al
 ## Acceptance checklist
 - [x] Independent runnable shell, finite A4, editable objects, contextual Inspector.
 - [x] Drag/resize, delete/duplicate, keyboard nudge, undo/redo.
-- [ ] Table workflow and contextual controls.
-- [ ] Compare safe margins A/B through browser interaction.
-- [ ] Execute father workflow, inspect desktop/laptop and capture evidence.
-- [ ] Required gates, evidence report and pushed checkpoints.
+- [x] Table workflow and contextual controls.
+- [x] Compare safe margins A/B/C through browser interaction.
+- [x] Execute father workflow, inspect desktop/laptop and capture evidence.
+- [x] Required gates, evidence report and pushed checkpoints.
 
 ## File list
 README.md, index.html, serve.mjs, main.tsx, Editor.tsx, fixtures.tsx, editor.css.
