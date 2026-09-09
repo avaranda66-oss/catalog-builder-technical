@@ -290,9 +290,9 @@ try {
   const overSpan=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20.003,rowHeights:[10,10],span:2,label:'t-q-span-02'}),'T-Q-SPAN-02');
   assert.equal(overSpan.status,'BLOCKED');assert(overSpan.diagnostics.some(d=>d.code==='ROW_CONTENT_OVERFLOW'));
   const browserContracts=await page.evaluate(async()=>{
-    const layout=await import('/src/labs/presys-editorial-proof/proof-layout.ts');
-    const physical=await import('/src/labs/presys-editorial-proof/physical.ts');
-    const preflight=await import('/src/labs/presys-editorial-proof/proof-preflight.ts');
+    const layout=await import('/src/vnext/table/table-layout.ts');
+    const physical=await import('/src/vnext/domain/physical.ts');
+    const preflight=await import('/src/vnext/publication/preflight.ts');
     const phaseRows=[
       {id:'prefix',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.0021}},
       {id:'grow',role:'body',heightPolicy:{mode:'AUTO'}},

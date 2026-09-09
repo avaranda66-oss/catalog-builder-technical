@@ -1,17 +1,35 @@
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { useState } from 'react';
-import type { CatalogDocument } from './proof-model';
-import { CatalogDocumentSchema } from './proof-model';
-import { authoredFrames,validateDocument } from './proof-table';
+import {
+  CatalogDocumentSchema,
+  DocumentRenderer,
+  VNextError,
+  asDiagnostic,
+  authoredFrames,
+  captureSnapshot,
+  compareSnapshots,
+  compilePlans,
+  decodeImages,
+  layoutReport,
+  loadFonts,
+  measureTables,
+  resolveAssets,
+  sha256,
+  tableConstraints,
+  validateDocument,
+  verifyFontManifest,
+  type CatalogDocument,
+  type Diagnostic,
+  type LayoutSnapshot,
+  type ResourceManifest,
+  type TablePlan,
+} from '@/vnext';
 import { makeFixture,fixtureNames,type FixtureName } from './fixtures';
-import { compilePlans,type TablePlan } from './proof-render-plan';
-import { ProofDocument } from './ProofDocument';
-import { captureSnapshot,compareSnapshots,measureTables,tableConstraints,type LayoutSnapshot } from './proof-measurement';
-import { layoutReport } from './proof-preflight';
-import { decodeImages,loadFonts,resolveAssets,sha256,verifyFontManifest,type ResourceManifest } from './proof-resources';
-import { asDiagnostic,ProofError,type Diagnostic } from './diagnostics';
 import './proof.css';
+
+const ta25nUrl=new URL('./assets/ta-25n.jpg',import.meta.url).href;
+const labAssetRegistry=new Map([['asset-ta25n',ta25nUrl]]);
 
 export interface PhaseRecord {phase:string;documentHash:string;framesHash:string;elapsedMs:number}
 export interface ProofResult {
@@ -27,7 +45,7 @@ let currentResult:ProofResult|undefined,busy=false;
 let currentJobStart=0;
 let notify:(result:ProofResult|undefined,busy:boolean)=>void=()=>{};
 function renderTree():void {
-  flushSync(()=>editorialRoot.render(<ProofDocument document={currentDocument} plans={currentPlans} assetUrls={currentUrls}/>));
+  flushSync(()=>editorialRoot.render(<DocumentRenderer document={currentDocument} plans={currentPlans} assetUrls={currentUrls} footerLabel="PRESYS · PROVA EDITORIAL R0"/>));
 }
 function freeze<T>(value:T):T {
   if(value && typeof value==='object'){Object.freeze(value);Object.values(value).forEach(freeze);}
@@ -35,10 +53,10 @@ function freeze<T>(value:T):T {
 }
 async function checkpoint(phase:string,start:number,phases:PhaseRecord[]):Promise<void> {
   phases.push({phase,documentHash:await sha256(JSON.stringify(currentDocument)),framesHash:await sha256(authoredFrames(currentDocument)),elapsedMs:performance.now()-start});
-  if(phases.some(p=>p.documentHash!==phases[0].documentHash||p.framesHash!==phases[0].framesHash))throw new ProofError('AUTHORSHIP_MUTATED',phase);
+  if(phases.some(p=>p.documentHash!==phases[0].documentHash||p.framesHash!==phases[0].framesHash))throw new VNextError('AUTHORSHIP_MUTATED',phase);
 }
 async function runDocument(input:CatalogDocument,fixture:string):Promise<ProofResult> {
-  if(busy)throw new ProofError('PROOF_JOB_BUSY');
+  if(busy)throw new VNextError('PROOF_JOB_BUSY');
   busy=true;currentResult=undefined;notify(undefined,true);
   flushSync(()=>editorialRoot.render(null));
   currentUrls.forEach(url=>URL.revokeObjectURL(url));currentUrls=new Map();currentPlans=new Map();
@@ -51,14 +69,14 @@ async function runDocument(input:CatalogDocument,fixture:string):Promise<ProofRe
     await checkpoint('before-validation',start,phases);
     diagnostics.push(...validateDocument(currentDocument));
     await checkpoint('validation',start,phases);
-    if(diagnostics.some(d=>d.severity==='ERROR'))throw new ProofError('DOCUMENT_VALIDATION_BLOCKED');
+    if(diagnostics.some(d=>d.severity==='ERROR'))throw new VNextError('DOCUMENT_VALIDATION_BLOCKED');
     CatalogDocumentSchema.parse(currentDocument);
     const compiled=compilePlans(currentDocument);currentPlans=compiled.plans;diagnostics.push(...compiled.diagnostics);
     const renderStart=performance.now();renderTree();durations.renderMs=performance.now()-renderStart;
     await checkpoint('render',start,phases);
     const resourcesStart=performance.now();
     const fonts=await loadFonts(currentDocument,host);await checkpoint('fonts-loaded',start,phases);
-    const assets=await resolveAssets(currentDocument);currentUrls=assets.urls;
+    const assets=await resolveAssets(currentDocument,asset=>labAssetRegistry.get(asset.id));currentUrls=assets.urls;
     await checkpoint('assets-resolved',start,phases);
     renderTree();await decodeImages(host,currentDocument,currentUrls);
     await checkpoint('images-decoded',start,phases);durations.resourcesMs=performance.now()-resourcesStart;
@@ -76,7 +94,7 @@ async function runDocument(input:CatalogDocument,fixture:string):Promise<ProofRe
   durations.totalMs=performance.now()-start;
   const tables=[...currentPlans.values()].map(plan=>{
     const object=currentDocument.pages.flatMap(p=>p.objects).find(o=>o.type==='table'&&o.table.id===plan.tableId)!;
-    if(object.type!=='table')throw new ProofError('TABLE_NOT_FOUND');
+    if(object.type!=='table')throw new VNextError('TABLE_NOT_FOUND');
     return {id:plan.tableId,rows:object.table.rows.length,columns:object.table.columns.length,cells:object.table.cells.length,
       anchors:object.table.cells.filter(c=>!c.coveredBy).length,widthsU:plan.widthsU,trackQ:plan.trackQ,heightsU:plan.heightsU??[],rowQ:plan.rowQ??[],paintEdges:plan.edges.length,suppressed:plan.suppressed};
   });
@@ -97,25 +115,25 @@ export const proofApi={
     return layoutReport(currentDocument,currentPlans,snapshot,host);
   },
   beforeExport:async()=>{
-    if(!currentResult||currentResult.status!=='READY'||!currentResult.snapshot)throw new ProofError('PDF_EXPORT_BLOCKED');
+    if(!currentResult||currentResult.status!=='READY'||!currentResult.snapshot)throw new VNextError('PDF_EXPORT_BLOCKED');
     verifyFontManifest(currentDocument,host);
     await decodeImages(host,currentDocument,currentUrls);
     const a=await captureSnapshot(currentDocument,currentPlans,host);
     const issues=[...layoutReport(currentDocument,currentPlans,a,host),...compareSnapshots(currentResult.snapshot,a)];
     const b=await captureSnapshot(currentDocument,currentPlans,host);issues.push(...compareSnapshots(a,b));
-    if(issues.some(d=>d.severity==='ERROR'))throw new ProofError('PDF_EXPORT_BLOCKED',JSON.stringify(issues));
+    if(issues.some(d=>d.severity==='ERROR'))throw new VNextError('PDF_EXPORT_BLOCKED',JSON.stringify(issues));
     await checkpoint('before-pdf',currentJobStart,currentResult.phases);
     return {documentHash:await sha256(JSON.stringify(currentDocument)),framesHash:await sha256(authoredFrames(currentDocument)),snapshot:b};
   },
   afterExport:async()=>{
-    if(!currentResult)throw new ProofError('PDF_EXPORT_BLOCKED');
+    if(!currentResult)throw new VNextError('PDF_EXPORT_BLOCKED');
     const snapshot=await captureSnapshot(currentDocument,currentPlans,host);
-    if(!currentResult.snapshot||compareSnapshots(currentResult.snapshot,snapshot).length)throw new ProofError('LAYOUT_UNSTABLE','Layout changed during PDF generation');
+    if(!currentResult.snapshot||compareSnapshots(currentResult.snapshot,snapshot).length)throw new VNextError('LAYOUT_UNSTABLE','Layout changed during PDF generation');
     await checkpoint('after-pdf',currentJobStart,currentResult.phases);
     return {documentHash:await sha256(JSON.stringify(currentDocument)),framesHash:await sha256(authoredFrames(currentDocument)),layoutStable:true};
   },
   constraints:()=>currentDocument.pages.flatMap(p=>p.objects).filter(o=>o.type==='table').map(o=>{
-    if(o.type!=='table')throw new ProofError('TABLE_NOT_FOUND');
+    if(o.type!=='table')throw new VNextError('TABLE_NOT_FOUND');
     const plan=currentPlans.get(o.table.id)!;
     return {tableId:o.table.id,frameHeightMm:o.frame.heightMm,...tableConstraints(o.table,host,plan),heightsU:plan.heightsU,rows:o.table.rows};
   }),

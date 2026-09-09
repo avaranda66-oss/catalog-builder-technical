@@ -1,10 +1,10 @@
-import type { CatalogDocument, Cell, TableAnnotation, TableLegendEntry, TableModel, RichText } from './proof-model';
-import { plainRichText } from './proof-model';
-import { orderedAnchors } from './proof-table';
-import { projectTracks, resolveColumns } from './proof-layout';
-import { asDiagnostic, type Diagnostic, ProofError } from './diagnostics';
-import { resolveCellStyle, resolveStyle, type ResolvedStyle } from './proof-style';
-import type { PaintEdge } from './proof-paint';
+import type { CatalogDocument, Cell, TableAnnotation, TableLegendEntry, TableModel, RichText } from '../domain/editorial-model';
+import { plainRichText } from '../domain/editorial-model';
+import { orderedAnchors } from '../table/table-model';
+import { projectTracks, resolveColumns } from '../table/table-layout';
+import { asDiagnostic, type Diagnostic, VNextError } from '../domain/diagnostics';
+import { resolveCellStyle, resolveStyle, type ResolvedStyle } from './style';
+import type { PaintEdge } from './border-paint';
 
 export interface TablePlan {
   tableId:string;objectId:string;pageId:string;
@@ -18,7 +18,7 @@ export function compilePlans(doc:CatalogDocument):{plans:Map<string,TablePlan>;d
   for(const page of doc.pages)for(const object of page.objects)if(object.type==='table') {
     try {
       const result=resolveColumns(object.table.columns,object.frame.widthMm);
-      if(!result.ok)throw new ProofError(result.code,result.details);
+      if(!result.ok)throw new VNextError(result.code,result.details);
       const projected=projectTracks(result.widthsU,result.availableTrackWidthU);
       plans.set(object.table.id,{tableId:object.table.id,objectId:object.id,pageId:page.id,
         frameU:result.availableTrackWidthU,widthsU:result.widthsU,...projected,
@@ -48,7 +48,7 @@ export function cellDisplayText(cell:Cell,table:TableModel):RichText|undefined {
     case 'measurement':rich=plainRichText(cell.id+':display',(content.qualifier?{approx:'≈ ',min:'≥ ',max:'≤ '}[content.qualifier]:'')+content.valueText+' '+content.unit);break;
     case 'marker': {
       const legend=table.legend.find(l=>l.id===content.legendEntryId);
-      if(!legend)throw new ProofError('MARKER_LEGEND_REFERENCE_DANGLING');
+      if(!legend)throw new VNextError('MARKER_LEGEND_REFERENCE_DANGLING');
       rich=plainRichText(cell.id+':display',legend.markerCode);break;
     }
   }

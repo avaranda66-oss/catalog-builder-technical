@@ -1,11 +1,11 @@
-import { CatalogDocumentSchema, TableModelSchema } from './proof-model';
-import type { AssetRef, CatalogDocument, Cell, Column, Row, TableModel } from './proof-model';
-import { diagnostic, ProofError, type Diagnostic } from './diagnostics';
-import { mul } from './physical';
+import { CatalogDocumentSchema, TableModelSchema } from '../domain/editorial-model';
+import type { AssetRef, CatalogDocument, Cell, Column, Row, TableModel } from '../domain/editorial-model';
+import { diagnostic, VNextError, type Diagnostic } from '../domain/diagnostics';
+import { mul } from '../domain/physical';
 
 /** Ported verbatim concept from legacy table.types.ts; no legacy runtime import. */
 export function getCellKey(rowId:string,columnId:string):string {
-  if(!rowId || !columnId) throw new ProofError('CELL_COORDINATE_INVALID');
+  if(!rowId || !columnId) throw new VNextError('CELL_COORDINATE_INVALID');
   return `r${rowId.length}:${rowId}|c${columnId.length}:${columnId}`;
 }
 export function cellIndex(table:TableModel):Map<string,Cell> {
@@ -108,25 +108,25 @@ export function validateDocument(input:unknown):Diagnostic[] {
 }
 export function assertTable(table:TableModel):void {
   const errors=validateTable(table);
-  if(errors.length)throw new ProofError(errors[0].code,errors[0].details);
+  if(errors.length)throw new VNextError(errors[0].code,errors[0].details);
 }
 /** Fail-closed immutable operation, adapted to the new strict array model. */
 export function mergeCells(table:TableModel,anchorId:string,rows:number,columns:number):TableModel {
   assertTable(table);
-  if(!Number.isSafeInteger(rows)||!Number.isSafeInteger(columns)||rows<1||columns<1)throw new ProofError('INVALID_SPAN');
+  if(!Number.isSafeInteger(rows)||!Number.isSafeInteger(columns)||rows<1||columns<1)throw new VNextError('INVALID_SPAN');
   const anchor=table.cells.find(c=>c.id===anchorId);
-  if(!anchor)throw new ProofError('CELL_NOT_FOUND');
-  if(anchor.coveredBy)throw new ProofError('MERGE_INTERSECTION');
+  if(!anchor)throw new VNextError('CELL_NOT_FOUND');
+  if(anchor.coveredBy)throw new VNextError('MERGE_INTERSECTION');
   if(rows===1 && columns===1)return table;
   const r=table.rows.findIndex(row=>row.id===anchor.rowId),c=table.columns.findIndex(col=>col.id===anchor.columnId);
-  if(r+rows>table.rows.length || c+columns>table.columns.length)throw new ProofError('SPAN_OUT_OF_BOUNDS');
-  if(table.rows.slice(r,r+rows).some(row=>(row.role==='header')!==(table.rows[r].role==='header')))throw new ProofError('MERGE_HEADER_BOUNDARY');
+  if(r+rows>table.rows.length || c+columns>table.columns.length)throw new VNextError('SPAN_OUT_OF_BOUNDS');
+  if(table.rows.slice(r,r+rows).some(row=>(row.role==='header')!==(table.rows[r].role==='header')))throw new VNextError('MERGE_HEADER_BOUNDARY');
   const region=new Set<string>();
   const index=cellIndex(table);
   for(let ri=r;ri<r+rows;ri++)for(let ci=c;ci<c+columns;ci++) {
     const cell=index.get(getCellKey(table.rows[ri].id,table.columns[ci].id))!;
-    if(cell.coveredBy || (cell.span?.rows??1)>1 || (cell.span?.columns??1)>1)throw new ProofError('MERGE_OVERLAP');
-    if(cell.id!==anchorId && (cell.content.type!=='empty' || cell.annotationIds?.length))throw new ProofError('MERGE_WOULD_DISCARD_CONTENT',cell.id);
+    if(cell.coveredBy || (cell.span?.rows??1)>1 || (cell.span?.columns??1)>1)throw new VNextError('MERGE_OVERLAP');
+    if(cell.id!==anchorId && (cell.content.type!=='empty' || cell.annotationIds?.length))throw new VNextError('MERGE_WOULD_DISCARD_CONTENT',cell.id);
     region.add(cell.id);
   }
   const result={...table,cells:table.cells.map(cell=>cell.id===anchorId?{...cell,span:{rows,columns}}:region.has(cell.id)?{...cell,coveredBy:anchorId}:cell)};
@@ -135,8 +135,8 @@ export function mergeCells(table:TableModel,anchorId:string,rows:number,columns:
 export function unmergeCell(table:TableModel,anchorId:string):TableModel {
   assertTable(table);
   const anchor=table.cells.find(c=>c.id===anchorId);
-  if(!anchor)throw new ProofError('CELL_NOT_FOUND');
-  if(anchor.coveredBy)throw new ProofError('MERGE_INTERSECTION');
+  if(!anchor)throw new VNextError('CELL_NOT_FOUND');
+  if(anchor.coveredBy)throw new VNextError('MERGE_INTERSECTION');
   if(!anchor.span)return table;
   const result={...table,cells:table.cells.map(cell=>{
     if(cell.id===anchorId){const {span:_span,...rest}=cell;return rest;}
@@ -149,17 +149,17 @@ export function assertAxisManipulation(table:TableModel,axis:'row'|'column',id:s
   assertTable(table);
   const items=axis==='row'?table.rows:table.columns;
   const position=items.findIndex(item=>item.id===id);
-  if(position<0)throw new ProofError('AXIS_NOT_FOUND');
+  if(position<0)throw new VNextError('AXIS_NOT_FOUND');
   for(const anchor of orderedAnchors(table)) {
     if((anchor.span?.rows??1)===1 && (anchor.span?.columns??1)===1)continue;
     const start=items.findIndex(item=>item.id===(axis==='row'?anchor.rowId:anchor.columnId));
     const length=axis==='row'?(anchor.span?.rows??1):(anchor.span?.columns??1);
-    if(position>=start && position<start+length)throw new ProofError('MERGE_INTERSECTION');
+    if(position>=start && position<start+length)throw new VNextError('MERGE_INTERSECTION');
   }
 }
 export function deleteAxis(table:TableModel,axis:'row'|'column',id:string):TableModel {
   assertAxisManipulation(table,axis,id);
-  if((axis==='row'?table.rows:table.columns).length===1)throw new ProofError('TABLE_LAST_AXIS');
+  if((axis==='row'?table.rows:table.columns).length===1)throw new VNextError('TABLE_LAST_AXIS');
   const next={...table,rows:axis==='row'?table.rows.filter(r=>r.id!==id):table.rows,
     columns:axis==='column'?table.columns.filter(c=>c.id!==id):table.columns,
     cells:table.cells.filter(c=>(axis==='row'?c.rowId:c.columnId)!==id)};
@@ -168,7 +168,7 @@ export function deleteAxis(table:TableModel,axis:'row'|'column',id:string):Table
 export function reorderAxis(table:TableModel,axis:'row'|'column',order:string[]):TableModel {
   assertTable(table);
   const items=axis==='row'?table.rows:table.columns;
-  if(order.length!==items.length || new Set(order).size!==items.length || order.some(id=>!items.some(i=>i.id===id)))throw new ProofError('AXIS_ORDER_INVALID');
+  if(order.length!==items.length || new Set(order).size!==items.length || order.some(id=>!items.some(i=>i.id===id)))throw new VNextError('AXIS_ORDER_INVALID');
   items.forEach((item,i)=>{if(order[i]!==item.id)assertAxisManipulation(table,axis,item.id);});
   const next={...table,rows:axis==='row'?order.map(id=>table.rows.find(r=>r.id===id)!):table.rows,
     columns:axis==='column'?order.map(id=>table.columns.find(c=>c.id===id)!):table.columns};
@@ -178,7 +178,7 @@ export function reorderAxis(table:TableModel,axis:'row'|'column',order:string[])
 export function insertAxis(table:TableModel,axis:'row'|'column',at:number,item:Row|Column,newCells:Cell[]):TableModel {
   assertTable(table);
   const items=axis==='row'?table.rows:table.columns;
-  if(!Number.isSafeInteger(at)||at<0||at>items.length)throw new ProofError('AXIS_INDEX_INVALID');
+  if(!Number.isSafeInteger(at)||at<0||at>items.length)throw new VNextError('AXIS_INDEX_INVALID');
   const nextRows=[...table.rows],nextColumns=[...table.columns];
   if(axis==='row')nextRows.splice(at,0,item as Row);else nextColumns.splice(at,0,item as Column);
   const anchors=orderedAnchors(table);
@@ -196,7 +196,7 @@ export function insertAxis(table:TableModel,axis:'row'|'column',at:number,item:R
     const ol=axis==='row'?span.columns:span.rows;
     const coveredIds=new Set(orthogonal.slice(os,os+ol).map(i=>i.id));
     for(const cell of inserted)if(coveredIds.has(axis==='row'?cell.columnId:cell.rowId)) {
-      if(cell.content.type!=='empty'||cell.annotationIds?.length)throw new ProofError('MERGE_WOULD_DISCARD_CONTENT');
+      if(cell.content.type!=='empty'||cell.annotationIds?.length)throw new VNextError('MERGE_WOULD_DISCARD_CONTENT');
       cell.coveredBy=anchor.id;
     }
   }

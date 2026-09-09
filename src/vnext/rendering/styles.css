@@ -1,0 +1,29 @@
+@import '@fontsource/noto-sans/400.css';
+@import '@fontsource/noto-sans/700.css';
+@import '@fontsource/noto-sans/400-italic.css';
+@import '@fontsource/noto-sans/700-italic.css';
+@import '@fontsource/noto-sans-jp/400.css';
+
+[data-editorial-root] { font-family:'Noto Sans',sans-serif; font-synthesis:none; transform:none; zoom:1; width:max-content; }
+[data-editorial-root],[data-editorial-root] * { box-sizing:border-box; }
+.editorial-page { position:relative; background:white; padding:0; border:0; overflow:visible; }
+.editorial-object { position:absolute; padding:0; margin:0; border:0; overflow:visible; }
+.table-intrinsic { margin:0; padding:0; border:0; }
+.editorial-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }
+.logical-row { display:contents; }
+.editorial-cell { box-sizing:border-box; min-width:0; min-height:0; margin:0; border:0; overflow:visible; }
+[data-flow-root] { display:flow-root; margin:0; padding:0; border:0; transform:none; overflow:visible; }
+[data-flow-root] p { position:relative; margin:0; padding:0; min-height:1em; overflow-wrap:normal; word-break:normal; }
+.list-marker { position:absolute; left:0; }
+.paint-edge { position:absolute; pointer-events:none; margin:0; border:0; padding:0; }
+.editorial-annotation,.editorial-legend,.legend-entry { padding:0; border:0; }
+.caption { font-weight:700; }
+.editorial-page-number { position:absolute; display:flex; justify-content:space-between; font-size:6.5pt; line-height:1.2; color:#526975; }
+.invalid-table { color:#b32237; font-size:9pt; background:#fff0f2; padding:8px; }
+@page { size:A4 portrait; margin:0; }
+@media print {
+  [data-editorial-root] { margin:0; }
+  .editorial-page { margin:0; box-shadow:none; break-after:page; break-inside:avoid; }
+  .editorial-page:last-child { break-after:auto; }
+  [data-editorial-root],[data-editorial-root] * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}

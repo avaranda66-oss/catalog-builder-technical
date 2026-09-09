@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {compareSnapshots,type LayoutSnapshot} from '@/labs/presys-editorial-proof/proof-measurement';
-import {pxToQ} from '@/labs/presys-editorial-proof/physical';
+import {compareSnapshots,type LayoutSnapshot} from '@/vnext/rendering/measurement';
+import {pxToQ} from '@/vnext/domain/physical';
 describe('canonical snapshot equality',()=>{
   const source:LayoutSnapshot={geometryDiagnostics:[],facts:[
     {kind:'page',pageId:'p',authoredWidthU:2100000,authoredHeightU:2970000,widthQ:50800,heightQ:71841},

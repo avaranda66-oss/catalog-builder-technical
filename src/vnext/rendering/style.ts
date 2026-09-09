@@ -1,6 +1,6 @@
-import type { Border, Cell, CellStyle, DocumentStyle, TableModel } from './proof-model';
-import { mmToU, uToQ } from './physical';
-import { ProofError } from './diagnostics';
+import type { Border, Cell, CellStyle, DocumentStyle, TableModel } from '../domain/editorial-model';
+import { mmToU, uToQ } from '../domain/physical';
+import { VNextError } from '../domain/diagnostics';
 export const sides=['top','right','bottom','left'] as const;
 export type Side=typeof sides[number];
 export interface EdgeCandidate {border:Border;sourceLevel:number}
@@ -25,14 +25,14 @@ export function resolveStyle(defaults:CellStyle,layers:readonly (CellStyle|undef
     style={...definedMerge(style,layer),paddingMm:definedMerge(style.paddingMm??{},layer.paddingMm??{})};
     for(const side of sides)if(layer.borders?.[side])edges[side]={border:layer.borders[side]!,sourceLevel};
   });
-  if(!style.fontFamily || !style.fontSizePt || !style.lineHeight)throw new ProofError('STYLE_UNRESOLVED');
+  if(!style.fontFamily || !style.fontSizePt || !style.lineHeight)throw new VNextError('STYLE_UNRESOLVED');
   return {fontFamily:style.fontFamily,fontSizePt:style.fontSizePt,lineHeight:style.lineHeight,
     fontWeight:style.fontWeight??400,color:style.color??'#172B3A',background:style.background??'#FFFFFF',textAlign:style.textAlign??'left',
     paddingQ:{top:uToQ(mmToU(style.paddingMm?.top??0)),right:uToQ(mmToU(style.paddingMm?.right??0)),bottom:uToQ(mmToU(style.paddingMm?.bottom??0)),left:uToQ(mmToU(style.paddingMm?.left??0))},edges};
 }
 export function resolveCellStyle(documentStyle:DocumentStyle,table:TableModel,cell:Cell):ResolvedStyle {
   const row=table.rows.find(r=>r.id===cell.rowId),column=table.columns.find(c=>c.id===cell.columnId);
-  if(!row||!column)throw new ProofError('CELL_COORDINATE_INVALID');
+  if(!row||!column)throw new VNextError('CELL_COORDINATE_INVALID');
   return resolveStyle(documentStyle.defaultText,[table.style.base,table.style.rowRoles[row.role],column.style,row.style,cell.style]);
 }
 export function resolveWrap(cell:Cell):'wrap'|'nowrap' {

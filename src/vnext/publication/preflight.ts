@@ -1,9 +1,9 @@
-import type { CatalogDocument } from './proof-model';
-import type { TablePlan } from './proof-render-plan';
-import type { LayoutSnapshot } from './proof-measurement';
-import { findElement,intrinsicMetrics } from './proof-measurement';
-import { add,mmToU,qToU,uToQ } from './physical';
-import { diagnostic,type Diagnostic } from './diagnostics';
+import type { CatalogDocument } from '../domain/editorial-model';
+import type { TablePlan } from '../rendering/render-plan';
+import type { LayoutSnapshot } from '../rendering/measurement';
+import { findElement,intrinsicMetrics } from '../rendering/measurement';
+import { add,mmToU,qToU,uToQ } from '../domain/physical';
+import { diagnostic,type Diagnostic } from '../domain/diagnostics';
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number):boolean => metrics.widthQ>uToQ(authoredWidthU)||metrics.heightQ>uToQ(authoredHeightU);
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {

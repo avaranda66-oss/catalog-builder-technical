@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {emptyTable} from './test-data';
-import {plainRichText,TableModelSchema} from '@/labs/presys-editorial-proof/proof-model';
-import {validateTable,mergeCells,unmergeCell,getCellKey,deleteAxis,reorderAxis,insertAxis} from '@/labs/presys-editorial-proof/proof-table';
+import {plainRichText,TableModelSchema} from '@/vnext/domain/editorial-model';
+import {validateTable,mergeCells,unmergeCell,getCellKey,deleteAxis,reorderAxis,insertAxis} from '@/vnext/table/table-model';
 
 describe('table topology, immutable operations and references',()=>{
   it('accepts headerless full grid and collision-safe coordinates',()=>{

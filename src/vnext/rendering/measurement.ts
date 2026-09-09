@@ -1,15 +1,15 @@
-import type { CatalogDocument, RichText, TableModel } from './proof-model';
-import { add,mmToU,pxToQ,sum,uToQ } from './physical';
-import { cumulative,projectRows,resolveRows,type SpanConstraint } from './proof-layout';
-import { buildPaint } from './proof-paint';
-import { orderedAnchors } from './proof-table';
-import { annotationDisplayText,cellDisplayText,legendDisplayText,referencedAnnotations,type TablePlan } from './proof-render-plan';
-import { diagnostic,ProofError,type Diagnostic } from './diagnostics';
-import { sha256 } from './proof-resources';
+import type { CatalogDocument, RichText, TableModel } from '../domain/editorial-model';
+import { add,mmToU,pxToQ,sum,uToQ } from '../domain/physical';
+import { cumulative,projectRows,resolveRows,type SpanConstraint } from '../table/table-layout';
+import { buildPaint } from './border-paint';
+import { orderedAnchors } from '../table/table-model';
+import { annotationDisplayText,cellDisplayText,legendDisplayText,referencedAnnotations,type TablePlan } from './render-plan';
+import { diagnostic,VNextError,type Diagnostic } from '../domain/diagnostics';
+import { sha256 } from './resources';
 
 export function findElement(root:ParentNode,attribute:string,id:string):HTMLElement {
   const element=root.querySelector<HTMLElement>('['+attribute+'="'+CSS.escape(id)+'"]');
-  if(!element)throw new ProofError('RENDER_ELEMENT_MISSING',attribute+'='+id);
+  if(!element)throw new VNextError('RENDER_ELEMENT_MISSING',attribute+'='+id);
   return element;
 }
 export function assertTransformFree(root:HTMLElement):void {
@@ -17,13 +17,13 @@ export function assertTransformFree(root:HTMLElement):void {
   while(element) {
     const style=getComputedStyle(element);
     if(style.transform!=='none'||style.scale!=='none'||style.translate!=='none'||style.rotate!=='none'||!['1','normal',''].includes(style.zoom))
-      throw new ProofError('MEASUREMENT_ROOT_TRANSFORMED',element.tagName);
+      throw new VNextError('MEASUREMENT_ROOT_TRANSFORMED',element.tagName);
     element=element.parentElement;
   }
 }
 function assertDomIds(root:ParentNode,attribute:string,expected:readonly string[]):void {
   const actual=[...root.querySelectorAll('['+attribute+']')].map(node=>node.getAttribute(attribute)!).sort();
-  if(JSON.stringify(actual)!==JSON.stringify([...expected].sort()))throw new ProofError('LAYOUT_UNSTABLE','Unexpected/missing/duplicate DOM identity: '+attribute);
+  if(JSON.stringify(actual)!==JSON.stringify([...expected].sort()))throw new VNextError('LAYOUT_UNSTABLE','Unexpected/missing/duplicate DOM identity: '+attribute);
 }
 export type TextFlowRecord=['P',string]|['T',string,string,number,number,number,number,number]|['B',string,string];
 export function textFlowRecords(flow:HTMLElement,rich:RichText):TextFlowRecord[] {
@@ -34,7 +34,7 @@ export function textFlowRecords(flow:HTMLElement,rich:RichText):TextFlowRecord[]
       const element=findElement(flow,'data-inline-id',inline.id);
       if(inline.kind==='lineBreak'){records.push(['B',paragraph.id,inline.id]);continue;}
       if(element.childNodes.length!==1||element.firstChild?.nodeType!==Node.TEXT_NODE||element.textContent!==inline.text)
-        throw new ProofError('TEXT_RUN_DOM_MISMATCH',inline.id);
+        throw new VNextError('TEXT_RUN_DOM_MISMATCH',inline.id);
       const range=document.createRange();range.selectNodeContents(element.firstChild);
       [...range.getClientRects()].forEach((rect,index)=>records.push(['T',paragraph.id,inline.id,index,
         pxToQ(rect.left-origin.left),pxToQ(rect.top-origin.top),pxToQ(rect.width),pxToQ(rect.height)]));
@@ -131,7 +131,7 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
       const intrinsic=findElement(node,'data-table-intrinsic',table.id);
       facts.push({kind:'table',...location,tableId:table.id,frameWidthU:plan.frameU,columnWidthsU:[...plan.widthsU],frameQ,trackQ,renderedIntrinsicHeightQ:pxToQ(intrinsic.getBoundingClientRect().height)});
       check(frameQ,plan.frameQ,'table frame',{...location,tableId:table.id});
-      if(trackQ.length!==plan.trackQ.length||rowQ.length!==plan.rowQ.length)throw new ProofError('RENDER_GEOMETRY_MISMATCH','Computed track count differs');
+      if(trackQ.length!==plan.trackQ.length||rowQ.length!==plan.rowQ.length)throw new VNextError('RENDER_GEOMETRY_MISMATCH','Computed track count differs');
       trackQ.forEach((q,i)=>check(q,plan.trackQ[i],'column '+i,{...location,tableId:table.id}));
       rowQ.forEach((q,i)=>check(q,plan.rowQ![i],'row '+i,{...location,tableId:table.id,rowId:table.rows[i].id}));
       const x=cumulative(plan.trackQ),y=cumulative(plan.rowQ),actualY=cumulative(rowQ);

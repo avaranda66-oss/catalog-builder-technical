@@ -1,4 +1,4 @@
-import type { TableModel, DocumentStyle } from '@/labs/presys-editorial-proof/proof-model';
+import type { TableModel, DocumentStyle } from '@/vnext/domain/editorial-model';
 export const documentStyle:DocumentStyle={fonts:[{family:'Noto Sans',revision:'5.3.0',weight:400,style:'normal'}],
   defaultText:{fontFamily:'Noto Sans',fontSizePt:8,lineHeight:1.2,paddingMm:{top:1,right:1,bottom:1,left:1}},palette:['#173F52']};
 export function emptyTable(rows=3,columns=3):TableModel {

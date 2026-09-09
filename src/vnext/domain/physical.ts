@@ -1,11 +1,11 @@
-import { ProofError } from './diagnostics';
+import { VNextError } from './diagnostics';
 
 /** Domain U and renderer Q are deliberately separate; neither is serialized into authored mm. */
 export type PhysicalLengthU = number;
 export type PhysicalPixelQ = number;
 const MAX = String(Number.MAX_SAFE_INTEGER);
 export function safe(value: number): number {
-  if (!Number.isSafeInteger(value)) throw new ProofError('PHYSICAL_ARITHMETIC_OVERFLOW');
+  if (!Number.isSafeInteger(value)) throw new VNextError('PHYSICAL_ARITHMETIC_OVERFLOW');
   return value;
 }
 export const add = (a: number,b: number): number => safe(safe(a)+safe(b));
@@ -13,9 +13,9 @@ export const mul = (a: number,b: number): number => safe(safe(a)*safe(b));
 export const sum = (values: readonly number[]): number => values.reduce(add,0);
 
 function decimal(value: number): {negative:boolean;digits:string;scale:number} {
-  if (!Number.isFinite(value)) throw new ProofError('PHYSICAL_LENGTH_INVALID');
+  if (!Number.isFinite(value)) throw new VNextError('PHYSICAL_LENGTH_INVALID');
   const match = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(Number.prototype.toString.call(value));
-  if (!match) throw new ProofError('PHYSICAL_LENGTH_INVALID');
+  if (!match) throw new VNextError('PHYSICAL_LENGTH_INVALID');
   return {negative:match[1]==='-', digits:(match[2]+(match[3]??'')).replace(/^0+(?=\d)/,''), scale:Number(match[4]??0)-(match[3]?.length??0)};
 }
 function increment(digits: string): string {
@@ -28,7 +28,7 @@ function increment(digits: string): string {
 }
 function integerFromDigits(digits: string): number {
   const normalized=digits.replace(/^0+(?=\d)/,'');
-  if(normalized.length>MAX.length || (normalized.length===MAX.length && normalized>MAX)) throw new ProofError('PHYSICAL_ARITHMETIC_OVERFLOW');
+  if(normalized.length>MAX.length || (normalized.length===MAX.length && normalized>MAX)) throw new VNextError('PHYSICAL_ARITHMETIC_OVERFLOW');
   return safe(Number(normalized));
 }
 /** Decimal digit arithmetic avoids an unsafe coefficient or enormous power-of-ten denominator. */
@@ -60,7 +60,7 @@ export const mmToU = (mm:number):PhysicalLengthU => scaledDecimal(mm,4,1,1);
 export const pxToQ = (px:number):PhysicalPixelQ => scaledDecimal(px,0,64,1);
 export function roundRatio(numerator:number,denominator:number):number {
   safe(numerator); safe(denominator);
-  if(denominator<=0) throw new ProofError('PHYSICAL_LENGTH_INVALID');
+  if(denominator<=0) throw new VNextError('PHYSICAL_LENGTH_INVALID');
   const n=Math.abs(numerator);
   const base=Math.floor(n/denominator);
   const magnitude=add(base,mul(n%denominator,2)>=denominator?1:0);
@@ -70,19 +70,19 @@ export const uToQ = (u:PhysicalLengthU):PhysicalPixelQ => roundRatio(mul(u,384),
 export const qToU = (q:PhysicalPixelQ):PhysicalLengthU => roundRatio(mul(q,15875),384);
 export function minimumUForProjectedQ(targetQ:PhysicalPixelQ):PhysicalLengthU {
   safe(targetQ);
-  if(targetQ<0)throw new ProofError('PHYSICAL_LENGTH_INVALID');
+  if(targetQ<0)throw new VNextError('PHYSICAL_LENGTH_INVALID');
   if(targetQ===0)return 0;
   const threshold=add(mul(targetQ,2),-1);
   const whole=Math.floor(threshold/768),remainder=threshold%768;
   const tail=Math.floor(add(mul(remainder,15875),767)/768);
   const candidate=add(mul(whole,15875),tail);
-  if(uToQ(candidate)<targetQ || (candidate>0&&uToQ(candidate-1)>=targetQ))throw new ProofError('PHYSICAL_ARITHMETIC_OVERFLOW');
+  if(uToQ(candidate)<targetQ || (candidate>0&&uToQ(candidate-1)>=targetQ))throw new VNextError('PHYSICAL_ARITHMETIC_OVERFLOW');
   return candidate;
 }
 export function ptToQ(pt:number):PhysicalPixelQ {
-  if(pt<=0) throw new ProofError('BORDER_THICKNESS_INVALID');
+  if(pt<=0) throw new VNextError('BORDER_THICKNESS_INVALID');
   const q=scaledDecimal(pt,0,256,3);
-  if(q<=0) throw new ProofError('BORDER_THICKNESS_PROJECTS_TO_ZERO');
+  if(q<=0) throw new VNextError('BORDER_THICKNESS_PROJECTS_TO_ZERO');
   return q;
 }
 export function qCss(q:PhysicalPixelQ):string {
