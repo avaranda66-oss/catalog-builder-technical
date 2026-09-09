@@ -1,0 +1,154 @@
+{
+  "baselineSha": "616332d6048a4259d2e2b562d8d5e781cea334bd",
+  "baselineTree": "26b21e6a06247823c80826e4855ee477a44db2de",
+  "date": "2026-09-09",
+  "method": "pypdf MediaBox and page count; Poppler render all pages; visual overview all 24, selected pages enlarged",
+  "sources": [
+    {
+      "file": "Additel-761A-Datasheet.pdf",
+      "sha256": "8d8eb89cc9a6e037693052377231b9fc51cf903b05a948264180a7c399b3e604",
+      "pageCount": 6,
+      "pageSizesMm": [
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ]
+      ]
+    },
+    {
+      "file": "Additel-875-Dry-Well-Calibrator-Datasheet (1).pdf",
+      "sha256": "cdd12f19e554e0844b76391cfe1a13a9b6a698f5ab828a462bcd1bba79eeebad",
+      "pageCount": 8,
+      "pageSizesMm": [
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ],
+        [
+          210.0,
+          285.0
+        ]
+      ]
+    },
+    {
+      "file": "Europa-Venus-Calisto-datasheet.pdf",
+      "sha256": "17744a37821f51049cb6442fc16722870c9952a974abf91171e13617bc7ffa9a",
+      "pageCount": 4,
+      "pageSizesMm": [
+        [
+          210.0,
+          297.0
+        ],
+        [
+          210.0,
+          297.0
+        ],
+        [
+          210.0,
+          297.0
+        ],
+        [
+          210.0,
+          297.0
+        ]
+      ]
+    },
+    {
+      "file": "Fluke-9140-datasheet.pdf",
+      "sha256": "ac68e73cd33d19e0f0c5ac4e3e1cd81680524dd35ae7e29861779f9cb8a56c47",
+      "pageCount": 6,
+      "pageSizesMm": [
+        [
+          209.55,
+          279.4
+        ],
+        [
+          209.55,
+          279.4
+        ],
+        [
+          209.55,
+          279.4
+        ],
+        [
+          209.55,
+          279.4
+        ],
+        [
+          209.55,
+          279.4
+        ],
+        [
+          209.55,
+          279.4
+        ]
+      ]
+    }
+  ],
+  "gates": {
+    "lint": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 268
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "test": {
+      "exitCode": 0,
+      "filesPassed": 196,
+      "testsPassed": 2046,
+      "testsSkipped": 1
+    },
+    "build": {
+      "exitCode": 0,
+      "mainJsKb": 2590.64,
+      "mainJsGzipKb": 690.51,
+      "warning": "large chunk"
+    }
+  }
+}
