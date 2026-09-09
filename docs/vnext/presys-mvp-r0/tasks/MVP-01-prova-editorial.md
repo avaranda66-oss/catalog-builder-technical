@@ -67,7 +67,7 @@ Regra inviolável: **MEASUREMENT NEVER MUTATES AUTHORED FRAME**. Measurement pod
 
 Para tabela, `frame.heightMm` é autoral/fixo. O renderer produz `renderedIntrinsicHeightQ` DERIVED. **R0.1.3:** `renderedIntrinsicHeightQ <= uToQ(frame.heightU)` é OK; somente valor Q maior emite `TABLE_CONTENT_OVERFLOW / ERROR`. Igualdade em Q nunca volta a U para criar overflow. Nunca auto-grow. Futuro `Fit height to content` somente como USER COMMAND explícita.
 
-`RowHeightPolicy`: AUTO; MIN_MM; FIXED_MM. AUTO usa conteúdo; MIN_MM = `max(intrinsic,min)`; FIXED_MM é autoral. Conteúdo maior que FIXED_MM emite `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir font, aumentar row, cortar silenciosamente ou alterar conteúdo.
+`RowHeightPolicy`: AUTO; MIN_MM; FIXED_MM. **R0.1.4:** authored/base state permanece U (`AUTO=0`, `MIN_MM=min`, `FIXED_MM=authored`) e todo conteúdo medido permanece Q até o fit por cumulative boundaries. AUTO/MIN podem receber extra U mínimo; FIXED nunca cresce. Conteúdo cuja requirement Q exceda o span projetado em Q emite `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir font, aumentar FIXED, cortar silenciosamente ou alterar conteúdo.
 
 `resolveColumns(table, availableTrackWidthMm)` é função pura e retorna `{ok:true,widths}` ou `{ok:false,code,details}`, sem DOM. `availableTrackWidthMm === tableObject.frame.widthMm`: border/padding não são subtraídos e não aumentam frame. Invariantes: width > 0; minWidth respeitado; fixed respeitado; flex usa somente espaço restante; deterministic rounding; conservação de largura. Aritmética obrigatória: `PhysicalLengthU = 0.0001 mm`; mm autoral é normalizado pelo parser decimal normativo D3 + round-half-away-from-zero, cálculo usa inteiros seguros, flex weight é inteiro positivo seguro, sucesso exige `sum(widthsU) === availableTrackWidthU`, e resíduo é distribuído por largest remainder (resto decrescente; empate pela ordem estável das colunas) após aplicar caps. Toda soma/produto deve permanecer safe integer; overflow retorna `PHYSICAL_ARITHMETIC_OVERFLOW / ERROR`. Converter de volta a mm somente por `/10_000`; testes de domínio comparam `widthsU` exatamente, sem epsilon. Contraexemplo obrigatório: available 100 mm, fixed A 70, fixed B 50, flex C min 20 -> ERROR `TABLE_WIDTH_INFEASIBLE`; jamais valid+warning/C=0.
 
@@ -77,7 +77,7 @@ Renderer obrigatório da proof: `ProofTable` usa CSS Grid, não HTML `<table>` c
 
 `CellContent` deve ser exatamente a união D4: `empty | richText | technicalCode | measurement | marker | image`, sem `any`/JSON arbitrário. `measurement.valueText` preserva o decimal lexeme byte-for-byte; marker referencia `legendEntryId`; image referencia `AssetRef.id`. `wrapPolicy`, image `fit/targetWidthMm/targetHeightMm` ficam em `CellContentPresentation`; caption é annotation table-scope. `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling = `ANNOTATION_REFERENCE_DANGLING`, wrong scope = `ANNOTATION_SCOPE_INVALID`.
 
-**R0.1.3 ROWSPAN:** calcular bases em U (`AUTO=intrinsic`, `MIN_MM=max(intrinsic,min)`, `FIXED_MM=authored`) e formular cada rowspan como constraint sobre extras das growable rows do intervalo. Resolver globalmente por prefix sums/forward longest path em `PhysicalLengthU`, minimizando exatamente o total extra. FIXED_MM nunca cresce; span deficitário sem growable row emite `ROW_CONTENT_OVERFLOW / ERROR`; ordem de constraints/DOM não altera o resultado. O counterexample Astra/Sol deve resolver em `507789 U` total para os valores reproduzidos e não gerar o falso overflow do frame `550000 U`.
+**R0.1.4 ROW PROJECTION:** cada célula preserva `requiredQ = intrinsicContentHeightQ + paddingTopQ + paddingBottomQ`; o fit do span `[start,end)` usa `uToQ(totalBoundaryU[end]) - uToQ(totalBoundaryU[start]) >= requiredQ`. Bases authored são U (`AUTO=0`, `MIN_MM=min`, `FIXED_MM=authored`) e extras U existem somente nas AUTO/MIN. O solver usa forward prefix constraints e `minimumUForProjectedQ(targetQ)` para escolher o menor end prefix U que alcança o target Q a partir da phase real do start. FIXED nunca cresce; all-FIXED que não cabe em Q emite `ROW_CONTENT_OVERFLOW`; ordem das constraints/DOM não altera o resultado. O counterexample R0.1.3 Astra/Sol permanece obrigatório como regressão de mínimo global e não pode reintroduzir a expansão R0.1.2.
 
 **HISTÓRICO:** a distribuição R0.1.2 por `baseU/remainderU` foi empiricamente falsificada e permanece registrada no evidence report; nenhum outro contrato foi reaberto por esse finding.
 
@@ -116,7 +116,15 @@ Renderer obrigatório da proof: `ProofTable` usa CSS Grid, não HTML `<table>` c
 | T-TABLE-SPAN-PAINT-01 | colSpan/rowSpan/combinação suprimem todo atomic edge interno cujo dois slots mapeiam ao mesmo anchor `coveredBy`; perímetro permanece |
 | T-TABLE-BORDER-PARITY-01 | Screen/print, viewport 900/1500 e DPR 1/2 preservam frame/tracks/rows/paint Q; PDF tem text layer e vector path/fill, sem raster image-paint da tabela |
 | T-TEXT-FLOW | Múltiplos runs na mesma linha, run multilinha, sub/sup, lineBreak, mixed styles e technicalCode nowrap produzem records/hash D3; reflow real muda signature |
-| T-ROWSPAN-GLOBAL-MIN | Bases U + interval constraints/prefix longest-path preservam FIXED, satisfazem simple/cross-fixed/nested/overlap/same-start/zero-deficit e minimizam total extra; constraint permutation não altera saída |
+| T-ROWSPAN-GLOBAL-MIN | Bases authored U + requirements Q + forward prefix constraints preservam FIXED, satisfazem simple/cross-fixed/nested/overlap/same-start/zero-deficit e minimizam total extra; constraint permutation não altera saída |
+| T-Q-ROW-01 | FIXED 20 mm, envelope 4838 Q, requirement 4838 Q: sem `ROW_CONTENT_OVERFLOW` |
+| T-Q-ROW-02 | Mesmo FIXED 20 mm, requirement 4839 Q: `ROW_CONTENT_OVERFLOW` |
+| T-Q-PHASE-01 | Prefixo cumulativo 21 U, requirement 4838 Q: solver aloca U até a diferença real de boundaries ser >= 4838 Q |
+| T-Q-SPAN-01 | rowspan all-FIXED com igualdade Q: sem falso overflow |
+| T-Q-SPAN-02 | Mesmo rowspan um Q acima: `ROW_CONTENT_OVERFLOW` |
+| T-Q-GROWABLE-SPAN-01 | AUTO/MIN sobrepostos em phase adversarial: mínimo determinístico e todas as projected boundary differences satisfazem requirements Q |
+| T-Q-TEXT-01 | Text object com metrics width/height iguais ao frame projetado Q: sem `TEXT_OBJECT_OVERFLOW` |
+| T-Q-TEXT-02 | Text object um Q acima do frame projetado: `TEXT_OBJECT_OVERFLOW` |
 | T-ANNOTATION-SCOPE | Cell aceita note/footnote e rejeita caption; table aceita caption/note/footnote; dangling/wrong-scope retornam códigos exatos D4 |
 | T-TABLE-HEADERLESS | Tabela válida com ao menos uma coluna/linha body, zero header rows, roundtrip + validate + render sem `<thead>` ou header sintético quando policy permite |
 | T-EDITOR-ZOOM-AUTHORITY-01 | Transform visual `scale(1.25)` pode alterar raw DOMRect da UI, mas measurement e `PhysicalLayoutFact` vêm somente do root transform-free e permanecem Q-idênticos; não corrigir por divisão de zoom |

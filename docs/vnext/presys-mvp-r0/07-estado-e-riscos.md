@@ -59,6 +59,14 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Reopen B confirmado: Chromium mediu `tableHeightQ == objectHeightQ == 4838`, mas `qToU(4838)=200008 U > authoredHeightU=200000 U`. Novo contrato: overflow final de tabela compara `renderedIntrinsicHeightQ > uToQ(authoredFrameHeightU)`; igualdade em Q é OK.
 - Todo o restante de R0.1.2 permanece congelado e inalterado. O histórico das duas hipóteses falsificadas permanece neste pacote.
 
+## R0.1.4 — RENDERED EXTENT / ROW PROJECTION AMENDMENT
+
+- Auditoria Principal reproduziu um terceiro boundary sistêmico: `uToQ(200000)=4838`, porém `qToU(4838)=200008`; usar esse round-trip como requisito de row transforma fit Q exato em falso `ROW_CONTENT_OVERFLOW`.
+- O mesmo scalar `qToU` falha como lower-bound quando a row começa fora da phase zero: com prefixo `21 U`, alocar `200008 U` produz boundaries `1 Q → 4838 Q`, apenas `4837 Q` de span para requirement `4838 Q`.
+- Text object tinha a mesma classe de falso positivo ao testar `qToU(metrics.widthQ/heightQ) > authoredWidthU/authoredHeightU`.
+- Contrato R0.1.4: U continua autoridade authored/solver; Q continua autoridade dos fatos Chromium. Fit renderizado compara em Q. Row solver mantém requirements Q e usa cumulative boundary projection + inversa monotônica exata para derivar somente o U mínimo necessário em AUTO/MIN.
+- R0.1.3 permanece preservado em seus resultados sistêmicos: eliminou expansão artificial global de rowspan e fechou a igualdade Q do envelope final da tabela. Nenhum contrato fora dessa fronteira U/Q foi reaberto.
+
 ## Decisões arquiteturais R0.1
 
 | ADR | Estado | Decisão | Alternativa e motivo |
