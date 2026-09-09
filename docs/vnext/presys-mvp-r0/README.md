@@ -1,4 +1,4 @@
-# PRESYS VNext R0.1.2 — PRINCIPAL FINAL FREEZE
+# PRESYS VNext R0.1.3 — TARGETED EMPIRICAL AMENDMENT
 
 STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
 PRINCIPAL REVIEW: APPROVED
@@ -7,9 +7,9 @@ DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
-Este pacote é a arquitetura documental canônica de PRESYS VNext R0.1.2 para FOUNDATION-PROOF-01. A auditoria Principal final registrou **GO** e congelou para implementação os contratos explicitamente aplicáveis à proof. Isso não é implementação, aceite de produção, autorização de merge/deploy nem freeze automático das decisões futuras de FATHER-USABLE V1 ou POST-V1, que permanecem PROPOSED/MUST-CANDIDATE onde indicado.
+Este pacote é a arquitetura documental canônica de PRESYS VNext R0.1.3 para FOUNDATION-PROOF-01. R0.1.3 preserva o freeze R0.1.2 e o **GO** Principal, exceto por duas decisões de altura empiricamente falsificadas e explicitamente reabertas: alocação AUTO/MIN em rowspan e comparação de overflow da altura final da tabela no boundary U/Q. Isso não é implementação, aceite de produção, autorização de merge/deploy nem freeze automático das decisões futuras de FATHER-USABLE V1 ou POST-V1, que permanecem PROPOSED/MUST-CANDIDATE onde indicado.
 
-Follow-up atual do PR #12: **R0.1.2**, closure documental dirigida dos contratos A–F (CellContent, projeção/paint Chromium, text flow, rowspan remainder, annotation scope e renderer legado), agora com **PRINCIPAL FINAL FREEZE AUDIT: GO**. Implementadores de FOUNDATION-PROOF-01 devem seguir o contrato congelado e não podem redesenhá-lo silenciosamente; falha empírica pode reabrir somente a decisão específica demonstrada pelo contraexemplo.
+Follow-up atual do PR #12: **R0.1.3 — TARGETED EMPIRICAL AMENDMENT**. O histórico R0.1.2 A–F e o **PRINCIPAL FINAL FREEZE AUDIT: GO** permanecem válidos; somente os dois contratos de altura documentados em `R0.1.3-targeted-empirical-amendment.md` são substituídos. Os contraexemplos R0.1.2 permanecem registrados como evidência e não autorizam redesign de outros contratos.
 
 A prioridade é permitir que uma pessoa da PRESYS produza catálogos técnicos e institucionais com tabelas densas, imagens, notas e composição profissional. A primeira execução é uma prova técnica da fundação editorial; ela não redefine o escopo do primeiro produto utilizável.
 

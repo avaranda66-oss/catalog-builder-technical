@@ -124,7 +124,7 @@ Essa capacidade produz especificações, comparação, compatibilidade, acessór
 
 ## Geometria externa, tracks e bordas — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
-`frame.xMm`, `frame.yMm`, `frame.widthMm` e `frame.heightMm` pertencem ao objeto tabela e são autoria. Para largura, `frame.widthU` é **a largura total do plano de tracks**: `sum(columnTrackWidthsU) === frame.widthU`. Bordas e padding não são subtraídos antes do solver e não podem aumentar o frame. O renderer mantém `renderedIntrinsicHeightQ` como fato espacial Chromium; quando a política de domínio precisa testar overflow contra `frame.heightU`, converte esse Q para U **uma única vez** pela regra D3. Um valor em mm pode ser exibido como diagnóstico, mas não é uma segunda autoridade de estabilidade. Caption/notes/footnotes, grid e espaçamentos participam da altura intrínseca, mas measurement jamais escreve no frame.
+`frame.xMm`, `frame.yMm`, `frame.widthMm` e `frame.heightMm` pertencem ao objeto tabela e são autoria. Para largura, `frame.widthU` é **a largura total do plano de tracks**: `sum(columnTrackWidthsU) === frame.widthU`. Bordas e padding não são subtraídos antes do solver e não podem aumentar o frame. O renderer mantém `renderedIntrinsicHeightQ` como fato espacial Chromium. **R0.1.3:** o overflow do envelope final da tabela compara esse fato diretamente com `uToQ(frame.heightU)` no mesmo espaço Q; igualdade em Q é OK. `qToU` continua disponível para RowHeightPolicy/diagnóstico quando um algoritmo de domínio realmente precisa consumir uma medição Chromium, mas não decide essa comparação final. Caption/notes/footnotes, grid e espaçamentos participam da altura intrínseca, e measurement jamais escreve no frame.
 
 ### Autoridade de renderização para FOUNDATION-PROOF-01
 
@@ -178,7 +178,7 @@ Span suppression deriva somente de full-grid + `coveredBy`: para cada atomic edg
 
 ### Rows e horizontal paint
 
-Paint horizontal é downstream da row geometry e jamais mede/muta rows. O renderer trabalha em duas fases do **mesmo componente/árvore**, não em dois engines: (1) transform-free measurement grid com column `trackQ`, padding Q, sem paint, mede conteúdo após fonts/assets/images ready; todo browser rect normaliza primeiro para Q e, quando RowHeightPolicy precisa de U, converte Q -> U pelo contrato D3; (2) aplicar AUTO/MIN_MM/FIXED_MM e rowspan remainder D4 em U. Com resolved row heights `rowHeightU`, formar boundaries cumulativas `boundaryU[0]=0`, `boundaryU[i+1]=boundaryU[i]+rowHeightU[i]`; projetar cada boundary por U -> Q e definir `rowQ[i]=boundaryQ[i+1]-boundaryQ[i]`. Todo `rowQ > 0`.
+Paint horizontal é downstream da row geometry e jamais mede/muta rows. O renderer trabalha em duas fases do **mesmo componente/árvore**, não em dois engines: (1) transform-free measurement grid com column `trackQ`, padding Q, sem paint, mede conteúdo após fonts/assets/images ready; todo browser rect normaliza primeiro para Q e, quando RowHeightPolicy precisa de U, converte Q -> U pelo contrato D3; (2) aplicar AUTO/MIN_MM/FIXED_MM e o solver global de intervalos/prefixos R0.1.3 em U. Com resolved row heights `rowHeightU`, formar boundaries cumulativas `boundaryU[0]=0`, `boundaryU[i+1]=boundaryU[i]+rowHeightU[i]`; projetar cada boundary por U -> Q e definir `rowQ[i]=boundaryQ[i+1]-boundaryQ[i]`. Todo `rowQ > 0`.
 
 O final grid recebe `grid-template-rows` explícito em Q. Só então gerar paint a partir de `trackQ`, `rowQ` e edge topology. Como paint é absolute/pointer-events none, sua criação não pode provocar semantic reflow. O paint layer já existe antes de layout report/preflight e dos dois snapshots de estabilidade.
 
@@ -209,22 +209,26 @@ Chromium `151.0.7922.34`, Playwright já presente no baseline:
 
 O counterproof prova a invariância exigida: a projeção Q é exata/repetível e Chromium não redistribui track/paint geometry. Não afirma que `frameQ` representa matematicamente exatamente os mm autorais; U continua sendo a autoridade física do documento.
 
-Contrato de altura do objeto em FOUNDATION-PROOF-01:
+Contrato de altura do objeto em FOUNDATION-PROOF-01, amendado por R0.1.3:
 
 ```text
-renderedIntrinsicHeightMm <= frame.heightMm  -> OK
-renderedIntrinsicHeightMm >  frame.heightMm  -> TABLE_CONTENT_OVERFLOW / ERROR
+renderedIntrinsicHeightQ <= uToQ(frame.heightU)  -> OK
+renderedIntrinsicHeightQ >  uToQ(frame.heightU)  -> TABLE_CONTENT_OVERFLOW / ERROR
 ```
 
-`TABLE_CONTENT_OVERFLOW` bloqueia GREEN e PDF final. Nunca auto-grow no renderer. Um futuro comando explícito `Fit height to content`/`FitTableHeightToContent` pode gravar novo `frame.heightMm`; isso é USER COMMAND, não side effect de measurement.
+`frame.heightU` permanece autoridade autoral e persistida; `Q` permanece projeção efêmera do renderer. Igualdade já observada em Q não pode virar overflow por round-trip `Q -> U`. `qToU(renderedIntrinsicHeightQ)` pode aparecer apenas como diagnóstico derivado. `TABLE_CONTENT_OVERFLOW` bloqueia GREEN e PDF final. Nunca auto-grow no renderer. Um futuro comando explícito `Fit height to content`/`FitTableHeightToContent` pode gravar novo `frame.heightMm`; isso é USER COMMAND, não side effect de measurement.
 
 `RowHeightPolicy` também é FOUNDATION REQUIRED — FROZEN FOR FOUNDATION-PROOF-01. `AUTO`: conteúdo define a altura derivada da linha. `MIN_MM`: altura derivada = `max(intrinsic, minMm)`. `FIXED_MM`: altura autoral exata. Se conteúdo exceder `FIXED_MM`, emitir `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir fonte, aumentar a linha, cortar silenciosamente nem alterar conteúdo. CSS `height` em `<tr>` sozinho não prova teto; a prova deve medir e detectar overflow real.
 
 Arrastar lateral da tabela é user command que muda `frame.widthMm` e re-resolve colunas flex. Ajustar altura do frame também é user command. Measurement pode diagnosticar o efeito, mas não mover vizinhos, alterar o frame ou paginar.
 
-Mesclas verticais: a altura do conteúdo da âncora precisa caber na soma das linhas cobertas. Primeiro calcular a altura-base de cada row (`AUTO = intrinsic`, `MIN_MM = max(intrinsic,min)`, `FIXED_MM = authored`) sem usar rowspan para crescer linhas. Depois processar anchors com `rowSpan > 1` em ordem canônica `(anchorRowIndex asc, anchorColumnIndex asc, anchorCellId asc)`. Para cada constraint, `deficitU = max(0, requiredSpanContentHeightU - sum(currentCoveredRowHeightsU))`. Elegíveis são somente rows `AUTO`/`MIN_MM` cobertas, em ordem top-to-bottom. Para `K > 0`: `baseU = floor(deficitU / K)`, `remainderU = deficitU mod K`; somar `baseU` a todas e `+1 U` às primeiras `remainderU` elegíveis. `FIXED_MM` nunca cresce. Se `deficitU > 0` e `K === 0`, `ROW_CONTENT_OVERFLOW / ERROR`. Constraints sobrepostas usam as alturas já incrementadas; como o algoritmo só cresce linhas e anchors têm ordem estável, uma constraint satisfeita não é invalidada por uma posterior. Nenhum float participa.
+Mesclas verticais: a altura do conteúdo da âncora precisa caber na soma das linhas cobertas. Primeiro calcular a altura-base de cada row (`AUTO = intrinsic`, `MIN_MM = max(intrinsic,min)`, `FIXED_MM = authored`) sem usar rowspan para crescer linhas. **R0.1.3 substitui a distribuição sequencial R0.1.2 por uma solução global de mínimo total extra.**
 
-**EMPIRICAL WATCH — NON-BLOCKING AT FREEZE:** a distribuição de deficit de rowspan em rows AUTO/MIN_MM acima permanece congelada como a hipótese determinística de FOUNDATION-PROOF-01. Constraints de rowspan sobrepostas podem admitir solução global mais compacta. G01/G03 e os testes de rowspan devem verificar se a política preserva densidade aceitável de tabelas técnicas. Se a proof demonstrar expansão artificial material ou falso overflow prático, **STOP PROMOTION** e reabrir somente a decisão de altura de rowspan; esta freeze stamp não altera o algoritmo.
+Considere somente rows growable (`AUTO`/`MIN_MM`) em ordem semântica, com extras inteiros `x[k] >= 0`. Para cada rowspan, calcule `deficitU = max(0, requiredSpanContentHeightU - sum(baseCoveredRowHeightsU))` usando as alturas-base, nunca alturas já incrementadas. As growable rows tocadas por um span formam um intervalo `[l,r]` nessa sequência e impõem `sum(x[l..r]) >= deficitU`. Se `deficitU > 0` e o span não contém growable row, emitir `ROW_CONTENT_OVERFLOW / ERROR`; `FIXED_MM` nunca cresce.
+
+Defina `P[0]=0` e `P[k+1]=P[k]+x[k]`. Não-negatividade produz edges `P[k+1] >= P[k]`; cada rowspan produz `P[r+1] >= P[l] + deficitU`. Todos os edges apontam para frente, então formam DAG. Calcular cada prefixo como o maior valor exigido por seus predecessores (longest path em ordem semântica) e derivar `x[k]=P[k+1]-P[k]`. Qualquer solução factível precisa dominar todo path e portanto tem `P[m]` ao menos igual ao longest path final; a solução construída atinge esse limite e minimiza exatamente o total extra. Como todos os pesos são `PhysicalLengthU` inteiros, não há divisão, remainder ou float. A forma componentwise-minimum do vetor de prefixos é a canonicalização determinística quando existem múltiplos vetores de row heights com o mesmo total mínimo; ordem de constraints/DOM não altera o resultado.
+
+**HISTÓRICO R0.1.2 PRESERVADO:** no counterexample reproduzido, requirements `[407789,407789] U` sobre base `[100000,100000,100000] U` produziram `[203895,255842,151947] U` (`611684 U`) pelo algoritmo antigo, enquanto `[100000,307789,100000] U` (`507789 U`) satisfaz ambos e cabe no frame `550000 U`. A expansão artificial `103895 U` (~`10.3895 mm`, ~`20.46%`) confirmou o watch e falsificou somente a decisão de alocação de rowspan.
 
 Se o conteúdo intrínseco exceder o frame, objetos vizinhos permanecem no lugar e a prova falha com overflow. A UI futura pode oferecer ampliar/mover, reduzir padding/fonte por escolha explícita, ajustar colunas ou dividir após uma linha. Nunca esconder linhas, diminuir tudo silenciosamente, anexar folhas sem ação ou transformar measurement em autoria.
 

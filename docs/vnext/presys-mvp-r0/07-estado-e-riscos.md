@@ -49,9 +49,15 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Renderer proposto da proof: CSS Grid com tracks resolvidos em `PhysicalLengthU` e projeção inteira `PhysicalPixelQ = 1/64 CSS px`; borders/padding não alteram a soma de tracks. Chromium 151.0.7922.34 confirmou que HTML table com collapsed/separate borders aumenta o border box além do frame declarado, enquanto o Grid com projeção explícita fecha `frameQ/trackQ` deterministicamente em screen/print, viewport 900/1500 e DPR 1/2. CSS `border-width:1.328125px` foi canonicalizado para `1px`; paint rectangle posicionado reteve a geometria solicitada, portanto border físico é paint separado do sizing.
 - `textFlowSignature` é derivada por `Range.getClientRects()` de inlines semânticos identificados, relativa à content box e normalizada em `PhysicalPixelQ`; não depende de traversal DOM para ordenar conteúdo e não cria uma segunda igualdade em U para o mesmo browser fact.
 - O PDF probe preservou text layer (`42` text items) e registrou `111` `constructPath` / `110` `fill`, com `0` ocorrências em todos os PDF.js image-paint operators consultados; a evidência local suporta paint vetorial/anti-raster da tabela.
-- Rowspan distribui deficit em inteiro por `baseU/remainderU`, rows AUTO/MIN_MM top-to-bottom, anchors em ordem canônica; FIXED_MM nunca cresce.
+- **Histórico R0.1.2:** rowspan distribuía deficit sequencialmente por `baseU/remainderU`; FOUNDATION-PROOF-01 demonstrou expansão artificial material em spans sobrepostos. R0.1.3 substitui somente essa decisão pelo solver global de mínimo total extra.
 - `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling/wrong-scope têm códigos distintos.
 - `TableCoreRenderer.tsx` é **DO NOT PORT AS VNEXT RENDERER** porque injeta header sintético quando não há header explícito. O teste headerless deve provar ausência dessa mutação estrutural.
+
+## R0.1.3 — TARGETED EMPIRICAL AMENDMENT
+
+- Reopen A confirmado: `[203895,255842,151947] U` / `611684 U` contra witness factível `[100000,307789,100000] U` / `507789 U` em frame `550000 U`. Novo contrato: interval constraints + prefix longest-path em U, mínimo total extra e FIXED imutável.
+- Reopen B confirmado: Chromium mediu `tableHeightQ == objectHeightQ == 4838`, mas `qToU(4838)=200008 U > authoredHeightU=200000 U`. Novo contrato: overflow final de tabela compara `renderedIntrinsicHeightQ > uToQ(authoredFrameHeightU)`; igualdade em Q é OK.
+- Todo o restante de R0.1.2 permanece congelado e inalterado. O histórico das duas hipóteses falsificadas permanece neste pacote.
 
 ## Decisões arquiteturais R0.1
 
@@ -86,7 +92,7 @@ Os ADRs marcados `FROZEN FOR FOUNDATION-PROOF-01` estão aprovados para implemen
 
 ## Questões empíricas abertas
 
-- **NON-BLOCKING EMPIRICAL WATCH — ROWSPAN AUTO/MIN:** a distribuição de deficit está intencionalmente congelada como hipótese determinística de FOUNDATION-PROOF-01. Constraints de rowspan sobrepostas podem admitir solução global mais compacta. G01/G03 e os testes de rowspan devem determinar se a política documentada preserva densidade aceitável de tabelas técnicas. Se a proof demonstrar expansão artificial material ou falso overflow prático, **STOP PROMOTION** e reabrir somente a decisão de altura de rowspan; não alterar o algoritmo durante esta freeze stamp.
+- **RESOLVIDO EM R0.1.3 — ROWSPAN AUTO/MIN:** o watch R0.1.2 produziu counterexample reproduzível com expansão artificial de `103895 U` (~`20.46%`) e falso overflow prático. A decisão foi reaberta e substituída somente pelo solver global de mínimo total extra; a pergunta visual sobre mixed rich content permanece empírica.
 
 - **OPEN EMPIRICAL QUESTION:** G01–G05 mantêm legibilidade com a fonte e os assets PRESYS? Provar em tela/PDF/impressão.
 - **OPEN EMPIRICAL QUESTION:** qual safe area/margem PRESYS deve virar default de FATHER-USABLE V1? O legado `8.4667 mm` não decide isso.
