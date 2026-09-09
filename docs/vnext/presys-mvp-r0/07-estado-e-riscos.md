@@ -16,7 +16,7 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Repositório: `avaranda66-oss/catalog-builder-technical`.
 - Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
 - Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
-- PR #12: OPEN, NOT MERGED. Current R0.1.3 docs head: `4ba520ef86b745eb58d979a9ce27d21ad14202fd`.
+- PR #12: OPEN, NOT MERGED. Head semântico da arquitetura aprovado pelo Principal: `34b1c4a220c857e087a651d91ec83c7a4d43317d`.
 - GitHub Quality Gate: run `34378706870`, head `34b1c4a220c857e087a651d91ec83c7a4d43317d`, status `completed`, conclusion `success`.
 - Main: `616332d6048a4259d2e2b562d8d5e781cea334bd`; tree `26b21e6a06247823c80826e4855ee477a44db2de`.
 - Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
