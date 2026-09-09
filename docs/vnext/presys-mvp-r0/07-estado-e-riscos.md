@@ -1,0 +1,132 @@
+# Estado e passagem de contexto
+
+> **HISTORICAL R0.1 FOUNDATION RECORD.** O estado operacional atual e a próxima ação canônica estão em [`../PROJECT-STATE.md`](../PROJECT-STATE.md). A memória intelectual durável está em [`../PRINCIPAL-HANDOFF.md`](../PRINCIPAL-HANDOFF.md). Não usar os SHAs/"próximo passo" históricos abaixo sem revalidar Git/GitHub.
+
+STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
+DATE: 2026-09-09
+
+BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
+
+TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
+
+## Estado real
+
+- Repositório: `avaranda66-oss/catalog-builder-technical`.
+- Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
+- Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
+- PR #12: OPEN, NOT MERGED. Head semântico da arquitetura aprovado pelo Principal: `34b1c4a220c857e087a651d91ec83c7a4d43317d`.
+- GitHub Quality Gate: run `34378706870`, head `34b1c4a220c857e087a651d91ec83c7a4d43317d`, status `completed`, conclusion `success`.
+- Main: `616332d6048a4259d2e2b562d8d5e781cea334bd`; tree `26b21e6a06247823c80826e4855ee477a44db2de`.
+- Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
+- Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
+- VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
+- Pacote: sete documentos temáticos, README e uma foundation proof; os contratos explicitamente FOUNDATION REQUIRED foram aprovados e congelados para FOUNDATION-PROOF-01. FATHER-USABLE V1 e POST-V1 continuam PROPOSED/MUST-CANDIDATE onde indicado.
+- Próximo passo: executar FOUNDATION-PROOF-01 sob o contrato congelado. Falha empírica pode reabrir uma decisão específica, sem autorizar redesign silencioso do restante do pacote.
+- Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
+
+## Publication closure evidence
+
+- BASE SHA / pre-commit HEAD: `616332d6048a4259d2e2b562d8d5e781cea334bd`; tree `26b21e6a06247823c80826e4855ee477a44db2de`.
+- `git diff --check`: PASS.
+- `npm run lint`: PASS, 0 errors / 268 warnings.
+- `npm run typecheck`: PASS, exit 0.
+- `npm test`: PASS, 196 test files; 2.046 tests passed / 1 skipped.
+- `npm run build`: PASS; 2.292 modules transformed, built in 16.81s; warnings não bloqueantes de imports mistos/chunk >500 kB.
+- Diff safety: production code NO; package NO; lockfile NO; Supabase NO; Legacy runtime NO.
+- GitHub Quality Gate do head semântico de entrada `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`: required check `Lint, typecheck, tests, build` SUCCESS. PR #12 permanece OPEN e NOT MERGED. O novo head criado por esta closure precisa de nova execução do mesmo gate antes do handoff.
+
+## Principal final freeze verdict
+
+- VNEXT DIRECTION: **GO**.
+- FOUNDATION-PROOF-01 SPEC: **FROZEN / READY FOR IMPLEMENTATION**.
+- PRODUCTION: **NOT IMPLEMENTED**.
+- MERGE: **NOT AUTHORIZED BY THIS TASK**.
+- O freeze obriga a implementação a seguir o contrato documentado e proíbe redesign silencioso. Ele não declara toda arquitetura futura de FATHER-USABLE V1/POST-V1 como congelada e não é aprovação de produção, merge ou deploy.
+
+## Closure R0.1.2 A–F — evidência dirigida, PROPOSED
+
+- CellContent agora possui união discriminada exata; measurement preserva decimal lexeme, marker/asset usam refs estáveis e wrap/image fit/dimensões/caption permanecem fora do conteúdo semântico.
+- Renderer proposto da proof: CSS Grid com tracks resolvidos em `PhysicalLengthU` e projeção inteira `PhysicalPixelQ = 1/64 CSS px`; borders/padding não alteram a soma de tracks. Chromium 151.0.7922.34 confirmou que HTML table com collapsed/separate borders aumenta o border box além do frame declarado, enquanto o Grid com projeção explícita fecha `frameQ/trackQ` deterministicamente em screen/print, viewport 900/1500 e DPR 1/2. CSS `border-width:1.328125px` foi canonicalizado para `1px`; paint rectangle posicionado reteve a geometria solicitada, portanto border físico é paint separado do sizing.
+- `textFlowSignature` é derivada por `Range.getClientRects()` de inlines semânticos identificados, relativa à content box e normalizada em `PhysicalPixelQ`; não depende de traversal DOM para ordenar conteúdo e não cria uma segunda igualdade em U para o mesmo browser fact.
+- O PDF probe preservou text layer (`42` text items) e registrou `111` `constructPath` / `110` `fill`, com `0` ocorrências em todos os PDF.js image-paint operators consultados; a evidência local suporta paint vetorial/anti-raster da tabela.
+- **Histórico R0.1.2:** rowspan distribuía deficit sequencialmente por `baseU/remainderU`; FOUNDATION-PROOF-01 demonstrou expansão artificial material em spans sobrepostos. R0.1.3 substitui somente essa decisão pelo solver global de mínimo total extra.
+- `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling/wrong-scope têm códigos distintos.
+- `TableCoreRenderer.tsx` é **DO NOT PORT AS VNEXT RENDERER** porque injeta header sintético quando não há header explícito. O teste headerless deve provar ausência dessa mutação estrutural.
+
+## R0.1.3 — TARGETED EMPIRICAL AMENDMENT
+
+- Reopen A confirmado: `[203895,255842,151947] U` / `611684 U` contra witness factível `[100000,307789,100000] U` / `507789 U` em frame `550000 U`. Novo contrato: interval constraints + prefix longest-path em U, mínimo total extra e FIXED imutável.
+- Reopen B confirmado: Chromium mediu `tableHeightQ == objectHeightQ == 4838`, mas `qToU(4838)=200008 U > authoredHeightU=200000 U`. Novo contrato: overflow final de tabela compara `renderedIntrinsicHeightQ > uToQ(authoredFrameHeightU)`; igualdade em Q é OK.
+- Todo o restante de R0.1.2 permanece congelado e inalterado. O histórico das duas hipóteses falsificadas permanece neste pacote.
+
+## R0.1.4 — RENDERED EXTENT / ROW PROJECTION AMENDMENT
+
+- Auditoria Principal reproduziu um terceiro boundary sistêmico: `uToQ(200000)=4838`, porém `qToU(4838)=200008`; usar esse round-trip como requisito de row transforma fit Q exato em falso `ROW_CONTENT_OVERFLOW`.
+- O mesmo scalar `qToU` falha como lower-bound quando a row começa fora da phase zero: com prefixo `21 U`, alocar `200008 U` produz boundaries `1 Q → 4838 Q`, apenas `4837 Q` de span para requirement `4838 Q`.
+- Text object tinha a mesma classe de falso positivo ao testar `qToU(metrics.widthQ/heightQ) > authoredWidthU/authoredHeightU`.
+- Contrato R0.1.4: U continua autoridade authored/solver; Q continua autoridade dos fatos Chromium. Fit renderizado compara em Q. Row solver mantém requirements Q e usa cumulative boundary projection + inversa monotônica exata para derivar somente o U mínimo necessário em AUTO/MIN.
+- R0.1.3 permanece preservado em seus resultados sistêmicos: eliminou expansão artificial global de rowspan e fechou a igualdade Q do envelope final da tabela. Nenhum contrato fora dessa fronteira U/Q foi reaberto.
+
+## Decisões arquiteturais R0.1
+
+| ADR | Estado | Decisão | Alternativa e motivo |
+|---|---|---|---|
+| ADR-01 | PROPOSED | Núcleo VNext isolado no mesmo repo; manter Vite/React | Reescrita total de stack não atende um problema demonstrado; continuação integral do legado preservaria limites de composição |
+| ADR-02 | FROZEN FOR FOUNDATION-PROOF-01 | Página A4 explícita `210×297 mm`, objects com frame x/y/width/height; measurement nunca muta authored frame | Auto-flow/measurement authority viola composição autoral |
+| ADR-03 | FROZEN FOR FOUNDATION-PROOF-01 | Um único motor de tabela; Table Core é salvage seletivo; geometry resolver reimplementado from lessons | Motor paralelo ou port integral preservaria fallbacks/autoridades conflitantes |
+| ADR-04 | PROPOSED | Ações tipadas e transações como única mutação | Store/setters públicos expõem superfície ampla e dificultam Undo/IA futura |
+| ADR-05 | FROZEN FOR FOUNDATION-PROOF-01 | Mesma árvore editorial para screen e PDF Chromium; editor futuro só adiciona overlays externos | Captura raster integral e renderer PDF paralelo violam parity/text layer |
+| ADR-06 | PROPOSED | Documento JSON + CAS + recuperação local; assets separados | SQL por célula precoce aumenta custo; last-write-wins perde alterações |
+| ADR-07 | PROPOSED | Presets/componentes copiados com proveniência | Instâncias vivas introduzem propagação e conflitos antes de necessidade comprovada |
+| ADR-08 | FROZEN FOR FOUNDATION-PROOF-01 SCOPE / V1 PROPOSED | FOUNDATION-PROOF-01 exclui IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing são FATHER-USABLE V1 MUST-CANDIDATE; PIM/Presence/realtime/AI authoring/automation ficam POST-V1 | Evita confundir proof técnica com fronteira real de produto e explicita que reversão/recovery não são inferidos de save/reopen |
+| ADR-09 | FROZEN FOR FOUNDATION-PROOF-01 | GO da proof promove/move o núcleo do lab para `src/vnext/domain/`, `src/vnext/render/`, `src/vnext/editor/` | Lab engine + production engine em paralelo reconstruiria o motor |
+
+Os ADRs marcados `FROZEN FOR FOUNDATION-PROOF-01` estão aprovados para implementação da proof; ADRs de arquitetura futura e as disposições específicas de FATHER-USABLE V1/POST-V1 permanecem PROPOSED. Revisar D3/D4/D5 em conjunto; o freeze não autoriza aprovar ou alterar schema separadamente de geometria, annotations, histórico e exportação.
+
+## Dez riscos e mitigação
+
+| Risco | Sinal concreto de falha | Mitigação e prova |
+|---|---|---|
+| 1. Adiar qualidade PDF | Muitas telas novas e nenhuma página difícil exportada | FOUNDATION-PROOF-01 antes de plataforma; G01–G05 com conteúdo estruturado |
+| 2. Reescrita longa sem valor | Port inclui App/stores inteiros | Imports proibidos; manter legado útil; promover somente núcleo comprovado |
+| 3. Motor único virar monólito | Um arquivo passa a conter UI, resolver, schema e saves | Separar model/operations/geometry/render/editor; testar contratos |
+| 4. Canvas virar ferramenta gráfica geral | Rotação, vetores complexos e grupos infinitos antes de tabela confiável | MVP com página, frames e grupos planos; diagramas importáveis |
+| 5. Densidade destruir legibilidade | Golden “passa” diminuindo fonte/linhas ou rasterizando tudo | Código/frames imutáveis, PDF content inspection e PNGs derivados do PDF final |
+| 6. Medição dominar autoria | Render/preflight cria páginas, altera width ou grava height | Teste de imutabilidade e comparação de frames |
+| 7. Dados técnicos incorretos | Texto de concorrente ou fixture passa a ser “oficial PRESYS” | Fonte/revisão humana e estados pendentes explícitos; nenhum dado técnico inventado |
+| 8. Salvamento perder edições | ACK de revisão antiga limpa estado mais novo ou retry duplica | Captura de revisão, CAS, idempotência e teste de dois clientes |
+| 9. Exportação variar por ambiente | Fontes/CSS/assets/engine mudam entre prévia e job | Manifesto versionado, readiness explícito e `LAYOUT_UNSTABLE` bloqueante |
+| 10. Infra compartilhada vazar escopo | VNext chama RPC legado ou aceita workspace de cliente sem membership | Porta própria, RLS, testes de tenant, rollback sem mudar catálogo legado |
+
+## Questões empíricas abertas
+
+- **RESOLVIDO EM R0.1.3 — ROWSPAN AUTO/MIN:** o watch R0.1.2 produziu counterexample reproduzível com expansão artificial de `103895 U` (~`20.46%`) e falso overflow prático. A decisão foi reaberta e substituída somente pelo solver global de mínimo total extra; a pergunta visual sobre mixed rich content permanece empírica.
+
+- **OPEN EMPIRICAL QUESTION:** G01–G05 mantêm legibilidade com a fonte e os assets PRESYS? Provar em tela/PDF/impressão.
+- **OPEN EMPIRICAL QUESTION:** qual safe area/margem PRESYS deve virar default de FATHER-USABLE V1? O legado `8.4667 mm` não decide isso.
+- **OPEN EMPIRICAL QUESTION:** qual é a especificação oficial/atual dos produtos e quais imagens podem ser usadas comercialmente? As quatro referências não respondem isso.
+- **OPEN EMPIRICAL QUESTION:** o usuário alvo consegue editar sem ajuda e entende warnings e divisão de tabelas? Registrar uma sessão de aceite.
+- **OPEN EMPIRICAL QUESTION:** rowspan + altura fixa e mixed rich content permanecem visualmente corretos nos goldens reais do renderer escolhido? O algoritmo de altura está fechado; a confiabilidade visual ainda deve ser provada.
+- **OPEN EMPIRICAL QUESTION:** qual o orçamento real de memória/tempo do worker PDF em hospedagem? Medir 1, 20 e 50 páginas, documentar máquina e assets.
+- **OPEN EMPIRICAL QUESTION:** a gráfica exige PDF/X/CMYK/sangria? Não necessário para hipótese de PDF digital/impressão de escritório; muda exportação se virar requisito.
+- **OPEN EMPIRICAL QUESTION:** quais tabelas antigas podem ser convertidas sem perda? Importação só após mapa de compatibilidade e amostras reais.
+
+## Contraargumento mais forte
+
+O legado já tem auth, persistência, templates, tradução e muitos testes. Uma melhoria focada nele pode chegar mais cedo a usuários que aceitem composição vertical. O novo núcleo só compensa se provar a liberdade editorial e a saída PDF solicitadas. FOUNDATION-PROOF-01 deve poder refutar a proposta. Se exige trabalho desproporcional, comparar um port mínimo com extensão controlada do legado antes de financiar a migração inteira.
+
+## Checklist de revisão da fundação
+
+- [ ] Conferir fronteira proposta: proof sem IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing como FATHER-USABLE V1 MUST-CANDIDATE; demais itens POST-V1 PROPOSED.
+- [ ] Reproduzir inspeção das páginas difíceis e dimensões dos PDFs.
+- [ ] Revisar os paths de reaproveitamento e evitar imports transitivos do legado.
+- [ ] Conferir frame completo, table height fixo, RowHeightPolicy, solver de colunas e annotations sem autoridades concorrentes.
+- [ ] Conferir ações, revisão local, histórico, CAS e snapshot em conjunto.
+- [ ] Validar readiness de fonts/assets/images, `LAYOUT_UNSTABLE`, parity e anti-false-positive de raster PDF.
+- [ ] Executar FOUNDATION-PROOF-01 e registrar G01–G05 antes de detalhar todos os pacotes posteriores.
+- [ ] Conferir risco de RLS/worker antes de migrações ou deploy.
+- [ ] Não confundir suíte verde com aceitação editorial ou jornadas de nuvem testadas.
+
+O trabalho desta sessão entrega análise e proposta revisada. Não entrega uma plataforma pronta, um catálogo comercial final, uma auditoria de segurança completa ou a execução literal das 70 fases do anexo. As limitações foram registradas para que o próximo agente possa continuar sem depender de memória de chat.
