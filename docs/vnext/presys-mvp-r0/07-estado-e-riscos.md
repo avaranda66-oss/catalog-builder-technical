@@ -2,8 +2,8 @@
 
 > **HISTORICAL R0.1 FOUNDATION RECORD.** O estado operacional atual e a próxima ação canônica estão em [`../PROJECT-STATE.md`](../PROJECT-STATE.md). A memória intelectual durável está em [`../PRINCIPAL-HANDOFF.md`](../PRINCIPAL-HANDOFF.md). Não usar os SHAs/"próximo passo" históricos abaixo sem revalidar Git/GitHub.
 
-STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
-PRINCIPAL REVIEW: APPROVED
+STATUS: FOUNDATION-PROOF-01 PRINCIPAL AUDIT GO / ARCHITECTURAL FOUNDATION PROVEN
+PRINCIPAL REVIEW: GO AS ARCHITECTURAL FOUNDATION
 FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
@@ -23,7 +23,7 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
 - VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
 - Pacote: sete documentos temáticos, README e uma foundation proof; os contratos explicitamente FOUNDATION REQUIRED foram aprovados e congelados para FOUNDATION-PROOF-01. FATHER-USABLE V1 e POST-V1 continuam PROPOSED/MUST-CANDIDATE onde indicado.
-- Próximo passo: executar FOUNDATION-PROOF-01 sob o contrato congelado. Falha empírica pode reabrir uma decisão específica, sem autorizar redesign silencioso do restante do pacote.
+- FOUNDATION-PROOF-01 foi executado após as duas correções direcionadas R0.1.3. Evidência final local: G01–G05 PASS, matriz Chromium 8/8 PASS, PDF forense PASS e gates proof-owned PASS. Próximo passo: auditoria independente de código/PDF pelo Principal; sem merge, promoção ou deploy.
 - Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
 
 ## Publication closure evidence

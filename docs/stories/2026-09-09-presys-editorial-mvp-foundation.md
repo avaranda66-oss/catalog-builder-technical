@@ -27,6 +27,8 @@ Como responsável pelo produto PRESYS, quero transformar o pacote documental R0 
 - [x] Rodar gates locais finais desta branch e registrar resultados abaixo.
 - [x] Registrar Principal final freeze audit: VNEXT GO; FOUNDATION-PROOF-01 FROZEN / READY FOR IMPLEMENTATION; produção não implementada; merge não autorizado.
 - [x] Executar FOUNDATION-PROOF-01 e obter verdict empírico da proof em PR #13; implementation head verificado `c8808adf0dd3a9dbc4473aafc2f4007267ff67df`, 67/67 focused proof tests e Principal code/math/artifact verdict GO.
+- [x] Aplicar a correção R0.1.4 de quantização para fit renderizado de rows/rowspans/text objects, preservando geometria autoral em U e comparação bloqueante em Q.
+- [x] Revalidar G01–G05, matriz Chromium 8-run, PDF forensics, immutability, stability e gates locais; manter o erro conhecido de `ConflictReviewModal.tsx` fora do escopo somente como único erro de `lint:labs`.
 - [x] Registrar memória institucional durável para reconstrução sem chat: PROJECT-STATE, PRINCIPAL-HANDOFF e blueprint de Editor UX/Future AI.
 
 ## Escopo e verificação
@@ -63,6 +65,15 @@ Esses resultados são gates locais. GitHub Quality Gate só pode ser registrado 
 - `docs/vnext/presys-mvp-r0/07-estado-e-riscos.md`
 - `docs/vnext/presys-mvp-r0/tasks/MVP-01-prova-editorial.md`
 - `docs/vnext/presys-mvp-r0/evidence/source-inventory.json`
+- `docs/vnext/presys-mvp-r0/evidence/proof-result.md`
+- `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md`
+- `src/labs/presys-editorial-proof/physical.ts`
+- `src/labs/presys-editorial-proof/proof-layout.ts`
+- `src/labs/presys-editorial-proof/proof-measurement.ts`
+- `src/labs/presys-editorial-proof/proof-preflight.ts`
+- `tests/vnext/proof/arithmetic-adversarial.test.ts`
+- `tests/vnext/proof/geometry.test.ts`
+- `tests/vnext/proof/export-proof.mjs`
 - `docs/vnext/PROJECT-STATE.md`
 - `docs/vnext/PRINCIPAL-HANDOFF.md`
 - `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`
