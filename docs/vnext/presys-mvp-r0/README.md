@@ -1,13 +1,15 @@
 # PRESYS VNext R0.1 — PRINCIPAL AMENDMENTS PROPOSAL
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
 Este pacote é a proposta arquitetural canônica de PRESYS VNext R0.1 no repositório para auditoria Principal. Ele não é implementação, aceite de produção, arquitetura congelada ou autorização de merge/deploy. As recomendações substantivas permanecem fortes, porém sua decisão status é PROPOSED até revisão Principal; itens DEFERRED pertencem a uma fase posterior.
+
+Follow-up atual do PR #12: **R0.1.2**, closure documental dirigida dos contratos A–F (CellContent, projeção/paint Chromium, text flow, rowspan remainder, annotation scope e renderer legado). O freeze continua explicitamente não aplicado.
 
 A prioridade é permitir que uma pessoa da PRESYS produza catálogos técnicos e institucionais com tabelas densas, imagens, notas e composição profissional. A primeira execução é uma prova técnica da fundação editorial; ela não redefine o escopo do primeiro produto utilizável.
 

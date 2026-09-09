@@ -14,12 +14,12 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Repositório: `avaranda66-oss/catalog-builder-technical`.
 - Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
 - Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
-- PR #12: OPEN, NOT MERGED. Head recebido para este follow-up R0.1.1: `eb86bca9357676a19a344313bfea73021168ff5f`.
-- Required GitHub check `Lint, typecheck, tests, build`: SUCCESS em `eb86bca9357676a19a344313bfea73021168ff5f`. Esse é o gate factual do head de entrada desta emenda; o novo head R0.1.1 deve executar o mesmo check antes do handoff final.
+- PR #12: OPEN, NOT MERGED. Head semântico de entrada desta closure dirigida: `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`.
+- Required GitHub check `Lint, typecheck, tests, build`: SUCCESS em `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`. O novo head documental produzido por esta closure deve executar o mesmo check antes do handoff final.
 - Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
 - Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
 - VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
-- Pacote: sete documentos temáticos, README e uma foundation proof; a proposta R0.1 documenta a fronteira proof/V1, geometria autoral, contrato de tabelas, severidade, readiness/parity/PDF e promoção do lab para auditoria Principal. Nenhuma dessas decisões está congelada por este PR.
+- Pacote: sete documentos temáticos, README e uma foundation proof; a proposta R0.1 documenta a fronteira proof/V1, geometria autoral, contrato de tabelas, severidade, readiness/parity/PDF e promoção do lab para auditoria Principal. Esta closure A–F acrescenta CellContent exato, projeção física do renderer, text-flow extraction, remainder de rowspan, annotation scope e classificação do renderer legado. Nenhuma dessas decisões está congelada por este PR.
 - Próximo passo após auditoria independente: executar FOUNDATION-PROOF-01. FATHER-USABLE V1 continua produto posterior à proof e inclui Undo/Redo, local recovery, AI Translation e basic read-only sharing como MUST-CANDIDATE — PROPOSED.
 - Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
 
@@ -32,7 +32,17 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - `npm test`: PASS, 196 test files; 2.046 tests passed / 1 skipped.
 - `npm run build`: PASS; 2.292 modules transformed, built in 16.81s; warnings não bloqueantes de imports mistos/chunk >500 kB.
 - Diff safety: production code NO; package NO; lockfile NO; Supabase NO; Legacy runtime NO.
-- GitHub Quality Gate do head de entrada R0.1.1 `eb86bca9357676a19a344313bfea73021168ff5f`: required check `Lint, typecheck, tests, build` SUCCESS. PR #12 permanece OPEN e NOT MERGED. O novo head criado por esta emenda precisa de nova execução do mesmo gate antes do handoff.
+- GitHub Quality Gate do head semântico de entrada `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`: required check `Lint, typecheck, tests, build` SUCCESS. PR #12 permanece OPEN e NOT MERGED. O novo head criado por esta closure precisa de nova execução do mesmo gate antes do handoff.
+
+## Closure R0.1.2 A–F — evidência dirigida, PROPOSED
+
+- CellContent agora possui união discriminada exata; measurement preserva decimal lexeme, marker/asset usam refs estáveis e wrap/image fit/dimensões/caption permanecem fora do conteúdo semântico.
+- Renderer proposto da proof: CSS Grid com tracks resolvidos em `PhysicalLengthU` e projeção inteira `PhysicalPixelQ = 1/64 CSS px`; borders/padding não alteram a soma de tracks. Chromium 151.0.7922.34 confirmou que HTML table com collapsed/separate borders aumenta o border box além do frame declarado, enquanto o Grid com projeção explícita fecha `frameQ/trackQ` deterministicamente em screen/print, viewport 900/1500 e DPR 1/2. CSS `border-width:1.328125px` foi canonicalizado para `1px`; paint rectangle posicionado reteve a geometria solicitada, portanto border físico é paint separado do sizing.
+- `textFlowSignature` é derivada por `Range.getClientRects()` de inlines semânticos identificados, relativa à content box e normalizada em `PhysicalPixelQ`; não depende de traversal DOM para ordenar conteúdo e não cria uma segunda igualdade em U para o mesmo browser fact.
+- O PDF probe preservou text layer (`42` text items) e registrou `111` `constructPath` / `110` `fill`, com `0` ocorrências em todos os PDF.js image-paint operators consultados; a evidência local suporta paint vetorial/anti-raster da tabela.
+- Rowspan distribui deficit em inteiro por `baseU/remainderU`, rows AUTO/MIN_MM top-to-bottom, anchors em ordem canônica; FIXED_MM nunca cresce.
+- `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling/wrong-scope têm códigos distintos.
+- `TableCoreRenderer.tsx` é **DO NOT PORT AS VNEXT RENDERER** porque injeta header sintético quando não há header explícito. O teste headerless deve provar ausência dessa mutação estrutural.
 
 ## Decisões arquiteturais R0.1
 
@@ -67,14 +77,14 @@ Todas as decisões acima são PROPOSED e dependem de auditoria Principal; `FOUND
 
 ## Questões empíricas abertas
 
-- As composições G01–G05 mantêm legibilidade com a fonte e os assets PRESYS? Provar em tela/PDF/impressão.
-- Qual safe area/margem PRESYS deve virar default de FATHER-USABLE V1? O legado `8.4667 mm` não decide isso.
-- Qual é a especificação oficial/atual dos produtos e quais imagens podem ser usadas comercialmente? As quatro referências não respondem isso.
-- O usuário alvo consegue editar sem ajuda e entende warnings e divisão de tabelas? Registrar uma sessão de aceite.
-- Rowspan + altura fixa é confiável no renderer escolhido? Teste adversarial no primeiro pacote; não assumir que height em tr resolve.
-- Qual o orçamento real de memória/tempo do worker PDF em hospedagem? Medir 1, 20 e 50 páginas, documentar máquina e assets.
-- A gráfica exige PDF/X/CMYK/sangria? Não necessário para hipótese de PDF digital/impressão de escritório; muda exportação se virar requisito.
-- Quais tabelas antigas podem ser convertidas sem perda? Importação só após mapa de compatibilidade e amostras reais.
+- **OPEN EMPIRICAL QUESTION:** G01–G05 mantêm legibilidade com a fonte e os assets PRESYS? Provar em tela/PDF/impressão.
+- **OPEN EMPIRICAL QUESTION:** qual safe area/margem PRESYS deve virar default de FATHER-USABLE V1? O legado `8.4667 mm` não decide isso.
+- **OPEN EMPIRICAL QUESTION:** qual é a especificação oficial/atual dos produtos e quais imagens podem ser usadas comercialmente? As quatro referências não respondem isso.
+- **OPEN EMPIRICAL QUESTION:** o usuário alvo consegue editar sem ajuda e entende warnings e divisão de tabelas? Registrar uma sessão de aceite.
+- **OPEN EMPIRICAL QUESTION:** rowspan + altura fixa e mixed rich content permanecem visualmente corretos nos goldens reais do renderer escolhido? O algoritmo de altura está fechado; a confiabilidade visual ainda deve ser provada.
+- **OPEN EMPIRICAL QUESTION:** qual o orçamento real de memória/tempo do worker PDF em hospedagem? Medir 1, 20 e 50 páginas, documentar máquina e assets.
+- **OPEN EMPIRICAL QUESTION:** a gráfica exige PDF/X/CMYK/sangria? Não necessário para hipótese de PDF digital/impressão de escritório; muda exportação se virar requisito.
+- **OPEN EMPIRICAL QUESTION:** quais tabelas antigas podem ser convertidas sem perda? Importação só após mapa de compatibilidade e amostras reais.
 
 ## Contraargumento mais forte
 

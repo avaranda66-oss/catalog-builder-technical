@@ -1,7 +1,7 @@
 # PDF, durabilidade e evolução
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
@@ -15,9 +15,9 @@ O PDF final deve preservar text layer, códigos, unidades, símbolos, bordas fin
 
 O legado tem dois caminhos distintos: `window.print()` e html2canvas + jsPDF. Neste último cada folha vira PNG. Aumentar scale melhora resolução raster, mas não devolve texto pesquisável nem garante linhas finas ou baixo tamanho de arquivo. A existência de print nativo é reaproveitável; a integração atual não comprova um job reproduzível com assets congelados.
 
-Para a prova, a árvore editorial é única: `ProofDocument → ProofPage → ProofTable` e demais primitivas. A tela renderiza essa árvore; o editor futuro acrescenta overlays externos; o PDF imprime a mesma árvore com `@media print`. É proibida a arquitetura `EditorRenderer != PDFRenderer`. Medição usa fonte e largura editoriais iguais, independentemente do zoom. Uma folha autoral válida produz uma página física; conteúdo excedente bloqueia o job, não cria continuação automaticamente.
+Para a prova, a árvore editorial é única: `ProofDocument → ProofPage → ProofTable` e demais primitivas. A tela renderiza essa árvore; o editor futuro acrescenta overlays externos; o PDF imprime a mesma árvore com `@media print`. É proibida a arquitetura `EditorRenderer != PDFRenderer`. `ProofTable` usa o contrato D4 de CSS Grid com tracks físicos projetados para `PhysicalPixelQ`; HTML `<table>` pode existir futuramente somente como alternativa semântica se provar exatamente a mesma geometria, mas não é autoridade da proof. Medição usa fonte e largura editoriais iguais, independentemente do zoom. Uma folha autoral válida produz uma página física; conteúdo excedente bloqueia o job, não cria continuação automaticamente.
 
-Acceptance conceitual `T-PARITY-01`: o mesmo documento e manifesto produzem a mesma árvore editorial, frames e conteúdo semântico na visualização screen e no print/PDF; diferenças permitidas são somente estilos de mídia declarados que não mudem autoria, conteúdo ou geometria contratada.
+Acceptance conceitual `T-PARITY-01`: o mesmo documento e manifesto produzem a mesma árvore editorial, frames, `frameQ/trackQ`, edge segments e conteúdo semântico na visualização screen e no print/PDF; diferenças permitidas são somente estilos de mídia declarados que não mudem autoria, conteúdo ou geometria contratada.
 
 Referências técnicas: [Playwright page.pdf](https://playwright.dev/docs/api/class-page#page-pdf) documenta mídia print e opções de página/fundo; [CSS Paged Media](https://www.w3.org/TR/css-page-3/) define o modelo de páginas. Não se assume que todo recurso da especificação está implementado no browser.
 

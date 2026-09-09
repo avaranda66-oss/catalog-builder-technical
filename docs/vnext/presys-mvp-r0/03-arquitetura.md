@@ -1,7 +1,7 @@
 # Produto, arquitetura e contratos do documento
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
@@ -131,37 +131,60 @@ Regras: nenhuma referência quebrada; IDs únicos por documento; grupos só na m
 
 ## Aritmética física determinística — FOUNDATION REQUIRED, PROPOSED
 
-Toda geometria contratada usa milímetros na API/editor, mas cálculo e igualdade geométrica usam uma unidade inteira canônica. Definição: `PHYSICAL_UNIT_MM = 0.0001 mm` (um décimo de micrômetro; `10_000` unidades por mm). Essa escala preserva exatamente valores autorais com quatro casas decimais, inclusive o valor histórico `8.4667 mm` quando ele aparece como dado, é muito mais fina que a resolução física relevante de impressão/tela e mantém dimensões editoriais muito abaixo de `Number.MAX_SAFE_INTEGER` quando representadas como inteiros. Não usar `BigInt`, epsilon local ou acumulação binária em mm para decidir geometria.
+Toda geometria contratada usa milímetros na API/editor, mas cálculo e igualdade geométrica usam uma unidade inteira canônica. Definição: `PHYSICAL_UNIT_MM = 0.0001 mm` (`0.1 µm`; `10_000` unidades por mm). Essa escala preserva exatamente valores autorais com quatro casas decimais, inclusive o valor histórico `8.4667 mm` quando ele aparece como dado, é muito mais fina que a resolução física relevante de impressão/tela e mantém dimensões editoriais muito abaixo de `Number.MAX_SAFE_INTEGER` quando representadas como inteiros. Não usar `BigInt`, epsilon local ou acumulação binária em mm para decidir geometria.
 
 Contrato canônico:
 
 1. **Entrada de domínio:** campos públicos continuam em mm e devem ser `number` finito. `Column.flex.weight` é inteiro positivo seguro; peso fracionário não entra no solver canônico e deve ser normalizado por comando explícito antes dele.
 2. **Representação interna:** `PhysicalLengthU` é inteiro seguro em unidades de `0.0001 mm`. Todas as somas, subtrações, limites, comparações e conservação do solver usam `U`. Toda soma/produto intermediário também deve permanecer `Number.isSafeInteger`; se não permanecer, retornar `PHYSICAL_ARITHMETIC_OVERFLOW / ERROR`, sem fallback float/BigInt local inventado pelo implementador.
-3. **Conversão de mm autoral:** converter o `number` para sua representação decimal ECMAScript, inclusive forma exponencial quando produzida por `Number.prototype.toString`, interpretar os dígitos decimalmente e quantizar para `U` com **round half away from zero** na quinta casa decimal. É proibido `Math.round(mm * 10000 + epsilon)` ou epsilon equivalente. A quantização ocorre na fronteira de comando/importação; measurement nunca regrava frame autoral.
-4. **Medição CSS:** fatos vindos do DOM devem ser lidos no espaço editorial não transformado. CSS px é convertido pela razão exata `1 CSS px = 127/480 mm`; aplicar a razão sobre a representação decimal do valor medido e então a mesma quantização para `U`. `devicePixelRatio`, zoom do editor e pixels físicos não participam.
+3. **Conversão de mm autoral:** obter `s = Number.prototype.toString.call(mm)` de um `number` finito e interpretar `s` como decimal, sem multiplicação float. A gramática aceita sinal opcional, significando decimal ordinário ou científico (`1.25`, `-0.00005`, `1e-7`, `-2.5E+3`). Separar sinal, dígitos do coeficiente e expoente; remover o ponto e deslocar a escala decimal pelo expoente usando operações sobre a sequência de dígitos. Para converter a `U`, manter quatro casas de mm: se faltarem casas, anexar zeros; se sobrarem, comparar toda a parte descartada com exatamente meia unidade (`5` seguido apenas de zeros). Valor abaixo da metade trunca magnitude; valor igual/acima da metade incrementa a magnitude em `1 U`; aplicar o sinal **depois** do arredondamento da magnitude. Isso implementa **round half away from zero** também para negativos. Exemplos normativos: `1.23444 -> 12344 U`, `1.23445 -> 12345 U`, `-1.23445 -> -12345 U`, `1e-7 -> 0 U`, `5e-5 -> 1 U`, `-5e-5 -> -1 U`. Antes de converter a sequência decimal para `number`, verificar que a magnitude inteira resultante não excede `Number.MAX_SAFE_INTEGER`; caso contrário, `PHYSICAL_ARITHMETIC_OVERFLOW / ERROR`. Campos que não admitem negativos rejeitam o valor após normalização. É proibido `Math.round(mm * 10000 + epsilon)` ou epsilon equivalente. A quantização ocorre na fronteira de comando/importação; measurement nunca regrava frame autoral.
+4. **Medição CSS:** fatos vindos do DOM devem ser lidos somente em um render root editorial **sem transform**. O valor CSS px é normalizado primeiro para `PhysicalPixelQ` pelo contrato abaixo; browser-derived facts nunca são comparados como float ou convertidos diretamente para `U` como autoridade de estabilidade. `devicePixelRatio`, zoom do editor e pixels físicos não participam.
 5. **Arredondamento do solver:** divisões proporcionais produzem quociente inteiro por floor para a parcela base não negativa; o resto permanece inteiro e é tratado pela regra de resíduo abaixo. Nenhum arredondamento intermediário volta a mm.
-6. **Conservação:** em sucesso, `sum(widthsU) === availableInnerWidthU` exatamente. Se mínimos/fixed excedem a largura, ou máximos impedem preencher a largura exata, retornar `TABLE_WIDTH_INFEASIBLE`.
+6. **Conservação:** em sucesso, `sum(widthsU) === availableTrackWidthU` exatamente. `availableTrackWidthU` é definido pelo contrato D4 e corresponde à largura autoral do grid de tracks, sem redistribuição do browser. Se mínimos/fixed excedem a largura, ou máximos impedem preencher a largura exata, retornar `TABLE_WIDTH_INFEASIBLE`.
 7. **Resíduo determinístico:** depois de congelar colunas que atingiram `max`, calcular para cada flex elegível `q = floor(remainingU * weight / totalWeight)` e `r = (remainingU * weight) mod totalWeight`. Distribuir unidades residuais por `r` decrescente; empate pela ordem estável das colunas no modelo. Repetir após qualquer cap, nunca violar min/max. Se nenhuma coluna elegível puder receber o resíduo, falhar com `TABLE_WIDTH_INFEASIBLE`.
 8. **Saída:** converter `U` para mm somente na API/renderização por divisão por `10_000`; serialização de evidência usa decimal exato com no máximo quatro casas. O vetor inteiro `widthsU` é a autoridade de igualdade.
 9. **Igualdade em teste:** geometria normalizada é comparada por igualdade inteira exata; não existe epsilon. Para inputs idênticos, `widthsU` e sua serialização decimal devem ser idênticos independentemente de viewport, zoom ou renderer.
 
+### Duas unidades, uma autoridade por camada — FOUNDATION REQUIRED, PROPOSED
+
+`PhysicalLengthU` continua sendo a autoridade autoral/de domínio persistida: `10_000 U/mm`. FOUNDATION-PROOF-01 acrescenta **somente no renderer Chromium** `PhysicalPixelQ`, inteiro em unidades de `1/64 CSS px`. `Q` nunca é persistido no documento, nunca substitui mm/U e nunca volta como mutação autoral.
+
+Relações exatas:
+
+- `1 CSS px = 127/480 mm`;
+- `1 Q = 1/64 CSS px = 127/30_720 mm`;
+- `U -> Q`: `idealQ = U * 384 / 15_875`;
+- `Q -> mm` para diagnóstico/display: valor racional exato `Q * 127 / 30_720 mm`;
+- `Q -> U` quando um algoritmo de domínio precisa consumir uma medição Chromium: valor racional `Q * 15_875 / 384 U`, quantizado uma única vez por round-half-away-from-zero. Esse `U` derivado pode alimentar RowHeightPolicy/overflow, mas **não** vira a igualdade de browser layout.
+
+Conversão **escalar** `U -> Q`: tomar `abs(U)`, calcular `numerator = abs(U) * 384` com safe-integer check, `base = floor(numerator / 15_875)`, `remainder = numerator mod 15_875`; `magnitudeQ = base + (2*remainder >= 15_875 ? 1 : 0)`; aplicar o sinal depois. Zero permanece zero. Não usar epsilon, float multiplication ou `Math.round(x + epsilon)`. Essa regra projeta frames, posições, paddings e boundaries escalares. **Não** projetar cada `widthsU[i]` isoladamente e depois aceitar uma soma diferente do frame: vetores de tracks usam o apportionment conservativo D4, que parte do mesmo racional `U*384/15_875` e exige `sum(trackQ) === frameQ`. Rows projetam boundaries cumulativas escalares e derivam cada `rowQ` por diferença, preservando exatamente a boundary final.
+
+Conversão de CSS px medido para `Q`: obter o decimal ECMAScript do delta em px no espaço transform-free, interpretar esse decimal como racional pela mesma expansão ordinária/científica do item 3, multiplicar racionalmente por `64` e aplicar round-half-away-from-zero. Como o renderer emite posições/dimensões em múltiplos de `1/64 px`, o resultado esperado para geometria contratada é um inteiro Q exato; mismatch contra o Q esperado é `RENDER_GEOMETRY_MISMATCH / ERROR`.
+
+Serializar `Q` para CSS sem float autoritativo: `Q/64 px` é decimal finito. Gerar a string por quociente/resto inteiros (`0.015625 px` por unidade), nunca por conversão mm -> CSS. O manifesto da proof registra versão Chromium e este `Q` contract.
+
 ## Igualdade de layout e estabilidade — FOUNDATION REQUIRED, PROPOSED
 
-`LAYOUT_UNSTABLE` compara snapshots de fatos físicos normalizados, nunca `DOMRect` bruto. O renderer produz uma coleção ordenada de `PhysicalLayoutFact`; cada dimensão/posição usa `PhysicalLengthU` do contrato acima. O conjunto mínimo, quando aplicável, é:
+`LAYOUT_UNSTABLE` compara **um único snapshot canônico**, nunca `DOMRect` bruto. Campos autorais/solver permanecem em `U`; todo fato espacial derivado do Chromium permanece em `Q`. Não existem duas versões concorrentes do mesmo browser fact. Quando o mesmo `PhysicalLayoutFact` contém um authored/solver field em U e sua projeção renderer em Q, cada campo valida sua própria camada: U contra o documento/solver, Q contra o Chromium. É proibido converter um rect Q de volta a U e compará-lo contra outra leitura float/rounding do mesmo rect para decidir estabilidade. O conjunto mínimo, quando aplicável, é:
 
 ```ts
 type PhysicalLayoutFact =
-  | { kind:'page'; pageId:string; widthU:number; heightU:number }
-  | { kind:'object'; pageId:string; objectId:string; xU:number; yU:number; widthU:number; heightU:number }
-  | { kind:'table'; pageId:string; objectId:string; tableId:string; innerWidthU:number; renderedIntrinsicHeightU:number; columnWidthsU:number[] }
-  | { kind:'row'; pageId:string; tableId:string; rowId:string; yU:number; heightU:number }
-  | { kind:'cell'; pageId:string; tableId:string; cellId:string; xU:number; yU:number; widthU:number; heightU:number; intrinsicContentWidthU:number; intrinsicContentHeightU:number; textFlowSignature?:string }
-  | { kind:'annotation'; pageId:string; tableId:string; annotationId:string; xU:number; yU:number; widthU:number; heightU:number; intrinsicContentHeightU:number; textFlowSignature?:string };
+  | { kind:'page'; pageId:string; authoredWidthU:number; authoredHeightU:number; widthQ:number; heightQ:number }
+  | { kind:'object'; pageId:string; objectId:string; authoredXU:number; authoredYU:number; authoredWidthU:number; authoredHeightU:number; xQ:number; yQ:number; widthQ:number; heightQ:number }
+  | { kind:'table'; pageId:string; objectId:string; tableId:string; frameWidthU:number; columnWidthsU:number[]; frameQ:number; trackQ:number[]; renderedIntrinsicHeightQ:number }
+  | { kind:'row'; pageId:string; tableId:string; rowId:string; resolvedHeightU:number; yQ:number; heightQ:number }
+  | { kind:'cell'; pageId:string; tableId:string; cellId:string; xQ:number; yQ:number; widthQ:number; heightQ:number; intrinsicContentWidthQ:number; intrinsicContentHeightQ:number; textFlowSignature?:string }
+  | { kind:'annotation'; pageId:string; tableId:string; annotationId:string; xQ:number; yQ:number; widthQ:number; heightQ:number; intrinsicContentHeightQ:number; textFlowSignature?:string }
+  | { kind:'paintEdge'; pageId:string; tableId:string; edgeId:string; xQ:number; yQ:number; widthQ:number; heightQ:number; thicknessQ:number };
 ```
 
-`textFlowSignature`, quando há texto que pode quebrar linha, representa a sequência ordenada de fragmentos de linha associada aos IDs/offsets semânticos do conteúdo e às suas caixas normalizadas em `U`; assim uma quebra de linha real não fica invisível só porque a altura externa permaneceu igual. Fatos são ordenados por `kind` e IDs estáveis, nunca por ordem incidental do DOM.
+`textFlowSignature` usa Chromium como autoridade de line layout; não existe um segundo text-layout engine. Para cada célula/annotation text-bearing, o renderer cria um `data-flow-root` sem border/padding/transform exatamente na origem da content box. A extração percorre **o modelo semântico**, na ordem de `paragraphId` e dos inlines persistidos, e resolve cada inline pelo seu ID; não percorre filhos DOM para descobrir ordem. Cada inline `text` deve renderizar um único text node dentro do elemento identificado pelo inline ID. Para esse text node, criar um `Range` cobrindo o node inteiro e ler `Range.getClientRects()`: múltiplos runs na mesma linha permanecem fragmentos separados por seus IDs; um run em várias linhas produz vários rects; sub/sup e mixed styles aparecem em `y/height`; `technicalCode` nowrap produz um único fragmento salvo clipping/overflow diagnosticado. Inline `lineBreak` entra como registro semântico explícito mesmo sem rect.
 
-Após `required fonts loaded`, `required assets resolved` e `images decoded successfully`, o runner força a leitura de layout pela própria medição, captura snapshot A, executa preflight somente-leitura e captura snapshot B da mesma árvore/revisão/manifesto sem timer. **STABLE** significa: mesmo conjunto de chaves e igualdade exata de todos os inteiros, listas e `textFlowSignature` normalizados. Qualquer fato ausente/novo ou valor normalizado diferente é `LAYOUT_UNSTABLE / ERROR`. Ruído bruto inferior ao contrato só é estável quando normaliza para os mesmos fatos; não existe tolerância adicional. Mudança real de line flow, altura de row, dimensão intrínseca de imagem, métrica de fonte, bounds ou page assignment é instabilidade. `setTimeout`/sleep nunca prova estabilidade.
+Cada rect é convertido do viewport para coordenada relativa a `data-flow-root` (`rect.left - root.left`, `rect.top - root.top`) no espaço editorial **não transformado** e normalizado primeiro para `PhysicalPixelQ`. O `fragmentId` canônico é `(paragraphId, inlineId, rectOrdinal)`, onde `rectOrdinal` é o índice de `Range.getClientRects()` somente dentro daquele inline. A serialização para hash é `JSON.stringify(records)`, com records em ordem semântica e formas exatas `['P', paragraphId]`, `['T', paragraphId, inlineId, rectOrdinal, xQ, yQ, widthQ, heightQ]` e `['B', paragraphId, inlineId]`; `textFlowSignature` é SHA-256 lowercase do UTF-8 dessa string. Assim track geometry, cell bounds e text fragments usam a mesma normalização Chromium Q. Zoom/transform de UI fica fora da árvore medida; `DOMRect` bruto de uma árvore transformada nunca é fato físico.
+
+Fatos `PhysicalLayoutFact` são ordenados por `kind` e IDs estáveis, nunca por ordem incidental do DOM.
+
+Após `required fonts loaded`, `required assets resolved`, `images decoded successfully`, measurement, resolução de rows e geração do paint topology D4, o runner captura snapshot A, executa preflight somente-leitura e captura snapshot B da mesma árvore/revisão/manifesto sem timer. **STABLE** significa: mesmo conjunto de chaves e igualdade exata de todos os inteiros U/Q, listas e `textFlowSignature`. Qualquer fato ausente/novo ou valor diferente é `LAYOUT_UNSTABLE / ERROR`. Não existe epsilon adicional. Mudança real de line flow, rowQ, image intrinsic size, font metric, cell bound, paint edge ou page assignment é instabilidade. `setTimeout`/sleep nunca prova estabilidade.
 
 Cabeçalhos/rodapés no MVP são composições instanciadas a partir de template, com objetos bloqueados por padrão. Ao inserir/reordenar páginas, somente campos de numeração derivam. “Aplicar cabeçalho a páginas selecionadas” é comando explícito com preview, não vínculo vivo que altera tudo inesperadamente.
 

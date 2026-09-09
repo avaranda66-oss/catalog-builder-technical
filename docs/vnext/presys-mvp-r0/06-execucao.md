@@ -1,7 +1,7 @@
 # Requisitos, ondas e critérios de aceitação
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
@@ -24,17 +24,17 @@ Todos os requisitos abaixo estão propostos e ainda não implementados no núcle
 | PAGE-02 | Duas/três tabelas independentes lado a lado; 875 p.6, Fluke p.4 | D3/D4 | 01,05,07 | G02/G03 |
 | TABLE-01 | Motor único para todas as tabelas; legado + referências | D4 | 01,04,07 | T-IMPORT/G01–G05 |
 | TABLE-02 | Merge, cabeçalhos agrupados, seções; 761 pp.3–4 | D4 | 04,07 | T-MERGE/G01 |
-| TABLE-03 | Texto multilinha, código, unidade, sobrescrito; todas | D3/D4 | 02,04,07 | T-TEXT/G01 |
+| TABLE-03 | CellContent discriminado, texto multilinha, technicalCode, measurement decimal, marker e image; todas | D3/D4 | FOUNDATION-PROOF-01 | T-CELL-CONTENT-SCHEMA/T-TEXT-FLOW/G01 |
 | TABLE-04 | Marcadores, imagens e legendas; 875 p.7, Europa p.2 | D4 | 04,06,07 | G04/G05 |
-| TABLE-05 | Largura fixed/flex min/max, `frame.heightMm` autoral e RowHeightPolicy AUTO/MIN_MM/FIXED_MM | D4 | FOUNDATION-PROOF-01 | T-GEOMETRY/T-ROW |
-| TABLE-06 | Annotations tipadas, referências válidas e divisão explícita por comando | D4 | FOUNDATION-PROOF-01 | T-NOTE/T-SPLIT |
+| TABLE-05 | Largura fixed/flex min/max, CSS Grid + projeção `PhysicalPixelQ`, `frame.heightMm` autoral, RowHeightPolicy e rowspan inteiro | D4 | FOUNDATION-PROOF-01 | T-PROJECTION-Q-01/T-TABLE-BORDER-GEOMETRY-01/T-TABLE-BORDER-GEOMETRY-02/T-TABLE-SPAN-PAINT-01/T-ROWSPAN-REMAINDER/T-ROW |
+| TABLE-06 | Annotations tipadas, scope cell/table, referências válidas e divisão explícita por comando | D4 | FOUNDATION-PROOF-01 | T-ANNOTATION-SCOPE/T-NOTE/T-SPLIT |
 | STYLE-01 | Tipografia, cores, bordas, padding editáveis; riqueza solicitada | D3/D4 | proof + FATHER-USABLE V1 | G01–G05/T-FATHER |
-| UX-01 | Seleção, geometria, alinhamento, teclado e zoom | D3 | 05,07 | T-EDITOR |
+| UX-01 | Seleção, geometria, alinhamento, teclado e zoom; measurement authority fica no root transform-free | D3/D4 | FOUNDATION-PROOF-01 + 05,07 | T-EDITOR-ZOOM-AUTHORITY-01/T-EDITOR |
 | UX-02 | Undo/Redo e ações atômicas; confiabilidade do editor | D3 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-HISTORY |
 | COMP-01 | Presets/templates reutilizáveis | D3 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-PRESET/T-FATHER |
 | DOC-01 | Schema estrito, IDs estáveis e importação explícita | D3 | 02,03 | T-SCHEMA |
 | PERSIST-01 | Salvar/reabrir, recuperação local, conflitos visíveis | D5 | local recovery: FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-RECOVERY/T-CAS |
-| PUB-01 | PDF Chromium A4, mesma árvore screen/print, sem clipping/rasterização de página/tabela | D5 | FOUNDATION-PROOF-01 | T-PDF/T-PARITY-01/G01–G05 |
+| PUB-01 | PDF Chromium A4, mesma árvore e mesma projeção física screen/print, sem clipping/rasterização de página/tabela | D4/D5 | FOUNDATION-PROOF-01 | T-PDF/T-PARITY-01/T-TABLE-BORDER-PARITY-01/G01–G05 |
 | PUB-02 | Exportar revisão identificada e manifesto de assets/fontes | D5 | 08,11 | T-SNAPSHOT |
 | REL-01 | Erros explícitos e conteúdo pendente distinto de erro físico | D5 | 02,08,11 | T-PREFLIGHT |
 | TEST-01 | Foundation goldens + aceite por usuário não técnico | D5/este arquivo | proof + FATHER-USABLE V1 | G01–G05/T-FATHER |
@@ -53,7 +53,25 @@ Todos os requisitos abaixo estão propostos e ainda não implementados no núcle
 | G04 — MARKER / COMPATIBILITY MATRIX | Semantic marker type; matriz de compatibilidade | Marker não é arbitrary plain text only; semântica e legenda permanecem editáveis e preservadas |
 | G05 — ADVERSARIAL | Long technical code; fixed row overflow; impossible columns; page bounds violation; safe area warning; asset failure; font failure; geometry stability | Cada falha produz severidade/código esperados; nenhum auto-fix oculto; código adversarial permanece byte-for-byte semanticamente igual |
 
-Não reduzir linha/coluna/célula, fonte ou frame para fazer golden passar. Fixtures iniciais podem usar textos sintéticos identificados; liberação comercial usa dados PRESYS conferidos. Não usar print do concorrente como fundo nem toda a tabela como imagem. Em G05 o `technicalCode` usa `wrapPolicy = nowrap` e `06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX`; falta de espaço é diagnóstico, nunca alteração semântica.
+Não reduzir linha/coluna/célula, fonte ou frame para fazer golden passar. Fixtures iniciais podem usar textos sintéticos identificados; liberação comercial usa dados PRESYS conferidos. Não usar print do concorrente como fundo nem toda a tabela como imagem. Em G05 o `technicalCode.content.value` é `06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX` e `cell.contentPresentation.wrapPolicy = 'nowrap'`; falta de espaço é diagnóstico, nunca alteração semântica.
+
+Contratos RED/GREEN focados para a proof:
+
+| Caso | Contrato futuro |
+|---|---|
+| `T-CELL-CONTENT-SCHEMA` | Aceita somente a união exata D4; preserva `measurement.valueText`; marker/asset refs devem resolver; presentation não contamina semantic content |
+| `T-PROJECTION-Q-01` | U permanece autoridade autoral; `frameQ` usa o racional D3, `trackQ` usa apportionment D4 com desempate estável, `sum(trackQ) === frameQ` exatamente; Q nunca persiste nem roundtripa como autoria |
+| `T-TABLE-BORDER-GEOMETRY-01` | 100 mm 50/50, 0 border e 1 pt: root/tracks permanecem `frameQ/trackQ`, padding fica dentro do track, outer paint fica integralmente inset e não expande o frame |
+| `T-TABLE-BORDER-GEOMETRY-02` | Tracks/rows desiguais e 0.25/1/2 pt: edges internos ocupam integralmente o lado trailing; outer right/bottom usam `frameQ/gridHeightQ - thicknessQ`; conflict resolution segue thicknessQ → pt racional → sourceLevel → trailing side |
+| `T-TABLE-SPAN-PAINT-01` | `colSpan`, `rowSpan` e combinação usam full-grid + `coveredBy`; atomic edge cujo dois slots pertencem ao mesmo anchor é suprimido e somente perímetro/edges entre anchors distintos permanecem |
+| `T-TABLE-BORDER-PARITY-01` | Mesmos frame/tracks/rows/paint Q em screen e print, viewport 900/1500 e DPR 1/2; PDF mantém texto extraível e border paint vetorial, sem image-paint operators para a tabela |
+| `T-EDITOR-ZOOM-AUTHORITY-01` | Wrapper visual `scale(1.25)` altera raw DOMRect da cópia de UI, mas o root editorial transform-free produz os mesmos `PhysicalLayoutFact` Q; implementação não divide rect por zoom atual |
+| `T-TEXT-FLOW` | RichText com múltiplos runs, run multilinha, sub/sup, lineBreak e technicalCode nowrap produz signature canônica e acusa reflow real |
+| `T-ROWSPAN-REMAINDER` | deficit inteiro distribui `baseU` + primeiros `remainderU` rows elegíveis top-to-bottom; FIXED não cresce; overlaps seguem ordem canônica |
+| `T-ANNOTATION-SCOPE` | cell aceita note/footnote e rejeita caption; table aceita caption/note/footnote; dangling e wrong-scope usam códigos D4 |
+| `T-TABLE-HEADERLESS` | Tabela body/section sem header faz roundtrip/validate/render sem `<thead>` ou row sintética quando policy permite |
+
+Esses IDs são **contratos futuros de FOUNDATION-PROOF-01**; nenhum teste produtivo correspondente é implementado por esta emenda documental.
 
 Golden visual inicial deverá ser aprovado por inspeção do resultado em tela e impresso a 100%. Após aprovação poderá virar baseline de regressão. Screenshot não prova conteúdo: contar linhas/células/notas, extrair texto e comparar manifesto. Diferenças visuais têm tolerância calibrada no ambiente de execução; não inventar percentual de diff universal.
 

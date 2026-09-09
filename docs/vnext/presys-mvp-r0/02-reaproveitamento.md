@@ -1,7 +1,7 @@
 # Mapa do legado e reaproveitamento
 
 STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
+PRINCIPAL REVIEW: IN PROGRESS
 FREEZE STATUS: NOT FROZEN
 DATE: 2026-09-09
 
@@ -38,7 +38,7 @@ Os caminhos abaixo são relativos à raiz. “Reutilizar” significa portar exp
 | `src/domain/table-core/table.serialization.ts` | Roundtrip e defesa contra dados ruins | EXTRACT CONCEPT: não aceitar silenciosamente schema antigo como novo |
 | `src/domain/table-core/table.geometry.ts` | Distribuição fixed/weighted e unidade física; `table-core-v2-presentation.test.ts` | REIMPLEMENT FROM LESSONS: `auto` hoje é peso 1, não conteúdo; faltam min/max; soma fixa excedente pode retornar valid:true com warning e flex zero, comportamento proibido em VNext |
 | `src/domain/table-values/table-values.types.ts`, `.schema.ts`, `.formatter.ts` | Literais independentes: número, unidade, imagem, enum, token; `tests/domain/product-workbook/schema-and-values.test.ts` é cobertura indireta | PORT WITH CHANGES: preservar precisão textual, marcadores explícitos e texto rico; não tomar cobertura indireta como suficiente |
-| `src/components/editor/table-core/TableCoreRenderer.tsx` e `table-tokens.ts` | Renderização tipada com resolvers passados; `tests/components/editor/table-core-renderer.test.tsx` | PORT AFTER DECOUPLING: tirar controles do conteúdo imprimível; estilos dimensionais precisos; eliminar precedência duplicada de override |
+| `src/components/editor/table-core/TableCoreRenderer.tsx` e `table-tokens.ts` | Renderização tipada com resolvers passados; factual: quando `explicitHeaderRows.length === 0`, o JSX cria `<thead>` e uma linha sintética com `defaultLabel` de cada coluna | **DO NOT PORT AS VNEXT RENDERER**: conceitos visuais/tokens podem ser referenciados, mas JSX/runtime authority não entra em `ProofTable`; FOUNDATION-PROOF precisa provar tabela headerless sem header sintético |
 | `src/domain/document-commands/table-command.executor.ts` | Valida payload/alvo; `tests/domain/document-commands/table-commands.test.ts` | EXTRACT CONCEPT: ampliar para documento inteiro com transação, revisão e histórico; não é hoje uma barreira universal de mutação |
 | `src/domain/table-core/legacy-table.adapter.ts`, `.bridge.ts` | Conversão e compatibilidade testadas em `legacy-table.adapter.test.ts` | MIGRATION BOUNDARY ONLY; nunca dependência do renderer/runtime VNext |
 | `src/domain/table-core/table.pagination.ts`, `src/domain/page-flow-planner.ts` | Regras A4 e testes em `tests/flow/` | PORT CONCEPTS: blocos indivisíveis, cabeçalho órfão, diagnóstico. Não portar autoridade de redistribuição automática para autoria explícita |
@@ -59,7 +59,7 @@ Os nomes sem prefixo na coluna de testes acima pertencem a `tests/domain/table-c
 
 Preservar seletivamente do Table Core: stable table IDs; stable row IDs; stable column IDs; stable cell IDs; collision-safe cell key; strict structural validation; rowSpan; colSpan; `coveredBy`; merge fail-closed; `MERGE_WOULD_DISCARD_CONTENT`; immutable operations; typed contents; presentation separate from content; physical mm concepts.
 
-Não portar como autoridade: legacy adapter; legacy bridge; `TechnicalTableBlock`; `CustomTableBlock`; specialized table engines; table-specific runtime fallbacks; `A4Canvas`; automatic PageFlow authority; current raster PDF download. A implementação futura deve ter um engine only.
+Não portar como autoridade: legacy adapter; legacy bridge; `TechnicalTableBlock`; `CustomTableBlock`; specialized table engines; table-specific runtime fallbacks; `A4Canvas`; automatic PageFlow authority; current raster PDF download; **nem o JSX/runtime de `TableCoreRenderer.tsx`**. O renderer legado injeta header quando não há header explícito e portanto contradiz o contrato estrutural headerless do VNext. A implementação futura deve ter um engine only.
 
 `src/domain/page-geometry.ts` é evidência legada, não contrato VNext: seus `8.4667 mm` derivam de 32 CSS px e não viram safe area/default PRESYS automaticamente. A4 físico VNext permanece `210 mm × 297 mm`; safeArea/margins são autoria/configuração explícita.
 
