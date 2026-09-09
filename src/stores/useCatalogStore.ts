@@ -14,6 +14,7 @@ import {
   analyzeCatalogStructuralDelta,
   resolveDocumentLocale,
   hydrateCatalogSource,
+  reconcileCatalogSourceDiagnostics,
   EditorDocumentContext
 } from '../domain/catalog.schema';
 import {
@@ -70,6 +71,29 @@ import { useLibraryStore } from './useLibraryStore';
 export type { EditorDocumentContext };
 
 export type SyncStatus = 'synced' | 'saving' | 'dirty' | 'conflict' | 'error' | 'offline';
+
+const PAGE_BLOCK_STRUCTURE_MUTATIONS: ReadonlySet<MutationKind> = new Set([
+  'ADD_BLOCK',
+  'REMOVE_BLOCK',
+  'UPDATE_BLOCK',
+  'REORDER_BLOCKS'
+]);
+
+const didPageBlocksChange = (
+  before: Catalog,
+  after: Catalog,
+  pageId: string
+): boolean => {
+  const previousBlocks = before.pages.find((page) => page.id === pageId)?.blocks;
+  const nextBlocks = after.pages.find((page) => page.id === pageId)?.blocks;
+  if (!previousBlocks || !nextBlocks) return false;
+
+  try {
+    return JSON.stringify(previousBlocks) !== JSON.stringify(nextBlocks);
+  } catch {
+    return false;
+  }
+};
 
 export interface SaveResult {
   success: boolean;
@@ -757,7 +781,14 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     if (!currentCatalog) return;
 
     const draft = structuredClone(currentCatalog);
-    const updated = updater(draft) || draft;
+    const mutated = updater(draft) || draft;
+    const structurallyRemediatedPageIds = PAGE_BLOCK_STRUCTURE_MUTATIONS.has(mutationKind)
+      ? (currentCatalog.sourceDiagnostics ?? [])
+        .filter((diagnostic) => diagnostic.code === 'MALFORMED_PAGE_BLOCKS')
+        .map((diagnostic) => diagnostic.pageId)
+        .filter((pageId) => didPageBlocksChange(currentCatalog, mutated, pageId))
+      : [];
+    const updated = reconcileCatalogSourceDiagnostics(mutated, structurallyRemediatedPageIds);
     updated.updatedAt = new Date().toISOString();
 
     const nextRev = localRevision + 1;

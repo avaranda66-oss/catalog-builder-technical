@@ -175,14 +175,32 @@ describe('A4.FLOW.R1.3.2 — runtime-safe catalog boundary', () => {
     expect(catalog.sourceDiagnostics ?? []).toEqual([]);
   });
 
-  it('R132-T7 — keeps diagnostics outside persisted, user-editable content blocks', () => {
+  it('R132-T7 — keeps unresolved diagnostics outside content while dropping orphaned provenance on reload', () => {
     const catalog = hydrateIntoRealStore(false, 'non-content');
     const serialized = JSON.parse(JSON.stringify(catalog)) as Catalog;
 
     expect(serialized.pages[0].blocks).toEqual([]);
     expect(serialized.pages.flatMap((page) => page.blocks)).toEqual([]);
-    expect(serialized.sourceDiagnostics).toEqual(expect.arrayContaining([
+    const unresolvedReload = catalogRowToCatalog({
+      ...persistedRow([], 'non-content-reload'),
+      brand: {
+        ...serialized,
+        id: 'catalog-non-content-reload',
+        pages: [{ ...serialized.pages[0], id: 'page-non-content' }]
+      }
+    });
+    expect(unresolvedReload.sourceDiagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'MALFORMED_PAGE_BLOCKS' })
     ]));
+
+    const orphanReload = catalogRowToCatalog({
+      ...persistedRow([], 'non-content-orphan'),
+      brand: {
+        ...serialized,
+        id: 'catalog-non-content-orphan',
+        pages: [{ ...serialized.pages[0], id: 'page-replacement' }]
+      }
+    });
+    expect(orphanReload.sourceDiagnostics ?? []).toEqual([]);
   });
 });

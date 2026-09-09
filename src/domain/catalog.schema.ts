@@ -486,8 +486,42 @@ const isCatalogSourceDiagnostic = (value: unknown): value is CatalogSourceDiagno
 );
 
 const diagnosticKey = (diagnostic: CatalogSourceDiagnostic) => (
-  `${diagnostic.code}:${diagnostic.pageId}:${diagnostic.sourcePath}`
+  `${diagnostic.code}:${diagnostic.pageId}`
 );
+
+/**
+ * Reconciles persisted source provenance against stable runtime page identity.
+ * Existing-page diagnostics stay fail-closed unless that exact page was explicitly
+ * structurally remediated; diagnostics for removed pages are always discarded.
+ */
+export function reconcileCatalogSourceDiagnostics(
+  catalog: Catalog,
+  structurallyRemediatedPageIds: readonly string[] = []
+): Catalog {
+  const diagnostics = catalog.sourceDiagnostics ?? [];
+  if (diagnostics.length === 0) return catalog;
+
+  const existingPageIds = new Set(
+    catalog.pages
+      .filter((page): page is CatalogPage => isRecord(page) && typeof page.id === 'string')
+      .map((page) => page.id)
+  );
+  const remediatedPageIds = new Set(structurallyRemediatedPageIds);
+  const unresolvedDiagnostics = diagnostics.filter((diagnostic) => (
+    existingPageIds.has(diagnostic.pageId)
+    && !(
+      diagnostic.code === 'MALFORMED_PAGE_BLOCKS'
+      && remediatedPageIds.has(diagnostic.pageId)
+    )
+  ));
+
+  if (unresolvedDiagnostics.length === diagnostics.length) return catalog;
+
+  return {
+    ...catalog,
+    sourceDiagnostics: unresolvedDiagnostics.length > 0 ? unresolvedDiagnostics : undefined
+  };
+}
 
 /**
  * The single persisted/source -> runtime boundary for Catalog page blocks.
@@ -536,13 +570,13 @@ export function hydrateCatalogSource(source: unknown): CatalogHydrationResult {
     diagnosticsByKey.set(diagnosticKey(diagnostic), diagnostic);
   }
   const diagnostics = [...diagnosticsByKey.values()];
-  const catalog = {
+  const catalog = reconcileCatalogSourceDiagnostics({
     ...source,
     pages,
     ...(diagnostics.length > 0 ? { sourceDiagnostics: diagnostics } : { sourceDiagnostics: undefined })
-  } as unknown as Catalog;
+  } as unknown as Catalog);
 
-  return { catalog, diagnostics };
+  return { catalog, diagnostics: catalog.sourceDiagnostics ?? [] };
 }
 
 export const CatalogPresetSchema = z.object({
