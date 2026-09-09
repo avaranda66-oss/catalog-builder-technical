@@ -9,15 +9,15 @@ make('shape',{name:'Fundo da capa',x:0,y:0,w:595,h:842,fill:'#edf2f4',bleed:true
 make('shape',{name:'Faixa PRESYS',x:0,y:0,w:19,h:842,fill:'#123e59',bleed:true}),
 make('text',{name:'Logo editável',x:48,y:45,w:260,h:50,text:'PRESYS',size:32,bold:true}),
 make('text',{name:'Categoria',x:48,y:119,w:460,h:35,text:'METROLOGIA • TEMPERATURA',size:12}),
-make('text',{name:'Título da capa',x:48,y:177,w:490,h:103,text:'Precisão em cada\nmedição.',size:42,bold:true}),
+make('text',{name:'Título da capa',x:48,y:177,w:490,h:116,text:'Precisão em cada\nmedição.',size:42,bold:true}),
 make('text',{name:'Modelo',x:48,y:302,w:490,h:48,text:'TA-25N',size:30}),
 make('image',{x:74,y:382,w:446,h:303}),
 make('text',{name:'Contato',x:48,y:750,w:490,h:40,text:'PRESYS   •   Instrumentos e sistemas\nwww.presys.com.br',size:12})
 ]});
 export const initial=():Page[]=>[cover(),{id:uid(),name:'Especificações',objects:[
-make('text',{name:'Logo editável',x:48,y:35,w:250,h:32,text:'PRESYS',size:22,bold:true}),
+make('text',{name:'Logo editável',x:48,y:38,w:250,h:32,text:'PRESYS',size:22,bold:true}),
 make('text',{name:'Título da página',x:48,y:99,w:490,h:62,text:'Calibrador de temperatura',size:30,bold:true}),
-make('text',{name:'Modelo e descrição',x:48,y:164,w:240,h:90,text:'TA-25N\nPrecisão e estabilidade para\nseu laboratório.',size:17,leading:1.5}),
+make('text',{name:'Modelo e descrição',x:48,y:164,w:250,h:112,text:'TA-25N\nPrecisão e estabilidade para\nseu laboratório.',size:17,leading:1.5}),
 make('image',{x:310,y:168,w:235,h:226}),
 make('text',{name:'Introdução',x:48,y:297,w:220,h:94,text:'Desempenho confiável.\nOperação intuitiva.\nControle em cada etapa.',size:14,leading:1.65}),
 table(),
