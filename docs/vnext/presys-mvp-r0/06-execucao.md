@@ -67,7 +67,12 @@ Contratos RED/GREEN focados para a proof:
 | `T-TABLE-BORDER-PARITY-01` | Mesmos frame/tracks/rows/paint Q em screen e print, viewport 900/1500 e DPR 1/2; PDF mantém texto extraível e border paint vetorial, sem image-paint operators para a tabela |
 | `T-EDITOR-ZOOM-AUTHORITY-01` | Wrapper visual `scale(1.25)` altera raw DOMRect da cópia de UI, mas o root editorial transform-free produz os mesmos `PhysicalLayoutFact` Q; implementação não divide rect por zoom atual |
 | `T-TEXT-FLOW` | RichText com múltiplos runs, run multilinha, sub/sup, lineBreak e technicalCode nowrap produz signature canônica e acusa reflow real |
-| `T-ROWSPAN-GLOBAL-MIN` | solver de intervalos/prefixos usa base U, preserva FIXED, satisfaz spans sobrepostos e minimiza total extra; input-order não altera o resultado; counterexample fica <= 55 mm |
+| `T-ROWSPAN-GLOBAL-MIN` | solver de intervalos/prefixos usa authored/base U + requirements Q, preserva FIXED, satisfaz spans sobrepostos por cumulative boundaries e minimiza total extra; input-order não altera o resultado; counterexample R0.1.3 continua <= 55 mm |
+| `T-Q-ROW-01/02` | FIXED 20 mm projeta 4838 Q: requirement 4838 Q cabe; 4839 Q bloqueia com `ROW_CONTENT_OVERFLOW` |
+| `T-Q-PHASE-01` | prefixo inicial 21 U + requirement 4838 Q recebe U suficiente para que a diferença real das cumulative boundaries seja >= 4838 Q |
+| `T-Q-SPAN-01/02` | rowspan all-FIXED usa diferença de cumulative boundary Q; igualdade cabe e um Q acima bloqueia |
+| `T-Q-GROWABLE-SPAN-01` | spans AUTO/MIN sobrepostos em phase adversarial recebem mínimo U determinístico e satisfazem todas as diferenças Q |
+| `T-Q-TEXT-01/02` | text object compara `metrics.widthQ/heightQ` com `uToQ(authoredWidthU/authoredHeightU)`; igualdade cabe e um Q acima bloqueia |
 | `T-TABLE-HEIGHT-Q` | `renderedIntrinsicHeightQ` compara diretamente com `uToQ(authoredFrameHeightU)`; igualdade em Q não produz overflow por `Q -> U` |
 | `T-ANNOTATION-SCOPE` | cell aceita note/footnote e rejeita caption; table aceita caption/note/footnote; dangling e wrong-scope usam códigos D4 |
 | `T-TABLE-HEADERLESS` | Tabela body/section sem header faz roundtrip/validate/render sem `<thead>` ou row sintética quando policy permite |
