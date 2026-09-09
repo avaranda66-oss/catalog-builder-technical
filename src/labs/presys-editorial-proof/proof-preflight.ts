@@ -2,8 +2,9 @@ import type { CatalogDocument } from './proof-model';
 import type { TablePlan } from './proof-render-plan';
 import type { LayoutSnapshot } from './proof-measurement';
 import { findElement,intrinsicMetrics } from './proof-measurement';
-import { add,mmToU,qToU } from './physical';
+import { add,mmToU,qToU,uToQ } from './physical';
 import { diagnostic,type Diagnostic } from './diagnostics';
+export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
   const result:Diagnostic[]=[...snapshot.geometryDiagnostics];
   for(const page of doc.pages) {
@@ -20,8 +21,10 @@ export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TableP
         if(!plan)continue;
         result.push(...plan.diagnostics);
         const fact=snapshot.facts.find(f=>f.kind==='table'&&f.tableId===object.table.id);
-        if(fact?.kind==='table'&&qToU(fact.renderedIntrinsicHeightQ)>h)
-          result.push(diagnostic('TABLE_CONTENT_OVERFLOW',`intrinsicU=${qToU(fact.renderedIntrinsicHeightQ)}, authoredHeightU=${h}`,{...location,tableId:object.table.id}));
+        if(fact?.kind==='table'&&tableHeightOverflows(fact.renderedIntrinsicHeightQ,h)) {
+          const authoredHeightQ=uToQ(h);
+          result.push(diagnostic('TABLE_CONTENT_OVERFLOW',`intrinsicQ=${fact.renderedIntrinsicHeightQ}, authoredHeightQ=${authoredHeightQ}, diagnosticIntrinsicU=${qToU(fact.renderedIntrinsicHeightQ)}, authoredHeightU=${h}`,{...location,tableId:object.table.id}));
+        }
         for(const fact of snapshot.facts)if(fact.kind==='cell'&&fact.tableId===object.table.id) {
           const padding=plan.styles.get(fact.cellId)!.paddingQ,contentWidthQ=fact.widthQ-padding.left-padding.right,contentHeightQ=fact.heightQ-padding.top-padding.bottom;
           const cellLocation={...location,tableId:object.table.id,cellId:fact.cellId};

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mmToU, pxToQ, ptToQ, uToQ, qToU, qCss } from '@/labs/presys-editorial-proof/physical';
 import { resolveColumns, projectTracks, resolveRows } from '@/labs/presys-editorial-proof/proof-layout';
+import { tableHeightOverflows } from '@/labs/presys-editorial-proof/proof-preflight';
 
 describe('normative physical arithmetic', () => {
   it.each([[1.23444,12344],[1.23445,12345],[-1.23445,-12345],[1e-7,0],[5e-5,1],[-5e-5,-1],[8.4667,84667],[9.99995,100000],[2.5e3,25000000]])('%s mm → %s U', (mm,u) => expect(mmToU(mm)).toBe(u));
@@ -31,12 +32,18 @@ describe('conservative columns and frozen rows', () => {
     expect(projectTracks([500000,500000],1000000)).toEqual({frameQ:24189,trackQ:[12095,12094]});
     expect(() => projectTracks([1,999999],1000000)).toThrow('TRACK_PROJECTION_NONPOSITIVE');
   });
-  it('never grows a fixed row and distributes integer remainder top-down', () => {
+  it('never grows a fixed row and preserves every integer U at the interval boundary', () => {
     const rows = [{id:'r0',role:'body' as const,heightPolicy:{mode:'AUTO' as const}},
       {id:'r1',role:'body' as const,heightPolicy:{mode:'FIXED_MM' as const,heightMm:1}},
       {id:'r2',role:'body' as const,heightPolicy:{mode:'AUTO' as const}}];
     const result = resolveRows(rows,[10000,10000,10000],[{cellId:'a',row:0,column:0,span:3,requiredU:30003}]);
-    expect(result.heightsU).toEqual([10002,10000,10001]);
+    expect(result.heightsU).toEqual([10000,10000,10003]);
     expect(resolveRows(rows,[1,10001,1],[]).diagnostics).toContainEqual(expect.objectContaining({code:'ROW_CONTENT_OVERFLOW'}));
+  });
+  it('compares final table overflow in Q without a false Q to U round-trip', () => {
+    expect(uToQ(200000)).toBe(4838);
+    expect(qToU(4838)).toBe(200008);
+    expect(tableHeightOverflows(4838,200000)).toBe(false);
+    expect(tableHeightOverflows(4839,200000)).toBe(true);
   });
 });

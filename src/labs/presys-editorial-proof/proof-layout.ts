@@ -56,10 +56,11 @@ export function projectTracks(widthsU:readonly number[],frameU:number):{frameQ:n
   return {frameQ,trackQ};
 }
 export interface SpanConstraint {cellId:string;row:number;column:number;span:number;requiredU:number}
+interface PrefixEdge {from:number;weight:number}
 export function resolveRows(rows:readonly Row[],intrinsicU:readonly number[],constraints:readonly SpanConstraint[]):{heightsU:number[];diagnostics:Diagnostic[]} {
   if(rows.length!==intrinsicU.length)throw new ProofError('ROW_MEASUREMENT_INVALID');
   const diagnostics:Diagnostic[]=[];
-  const heightsU=rows.map((row,i)=>{
+  const baseHeightsU=rows.map((row,i)=>{
     const intrinsic=safe(intrinsicU[i]);
     if(intrinsic<0)throw new ProofError('ROW_MEASUREMENT_INVALID');
     const policy=row.heightPolicy;
@@ -69,17 +70,41 @@ export function resolveRows(rows:readonly Row[],intrinsicU:readonly number[],con
     if(intrinsic>authored)diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`requiredU=${intrinsic}, fixedU=${authored}`,{rowId:row.id}));
     return authored;
   });
-  const sorted=[...constraints].sort((a,b)=>a.row-b.row||a.column-b.column||(a.cellId<b.cellId?-1:a.cellId>b.cellId?1:0));
-  for(const constraint of sorted) {
-    const {row,span,requiredU,cellId}=constraint;
-    if(!Number.isSafeInteger(row)||!Number.isSafeInteger(span)||row<0||span<2||row+span>rows.length||safe(requiredU)<0)throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
-    const deficit=Math.max(0,add(requiredU,-sum(heightsU.slice(row,row+span))));
+  const growableRows=rows.map((row,rowIndex)=>({row,rowIndex})).filter(({row})=>row.heightPolicy.mode!=='FIXED_MM');
+  const growablePosition=new Map(growableRows.map(({rowIndex},position)=>[rowIndex,position]));
+  const incoming:PrefixEdge[][]=Array.from({length:growableRows.length+1},()=>[]);
+  for(let position=0;position<growableRows.length;position++)incoming[position+1].push({from:position,weight:0});
+  for(const constraint of constraints) {
+    const {row,span,requiredU,cellId,column}=constraint;
+    if(!Number.isSafeInteger(row)||!Number.isSafeInteger(column)||!Number.isSafeInteger(span)||row<0||column<0||span<2||row+span>rows.length||safe(requiredU)<0)
+      throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
+    const deficit=Math.max(0,add(requiredU,-sum(baseHeightsU.slice(row,row+span))));
     if(!deficit)continue;
-    const eligible=rows.map((r,i)=>({r,i})).slice(row,row+span).filter(({r})=>r.heightPolicy.mode!=='FIXED_MM');
-    if(!eligible.length){diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`Rowspan deficitU=${deficit}; all rows fixed`,{cellId}));continue;}
-    const base=Math.floor(deficit/eligible.length),remainder=deficit%eligible.length;
-    eligible.forEach(({i},index)=>{heightsU[i]=add(heightsU[i],add(base,index<remainder?1:0));});
+    const positions=[] as number[];
+    for(let rowIndex=row;rowIndex<row+span;rowIndex++) {
+      const position=growablePosition.get(rowIndex);
+      if(position!==undefined)positions.push(position);
+    }
+    if(!positions.length) {
+      diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`Rowspan deficitU=${deficit}; all rows fixed`,{cellId}));
+      continue;
+    }
+    const first=positions[0],last=positions[positions.length-1];
+    if(last-first+1!==positions.length)throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
+    incoming[last+1].push({from:first,weight:deficit});
   }
+  const prefixU=Array(growableRows.length+1).fill(0) as number[];
+  for(let end=1;end<prefixU.length;end++) {
+    let required=0;
+    for(const edge of incoming[end])required=Math.max(required,add(prefixU[edge.from],edge.weight));
+    prefixU[end]=safe(required);
+  }
+  const heightsU=[...baseHeightsU];
+  growableRows.forEach(({rowIndex},position)=>{
+    const extra=add(prefixU[position+1],-prefixU[position]);
+    if(extra<0)throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
+    heightsU[rowIndex]=add(heightsU[rowIndex],extra);
+  });
   return {heightsU,diagnostics};
 }
 export function cumulative(values:readonly number[]):number[] {

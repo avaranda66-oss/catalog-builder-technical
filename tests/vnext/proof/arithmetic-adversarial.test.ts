@@ -46,15 +46,53 @@ describe('independent arithmetic edge cases',()=>{
       expect(resolveColumns(columns,width)).toEqual(result);
     }
   });
-  it('records the frozen overlapping-rowspan counterexample without optimizing it',()=>{
+  it('solves the exact Astra overlapping-rowspan counterexample at minimum total height',()=>{
     const rows:Row[]=[0,1,2].map(i=>({id:'r'+i,role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}}));
-    const constraints=[{cellId:'a',row:0,column:0,span:2,requiredU:400000},{cellId:'b',row:1,column:1,span:2,requiredU:400000}];
+    const constraints=[{cellId:'a',row:0,column:0,span:2,requiredU:407789},{cellId:'b',row:1,column:1,span:2,requiredU:407789}];
     const result=resolveRows(rows,[100000,100000,100000],constraints);
-    expect(result.heightsU).toEqual([200000,250000,150000]);
+    expect(result.heightsU).toEqual([100000,307789,100000]);
+    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(507789);
     expect(resolveRows(rows,[100000,100000,100000],[...constraints].reverse())).toEqual(result);
-    const witness=[100000,300000,100000];
-    for(const c of constraints)expect(witness.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)).toBeGreaterThanOrEqual(c.requiredU);
-    expect(witness.reduce((a,b)=>a+b,0)).toBe(500000);
-    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(600000);
+  });
+  it('handles simple, crossing-fixed and zero-deficit spans without shrinking bases',()=>{
+    const simple:Row[]=[0,1].map(i=>({id:'s'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
+    expect(resolveRows(simple,[100,100],[{cellId:'simple',row:0,column:0,span:2,requiredU:251}]).heightsU).toEqual([100,151]);
+    const crossing:Row[]=[
+      {id:'a',role:'body',heightPolicy:{mode:'AUTO'}},
+      {id:'f',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.01}},
+      {id:'b',role:'body',heightPolicy:{mode:'MIN_MM',minMm:.01}},
+    ];
+    expect(resolveRows(crossing,[100,100,100],[{cellId:'cross',row:0,column:0,span:3,requiredU:451}]).heightsU).toEqual([100,100,251]);
+    expect(resolveRows(simple,[100,100],[{cellId:'zero',row:0,column:0,span:2,requiredU:200}]).heightsU).toEqual([100,100]);
+  });
+  it('reports an impossible positive deficit when every covered row is fixed',()=>{
+    const fixed:Row[]=[0,1].map(i=>({id:'f'+i,role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.01}}));
+    const result=resolveRows(fixed,[100,100],[{cellId:'blocked',row:0,column:0,span:2,requiredU:201}]);
+    expect(result.heightsU).toEqual([100,100]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({code:'ROW_CONTENT_OVERFLOW',cellId:'blocked'}));
+  });
+  it('solves nested and same-start constraints globally',()=>{
+    const rows:Row[]=[0,1,2,3].map(i=>({id:'n'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
+    const constraints=[
+      {cellId:'outer',row:0,column:2,span:4,requiredU:700},
+      {cellId:'same-start',row:0,column:1,span:2,requiredU:350},
+      {cellId:'nested',row:1,column:0,span:2,requiredU:500},
+    ];
+    const result=resolveRows(rows,[100,100,100,100],constraints);
+    expect(result.heightsU).toEqual([100,250,250,100]);
+    for(const c of constraints)expect(result.heightsU.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)).toBeGreaterThanOrEqual(c.requiredU);
+    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(700);
+  });
+  it('uses exact integer-U tie constraints and is invariant to constraint permutation',()=>{
+    const rows:Row[]=[0,1,2].map(i=>({id:'t'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
+    const constraints=[
+      {cellId:'left',row:0,column:0,span:2,requiredU:201},
+      {cellId:'right',row:1,column:1,span:2,requiredU:201},
+      {cellId:'whole',row:0,column:2,span:3,requiredU:302},
+    ];
+    const expected=[100,101,101];
+    expect(resolveRows(rows,[100,100,100],constraints).heightsU).toEqual(expected);
+    expect(resolveRows(rows,[100,100,100],[constraints[2],constraints[0],constraints[1]]).heightsU).toEqual(expected);
+    expect(resolveRows(rows,[100,100,100],[...constraints].reverse()).heightsU).toEqual(expected);
   });
 });

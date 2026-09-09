@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import { resolve,dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath,URL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { execFile } from 'node:child_process';
@@ -19,6 +19,25 @@ const output=resolve(root,'scratch/presys-editorial-proof');
 for(const name of ['matrix','pdf','png','screens','adversarial'])await mkdir(resolve(output,name),{recursive:true});
 const write=(path,value)=>writeFile(resolve(output,path),JSON.stringify(value,null,2)+'\n','utf8');
 const hash=value=>createHash('sha256').update(typeof value==='string'||value instanceof Uint8Array?value:JSON.stringify(value)).digest('hex');
+function legacySequentialRows(baseU,rows,constraints) {
+  const heights=[...baseU];
+  const sorted=[...constraints].sort((a,b)=>a.row-b.row||a.column-b.column||a.cellId.localeCompare(b.cellId));
+  for(const constraint of sorted) {
+    const covered=heights.slice(constraint.row,constraint.row+constraint.span).reduce((a,b)=>a+b,0);
+    const deficit=Math.max(0,constraint.requiredU-covered);
+    if(!deficit)continue;
+    const eligible=[];
+    for(let i=constraint.row;i<constraint.row+constraint.span;i++)if(rows[i].heightPolicy.mode!=='FIXED_MM')eligible.push(i);
+    if(!eligible.length)continue;
+    const share=Math.floor(deficit/eligible.length),remainder=deficit%eligible.length;
+    eligible.forEach((rowIndex,index)=>{heights[rowIndex]+=share+(index<remainder?1:0);});
+  }
+  return heights;
+}
+function qToUDiagnostic(q) {
+  const numerator=q*15875,base=Math.floor(numerator/384),remainder=numerator%384;
+  return base+(2*remainder>=384?1:0);
+}
 const runStarted=performance.now();
 const evidence={startedAt:new Date().toISOString(),machine:{platform:os.platform(),release:os.release(),arch:os.arch(),cpus:os.cpus()[0]?.model,logicalCPUs:os.cpus().length,totalMemoryBytes:os.totalmem()},matrix:[],adversarial:[],pdf:undefined};
 const port=Number(process.env.PROOF_PORT??5197);
@@ -100,7 +119,7 @@ function imageBounds(m) {
   return {x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};
 }
 async function inspectPdf(path) {
-  const bytes=new Uint8Array(await readFile(path));
+  const bytes=new Uint8Array(await readFile(path)),byteLength=bytes.length,sha256=hash(bytes);
   const pdf=await getDocument({data:bytes,isEvalSupported:false,useSystemFonts:false}).promise;
   const pages=[],names=new Map(Object.entries(OPS).map(([name,value])=>[value,name]));
   const imageOpNames=['paintImageXObject','paintInlineImageXObject','paintImageXObjectRepeat','paintInlineImageXObjectGroup','paintImageMaskXObject','paintImageMaskXObjectGroup','paintImageMaskXObjectRepeat','paintSolidColorImageMask'];
@@ -125,7 +144,14 @@ async function inspectPdf(path) {
       items:items.map(item=>({str:item.str,transform:item.transform,width:item.width,height:item.height,fontName:item.fontName}))});
   }
   await pdf.destroy();
-  return {path,bytes:bytes.length,sha256:hash(bytes),pageCount:pages.length,pages};
+  const summary={
+    textItems:pages.reduce((total,page)=>total+page.textItems,0),
+    fontSet:[...new Set(pages.flatMap(page=>page.fontNames.map(font=>font.name)))].sort(),
+    imagePaintCount:pages.reduce((total,page)=>total+page.imagePaintCount,0),
+    constructPathCount:pages.reduce((total,page)=>total+(page.operatorCounts.constructPath??0),0),
+    fillCount:pages.reduce((total,page)=>total+(page.operatorCounts.fill??0),0),
+  };
+  return {path,bytes:byteLength,sha256,pageCount:pages.length,summary,pages};
 }
 try {
   await server.listen();browser=await chromium.launch({headless:true});
@@ -219,8 +245,15 @@ try {
   await finalContext.close();
 
   const context=await browser.newContext({viewport:{width:1500,height:1200}});
-  const page=await openPage(context,'G05');
-  await assertBlocked(page,'G05',['CELL_CONTENT_OVERFLOW','ROW_CONTENT_OVERFLOW','TABLE_CONTENT_OVERFLOW','TABLE_WIDTH_INFEASIBLE','OBJECT_OUTSIDE_PAGE'],await result(page));
+  const page=await openPage(context,'G05'),g05Media=[];
+  for(const media of ['screen','print']) {
+    await page.emulateMedia({media});
+    const report=await load(page,'G05');
+    await assertBlocked(page,'G05-'+media,['CELL_CONTENT_OVERFLOW','ROW_CONTENT_OVERFLOW','TABLE_CONTENT_OVERFLOW','TABLE_WIDTH_INFEASIBLE','OBJECT_OUTSIDE_PAGE'],report);
+    g05Media.push({media,status:report.status,codes:report.diagnostics.map(d=>d.code),factCount:report.snapshot.facts.length});
+  }
+  evidence.g05Media=g05Media;
+  await page.emulateMedia({media:'screen'});await load(page,'G05');
   const g05=await page.evaluate(()=>window.proof.document);
   assert.equal(g05.pages[0].objects.find(o=>o.type==='table'&&o.table.id==='g05-code').table.cells[0].content.value,'06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX');
   for(const code of ['SAFE_AREA_VIOLATION','OBJECT_OVERLAP'])assert((await result(page)).diagnostics.some(d=>d.code===code&&d.severity==='WARNING'));
@@ -228,13 +261,18 @@ try {
   const watch=await load(page,'rowspan-watch');await write('adversarial/rowspan-watch.json',{report:watch,constraints:await page.evaluate(()=>window.proof.constraints())});
   const observed=(await page.evaluate(()=>window.proof.constraints()))[0];
   assert.equal(observed.constraints.length,2);
-  const base=observed.rows.map((row,i)=>Math.max(observed.baseIntrinsicU[i],row.heightPolicy.minMm*10000));
+  const base=observed.rows.map((row,i)=>row.heightPolicy.mode==='AUTO'?observed.baseIntrinsicU[i]:row.heightPolicy.mode==='MIN_MM'?Math.max(observed.baseIntrinsicU[i],row.heightPolicy.minMm*10000):row.heightPolicy.heightMm*10000);
+  const frozenHeightsU=legacySequentialRows(base,observed.rows,observed.constraints);
+  const frozenTotalU=frozenHeightsU.reduce((a,b)=>a+b,0);
   const middle=Math.max(base[1],observed.constraints[0].requiredU-base[0],observed.constraints[1].requiredU-base[2]);
-  const witness=[base[0],middle,base[2]];
-  assert(observed.constraints.every(c=>witness.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)>=c.requiredU));
-  const frozenTotalU=observed.heightsU.reduce((a,b)=>a+b,0),witnessTotalU=witness.reduce((a,b)=>a+b,0);
-  assert(frozenTotalU>550000&&witnessTotalU<=550000);
-  evidence.rowspan={classification:'ROWSPAN HEIGHT DECISION REOPEN REQUIRED',requiredU:observed.constraints.map(c=>c.requiredU),baseU:base,frozenHeightsU:observed.heightsU,frozenTotalU,witnessHeightsU:witness,witnessTotalU,artificialExpansionU:frozenTotalU-witnessTotalU,expansionPercent:(frozenTotalU/witnessTotalU-1)*100,frameHeightU:550000,falsePracticalOverflow:true,witnessIsAlternateSolver:false};
+  const witness=[base[0],middle,base[2]],witnessTotalU=witness.reduce((a,b)=>a+b,0);
+  const correctedHeightsU=observed.heightsU,correctedTotalU=correctedHeightsU.reduce((a,b)=>a+b,0);
+  assert(observed.constraints.every(c=>correctedHeightsU.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)>=c.requiredU));
+  assert.deepEqual(correctedHeightsU,witness);
+  assert(frozenTotalU>550000&&witnessTotalU<=550000&&correctedTotalU<=550000);
+  assert.equal(watch.status,'READY',JSON.stringify(watch.diagnostics));
+  assert(!watch.diagnostics.some(d=>d.code==='TABLE_CONTENT_OVERFLOW'));
+  evidence.rowspan={classification:'R0.1.3 TARGETED CORRECTION VERIFIED',principalReopenConfirmed:true,requiredU:observed.constraints.map(c=>c.requiredU),baseU:base,r012FrozenHeightsU:frozenHeightsU,r012FrozenTotalU:frozenTotalU,feasibleWitnessHeightsU:witness,witnessTotalU,r013HeightsU:correctedHeightsU,r013TotalU:correctedTotalU,minimumTotalU:correctedTotalU,artificialExpansionBeforeU:frozenTotalU-witnessTotalU,expansionPercentBefore:(frozenTotalU/witnessTotalU-1)*100,frameHeightU:550000,falsePracticalOverflowBefore:true,falsePracticalOverflowAfter:false};
   await write('adversarial/rowspan-counterexample.json',evidence.rowspan);
   await page.screenshot({path:resolve(output,'screens','rowspan-watch.png'),fullPage:true});
   const witnessDoc=await page.evaluate(()=>window.proof.makeFixture('rowspan-watch'));
@@ -243,10 +281,10 @@ try {
   const witnessReport=await runDoc(page,witnessDoc,'rowspan-manual-fixed-witness');
   assert.equal(witnessReport.status,'READY',JSON.stringify(witnessReport.diagnostics));
   evidence.rowspan.manualWitnessRendered=true;
-  evidence.rowspan.manualWitnessChanges='Test-only authored FIXED_MM row assignment; content, fonts, padding, columns and object frames unchanged. No alternate solver.';
+  evidence.rowspan.manualWitnessChanges='Test-only FIXED_MM rendering of the same canonical minimum witness; content, fonts, padding, columns and object frame unchanged.';
   await write('adversarial/rowspan-manual-fixed-witness.json',witnessReport);
   await page.screenshot({path:resolve(output,'screens','rowspan-manual-fixed-witness.png'),fullPage:true});
-  console.log('ROWSPAN watch:',watch.status,watch.diagnostics.map(d=>d.code));
+  console.log('ROWSPAN R0.1.3:',watch.status,correctedHeightsU,correctedTotalU);
   const goldens=[];
   for(const name of ['G01','G03']) {
     const report=await load(page,name),constraints=await page.evaluate(()=>window.proof.constraints());
@@ -299,11 +337,15 @@ try {
   await dpr2Context.close();
   await write('matrix/border-matrix.json',borderResults);evidence.borderMatrixRuns=borderResults.length;
   await page.emulateMedia({media:'screen'});
-  // The frozen Q→U overflow comparison is also exercised at an exact authored boundary.
+  // R0.1.3 compares the final rendered envelope and authored frame in the same Q projection.
   const boundary=await runDoc(page,probeDocument(g02,{rowHeights:[20],frameHeight:20}),'exact-height-boundary');
   const boundaryTable=boundary.snapshot.facts.find(f=>f.kind==='table'),boundaryObject=boundary.snapshot.facts.find(f=>f.kind==='object');
-  evidence.quantizationBoundary={status:boundary.status,codes:boundary.diagnostics.map(d=>d.code),tableHeightQ:boundaryTable.renderedIntrinsicHeightQ,objectHeightQ:boundaryObject.heightQ,authoredHeightU:boundaryObject.authoredHeightU};
+  const diagnosticRoundTripU=qToUDiagnostic(boundaryTable.renderedIntrinsicHeightQ);
+  evidence.quantizationBoundary={classification:'R0.1.3 TARGETED CORRECTION VERIFIED',principalReopenConfirmed:true,status:boundary.status,codes:boundary.diagnostics.map(d=>d.code),tableHeightQ:boundaryTable.renderedIntrinsicHeightQ,projectedAuthoredFrameHeightQ:boundaryObject.heightQ,authoredHeightU:boundaryObject.authoredHeightU,r012QToUDiagnosticU:diagnosticRoundTripU,falseOverflowBefore:diagnosticRoundTripU>boundaryObject.authoredHeightU,falseOverflowAfter:false};
   assert.equal(boundaryTable.renderedIntrinsicHeightQ,boundaryObject.heightQ);
+  assert(diagnosticRoundTripU>boundaryObject.authoredHeightU);
+  assert.equal(boundary.status,'READY',JSON.stringify(boundary.diagnostics));
+  assert(!boundary.diagnostics.some(d=>d.code==='TABLE_CONTENT_OVERFLOW'));
   await write('adversarial/exact-height-boundary.json',boundary);
 
   // Explicitly stable normalized facts, UI zoom outside authority, and real late changes.
@@ -363,7 +405,7 @@ try {
   const fontPage=await openPage(fontContext,'G01');
   await assertBlocked(fontPage,'font-http-failure',['REQUIRED_FONT_MISSING'],await result(fontPage));
   await fontContext.close();
-  evidence.status='ASSERTIONS_PASSED';evidence.foundationVerdict='ARCHITECTURE COUNTEREXAMPLES FOUND — DO NOT PROMOTE';evidence.recommendation='C';evidence.durationMs=performance.now()-runStarted;
+  evidence.status='ASSERTIONS_PASSED';evidence.foundationVerdict='FOUNDATION-PROOF-01 PASSED AFTER TARGETED R0.1.3 AMENDMENT — READY FOR INDEPENDENT PRINCIPAL AUDIT';evidence.recommendation='A';evidence.durationMs=performance.now()-runStarted;
   evidence.nodeMemory=process.memoryUsage();await write('proof-manifest.json',evidence);
 }catch(error) {
   evidence.status='FAIL';evidence.failure=error.stack??String(error);evidence.durationMs=performance.now()-runStarted;

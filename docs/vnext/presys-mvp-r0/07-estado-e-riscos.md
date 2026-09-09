@@ -1,6 +1,6 @@
 # Estado e passagem de contexto
 
-STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+STATUS: FOUNDATION-PROOF-01 EMPIRICALLY COMPLETED / READY FOR PRINCIPAL AUDIT
 PRINCIPAL REVIEW: APPROVED
 FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
@@ -14,14 +14,14 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Repositório: `avaranda66-oss/catalog-builder-technical`.
 - Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
 - Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
-- PR #12: OPEN, NOT MERGED. Head semântico da arquitetura aprovado pelo Principal: `34b1c4a220c857e087a651d91ec83c7a4d43317d`.
+- PR #12: OPEN, NOT MERGED. Current R0.1.3 docs head: `4ba520ef86b745eb58d979a9ce27d21ad14202fd`.
 - GitHub Quality Gate: run `34378706870`, head `34b1c4a220c857e087a651d91ec83c7a4d43317d`, status `completed`, conclusion `success`.
 - Main: `616332d6048a4259d2e2b562d8d5e781cea334bd`; tree `26b21e6a06247823c80826e4855ee477a44db2de`.
 - Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
 - Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
 - VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
 - Pacote: sete documentos temáticos, README e uma foundation proof; os contratos explicitamente FOUNDATION REQUIRED foram aprovados e congelados para FOUNDATION-PROOF-01. FATHER-USABLE V1 e POST-V1 continuam PROPOSED/MUST-CANDIDATE onde indicado.
-- Próximo passo: executar FOUNDATION-PROOF-01 sob o contrato congelado. Falha empírica pode reabrir uma decisão específica, sem autorizar redesign silencioso do restante do pacote.
+- FOUNDATION-PROOF-01 foi executado após as duas correções direcionadas R0.1.3. Evidência final local: G01–G05 PASS, matriz Chromium 8/8 PASS, PDF forense PASS e gates proof-owned PASS. Próximo passo: auditoria independente de código/PDF pelo Principal; sem merge, promoção ou deploy.
 - Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
 
 ## Publication closure evidence
