@@ -65,7 +65,7 @@ FOUNDATION-PROOF-01 usa página A4 `210 mm × 297 mm`. `safeArea` é explícita;
 
 Regra inviolável: **MEASUREMENT NEVER MUTATES AUTHORED FRAME**. Measurement pode medir, produzir derived intrinsic metrics, diagnosticar e bloquear publicação. Não pode mover objetos, alterar x/y/width/height, empurrar vizinhos, criar página, mover objeto entre páginas, gerar continuation page, reduzir fonte ou alterar conteúdo.
 
-Para tabela, `frame.heightMm` é autoral/fixo. O renderer produz `renderedIntrinsicHeightMm` DERIVED. `renderedIntrinsicHeightMm <= frame.heightMm` é OK; valor maior emite `TABLE_CONTENT_OVERFLOW / ERROR` e bloqueia GREEN/PDF final. Nunca auto-grow. Futuro `Fit height to content` somente como USER COMMAND explícita.
+Para tabela, `frame.heightMm` é autoral/fixo. O renderer produz `renderedIntrinsicHeightQ` DERIVED. **R0.1.3:** `renderedIntrinsicHeightQ <= uToQ(frame.heightU)` é OK; somente valor Q maior emite `TABLE_CONTENT_OVERFLOW / ERROR`. Igualdade em Q nunca volta a U para criar overflow. Nunca auto-grow. Futuro `Fit height to content` somente como USER COMMAND explícita.
 
 `RowHeightPolicy`: AUTO; MIN_MM; FIXED_MM. AUTO usa conteúdo; MIN_MM = `max(intrinsic,min)`; FIXED_MM é autoral. Conteúdo maior que FIXED_MM emite `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir font, aumentar row, cortar silenciosamente ou alterar conteúdo.
 
@@ -77,9 +77,9 @@ Renderer obrigatório da proof: `ProofTable` usa CSS Grid, não HTML `<table>` c
 
 `CellContent` deve ser exatamente a união D4: `empty | richText | technicalCode | measurement | marker | image`, sem `any`/JSON arbitrário. `measurement.valueText` preserva o decimal lexeme byte-for-byte; marker referencia `legendEntryId`; image referencia `AssetRef.id`. `wrapPolicy`, image `fit/targetWidthMm/targetHeightMm` ficam em `CellContentPresentation`; caption é annotation table-scope. `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling = `ANNOTATION_REFERENCE_DANGLING`, wrong scope = `ANNOTATION_SCOPE_INVALID`.
 
-Rowspan segue D4 sem floats: calcular `deficitU`, dividir entre rows AUTO/MIN_MM elegíveis com `baseU=floor(deficitU/K)` e `remainderU=deficitU mod K`, adicionando `+1 U` às primeiras `remainderU` em ordem top-to-bottom. FIXED_MM nunca cresce; anchors são processados por row index, column index, cell ID.
+**R0.1.3 ROWSPAN:** calcular bases em U (`AUTO=intrinsic`, `MIN_MM=max(intrinsic,min)`, `FIXED_MM=authored`) e formular cada rowspan como constraint sobre extras das growable rows do intervalo. Resolver globalmente por prefix sums/forward longest path em `PhysicalLengthU`, minimizando exatamente o total extra. FIXED_MM nunca cresce; span deficitário sem growable row emite `ROW_CONTENT_OVERFLOW / ERROR`; ordem de constraints/DOM não altera o resultado. O counterexample Astra/Sol deve resolver em `507789 U` total para os valores reproduzidos e não gerar o falso overflow do frame `550000 U`.
 
-**NON-BLOCKING EMPIRICAL WATCH:** essa distribuição AUTO/MIN_MM permanece congelada como hipótese determinística da proof. Constraints sobrepostas podem admitir solução global mais compacta; G01/G03 e os testes de rowspan devem medir densidade real. Expansão artificial material ou falso overflow prático exige **STOP PROMOTION** e reabertura somente da decisão de altura de rowspan, sem redesign silencioso do restante do contrato.
+**HISTÓRICO:** a distribuição R0.1.2 por `baseU/remainderU` foi empiricamente falsificada e permanece registrada no evidence report; nenhum outro contrato foi reaberto por esse finding.
 
 `ProofDocument → ProofPage → ProofTable` é a única árvore editorial. Screen usa essa árvore; editor futuro adiciona overlays externos; PDF usa a mesma árvore com `@media print`. `T-PARITY-01` rejeita `EditorRenderer != PDFRenderer`.
 
@@ -116,12 +116,12 @@ Rowspan segue D4 sem floats: calcular `deficitU`, dividir entre rows AUTO/MIN_MM
 | T-TABLE-SPAN-PAINT-01 | colSpan/rowSpan/combinação suprimem todo atomic edge interno cujo dois slots mapeiam ao mesmo anchor `coveredBy`; perímetro permanece |
 | T-TABLE-BORDER-PARITY-01 | Screen/print, viewport 900/1500 e DPR 1/2 preservam frame/tracks/rows/paint Q; PDF tem text layer e vector path/fill, sem raster image-paint da tabela |
 | T-TEXT-FLOW | Múltiplos runs na mesma linha, run multilinha, sub/sup, lineBreak, mixed styles e technicalCode nowrap produzem records/hash D3; reflow real muda signature |
-| T-ROWSPAN-REMAINDER | Deficit inteiro distribui base + remainder nas primeiras rows AUTO/MIN_MM top-to-bottom; FIXED não cresce; overlaps seguem ordem canônica e são determinísticos |
+| T-ROWSPAN-GLOBAL-MIN | Bases U + interval constraints/prefix longest-path preservam FIXED, satisfazem simple/cross-fixed/nested/overlap/same-start/zero-deficit e minimizam total extra; constraint permutation não altera saída |
 | T-ANNOTATION-SCOPE | Cell aceita note/footnote e rejeita caption; table aceita caption/note/footnote; dangling/wrong-scope retornam códigos exatos D4 |
 | T-TABLE-HEADERLESS | Tabela válida com ao menos uma coluna/linha body, zero header rows, roundtrip + validate + render sem `<thead>` ou header sintético quando policy permite |
 | T-EDITOR-ZOOM-AUTHORITY-01 | Transform visual `scale(1.25)` pode alterar raw DOMRect da UI, mas measurement e `PhysicalLayoutFact` vêm somente do root transform-free e permanecem Q-idênticos; não corrigir por divisão de zoom |
 | T-PAGE-01 | Object fora dos limites físicos da página é ERROR; safe-area violation é WARNING e não reposiciona |
-| T-TABLE-HEIGHT-01 | `renderedIntrinsicHeightMm > frame.heightMm` gera `TABLE_CONTENT_OVERFLOW / ERROR` e impede GREEN/PDF final |
+| T-TABLE-HEIGHT-01 | `renderedIntrinsicHeightQ > uToQ(frame.heightU)` gera `TABLE_CONTENT_OVERFLOW / ERROR`; igualdade em Q é OK e não faz round-trip Q -> U para decidir overflow |
 | T-ROW-01 | FIXED_MM com conteúdo maior gera `ROW_CONTENT_OVERFLOW / ERROR`; sem grow/shrink/clipping silencioso |
 | T-MERGE-01 | Merge fail-closed não descarta dados; `coveredBy`/span inválido falha; unmerge/roundtrip preservam IDs e conteúdo da âncora |
 | T-ASSET-01 | Required asset/font ausente é ERROR; broken image falha; nenhum placeholder vazio conta como sucesso |

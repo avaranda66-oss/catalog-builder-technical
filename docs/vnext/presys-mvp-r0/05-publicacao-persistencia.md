@@ -56,7 +56,7 @@ Para FOUNDATION-PROOF-01, `ERROR` é blocking e impede GREEN/PDF final nos segui
 - column width <= 0;
 - column below min width;
 - `PHYSICAL_ARITHMETIC_OVERFLOW`;
-- `TABLE_CONTENT_OVERFLOW`;
+- `TABLE_CONTENT_OVERFLOW` quando `renderedIntrinsicHeightQ > uToQ(authoredFrameHeightU)`; igualdade em Q é não-overflow conforme R0.1.3;
 - `ROW_CONTENT_OVERFLOW` para FIXED_MM;
 - invalid merge;
 - invalid `coveredBy`/span state;

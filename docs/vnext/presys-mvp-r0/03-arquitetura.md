@@ -155,7 +155,7 @@ Relações exatas:
 - `1 Q = 1/64 CSS px = 127/30_720 mm`;
 - `U -> Q`: `idealQ = U * 384 / 15_875`;
 - `Q -> mm` para diagnóstico/display: valor racional exato `Q * 127 / 30_720 mm`;
-- `Q -> U` quando um algoritmo de domínio precisa consumir uma medição Chromium: valor racional `Q * 15_875 / 384 U`, quantizado uma única vez por round-half-away-from-zero. Esse `U` derivado pode alimentar RowHeightPolicy/overflow, mas **não** vira a igualdade de browser layout.
+- `Q -> U` quando um algoritmo de domínio realmente precisa consumir uma medição Chromium: valor racional `Q * 15_875 / 384 U`, quantizado uma única vez por round-half-away-from-zero. Esse `U` derivado pode alimentar `RowHeightPolicy` e diagnósticos, mas **não** vira igualdade de browser layout. **R0.1.3:** o overflow do envelope final de tabela é decidido em Q, comparando `renderedIntrinsicHeightQ` diretamente com `uToQ(authoredFrameHeightU)`; não se faz Q -> U para criar essa desigualdade.
 
 Conversão **escalar** `U -> Q`: tomar `abs(U)`, calcular `numerator = abs(U) * 384` com safe-integer check, `base = floor(numerator / 15_875)`, `remainder = numerator mod 15_875`; `magnitudeQ = base + (2*remainder >= 15_875 ? 1 : 0)`; aplicar o sinal depois. Zero permanece zero. Não usar epsilon, float multiplication ou `Math.round(x + epsilon)`. Essa regra projeta frames, posições, paddings e boundaries escalares. **Não** projetar cada `widthsU[i]` isoladamente e depois aceitar uma soma diferente do frame: vetores de tracks usam o apportionment conservativo D4, que parte do mesmo racional `U*384/15_875` e exige `sum(trackQ) === frameQ`. Rows projetam boundaries cumulativas escalares e derivam cada `rowQ` por diferença, preservando exatamente a boundary final.
 

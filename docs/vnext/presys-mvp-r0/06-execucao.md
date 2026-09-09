@@ -26,7 +26,7 @@ Todos os requisitos abaixo estão propostos e ainda não implementados no núcle
 | TABLE-02 | Merge, cabeçalhos agrupados, seções; 761 pp.3–4 | D4 | 04,07 | T-MERGE/G01 |
 | TABLE-03 | CellContent discriminado, texto multilinha, technicalCode, measurement decimal, marker e image; todas | D3/D4 | FOUNDATION-PROOF-01 | T-CELL-CONTENT-SCHEMA/T-TEXT-FLOW/G01 |
 | TABLE-04 | Marcadores, imagens e legendas; 875 p.7, Europa p.2 | D4 | 04,06,07 | G04/G05 |
-| TABLE-05 | Largura fixed/flex min/max, CSS Grid + projeção `PhysicalPixelQ`, `frame.heightMm` autoral, RowHeightPolicy e rowspan inteiro | D4 | FOUNDATION-PROOF-01 | T-PROJECTION-Q-01/T-TABLE-BORDER-GEOMETRY-01/T-TABLE-BORDER-GEOMETRY-02/T-TABLE-SPAN-PAINT-01/T-ROWSPAN-REMAINDER/T-ROW |
+| TABLE-05 | Largura fixed/flex min/max, CSS Grid + projeção `PhysicalPixelQ`, `frame.heightMm` autoral, RowHeightPolicy e rowspan inteiro | D4 | FOUNDATION-PROOF-01 | T-PROJECTION-Q-01/T-TABLE-BORDER-GEOMETRY-01/T-TABLE-BORDER-GEOMETRY-02/T-TABLE-SPAN-PAINT-01/T-ROWSPAN-GLOBAL-MIN/T-TABLE-HEIGHT-Q/T-ROW |
 | TABLE-06 | Annotations tipadas, scope cell/table, referências válidas e divisão explícita por comando | D4 | FOUNDATION-PROOF-01 | T-ANNOTATION-SCOPE/T-NOTE/T-SPLIT |
 | STYLE-01 | Tipografia, cores, bordas, padding editáveis; riqueza solicitada | D3/D4 | proof + FATHER-USABLE V1 | G01–G05/T-FATHER |
 | UX-01 | Seleção, geometria, alinhamento, teclado e zoom; measurement authority fica no root transform-free | D3/D4 | FOUNDATION-PROOF-01 + 05,07 | T-EDITOR-ZOOM-AUTHORITY-01/T-EDITOR |
@@ -67,7 +67,8 @@ Contratos RED/GREEN focados para a proof:
 | `T-TABLE-BORDER-PARITY-01` | Mesmos frame/tracks/rows/paint Q em screen e print, viewport 900/1500 e DPR 1/2; PDF mantém texto extraível e border paint vetorial, sem image-paint operators para a tabela |
 | `T-EDITOR-ZOOM-AUTHORITY-01` | Wrapper visual `scale(1.25)` altera raw DOMRect da cópia de UI, mas o root editorial transform-free produz os mesmos `PhysicalLayoutFact` Q; implementação não divide rect por zoom atual |
 | `T-TEXT-FLOW` | RichText com múltiplos runs, run multilinha, sub/sup, lineBreak e technicalCode nowrap produz signature canônica e acusa reflow real |
-| `T-ROWSPAN-REMAINDER` | deficit inteiro distribui `baseU` + primeiros `remainderU` rows elegíveis top-to-bottom; FIXED não cresce; overlaps seguem ordem canônica |
+| `T-ROWSPAN-GLOBAL-MIN` | solver de intervalos/prefixos usa base U, preserva FIXED, satisfaz spans sobrepostos e minimiza total extra; input-order não altera o resultado; counterexample fica <= 55 mm |
+| `T-TABLE-HEIGHT-Q` | `renderedIntrinsicHeightQ` compara diretamente com `uToQ(authoredFrameHeightU)`; igualdade em Q não produz overflow por `Q -> U` |
 | `T-ANNOTATION-SCOPE` | cell aceita note/footnote e rejeita caption; table aceita caption/note/footnote; dangling e wrong-scope usam códigos D4 |
 | `T-TABLE-HEADERLESS` | Tabela body/section sem header faz roundtrip/validate/render sem `<thead>` ou row sintética quando policy permite |
 
