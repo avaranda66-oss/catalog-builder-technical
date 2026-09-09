@@ -14,6 +14,7 @@ import {
   analyzeCatalogStructuralDelta,
   resolveDocumentLocale,
   hydrateCatalogSource,
+  didCatalogPageBlocksChangeUnambiguously,
   reconcileCatalogSourceDiagnostics,
   EditorDocumentContext
 } from '../domain/catalog.schema';
@@ -78,22 +79,6 @@ const PAGE_BLOCK_STRUCTURE_MUTATIONS: ReadonlySet<MutationKind> = new Set([
   'UPDATE_BLOCK',
   'REORDER_BLOCKS'
 ]);
-
-const didPageBlocksChange = (
-  before: Catalog,
-  after: Catalog,
-  pageId: string
-): boolean => {
-  const previousBlocks = before.pages.find((page) => page.id === pageId)?.blocks;
-  const nextBlocks = after.pages.find((page) => page.id === pageId)?.blocks;
-  if (!previousBlocks || !nextBlocks) return false;
-
-  try {
-    return JSON.stringify(previousBlocks) !== JSON.stringify(nextBlocks);
-  } catch {
-    return false;
-  }
-};
 
 export interface SaveResult {
   success: boolean;
@@ -786,7 +771,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       ? (currentCatalog.sourceDiagnostics ?? [])
         .filter((diagnostic) => diagnostic.code === 'MALFORMED_PAGE_BLOCKS')
         .map((diagnostic) => diagnostic.pageId)
-        .filter((pageId) => didPageBlocksChange(currentCatalog, mutated, pageId))
+        .filter((pageId) => didCatalogPageBlocksChangeUnambiguously(currentCatalog, mutated, pageId))
       : [];
     const updated = reconcileCatalogSourceDiagnostics(mutated, structurallyRemediatedPageIds);
     updated.updatedAt = new Date().toISOString();
