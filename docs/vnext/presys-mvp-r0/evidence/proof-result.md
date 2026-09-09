@@ -5,6 +5,7 @@
 - Production main: `616332d6048a4259d2e2b562d8d5e781cea334bd`.
 - R0.1.2 freeze: `65b524afbf75c99acbf87e8374dd91be92bb4ba7`.
 - R0.1.3 targeted amendment: `4ba520ef86b745eb58d979a9ce27d21ad14202fd`.
+- R0.1.4 rendered-extent amendment: `2b20d1bc7705b18f00a2dadc8ff09f2eac0ab492`.
 - Remote implementation checkpoint: `b21963fef7aae04c90a896f6d029247f06f0f57e`.
 - Pre-final implementation head after adopting R0.1.3: `df56abf3c553d33c19c9e9353af181de8a92c865`.
 - Final implementation head: the commit containing this evidence record; the closure report records its resolved SHA after commit.
@@ -78,6 +79,14 @@ The row solver now treats rowSpan requirements as interval/prefix constraints an
 
 Final table-height overflow compares `renderedIntrinsicHeightQ > uToQ(authoredFrameHeightU)` in renderer projection space. Equality in Q is not overflow. Authored geometry remains U and Q is not persisted as authored geometry. Final boundary status: **READY / no false overflow**.
 
+## R0.1.4 corrections
+
+R0.1.4 closes the remaining rendered-extent quantization boundary. Chromium-measured row and text extents remain in integer Q for blocking fit decisions; authored geometry and solver variables remain integer U. The proof no longer uses nearest `qToU(...)` as a generic lower-bound fit requirement.
+
+Row constraints are evaluated on cumulative projected boundaries. For a span `[start,end)`, available rendered height is `uToQ(prefixU[end]) - uToQ(prefixU[start])`, and the interval must provide at least the measured requirement in Q. `minimumUForProjectedQ(targetQ)` is the exact monotone inverse used to obtain the smallest integer-U end prefix whose projection reaches the required Q boundary. Growth is contributed only by `AUTO`/`MIN` rows; `FIXED` rows never grow.
+
+The final row postcondition reprojects every resolved span and fails closed with `ROW_CONTENT_OVERFLOW` if measured intrinsic content still exceeds its projected content box. Text-object blocking fit likewise compares measured width/height Q directly with `uToQ(authoredWidthU/authoredHeightU)`, so exact Q equality fits and one-Q excess blocks.
+
 ## Physical arithmetic
 
 Physical conversion and arithmetic remain deterministic and integer-based after authored decimal conversion. Focused arithmetic tests cover signed ties, unsafe magnitudes, exact CSS-Q round-trips, and projection overflow protection.
@@ -92,7 +101,7 @@ Merged-cell topology and paint suppression remained within the existing frozen p
 
 ## Row-height solver
 
-The R0.1.3 solver preserves fixed rows, never shrinks authored/intrinsic bases, handles zero deficits, crossing fixed rows, nested constraints, same-start constraints, exact integer-U ties, and is invariant to constraint permutation. The Astra counterexample is exercised as a regression case, but the implementation itself contains no fixture-specific branch or special-case detection.
+The R0.1.4 solver preserves fixed rows, never shrinks authored/intrinsic bases, handles zero deficits, crossing fixed rows, nested and overlapping constraints, same-start constraints, awkward cumulative quantization phase, and is invariant to constraint permutation. Every constraint remains a Q requirement until projected cumulative-boundary fit is proven. The prior rowspan counterexample is exercised as a regression case, but the implementation itself contains no fixture-specific branch or special-case detection.
 
 ## CellContent
 
@@ -110,7 +119,7 @@ Notes and footnotes participate in intrinsic height. The runner proves that remo
 - DPR: `1`, `2`.
 - Media: `screen`, `print`.
 - Normalized facts per run: `1478`.
-- Facts hash for every run: `535c98d7315d9aea3bbabf0b633b596da7d79468a8d05bea9f5b4fc50c81af32`.
+- Facts hash for every run: `c797782fa1730fc98d1af539c74a352c0863004f8712365ed153aad0348f1932`.
 - Tables: `7`; native HTML tables: `0`; G02-C synthetic headers: `0`; G02-C rows: `8`.
 - Declared image readiness: complete, natural size `545×767`.
 
@@ -119,7 +128,7 @@ Notes and footnotes participate in intrinsic height. The runner proves that remo
 - PDF: `scratch/presys-editorial-proof/pdf/presys-foundation-g01-g04.pdf`.
 - Pages: `4`.
 - Bytes: `149278`.
-- SHA-256: `b7a1f2e0c2d54345b4f8605c2441faae91e5d34259eaa3cdabe8624d0df27763`.
+- SHA-256: `77431c59409ac63caf160428338adf4fd70ff5efbe2b4345a20f74fb074db399`.
 - Text items: `879`.
 - Image paints: `1` total, on G03 only.
 - `constructPath`: `1359`.
@@ -159,7 +168,7 @@ These are lab observations only: the 8 baseline matrix runs completed in roughly
 | Command | Exit | Result |
 |---|---:|---|
 | `npx eslint src/labs/presys-editorial-proof tests/vnext/proof` | 0 | PASS |
-| `npx vitest run tests/vnext/proof` | 0 | PASS — 6 files, 62/62 tests |
+| `npx vitest run tests/vnext/proof` | 0 | PASS — 6 files, 67/67 tests |
 | `npx tsc --noEmit` | 0 | PASS |
 | `node tests/vnext/proof/export-proof.mjs` | 0 | PASS — 8/8 browser matrix, PDF forensics, adversarial checks |
 | `git diff --check` | 0 | PASS |
@@ -171,7 +180,7 @@ These are lab observations only: the 8 baseline matrix runs completed in roughly
 | `npm run lint:labs` | 1 | **PRE-EXISTING OUT-OF-SCOPE** — only `src/labs/product-workspace-ux/components/ConflictReviewModal.tsx:21:57`, conditional `useState`; FOUNDATION-PROOF focused ESLint PASS |
 | `npm run lint` | 0 | PASS — 0 errors / 268 warnings |
 | `npm run typecheck` | 0 | PASS |
-| `npm test` | 0 | PASS — 202 files, 2108 passed / 1 skipped |
+| `npm test` | 0 | PASS — 202 files, 2113 passed / 1 skipped |
 | `npm run build` | 0 | PASS — 2292 modules transformed; existing Vite import/chunk-size warnings only |
 | `git diff --check` | 0 | PASS |
 
@@ -184,4 +193,4 @@ These are lab observations only: the 8 baseline matrix runs completed in roughly
 
 ## Recommendation
 
-FOUNDATION-PROOF-01 has sufficient empirical browser/PDF evidence for independent Principal code/PDF audit after the targeted R0.1.3 corrections. Do not merge or treat this result as production readiness.
+FOUNDATION-PROOF-01 has sufficient empirical browser/PDF evidence for independent Principal code/PDF audit after the targeted R0.1.4 rendered-extent correction. Do not merge or treat this result as production readiness.

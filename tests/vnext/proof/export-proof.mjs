@@ -38,6 +38,14 @@ function qToUDiagnostic(q) {
   const numerator=q*15875,base=Math.floor(numerator/384),remainder=numerator%384;
   return base+(2*remainder>=384?1:0);
 }
+function uToQDiagnostic(u) {
+  const numerator=u*384,base=Math.floor(numerator/15875),remainder=numerator%15875;
+  return base+(2*remainder>=15875?1:0);
+}
+function projectedSpanQ(heightsU,row,span) {
+  const boundaries=[0];for(const height of heightsU)boundaries.push(boundaries.at(-1)+height);
+  return uToQDiagnostic(boundaries[row+span])-uToQDiagnostic(boundaries[row]);
+}
 const runStarted=performance.now();
 const evidence={startedAt:new Date().toISOString(),machine:{platform:os.platform(),release:os.release(),arch:os.arch(),cpus:os.cpus()[0]?.model,logicalCPUs:os.cpus().length,totalMemoryBytes:os.totalmem()},matrix:[],adversarial:[],pdf:undefined};
 const port=Number(process.env.PROOF_PORT??5197);
@@ -86,6 +94,19 @@ function probeDocument(source,{thickness=1,span='none',equal=false,rowHeights=[1
     {id:'probe-object',type:'table',frame:{xMm:12,yMm:20,widthMm:100,heightMm:frameHeight},zIndex:0,table:t},
   ]}];doc.assets=[];return doc;
 }
+function quantizedImageRowDocument(source,{requiredHeightMm=20,rowHeights=[20],span=1,label='q-row'}={}) {
+  const doc=structuredClone(source),object=doc.pages[0].objects.find(o=>o.type==='table'),table=object.table;
+  table.id=label;table.columns=[{id:label+':c0',minMm:1,width:{mode:'fixed',mm:40}}];
+  table.rows=rowHeights.map((heightMm,i)=>({id:label+':r'+i,role:'body',heightPolicy:{mode:'FIXED_MM',heightMm}}));
+  table.cells=table.rows.map((row,i)=>({id:label+':cell'+i,rowId:row.id,columnId:table.columns[0].id,content:{type:'empty'}}));
+  const anchor=table.cells[0];anchor.content={type:'image',assetId:'asset-ta25n'};
+  anchor.contentPresentation={image:{fit:'contain',targetWidthMm:5,targetHeightMm:requiredHeightMm}};
+  if(span>1){anchor.span={rows:span,columns:1};for(let i=1;i<span;i++)table.cells[i].coveredBy=anchor.id;}
+  table.style.base.paddingMm={top:0,right:0,bottom:0,left:0};table.annotations=[];table.annotationIds=[];table.legend=[];
+  object.id=label+':object';object.frame={xMm:12,yMm:20,widthMm:40,heightMm:30};
+  doc.pages[0].objects=[object];return doc;
+}
+
 async function expectUnstable(page,label,mutate) {
   await load(page,'all');
   const a=await page.evaluate(()=>window.proof.snapshot());
@@ -258,39 +279,84 @@ try {
   assert.equal(g05.pages[0].objects.find(o=>o.type==='table'&&o.table.id==='g05-code').table.cells[0].content.value,'06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX');
   for(const code of ['SAFE_AREA_VIOLATION','OBJECT_OVERLAP'])assert((await result(page)).diagnostics.some(d=>d.code===code&&d.severity==='WARNING'));
   await page.screenshot({path:resolve(output,'screens','g05-adversarial.png'),fullPage:true});
+  const g03ForQ=await page.evaluate(()=>window.proof.makeFixture('G03'));
+  const exactRow=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20,rowHeights:[20],label:'t-q-row-01'}),'T-Q-ROW-01');
+  assert.equal(exactRow.status,'READY',JSON.stringify(exactRow.diagnostics));
+  assert(!exactRow.diagnostics.some(d=>d.code==='ROW_CONTENT_OVERFLOW'));
+  const overRow=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20.003,rowHeights:[20],label:'t-q-row-02'}),'T-Q-ROW-02');
+  assert.equal(overRow.status,'BLOCKED');assert(overRow.diagnostics.some(d=>d.code==='ROW_CONTENT_OVERFLOW'));
+  const exactSpan=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20,rowHeights:[10,10],span:2,label:'t-q-span-01'}),'T-Q-SPAN-01');
+  assert.equal(exactSpan.status,'READY',JSON.stringify(exactSpan.diagnostics));
+  const overSpan=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20.003,rowHeights:[10,10],span:2,label:'t-q-span-02'}),'T-Q-SPAN-02');
+  assert.equal(overSpan.status,'BLOCKED');assert(overSpan.diagnostics.some(d=>d.code==='ROW_CONTENT_OVERFLOW'));
+  const browserContracts=await page.evaluate(async()=>{
+    const layout=await import('/src/labs/presys-editorial-proof/proof-layout.ts');
+    const physical=await import('/src/labs/presys-editorial-proof/physical.ts');
+    const preflight=await import('/src/labs/presys-editorial-proof/proof-preflight.ts');
+    const phaseRows=[
+      {id:'prefix',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.0021}},
+      {id:'grow',role:'body',heightPolicy:{mode:'AUTO'}},
+    ];
+    const phase=layout.resolveRows(phaseRows,[{cellId:'phase',row:1,column:0,span:1,requiredQ:4838}]);
+    const phaseProjection=layout.projectRows(phase.heightsU);
+    const growRows=[
+      {id:'prefix',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.0021}},
+      {id:'a',role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}},
+      {id:'b',role:'body',heightPolicy:{mode:'AUTO'}},
+      {id:'c',role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}},
+    ];
+    const constraints=[
+      {cellId:'left',row:1,column:0,span:2,requiredQ:7000},
+      {cellId:'right',row:2,column:1,span:2,requiredQ:7000},
+      {cellId:'whole',row:1,column:2,span:3,requiredQ:12000},
+    ];
+    const grow=layout.resolveRows(growRows,constraints),growProjection=layout.projectRows(grow.heightsU);
+    const spanQ=c=>growProjection.boundariesQ[c.row+c.span]-growProjection.boundariesQ[c.row];
+    return {
+      fixedProjectionQ:physical.uToQ(200000),nearestRoundTripU:physical.qToU(4838),
+      inverse4838U:physical.minimumUForProjectedQ(4838),inverse4839U:physical.minimumUForProjectedQ(4839),
+      phase:{heightsU:phase.heightsU,startQ:phaseProjection.boundariesQ[1],endQ:phaseProjection.boundariesQ[2],spanQ:phaseProjection.boundariesQ[2]-phaseProjection.boundariesQ[1]},
+      growable:{heightsU:grow.heightsU,spanQ:constraints.map(spanQ),permutationEqual:JSON.stringify(layout.resolveRows(growRows,[...constraints].reverse()))===JSON.stringify(grow)},
+      textExactOverflows:preflight.textObjectOverflows({widthQ:4838,heightQ:4838},200000,200000),
+      textOneQOverflows:preflight.textObjectOverflows({widthQ:4839,heightQ:4838},200000,200000),
+    };
+  });
+  assert.equal(browserContracts.fixedProjectionQ,4838);assert.equal(browserContracts.nearestRoundTripU,200008);
+  assert.equal(browserContracts.phase.startQ,1);assert.equal(browserContracts.phase.spanQ,4838);assert.deepEqual(browserContracts.phase.heightsU,[21,200009]);
+  assert(browserContracts.growable.spanQ.every((q,i)=>q>=[7000,7000,12000][i]));assert(browserContracts.growable.permutationEqual);
+  assert.equal(browserContracts.textExactOverflows,false);assert.equal(browserContracts.textOneQOverflows,true);
+  evidence.r014Quantization={classification:'R0.1.4 RENDERED EXTENT CORRECTION VERIFIED',exactRowStatus:exactRow.status,overRowStatus:overRow.status,exactSpanStatus:exactSpan.status,overSpanStatus:overSpan.status,browserContracts};
+  await write('adversarial/r014-quantization-boundaries.json',evidence.r014Quantization);
+
   const watch=await load(page,'rowspan-watch');await write('adversarial/rowspan-watch.json',{report:watch,constraints:await page.evaluate(()=>window.proof.constraints())});
-  const observed=(await page.evaluate(()=>window.proof.constraints()))[0];
-  assert.equal(observed.constraints.length,2);
-  const base=observed.rows.map((row,i)=>row.heightPolicy.mode==='AUTO'?observed.baseIntrinsicU[i]:row.heightPolicy.mode==='MIN_MM'?Math.max(observed.baseIntrinsicU[i],row.heightPolicy.minMm*10000):row.heightPolicy.heightMm*10000);
-  const frozenHeightsU=legacySequentialRows(base,observed.rows,observed.constraints);
-  const frozenTotalU=frozenHeightsU.reduce((a,b)=>a+b,0);
-  const middle=Math.max(base[1],observed.constraints[0].requiredU-base[0],observed.constraints[1].requiredU-base[2]);
-  const witness=[base[0],middle,base[2]],witnessTotalU=witness.reduce((a,b)=>a+b,0);
+  const observed=(await page.evaluate(()=>window.proof.constraints()))[0],rowspans=observed.constraints.filter(c=>c.span>1);
+  assert.equal(rowspans.length,2);
+  const historicalBase=observed.rows.map((row,i)=>{
+    const intrinsicU=Math.max(0,...observed.constraints.filter(c=>c.row===i&&c.span===1).map(c=>qToUDiagnostic(c.requiredQ)));
+    return row.heightPolicy.mode==='AUTO'?intrinsicU:row.heightPolicy.mode==='MIN_MM'?Math.max(intrinsicU,row.heightPolicy.minMm*10000):row.heightPolicy.heightMm*10000;
+  });
+  const historicalRowspans=rowspans.map(c=>({...c,requiredU:qToUDiagnostic(c.requiredQ)}));
+  const frozenHeightsU=legacySequentialRows(historicalBase,observed.rows,historicalRowspans),frozenTotalU=frozenHeightsU.reduce((a,b)=>a+b,0);
+  const historicalMiddle=Math.max(historicalBase[1],historicalRowspans[0].requiredU-historicalBase[0],historicalRowspans[1].requiredU-historicalBase[2]);
+  const r013Witness=[historicalBase[0],historicalMiddle,historicalBase[2]],r013TotalU=r013Witness.reduce((a,b)=>a+b,0);
   const correctedHeightsU=observed.heightsU,correctedTotalU=correctedHeightsU.reduce((a,b)=>a+b,0);
-  assert(observed.constraints.every(c=>correctedHeightsU.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)>=c.requiredU));
-  assert.deepEqual(correctedHeightsU,witness);
-  assert(frozenTotalU>550000&&witnessTotalU<=550000&&correctedTotalU<=550000);
-  assert.equal(watch.status,'READY',JSON.stringify(watch.diagnostics));
-  assert(!watch.diagnostics.some(d=>d.code==='TABLE_CONTENT_OVERFLOW'));
-  evidence.rowspan={classification:'R0.1.3 TARGETED CORRECTION VERIFIED',principalReopenConfirmed:true,requiredU:observed.constraints.map(c=>c.requiredU),baseU:base,r012FrozenHeightsU:frozenHeightsU,r012FrozenTotalU:frozenTotalU,feasibleWitnessHeightsU:witness,witnessTotalU,r013HeightsU:correctedHeightsU,r013TotalU:correctedTotalU,minimumTotalU:correctedTotalU,artificialExpansionBeforeU:frozenTotalU-witnessTotalU,expansionPercentBefore:(frozenTotalU/witnessTotalU-1)*100,frameHeightU:550000,falsePracticalOverflowBefore:true,falsePracticalOverflowAfter:false};
-  await write('adversarial/rowspan-counterexample.json',evidence.rowspan);
-  await page.screenshot({path:resolve(output,'screens','rowspan-watch.png'),fullPage:true});
-  const witnessDoc=await page.evaluate(()=>window.proof.makeFixture('rowspan-watch'));
-  const witnessTable=witnessDoc.pages[0].objects.find(o=>o.type==='table').table;
-  witnessTable.rows.forEach((row,i)=>{row.heightPolicy={mode:'FIXED_MM',heightMm:witness[i]/10000};});
-  const witnessReport=await runDoc(page,witnessDoc,'rowspan-manual-fixed-witness');
-  assert.equal(witnessReport.status,'READY',JSON.stringify(witnessReport.diagnostics));
-  evidence.rowspan.manualWitnessRendered=true;
-  evidence.rowspan.manualWitnessChanges='Test-only FIXED_MM rendering of the same canonical minimum witness; content, fonts, padding, columns and object frame unchanged.';
-  await write('adversarial/rowspan-manual-fixed-witness.json',witnessReport);
-  await page.screenshot({path:resolve(output,'screens','rowspan-manual-fixed-witness.png'),fullPage:true});
-  console.log('ROWSPAN R0.1.3:',watch.status,correctedHeightsU,correctedTotalU);
+  assert(rowspans.every(c=>projectedSpanQ(correctedHeightsU,c.row,c.span)>=c.requiredQ));
+  assert(frozenTotalU>550000&&r013TotalU<=550000&&correctedTotalU<=r013TotalU&&correctedTotalU<=550000);
+  assert.equal(watch.status,'READY',JSON.stringify(watch.diagnostics));assert(!watch.diagnostics.some(d=>d.code==='TABLE_CONTENT_OVERFLOW'));
+  evidence.rowspan={classification:'R0.1.3 REGRESSION RETAINED / R0.1.4 PROJECTION-SAFE',principalReopenConfirmed:true,requiredQ:rowspans.map(c=>c.requiredQ),historicalNearestRequiredU:historicalRowspans.map(c=>c.requiredU),baseU:historicalBase,r012FrozenHeightsU:frozenHeightsU,r012FrozenTotalU:frozenTotalU,r013HistoricalHeightsU:r013Witness,r013HistoricalTotalU:r013TotalU,r014HeightsU:correctedHeightsU,r014TotalU:correctedTotalU,projectedSpanQ:rowspans.map(c=>projectedSpanQ(correctedHeightsU,c.row,c.span)),artificialExpansionBeforeU:frozenTotalU-r013TotalU,frameHeightU:550000,falsePracticalOverflowBefore:true,falsePracticalOverflowAfter:false};
+  await write('adversarial/rowspan-counterexample.json',evidence.rowspan);await page.screenshot({path:resolve(output,'screens','rowspan-watch.png'),fullPage:true});
+  const witnessDoc=await page.evaluate(()=>window.proof.makeFixture('rowspan-watch')),witnessTable=witnessDoc.pages[0].objects.find(o=>o.type==='table').table;
+  witnessTable.rows.forEach((row,i)=>{row.heightPolicy={mode:'FIXED_MM',heightMm:correctedHeightsU[i]/10000};});
+  const witnessReport=await runDoc(page,witnessDoc,'rowspan-manual-fixed-witness');assert.equal(witnessReport.status,'READY',JSON.stringify(witnessReport.diagnostics));
+  evidence.rowspan.manualWitnessRendered=true;evidence.rowspan.manualWitnessChanges='Test-only FIXED_MM rendering of the R0.1.4 canonical minimum; content, fonts, padding, columns and object frame unchanged.';
+  await write('adversarial/rowspan-manual-fixed-witness.json',witnessReport);await page.screenshot({path:resolve(output,'screens','rowspan-manual-fixed-witness.png'),fullPage:true});
+  console.log('ROWSPAN R0.1.4:',watch.status,correctedHeightsU,correctedTotalU);
   const goldens=[];
   for(const name of ['G01','G03']) {
     const report=await load(page,name),constraints=await page.evaluate(()=>window.proof.constraints());
     goldens.push({name,status:report.status,tables:constraints.map(table=>{
-      const baseResolvedU=table.rows.map((row,i)=>row.heightPolicy.mode==='AUTO'?table.baseIntrinsicU[i]:row.heightPolicy.mode==='MIN_MM'?Math.max(table.baseIntrinsicU[i],row.heightPolicy.minMm*10000):row.heightPolicy.heightMm*10000);
-      return {...table,baseResolvedU,spanAddedU:table.heightsU.reduce((a,b)=>a+b,0)-baseResolvedU.reduce((a,b)=>a+b,0)};
+      const authoredBaseU=table.rows.map(row=>row.heightPolicy.mode==='AUTO'?0:row.heightPolicy.mode==='MIN_MM'?row.heightPolicy.minMm*10000:row.heightPolicy.heightMm*10000);
+      return {...table,authoredBaseU,derivedGrowthU:table.heightsU.reduce((a,b)=>a+b,0)-authoredBaseU.reduce((a,b)=>a+b,0)};
     })});
     assert.equal(report.status,'READY');
   }
@@ -405,7 +471,7 @@ try {
   const fontPage=await openPage(fontContext,'G01');
   await assertBlocked(fontPage,'font-http-failure',['REQUIRED_FONT_MISSING'],await result(fontPage));
   await fontContext.close();
-  evidence.status='ASSERTIONS_PASSED';evidence.foundationVerdict='FOUNDATION-PROOF-01 PASSED AFTER TARGETED R0.1.3 AMENDMENT — READY FOR INDEPENDENT PRINCIPAL AUDIT';evidence.recommendation='A';evidence.durationMs=performance.now()-runStarted;
+  evidence.status='ASSERTIONS_PASSED';evidence.foundationVerdict='FOUNDATION-PROOF-01 R0.1.4 VERIFIED — READY FOR PRINCIPAL CODE + ARTIFACT AUDIT';evidence.recommendation='A';evidence.durationMs=performance.now()-runStarted;
   evidence.nodeMemory=process.memoryUsage();await write('proof-manifest.json',evidence);
 }catch(error) {
   evidence.status='FAIL';evidence.failure=error.stack??String(error);evidence.durationMs=performance.now()-runStarted;

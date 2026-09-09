@@ -1,5 +1,5 @@
 import type { CatalogDocument, RichText, TableModel } from './proof-model';
-import { add,mmToU,pxToQ,qToU,sum,uToQ } from './physical';
+import { add,mmToU,pxToQ,sum,uToQ } from './physical';
 import { cumulative,projectRows,resolveRows,type SpanConstraint } from './proof-layout';
 import { buildPaint } from './proof-paint';
 import { orderedAnchors } from './proof-table';
@@ -63,7 +63,7 @@ export function measureTables(doc:CatalogDocument,plans:Map<string,TablePlan>,ro
     const table=object.table,plan=plans.get(table.id);
     if(!plan)continue;
     const measured=tableConstraints(table,root,plan);
-    const resolved=resolveRows(table.rows,measured.baseIntrinsicU,measured.constraints);
+    const resolved=resolveRows(table.rows,measured.constraints);
     const projected=projectRows(resolved.heightsU);
     const paint=buildPaint(table,plan.trackQ,projected.rowQ,plan.styles);
     plan.heightsU=resolved.heightsU;plan.rowQ=projected.rowQ;plan.edges=paint.edges;plan.suppressed=paint.suppressed;
@@ -174,15 +174,15 @@ export function compareSnapshots(a:LayoutSnapshot,b:LayoutSnapshot):Diagnostic[]
   const keys=[...new Set([...before.keys(),...after.keys()])].sort();
   return keys.filter(key=>before.get(key)!==after.get(key)).map(key=>diagnostic('LAYOUT_UNSTABLE',key));
 }
-export function tableConstraints(table:TableModel,root:HTMLElement,plan:TablePlan):{baseIntrinsicU:number[];constraints:SpanConstraint[]} {
-  const baseIntrinsicU=table.rows.map(()=>0),constraints:SpanConstraint[]=[];
+export function tableConstraints(table:TableModel,root:HTMLElement,plan:TablePlan):{constraints:SpanConstraint[]} {
+  const constraints:SpanConstraint[]=[];
   const grid=findElement(root,'data-table-id',table.id);
   for(const cell of orderedAnchors(table)) {
     const flow=findElement(grid,'data-cell-id',cell.id).querySelector<HTMLElement>('[data-flow-root]')!;
     const metrics=intrinsicMetrics(flow,cellDisplayText(cell,table)),padding=plan.styles.get(cell.id)!.paddingQ;
-    const requiredU=qToU(sum([metrics.heightQ,padding.top,padding.bottom]));
+    const requiredQ=sum([metrics.heightQ,padding.top,padding.bottom]);
     const row=table.rows.findIndex(r=>r.id===cell.rowId),column=table.columns.findIndex(c=>c.id===cell.columnId),span=cell.span?.rows??1;
-    if(span>1)constraints.push({cellId:cell.id,row,column,span,requiredU});else baseIntrinsicU[row]=Math.max(baseIntrinsicU[row],requiredU);
+    constraints.push({cellId:cell.id,row,column,span,requiredQ});
   }
-  return {baseIntrinsicU,constraints};
+  return {constraints};
 }

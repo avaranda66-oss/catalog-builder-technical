@@ -1,5 +1,5 @@
 import type { Column, Row } from './proof-model';
-import { add, mmToU, mul, safe, sum, uToQ } from './physical';
+import { add, minimumUForProjectedQ, mmToU, mul, safe, sum, uToQ } from './physical';
 import { asDiagnostic, diagnostic, ProofError, type Diagnostic } from './diagnostics';
 
 export type ColumnResult={ok:true;widthsU:number[];availableTrackWidthU:number}|{ok:false;code:string;details:string};
@@ -55,56 +55,55 @@ export function projectTracks(widthsU:readonly number[],frameU:number):{frameQ:n
   if(sum(trackQ)!==frameQ)throw new ProofError('TRACK_PROJECTION_INVARIANT');
   return {frameQ,trackQ};
 }
-export interface SpanConstraint {cellId:string;row:number;column:number;span:number;requiredU:number}
-interface PrefixEdge {from:number;weight:number}
-export function resolveRows(rows:readonly Row[],intrinsicU:readonly number[],constraints:readonly SpanConstraint[]):{heightsU:number[];diagnostics:Diagnostic[]} {
-  if(rows.length!==intrinsicU.length)throw new ProofError('ROW_MEASUREMENT_INVALID');
+export interface SpanConstraint {cellId:string;row:number;column:number;span:number;requiredQ:number}
+interface PrefixEdge {from:number;constraint:SpanConstraint}
+export function resolveRows(rows:readonly Row[],constraints:readonly SpanConstraint[]):{heightsU:number[];diagnostics:Diagnostic[]} {
   const diagnostics:Diagnostic[]=[];
-  const baseHeightsU=rows.map((row,i)=>{
-    const intrinsic=safe(intrinsicU[i]);
-    if(intrinsic<0)throw new ProofError('ROW_MEASUREMENT_INVALID');
+  const baseHeightsU=rows.map(row=>{
     const policy=row.heightPolicy;
-    if(policy.mode==='AUTO')return intrinsic;
+    if(policy.mode==='AUTO')return 0;
     const authored=mmToU(policy.mode==='MIN_MM'?policy.minMm:policy.heightMm);
-    if(policy.mode==='MIN_MM')return Math.max(intrinsic,authored);
-    if(intrinsic>authored)diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`requiredU=${intrinsic}, fixedU=${authored}`,{rowId:row.id}));
+    if(authored<=0)throw new ProofError('ROW_MEASUREMENT_INVALID');
     return authored;
   });
-  const growableRows=rows.map((row,rowIndex)=>({row,rowIndex})).filter(({row})=>row.heightPolicy.mode!=='FIXED_MM');
-  const growablePosition=new Map(growableRows.map(({rowIndex},position)=>[rowIndex,position]));
-  const incoming:PrefixEdge[][]=Array.from({length:growableRows.length+1},()=>[]);
-  for(let position=0;position<growableRows.length;position++)incoming[position+1].push({from:position,weight:0});
+  const basePrefixU=cumulative(baseHeightsU);
+  const growableBeforeBoundary=[0];
+  for(const row of rows)growableBeforeBoundary.push(add(growableBeforeBoundary[growableBeforeBoundary.length-1],row.heightPolicy.mode==='FIXED_MM'?0:1));
+  const growableCount=growableBeforeBoundary[growableBeforeBoundary.length-1];
+  const incoming:PrefixEdge[][]=Array.from({length:growableCount+1},()=>[]);
   for(const constraint of constraints) {
-    const {row,span,requiredU,cellId,column}=constraint;
-    if(!Number.isSafeInteger(row)||!Number.isSafeInteger(column)||!Number.isSafeInteger(span)||row<0||column<0||span<2||row+span>rows.length||safe(requiredU)<0)
+    const {row,span,requiredQ,column}=constraint;
+    if(!Number.isSafeInteger(row)||!Number.isSafeInteger(column)||!Number.isSafeInteger(span)||row<0||column<0||span<1||row+span>rows.length||safe(requiredQ)<0)
       throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
-    const deficit=Math.max(0,add(requiredU,-sum(baseHeightsU.slice(row,row+span))));
-    if(!deficit)continue;
-    const positions=[] as number[];
-    for(let rowIndex=row;rowIndex<row+span;rowIndex++) {
-      const position=growablePosition.get(rowIndex);
-      if(position!==undefined)positions.push(position);
-    }
-    if(!positions.length) {
-      diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`Rowspan deficitU=${deficit}; all rows fixed`,{cellId}));
-      continue;
-    }
-    const first=positions[0],last=positions[positions.length-1];
-    if(last-first+1!==positions.length)throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
-    incoming[last+1].push({from:first,weight:deficit});
+    const from=growableBeforeBoundary[row],to=growableBeforeBoundary[row+span];
+    if(to>from)incoming[to].push({from,constraint});
   }
-  const prefixU=Array(growableRows.length+1).fill(0) as number[];
-  for(let end=1;end<prefixU.length;end++) {
-    let required=0;
-    for(const edge of incoming[end])required=Math.max(required,add(prefixU[edge.from],edge.weight));
-    prefixU[end]=safe(required);
+  const extraPrefixU=Array(growableCount+1).fill(0) as number[];
+  for(let end=1;end<extraPrefixU.length;end++) {
+    let required=extraPrefixU[end-1];
+    for(const edge of incoming[end]) {
+      const {row,span,requiredQ}=edge.constraint;
+      const startU=add(basePrefixU[row],extraPrefixU[edge.from]);
+      const targetEndQ=add(uToQ(startU),requiredQ);
+      const targetEndU=minimumUForProjectedQ(targetEndQ);
+      required=Math.max(required,add(targetEndU,-basePrefixU[row+span]));
+    }
+    extraPrefixU[end]=safe(Math.max(0,required));
   }
   const heightsU=[...baseHeightsU];
-  growableRows.forEach(({rowIndex},position)=>{
-    const extra=add(prefixU[position+1],-prefixU[position]);
+  let growablePosition=0;
+  rows.forEach((row,rowIndex)=>{
+    if(row.heightPolicy.mode==='FIXED_MM')return;
+    const extra=add(extraPrefixU[growablePosition+1],-extraPrefixU[growablePosition]);
     if(extra<0)throw new ProofError('ROWSPAN_CONSTRAINT_INVALID');
     heightsU[rowIndex]=add(heightsU[rowIndex],extra);
+    growablePosition++;
   });
+  const boundariesQ=cumulative(heightsU).map(uToQ);
+  for(const constraint of constraints) {
+    const availableQ=add(boundariesQ[constraint.row+constraint.span],-boundariesQ[constraint.row]);
+    if(availableQ<constraint.requiredQ)diagnostics.push(diagnostic('ROW_CONTENT_OVERFLOW',`requiredQ=${constraint.requiredQ}, spanQ=${availableQ}`,{cellId:constraint.cellId}));
+  }
   return {heightsU,diagnostics};
 }
 export function cumulative(values:readonly number[]):number[] {

@@ -5,6 +5,7 @@ import { findElement,intrinsicMetrics } from './proof-measurement';
 import { add,mmToU,qToU,uToQ } from './physical';
 import { diagnostic,type Diagnostic } from './diagnostics';
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
+export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number):boolean => metrics.widthQ>uToQ(authoredWidthU)||metrics.heightQ>uToQ(authoredHeightU);
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
   const result:Diagnostic[]=[...snapshot.geometryDiagnostics];
   for(const page of doc.pages) {
@@ -30,10 +31,12 @@ export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TableP
           const cellLocation={...location,tableId:object.table.id,cellId:fact.cellId};
           if(contentWidthQ<=0||contentHeightQ<=0)result.push(diagnostic('CELL_CONTENT_BOX_NONPOSITIVE',`contentWidthQ=${contentWidthQ}, contentHeightQ=${contentHeightQ}`,cellLocation));
           if(fact.intrinsicContentWidthQ>contentWidthQ)result.push(diagnostic('CELL_CONTENT_OVERFLOW',`intrinsicWidthQ=${fact.intrinsicContentWidthQ}, contentWidthQ=${contentWidthQ}`,cellLocation));
+          if(fact.intrinsicContentHeightQ>contentHeightQ&&!result.some(d=>d.code==='ROW_CONTENT_OVERFLOW'&&d.tableId===object.table.id&&d.cellId===fact.cellId))
+            result.push(diagnostic('ROW_CONTENT_OVERFLOW',`intrinsicHeightQ=${fact.intrinsicContentHeightQ}, availableContentQ=${contentHeightQ}`,cellLocation));
         }
       }else {
         const objectNode=findElement(root,'data-object-id',object.id),flow=objectNode.querySelector<HTMLElement>('[data-flow-root]')!,metrics=intrinsicMetrics(flow,object.text);
-        if(qToU(metrics.heightQ)>h||qToU(metrics.widthQ)>w)result.push(diagnostic('TEXT_OBJECT_OVERFLOW','Text exceeds authored object frame',location));
+        if(textObjectOverflows(metrics,w,h))result.push(diagnostic('TEXT_OBJECT_OVERFLOW','Text exceeds authored object frame',location));
       }
     }
     for(let i=0;i<frames.length;i++)for(let j=i+1;j<frames.length;j++) {

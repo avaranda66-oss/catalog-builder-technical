@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {mmToU,pxToQ,ptToQ,qCss,uToQ,compareDecimal} from '@/labs/presys-editorial-proof/physical';
-import {resolveColumns,resolveRows,projectTracks} from '@/labs/presys-editorial-proof/proof-layout';
+import {mmToU,pxToQ,ptToQ,qCss,qToU,uToQ,compareDecimal} from '@/labs/presys-editorial-proof/physical';
+import {projectRows,resolveColumns,resolveRows,projectTracks} from '@/labs/presys-editorial-proof/proof-layout';
 import type {Column,Row} from '@/labs/presys-editorial-proof/proof-model';
 describe('independent arithmetic edge cases',()=>{
   it('exercises fifth-digit ties across carries, signs and scientific notation',()=>{
@@ -46,53 +46,74 @@ describe('independent arithmetic edge cases',()=>{
       expect(resolveColumns(columns,width)).toEqual(result);
     }
   });
-  it('solves the exact Astra overlapping-rowspan counterexample at minimum total height',()=>{
+  const spanQ=(heightsU:readonly number[],row:number,span:number)=>{
+    const boundaries=projectRows(heightsU).boundariesQ;
+    return boundaries[row+span]-boundaries[row];
+  };
+  it('retains the R0.1.3 Astra overlapping-rowspan regression under R0.1.4 Q constraints',()=>{
     const rows:Row[]=[0,1,2].map(i=>({id:'r'+i,role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}}));
-    const constraints=[{cellId:'a',row:0,column:0,span:2,requiredU:407789},{cellId:'b',row:1,column:1,span:2,requiredU:407789}];
-    const result=resolveRows(rows,[100000,100000,100000],constraints);
-    expect(result.heightsU).toEqual([100000,307789,100000]);
-    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(507789);
-    expect(resolveRows(rows,[100000,100000,100000],[...constraints].reverse())).toEqual(result);
+    const constraints=[{cellId:'a',row:0,column:0,span:2,requiredQ:9864},{cellId:'b',row:1,column:1,span:2,requiredQ:9864}];
+    expect(qToU(9864)).toBe(407789);
+    const result=resolveRows(rows,constraints);
+    expect(result.heightsU).toEqual([100000,307769,100004]);
+    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(507773);
+    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBeLessThan(550000);
+    for(const c of constraints)expect(spanQ(result.heightsU,c.row,c.span)).toBeGreaterThanOrEqual(c.requiredQ);
+    expect(resolveRows(rows,[...constraints].reverse())).toEqual(result);
   });
-  it('handles simple, crossing-fixed and zero-deficit spans without shrinking bases',()=>{
-    const simple:Row[]=[0,1].map(i=>({id:'s'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
-    expect(resolveRows(simple,[100,100],[{cellId:'simple',row:0,column:0,span:2,requiredU:251}]).heightsU).toEqual([100,151]);
+  it('handles simple, crossing-fixed and zero-deficit spans without shrinking authored minima',()=>{
+    const simple:Row[]=[0,1].map(i=>({id:'s'+i,role:'body',heightPolicy:{mode:'MIN_MM',minMm:.01}}));
+    expect(resolveRows(simple,[{cellId:'simple',row:0,column:0,span:2,requiredQ:6}]).heightsU).toEqual([100,128]);
     const crossing:Row[]=[
-      {id:'a',role:'body',heightPolicy:{mode:'AUTO'}},
+      {id:'a',role:'body',heightPolicy:{mode:'MIN_MM',minMm:.01}},
       {id:'f',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.01}},
       {id:'b',role:'body',heightPolicy:{mode:'MIN_MM',minMm:.01}},
     ];
-    expect(resolveRows(crossing,[100,100,100],[{cellId:'cross',row:0,column:0,span:3,requiredU:451}]).heightsU).toEqual([100,100,251]);
-    expect(resolveRows(simple,[100,100],[{cellId:'zero',row:0,column:0,span:2,requiredU:200}]).heightsU).toEqual([100,100]);
+    const cross=resolveRows(crossing,[{cellId:'cross',row:0,column:0,span:3,requiredQ:11}]);
+    expect(cross.heightsU).toEqual([100,100,235]);
+    expect(spanQ(cross.heightsU,0,3)).toBe(11);
+    expect(resolveRows(simple,[{cellId:'zero',row:0,column:0,span:2,requiredQ:5}]).heightsU).toEqual([100,100]);
   });
-  it('reports an impossible positive deficit when every covered row is fixed',()=>{
+  it('reports an impossible projected deficit when every covered row is fixed',()=>{
     const fixed:Row[]=[0,1].map(i=>({id:'f'+i,role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.01}}));
-    const result=resolveRows(fixed,[100,100],[{cellId:'blocked',row:0,column:0,span:2,requiredU:201}]);
+    const result=resolveRows(fixed,[{cellId:'blocked',row:0,column:0,span:2,requiredQ:6}]);
     expect(result.heightsU).toEqual([100,100]);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({code:'ROW_CONTENT_OVERFLOW',cellId:'blocked'}));
   });
-  it('solves nested and same-start constraints globally',()=>{
-    const rows:Row[]=[0,1,2,3].map(i=>({id:'n'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
+  it('solves nested and same-start Q constraints globally',()=>{
+    const rows:Row[]=[0,1,2,3].map(i=>({id:'n'+i,role:'body',heightPolicy:{mode:'MIN_MM',minMm:.01}}));
     const constraints=[
-      {cellId:'outer',row:0,column:2,span:4,requiredU:700},
-      {cellId:'same-start',row:0,column:1,span:2,requiredU:350},
-      {cellId:'nested',row:1,column:0,span:2,requiredU:500},
+      {cellId:'outer',row:0,column:2,span:4,requiredQ:17},
+      {cellId:'same-start',row:0,column:1,span:2,requiredQ:8},
+      {cellId:'nested',row:1,column:0,span:2,requiredQ:12},
     ];
-    const result=resolveRows(rows,[100,100,100,100],constraints);
-    expect(result.heightsU).toEqual([100,250,250,100]);
-    for(const c of constraints)expect(result.heightsU.slice(c.row,c.row+c.span).reduce((a,b)=>a+b,0)).toBeGreaterThanOrEqual(c.requiredU);
-    expect(result.heightsU.reduce((a,b)=>a+b,0)).toBe(700);
+    const result=resolveRows(rows,constraints);
+    for(const c of constraints)expect(spanQ(result.heightsU,c.row,c.span)).toBeGreaterThanOrEqual(c.requiredQ);
+    expect(resolveRows(rows,[constraints[2],constraints[0],constraints[1]])).toEqual(result);
+    expect(resolveRows(rows,[...constraints].reverse())).toEqual(result);
+    const positiveGrowth=result.heightsU.map(h=>h-100).findIndex(x=>x>0);
+    expect(positiveGrowth).toBeGreaterThanOrEqual(0);
   });
-  it('uses exact integer-U tie constraints and is invariant to constraint permutation',()=>{
-    const rows:Row[]=[0,1,2].map(i=>({id:'t'+i,role:'body',heightPolicy:{mode:'AUTO'}}));
-    const constraints=[
-      {cellId:'left',row:0,column:0,span:2,requiredU:201},
-      {cellId:'right',row:1,column:1,span:2,requiredU:201},
-      {cellId:'whole',row:0,column:2,span:3,requiredU:302},
+  it('T-Q-GROWABLE-SPAN-01: overlapping spans at awkward phase use minimum deterministic projected growth',()=>{
+    const rows:Row[]=[
+      {id:'prefix',role:'body',heightPolicy:{mode:'FIXED_MM',heightMm:.0021}},
+      {id:'a',role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}},
+      {id:'b',role:'body',heightPolicy:{mode:'AUTO'}},
+      {id:'c',role:'body',heightPolicy:{mode:'MIN_MM',minMm:10}},
     ];
-    const expected=[100,101,101];
-    expect(resolveRows(rows,[100,100,100],constraints).heightsU).toEqual(expected);
-    expect(resolveRows(rows,[100,100,100],[constraints[2],constraints[0],constraints[1]]).heightsU).toEqual(expected);
-    expect(resolveRows(rows,[100,100,100],[...constraints].reverse()).heightsU).toEqual(expected);
+    const constraints=[
+      {cellId:'left',row:1,column:0,span:2,requiredQ:7000},
+      {cellId:'right',row:2,column:1,span:2,requiredQ:7000},
+      {cellId:'whole',row:1,column:2,span:3,requiredQ:12000},
+    ];
+    const result=resolveRows(rows,constraints);
+    expect(result.heightsU).toEqual([21,100000,189388,206706]);
+    for(const c of constraints)expect(spanQ(result.heightsU,c.row,c.span)).toBeGreaterThanOrEqual(c.requiredQ);
+    expect(resolveRows(rows,[constraints[2],constraints[0],constraints[1]])).toEqual(result);
+    expect(resolveRows(rows,[...constraints].reverse())).toEqual(result);
+    for(let i=1;i<result.heightsU.length;i++)if(result.heightsU[i]>(i===2?0:100000)) {
+      const reduced=[...result.heightsU];reduced[i]--;
+      expect(constraints.some(c=>spanQ(reduced,c.row,c.span)<c.requiredQ)).toBe(true);
+    }
   });
 });

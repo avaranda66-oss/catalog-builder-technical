@@ -68,6 +68,17 @@ export function roundRatio(numerator:number,denominator:number):number {
 }
 export const uToQ = (u:PhysicalLengthU):PhysicalPixelQ => roundRatio(mul(u,384),15875);
 export const qToU = (q:PhysicalPixelQ):PhysicalLengthU => roundRatio(mul(q,15875),384);
+export function minimumUForProjectedQ(targetQ:PhysicalPixelQ):PhysicalLengthU {
+  safe(targetQ);
+  if(targetQ<0)throw new ProofError('PHYSICAL_LENGTH_INVALID');
+  if(targetQ===0)return 0;
+  const threshold=add(mul(targetQ,2),-1);
+  const whole=Math.floor(threshold/768),remainder=threshold%768;
+  const tail=Math.floor(add(mul(remainder,15875),767)/768);
+  const candidate=add(mul(whole,15875),tail);
+  if(uToQ(candidate)<targetQ || (candidate>0&&uToQ(candidate-1)>=targetQ))throw new ProofError('PHYSICAL_ARITHMETIC_OVERFLOW');
+  return candidate;
+}
 export function ptToQ(pt:number):PhysicalPixelQ {
   if(pt<=0) throw new ProofError('BORDER_THICKNESS_INVALID');
   const q=scaledDecimal(pt,0,256,3);
