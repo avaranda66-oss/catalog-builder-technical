@@ -58,11 +58,34 @@ export function auditLayoutPreflight(
   plan?: PageFlowPlan
 ): LayoutPreflightReport {
   const issues: LayoutPreflightIssue[] = [];
+  const pageIdentityCounts = new Map<string, number>();
+
+  for (const page of catalog.pages) {
+    pageIdentityCounts.set(page.id, (pageIdentityCounts.get(page.id) ?? 0) + 1);
+  }
+
+  for (const [pageId, count] of pageIdentityCounts) {
+    if (count <= 1) continue;
+    issues.push({
+      code: 'DUPLICATE_PAGE_ID',
+      severity: 'block',
+      message: `O identificador de página "${pageId}" aparece mais de uma vez; a identidade estrutural do documento é ambígua.`
+    });
+  }
 
   for (const diagnostic of catalog.sourceDiagnostics ?? []) {
     if (diagnostic.code !== 'MALFORMED_PAGE_BLOCKS') continue;
+    const pageMatchCount = pageIdentityCounts.get(diagnostic.pageId) ?? 0;
+    if (pageMatchCount === 0) continue;
+    if (pageMatchCount > 1) {
+      issues.push({
+        code: diagnostic.code,
+        severity: 'block',
+        message: `O identificador de página ambíguo "${diagnostic.pageId}" mantém corrupção de origem não resolvida em blocks (${diagnostic.receivedType}); o runtime usa uma lista vazia segura.`
+      });
+      continue;
+    }
     const currentPageIndex = catalog.pages.findIndex((page) => page.id === diagnostic.pageId);
-    if (currentPageIndex === -1) continue;
     const currentPageNumber = currentPageIndex + 1;
     issues.push({
       code: diagnostic.code,

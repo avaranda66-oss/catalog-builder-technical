@@ -489,6 +489,34 @@ const diagnosticKey = (diagnostic: CatalogSourceDiagnostic) => (
   `${diagnostic.code}:${diagnostic.pageId}`
 );
 
+const countCatalogPagesById = (catalog: Catalog): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const page of catalog.pages) {
+    counts.set(page.id, (counts.get(page.id) ?? 0) + 1);
+  }
+  return counts;
+};
+
+/**
+ * A page-scoped block delta is authoritative only while page identity is unique
+ * on both sides of the transaction.
+ */
+export function didCatalogPageBlocksChangeUnambiguously(
+  before: Catalog,
+  after: Catalog,
+  pageId: string
+): boolean {
+  const previousMatches = before.pages.filter((page) => page.id === pageId);
+  const nextMatches = after.pages.filter((page) => page.id === pageId);
+  if (previousMatches.length !== 1 || nextMatches.length !== 1) return false;
+
+  try {
+    return JSON.stringify(previousMatches[0].blocks) !== JSON.stringify(nextMatches[0].blocks);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Reconciles persisted source provenance against stable runtime page identity.
  * Existing-page diagnostics stay fail-closed unless that exact page was explicitly
@@ -501,19 +529,19 @@ export function reconcileCatalogSourceDiagnostics(
   const diagnostics = catalog.sourceDiagnostics ?? [];
   if (diagnostics.length === 0) return catalog;
 
-  const existingPageIds = new Set(
-    catalog.pages
-      .filter((page): page is CatalogPage => isRecord(page) && typeof page.id === 'string')
-      .map((page) => page.id)
-  );
+  const pageIdentityCounts = countCatalogPagesById(catalog);
   const remediatedPageIds = new Set(structurallyRemediatedPageIds);
-  const unresolvedDiagnostics = diagnostics.filter((diagnostic) => (
-    existingPageIds.has(diagnostic.pageId)
-    && !(
+  const unresolvedDiagnostics = diagnostics.filter((diagnostic) => {
+    const pageMatchCount = pageIdentityCounts.get(diagnostic.pageId) ?? 0;
+    if (pageMatchCount === 0) return false;
+
+    return !(
+      pageMatchCount === 1
+      &&
       diagnostic.code === 'MALFORMED_PAGE_BLOCKS'
       && remediatedPageIds.has(diagnostic.pageId)
-    )
-  ));
+    );
+  });
 
   if (unresolvedDiagnostics.length === diagnostics.length) return catalog;
 
