@@ -1,15 +1,15 @@
-# PRESYS VNext R0.1 — PRINCIPAL AMENDMENTS PROPOSAL
+# PRESYS VNext R0.1.2 — PRINCIPAL FINAL FREEZE
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
-Este pacote é a proposta arquitetural canônica de PRESYS VNext R0.1 no repositório para auditoria Principal. Ele não é implementação, aceite de produção, arquitetura congelada ou autorização de merge/deploy. As recomendações substantivas permanecem fortes, porém sua decisão status é PROPOSED até revisão Principal; itens DEFERRED pertencem a uma fase posterior.
+Este pacote é a arquitetura documental canônica de PRESYS VNext R0.1.2 para FOUNDATION-PROOF-01. A auditoria Principal final registrou **GO** e congelou para implementação os contratos explicitamente aplicáveis à proof. Isso não é implementação, aceite de produção, autorização de merge/deploy nem freeze automático das decisões futuras de FATHER-USABLE V1 ou POST-V1, que permanecem PROPOSED/MUST-CANDIDATE onde indicado.
 
-Follow-up atual do PR #12: **R0.1.2**, closure documental dirigida dos contratos A–F (CellContent, projeção/paint Chromium, text flow, rowspan remainder, annotation scope e renderer legado). O freeze continua explicitamente não aplicado.
+Follow-up atual do PR #12: **R0.1.2**, closure documental dirigida dos contratos A–F (CellContent, projeção/paint Chromium, text flow, rowspan remainder, annotation scope e renderer legado), agora com **PRINCIPAL FINAL FREEZE AUDIT: GO**. Implementadores de FOUNDATION-PROOF-01 devem seguir o contrato congelado e não podem redesenhá-lo silenciosamente; falha empírica pode reabrir somente a decisão específica demonstrada pelo contraexemplo.
 
 A prioridade é permitir que uma pessoa da PRESYS produza catálogos técnicos e institucionais com tabelas densas, imagens, notas e composição profissional. A primeira execução é uma prova técnica da fundação editorial; ela não redefine o escopo do primeiro produto utilizável.
 
@@ -27,7 +27,7 @@ Primeira versão utilizável por pessoa não técnica. Ela deve permitir criar/e
 
 | Horizonte | Disposição recomendada | Decision status |
 |---|---|---|
-| FOUNDATION-PROOF-01 | FOUNDATION REQUIRED — AI Translation, Sharing, PIM, Presence e AI authoring agent OUT OF SCOPE | PROPOSED |
+| FOUNDATION-PROOF-01 | FOUNDATION REQUIRED — AI Translation, Sharing, PIM, Presence e AI authoring agent OUT OF SCOPE | APPROVED / FROZEN FOR FOUNDATION-PROOF-01 |
 | FATHER-USABLE V1 | Catalog create/edit, Undo/Redo, local recovery, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e one advanced table engine: MUST-CANDIDATE | PROPOSED |
 | POST-V1 / LATER | central PIM/product knowledge; Presence; realtime co-editing; autonomous AI catalog authoring; deeper workflow automation | PROPOSED |
 

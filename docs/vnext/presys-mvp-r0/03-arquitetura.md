@@ -1,8 +1,8 @@
 # Produto, arquitetura e contratos do documento
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
@@ -75,7 +75,7 @@ Dependências: domain não importa React, DOM, Zustand ou Supabase. Render receb
 
 Imports proibidos no runtime VNext: `useCatalogStore`, `useLibraryStore`, `ContentBlock`, `A4Canvas`, adaptadores de tabela legada, renderizadores especializados, presence legada. ESLint `no-restricted-imports` com overrides e verificação de grafo resolvido por TypeScript devem cobrir imports relativos e barrels. Um grep isolado não prova essa barreira.
 
-## Geometria autoral — FOUNDATION REQUIRED, PROPOSED
+## Geometria autoral — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 O contrato de página abaixo é autoridade de autoria para FOUNDATION-PROOF-01 e base de FATHER-USABLE V1. Todos os IDs são opacos e estáveis. `widthMm`, `heightMm` e cada componente do frame devem ser finitos e positivos onde aplicável.
 
@@ -119,7 +119,7 @@ type EditorialObject = {
 // line: endpoints em mm + stroke; não depende de objetos-alvo na V1
 ```
 
-Para FOUNDATION-PROOF-01 a página física alvo proposta é A4 retrato, `210 mm × 297 mm`. `safeArea`/margens são modeladas explicitamente e não alteram o tamanho físico. O valor legado `8.4667 mm`, derivado de 32 CSS px a 96 dpi, não é regra VNext nem default PRESYS; o default definitivo permanece PROPOSED/aberto para decisão editorial posterior.
+Para FOUNDATION-PROOF-01 a página física alvo congelada é A4 retrato, `210 mm × 297 mm`. `safeArea`/margens são modeladas explicitamente e não alteram o tamanho físico. O valor legado `8.4667 mm`, derivado de 32 CSS px a 96 dpi, não é regra VNext nem default PRESYS; o default definitivo permanece PROPOSED/aberto para decisão editorial posterior.
 
 Regra inviolável: **MEASUREMENT NEVER MUTATES AUTHORED FRAME.** Measurement pode medir, produzir métricas intrínsecas derivadas, diagnosticar e bloquear publicação. Measurement não pode alterar `xMm`, `yMm`, `widthMm` ou `heightMm`, mover vizinhos, criar página, mover objeto entre páginas, criar continuation page, reduzir fonte ou alterar conteúdo. Qualquer ajuste de frame é uma user command explícita e auditável.
 
@@ -129,7 +129,7 @@ Resolver estilo: defaults do documento → estilo do objeto → overrides espec�
 
 Regras: nenhuma referência quebrada; IDs únicos por documento; grupos só na mesma página, sem aninhamento ou membro em dois grupos; largura/altura positivas e finitas. Cruzar safe area gera WARNING sem reposicionamento; qualquer objeto fora dos limites físicos gera ERROR. Número da página é derivado da ordem, não persistido em textos fixos: usar campo dinâmico pageNumber/pageCount no renderer.
 
-## Aritmética física determinística — FOUNDATION REQUIRED, PROPOSED
+## Aritmética física determinística — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 Toda geometria contratada usa milímetros na API/editor, mas cálculo e igualdade geométrica usam uma unidade inteira canônica. Definição: `PHYSICAL_UNIT_MM = 0.0001 mm` (`0.1 µm`; `10_000` unidades por mm). Essa escala preserva exatamente valores autorais com quatro casas decimais, inclusive o valor histórico `8.4667 mm` quando ele aparece como dado, é muito mais fina que a resolução física relevante de impressão/tela e mantém dimensões editoriais muito abaixo de `Number.MAX_SAFE_INTEGER` quando representadas como inteiros. Não usar `BigInt`, epsilon local ou acumulação binária em mm para decidir geometria.
 
@@ -145,7 +145,7 @@ Contrato canônico:
 8. **Saída:** converter `U` para mm somente na API/renderização por divisão por `10_000`; serialização de evidência usa decimal exato com no máximo quatro casas. O vetor inteiro `widthsU` é a autoridade de igualdade.
 9. **Igualdade em teste:** geometria normalizada é comparada por igualdade inteira exata; não existe epsilon. Para inputs idênticos, `widthsU` e sua serialização decimal devem ser idênticos independentemente de viewport, zoom ou renderer.
 
-### Duas unidades, uma autoridade por camada — FOUNDATION REQUIRED, PROPOSED
+### Duas unidades, uma autoridade por camada — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 `PhysicalLengthU` continua sendo a autoridade autoral/de domínio persistida: `10_000 U/mm`. FOUNDATION-PROOF-01 acrescenta **somente no renderer Chromium** `PhysicalPixelQ`, inteiro em unidades de `1/64 CSS px`. `Q` nunca é persistido no documento, nunca substitui mm/U e nunca volta como mutação autoral.
 
@@ -163,7 +163,7 @@ Conversão de CSS px medido para `Q`: obter o decimal ECMAScript do delta em px 
 
 Serializar `Q` para CSS sem float autoritativo: `Q/64 px` é decimal finito. Gerar a string por quociente/resto inteiros (`0.015625 px` por unidade), nunca por conversão mm -> CSS. O manifesto da proof registra versão Chromium e este `Q` contract.
 
-## Igualdade de layout e estabilidade — FOUNDATION REQUIRED, PROPOSED
+## Igualdade de layout e estabilidade — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 `LAYOUT_UNSTABLE` compara **um único snapshot canônico**, nunca `DOMRect` bruto. Campos autorais/solver permanecem em `U`; todo fato espacial derivado do Chromium permanece em `Q`. Não existem duas versões concorrentes do mesmo browser fact. Quando o mesmo `PhysicalLayoutFact` contém um authored/solver field em U e sua projeção renderer em Q, cada campo valida sua própria camada: U contra o documento/solver, Q contra o Chromium. É proibido converter um rect Q de volta a U e compará-lo contra outra leitura float/rounding do mesmo rect para decidir estabilidade. O conjunto mínimo, quando aplicável, é:
 

@@ -1,13 +1,13 @@
 # PDF, durabilidade e evolução
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
-## Saída editorial — FOUNDATION REQUIRED, PROPOSED
+## Saída editorial — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 FOUNDATION-PROOF-01 usa HTML/CSS editorial com impressão Chromium/browser PDF controlada. É proibido usar como mecanismo da prova: `html2canvas`, screenshot-as-PDF, PNG full-page, PNG full-table ou o atual `PDFService.exportToPDF()`. Raster é permitido somente para conteúdo naturalmente imagem, como fotografia de produto.
 
@@ -21,7 +21,7 @@ Acceptance conceitual `T-PARITY-01`: o mesmo documento e manifesto produzem a me
 
 Referências técnicas: [Playwright page.pdf](https://playwright.dev/docs/api/class-page#page-pdf) documenta mídia print e opções de página/fundo; [CSS Paged Media](https://www.w3.org/TR/css-page-3/) define o modelo de páginas. Não se assume que todo recurso da especificação está implementado no browser.
 
-## Pipeline e readiness — FOUNDATION REQUIRED, PROPOSED
+## Pipeline e readiness — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 1. Capturar uma revisão local consistente. Exportar rascunho local é permitido, com identidade `draft:documentId:localRevision`, sem afirmar que está salvo na nuvem.
 2. Para publicação persistida/compartilhada, salvar primeiro e obter ACK da versão N. Capturar documento exato de N; não ler “latest” depois e fingir que corresponde a N.
@@ -44,7 +44,7 @@ A primeira prova é CLI local. No produto, o adapter de exportação pode chamar
 
 Como alternativa operacional inicial, print nativo pode ser apresentado com instruções claras (A4, escala 100%, sem cabeçalhos do navegador). Isso deve ser rotulado como fluxo manual; não equivale ao download controlado exigido no aceite final do MVP.
 
-## Diagnostic severity policy — FOUNDATION REQUIRED, PROPOSED
+## Diagnostic severity policy — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 Para FOUNDATION-PROOF-01, `ERROR` é blocking e impede GREEN/PDF final nos seguintes casos:
 

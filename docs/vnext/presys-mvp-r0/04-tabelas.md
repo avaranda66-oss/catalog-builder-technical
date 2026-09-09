@@ -1,13 +1,13 @@
 # Contrato editorial de tabelas
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
-Decisão recomendada — PROPOSED: **um único motor de tabela**. Evoluir seletivamente as lições do Table Core sem carregar sua autoridade runtime legada. Preservar stable table/row/column/cell IDs, collision-safe cell key, validação estrutural estrita, rowSpan, colSpan, `coveredBy`, merge fail-closed, `MERGE_WOULD_DISCARD_CONTENT`, operações imutáveis, conteúdos tipados, apresentação separada de conteúdo e conceitos físicos em mm.
+Decisão Principal para FOUNDATION-PROOF-01 — FROZEN: **um único motor de tabela**. Evoluir seletivamente as lições do Table Core sem carregar sua autoridade runtime legada. Preservar stable table/row/column/cell IDs, collision-safe cell key, validação estrutural estrita, rowSpan, colSpan, `coveredBy`, merge fail-closed, `MERGE_WOULD_DISCARD_CONTENT`, operações imutáveis, conteúdos tipados, apresentação separada de conteúdo e conceitos físicos em mm.
 
 Não portar como autoridade VNext: legacy adapter/bridge, `TechnicalTableBlock`, `CustomTableBlock`, motores especializados, fallbacks runtime por tipo de tabela, `A4Canvas`, PageFlow automático ou o download PDF raster atual. O geometry resolver é **REIMPLEMENTED FROM LESSONS**: testes e contraexemplos do legado servem de evidência, mas o solver novo obedece o contrato desta revisão.
 
@@ -107,7 +107,7 @@ type TableLegendEntry = {
 };
 ```
 
-### Contrato exato de CellContent — FOUNDATION REQUIRED, PROPOSED
+### Contrato exato de CellContent — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 `CellContent` é semântico; apresentação não entra nessa união. Regras de validação:
 
@@ -122,13 +122,13 @@ type TableLegendEntry = {
 
 Essa capacidade produz especificações, comparação, compatibilidade, acessórios, fornecimento, insertos e pedidos sem sete motores. Diagonal de canto é apresentação de cabeçalho, não célula de negócio nova; pode ser adiada sem perder agrupamentos e conteúdo.
 
-## Geometria externa, tracks e bordas — FOUNDATION REQUIRED, PROPOSED
+## Geometria externa, tracks e bordas — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 `frame.xMm`, `frame.yMm`, `frame.widthMm` e `frame.heightMm` pertencem ao objeto tabela e são autoria. Para largura, `frame.widthU` é **a largura total do plano de tracks**: `sum(columnTrackWidthsU) === frame.widthU`. Bordas e padding não são subtraídos antes do solver e não podem aumentar o frame. O renderer mantém `renderedIntrinsicHeightQ` como fato espacial Chromium; quando a política de domínio precisa testar overflow contra `frame.heightU`, converte esse Q para U **uma única vez** pela regra D3. Um valor em mm pode ser exibido como diagnóstico, mas não é uma segunda autoridade de estabilidade. Caption/notes/footnotes, grid e espaçamentos participam da altura intrínseca, mas measurement jamais escreve no frame.
 
 ### Autoridade de renderização para FOUNDATION-PROOF-01
 
-Escolha definitiva proposta após counterproof Chromium: **CSS Grid é a única autoridade de layout visual da proof; HTML `<table>` é rejeitado como autoridade física**. `table-layout:fixed` não impede border/collapse/spacing de alterar o border box e não garante que o vetor físico resolvido seja o vetor final do Chromium. Nenhum `<table>`, `border-collapse`, `border-spacing`, width auto ou algoritmo de redistribuição de tabela participa de `ProofTable`.
+Escolha congelada para FOUNDATION-PROOF-01 após counterproof Chromium: **CSS Grid é a única autoridade de layout visual da proof; HTML `<table>` é rejeitado como autoridade física**. `table-layout:fixed` não impede border/collapse/spacing de alterar o border box e não garante que o vetor físico resolvido seja o vetor final do Chromium. Nenhum `<table>`, `border-collapse`, `border-spacing`, width auto ou algoritmo de redistribuição de tabela participa de `ProofTable`.
 
 ### Semântica/acessibilidade sem ceder geometria ao browser
 
@@ -218,15 +218,17 @@ renderedIntrinsicHeightMm >  frame.heightMm  -> TABLE_CONTENT_OVERFLOW / ERROR
 
 `TABLE_CONTENT_OVERFLOW` bloqueia GREEN e PDF final. Nunca auto-grow no renderer. Um futuro comando explícito `Fit height to content`/`FitTableHeightToContent` pode gravar novo `frame.heightMm`; isso é USER COMMAND, não side effect de measurement.
 
-`RowHeightPolicy` também é FOUNDATION REQUIRED — PROPOSED. `AUTO`: conteúdo define a altura derivada da linha. `MIN_MM`: altura derivada = `max(intrinsic, minMm)`. `FIXED_MM`: altura autoral exata. Se conteúdo exceder `FIXED_MM`, emitir `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir fonte, aumentar a linha, cortar silenciosamente nem alterar conteúdo. CSS `height` em `<tr>` sozinho não prova teto; a prova deve medir e detectar overflow real.
+`RowHeightPolicy` também é FOUNDATION REQUIRED — FROZEN FOR FOUNDATION-PROOF-01. `AUTO`: conteúdo define a altura derivada da linha. `MIN_MM`: altura derivada = `max(intrinsic, minMm)`. `FIXED_MM`: altura autoral exata. Se conteúdo exceder `FIXED_MM`, emitir `ROW_CONTENT_OVERFLOW / ERROR`. Não reduzir fonte, aumentar a linha, cortar silenciosamente nem alterar conteúdo. CSS `height` em `<tr>` sozinho não prova teto; a prova deve medir e detectar overflow real.
 
 Arrastar lateral da tabela é user command que muda `frame.widthMm` e re-resolve colunas flex. Ajustar altura do frame também é user command. Measurement pode diagnosticar o efeito, mas não mover vizinhos, alterar o frame ou paginar.
 
 Mesclas verticais: a altura do conteúdo da âncora precisa caber na soma das linhas cobertas. Primeiro calcular a altura-base de cada row (`AUTO = intrinsic`, `MIN_MM = max(intrinsic,min)`, `FIXED_MM = authored`) sem usar rowspan para crescer linhas. Depois processar anchors com `rowSpan > 1` em ordem canônica `(anchorRowIndex asc, anchorColumnIndex asc, anchorCellId asc)`. Para cada constraint, `deficitU = max(0, requiredSpanContentHeightU - sum(currentCoveredRowHeightsU))`. Elegíveis são somente rows `AUTO`/`MIN_MM` cobertas, em ordem top-to-bottom. Para `K > 0`: `baseU = floor(deficitU / K)`, `remainderU = deficitU mod K`; somar `baseU` a todas e `+1 U` às primeiras `remainderU` elegíveis. `FIXED_MM` nunca cresce. Se `deficitU > 0` e `K === 0`, `ROW_CONTENT_OVERFLOW / ERROR`. Constraints sobrepostas usam as alturas já incrementadas; como o algoritmo só cresce linhas e anchors têm ordem estável, uma constraint satisfeita não é invalidada por uma posterior. Nenhum float participa.
 
+**EMPIRICAL WATCH — NON-BLOCKING AT FREEZE:** a distribuição de deficit de rowspan em rows AUTO/MIN_MM acima permanece congelada como a hipótese determinística de FOUNDATION-PROOF-01. Constraints de rowspan sobrepostas podem admitir solução global mais compacta. G01/G03 e os testes de rowspan devem verificar se a política preserva densidade aceitável de tabelas técnicas. Se a proof demonstrar expansão artificial material ou falso overflow prático, **STOP PROMOTION** e reabrir somente a decisão de altura de rowspan; esta freeze stamp não altera o algoritmo.
+
 Se o conteúdo intrínseco exceder o frame, objetos vizinhos permanecem no lugar e a prova falha com overflow. A UI futura pode oferecer ampliar/mover, reduzir padding/fonte por escolha explícita, ajustar colunas ou dividir após uma linha. Nunca esconder linhas, diminuir tudo silenciosamente, anexar folhas sem ação ou transformar measurement em autoria.
 
-## Largura de colunas, solver puro — FOUNDATION REQUIRED, PROPOSED
+## Largura de colunas, solver puro — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 ```ts
 resolveColumns(table, availableTrackWidthMm)
@@ -273,7 +275,7 @@ Cabeçalhos agrupados são linhas header com spans, não grupos mantidos em estr
 
 Escopo canônico: `cell.annotationIds` pode referenciar somente `note` ou `footnote`; `caption` em cell scope é inválida. `table.annotationIds` pode referenciar `caption`, `note` ou `footnote`, portanto notas/footnotes de tabela são permitidas. Todo ID deve existir exatamente uma vez em `table.annotations`. ID inexistente em qualquer scope gera `ANNOTATION_REFERENCE_DANGLING / ERROR`; kind incompatível com o scope gera `ANNOTATION_SCOPE_INVALID / ERROR`. A annotation participa da geometria intrínseca e deve aparecer na página do objeto tabela correto. Remover annotation referenciada é erro; remover a última referência não apaga annotation automaticamente. Caption usada em FOUNDATION-PROOF é table-scope e nunca campo de image content/presentation. Legenda explica os markers; texto alternativo não deve depender de cor.
 
-## Conteúdo técnico — FOUNDATION REQUIRED, PROPOSED
+## Conteúdo técnico — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 Conteúdo semântico nunca é alterado para caber. Para `technicalCode`, a política visual fica em `cell.contentPresentation.wrapPolicy`, separada de `content.value`. Para G05 usar `wrapPolicy = 'nowrap'` com o valor adversarial `06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX`. Se não couber, emitir diagnóstico bloqueante; é proibido inserir soft break no valor, reduzir fonte automaticamente, expandir frame/row escondidamente ou fazer clipping silencioso. Outras células podem permitir `wrap` visual sem alterar o valor semântico original.
 

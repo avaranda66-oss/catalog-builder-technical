@@ -1,15 +1,15 @@
 # Requisitos, ondas e critérios de aceitação
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
 
 ## Limite de escopo — PROPOSED
 
-FOUNDATION-PROOF-01 é a prova proposta da fundação editorial e do PDF difícil antes de ampliar produto. Nessa prova, AI Translation, Sharing, PIM, Presence e AI authoring agent são OUT OF SCOPE. Isso não os classifica todos como pós-V1: para FATHER-USABLE V1, Catalog create/edit, Undo/Redo, local recovery, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e um único advanced table engine têm V1 DISPOSITION: MUST-CANDIDATE e DECISION STATUS: PROPOSED. Central PIM/product knowledge, Presence, realtime co-editing, autonomous AI catalog authoring e deeper workflow automation ficam POST-V1/LATER como proposta.
+FOUNDATION-PROOF-01 é a prova aprovada e congelada para implementação da fundação editorial e do PDF difícil antes de ampliar produto. Nessa prova, AI Translation, Sharing, PIM, Presence e AI authoring agent são OUT OF SCOPE. Isso não os classifica todos como pós-V1: para FATHER-USABLE V1, Catalog create/edit, Undo/Redo, local recovery, Save/reopen, PDF, AI Translation, Basic read-only sharing, Presets/templates e um único advanced table engine têm V1 DISPOSITION: MUST-CANDIDATE e DECISION STATUS: PROPOSED. Central PIM/product knowledge, Presence, realtime co-editing, autonomous AI catalog authoring e deeper workflow automation ficam POST-V1/LATER como proposta.
 
 Não há prazo, custo, throughput ou limite de páginas prometido sem medição.
 
@@ -43,7 +43,7 @@ Todos os requisitos abaixo estão propostos e ainda não implementados no núcle
 | TRANS-01 | AI Translation com leaf IDs e proteção técnica | D3/D5 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-TRANSLATION/T-TEXT |
 | SHARE-01 | Basic read-only sharing por snapshot revogável | D5 | FATHER-USABLE V1 MUST-CANDIDATE — PROPOSED | T-SHARE |
 
-## G01–G05 — FOUNDATION REQUIRED, PROPOSED
+## G01–G05 — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01
 
 | Golden | Fixture obrigatória | Aceite mínimo |
 |---|---|---|

@@ -1,8 +1,8 @@
 # FOUNDATION-PROOF-01 — EDITORIAL FOUNDATION PROOF
 
-STATUS: PROPOSED / READY FOR SCOPED IMPLEMENTATION AFTER REVIEW
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: FROZEN / READY FOR IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 
 BASELINE EXPECTATION: `616332d6048a4259d2e2b562d8d5e781cea334bd` + este pacote documental
 
@@ -14,7 +14,7 @@ Risk: alto; implementação com agente competente em layout/tabelas e revisão i
 
 Demonstrar que o núcleo escolhido representa e imprime G01–G05 antes de construir uma nova biblioteca, banco ou interface completa. Resultado é prova técnica local reproduzível, não editor de produção, migração do legado ou **FATHER-USABLE V1**.
 
-Escopo FOUNDATION REQUIRED — PROPOSED: AI Translation OUT OF SCOPE; Sharing OUT OF SCOPE; PIM OUT OF SCOPE; Presence OUT OF SCOPE; AI authoring agent OUT OF SCOPE. Esses cortes não rebaixam a recomendação de produto: AI Translation e basic read-only sharing continuam V1 MUST-CANDIDATE, com decisão PROPOSED.
+Escopo FOUNDATION REQUIRED — FROZEN FOR FOUNDATION-PROOF-01: AI Translation OUT OF SCOPE; Sharing OUT OF SCOPE; PIM OUT OF SCOPE; Presence OUT OF SCOPE; AI authoring agent OUT OF SCOPE. Esses cortes não rebaixam a recomendação de produto: AI Translation e basic read-only sharing continuam V1 MUST-CANDIDATE, com decisão PROPOSED.
 
 Requisitos: PAGE-01/02, TABLE-01/02/03/04/05/06, STYLE-01, PUB-01, TEST-01. Ler README, evidências, reaproveitamento, D3, D4, D5 e execução desta pasta. Referências visuais são os PDFs locais informados pelo usuário; se ausentes, registrar falta e usar especificação, sem inventar inspeção visual.
 
@@ -78,6 +78,8 @@ Renderer obrigatório da proof: `ProofTable` usa CSS Grid, não HTML `<table>` c
 `CellContent` deve ser exatamente a união D4: `empty | richText | technicalCode | measurement | marker | image`, sem `any`/JSON arbitrário. `measurement.valueText` preserva o decimal lexeme byte-for-byte; marker referencia `legendEntryId`; image referencia `AssetRef.id`. `wrapPolicy`, image `fit/targetWidthMm/targetHeightMm` ficam em `CellContentPresentation`; caption é annotation table-scope. `cell.annotationIds` aceita note/footnote; `table.annotationIds` aceita caption/note/footnote; dangling = `ANNOTATION_REFERENCE_DANGLING`, wrong scope = `ANNOTATION_SCOPE_INVALID`.
 
 Rowspan segue D4 sem floats: calcular `deficitU`, dividir entre rows AUTO/MIN_MM elegíveis com `baseU=floor(deficitU/K)` e `remainderU=deficitU mod K`, adicionando `+1 U` às primeiras `remainderU` em ordem top-to-bottom. FIXED_MM nunca cresce; anchors são processados por row index, column index, cell ID.
+
+**NON-BLOCKING EMPIRICAL WATCH:** essa distribuição AUTO/MIN_MM permanece congelada como hipótese determinística da proof. Constraints sobrepostas podem admitir solução global mais compacta; G01/G03 e os testes de rowspan devem medir densidade real. Expansão artificial material ou falso overflow prático exige **STOP PROMOTION** e reabertura somente da decisão de altura de rowspan, sem redesign silencioso do restante do contrato.
 
 `ProofDocument → ProofPage → ProofTable` é a única árvore editorial. Screen usa essa árvore; editor futuro adiciona overlays externos; PDF usa a mesma árvore com `@media print`. `T-PARITY-01` rejeita `EditorRenderer != PDFRenderer`.
 
@@ -149,9 +151,9 @@ O runner novo deve documentar porta, forma de iniciar/parar o Vite que ele próp
 
 Entregar: PDF final; PNGs renderizados desse PDF; screenshot screen opcional de parity; matriz conteúdo esperado/extraído; evidência anti-raster de página/tabela; relatório de erros adversariais; font/assets/version manifest; comandos/exit codes; métricas com máquina/condições e diff dos arquivos. Screenshot DOM aprovada sozinha não cumpre a prova do PDF.
 
-## Model-routing review — PROPOSED
+## Model-routing review — APPROVED FOR FOUNDATION-PROOF-01
 
-Classificação após a closure A–F: **GEMINI-SAFE IMPLEMENTATION PACKET — PRINCIPAL REVIEW REQUIRED.** O executor não escolhe shapes de CellContent, border accounting, layout engine authority, line-flow extraction, rowspan rounding, annotation scope nem decimal arithmetic semantics: D3/D4 fixam esses contratos. Isto não significa Principal GO nem arquitetura congelada. Se a implementação precisar alterar qualquer contrato acima, ampliar arquivos permitidos ou introduzir nova autoridade de domínio/renderização, **STOP** e registrar `SOL_HIGH_REQUIRED DECISION BEFORE IMPLEMENTATION`; nenhuma emenda arquitetural silenciosa é permitida.
+Classificação após a closure A–F: **GEMINI-SAFE IMPLEMENTATION PACKET — PRINCIPAL REVIEW APPROVED FOR FOUNDATION-PROOF-01.** O executor não escolhe shapes de CellContent, border accounting, layout engine authority, line-flow extraction, rowspan rounding, annotation scope nem decimal arithmetic semantics: D3/D4 fixam esses contratos. Há Principal GO para iniciar a proof sob o contrato congelado; isso não é produção, merge, deploy nem freeze automático da arquitetura futura. Se a implementação precisar alterar qualquer contrato acima, ampliar arquivos permitidos ou introduzir nova autoridade de domínio/renderização, **STOP** e registrar `SOL_HIGH_REQUIRED DECISION BEFORE IMPLEMENTATION`; nenhuma emenda arquitetural silenciosa é permitida.
 
 ## Condições de interrupção e handoff
 
@@ -159,4 +161,4 @@ Parar ampliação de escopo se precisar alterar legado, migrar banco, depender d
 
 Handoff: SHA/base, arquivos alterados, decisões comprovadas/refutadas, G01–G05 aprovados/pendentes, gates, local dos artefatos e recomendação para MVP-02. Sem merge/deploy automático.
 
-**LAB PROMOTION RULE — FOUNDATION REQUIRED, PROPOSED:** se FOUNDATION-PROOF-01 receber GO após revisão, MVP-02/próxima fase começa MOVENDO/PROMOVENDO o núcleo comprovado para `src/vnext/domain/`, `src/vnext/render/` e `src/vnext/editor/`. É proibido deixar um lab engine e um production VNext engine evoluírem em paralelo. O próximo pacote recebe o engine comprovado, não a obrigação de inventá-lo novamente.
+**LAB PROMOTION RULE — FOUNDATION REQUIRED, FROZEN FOR FOUNDATION-PROOF-01:** se FOUNDATION-PROOF-01 receber GO após revisão, MVP-02/próxima fase começa MOVENDO/PROMOVENDO o núcleo comprovado para `src/vnext/domain/`, `src/vnext/render/` e `src/vnext/editor/`. O freeze de implementação atual não satisfaz sozinho essa condição de promoção. É proibido deixar um lab engine e um production VNext engine evoluírem em paralelo. O próximo pacote recebe o engine comprovado, não a obrigação de inventá-lo novamente.

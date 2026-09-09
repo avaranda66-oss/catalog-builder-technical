@@ -1,8 +1,8 @@
-# PRESYS.VNEXT.R0.1 — PRINCIPAL AMENDMENTS PROPOSAL
+# PRESYS.VNEXT.R0.1.2 — PRINCIPAL FREEZE STAMP
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: PENDING
-FREEZE STATUS: NOT FROZEN
+STATUS: READY FOR REVIEW
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 
 Data: 2026-09-09
 
@@ -25,7 +25,8 @@ Como responsável pelo produto PRESYS, quero transformar o pacote documental R0 
 - [x] Registrar G01–G05 e LAB PROMOTION RULE como FOUNDATION REQUIRED — PROPOSED.
 - [x] Atualizar o pacote compacto R0.1 sem criar novos documentos temáticos.
 - [x] Rodar gates locais finais desta branch e registrar resultados abaixo.
-- [ ] Revisão independente do spec R0.1 e execução de FOUNDATION-PROOF-01 (trabalho posterior).
+- [x] Registrar Principal final freeze audit: VNEXT GO; FOUNDATION-PROOF-01 FROZEN / READY FOR IMPLEMENTATION; produção não implementada; merge não autorizado.
+- [ ] Executar FOUNDATION-PROOF-01 e obter verdict empírico da proof (trabalho posterior).
 
 ## Escopo e verificação
 

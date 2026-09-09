@@ -1,8 +1,8 @@
 # Estado e passagem de contexto
 
-STATUS: PROPOSED
-PRINCIPAL REVIEW: IN PROGRESS
-FREEZE STATUS: NOT FROZEN
+STATUS: APPROVED / FROZEN FOR FOUNDATION-PROOF-01 IMPLEMENTATION
+PRINCIPAL REVIEW: APPROVED
+FREEZE STATUS: FROZEN FOR FOUNDATION-PROOF-01
 DATE: 2026-09-09
 
 BASELINE: `616332d6048a4259d2e2b562d8d5e781cea334bd`
@@ -14,13 +14,14 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - Repositório: `avaranda66-oss/catalog-builder-technical`.
 - Pacote R0 investigado no worktree `C:/Users/Usuario/.codex/worktrees/00ef/catalog-builder`; R0.1 é amendado em worktree/branch isolados.
 - Branch R0.1: `docs/vnext-r0-1-principal-amendments`.
-- PR #12: OPEN, NOT MERGED. Head semântico de entrada desta closure dirigida: `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`.
-- Required GitHub check `Lint, typecheck, tests, build`: SUCCESS em `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`. O novo head documental produzido por esta closure deve executar o mesmo check antes do handoff final.
+- PR #12: OPEN, NOT MERGED. Head semântico da arquitetura aprovado pelo Principal: `34b1c4a220c857e087a651d91ec83c7a4d43317d`.
+- GitHub Quality Gate: run `34378706870`, head `34b1c4a220c857e087a651d91ec83c7a4d43317d`, status `completed`, conclusion `success`.
+- Main: `616332d6048a4259d2e2b562d8d5e781cea334bd`; tree `26b21e6a06247823c80826e4855ee477a44db2de`.
 - Escopo desta revisão: documentação apenas; sem código produtivo, runtime, legado, banco, dependências, merge ou deploy.
 - Legado: código de produção preservado, quatro gates concluídos; avisos explicitados nas evidências.
 - VNext produtivo: não implementado. Nenhuma onda produtiva concluída.
-- Pacote: sete documentos temáticos, README e uma foundation proof; a proposta R0.1 documenta a fronteira proof/V1, geometria autoral, contrato de tabelas, severidade, readiness/parity/PDF e promoção do lab para auditoria Principal. Esta closure A–F acrescenta CellContent exato, projeção física do renderer, text-flow extraction, remainder de rowspan, annotation scope e classificação do renderer legado. Nenhuma dessas decisões está congelada por este PR.
-- Próximo passo após auditoria independente: executar FOUNDATION-PROOF-01. FATHER-USABLE V1 continua produto posterior à proof e inclui Undo/Redo, local recovery, AI Translation e basic read-only sharing como MUST-CANDIDATE — PROPOSED.
+- Pacote: sete documentos temáticos, README e uma foundation proof; os contratos explicitamente FOUNDATION REQUIRED foram aprovados e congelados para FOUNDATION-PROOF-01. FATHER-USABLE V1 e POST-V1 continuam PROPOSED/MUST-CANDIDATE onde indicado.
+- Próximo passo: executar FOUNDATION-PROOF-01 sob o contrato congelado. Falha empírica pode reabrir uma decisão específica, sem autorizar redesign silencioso do restante do pacote.
 - Evidências locais: revisão visual dos PDFs, navegação nos componentes reais com fixture e laboratórios A4. Nuvem/auth/share não validados de ponta a ponta.
 
 ## Publication closure evidence
@@ -33,6 +34,14 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 - `npm run build`: PASS; 2.292 modules transformed, built in 16.81s; warnings não bloqueantes de imports mistos/chunk >500 kB.
 - Diff safety: production code NO; package NO; lockfile NO; Supabase NO; Legacy runtime NO.
 - GitHub Quality Gate do head semântico de entrada `d0d0ca280e9c6ceefca39e1bd49495c2ee3b125d`: required check `Lint, typecheck, tests, build` SUCCESS. PR #12 permanece OPEN e NOT MERGED. O novo head criado por esta closure precisa de nova execução do mesmo gate antes do handoff.
+
+## Principal final freeze verdict
+
+- VNEXT DIRECTION: **GO**.
+- FOUNDATION-PROOF-01 SPEC: **FROZEN / READY FOR IMPLEMENTATION**.
+- PRODUCTION: **NOT IMPLEMENTED**.
+- MERGE: **NOT AUTHORIZED BY THIS TASK**.
+- O freeze obriga a implementação a seguir o contrato documentado e proíbe redesign silencioso. Ele não declara toda arquitetura futura de FATHER-USABLE V1/POST-V1 como congelada e não é aprovação de produção, merge ou deploy.
 
 ## Closure R0.1.2 A–F — evidência dirigida, PROPOSED
 
@@ -49,16 +58,16 @@ TREE: `26b21e6a06247823c80826e4855ee477a44db2de`
 | ADR | Estado | Decisão | Alternativa e motivo |
 |---|---|---|---|
 | ADR-01 | PROPOSED | Núcleo VNext isolado no mesmo repo; manter Vite/React | Reescrita total de stack não atende um problema demonstrado; continuação integral do legado preservaria limites de composição |
-| ADR-02 | PROPOSED — FOUNDATION REQUIRED | Página A4 explícita `210×297 mm`, objects com frame x/y/width/height; measurement nunca muta authored frame | Auto-flow/measurement authority viola composição autoral |
-| ADR-03 | PROPOSED — FOUNDATION REQUIRED | Um único motor de tabela; Table Core é salvage seletivo; geometry resolver reimplementado from lessons | Motor paralelo ou port integral preservaria fallbacks/autoridades conflitantes |
+| ADR-02 | FROZEN FOR FOUNDATION-PROOF-01 | Página A4 explícita `210×297 mm`, objects com frame x/y/width/height; measurement nunca muta authored frame | Auto-flow/measurement authority viola composição autoral |
+| ADR-03 | FROZEN FOR FOUNDATION-PROOF-01 | Um único motor de tabela; Table Core é salvage seletivo; geometry resolver reimplementado from lessons | Motor paralelo ou port integral preservaria fallbacks/autoridades conflitantes |
 | ADR-04 | PROPOSED | Ações tipadas e transações como única mutação | Store/setters públicos expõem superfície ampla e dificultam Undo/IA futura |
-| ADR-05 | PROPOSED — FOUNDATION REQUIRED | Mesma árvore editorial para screen e PDF Chromium; editor futuro só adiciona overlays externos | Captura raster integral e renderer PDF paralelo violam parity/text layer |
+| ADR-05 | FROZEN FOR FOUNDATION-PROOF-01 | Mesma árvore editorial para screen e PDF Chromium; editor futuro só adiciona overlays externos | Captura raster integral e renderer PDF paralelo violam parity/text layer |
 | ADR-06 | PROPOSED | Documento JSON + CAS + recuperação local; assets separados | SQL por célula precoce aumenta custo; last-write-wins perde alterações |
 | ADR-07 | PROPOSED | Presets/componentes copiados com proveniência | Instâncias vivas introduzem propagação e conflitos antes de necessidade comprovada |
-| ADR-08 | PROPOSED | FOUNDATION-PROOF-01 exclui IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing são FATHER-USABLE V1 MUST-CANDIDATE; PIM/Presence/realtime/AI authoring/automation ficam POST-V1 | Evita confundir proof técnica com fronteira real de produto e explicita que reversão/recovery não são inferidos de save/reopen |
-| ADR-09 | PROPOSED — FOUNDATION REQUIRED | GO da proof promove/move o núcleo do lab para `src/vnext/domain/`, `src/vnext/render/`, `src/vnext/editor/` | Lab engine + production engine em paralelo reconstruiria o motor |
+| ADR-08 | FROZEN FOR FOUNDATION-PROOF-01 SCOPE / V1 PROPOSED | FOUNDATION-PROOF-01 exclui IA/sharing/PIM/presence; Undo/Redo + local recovery + AI Translation + basic read-only sharing são FATHER-USABLE V1 MUST-CANDIDATE; PIM/Presence/realtime/AI authoring/automation ficam POST-V1 | Evita confundir proof técnica com fronteira real de produto e explicita que reversão/recovery não são inferidos de save/reopen |
+| ADR-09 | FROZEN FOR FOUNDATION-PROOF-01 | GO da proof promove/move o núcleo do lab para `src/vnext/domain/`, `src/vnext/render/`, `src/vnext/editor/` | Lab engine + production engine em paralelo reconstruiria o motor |
 
-Todas as decisões acima são PROPOSED e dependem de auditoria Principal; `FOUNDATION REQUIRED` indica força da recomendação para a prova, não freeze status. Revisar D3/D4/D5 em conjunto; não aprovar schema separadamente de geometria, annotations, histórico e exportação.
+Os ADRs marcados `FROZEN FOR FOUNDATION-PROOF-01` estão aprovados para implementação da proof; ADRs de arquitetura futura e as disposições específicas de FATHER-USABLE V1/POST-V1 permanecem PROPOSED. Revisar D3/D4/D5 em conjunto; o freeze não autoriza aprovar ou alterar schema separadamente de geometria, annotations, histórico e exportação.
 
 ## Dez riscos e mitigação
 
@@ -76,6 +85,8 @@ Todas as decisões acima são PROPOSED e dependem de auditoria Principal; `FOUND
 | 10. Infra compartilhada vazar escopo | VNext chama RPC legado ou aceita workspace de cliente sem membership | Porta própria, RLS, testes de tenant, rollback sem mudar catálogo legado |
 
 ## Questões empíricas abertas
+
+- **NON-BLOCKING EMPIRICAL WATCH — ROWSPAN AUTO/MIN:** a distribuição de deficit está intencionalmente congelada como hipótese determinística de FOUNDATION-PROOF-01. Constraints de rowspan sobrepostas podem admitir solução global mais compacta. G01/G03 e os testes de rowspan devem determinar se a política documentada preserva densidade aceitável de tabelas técnicas. Se a proof demonstrar expansão artificial material ou falso overflow prático, **STOP PROMOTION** e reabrir somente a decisão de altura de rowspan; não alterar o algoritmo durante esta freeze stamp.
 
 - **OPEN EMPIRICAL QUESTION:** G01–G05 mantêm legibilidade com a fonte e os assets PRESYS? Provar em tela/PDF/impressão.
 - **OPEN EMPIRICAL QUESTION:** qual safe area/margem PRESYS deve virar default de FATHER-USABLE V1? O legado `8.4667 mm` não decide isso.
