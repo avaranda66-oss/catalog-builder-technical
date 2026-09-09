@@ -30,7 +30,7 @@ Promote the Principal-approved FOUNDATION-PROOF-01 engine from `src/labs/presys-
 - [x] Baseline/post-promotion browser fact hash and semantic evidence match.
 - [x] Focused and global gates pass; unrelated known lab lint issue remains out of scope.
 - [x] `docs/vnext/PROJECT-STATE.md` records W0 IN REVIEW only after verification.
-- [ ] PR opened against `main` with DO NOT MERGE pending Principal audit.
+- [x] PR #14 opened against `main` with DO NOT MERGE pending Principal audit.
 
 ## Gates
 
@@ -47,7 +47,11 @@ Promote the Principal-approved FOUNDATION-PROOF-01 engine from `src/labs/presys-
 
 ## PR
 
-Pending creation after the final closure commit. DO NOT MERGE pending Principal audit.
+PR #14: https://github.com/avaranda66-oss/catalog-builder-technical/pull/14
+
+Closure commit before PR creation: `8120c3cd571d37bb797a942f666a75f8f20f6f8e`.
+
+DO NOT MERGE pending Principal audit.
 
 ## Principal decision
 
