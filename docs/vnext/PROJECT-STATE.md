@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: POST-W1 CANONICAL BASE; W2.0 CONTRACT PRINCIPAL ACCEPTED / READY FOR MERGE
+STATUS: POST-W1 CANONICAL BASE; W2.0 CONTRACT PRINCIPAL ACCEPTED
 
 DATE: 2026-09-10
 
@@ -52,7 +52,7 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is also merged, so W1 is canonical on `main` and closed. The amended W2.0 contract in PR #17 is **PRINCIPAL ACCEPTED / READY FOR MERGE**. PR #17 remains **OPEN** and awaits explicit merge authorization. **W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.**
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is also merged, so W1 is canonical on `main` and closed. The amended W2.0 contract is **PRINCIPAL ACCEPTED**; PR #17 is its review/promotion vehicle, and GitHub is authority for that vehicle’s live merge state. **No W2 feature implementation existed at the time of this acceptance closeout. W2.A may begin only after PR #17 is verified merged into canonical main and the resulting main SHA/tree are independently reconstructed.**
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -402,7 +402,7 @@ PR #15 is **MERGED / COMPLETE** and established the exact W1 base `ff4ce7302fe79
 
 PR #16 is **MERGED / COMPLETE** and established the current canonical post-W1 main `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-Next governance action: perform the final explicit merge check and obtain owner authorization for PR #17. The W2.0 contract is Principal accepted, but PR #17 remains OPEN. Do not start W2 feature implementation; W2.A may begin only after PR #17 is merged and canonical main is independently verified.
+W2.0 contract: **PRINCIPAL ACCEPTED**. Promotion vehicle: PR #17. GitHub is authority for the vehicle’s live merge state. Before beginning W2.A, independently verify that PR #17 has merged into canonical main and reconstruct the resulting main SHA/tree.
 
 ## RECONSTRUCTION READING ORDER
 

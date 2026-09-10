@@ -1,6 +1,6 @@
 # Catalog Builder VNext — W2 A4 Authoring Contract
 
-STATUS: W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE — CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
+STATUS: W2.0 CONTRACT — PRINCIPAL ACCEPTED — CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
 
 DATE: 2026-09-10
 
@@ -802,12 +802,12 @@ No unrelated Legacy or lab debt is part of W2. In particular, `src/labs/product-
 
 ## 22. Principal acceptance closeout
 
-W2.0 contract is Principal accepted. PR #17 remains OPEN and awaits explicit merge authorization. W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.
+W2.0 contract is Principal accepted. PR #17 is the review/promotion vehicle for this accepted contract; GitHub is authority for its live merge state. No W2 feature implementation existed at the time of this acceptance closeout. W2.A may begin only after PR #17 is verified merged into canonical main and the resulting main SHA/tree are independently reconstructed.
 
 The Principal re-audit accepted the reconciled decisions without reopening W0/W1: authored `*Mm` serialization with U operational authority and mm-facing Inspector controls; sole Text physical-height authority in `frame.heightMm`; Image focal point; commit-then-diagnose Table resize; stable W0 diagnostic codes; legal intentional overlap without universal publication warning; stale-safe gesture lifecycle; canonical-vs-editor resize minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
 
-W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
+W2.0 CONTRACT — PRINCIPAL ACCEPTED
 
-PR #17 REMAINS OPEN — AWAIT EXPLICIT MERGE AUTHORIZATION
+PROMOTION VEHICLE: PR #17 — VERIFY LIVE MERGE STATE IN GITHUB BEFORE ACTING
 
-DO NOT START W2 IMPLEMENTATION
+DO NOT START W2.A UNTIL PR #17 IS VERIFIED MERGED INTO CANONICAL MAIN

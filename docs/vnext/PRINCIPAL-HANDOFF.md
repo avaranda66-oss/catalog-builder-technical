@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 CONTRACT PRINCIPAL ACCEPTED / READY FOR MERGE
+STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 CONTRACT PRINCIPAL ACCEPTED
 
 DATE: 2026-09-10
 
@@ -61,7 +61,7 @@ PR #16 — W1 Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
 
 W1: **COMPLETE**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. The amended W2.0 contract in PR #17 is **PRINCIPAL ACCEPTED / READY FOR MERGE**. PR #17 remains **OPEN** and awaits explicit merge authorization. **W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.**
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. The amended W2.0 contract is **PRINCIPAL ACCEPTED**; PR #17 is its review/promotion vehicle, and GitHub is authority for that vehicle’s live merge state. **No W2 feature implementation existed at the time of this acceptance closeout. W2.A may begin only after PR #17 is verified merged into canonical main and the resulting main SHA/tree are independently reconstructed.**
 
 ## WHAT IS CANONICAL NOW
 
@@ -453,7 +453,7 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 PRs #12 through #16 are merged. W0, W0.1, and W1 are complete. Current canonical main is `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-The next governance action is the final explicit merge check and owner authorization for PR #17. The W2.0 contract is Principal accepted and PR #17 remains OPEN. Do not start W2 feature implementation; W2.A may begin only after PR #17 is merged and canonical main is independently verified. Do not merge PR #17 without separate authorization.
+W2.0 contract: **PRINCIPAL ACCEPTED**. Promotion vehicle: PR #17. GitHub is authority for the vehicle’s live merge state. Before beginning W2.A, independently verify that PR #17 has merged into canonical main and reconstruct the resulting main SHA/tree.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

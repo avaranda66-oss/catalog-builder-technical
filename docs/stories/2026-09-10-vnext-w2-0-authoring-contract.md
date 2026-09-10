@@ -1,6 +1,6 @@
 # W2.0 — VNext A4 Authoring Contract
 
-Status: W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
+Status: W2.0 CONTRACT — PRINCIPAL ACCEPTED
 Date: 2026-09-10
 Base SHA: `0975953da7a8748b483ba8f64cb69c7cdb9172f6`
 Base tree: `d617b9089b2e5dbc94ed02b438e821d7885da6f3`
@@ -71,8 +71,8 @@ The Principal re-audit accepted the amended contract without reopening W0/W1. Th
 
 No W2 feature implementation is authorized by this story. W2.A may begin only after PR #17 is merged and canonical main is independently verified. Historical W0/W1 execution stories remain historical records and are not rewritten to simulate current state.
 
-W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
+W2.0 CONTRACT — PRINCIPAL ACCEPTED
 
-PR #17 REMAINS OPEN — AWAIT EXPLICIT MERGE AUTHORIZATION
+Acceptance closeout record: PR #17 was the open review/promotion vehicle at this point; GitHub is authority for its live merge state.
 
-DO NOT START W2 IMPLEMENTATION
+DO NOT START W2.A UNTIL PR #17 IS VERIFIED MERGED INTO CANONICAL MAIN
