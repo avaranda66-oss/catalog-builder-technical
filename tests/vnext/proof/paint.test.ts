@@ -1,9 +1,9 @@
 import {describe,it,expect} from 'vitest';
 import {emptyTable,documentStyle} from './test-data';
-import {buildPaint,chooseBorder} from '@/labs/presys-editorial-proof/proof-paint';
-import {resolveCellStyle} from '@/labs/presys-editorial-proof/proof-style';
-import {mergeCells} from '@/labs/presys-editorial-proof/proof-table';
-import {projectTracks} from '@/labs/presys-editorial-proof/proof-layout';
+import {buildPaint,chooseBorder} from '@/vnext/rendering/border-paint';
+import {resolveCellStyle} from '@/vnext/rendering/style';
+import {mergeCells} from '@/vnext/table/table-model';
+import {projectTracks} from '@/vnext/table/table-layout';
 describe('paint-only borders',()=>{
   it.each([.25,1,2])('keeps 100mm frame and unequal tracks invariant at %s pt',pt=>{
     const table=emptyTable(2,3);

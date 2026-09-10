@@ -1,0 +1,27 @@
+@import '@fontsource/noto-sans/400.css';
+@import '@fontsource/noto-sans/700.css';
+@import '@fontsource/noto-sans/400-italic.css';
+@import '@fontsource/noto-sans/700-italic.css';
+@import '@fontsource/noto-sans-jp/400.css';
+
+[data-editorial-root] { font-family:'Noto Sans',sans-serif; font-synthesis:none; transform:none; zoom:1; width:max-content; }
+[data-editorial-root],[data-editorial-root] * { box-sizing:border-box; }
+[data-editorial-root] .editorial-page { position:relative; background:white; padding:0; border:0; overflow:visible; }
+[data-editorial-root] .editorial-object { position:absolute; padding:0; margin:0; border:0; overflow:visible; }
+[data-editorial-root] .table-intrinsic { margin:0; padding:0; border:0; }
+[data-editorial-root] .editorial-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }
+[data-editorial-root] .logical-row { display:contents; }
+[data-editorial-root] .editorial-cell { box-sizing:border-box; min-width:0; min-height:0; margin:0; border:0; overflow:visible; }
+[data-editorial-root] [data-flow-root] { display:flow-root; margin:0; padding:0; border:0; transform:none; overflow:visible; }
+[data-editorial-root] [data-flow-root] p { position:relative; margin:0; padding:0; min-height:1em; overflow-wrap:normal; word-break:normal; }
+[data-editorial-root] .list-marker { position:absolute; left:0; }
+[data-editorial-root] .paint-edge { position:absolute; pointer-events:none; margin:0; border:0; padding:0; }
+[data-editorial-root] .editorial-annotation,[data-editorial-root] .editorial-legend,[data-editorial-root] .legend-entry { padding:0; border:0; }
+[data-editorial-root] .caption { font-weight:700; }
+[data-editorial-root] .invalid-table { color:#b32237; font-size:9pt; background:#fff0f2; padding:8px; }
+@media print {
+  [data-editorial-root] { margin:0; }
+  [data-editorial-root] .editorial-page { margin:0; box-shadow:none; break-after:page; break-inside:avoid; }
+  [data-editorial-root] .editorial-page:last-child { break-after:auto; }
+  [data-editorial-root],[data-editorial-root] * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}

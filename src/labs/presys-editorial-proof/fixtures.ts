@@ -1,6 +1,15 @@
-import type { CatalogDocument, Cell, CellContent, EditorialObject, Page, RichText, TableModel, TableStyle } from './proof-model';
-import { plainRichText } from './proof-model';
-import { mergeCells } from './proof-table';
+import {
+  mergeCells,
+  plainRichText,
+  type CatalogDocument,
+  type Cell,
+  type CellContent,
+  type EditorialObject,
+  type Page,
+  type RichText,
+  type TableModel,
+  type TableStyle,
+} from '@/vnext';
 
 export const LONG_CODE='06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX';
 export const fixtureNames=['G01','G02','G03','G04','G05','rowspan-watch'] as const;

@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
-import {CellContentSchema,CellSchema,CatalogDocumentSchema,RichTextSchema,plainRichText} from '@/labs/presys-editorial-proof/proof-model';
+import {CellContentSchema,CellSchema,CatalogDocumentSchema,RichTextSchema,plainRichText} from '@/vnext/domain/editorial-model';
 import {makeFixture} from '@/labs/presys-editorial-proof/fixtures';
-import {validateDocument} from '@/labs/presys-editorial-proof/proof-table';
+import {validateDocument} from '@/vnext/table/table-model';
 describe('strict canonical document and semantic content',()=>{
   it.each(['+01.2300','-0.0000','.0500','1.230e+03','-1E-9'])('preserves measurement lexeme %s byte-for-byte',valueText=>{
     const input={type:'measurement',valueText,unit:' µV ',qualifier:'approx'};

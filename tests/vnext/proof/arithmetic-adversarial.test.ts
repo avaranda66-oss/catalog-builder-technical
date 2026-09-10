@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
-import {mmToU,pxToQ,ptToQ,qCss,qToU,uToQ,compareDecimal} from '@/labs/presys-editorial-proof/physical';
-import {projectRows,resolveColumns,resolveRows,projectTracks} from '@/labs/presys-editorial-proof/proof-layout';
-import type {Column,Row} from '@/labs/presys-editorial-proof/proof-model';
+import {mmToU,pxToQ,ptToQ,qCss,qToU,uToQ,compareDecimal} from '@/vnext/domain/physical';
+import {projectRows,resolveColumns,resolveRows,projectTracks} from '@/vnext/table/table-layout';
+import type {Column,Row} from '@/vnext/domain/editorial-model';
 describe('independent arithmetic edge cases',()=>{
   it('exercises fifth-digit ties across carries, signs and scientific notation',()=>{
     for(const sign of [1,-1])for(const [input,expected] of [[.000049999999,0],[.000050000001,1],[.99995,10000],[10.00005,100001],[123.45675,1234568],[1.2345e-2,123],[1.2345e2,1234500],[1e-300,0],[1e-4,1]])

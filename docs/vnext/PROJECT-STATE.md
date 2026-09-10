@@ -33,20 +33,17 @@ The acceptance lens is a **father-usable workflow**:
 ## CURRENT REFS
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Verified production main: `616332d6048a4259d2e2b562d8d5e781cea334bd`.
+W0 base SHA: `09fe9d49b65b3d4501c4079b6df38f2d97f595c6`.
 
-PR #12:
-- state: OPEN / UNMERGED;
-- branch: `docs/vnext-r0-1-principal-amendments`;
-- head at start of this institutional-memory wave: `2b20d1bc7705b18f00a2dadc8ff09f2eac0ab492`;
-- purpose: VNext R0.1 architectural/governance documentation.
+W0 base tree: `c62699243c9678f0166de7c2393798aa0f80f847`.
 
-PR #13:
-- state: OPEN / UNMERGED;
-- branch: `vnext/foundation-proof-01`;
-- base: PR #12 documentation branch;
-- verified implementation head before this documentation update: `c8808adf0dd3a9dbc4473aafc2f4007267ff67df`;
-- purpose: lab-only FOUNDATION-PROOF-01 implementation and evidence.
+PR #12: **MERGED**.
+
+PR #13: **MERGED**.
+
+FOUNDATION-PROOF-01 had Principal GO before W0 began.
+
+W0 branch: `feat/vnext-w0-foundation-promotion`.
 
 Always run `git fetch origin --prune` and verify GitHub heads before acting. Git history and repository evidence outrank agent reports.
 ## FOUNDATION STATUS
@@ -61,7 +58,7 @@ Principal verdict: **GO as architectural foundation**.
 
 This is **not a finished editor** and is **not production VNext**.
 
-The proof remains isolated under the lab implementation in PR #13.
+The approved proof is being promoted on the W0 branch; `src/vnext` ownership is **IN REVIEW** and is not yet canonical on main.
 ## R0.1 FOUNDATION HISTORY
 R0 established the proposed VNext editorial foundation.
 
@@ -189,11 +186,15 @@ Do not wait for complete V1.
 
 Run the first father pilot when the product has template-first creation, real A4 pages, page add/duplicate/delete/reorder, direct text editing, image insert/replace, one canonical table, basic grouped headers, row/column add/delete, table title/note/footnote, move/resize, snap/safe guide, Undo/Redo, autosave, reopen, local recovery, basic diagnostics, real PDF, and the first Spanish translation walkthrough.
 ## CURRENT ACTIVE WAVE
-**W0 — Foundation promotion.**
+**W0 — Foundation Promotion.**
 
-FOUNDATION-PROOF-01 is proven, but production code has **not** been promoted into `src/vnext`.
+STATUS: **IN REVIEW**.
 
-W0 must move/promote the proven core into the production VNext boundary without creating a second competing engine.
+FOUNDATION OWNERSHIP: `src/vnext` now owns the promoted editorial foundation on the W0 branch.
+
+LAB: `src/labs/presys-editorial-proof/` is consumer/harness only.
+
+W1: **NOT STARTED**.
 ## ROADMAP
 - W0 — Foundation promotion.
 - W1 — Application Actions + minimal VNext shell.
@@ -256,21 +257,21 @@ Do not port as authority: giant `useCatalogStore`, `useLibraryStore` authority, 
 
 Do not repair it as part of FOUNDATION-PROOF/VNext institutional-memory work.
 ## MERGE STATUS
-PR #12: **OPEN / NOT MERGED**.
+PR #12: **MERGED**.
 
-PR #13: **OPEN / NOT MERGED**.
+PR #13: **MERGED**.
 
-Never merge either PR without explicit user authorization.
+W0 Foundation Promotion: **IN REVIEW** on its feature branch. Do not merge pending Principal audit.
 ## PROMOTION STATUS
-Production VNext: **NOT IMPLEMENTED / NOT PROMOTED**.
+Production VNext foundation: **PROMOTED ON W0 BRANCH / IN REVIEW**.
 
-No proven foundation code is yet authoritative under `src/vnext`.
+The promoted foundation is not yet merged or canonical on main.
 ## NEXT PRINCIPAL ACTION
-Prepare and Principal-review the **W0 Foundation Promotion** story/contract that moves the proven FOUNDATION-PROOF core into `src/vnext/domain/`, `src/vnext/render/`, and `src/vnext/editor/` without redesign or a second engine.
+Independent Principal audit of the W0 Foundation Promotion PR.
 
-Before implementation, re-verify main, PR #12, PR #13, and the stacked ancestry. Keep the proof contract intact unless new empirical evidence justifies a narrowly scoped amendment.
+W1 is **NOT STARTED**.
 ## WHAT MUST NOT HAPPEN
-- Do not merge PR #12 or PR #13 without explicit user authorization.
+- Do not merge the W0 Foundation Promotion PR pending Principal audit.
 - Do not deploy from these governance/proof branches.
 - Do not treat FOUNDATION-PROOF-01 as a finished editor.
 - Do not rebuild the proven engine independently under `src/vnext`.

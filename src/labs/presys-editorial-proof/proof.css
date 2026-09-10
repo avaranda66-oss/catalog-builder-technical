@@ -1,10 +1,4 @@
-@import '@fontsource/noto-sans/400.css';
-@import '@fontsource/noto-sans/700.css';
-@import '@fontsource/noto-sans/400-italic.css';
-@import '@fontsource/noto-sans/700-italic.css';
-@import '@fontsource/noto-sans-jp/400.css';
-
-:root { font-family:'Noto Sans',sans-serif; color:#203746; background:#e7edf1; font-synthesis:none; }
+:root { font-family:'Noto Sans',sans-serif; color:#203746; background:#e7edf1; }
 * { box-sizing:border-box; }
 body { margin:0; }
 .lab-toolbar { padding:16px 24px; background:#123f59; color:white; display:flex; gap:12px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:100; }
@@ -16,28 +10,14 @@ body { margin:0; }
 .lab-summary[data-status="READY"] { border-left:5px solid #1e7c65; }
 .lab-diagnostics { margin:0; padding:8px 24px 12px 42px; background:#fff; font-size:11px; }
 #editorial-host { padding:24px 0; overflow:visible; }
-[data-editorial-root] { transform:none; zoom:1; width:max-content; margin:0 auto; }
-.proof-page { position:relative; background:white; margin:0 0 24px; padding:0; border:0; box-shadow:0 3px 18px #183e5220; overflow:visible; }
-.proof-object { position:absolute; padding:0; margin:0; border:0; overflow:visible; }
-.table-intrinsic { margin:0; padding:0; border:0; }
-.proof-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }
-.logical-row { display:contents; }
-.proof-cell { box-sizing:border-box; min-width:0; min-height:0; margin:0; border:0; overflow:visible; }
-[data-flow-root] { display:flow-root; margin:0; padding:0; border:0; transform:none; overflow:visible; }
-[data-flow-root] p { position:relative; margin:0; padding:0; min-height:1em; overflow-wrap:normal; word-break:normal; }
-.list-marker { position:absolute; left:0; }
-.paint-edge { position:absolute; pointer-events:none; margin:0; border:0; padding:0; }
-.proof-annotation,.proof-legend,.legend-entry { padding:0; border:0; }
-.caption { font-weight:700; }
-.page-number { position:absolute; display:flex; justify-content:space-between; font-size:6.5pt; line-height:1.2; color:#526975; }
-.invalid-table { color:#b32237; font-size:9pt; background:#fff0f2; padding:8px; }
+[data-editorial-root] { margin:0 auto; }
+[data-editorial-root] .editorial-page { margin:0 0 24px; box-shadow:0 3px 18px #183e5220; }
+[data-editorial-root] .proof-page-footer { position:absolute; display:flex; justify-content:space-between; left:45.359375px; right:45.359375px; bottom:22.671875px; font-size:6.5pt; line-height:1.2; color:#526975; }
 @page { size:A4 portrait; margin:0; }
 @media print {
   :root,body { background:white; }
   .lab-toolbar,.lab-summary,.lab-diagnostics { display:none; }
   #editorial-host { padding:0; }
   [data-editorial-root] { margin:0; }
-  .proof-page { margin:0; box-shadow:none; break-after:page; break-inside:avoid; }
-  .proof-page:last-child { break-after:auto; }
-  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  [data-editorial-root] .editorial-page { margin:0; box-shadow:none; }
 }

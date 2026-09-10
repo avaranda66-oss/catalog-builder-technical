@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { mmToU } from './physical';
-import { ProofError } from './diagnostics';
+import { VNextError } from './diagnostics';
 
 const id=z.string().min(1);
 const finite=z.number().finite();
@@ -11,7 +11,7 @@ const color=z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const clean=z.string().min(1).refine(s=>![...s].some(c=>c.charCodeAt(0)<32||c.charCodeAt(0)===127),'Control character');
 const positiveMm=positive.superRefine((n,ctx)=>{
   try{if(mmToU(n)<=0)ctx.addIssue({code:'custom',message:'PHYSICAL_LENGTH_NONPOSITIVE'});}
-  catch(error){ctx.addIssue({code:'custom',message:error instanceof ProofError?error.code:'PHYSICAL_LENGTH_INVALID'});}
+  catch(error){ctx.addIssue({code:'custom',message:error instanceof VNextError?error.code:'PHYSICAL_LENGTH_INVALID'});}
 });
 const marks=['bold','italic','subscript','superscript'] as const;
 export const RichTextSchema=z.object({paragraphs:z.array(z.object({

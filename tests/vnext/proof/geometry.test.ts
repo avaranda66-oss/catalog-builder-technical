@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mmToU, minimumUForProjectedQ, pxToQ, ptToQ, uToQ, qToU, qCss } from '@/labs/presys-editorial-proof/physical';
-import { projectRows, resolveColumns, projectTracks, resolveRows } from '@/labs/presys-editorial-proof/proof-layout';
-import { tableHeightOverflows, textObjectOverflows } from '@/labs/presys-editorial-proof/proof-preflight';
-import type { Row } from '@/labs/presys-editorial-proof/proof-model';
+import { mmToU, minimumUForProjectedQ, pxToQ, ptToQ, uToQ, qToU, qCss } from '@/vnext/domain/physical';
+import { projectRows, resolveColumns, projectTracks, resolveRows } from '@/vnext/table/table-layout';
+import { tableHeightOverflows, textObjectOverflows } from '@/vnext/publication/preflight';
+import type { Row } from '@/vnext/domain/editorial-model';
 
 describe('normative physical arithmetic', () => {
   it.each([[1.23444,12344],[1.23445,12345],[-1.23445,-12345],[1e-7,0],[5e-5,1],[-5e-5,-1],[8.4667,84667],[9.99995,100000],[2.5e3,25000000]])('%s mm → %s U', (mm,u) => expect(mmToU(mm)).toBe(u));
