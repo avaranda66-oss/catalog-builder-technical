@@ -1,8 +1,8 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W1 CANDIDATE IMPLEMENTATION; PR #16 IN REVIEW
+STATUS: POST-W1 CANONICAL BASE; W2.0 CONTRACT PRINCIPAL ACCEPTED
 
-DATE: 2026-09-09
+DATE: 2026-09-10
 
 PURPOSE: provide the current VNext facts and next action so the project can be reconstructed from GitHub without chat memory.
 
@@ -16,11 +16,11 @@ VNext must be simpler internally than Legacy while becoming more capable, editab
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Post-W0 canonical engineering base SHA: `865251dc023148b349a9ceba8051c249c0bbb647`.
+Current canonical main SHA after W1: `0975953da7a8748b483ba8f64cb69c7cdb9172f6`.
 
-Post-W0 canonical engineering base tree: `ede5e561717546a69899f1008c952efeb317b7ad`.
+Current canonical tree: `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-Parent: `09fe9d49b65b3d4501c4079b6df38f2d97f595c6`.
+This is the verified merge result of PR #16. Future documentation-only commits do not make this paragraph a self-updating SHA pointer; always verify live `origin/main` and GitHub before acting.
 
 PR #12: **MERGED**.
 
@@ -28,17 +28,15 @@ PR #13 — FOUNDATION-PROOF-01: **MERGED**.
 
 PR #14 — W0 Foundation Promotion + W0.1 Production Boundary Hardening: **MERGED**.
 
-The SHA above is the canonical **engineering base after W0**, not a self-updating pointer to later docs-only commits.
-
 Handoff sync vehicle: **PR #15 — MERGED / COMPLETE** at `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
 
-W1 review vehicle: **PR #16** from `feat/vnext-w1-application-actions-shell`. While this PR remains open, W1 is a candidate implementation under Principal review; GitHub is authority for its live head/check state.
+W1 review vehicle: **PR #16 — MERGED / COMPLETE** at `0975953da7a8748b483ba8f64cb69c7cdb9172f6`.
 
 Always run `git fetch origin --prune` and verify GitHub before acting. Git history and repository evidence outrank agent reports.
 
 ## CURRENT PHASE
 
-Post-W0 engineering base: **ESTABLISHED**.
+Post-W1 canonical engineering base: **ESTABLISHED**.
 
 Handoff synchronization: **COMPLETE** via merged PR #15.
 
@@ -46,7 +44,7 @@ W0 — Foundation Promotion: **MERGED / COMPLETE**.
 
 W0.1 — Production Boundary Hardening: **MERGED / COMPLETE**.
 
-W1 — Application Actions + Minimal VNext Shell: **CANDIDATE IMPLEMENTATION / IN REVIEW — PR #16**.
+W1 — Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -54,7 +52,7 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged, so the post-W0 handoff sync is **COMPLETE**. W1 is now implemented on its dedicated branch and under Principal review in PR #16. Do not infer W1 completion from this candidate branch; GitHub remains authority for the PR state, exact head, and CI.
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is also merged, so W1 is canonical on `main` and closed. The amended W2.0 contract is **PRINCIPAL ACCEPTED**; PR #17 is its review/promotion vehicle, and GitHub is authority for that vehicle’s live merge state. **No W2 feature implementation existed at the time of this acceptance closeout. W2.A may begin only after PR #17 is verified merged into canonical main and the resulting main SHA/tree are independently reconstructed.**
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -270,8 +268,8 @@ Every preset, template, starter, or component must resolve into normal canonical
 No exact dates or detailed W6/W7 implementation boundary are frozen.
 
 - **W0 — Foundation Promotion + W0.1 Boundary Hardening:** merged / complete.
-- **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, isolated `/v2` shell. **CANDIDATE / IN REVIEW — PR #16**.
-- **W2 — A4 Authoring + Primitives + Direct Manipulation:** finite A4 authoring, primitives, move/resize, guides/diagnostics, plus a minimum page-template insertion seam.
+- **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
+- **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering (including Text-height resolution and Image focal point); W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. W2 is not complete until A–G and the visible basic-authoring path are executable.
 - **W3 — Save/Reopen/Catalog Library:** versioned persistence, recovery/reopen, and a persistable starter/catalog creation path.
 - **W4 — Advanced Table Editor:** structural table editing plus TSV paste, marker bulk toggle, explicit Fit Height, and table presets.
 - **W5 — Complete Translation:** complete semantic translation coverage and layout review.
@@ -315,7 +313,7 @@ Human UI ─┐
 Future AI ┘
 ```
 
-W1 establishes the action boundary. Future AI should eventually invoke the same ordinary actions a user invokes: add page, insert object, move, resize, edit text, insert/populate table, merge, apply preset, and similar validated commands.
+W1 established the action boundary. Future AI should eventually invoke the same ordinary actions a user invokes: add page, insert object, move, resize, edit text, insert/populate table, merge, apply preset, and similar validated commands.
 
 AI must not manipulate the DOM directly and must not replace arbitrary document JSON.
 
@@ -398,13 +396,13 @@ Older R0 and W0 story documents intentionally preserve the state that existed wh
 
 Governance rule: do **not** fix this as part of unrelated VNext waves unless a task explicitly targets it. Keep unrelated lab lint debt out of VNext scope.
 
-## HANDOFF SYNC STATE / NEXT PRINCIPAL ACTION
+## POST-W1 STATE / NEXT PRINCIPAL ACTION
 
 PR #15 is **MERGED / COMPLETE** and established the exact W1 base `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
 
-W1 is implemented on `feat/vnext-w1-application-actions-shell` and is under Principal review in **PR #16**. The PR branch is the candidate vehicle; GitHub decides its live exact head and CI result. Do not create a self-referential docs SHA loop by trying to encode the commit that contains this sentence.
+PR #16 is **MERGED / COMPLETE** and established the current canonical post-W1 main `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-Next Principal action: independently audit **PR #16** and its exact-head Quality Gates. Do not merge without separate authorization after Principal GO. Do not start W2 from this candidate state.
+W2.0 contract: **PRINCIPAL ACCEPTED**. Promotion vehicle: PR #17. GitHub is authority for the vehicle’s live merge state. Before beginning W2.A, independently verify that PR #17 has merged into canonical main and reconstruct the resulting main SHA/tree.
 
 ## RECONSTRUCTION READING ORDER
 
@@ -415,3 +413,6 @@ Next Principal action: independently audit **PR #16** and its exact-head Quality
 5. `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md` — exact mathematical amendment.
 6. `docs/vnext/presys-mvp-r0/evidence/proof-result.md` — empirical browser/PDF proof.
 7. `docs/stories/2026-09-09-vnext-w0-foundation-promotion.md` — historical W0 execution record.
+8. `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md` — historical W1 execution record.
+9. `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` — executable W2 authoring contract under Principal audit.
+10. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md` — W2.0 documentation/review story.
