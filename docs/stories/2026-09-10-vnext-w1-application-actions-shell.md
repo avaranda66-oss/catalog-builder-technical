@@ -50,7 +50,7 @@ Establish the first production VNext application layer and product shell without
 - [x] A27 No W2/W4/W5/W6 scope creep.
 - [x] A28 Architecture boundary tests protect the new seams.
 - [x] A29 Global gates pass.
-- [ ] A30 Exact-head GitHub CI passes.
+- [x] A30 Exact-head GitHub CI passes.
 
 ## Tasks
 
@@ -62,7 +62,7 @@ Establish the first production VNext application layer and product shell without
 - [x] Run focused and global quality gates plus adversarial import/mutation audit.
 - [x] Capture local browser evidence and direct-route/Legacy regression behavior.
 - [x] Update durable project state and this evidence record.
-- [ ] Commit, push, open PR, and record exact-head GitHub Quality Gate results. Do not merge.
+- [x] Commit, push, open PR, and record exact-head GitHub Quality Gate results. Do not merge.
 
 ## Dev Agent Record
 
@@ -89,7 +89,7 @@ GPT-5.6 Sol (High)
 - Moved Legacy bootstrap to `src/legacy-main.tsx`; `src/main.tsx` selects `/v2` before dynamically importing either VNext or Legacy.
 - Added an isolated in-memory `/v2` shell rendering the canonical A4 VNext document. Its visible Add Page and Undo/Redo controls use the Application runtime, and the UI explicitly states that saving is limited to the current tab.
 - Added application/session coverage and architecture proofs for application purity, mutation authority, bootstrap ordering, and VNext graph isolation.
-- Local implementation, automated gates, browser regression proof, and adversarial import/mutation audit are complete. Exact-head GitHub CI remains pending until the PR is opened and checks settle.
+- Local implementation, automated gates, browser regression proof, adversarial import/mutation audit, PR creation, and required GitHub Quality Gate verification are complete. The live PR check rollup is the source of truth for the final docs-only head/run so this story does not create a self-referential SHA loop.
 
 ### File List
 
