@@ -53,6 +53,12 @@ Closure commit before PR creation: `8120c3cd571d37bb797a942f666a75f8f20f6f8e`.
 
 DO NOT MERGE pending Principal audit.
 
+## PRINCIPAL W0.1 AMENDMENT
+
+Principal re-audit found two production-boundary defects: the renderer accepted noncanonical `footerLabel` copy, and the root VNext barrel mixed pure core API with renderer/browser/publication imports and CSS side effects. W0.1 removes the production footer side channel, keeps the proof footer/page numbering as lab-only decoration, splits pure `src/vnext` core from explicit `rendering` and `publication` entry points, scopes renderer CSS under `[data-editorial-root]`, and moves `@page` policy to the lab proof print surface.
+
+Boundary regression coverage now proves the root/domain/table entry points remain React/browser/CSS free, renderer CSS is scoped and contains no global `@page`, and the production renderer contract cannot accept arbitrary footer copy. Focused proof is 71/71 PASS; Chromium remains 8/8 at 1478 normalized facts/run with hash `c797782fa1730fc98d1af539c74a352c0863004f8712365ed153aad0348f1932`; R0.1.4 remains `[100000, 307769, 100004]` = `507773 U`; G01–G05 and PDF forensic/line/immutability/stability evidence pass. The generated PDF is 149230 bytes versus the prior 149278-byte artifact, while the semantic forensic counts remain identical at 879 text items, 1359 `constructPath`, 1355 `fill`, and one legitimate image paint.
+
 ## Principal decision
 
 Pending Principal audit. Do not merge. Do not start W1.

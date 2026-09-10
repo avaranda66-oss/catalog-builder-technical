@@ -3,28 +3,30 @@ import { flushSync } from 'react-dom';
 import { useState } from 'react';
 import {
   CatalogDocumentSchema,
-  DocumentRenderer,
   VNextError,
   asDiagnostic,
   authoredFrames,
+  validateDocument,
+  type CatalogDocument,
+  type Diagnostic,
+} from '@/vnext';
+import {
+  DocumentRenderer,
   captureSnapshot,
   compareSnapshots,
   compilePlans,
   decodeImages,
-  layoutReport,
   loadFonts,
   measureTables,
   resolveAssets,
   sha256,
   tableConstraints,
-  validateDocument,
   verifyFontManifest,
-  type CatalogDocument,
-  type Diagnostic,
   type LayoutSnapshot,
   type ResourceManifest,
   type TablePlan,
-} from '@/vnext';
+} from '@/vnext/rendering';
+import { layoutReport } from '@/vnext/publication';
 import { makeFixture,fixtureNames,type FixtureName } from './fixtures';
 import './proof.css';
 
@@ -45,7 +47,19 @@ let currentResult:ProofResult|undefined,busy=false;
 let currentJobStart=0;
 let notify:(result:ProofResult|undefined,busy:boolean)=>void=()=>{};
 function renderTree():void {
-  flushSync(()=>editorialRoot.render(<DocumentRenderer document={currentDocument} plans={currentPlans} assetUrls={currentUrls} footerLabel="PRESYS · PROVA EDITORIAL R0"/>));
+  flushSync(()=>editorialRoot.render(<DocumentRenderer document={currentDocument} plans={currentPlans} assetUrls={currentUrls}/>));
+  decorateProofPages();
+}
+function decorateProofPages():void {
+  const pages=[...host.querySelectorAll<HTMLElement>('[data-editorial-root] .editorial-page')];
+  pages.forEach((page,index)=>{
+    page.querySelector('.proof-page-footer')?.remove();
+    const footer=document.createElement('div');footer.className='proof-page-footer';
+    footer.style.fontFamily='"'+currentDocument.style.defaultText.fontFamily+'"';
+    const label=document.createElement('span');label.textContent='PRESYS · PROVA EDITORIAL R0';
+    const pageNumber=document.createElement('span');pageNumber.textContent=(index+1)+' / '+pages.length;
+    footer.append(label,pageNumber);page.append(footer);
+  });
 }
 function freeze<T>(value:T):T {
   if(value && typeof value==='object'){Object.freeze(value);Object.values(value).forEach(freeze);}

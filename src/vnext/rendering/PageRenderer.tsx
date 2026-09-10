@@ -5,7 +5,7 @@ import { TableRenderer } from './TableRenderer';
 import { RichTextRenderer,typography } from './RichTextRenderer';
 import { resolveStyle } from './style';
 
-export function PageRenderer({page,document,pageNumber,pageCount,plans,assetUrls,footerLabel}:{page:Page;document:CatalogDocument;pageNumber:number;pageCount:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>;footerLabel?:string}) {
+export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Page;document:CatalogDocument;pageNumber:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>}) {
   const px=(mm:number)=>qCss(uToQ(mmToU(mm)));
   return <section data-page-id={page.id} className="editorial-page" aria-label={'Página '+pageNumber}
     style={{width:px(page.widthMm),height:px(page.heightMm)}}>
@@ -17,8 +17,5 @@ export function PageRenderer({page,document,pageNumber,pageCount,plans,assetUrls
         <div data-flow-root=""><RichTextRenderer rich={object.text}/></div>
       </div>}
     </div>)}
-    {footerLabel&&<div className="editorial-page-number" data-page-number={pageNumber} style={{left:px(12),right:px(12),bottom:px(6),fontFamily:'"'+document.style.defaultText.fontFamily+'"'}}>
-      <span>{footerLabel}</span><span>{pageNumber} / {pageCount}</span>
-    </div>}
   </section>;
 }

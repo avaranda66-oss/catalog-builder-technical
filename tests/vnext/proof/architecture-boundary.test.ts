@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -63,6 +63,61 @@ function repoTarget(file:string,specifier:string):string|undefined {
   return undefined;
 }
 
+function localModule(file:string,specifier:string):string|undefined {
+  const target=repoTarget(file,specifier);
+  if(!target)return undefined;
+  const candidates=[target,target+'.ts',target+'.tsx',target+'.css',resolve(target,'index.ts'),resolve(target,'index.tsx')];
+  return candidates.find(candidate=>existsSync(candidate)&&statSync(candidate).isFile());
+}
+
+function localGraph(entry:string):Set<string> {
+  const seen=new Set<string>(),pending=[entry];
+  while(pending.length){
+    const file=pending.pop()!;
+    if(seen.has(file))continue;
+    seen.add(file);
+    if(file.endsWith('.css'))continue;
+    const text=readFileSync(file,'utf8');
+    const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+    for(const specifier of specifiers(source)){
+      const target=localModule(file,specifier);
+      if(target&&!seen.has(target))pending.push(target);
+    }
+  }
+  return seen;
+}
+
+function pureGraphViolations(entry:string):string[] {
+  const violations:string[]=[];
+  for(const file of localGraph(entry)){
+    const relFile=normalize(relative(repoRoot,file));
+    if(file.endsWith('.css')){violations.push(`${relFile}: CSS side effect in pure entry point`);continue;}
+    if(relFile.startsWith('src/vnext/rendering/')||relFile.startsWith('src/vnext/publication/'))
+      violations.push(`${relFile}: browser/publication layer reachable from pure entry point`);
+    const text=readFileSync(file,'utf8');
+    const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+    if(specifiers(source).some(specifier=>specifier==='react'||specifier.startsWith('react/')))
+      violations.push(`${relFile}: React reachable from pure entry point`);
+    const visit=(node:ts.Node):void=>{
+      if(ts.isIdentifier(node)&&browserIdentifiers.has(node.text))violations.push(`${relFile}: browser authority ${node.text}`);
+      ts.forEachChild(node,visit);
+    };
+    visit(source);
+  }
+  return violations;
+}
+
+function ordinarySelectors(css:string):string[] {
+  const source=css.replace(/\/\*[\s\S]*?\*\//g,'').replace(/@import\s+[^;]+;/g,'');
+  const selectors:string[]=[];
+  for(const match of source.matchAll(/([^{}]+)\{/g)){
+    const prelude=match[1].trim();
+    if(!prelude||prelude.startsWith('@'))continue;
+    selectors.push(...prelude.split(',').map(selector=>selector.trim()).filter(Boolean));
+  }
+  return selectors;
+}
+
 function isWithin(root:string,target:string):boolean {
   const rel=relative(root,target);
   return rel===''||(!rel.startsWith('..')&&!resolve(root,rel).startsWith('\\\\'));
@@ -104,5 +159,29 @@ describe('VNext architecture boundary',()=>{
       }
     }
     expect(violations,violations.join('\n')).toEqual([]);
+  });
+
+  it('keeps the root, domain and table public entry points pure',()=>{
+    const entries=[resolve(vnextRoot,'index.ts'),resolve(vnextRoot,'domain/index.ts'),resolve(vnextRoot,'table/index.ts')];
+    const violations=entries.flatMap(entry=>pureGraphViolations(entry));
+    expect(violations,violations.join('\n')).toEqual([]);
+  });
+
+  it('scopes renderer CSS and leaves global page policy outside generic rendering',()=>{
+    const css=readFileSync(resolve(vnextRoot,'rendering/styles.css'),'utf8');
+    const selectors=ordinarySelectors(css);
+    expect(selectors.length).toBeGreaterThan(0);
+    expect(selectors.filter(selector=>!selector.startsWith('[data-editorial-root]'))).toEqual([]);
+    expect(css).not.toMatch(/@page\b/i);
+  });
+
+  it('keeps arbitrary footer copy out of the production renderer contract',()=>{
+    const file=resolve(vnextRoot,'rendering/DocumentRenderer.tsx'),text=readFileSync(file,'utf8');
+    const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+    const declaration=source.statements.find((statement):statement is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(statement)&&statement.name.text==='DocumentRendererProps');
+    const props=declaration?.members.flatMap(member=>ts.isPropertySignature(member)&&member.name&&ts.isIdentifier(member.name)?[member.name.text]:[])??[];
+    expect(props.sort()).toEqual(['assetUrls','document','plans']);
+    const rendererSource=filesUnder(resolve(vnextRoot,'rendering')).filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    expect(rendererSource).not.toMatch(/\bfooterLabel\b|PROVA EDITORIAL|editorial-page-number/);
   });
 });

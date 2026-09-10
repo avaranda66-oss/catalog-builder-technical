@@ -7,11 +7,10 @@ export interface DocumentRendererProps {
   document: CatalogDocument;
   plans: ReadonlyMap<string, TablePlan>;
   assetUrls: ReadonlyMap<string, string>;
-  footerLabel?: string;
 }
 
-export function DocumentRenderer({document,plans,assetUrls,footerLabel}:DocumentRendererProps) {
+export function DocumentRenderer({document,plans,assetUrls}:DocumentRendererProps) {
   return <div data-editorial-root="" lang={document.locale}>
-    {document.pages.map((page,i)=><PageRenderer key={page.id} page={page} document={document} pageNumber={i+1} pageCount={document.pages.length} plans={plans} assetUrls={assetUrls} footerLabel={footerLabel}/>)}
+    {document.pages.map((page,i)=><PageRenderer key={page.id} page={page} document={document} pageNumber={i+1} plans={plans} assetUrls={assetUrls}/>)}
   </div>;
 }

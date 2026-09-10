@@ -11,11 +11,13 @@ body { margin:0; }
 .lab-diagnostics { margin:0; padding:8px 24px 12px 42px; background:#fff; font-size:11px; }
 #editorial-host { padding:24px 0; overflow:visible; }
 [data-editorial-root] { margin:0 auto; }
-.editorial-page { margin:0 0 24px; box-shadow:0 3px 18px #183e5220; }
+[data-editorial-root] .editorial-page { margin:0 0 24px; box-shadow:0 3px 18px #183e5220; }
+[data-editorial-root] .proof-page-footer { position:absolute; display:flex; justify-content:space-between; left:45.359375px; right:45.359375px; bottom:22.671875px; font-size:6.5pt; line-height:1.2; color:#526975; }
+@page { size:A4 portrait; margin:0; }
 @media print {
   :root,body { background:white; }
   .lab-toolbar,.lab-summary,.lab-diagnostics { display:none; }
   #editorial-host { padding:0; }
   [data-editorial-root] { margin:0; }
-  .editorial-page { margin:0; box-shadow:none; }
+  [data-editorial-root] .editorial-page { margin:0; box-shadow:none; }
 }
