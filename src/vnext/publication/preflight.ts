@@ -34,15 +34,10 @@ export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TableP
           if(fact.intrinsicContentHeightQ>contentHeightQ&&!result.some(d=>d.code==='ROW_CONTENT_OVERFLOW'&&d.tableId===object.table.id&&d.cellId===fact.cellId))
             result.push(diagnostic('ROW_CONTENT_OVERFLOW',`intrinsicHeightQ=${fact.intrinsicContentHeightQ}, availableContentQ=${contentHeightQ}`,cellLocation));
         }
-      }else {
+      }else if(object.type==='text') {
         const objectNode=findElement(root,'data-object-id',object.id),flow=objectNode.querySelector<HTMLElement>('[data-flow-root]')!,metrics=intrinsicMetrics(flow,object.text);
         if(textObjectOverflows(metrics,w,h))result.push(diagnostic('TEXT_OBJECT_OVERFLOW','Text exceeds authored object frame',location));
       }
-    }
-    for(let i=0;i<frames.length;i++)for(let j=i+1;j<frames.length;j++) {
-      const a=frames[i],b=frames[j];
-      if(a.x<add(b.x,b.w)&&add(a.x,a.w)>b.x&&a.y<add(b.y,b.h)&&add(a.y,a.h)>b.y)
-        result.push(diagnostic('OBJECT_OVERLAP',a.object.id+' overlaps '+b.object.id,{pageId:page.id,objectId:a.object.id,severity:'WARNING'}));
     }
   }
   return result;

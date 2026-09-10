@@ -12,7 +12,7 @@ import {
 } from '@/vnext';
 
 export const LONG_CODE='06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX';
-export const fixtureNames=['G01','G02','G03','G04','G05','rowspan-watch'] as const;
+export const fixtureNames=['G01','G02','G03','G04','G05','W2A','rowspan-watch'] as const;
 export type FixtureName=typeof fixtureNames[number];
 const blue='#123F59',red='#B32237',ink='#203746';
 const style:TableStyle={base:{fontSizePt:7.5,lineHeight:1.22,paddingMm:{top:.8,right:1.2,bottom:.8,left:1.2},
@@ -36,8 +36,8 @@ function tableObject(table:TableModel,xMm:number,yMm:number,widthMm:number,heigh
   return {id:table.id+':object',type:'table',table,frame:{xMm,yMm,widthMm,heightMm},zIndex:1};
 }
 function textObject(id:string,value:string,xMm:number,yMm:number,widthMm:number,heightMm:number,fontSizePt:number,color=ink,bold=false):EditorialObject {
-  return {id,type:'text',text:plainRichText(id+':text',value),frame:{xMm,yMm,widthMm,heightMm},zIndex:0,height:{mode:'fixed',mm:heightMm},
-    style:{fontSizePt,color,fontWeight:bold?700:400,paddingMm:{top:0,right:0,bottom:0,left:0}}};
+  return {id,type:'text',text:plainRichText(id+':text',value),frame:{xMm,yMm,widthMm,heightMm},zIndex:0,
+    style:{fontSizePt,color,fontWeight:bold?700:400}};
 }
 function page(id:string,title:string,kicker:string,objects:EditorialObject[]):Page {
   return {id,widthMm:210,heightMm:297,safeArea:{topMm:10,rightMm:12,bottomMm:12,leftMm:12},
@@ -196,11 +196,24 @@ function rowspanWatch():Page {
   for(let r=0;r<3;r++)text(t,r,2,'Linha '+r+' · base mínima de 10 mm');
   return page('rowspan-watch','Rowspan: ensaio de densidade','CONTRAEXEMPLO POTENCIAL  /  ALGORITMO CONGELADO',[tableObject(t,12,59,186,55)]);
 }
+function w2a():Page {
+  const table=createTable('w2a-table',2,[1,1],1);
+  text(table,0,0,'Grandeza');text(table,0,1,'Valor');
+  text(table,1,0,'Tensão');set(table,1,1,{type:'measurement',valueText:'10.000',unit:'mV'});
+  return {id:'w2a-page',widthMm:210,heightMm:297,safeArea:{topMm:10,rightMm:12,bottomMm:12,leftMm:12},objects:[
+    {id:'w2a-text',type:'text',frame:{xMm:12,yMm:12,widthMm:80,heightMm:14},zIndex:1,text:plainRichText('w2a-text-rich','W2.A primitive browser proof'),style:{fontFamily:'Noto Sans',fontSizePt:11,lineHeight:1.2,fontWeight:700,color:blue,textAlign:'left'}},
+    {id:'w2a-shape',type:'shape',frame:{xMm:12,yMm:36,widthMm:30,heightMm:20},zIndex:2,shape:'rectangle',style:{fill:'#E7EEF2',stroke:{pattern:'solid',thicknessPt:2,color:blue}}},
+    {id:'w2a-image',type:'image',frame:{xMm:50,yMm:36,widthMm:48,heightMm:30},zIndex:3,assetId:'asset-ta25n',fit:'cover',focalPoint:{x:.2,y:.8}},
+    {id:'w2a-icon',type:'icon',frame:{xMm:106,yMm:36,widthMm:20,heightMm:20},zIndex:4,assetId:'asset-ta25n'},
+    {id:'w2a-line',type:'line',frame:{xMm:12,yMm:72,widthMm:114,heightMm:1.5},zIndex:5,axis:'horizontal',color:red},
+    tableObject(table,12,84,114,34),
+  ]};
+}
 export function makeFixture(name:FixtureName|'all'):CatalogDocument {
-  const pages=name==='all'?[g01(),g02(),g03(),g04()]:[({G01:g01,G02:g02,G03:g03,G04:g04,G05:g05,'rowspan-watch':rowspanWatch}[name])()];
+  const pages=name==='all'?[g01(),g02(),g03(),g04()]:[({G01:g01,G02:g02,G03:g03,G04:g04,G05:g05,W2A:w2a,'rowspan-watch':rowspanWatch}[name])()];
   return {schemaVersion:1,id:'proof-'+name,title:'PRESYS · Foundation proof '+name,locale:'pt-BR',
     style:{fonts:[...[400,700].flatMap(weight=>['normal','italic'].map(s=>({family:'Noto Sans',revision:'5.3.0',weight:weight as 400|700,style:s as 'normal'|'italic'}))),
       ...(name==='all'||name==='G04'?[{family:'Noto Sans JP',revision:'5.3.0',weight:400 as const,style:'normal' as const}]:[])],
       defaultText:{fontFamily:'Noto Sans',fontSizePt:8,lineHeight:1.25,fontWeight:400,color:ink,paddingMm:{top:0,right:0,bottom:0,left:0}},palette:[blue,red,ink]},
-    pages,assets:name==='all'||name==='G03'?[{id:'asset-ta25n',version:'repo-616332d',sha256:'9a3b009caa49f76df16f59b8733dda1c1c5d8459479006c1bcc4b37e7071c067',mime:'image/jpeg',widthPx:545,heightPx:767,name:'TA-25N repository photograph',alt:'Fotografia de um calibrador PRESYS TA-25N'}]:[]};
+    pages,assets:name==='all'||name==='G03'||name==='W2A'?[{id:'asset-ta25n',version:'repo-616332d',sha256:'9a3b009caa49f76df16f59b8733dda1c1c5d8459479006c1bcc4b37e7071c067',mime:'image/jpeg',widthPx:545,heightPx:767,name:'TA-25N repository photograph',alt:'Fotografia de um calibrador PRESYS TA-25N'}]:[]};
 }

@@ -244,4 +244,24 @@ describe('VNext architecture boundary',()=>{
     const rendererSource=filesUnder(resolve(vnextRoot,'rendering')).filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
     expect(rendererSource).not.toMatch(/\bfooterLabel\b|PROVA EDITORIAL|editorial-page-number/);
   });
+
+  it('keeps canonical rendering free of editor state and application mutation authority',()=>{
+    const renderingFiles=filesUnder(resolve(vnextRoot,'rendering')).filter(path=>/\.tsx?$/.test(path));
+    const violations:string[]=[];
+    for(const file of renderingFiles) {
+      const relFile=normalize(relative(repoRoot,file));
+      const text=readFileSync(file,'utf8');
+      const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+      for(const specifier of specifiers(source)) {
+        const target=repoTarget(file,specifier);
+        if(!target)continue;
+        const normalized=normalize(relative(repoRoot,target));
+        if(normalized.startsWith('src/vnext/application/')||normalized.startsWith('src/vnext/app/'))
+          violations.push(`${relFile}: mutation/editor application layer import -> ${specifier}`);
+      }
+      if(/\b(selectedObjectIds|hoveredObjectId|activeHandle|dragPreview|snappingState|editorMode|contentEditable)\b/.test(text))
+        violations.push(`${relFile}: editor interaction state in canonical rendering`);
+    }
+    expect(violations,violations.join('\n')).toEqual([]);
+  });
 });

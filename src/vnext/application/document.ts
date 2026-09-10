@@ -26,7 +26,7 @@ export function canonicalIdentityIds(document: CatalogDocument): string[] {
     ids.push(page.id);
     for (const object of page.objects) {
       ids.push(object.id);
-      if (object.type === 'text') continue;
+      if (object.type !== 'table') continue;
 
       const table = object.table;
       ids.push(
@@ -54,6 +54,7 @@ function reservationIdentityIds(document: CatalogDocument): string[] {
         ids.push(...richTextIdentityIds(object.text));
         continue;
       }
+      if (object.type !== 'table') continue;
       for (const cell of object.table.cells) {
         if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
       }
@@ -163,7 +164,7 @@ export function duplicatePageWithFreshIds(
 
   for (const object of page.objects) {
     mapping.set(object.id, allocator.next());
-    if (object.type === 'text') continue;
+    if (object.type !== 'table') continue;
     const table = object.table;
     mapping.set(table.id, allocator.next());
     for (const column of table.columns) mapping.set(column.id, allocator.next());
@@ -184,8 +185,22 @@ export function duplicatePageWithFreshIds(
           id: mapping.get(object.id)!,
           frame: { ...object.frame },
           style: { ...object.style },
-          height: { ...object.height },
           text: duplicateRichTextWithFreshIds(object.text, allocator),
+        };
+      }
+
+      if (object.type !== 'table') {
+        return {
+          ...object,
+          id: mapping.get(object.id)!,
+          frame: { ...object.frame },
+          ...(object.type === 'image' && object.focalPoint ? { focalPoint: { ...object.focalPoint } } : {}),
+          ...(object.type === 'shape' ? {
+            style: {
+              ...object.style,
+              ...(object.style.stroke ? { stroke: { ...object.style.stroke } } : {}),
+            },
+          } : {}),
         };
       }
 

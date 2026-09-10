@@ -56,6 +56,12 @@ export const CellStyleSchema=z.object({
   borders:EdgesSchema.optional(),
 }).strict();
 export type CellStyle=z.infer<typeof CellStyleSchema>;
+export const TextStyleSchema=z.object({
+  fontFamily:clean.optional(),fontSizePt:positive.optional(),lineHeight:positive.optional(),
+  fontWeight:z.union([z.literal(400),z.literal(700)]).optional(),
+  color:color.optional(),textAlign:z.enum(['left','center','right']).optional(),
+}).strict();
+export type TextStyle=z.infer<typeof TextStyleSchema>;
 export const TableStyleSchema=z.object({
   base:CellStyleSchema,
   rowRoles:z.object({header:CellStyleSchema.optional(),body:CellStyleSchema.optional(),section:CellStyleSchema.optional()}).strict(),
@@ -103,13 +109,24 @@ export const DocumentStyleSchema=z.object({
 }).strict();
 export type DocumentStyle=z.infer<typeof DocumentStyleSchema>;
 const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optional()};
+export const ImageFocalPointSchema=z.object({x:finite.min(0).max(1),y:finite.min(0).max(1)}).strict();
+export type ImageFocalPoint=z.infer<typeof ImageFocalPointSchema>;
+export const DEFAULT_IMAGE_FOCAL_POINT:Readonly<ImageFocalPoint>=Object.freeze({x:0.5,y:0.5});
 export const EditorialObjectSchema=z.discriminatedUnion('type',[
   z.object({...objectBase,type:z.literal('table'),table:TableModelSchema}).strict(),
-  z.object({...objectBase,type:z.literal('text'),text:RichTextSchema,style:CellStyleSchema,height:z.discriminatedUnion('mode',[
-    z.object({mode:z.literal('auto')}).strict(),z.object({mode:z.literal('fixed'),mm:positiveMm}).strict(),
-  ])}).strict(),
+  z.object({...objectBase,type:z.literal('text'),text:RichTextSchema,style:TextStyleSchema}).strict(),
+  z.object({...objectBase,type:z.literal('image'),assetId:id,fit:z.enum(['contain','cover']),focalPoint:ImageFocalPointSchema.optional()}).strict(),
+  z.object({...objectBase,type:z.literal('shape'),shape:z.enum(['rectangle','ellipse']),style:z.object({fill:color.optional(),stroke:BorderSchema.optional()}).strict()}).strict(),
+  z.object({...objectBase,type:z.literal('line'),axis:z.enum(['horizontal','vertical']),color}).strict(),
+  z.object({...objectBase,type:z.literal('icon'),assetId:id}).strict(),
 ]);
 export type EditorialObject=z.infer<typeof EditorialObjectSchema>;
+export type TextObject=Extract<EditorialObject,{type:'text'}>;
+export type ImageObject=Extract<EditorialObject,{type:'image'}>;
+export type TableObject=Extract<EditorialObject,{type:'table'}>;
+export type ShapeObject=Extract<EditorialObject,{type:'shape'}>;
+export type LineObject=Extract<EditorialObject,{type:'line'}>;
+export type IconObject=Extract<EditorialObject,{type:'icon'}>;
 export const PageSchema=z.object({id,widthMm:z.literal(210),heightMm:z.literal(297),
   safeArea:z.object({topMm:nonnegative,rightMm:nonnegative,bottomMm:nonnegative,leftMm:nonnegative}).strict().optional(),
   objects:z.array(EditorialObjectSchema)}).strict();
