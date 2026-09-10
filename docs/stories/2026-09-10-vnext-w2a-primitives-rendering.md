@@ -254,7 +254,7 @@ GPT-6 Codex continuation executor (Dex / aiox-dev workflow).
 - Full repository tests: 205 files PASS; 2142 tests PASS, 1 skipped (2143 total).
 - Final gates: `git diff --check` PASS; `npm run lint` PASS with 0 errors / 268 pre-existing warnings; `npm run typecheck` PASS; `npm test` PASS; `npm run build` PASS (`built in 16.88s`).
 - CodeRabbit CLI review was attempted through the project-prescribed Windows/WSL path but the binary was absent; runtime tool inventory also exposed no CodeRabbit tool. This environment limitation is recorded for Principal review and is not represented as a passed gate.
-- PR/head evidence: pending DevOps-authority push/PR step; GitHub remains authority for live PR state.
+- PR/head evidence: PR #18 (`https://github.com/avaranda66-oss/catalog-builder-technical/pull/18`) is the single W2.A review vehicle from `feat/vnext-w2a-primitives-rendering` into `main`; GitHub remains authority for live PR state.
 
 ### Completion Notes List
 
@@ -285,10 +285,11 @@ GPT-6 Codex continuation executor (Dex / aiox-dev workflow).
 - `tests/vnext/proof/architecture-boundary.test.ts`
 - `tests/vnext/proof/export-proof.mjs`
 - `tests/vnext/proof/primitives-rendering.test.tsx`
-- `docs/vnext/PROJECT-STATE.md` — to be updated after the single W2.A PR exists so the durable record can cite the live review vehicle.
-- `docs/vnext/PRINCIPAL-HANDOFF.md` — to be updated after the single W2.A PR exists so the durable record can cite the live review vehicle.
+- `docs/vnext/PROJECT-STATE.md`
+- `docs/vnext/PRINCIPAL-HANDOFF.md`
 
 ### Change Log
 
 - 2026-09-10: Dedicated W2.A implementation story created from the verified post-W2.0 canonical base and Principal-accepted authoring contract. No production code, project-memory document, commit, push, or PR change is part of this story-preparation edit.
 - 2026-09-10: Interrupted W2.A implementation recovered from its existing worktree, validated against the merged W2.0 contract, completed through focused/browser/PDF/full-repository gates, and prepared for independent review without starting W2.B.
+- 2026-09-10: PR #18 opened as the single W2.A review vehicle; durable project state/handoff updated to record the verified PR #17 base and PR #18 review state without claiming W2.A merged or canonical.
