@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE POST-W2.0 PRINCIPAL MEMORY; W2.A PR #18 OPEN FOR REVIEW
+STATUS: DURABLE W2.A PRINCIPAL MEMORY; PR #18 CARRIES IMPLEMENTATION AND GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-10
 
@@ -35,15 +35,15 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## CANONICAL POST-W2.0 STATE
+## VERIFIED W2.A IMPLEMENTATION PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Current canonical main after W2.0 contract promotion: `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
+The verified implementation base for PR #18 is `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
 
-Tree: `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+Its tree is `fa61d3e8cc978a0af928423fc9c21550e618e675`.
 
-This is the independently verified merge result after PR #17. Do not create a self-referential docs-SHA loop; verify live GitHub and `origin/main` when reconstructing later work.
+This is the independently verified PR #17 merge result from which PR #18 was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
 
 PR #12: **MERGED**.
 
@@ -65,7 +65,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. W2.A now has an implementation candidate in **PR #18**, branch `feat/vnext-w2a-primitives-rendering`. GitHub is authority for its live state. The candidate must be independently audited before merge; W2.A is not yet canonical and W2.B must not begin from this handoff merely because PR #18 exists.
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. W2.A implementation is carried by **PR #18**, branch `feat/vnext-w2a-primitives-rendering`. GitHub is authority for its live review/merge state. This handoff does not claim PR #18 is merged or W2.A has final Principal acceptance. Before W2.B, verify PR #18 merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
 
 ## WHAT IS CANONICAL NOW
 
@@ -455,9 +455,9 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #17 are merged. W0, W0.1, W1, and the W2.0 contract promotion are complete. Current canonical main is `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+PRs #12 through #17 are merged. W0, W0.1, W1, and the W2.0 contract promotion are complete. PR #18’s verified implementation base is `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`.
 
-W2.A implementation candidate: **PR #18 — OPEN / PRINCIPAL REVIEW REQUIRED**. Independently review the W2.A story, final diff, focused tests, browser/PDF proof, and full gates. Verify that `frame.heightMm` is the sole authored Text height authority, Image focal-point semantics are normalized/deterministic, the existing Table Engine remains singular, and the canonical renderer has no editor-state dependency. Do not merge without explicit user authorization and do not start W2.B from this handoff before W2.A review/merge state is resolved.
+W2.A implementation/promotion vehicle: **PR #18**. Independently review the W2.A story, final diff, focused tests, browser/PDF proof, and full gates. Verify that `frame.heightMm` is the sole authored Text height authority, Image focal-point semantics are normalized/deterministic, the existing Table Engine remains singular, and the canonical renderer has no editor-state dependency. GitHub is authority for the PR’s live state. Before beginning W2.B, verify PR #18 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree. Do not infer final Principal acceptance from this handoff alone.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

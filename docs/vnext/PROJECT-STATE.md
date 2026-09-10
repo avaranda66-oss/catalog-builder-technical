@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: POST-W2.0 CANONICAL BASE; W2.A PR #18 OPEN FOR PRINCIPAL REVIEW
+STATUS: W2.A IMPLEMENTATION CARRIED BY PR #18; GITHUB IS AUTHORITY FOR LIVE REVIEW/MERGE STATE
 
 DATE: 2026-09-10
 
@@ -12,15 +12,15 @@ PURPOSE: provide the current VNext facts and next action so the project can be r
 
 VNext must be simpler internally than Legacy while becoming more capable, editable, professional, and easy to use.
 
-## CURRENT CANONICAL ENGINEERING BASE
+## VERIFIED W2.A IMPLEMENTATION BASE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Current canonical main SHA after W2.0 contract promotion: `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
+The verified implementation base for PR #18 is SHA `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
 
-Current canonical tree: `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+Its tree is `fa61d3e8cc978a0af928423fc9c21550e618e675`.
 
-This is the independently verified merge result after PR #17. Future documentation-only commits do not make this paragraph a self-updating SHA pointer; always verify live `origin/main` and GitHub before acting.
+This is the independently verified PR #17 merge result from which PR #18 was implemented. It is provenance, not a permanent pointer to current `main`; always verify live `origin/main` and GitHub before acting.
 
 PR #12: **MERGED**.
 
@@ -34,7 +34,7 @@ W1 review vehicle: **PR #16 — MERGED / COMPLETE** at `0975953da7a8748b483ba8f6
 
 W2.0 contract promotion vehicle: **PR #17 — MERGED / COMPLETE** at `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
 
-W2.A implementation review vehicle: **PR #18 — OPEN / PRINCIPAL REVIEW REQUIRED**. Its branch is `feat/vnext-w2a-primitives-rendering`; GitHub is authority for its live state. Do not treat W2.A as canonical until that PR is independently reviewed and merged.
+W2.A implementation/promotion vehicle: **PR #18**, branch `feat/vnext-w2a-primitives-rendering`. GitHub is authority for its live review/merge state. This document does not claim that PR #18 is merged or that W2.A has final Principal acceptance.
 
 Always run `git fetch origin --prune` and verify GitHub before acting. Git history and repository evidence outrank agent reports.
 
@@ -52,7 +52,7 @@ W1 — Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
 
 W2.0 — A4 Authoring Contract: **PRINCIPAL ACCEPTED / MERGED VIA PR #17**.
 
-W2.A — Primitive Domain + Publication-Safe Rendering: **IMPLEMENTATION CANDIDATE IN PR #18 / PRINCIPAL REVIEW REQUIRED**.
+W2.A — Primitive Domain + Publication-Safe Rendering: **IMPLEMENTATION CARRIED BY PR #18; LIVE STATE MUST BE VERIFIED ON GITHUB**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -60,7 +60,7 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is merged, so W1 is canonical on `main` and closed. PR #17 is also merged; the amended W2.0 contract is **PRINCIPAL ACCEPTED** and the verified canonical base is SHA `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`. W2.A has an implementation candidate in **PR #18**. GitHub is authority for that PR’s live state; do not claim W2.A complete or canonical before independent review and merge.
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is merged, so W1 is canonical on `main` and closed. PR #17 is also merged; the amended W2.0 contract is **PRINCIPAL ACCEPTED**. PR #18 carries the W2.A implementation and was implemented from verified base SHA `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`. GitHub is authority for PR #18’s live review/merge state. Before beginning W2.B, independently verify that PR #18 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -412,7 +412,7 @@ PR #16 is **MERGED / COMPLETE** and established the current canonical post-W1 ma
 
 PR #17 is **MERGED / COMPLETE** and established the verified W2.0 canonical base `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`.
 
-W2.A implementation candidate: **PR #18 — OPEN / PRINCIPAL REVIEW REQUIRED**. Independently audit the primitive/domain contracts, Text-height authority cleanup, Image focal-point seam, canonical renderer/publication behavior, preserved Table Engine, and proof/gate evidence before merge. Do not start W2.B from this durable record until W2.A review/merge state is resolved through GitHub.
+W2.A implementation/promotion vehicle: **PR #18**. Independently audit the primitive/domain contracts, Text-height authority cleanup, Image focal-point seam, canonical renderer/publication behavior, preserved Table Engine, and proof/gate evidence. GitHub is authority for PR #18’s live review/merge state; this record does not claim the PR merged or W2.A received final Principal acceptance. Before beginning W2.B, independently verify that PR #18 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
 
 ## RECONSTRUCTION READING ORDER
 

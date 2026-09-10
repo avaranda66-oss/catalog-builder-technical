@@ -6,6 +6,7 @@ export {
   FrameSchema,
   ImageFocalPointSchema,
   TableModelSchema,
+  TextStyleSchema,
   plainRichText,
 } from './editorial-model';
 export type {
@@ -28,6 +29,7 @@ export type {
   TableModel,
   TableObject,
   TableStyle,
+  TextStyle,
   TextObject,
 } from './editorial-model';
 export { VNextError, asDiagnostic, diagnostic } from './diagnostics';

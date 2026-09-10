@@ -107,6 +107,61 @@ function reusedRichTextIdentityDocument(): CatalogDocument {
   };
 }
 
+function allPrimitiveDocument(): CatalogDocument {
+  const document = complexDocument();
+  return {
+    ...document,
+    assets: [{
+      id: 'asset-shared',
+      version: 'w2a-duplication',
+      sha256: 'a'.repeat(64),
+      mime: 'image/png',
+      widthPx: 100,
+      heightPx: 80,
+      name: 'Shared primitive asset',
+      alt: 'Shared primitive asset',
+    }],
+    pages: [{
+      ...document.pages[0],
+      objects: [
+        ...document.pages[0].objects,
+        {
+          id: 'image-object',
+          type: 'image',
+          frame: { xMm: 12, yMm: 110, widthMm: 40, heightMm: 25 },
+          zIndex: 2,
+          assetId: 'asset-shared',
+          fit: 'cover',
+          focalPoint: { x: 0.2, y: 0.8 },
+        },
+        {
+          id: 'shape-object',
+          type: 'shape',
+          frame: { xMm: 58, yMm: 110, widthMm: 30, heightMm: 20 },
+          zIndex: 3,
+          shape: 'ellipse',
+          style: { fill: '#173F52', stroke: { pattern: 'solid', thicknessPt: 1, color: '#FFFFFF' } },
+        },
+        {
+          id: 'line-object',
+          type: 'line',
+          frame: { xMm: 12, yMm: 142, widthMm: 80, heightMm: 1 },
+          zIndex: 4,
+          axis: 'horizontal',
+          color: '#173F52',
+        },
+        {
+          id: 'icon-object',
+          type: 'icon',
+          frame: { xMm: 96, yMm: 110, widthMm: 12, heightMm: 12 },
+          zIndex: 5,
+          assetId: 'asset-shared',
+        },
+      ],
+    }],
+  };
+}
+
 describe('VNext Application Actions', () => {
   it('uses one strict runtime-validatable action contract', () => {
     expect(ApplicationActionSchema.safeParse({ type: 'page.add' }).success).toBe(true);
@@ -250,6 +305,85 @@ describe('VNext Application Actions', () => {
     expect(JSON.stringify(session.getSnapshot().document)).toBe(afterRename);
     expect(session.redo().ok).toBe(true);
     expect(session.getSnapshot().document.pages).toHaveLength(2);
+  });
+
+  it('duplicates a page containing all six W2.A primitives through the W1 session action path', () => {
+    const document = allPrimitiveDocument();
+    const original = JSON.stringify(document);
+    const sourcePage = document.pages[0];
+    const sourceTableObject = sourcePage.objects.find((object) => object.type === 'table');
+    expect(sourceTableObject?.type).toBe('table');
+    if (!sourceTableObject || sourceTableObject.type !== 'table') return;
+
+    const session = createDocumentSession(document, { createId: sequenceIds('w2a-copy') });
+    const duplicated = session.execute({ type: 'page.duplicate', pageId: sourcePage.id });
+    expect(duplicated.ok).toBe(true);
+    if (!duplicated.ok) return;
+
+    const copy = duplicated.document.pages[1];
+    expect(copy.id).not.toBe(sourcePage.id);
+    expect(copy.objects).toHaveLength(6);
+    expect(copy.objects.map((object) => object.type)).toEqual(sourcePage.objects.map((object) => object.type));
+    expect(copy.objects.map((object) => object.id)).not.toEqual(sourcePage.objects.map((object) => object.id));
+    expect(new Set(copy.objects.map((object) => object.id)).size).toBe(copy.objects.length);
+
+    const copiedTableObject = copy.objects.find((object) => object.type === 'table');
+    const copiedTextObject = copy.objects.find((object) => object.type === 'text');
+    const copiedImageObject = copy.objects.find((object) => object.type === 'image');
+    const copiedShapeObject = copy.objects.find((object) => object.type === 'shape');
+    const copiedLineObject = copy.objects.find((object) => object.type === 'line');
+    const copiedIconObject = copy.objects.find((object) => object.type === 'icon');
+    expect(copiedTableObject?.type).toBe('table');
+    expect(copiedTextObject?.type).toBe('text');
+    expect(copiedImageObject?.type).toBe('image');
+    expect(copiedShapeObject?.type).toBe('shape');
+    expect(copiedLineObject?.type).toBe('line');
+    expect(copiedIconObject?.type).toBe('icon');
+    if (!copiedTableObject || copiedTableObject.type !== 'table' ||
+        !copiedTextObject || copiedTextObject.type !== 'text' ||
+        !copiedImageObject || copiedImageObject.type !== 'image' ||
+        !copiedShapeObject || copiedShapeObject.type !== 'shape' ||
+        !copiedLineObject || copiedLineObject.type !== 'line' ||
+        !copiedIconObject || copiedIconObject.type !== 'icon') return;
+
+    const sourceTable = sourceTableObject.table;
+    const copiedTable = copiedTableObject.table;
+    expect(copiedTable.id).not.toBe(sourceTable.id);
+    expect(copiedTable.columns.map((column) => column.id)).not.toEqual(sourceTable.columns.map((column) => column.id));
+    expect(copiedTable.rows.map((row) => row.id)).not.toEqual(sourceTable.rows.map((row) => row.id));
+    expect(copiedTable.cells.map((cell) => cell.id)).not.toEqual(sourceTable.cells.map((cell) => cell.id));
+    expect(copiedTable.annotations.map((annotation) => annotation.id)).not.toEqual(sourceTable.annotations.map((annotation) => annotation.id));
+    expect(copiedTable.legend.map((entry) => entry.id)).not.toEqual(sourceTable.legend.map((entry) => entry.id));
+
+    expect(copiedTextObject.text.paragraphs[0].id).not.toBe(sourcePage.objects[0].type === 'text' ? sourcePage.objects[0].text.paragraphs[0].id : '');
+    expect(copiedTextObject.text.paragraphs[0].inlines[0].id).not.toBe(sourcePage.objects[0].type === 'text' ? sourcePage.objects[0].text.paragraphs[0].inlines[0].id : '');
+    const sourceRichCell = sourceTable.cells.find((cell) => cell.content.type === 'richText');
+    const copiedRichCell = copiedTable.cells.find((cell) => cell.content.type === 'richText');
+    expect(sourceRichCell?.content.type).toBe('richText');
+    expect(copiedRichCell?.content.type).toBe('richText');
+    if (sourceRichCell?.content.type === 'richText' && copiedRichCell?.content.type === 'richText') {
+      expect(copiedRichCell.content.value.paragraphs[0].id).not.toBe(sourceRichCell.content.value.paragraphs[0].id);
+      expect(copiedRichCell.content.value.paragraphs[0].inlines[0].id).not.toBe(sourceRichCell.content.value.paragraphs[0].inlines[0].id);
+    }
+    sourceTable.annotations.forEach((annotation, index) => {
+      expect(copiedTable.annotations[index].text.paragraphs[0].id).not.toBe(annotation.text.paragraphs[0].id);
+      expect(copiedTable.annotations[index].text.paragraphs[0].inlines[0].id).not.toBe(annotation.text.paragraphs[0].inlines[0].id);
+    });
+    sourceTable.legend.forEach((entry, index) => {
+      expect(copiedTable.legend[index].text.paragraphs[0].id).not.toBe(entry.text.paragraphs[0].id);
+      expect(copiedTable.legend[index].text.paragraphs[0].inlines[0].id).not.toBe(entry.text.paragraphs[0].inlines[0].id);
+    });
+
+    expect(copiedImageObject.assetId).toBe('asset-shared');
+    expect(copiedImageObject.focalPoint).toEqual({ x: 0.2, y: 0.8 });
+    expect(copiedImageObject.focalPoint).not.toBe(sourcePage.objects.find((object) => object.type === 'image')?.focalPoint);
+    expect(copiedShapeObject.style).toEqual({ fill: '#173F52', stroke: { pattern: 'solid', thicknessPt: 1, color: '#FFFFFF' } });
+    expect(copiedShapeObject.style).not.toBe(sourcePage.objects.find((object) => object.type === 'shape')?.style);
+    expect(copiedLineObject).toMatchObject({ axis: 'horizontal', color: '#173F52' });
+    expect(copiedIconObject.assetId).toBe('asset-shared');
+    expect(duplicated.document.assets).toEqual(document.assets);
+    expect(duplicated.document.assets).toHaveLength(1);
+    expect(JSON.stringify(document)).toBe(original);
   });
 
   it('fails page duplication on a generated ID collision without changing the document', () => {

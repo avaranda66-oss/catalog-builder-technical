@@ -248,11 +248,14 @@ GPT-6 Codex continuation executor (Dex / aiox-dev workflow).
 - Current durable state/handoff consulted: `docs/vnext/PROJECT-STATE.md` and `docs/vnext/PRINCIPAL-HANDOFF.md`.
 - Prior implementation-story convention consulted: `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md`.
 - Recovery found the implementation branch checked out in worktree `780d` with all W2.A implementation changes uncommitted at the canonical base; no prior W2.A commit, remote branch, partial push, or PR existed.
+- Amendment recovery rechecked worktree ownership after an interrupted detached session: worktree `98d5` was detached at `c9739529bff29f5e3837d56bcf3570b4e852cf47`, while `feat/vnext-w2a-primitives-rendering` was already cleanly owned by worktree `780d` at the same SHA. Recovery therefore followed Case C and continued in `780d` without moving refs, forcing checkout, resetting, stashing, cleaning, or deleting worktrees.
 - Text-height audit found the obsolete Text-specific `height` only in historical R0 documentation plus the W2.A negative test; no runtime, renderer, preflight, publication, serialization, application, fixture, or proof consumer remains.
-- Focused VNext proof/application validation: `npx vitest run tests/vnext/proof tests/vnext/application` — 9 files, 96/96 tests PASS.
-- Browser/PDF proof: `node tests/vnext/proof/export-proof.mjs` — 8/8 viewport/DPR/media matrix cases PASS; native PDF + PDF.js forensics PASS; `ROWSPAN R0.1.4: READY`.
-- Full repository tests: 205 files PASS; 2142 tests PASS, 1 skipped (2143 total).
-- Final gates: `git diff --check` PASS; `npm run lint` PASS with 0 errors / 268 pre-existing warnings; `npm run typecheck` PASS; `npm test` PASS; `npm run build` PASS (`built in 16.88s`).
+- Amendment TextStyle proof: dedicated strict `TextStyleSchema` accepts only `fontFamily`, `fontSizePt`, `lineHeight`, `fontWeight`, `color`, and `textAlign`; standalone Text rejects `background`, `paddingMm`, `borders`, and unknown fields while `CellStyleSchema` remains the Table/cell style contract.
+- Focused VNext proof/application validation: `npx vitest run tests/vnext/proof tests/vnext/application` — 9 files, 98/98 tests PASS.
+- Browser/PDF proof: `node tests/vnext/proof/export-proof.mjs` — original 8/8 viewport/DPR/media matrix cases PASS; representative `W2A` page PASS through production `DocumentRenderer -> PrimitiveRenderer/TableRenderer`; declared Image/Icon assets resolve to blob URLs and decode at 545×767; cover Image resolves non-centered `20% 80%`; Icon resolves `contain` + `50% 50%`; Shape stroke ink bounds equal its authored frame in screen/print; Line ink bounds equal its authored frame in screen/print; Text remains DOM text; canonical Table Renderer remains in use; representative page reaches native Chromium PDF; PDF.js forensics PASS; optional host `pdftoppm` rasterization PASS; `ROWSPAN R0.1.4: READY`.
+- W1 page-duplication regression now exercises Text/Image/Table/Shape/Line/Icon through the real session action path, proving fresh Page/Object/Table structural/local RichText IDs, preserved Image focal point and asset reference, preserved Shape stroke/style, preserved Line/Icon payload, no asset duplication, and unchanged source document.
+- Full repository tests: 205 files PASS; 2144 tests PASS, 1 skipped (2145 total).
+- Final gates: `git diff --check` PASS; `npm run lint` PASS with 0 errors / 268 pre-existing warnings; `npm run typecheck` PASS; `npm test` PASS; `npm run build` PASS (`built in 12.16s`).
 - CodeRabbit CLI review was attempted through the project-prescribed Windows/WSL path but the binary was absent; runtime tool inventory also exposed no CodeRabbit tool. This environment limitation is recorded for Principal review and is not represented as a passed gate.
 - PR/head evidence: PR #18 (`https://github.com/avaranda66-oss/catalog-builder-technical/pull/18`) is the single W2.A review vehicle from `feat/vnext-w2a-primitives-rendering` into `main`; GitHub remains authority for live PR state.
 
@@ -260,12 +263,15 @@ GPT-6 Codex continuation executor (Dex / aiox-dev workflow).
 
 - Recovered and preserved the interrupted W2.A work rather than recreating it; implementation remained based directly on verified post-PR-#17 canonical main.
 - `frame.heightMm` is the sole authored physical Text height authority; no replacement secondary authority was introduced.
+- Standalone Text now uses strict `TextStyleSchema`; cell-only background/padding/border semantics cannot enter a Text object as silent no-ops.
 - Added canonical Image, Shape, Line, and Icon variants while retaining the existing Table object and one canonical Table Engine.
 - Image `focalPoint` is optional, normalized to inclusive `0..1`, defaults to center for `cover`, and does not affect deterministic `contain` behavior.
 - `PrimitiveRenderer` is exhaustive for Text/Image/Table/Shape/Line/Icon and remains free of selection/editor-state dependencies; `PageRenderer` preserves deterministic `(zIndex, stable array order)` ordering.
 - Intentional overlap remains legal authored composition; the `OBJECT_OVERLAP` diagnostic identifier remains stable while universal publication emission is removed.
 - Existing resource readiness/hash/decode flow covers standalone Image/Icon through the same declared asset boundary; no second resource or renderer authority was added.
-- W1 page duplication compatibility was updated for new primitive variants while RichText paragraph/inline identity remains local to each independent RichText.
+- Real Chromium evidence now covers all six W2.A primitives together, including Shape stroke containment, exact Line frame/ink geometry, screen/print semantic parity, and native Chromium PDF output.
+- W1 page duplication compatibility is directly regression-tested across all six primitives while RichText paragraph/inline identity remains local to each independent RichText.
+- Durable project state/handoff wording now treats `8dc43027...` / `fa61d3e...` as PR #18 implementation provenance and requires live GitHub verification plus reconstruction of canonical `main` before W2.B; it does not self-freeze PR #18 as open or claim final Principal acceptance.
 - W2.B–W2.G, persistence/Auth/Supabase, translation, AI, PIM, Realtime/Presence, Group, and advanced table editing remain deferred.
 - This story is ready for independent review only. W2.A is not claimed merged or canonical until its PR is independently reviewed, merged, and reconstructed from GitHub.
 
@@ -293,3 +299,4 @@ GPT-6 Codex continuation executor (Dex / aiox-dev workflow).
 - 2026-09-10: Dedicated W2.A implementation story created from the verified post-W2.0 canonical base and Principal-accepted authoring contract. No production code, project-memory document, commit, push, or PR change is part of this story-preparation edit.
 - 2026-09-10: Interrupted W2.A implementation recovered from its existing worktree, validated against the merged W2.0 contract, completed through focused/browser/PDF/full-repository gates, and prepared for independent review without starting W2.B.
 - 2026-09-10: PR #18 opened as the single W2.A review vehicle; durable project state/handoff updated to record the verified PR #17 base and PR #18 review state without claiming W2.A merged or canonical.
+- 2026-09-10: W2.A amendment recovery completed in the existing branch-owning worktree (Case C): strict standalone `TextStyleSchema`, representative production Chromium/native-PDF primitive proof, six-primitive W1 page-duplication regression, explicit Shape/Line geometry evidence, and merge-durable project memory added without starting W2.B.

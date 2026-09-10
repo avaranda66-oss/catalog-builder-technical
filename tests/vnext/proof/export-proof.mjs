@@ -62,6 +62,29 @@ async function openPage(context,fixture='all') {
 async function result(page){return page.evaluate(()=>window.proof.result);}
 async function load(page,name){return page.evaluate(name=>window.proof.loadFixture(name),name);}
 async function runDoc(page,doc,label){return page.evaluate(({doc,label})=>window.proof.runDocument(doc,label),{doc,label});}
+async function primitiveBrowserFacts(page) {
+  return page.evaluate(()=>{
+    const rect=element=>{const value=element.getBoundingClientRect();return {left:value.left,top:value.top,width:value.width,height:value.height,right:value.right,bottom:value.bottom};};
+    const object=id=>document.querySelector(`[data-object-id="${id}"]`);
+    const primitive=(id,type)=>object(id).querySelector(`[data-primitive-type="${type}"]`);
+    const image=primitive('w2a-image','image'),icon=primitive('w2a-icon','icon'),shape=primitive('w2a-shape','shape'),line=primitive('w2a-line','line');
+    const text=primitive('w2a-text','text'),table=document.querySelector('[data-table-id="w2a-table"]');
+    const source=window.proof.document.pages[0].objects;
+    return {
+      objectIds:[...document.querySelectorAll('[data-object-id]')].map(node=>node.getAttribute('data-object-id')),
+      primitiveTypes:[...document.querySelectorAll('[data-primitive-type]')].map(node=>node.getAttribute('data-primitive-type')).sort(),
+      table:{id:table?.getAttribute('data-table-id'),intrinsic:Boolean(document.querySelector('[data-table-intrinsic="w2a-table"]')),nativeTableCount:document.querySelectorAll('table,thead,tbody,tr,td,th').length},
+      text:{content:text?.textContent,hasTextNode:Boolean(text?.querySelector('[data-inline-id]')?.firstChild?.nodeType===Node.TEXT_NODE)},
+      image:{complete:image.complete,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,objectFit:getComputedStyle(image).objectFit,objectPosition:getComputedStyle(image).objectPosition,src:image.src},
+      icon:{complete:icon.complete,naturalWidth:icon.naturalWidth,naturalHeight:icon.naturalHeight,objectFit:getComputedStyle(icon).objectFit,objectPosition:getComputedStyle(icon).objectPosition,src:icon.src},
+      shape:{authored:source.find(item=>item.id==='w2a-shape').frame,frame:rect(object('w2a-shape')),ink:rect(shape),boxSizing:getComputedStyle(shape).boxSizing,borderWidth:getComputedStyle(shape).borderLeftWidth},
+      line:{authored:source.find(item=>item.id==='w2a-line').frame,frame:rect(object('w2a-line')),ink:rect(line),background:getComputedStyle(line).backgroundColor},
+    };
+  });
+}
+function assertSameRect(actual,expected,label) {
+  for(const key of ['left','top','width','height','right','bottom'])assert(Math.abs(actual[key]-expected[key])<.02,`${label} ${key}: ${actual[key]} vs ${expected[key]}`);
+}
 async function sampledLines(page) {
   return page.evaluate(()=>{
     const ids=['g03-note-text:t','g03-footnote-text:t','g03-image:1:2:text:t','g02-c:7:1:display:t','g01-note-text:t'];
@@ -260,10 +283,57 @@ try {
   await write('pdf/line-parity.json',lineParity);
   assert(lineParity.every(sample=>sample.lines.every(line=>line.matched)),'Final PDF line wrapping differs from Chromium print sample');
   evidence.pdfLineParity={samples:lineParity.length,lines:lineParity.reduce((sum,s)=>sum+s.lines.length,0),matched:true};
-  await promisify(execFile)('pdftoppm',['-r','150','-png',pdfPath,resolve(output,'png','presys-foundation')],{windowsHide:true});
-  evidence.pdfDerivedPngs=[1,2,3,4].map(n=>resolve(output,'png',`presys-foundation-${n}.png`));
   console.log('PASS native PDF + PDF.js forensics');
+  try {
+    await promisify(execFile)('pdftoppm',['-r','150','-png',pdfPath,resolve(output,'png','presys-foundation')],{windowsHide:true});
+    evidence.optionalHostRasterization={status:'PASS',tool:'pdftoppm'};
+    evidence.pdfDerivedPngs=[1,2,3,4].map(n=>resolve(output,'png',`presys-foundation-${n}.png`));
+  }catch(error) {
+    evidence.optionalHostRasterization={status:'UNAVAILABLE',tool:'pdftoppm',message:error.message};
+    console.log('SKIP optional pdftoppm rasterization:',error.message);
+  }
   await finalContext.close();
+
+  const primitiveContext=await browser.newContext({viewport:{width:1200,height:1200},deviceScaleFactor:1});
+  const primitivePage=await openPage(primitiveContext,'W2A');
+  const primitiveMedia={};
+  for(const media of ['screen','print']) {
+    await primitivePage.emulateMedia({media});
+    const report=await load(primitivePage,'W2A');
+    assert.equal(report.status,'READY',JSON.stringify(report.diagnostics));
+    assert.equal(report.tables.length,1);assert.equal(report.tables[0].id,'w2a-table');
+    const facts=await primitiveBrowserFacts(primitivePage);
+    assert.deepEqual(facts.objectIds,['w2a-text','w2a-table:object','w2a-shape','w2a-image','w2a-icon','w2a-line']);
+    assert.deepEqual(facts.primitiveTypes,['icon','image','line','shape','text']);
+    assert.deepEqual(facts.table,{id:'w2a-table',intrinsic:true,nativeTableCount:0});
+    assert.equal(facts.text.content,'W2.A primitive browser proof');assert.equal(facts.text.hasTextNode,true);
+    assert.equal(facts.image.complete,true);assert.equal(facts.image.naturalWidth,545);assert.equal(facts.image.naturalHeight,767);
+    assert.equal(facts.image.objectFit,'cover');assert.equal(facts.image.objectPosition,'20% 80%');assert.match(facts.image.src,/^blob:/);
+    assert.equal(facts.icon.complete,true);assert.equal(facts.icon.naturalWidth,545);assert.equal(facts.icon.naturalHeight,767);
+    assert.equal(facts.icon.objectFit,'contain');assert.equal(facts.icon.objectPosition,'50% 50%');assert.match(facts.icon.src,/^blob:/);
+    assert.equal(facts.shape.boxSizing,'border-box');assert(parseFloat(facts.shape.borderWidth)>0);
+    assertSameRect(facts.shape.ink,facts.shape.frame,`W2.A shape containment ${media}`);
+    assertSameRect(facts.line.ink,facts.line.frame,`W2.A line ink frame ${media}`);
+    primitiveMedia[media]={report:{status:report.status,tableId:report.tables[0].id,phases:report.phases.map(phase=>phase.phase)},facts};
+  }
+  const dimensions=rect=>({width:rect.width,height:rect.height});
+  const semantic=facts=>({objectIds:facts.objectIds,primitiveTypes:facts.primitiveTypes,table:facts.table,text:facts.text,image:{complete:facts.image.complete,naturalWidth:facts.image.naturalWidth,naturalHeight:facts.image.naturalHeight,objectFit:facts.image.objectFit,objectPosition:facts.image.objectPosition},icon:{complete:facts.icon.complete,naturalWidth:facts.icon.naturalWidth,naturalHeight:facts.icon.naturalHeight,objectFit:facts.icon.objectFit,objectPosition:facts.icon.objectPosition},shape:{authored:facts.shape.authored,frame:dimensions(facts.shape.frame),ink:dimensions(facts.shape.ink),boxSizing:facts.shape.boxSizing,borderWidth:facts.shape.borderWidth},line:{authored:facts.line.authored,frame:dimensions(facts.line.frame),ink:dimensions(facts.line.ink),background:facts.line.background}});
+  assert.deepEqual(semantic(primitiveMedia.print.facts),semantic(primitiveMedia.screen.facts),'W2.A screen/print primitive semantics diverged');
+  await primitivePage.emulateMedia({media:'print'});await load(primitivePage,'W2A');
+  const primitiveBefore=await primitivePage.evaluate(()=>window.proof.beforeExport());
+  const primitivePdfPath=resolve(output,'pdf','w2a-primitives.pdf');
+  await primitivePage.pdf({path:primitivePdfPath,format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false,margin:{top:'0',right:'0',bottom:'0',left:'0'},scale:1});
+  const primitiveAfter=await primitivePage.evaluate(()=>window.proof.afterExport());
+  assert.equal(primitiveBefore.documentHash,primitiveAfter.documentHash);assert.equal(primitiveBefore.framesHash,primitiveAfter.framesHash);assert.equal(primitiveAfter.layoutStable,true);
+  const primitiveForensic=await inspectPdf(primitivePdfPath);
+  assert.equal(primitiveForensic.pageCount,1);assert(primitiveForensic.pages[0].textContent.includes('W2.A primitive browser proof'));
+  assert(primitiveForensic.pages[0].textContent.includes('Grandeza'));assert(primitiveForensic.pages[0].textContent.includes('10.000 mV'));
+  assert(primitiveForensic.pages[0].textItems>0);assert(primitiveForensic.pages[0].imagePaintCount>=2);assert((primitiveForensic.pages[0].operatorCounts.fill??0)>0);
+  await write('pdf/w2a-primitives-forensics.json',primitiveForensic);
+  await primitivePage.locator('[data-page-id="w2a-page"]').screenshot({path:resolve(output,'screens','w2a-primitives-screen.png')});
+  evidence.w2aPrimitiveProof={status:'PASS',renderer:'DocumentRenderer -> PrimitiveRenderer/TableRenderer',resourcePipeline:'resolveAssets -> blob URL -> decodeImages',media:primitiveMedia,nativePdf:{path:primitivePdfPath,bytes:primitiveForensic.bytes,sha256:primitiveForensic.sha256,pageCount:primitiveForensic.pageCount,textItems:primitiveForensic.pages[0].textItems,imagePaintCount:primitiveForensic.pages[0].imagePaintCount}};
+  console.log('PASS W2.A representative primitives Chromium + native PDF');
+  await primitiveContext.close();
 
   const context=await browser.newContext({viewport:{width:1500,height:1200}});
   const page=await openPage(context,'G05'),g05Media=[];

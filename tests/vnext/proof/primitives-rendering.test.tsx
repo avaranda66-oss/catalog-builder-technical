@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CatalogDocumentSchema,
   EditorialObjectSchema,
+  TextStyleSchema,
   plainRichText,
   validateDocument,
   type CatalogDocument,
@@ -46,6 +47,24 @@ function representativeDocument():CatalogDocument {
 }
 
 describe('W2.A primitive domain contracts',()=>{
+  it('accepts only standalone Text typography/alignment style fields',()=>{
+    const accepted={fontFamily:'Noto Sans',fontSizePt:10,lineHeight:1.25,fontWeight:700 as const,color:'#173F52',textAlign:'center' as const};
+    expect(TextStyleSchema.parse(accepted)).toEqual(accepted);
+    for(const rejected of [
+      {...accepted,background:'#FFFFFF'},
+      {...accepted,paddingMm:{top:1}},
+      {...accepted,borders:{top:{pattern:'solid',thicknessPt:1,color:'#173F52'}}},
+      {...accepted,unknownField:true},
+    ])expect(TextStyleSchema.safeParse(rejected).success).toBe(false);
+
+    const base={id:'text-style',type:'text',frame:frame(1,2,30,17),zIndex:0,text:plainRichText('text-style','Estilo canônico')} as const;
+    expect(EditorialObjectSchema.safeParse({...base,style:accepted}).success).toBe(true);
+    expect(EditorialObjectSchema.safeParse({...base,style:{background:'#FFFFFF'}}).success).toBe(false);
+    expect(EditorialObjectSchema.safeParse({...base,style:{paddingMm:{top:1}}}).success).toBe(false);
+    expect(EditorialObjectSchema.safeParse({...base,style:{borders:{top:{pattern:'none'}}}}).success).toBe(false);
+    expect(EditorialObjectSchema.safeParse({...base,style:{surprise:true}}).success).toBe(false);
+  });
+
   it('uses frame.heightMm as the sole authored Text physical height authority',()=>{
     const text={id:'text',type:'text',frame:frame(1,2,30,17),zIndex:0,text:plainRichText('text','Altura canônica'),style:{}} as const;
     expect(EditorialObjectSchema.safeParse(text).success).toBe(true);
