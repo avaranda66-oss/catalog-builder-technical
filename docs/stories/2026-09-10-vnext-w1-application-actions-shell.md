@@ -79,6 +79,8 @@ GPT-5.6 Sol (High)
 - Production Chromium proof: `/v2` loaded with no Legacy chunks, Add Page/Undo/Redo worked through the Application runtime, refresh reset the in-memory draft, and `?catalog=...` under `/v2` remained VNext. `/`, root `?catalog=...`, and `/print` remained Legacy with no console/page errors.
 - Production build separated the VNext bootstrap (~33 kB JS) from `legacy-main` (~2.39 MB JS), corroborating runtime isolation.
 - CodeRabbit CLI gate unavailable in this environment: `/home/gabriel/.local/bin/coderabbit` is not installed. This is recorded as unavailable, not passed.
+- PR #16 opened against `main`: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/16`. Initial implementation head before the final documentation commit was `6ff981c5a5f3ca16ec325e054e017fb2c18f6f6c`.
+- Exact final PR head and GitHub Quality Gate conclusion are intentionally sourced from PR #16/final execution evidence after the last commit, avoiding a self-referential story-SHA loop.
 
 ### Completion Notes List
 
@@ -92,6 +94,7 @@ GPT-5.6 Sol (High)
 ### File List
 
 - `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md`
+- `docs/vnext/PROJECT-STATE.md`
 - `src/legacy-main.tsx`
 - `src/main.tsx`
 - `src/vnext/app/bootstrap.tsx`
