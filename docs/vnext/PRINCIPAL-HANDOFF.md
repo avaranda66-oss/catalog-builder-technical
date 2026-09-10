@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 CONTRACT READY FOR AUDIT
+STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 AMENDED CONTRACT UNDER PRINCIPAL REVIEW
 
 DATE: 2026-09-10
 
@@ -61,7 +61,7 @@ PR #16 — W1 Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
 
 W1: **COMPLETE**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. Before implementation, independently audit `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and its W2.0 story.
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. W2.0 remains under Principal review while the reconciled PR #17 amendment is re-audited. **W2 feature implementation has not started and must not start before Principal acceptance.**
 
 ## WHAT IS CANONICAL NOW
 
@@ -262,7 +262,7 @@ Governance rule: **MINIMUM EASY-BUTTON LAYER BEFORE FATHER PILOT**.
 No exact dates are frozen, and detailed W6/W7 implementation boundaries may move with evidence. The minimum easy-button requirement may not move behind the first father pilot.
 
 - **W1 — Application Actions + Minimal VNext Shell:** typed actions, immutable session, Undo/Redo/coalescing, and isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
-- **W2 — A4 Authoring + Primitives + Direct Manipulation:** canonical primitives, move/resize, finite-page guides/diagnostics, plus minimum page-template insertion seam.
+- **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering with Text-height resolution and Image focal point; W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. W2 is not complete until A–G and the visible basic-authoring path are executable.
 - **W3 — Save/Reopen/Catalog Library:** versioned persistence, autosave/local recovery, visible conflicts, and a persistable starter/catalog creation path.
 - **W4 — Advanced Table Editor:** structural editing, spreadsheet-style selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, titles/notes/footnotes.
 - **W5 — Complete Translation:** full semantic coverage, stale tracking, protection, coverage audit, and layout review.
@@ -453,7 +453,7 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 PRs #12 through #16 are merged. W0, W0.1, and W1 are complete. Current canonical main is `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-The next Principal action is to audit the documentation-only W2.0 contract in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`. Do not start W2 feature implementation until that contract is accepted. Its review PR must not be merged without separate authorization.
+The next Principal action is to re-audit the amended documentation-only W2.0 contract in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`. PR #17 remains the review vehicle. Do not start W2 feature implementation until the amendment is accepted. Do not merge PR #17 without separate authorization.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

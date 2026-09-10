@@ -1,6 +1,6 @@
 # Catalog Builder VNext — W2 A4 Authoring Contract
 
-STATUS: READY FOR PRINCIPAL AUDIT — CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
+STATUS: UNDER PRINCIPAL REVIEW — AMENDED CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
 
 DATE: 2026-09-10
 
@@ -68,6 +68,8 @@ mmToU(writtenMm) === suppliedU
 
 No action may make a geometry decision using epsilon comparisons or raw DOM floating-point coordinates.
 
+Normal user-facing geometry remains millimetres. Inspector and equivalent numeric geometry controls display and accept `x/y/width/height` in mm, then quantize those values to integer U at the Application Action boundary before any authored geometry decision. Raw U values are not ordinary user-facing units.
+
 `zIndex` remains a safe integer on the object. Rendering order remains deterministic by `(zIndex, page.objects array order)` as today. User-facing reorder actions own deliberate z-order changes; renderer order is never mutation authority.
 
 ### 2.1 Legal and illegal frames
@@ -75,7 +77,7 @@ No action may make a geometry decision using epsilon comparisons or raw DOM floa
 - Negative `x` and `y` are schema-legal. They represent deliberate authored placement that extends outside the physical page and produce a blocking page-bounds diagnostic.
 - Objects may cross or sit outside safe margins. Safe margins are guidance, not a placement constraint.
 - Objects may extend outside the physical A4 page in authored state. This is not silently clamped; it produces a blocking publication diagnostic.
-- Independent objects may overlap. Overlap is legal authored composition and remains a warning by default.
+- Independent objects may overlap. Overlap is legal authored composition and does not by itself require a universal publication warning.
 - Width and height must normalize to at least `1 U`. Zero, negative, non-finite, unsafe, or non-quantizable dimensions are invalid geometry and must fail the action/schema validation path.
 - `x`/`y` must normalize to safe integer U. Non-finite or unsafe values are invalid geometry.
 - `zIndex` must be a safe integer.
@@ -87,7 +89,7 @@ The `1 U` minimum is a canonical data minimum, not a UX handle size. The editor 
 
 Schema/action errors describe content that cannot become canonical: malformed action data, unknown fields, unsupported primitive variants, invalid IDs, non-finite geometry, non-positive dimensions, unsafe integers, impossible typed styles, or dangling references that canonical validation defines as errors.
 
-Diagnostics describe canonical authored content whose physical/layout result needs attention: outside safe area, outside page, overlap, text overflow, table overflow, and resource/publication failures. A diagnostic must never silently repair the document.
+Diagnostics describe canonical authored content whose physical/layout result needs attention: outside safe area, outside page, text overflow, table overflow, table infeasibility, and resource/publication failures. Contextual overlap feedback may exist in the editor when useful, but ordinary intentional overlap is not global publication-warning noise. A diagnostic must never silently repair the document.
 
 ## 3. Primitive contract
 
@@ -106,15 +108,15 @@ type ObjectBase = {
 
 ### 3.1 Text
 
-Minimum delta: **none to the existing canonical Text shape for W2**.
+`frame.heightMm` is the **sole authored physical height authority** for Text. The current production renderer/preflight already use the authored frame as the physical width/height envelope, and W2 preserves that authority.
 
-Canonical properties remain `id`, `type:'text'`, `frame`, `zIndex`, `locked?`, canonical `RichText`, existing `CellStyle`, and the existing text `height` policy. The current production renderer/preflight use the authored frame as the physical width/height envelope; W2 therefore preserves the `height` field for schema compatibility but does not reinterpret it as a second physical frame authority. W2 move/resize mutates `frame` only. Removing, repurposing, or making `height.mode:'auto'` rewrite `frame.heightMm` would reopen W0 and is outside W2.
+The existing Text-specific `height` field is not allowed to become a second physical frame authority. W2.A must resolve it before W3 freezes persisted VNext serialization. If the confirmed consumer audit remains true, the preferred implementation outcome is to remove/deprecate the redundant field. If compatibility requires it to remain temporarily, W2.A must document its exact non-physical semantics and establish a mandatory removal/migration gate before W3. It must never silently rewrite `frame.heightMm`.
 
 Translation relevance: **yes**. The canonical RichText is semantic source content. Existing RichText-local paragraph/inline identity rules remain intact.
 
 Renderer responsibility: render canonical RichText with resolved document/text style inside the authored frame, measure in Q, and report overflow without changing the frame or content.
 
-Future direct-editing seam: a later typed `text.setContent`/equivalent action may replace or structurally edit canonical RichText while preserving local identity rules. W2 does not build a rich-text editing framework merely to support object insertion/move/resize.
+W2.G owns minimum direct editing through typed `text.setContent`/equivalent actions that edit canonical RichText while preserving local identity rules. W2 does not build a giant rich-text framework merely to support this minimum editing surface.
 
 ### 3.2 Image
 
@@ -125,18 +127,24 @@ type ImageObject = ObjectBase & {
   type: 'image';
   assetId: string;
   fit: 'contain' | 'cover';
+  focalPoint?: {
+    x: number; // normalized 0..1
+    y: number; // normalized 0..1
+  };
 };
 ```
 
 `assetId` references an entry in `CatalogDocument.assets`. The asset record owns name, MIME, pixel dimensions, checksum/version, and accessibility alt text. The Image object does not duplicate that metadata.
 
-`contain` shows the complete source inside the authored frame. `cover` fills the authored frame using deterministic centered cropping. W2 does **not** add focal point, arbitrary crop rectangles, opacity, masking, corner radius, filters, or rotation. Those remain future additions if concrete product evidence requires them.
+`contain` shows the complete source inside the authored frame. `cover` fills the authored frame and uses `focalPoint` only to choose deterministic source positioning. Missing `focalPoint` defaults to `{ x: 0.5, y: 0.5 }`. Each coordinate is normalized and validated in `0..1`.
 
-Replace Image seam: typed `image.replace({ objectId, assetId })` changes the asset reference while preserving frame, fit, z-order, and object identity. It must reference an existing canonical asset.
+W2 does **not** add arbitrary crop rectangles, rotation, filters, masking, Photoshop-like editing, or arbitrary transforms. The focal point is the minimum seam required so Replace Image can preserve a professional authored frame when the important visual subject is not centered.
+
+Replace Image seam: typed `image.replace({ objectId, assetId })` changes the asset reference while preserving frame, fit, focal point, z-order, and object identity. It must reference an existing canonical asset.
 
 Translation relevance: no visible editorial text in the W2 Image object. Asset alt/localization policy may evolve with the translation wave without changing image geometry.
 
-Renderer responsibility: resolve only declared canonical assets through the existing asset URL/resource boundary; paint according to `fit`; never resize the authored frame. Missing/unready assets remain publication diagnostics.
+Renderer responsibility: resolve only declared canonical assets through the existing asset URL/resource boundary; paint according to `fit` and deterministic focal-point semantics; never resize the authored frame. Missing/unready assets remain publication diagnostics.
 
 ### 3.3 Table
 
@@ -242,7 +250,7 @@ W2.C exposes single-object selection by keeping `selectedObjectIds` at length `0
 
 `activePageId` is navigation/editor state. Page ordering and page IDs remain canonical; which page the editor is looking at is not authored catalog content.
 
-`mode` is ephemeral. `text-edit` reserves the future direct RichText-editing interaction without adding edit cursors, selections, or DOM ranges to `CatalogDocument`.
+`mode` is ephemeral. W2.G uses `text-edit` for direct RichText editing without adding edit cursors, selections, DOM ranges, contentEditable HTML, or caret state to `CatalogDocument`.
 
 Selection changes never create Undo history, never clear Redo, and never affect publication output.
 
@@ -260,6 +268,7 @@ object.move({ objectId, xU, yU })
 object.resize({ objectId, xU, yU, widthU, heightU })
 object.reorder({ objectId, targetIndex })
 image.replace({ objectId, assetId })
+text.setContent({ objectId, content }) // or an equivalent strict RichText action family
 page.template.insert({ templateId, afterPageId? })
 ```
 
@@ -294,15 +303,20 @@ Pointer events are input sampling, not domain mutations.
 
 ### 6.1 Move/resize lifecycle
 
-1. `pointerdown` records the selected object ID, the immutable canonical start frame in U, pointer-start coordinates, zoom transform, and a fresh gesture `transactionId` in editor interaction state.
-2. `pointermove` derives a candidate frame from the **start frame**, not from the previous pointermove result. Browser coordinates are converted at the editor boundary into a candidate U delta. Optional snapping resolves that candidate to another U frame.
+1. `pointerdown` captures at least `objectId`, `pageId`, the immutable canonical start frame in U, a canonical/session revision or equivalent precondition, lock state, pointer-start coordinates, coordinate-transform/zoom basis, and a fresh gesture `transactionId` in editor interaction state.
+2. `pointermove` derives a candidate frame from the **immutable start frame**, not from the previous pointermove result. Browser coordinates are converted at the editor boundary into a candidate U delta. Optional snapping resolves that candidate to another U frame.
 3. Intermediate candidate positions **do not enter `DocumentSession`** and do not create history.
 4. During the gesture, the editor renders an ephemeral visual transform/preview from the candidate frame.
-5. `pointerup` compares the final candidate U frame to the current canonical frame. If identical, the gesture ends as a semantic no-op. Otherwise it executes exactly one `object.move` or `object.resize` with the final U frame and the gesture `transactionId`.
-6. Successful commit clears the preview and the normal canonical render reflects the new frame.
-7. `Escape` or pointer cancellation discards the preview without executing an Application Action.
+5. Before `pointerup` commits, the editor re-resolves the canonical target and verifies the required start preconditions. It must not commit stale intent onto a target whose canonical meaning changed during the gesture.
+6. If the final candidate U frame is identical to the still-valid canonical start result, the gesture ends as a semantic no-op. Otherwise it executes exactly one `object.move` or `object.resize` with the final U frame and the gesture `transactionId`.
+7. Successful commit clears the preview and the normal canonical render reflects the new frame.
+8. `Escape`, `pointercancel`, or unsafe loss of pointer capture/focus discards the preview without executing an Application Action.
 
-Cancelled/no-op gestures do not create history and do not clear Redo.
+Explicit stale/cancellation cases include target deletion; canonical move/resize of the target by another action; active-page change; target becoming locked; `Escape`; `pointercancel`; unsafe pointer-capture/focus loss; and any failed final precondition. Undo or Redo while a gesture exists first cancels the gesture and clears preview, then executes the requested history operation.
+
+Cancelled/stale/no-op gestures execute zero gesture Application Actions, create zero gesture history, and do not clear Redo. A failed final commit clears preview and leaves the canonical document unchanged.
+
+Resize-handle crossing must be deterministic and must never submit zero or negative dimensions. `1 U` remains the canonical data minimum. Any larger interaction minimum is editor policy rather than canonical geometry authority.
 
 ### 6.2 W1 `transactionId` participation
 
@@ -320,10 +334,15 @@ Minimum model:
 type InteractionPreview = {
   transactionId: string;
   objectId: string;
+  pageId: string;
   kind: 'move' | 'resize';
+  startFrameU: { xU: number; yU: number; widthU: number; heightU: number };
+  startRevision: number | string;
   frameU: { xU: number; yU: number; widthU: number; heightU: number };
 };
 ```
+
+The exact revision/precondition representation is an application/session detail; it must be sufficient to detect stale canonical target state before commit. Lock state and coordinate-transform/zoom basis are captured in active interaction state even if they are not duplicated into the minimal preview record.
 
 `DocumentSession.getSnapshot().document` remains the only canonical authored document during the gesture.
 
@@ -403,9 +422,7 @@ Safe-area behavior:
 - the system never clamps an object back inside it;
 - violation is a `WARNING` and does **not** block publication by itself.
 
-W2 canonical diagnostic name: `OBJECT_OUTSIDE_SAFE_AREA / WARNING`.
-
-The current W0 implementation name `SAFE_AREA_VIOLATION` has the same semantics. W2.D should normalize/alias the outward code without changing the established warning behavior.
+The canonical diagnostic remains `SAFE_AREA_VIOLATION / WARNING`. W2 does not rename or alias this established W0 code merely for stylistic consistency. UI-facing copy may describe the condition more clearly without changing the canonical identifier.
 
 If `safeArea` is absent, no safe-area diagnostic is emitted and no implicit default is invented by preflight. New blank pages may continue using the existing explicit 12 mm default supplied by the document/page factory.
 
@@ -413,17 +430,17 @@ If `safeArea` is absent, no safe-area diagnostic is emitted and no implicit defa
 
 The existing diagnostic severities are `ERROR` and `WARNING`; W2 does not introduce an `INFO` level merely for terminology. In publication, `ERROR` is blocking and `WARNING` is reviewable/non-blocking.
 
-| Condition | W2 canonical code | Severity | Publication | Required behavior |
+| Condition | Canonical code | Severity | Publication | Required behavior |
 |---|---|---|---|---|
-| Frame crosses configured safe area | `OBJECT_OUTSIDE_SAFE_AREA` | `WARNING` | Non-blocking | Keep authored frame; show guidance. |
+| Frame crosses configured safe area | `SAFE_AREA_VIOLATION` | `WARNING` | Non-blocking | Keep authored frame; show guidance. |
 | Any frame ink box crosses physical page | `OBJECT_OUTSIDE_PAGE` | `ERROR` | Blocking | Keep authored frame; require explicit user correction. |
-| Text intrinsic rendered content exceeds authored frame | `TEXT_CONTENT_OVERFLOW` | `ERROR` | Blocking | Keep text/frame; no auto-grow or font shrink. |
+| Text intrinsic rendered content exceeds authored frame | `TEXT_OBJECT_OVERFLOW` | `ERROR` | Blocking | Keep text/frame; no auto-grow or font shrink. |
 | Table intrinsic content exceeds authored table frame | `TABLE_CONTENT_OVERFLOW` | `ERROR` | Blocking | Keep table/frame; no automatic fit-height. |
-| Independent object frames overlap | `OBJECT_OVERLAP` | `WARNING` | Non-blocking | Preserve overlap; it may be intentional composition. |
+| Table width constraints cannot resolve inside authored frame | `TABLE_WIDTH_INFEASIBLE` | `ERROR` | Blocking | Keep authored frame; report infeasible table layout. |
 
-The current W0 text diagnostic `TEXT_OBJECT_OVERFLOW` has the intended R0.1.4 semantics. W2.D should normalize/alias it to `TEXT_CONTENT_OVERFLOW` without changing the Q/Q fit rule.
+Existing canonical W0 diagnostic codes stay stable. W2 must not create a second vocabulary or aliases unless a later versioned compatibility boundary demonstrates a real need. Human-readable UI messages may evolve independently of the canonical code.
 
-No separate blocking collision rule is added in the first W2 slice. Overlap remains legal. If later evidence requires a special collision class, it must be explicit and must not silently move either object.
+`OBJECT_OVERLAP` remains an existing canonical code available where a specific diagnostic policy legitimately emits it, but W2 removes any requirement to emit it for every pair of intersecting frames. Professional composition intentionally includes Text over Shape, Text over Image, badges, background fields, decorative bands, and layered editorial elements. W2.D may provide contextual or primitive-aware editor feedback when useful; ordinary intentional overlap is not a noisy global publication warning. No automatic collision avoidance is introduced, and no persisted "decorative Shape" role is invented solely to suppress warnings.
 
 Missing canonical asset references use `ASSET_REFERENCE_DANGLING`/`ASSET_NOT_FOUND` as blocking errors; resource load/decode failures remain blocking publication/resource diagnostics.
 
@@ -435,7 +452,18 @@ Move and resize use the ordinary object frame actions. Resize does not edit text
 
 The renderer continues to measure text in Q against the authored frame projection. Equality in Q fits; one-Q excess blocks according to R0.1.4. No W2 pointer gesture writes renderer measurements back to RichText or frame geometry.
 
-Future direct editing remains possible because text content stays canonical RichText and editing mode/caret selection remains ephemeral. Future text actions must be typed domain commands, not `contentEditable` DOM extraction as canonical authority.
+W2.G delivers the minimum direct Text editing surface. A user can activate text editing directly from the page and edit canonical RichText through strict typed Application Action(s). DOM selection, caret state, composition state, and any `contentEditable` representation remain ephemeral and are never canonical truth.
+
+Minimum W2.G behavior:
+
+- `Escape` cancels the active edit without committing canonical content;
+- commit produces controlled semantic history rather than one history entry per browser keystroke;
+- the authored frame is preserved by text-content editing;
+- overflow is diagnosed through the existing Q/Q publication rules rather than auto-growing or shrinking the frame;
+- RichText paragraph/inline local identity remains legal and is not globalized;
+- common technical symbols are supported at minimum: `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`.
+
+W2.G does not require a giant rich-text framework. Final committed content must pass through typed Application Actions.
 
 ## 13. Table frame interaction
 
@@ -446,6 +474,18 @@ Future direct editing remains possible because text content stays canonical Rich
 Width change causes the existing Table Engine to re-resolve columns against the new frame width. Fixed/flex/min/max and deterministic U/Q projection rules remain unchanged.
 
 Height change changes only the authored envelope used for fit. Measurement continues to derive intrinsic Q height and may produce or clear `TABLE_CONTENT_OVERFLOW`; it never writes the measured height into the frame.
+
+A geometrically valid `object.resize` **must commit even when the new Table frame makes the table layout/content infeasible**. The required flow is:
+
+```text
+valid authored resize
+→ commit canonical frame
+→ Table Engine recompiles against that frame
+→ TABLE_WIDTH_INFEASIBLE and/or TABLE_CONTENT_OVERFLOW as appropriate
+→ publication diagnostics
+```
+
+Do not silently clamp authored width, silently grow authored height, or reject the resize merely because table content no longer fits. Reject only canonical geometry/invariant violations.
 
 `Fit Height to Content` remains a future explicit Application Action and is **not** part of W2 direct resize. W2 must not smuggle fit-height behavior into renderer, measurement, pointerup, or snapping.
 
@@ -480,6 +520,8 @@ Before Group code is written, W2.F must freeze these questions together:
 - whether nested groups exist in Father V1.
 
 Until that contract is ratified, W2 UI must not emulate Group by maintaining a hidden parallel object tree.
+
+W2.F completion is a required gate before W3 freezes persisted VNext document serialization.
 
 ## 16. Page-template insertion seam
 
@@ -535,11 +577,14 @@ W1 snapshot history remains the authority.
 | `object.resize` | Restores the exact prior frame. | Restores the committed final frame. |
 | `object.reorder` | Restores prior visual order/zIndex values. | Restores committed order. |
 | `image.replace` | Restores prior asset reference. | Restores replacement reference. |
+| `text.setContent` / equivalent | Restores the prior canonical RichText snapshot. | Restores the committed canonical RichText snapshot. |
 | `page.template.insert` | Removes the entire instantiated page atomically. | Restores the same page and all originally allocated IDs atomically. |
 
 Semantic no-ops do not enter history. Failed actions do not enter history. Preview/cancel/selection changes do not enter history and do not clear Redo.
 
 A direct manipulation gesture that commits one action therefore produces one Undo step. If a later gesture legitimately emits multiple actions under one `transactionId`, W1 coalescing preserves that same one-step user expectation.
+
+If Undo or Redo is invoked while a move/resize gesture is active, the editor cancels that gesture first and clears preview before executing the history operation. Cancellation itself creates no history and does not clear Redo. W2.G text-edit commit similarly uses controlled semantic history rather than DOM-keystroke history.
 
 ## 18. Future AI compatibility
 
@@ -575,6 +620,8 @@ Snapping is optional intent-resolution before the action. AI may submit exact ge
 - reject non-finite/unsafe/non-positive geometry;
 - allow negative x/y as canonical authored placement;
 - validate Image/Icon asset references and missing-asset failure/diagnostic behavior;
+- Image `focalPoint` defaults to `{0.5,0.5}`, validates normalized `0..1` coordinates, round-trips deterministically, and affects only `cover` positioning;
+- Text physical height authority is `frame.heightMm` only, with the secondary Text height field resolved under the W2.A/W3 gate;
 - preserve RichText-local identity scope.
 
 ### Application action tests
@@ -590,25 +637,37 @@ Snapping is optional intent-resolution before the action. AI may submit exact ge
 - locked target;
 - invalid geometry;
 - action failure leaves document/history unchanged and avoids avoidable ID consumption;
-- Undo/Redo for insert/delete/duplicate/move/resize/reorder/image replace/template insertion.
+- valid Table frame resize may commit into `TABLE_WIDTH_INFEASIBLE` and/or `TABLE_CONTENT_OVERFLOW` without changing `TableModel` content/IDs;
+- Undo/Redo for insert/delete/duplicate/move/resize/reorder/image replace/text edit/template insertion.
 
 ### Direct-manipulation tests
 
 - hundreds of pointermove-equivalent preview updates produce zero canonical session writes until commit;
 - pointerup commits one move/resize action;
 - one drag is one Undo step;
-- Escape/pointercancel clears preview with no document/history/Redo change;
+- Escape clears preview with zero document/history/Redo mutation;
+- pointercancel or unsafe lost pointer capture/focus cancels with zero gesture action/history;
+- stale target changed canonically during gesture produces no stale commit;
+- target deleted during gesture produces no stale commit;
+- active page change during gesture cancels the gesture;
+- target becoming locked during gesture prevents the final commit;
+- Undo during a gesture cancels preview first, then performs Undo;
+- Redo during a gesture cancels preview first, then performs Redo;
+- zero-delta move/resize is a semantic no-op and preserves Redo;
 - failed final commit clears preview and restores canonical visual state;
+- left/top resize derives the complete final frame from the immutable start frame;
+- resize-handle crossing never submits zero/negative dimensions and does not make a UX minimum the canonical geometry authority;
 - repeated actions with one `transactionId` still coalesce under W1 when that seam is used.
 
 ### Geometry/diagnostic tests
 
 - object outside safe area → `WARNING`, non-blocking;
 - object outside page → `ERROR`, blocking;
-- overlapping independent objects remain legal and emit only the overlap warning;
+- intentional overlap composition remains legal and is not required to produce universal publication-warning noise;
 - text overflow uses Q/Q fit and does not mutate frame/content;
 - table overflow uses existing Q/Q fit and does not mutate frame/content;
 - table frame move/resize leaves `TableModel` content/IDs unchanged;
+- table width infeasibility after valid frame resize preserves the committed frame and emits the existing `TABLE_WIDTH_INFEASIBLE` diagnostic;
 - snap result is deterministic for identical pure U inputs and deterministic ties;
 - snapping itself does not mutate a document.
 
@@ -616,10 +675,10 @@ Snapping is optional intent-resolution before the action. AI may submit exact ge
 
 - renderer supports every implemented primitive without editor chrome;
 - selection does not alter canonical renderer output;
-- preview state is absent from `DocumentRenderer` props/publication tree;
+- preview, guides, selection, and editor mode are absent from `DocumentRenderer` mutation authority/publication tree;
 - publication rendering is unaffected by selection/active-page/editor mode;
 - editor handles/guides/safe-area emphasis do not appear under the publication root;
-- Image/Icon resolve only declared assets;
+- Image/Icon resolve only declared assets, and Image focal-point rendering is deterministic;
 - architecture-boundary tests continue blocking React/DOM/browser imports from application/domain/table and Legacy authority from VNext.
 
 ### Template tests
@@ -631,19 +690,35 @@ Snapping is optional intent-resolution before the action. AI may submit exact ge
 - editing the inserted page uses ordinary object actions with no template renderer/link;
 - Undo removes the inserted page atomically and Redo restores the same allocated IDs.
 
+### Group tests
+
+- W2.F freezes and tests ownership, coordinate model, frame semantics, move, resize/scaling, z-order, duplicate, delete, ungroup, and nesting policy before W3;
+- Group actions use canonical objects/IDs and do not degrade into temporary multi-selection or a hidden parallel object tree;
+- duplicate/ungroup preserve required geometry and identity invariants with predictable Undo/Redo;
+- renderer/publication parity holds for every ratified Group operation.
+
+### Direct Text editing tests
+
+- direct page activation enters ephemeral `text-edit` mode without serializing DOM/caret state;
+- Escape cancels with no canonical content/history/Redo mutation;
+- committed RichText edits go through typed Application Actions and produce controlled semantic Undo/Redo;
+- editing preserves the authored frame and lets existing overflow diagnostics report fit failures;
+- paragraph/inline local identity remains valid;
+- at minimum `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, and `≈` can be authored without HTML becoming canonical truth.
+
 ## 20. Principal-auditable W2 PR decomposition
 
 ### W2.A — Primitive/domain + publication-safe renderer contracts
 
-Scope: add Image, Shape, Line, and Icon typed canonical variants; minimal asset MIME/reference delta for SVG if required; exhaustive publication-safe rendering and primitive validation; preserve Text/Table contracts.
+Scope: add Image, Shape, Line, and Icon typed canonical variants; minimal asset MIME/reference delta for SVG if required; exhaustive publication-safe rendering and primitive validation; resolve the secondary Text height field so `frame.heightMm` remains the sole authored physical height authority; add the minimal normalized Image `focalPoint` seam with deterministic centered default.
 
 Dependencies: merged W1 only.
 
 Visible result: canonical documents containing the new generic primitives can be validated and rendered through the production renderer/proof harness. No editor authoring controls yet.
 
-Required tests: primitive schema/reference tests, renderer tests, publication-no-chrome tests, architecture-boundary tests, existing W0 proof regressions.
+Required tests: primitive schema/reference tests, Text-height authority gate, Image focal-point default/validation/serialization/rendering tests, renderer tests, publication-no-chrome tests, architecture-boundary tests, existing W0 proof regressions.
 
-Must not implement: selection, drag/resize, snapping, templates UI, Group, persistence, crop/focal editing, vector paths, rich-text editor, table structural editing.
+Must not implement: selection, drag/resize, snapping, templates UI, Group, persistence, arbitrary crop rectangles, vector paths, giant rich-text editor, table structural editing.
 
 ### W2.B — Object Application Actions
 
@@ -659,25 +734,25 @@ Must not implement: pointer UI, selection persistence, snapping, template librar
 
 ### W2.C — Editor selection + direct move/resize interaction
 
-Scope: ephemeral active page/single selection, future multi-selection seam, editor overlays, move/resize gesture preview, one final canonical commit, Escape/cancel, visible Undo behavior.
+Scope: ephemeral active page/single selection, future multi-selection seam, editor overlays, stale-safe move/resize gesture preview, one final canonical commit, Escape/cancel, visible Undo behavior, and the minimum discoverable basic authoring surface.
 
 Dependencies: W2.B.
 
-Visible result: a user can select one canonical object in `/v2`, drag it, resize it, cancel a gesture, and Undo/Redo one gesture predictably.
+Visible result: a normal user can discover and perform Add Text, Add Image, Add Table, Add Shape, Add Line, Delete, Duplicate, Move, Resize, z-order manipulation, Replace Image, and numeric `x/y/width/height` editing. Inspector/equivalent geometry is displayed and entered in millimetres, quantized to U at the application boundary. The user can cancel a gesture and Undo/Redo one committed gesture predictably.
 
-Required tests: zero canonical writes during preview, one action on pointerup, one Undo per gesture, cancellation/failed-commit history safety, publication unaffected by selection/preview.
+Required tests: zero canonical writes during preview, stale-target/page/lock cancellation, Undo/Redo-during-gesture ordering, one action on pointerup, one Undo per gesture, left/top immutable-start resize, handle-crossing validity, cancellation/failed-commit history safety, visible basic-authoring action wiring, mm→U Inspector quantization, publication unaffected by selection/preview.
 
-Must not implement: multi-selection behavior, Group, snapping, persistent guides, direct RichText editing, persistence, automatic reflow.
+Must not implement: advanced table tools, multi-selection behavior, Group, snapping, persistent guides, direct RichText editing, persistence, automatic reflow, or a redesign of the final editor UX.
 
 ### W2.D — Snapping + guides + authoring diagnostics
 
-Scope: pure U snapping, ephemeral snap guides, safe-area interaction feedback, page-bounds/overflow/overlap presentation, diagnostic name normalization described here.
+Scope: pure U snapping, ephemeral snap guides, safe-area interaction feedback, page-bounds/overflow/table-infeasibility presentation, and contextual/primitive-aware overlap feedback when useful while preserving existing canonical W0 diagnostic identifiers.
 
 Dependencies: W2.C.
 
 Visible result: move/resize gains predictable snap assistance and clearly distinguishes safe-margin warnings from blocking physical/page/content errors.
 
-Required tests: deterministic snapping/ties, no snap mutation, safe-area warning, page blocking error, overlap warning, Q/Q text/table overflow preservation, publication tree free of guides.
+Required tests: deterministic snapping/ties, no snap mutation, `SAFE_AREA_VIOLATION`, `OBJECT_OUTSIDE_PAGE`, `TEXT_OBJECT_OVERFLOW`, `TABLE_CONTENT_OVERFLOW`, `TABLE_WIDTH_INFEASIBLE`, intentional-overlap publication-noise regression, Q/Q text/table overflow preservation, publication tree free of guides.
 
 Must not implement: automatic clamp/reflow, collision avoidance, persistent ruler-guide document model, Fit Height, Group.
 
@@ -701,26 +776,37 @@ Dependencies: W2.C and W2.E identity-instantiation semantics.
 
 Visible result: a selected set of ordinary page objects can become a Group and return to equivalent ordinary objects through explicit actions without hidden topology.
 
-Required tests: all group invariants from section 15, fresh duplicate IDs, move/resize semantics, z-order, delete/ungroup, Undo/Redo, renderer/publication parity.
+Required tests: all group invariants from section 15, fresh duplicate IDs, move/resize semantics, z-order, delete/ungroup, nesting policy, Undo/Redo, renderer/publication parity. W2.F completion is a required gate before W3 serialization freeze.
 
 Must not implement: nested groups unless separately ratified, component library, reusable live-linked groups, arbitrary transforms/rotation, vector editing.
 
+### W2.G — Minimum Direct Text Editing
+
+Scope: activate text editing directly from the page; edit canonical RichText through strict typed Application Action(s); preserve authored frames; keep DOM/caret/composition state ephemeral; provide controlled semantic history; support common technical symbols.
+
+Dependencies: W2.C and the canonical Text/Application Action foundations from W2.A/W2.B.
+
+Visible result: a normal user can enter direct text-edit mode on a Text object, author ordinary technical copy including `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, and `≈`, commit through typed actions, cancel with Escape, and Undo/Redo the committed semantic edit predictably.
+
+Required tests: direct activation, Escape cancellation, typed commit, controlled Undo/Redo, frame preservation, overflow diagnostics, RichText-local identity, technical-symbol authoring, renderer/publication independence from DOM/caret/editor state.
+
+Must not implement: a giant rich-text framework, arbitrary HTML as canonical content, persistence, collaborative cursors, or advanced typography beyond the minimum canonical RichText capabilities already justified.
+
+W2 is **not complete** until W2.A through W2.G are executable and the minimum visible basic-authoring path exists.
+
 ## 21. Out of scope for this contract wave
 
-No W2.0 documentation work implements persistence, Supabase/Auth VNext, save/autosave, translation, advanced table structural editing, TSV paste, table presets, full template library, catalog starters, components library, PIM, Presence, Realtime, CRDT, AI authoring, publication redesign, or automatic pagination/reflow.
+No W2.0 documentation work implements persistence, Supabase/Auth VNext, save/autosave, translation, advanced table structural editing, TSV paste, table presets, full template library, catalog starters, components library, PIM, Presence, Realtime, CRDT, AI authoring, publication redesign, automatic pagination/reflow, automatic collision avoidance, arbitrary rotation, diagonal/path/Bezier authoring, arbitrary crop rectangles, or Illustrator-like editing.
 
 No unrelated Legacy or lab debt is part of W2. In particular, `src/labs/product-workspace-ux/components/ConflictReviewModal.tsx` remains untouched.
 
-## 22. Principal audit points
+## 22. Principal re-audit points
 
-No unresolved question blocks W2.A after this contract is accepted. The Principal should explicitly audit these two deliberate decisions because they constrain later slices:
+W2.0 remains under Principal review until this amendment is audited. W2 feature implementation has not started.
 
-1. Keep the existing authored `*Mm` frame serialization while requiring integer-U action/snap/layout authority, rather than renaming the canonical Frame schema during W2.
-2. Defer serialized Group modeling to W2.F so ownership/coordinate/resize semantics are frozen together rather than improvised during W2.C UI work.
+The re-audit should confirm that the reconciled decisions are represented without reopening W0/W1: authored `*Mm` serialization with U operational authority and mm-facing Inspector controls; sole Text physical-height authority in `frame.heightMm`; Image focal point; commit-then-diagnose Table resize; stable W0 diagnostic codes; legal intentional overlap without universal publication warning; stale-safe gesture lifecycle; canonical-vs-editor resize minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
 
-Any rejection of either decision should be resolved in this contract before feature implementation starts.
-
-READY FOR PRINCIPAL AUDIT
+READY FOR PRINCIPAL RE-AUDIT
 
 DO NOT MERGE
 
