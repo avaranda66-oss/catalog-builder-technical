@@ -10,6 +10,19 @@ DATE: 2026-09-09
 
 This blueprint describes the recommended product experience and the architectural boundaries it must respect. It deliberately separates durable contracts from interaction hypotheses that should change when user testing gives better evidence.
 
+## POST-W0 EVIDENCE UPDATE
+
+PR #14 merged the proven W0 foundation plus W0.1 production-boundary hardening at engineering base `865251dc023148b349a9ceba8051c249c0bbb647`. Production foundation authority is now `src/vnext/`; W1 has not started.
+
+Two product-evidence sources now sharpen this blueprint without changing the foundation architecture:
+
+- the experimental `lab/vnext-editor-ux-astra` interaction lab, initiated by Astra and continued by Gemini after Astra quota exhaustion;
+- a 24-page editorial-capability audit across Additel 875, Additel 761A, Fluke 9140/9142/9143/9144 material, and Isotech Europa/Venus/Calisto.
+
+The lab is **EXPERIMENTAL / NOT PRODUCTION / DO NOT MERGE BLINDLY**. Its mock state, approximate layout logic, and native-table shortcuts are not production authority. The reference documents are capability evidence only; do not copy competitor branding.
+
+Both evidence streams support the existing generic architecture. They strengthen Father-V1 requirements for direct rich-text editing, standalone Image/Shape/Line/Group capability, spreadsheet-like table interaction, TSV paste, marker bulk toggle, explicit Fit Height, highly discoverable Replace Image, and a minimum easy-button layer of table presets, page templates, catalog starters, and reusable components before the first father pilot.
+
 ## PRODUCT EXPERIENCE TARGET
 
 The editor should feel like a professional document/canvas tool specialized for technical catalogs, not like a developer console, database form, or rigid vertical-flow generator.
@@ -161,6 +174,7 @@ The UX should allow users to configure that engine rather than choose between mu
 Capabilities expected across V1 and its first father pilot:
 
 - insert canonical table;
+- spreadsheet-like range/row/column selection;
 - add/delete rows and columns;
 - grouped headers;
 - section rows;
@@ -168,16 +182,19 @@ Capabilities expected across V1 and its first father pilot:
 - merge/unmerge fail-closed;
 - typed technical values;
 - image/marker/rich-text cells;
+- TSV/spreadsheet clipboard paste for bulk technical data entry;
+- marker-cell bulk toggle for compatibility matrices;
 - table title;
 - caption;
 - note;
 - footnote;
 - legend;
 - table presets;
+- explicit **Fit Height to Content / Ajustar altura**;
 - independent table frames;
 - deterministic physical fit diagnostics.
 
-The product should explain impossible layout rather than silently shrinking content or changing structure.
+The product should explain impossible layout rather than silently shrinking content or changing structure. Fit Height is an explicit Application Action/user command that may update authored height only when invoked; measurement must never resize the frame silently.
 
 ## RICH COLORS
 
@@ -203,7 +220,8 @@ Expected capabilities:
 - font family/size/weight/style;
 - alignment;
 - line/paragraph controls as needed;
-- rich text where supported by the canonical content model;
+- direct rich-text editing backed by the canonical content model;
+- technical-symbol insertion UX for common symbols such as `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, and `≈`, without treating that sample as exhaustive;
 - technical tokens that remain semantically protected for translation;
 - overflow diagnostics against authored frames.
 
@@ -214,7 +232,7 @@ Do not rasterize text as canonical content.
 Expected image workflow:
 
 - insert from Asset Library/upload;
-- replace image without rebuilding the surrounding composition;
+- highly discoverable **Replace Image** without rebuilding the surrounding composition;
 - fit/fill/crop presentation controls;
 - retain source/provenance metadata;
 - show broken/missing asset diagnostics;
@@ -262,7 +280,11 @@ Examples:
 - Specifications + Image;
 - TA Family Catalog.
 
-Applying a preset/template produces canonical editable content/style.
+Applying a preset/template produces canonical editable content/style. A catalog starter likewise resolves to an ordinary canonical editable document.
+
+The father-facing easy-button layer consists of table presets, page templates, catalog starters, reusable components/`Blocos`, and contextual commands. `Preset != Engine`, `Template != New Renderer`, and `Component != Special Block Engine`.
+
+A **minimum** version of this easy-button layer must exist before the first father pilot; W7 remains the later maturation/expansion wave.
 
 No surprise global live propagation in V1.
 
@@ -314,9 +336,11 @@ Recommended workflow:
 9. run layout QA/preflight;
 10. review any `STALE`, overflow, or missing-translation diagnostics.
 
-Explicit coverage includes **TABLE TITLE** as well as captions, headers, group headers, row/section headers, rich-text cells, notes, footnotes, legends, banners, headers/footers, covers, contact labels, and component/template text.
+Explicit coverage includes text objects, **TABLE TITLE**, captions, group headers, column headers, row headers, section rows, rich-text cells, notes, footnotes, legends, cover copy, headers/footers, and component/template text.
 
 When source text changes, affected localized leaves become **STALE**. Do not silently overwrite prior translation work.
+
+Translation-driven growth must produce a diagnostic plus an explicit corrective action. It must not silently mutate authored geometry or topology, and architecture must not assume unsupported average translation-expansion percentages.
 
 ## PRODUCT DATA SEAM
 
@@ -353,7 +377,7 @@ Do not create:
 - DOM automation as canonical mutation authority;
 - unrestricted whole-document JSON replacement.
 
-AI should compose safe, validated, undo-compatible actions and receive structured results/IDs.
+AI should compose safe, validated, undo-compatible actions and receive structured results/IDs. It should eventually invoke the same ordinary actions as the user: add page, insert object, move, resize, edit text, insert/populate table, merge, apply preset, and related canonical commands.
 
 Autonomous authoring is **FUTURE**, not V1 scope.
 
@@ -385,7 +409,7 @@ Recommended behavior:
 - physical-page overflow is clearly distinguished from safe-margin warning;
 - warnings never silently move objects.
 
-Default guide visibility and safe-area visualization are **TESTABLE UX HYPOTHESIS**.
+The UX lab gives high-confidence support to a hybrid guidance principle: safe margins stay subtle in repose, become stronger during selection/movement, and warn rather than hard-constrain. Exact opacity, color, line style, and trigger timing remain **TESTABLE UX HYPOTHESIS**.
 
 ## DIAGNOSTICS
 
@@ -439,24 +463,23 @@ First father pilot should be deliberately narrow but real.
 
 Required milestone:
 
-- template-first creation;
+- new catalog from a starter/template;
 - real A4 pages;
-- page add/duplicate/delete/reorder;
-- direct text edit;
-- image insert/replace;
-- one canonical table;
-- basic grouped headers;
-- row/column add/delete;
+- page add/duplicate/reorder;
+- direct title/rich-text edit;
+- product image insert/replace;
+- one canonical technical table;
+- row/column add;
+- grouped headers and section rows;
 - table title/note/footnote;
 - move/resize;
-- snap/safe guide;
-- Undo/Redo;
-- autosave;
-- reopen;
+- safe-margin feedback;
+- visible predictable Undo/Redo;
+- save, close, and reopen;
 - local recovery;
-- basic diagnostics;
-- real PDF;
-- first Spanish translation walkthrough.
+- translation to Spanish;
+- warning/preflight review;
+- professional Chromium PDF publication.
 
 Observe task completion, errors, hesitation, terminology confusion, and whether the user trusts save/recovery/publication.
 
@@ -483,23 +506,24 @@ These are architectural/product boundaries, not interface-position preferences:
 - Chromium textual/vector publication path;
 - no raster page export as VNext authority;
 - literal or explicit typed `DataBinding` seam;
-- presets/templates yield canonical editable content.
+- presets/templates yield canonical editable content;
+- a minimum easy-button layer exists before the first father pilot.
 
 ## TESTABLE UX HYPOTHESIS
 
 These should be tested rather than frozen prematurely:
 
-- exact number of tool icons;
-- Inspector width;
-- Inspector tab/group organization;
-- contextual table toolbar position;
-- Layers default visibility;
-- safe-guide visibility;
-- default zoom;
+- exact Tool Rail icon count;
+- exact contextual toolbar composition and placement;
+- exact Inspector width/tab/group organization;
+- exact safe-guide visual treatment;
+- `Blocos` vs `Componentes` wording;
+- exact Pages/Layers defaults;
+- exact zoom;
+- exact keyboard workflow/shortcut set;
+- exact color-palette presentation and custom-color prominence;
 - right-click density;
-- custom-color prominence;
 - page thumbnail size;
-- exact shortcut set;
 - exact onboarding order;
 - how much table structure appears inline versus in the Inspector.
 
@@ -509,47 +533,48 @@ Changing one of these after user testing is normal product iteration and does no
 
 Explicit future capabilities:
 
-- PIM/product knowledge;
+- live PIM/product binding;
 - Presence;
-- Realtime collaboration;
+- Realtime collaboration / CRDT;
 - AI image generation;
 - autonomous AI catalog authoring;
-- approval workflows.
+- complex approval/workflow automation;
+- advanced offset-print features if later justified.
 
 Design seams where cheap and clear, but do not make these V1 prerequisites.
 
 ## FIRST IMPLEMENTATION WAVES
 
-### W0 — Foundation promotion
+### W0 — Foundation promotion + W0.1 boundary hardening
 
-Promote/move the proven FOUNDATION-PROOF core into production VNext authority. Preserve one engine and the proven physical/publication contracts.
+**MERGED / COMPLETE.** The proven foundation is production-owned under `src/vnext/` with the W0.1 public-API, footer-side-channel, scoped-CSS, and `@page` boundaries protected by architecture tests.
 
 ### W1 — Application Actions + minimal VNext shell
 
-Establish typed mutation actions and the minimal editor shell that invokes them.
+**NOT STARTED.** Establish typed mutation actions, Undo/Redo-compatible transaction semantics, and the minimal editor shell that invokes them.
 
 ### W2 — A4 authoring/direct manipulation + primitives
 
-Deliver direct page/object authoring for canonical primitives with move/resize, guides, and diagnostics.
+Deliver canonical primitive authoring, move/resize, guides/diagnostics, and a minimum page-template insertion seam.
 
 ### W3 — Save/Reopen/Catalog Library
 
-Add versioned persistence, CAS, autosave/local recovery, reopen, visible conflicts, and father-facing catalog access.
+Add versioned persistence, CAS, autosave/local recovery, reopen, visible conflicts, father-facing catalog access, and a persistable starter/catalog creation path.
 
 ### W4 — Advanced Table Editor
 
-Expose the single proven table engine through father-usable structural editing, presets, titles/notes/footnotes, grouped headers, and advanced controls.
+Expose the one proven table engine through father-usable structural editing, spreadsheet-like selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, grouped headers, titles/notes/footnotes, and advanced controls.
 
 ### W5 — Complete Translation VNext
 
 Implement complete semantic leaf coverage, Legacy translation salvage, protection, stale tracking, coverage audit, and layout QA.
 
-### W6 — Publication integration + First Father Pilot
+### W6 — Publication integration + minimum easy-button layer + First Father Pilot
 
-Integrate immutable publication snapshot/PDF artifacts/basic sharing and run the first father pilot including Spanish translation.
+Integrate immutable publication snapshot/PDF artifacts/basic sharing and ensure minimum usable page templates, catalog starter, and starter reusable components exist before running the first father pilot including Spanish translation.
 
-### W7 — UX corrections + templates/components/assets/sharing
+### W7 — Evidence-driven maturation
 
-Use pilot evidence to correct UX and broaden reusable templates/components/assets plus read-only sharing.
+Use father-pilot evidence to broaden templates/components, Asset Library, sharing, and polish, and to correct tested UX friction.
 
-No exact dates are frozen.
+No exact dates are frozen. Detailed W6/W7 boundaries may evolve, but the **minimum easy-button layer before the father pilot** is a durable product requirement.
