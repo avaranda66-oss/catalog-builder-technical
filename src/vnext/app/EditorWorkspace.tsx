@@ -6,9 +6,14 @@ import { compilePlans, DocumentRenderer } from '../rendering';
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 
-type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' };
+type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
 const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+
+function createGestureTransactionId(): string {
+  if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
+  return globalThis.crypto.randomUUID();
+}
 
 function useDocumentSession(session: DocumentSession) {
   return React.useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
@@ -49,7 +54,8 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     controllerRef.current = new EditorInteractionController({
       getDocument: () => session.getSnapshot().document,
       getActivePageId: () => activePageIdRef.current,
-      execute: (action) => session.execute(action),
+      createTransactionId: createGestureTransactionId,
+      execute: (action, context) => session.execute(action, context),
       onPreviewChange: setPreview,
     });
   }

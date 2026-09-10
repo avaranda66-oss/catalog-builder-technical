@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDocumentSession, type ApplicationActionResult } from '@/vnext/application';
+import {
+  createDocumentSession,
+  type ApplicationActionResult,
+  type ApplicationExecutionContext,
+} from '@/vnext/application';
 import { mmToU, type CatalogDocument, type Frame } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import {
@@ -41,7 +45,9 @@ function controllerHarness(document = fixtureDocument()) {
   let current = document;
   let activePageId = current.pages[0].id;
   const previews: unknown[] = [];
-  const execute = vi.fn((action): ApplicationActionResult => ({
+  let transactionSequence = 0;
+  const createTransactionId = vi.fn(() => `gesture-${++transactionSequence}`);
+  const execute = vi.fn((action, _context?: ApplicationExecutionContext): ApplicationActionResult => ({
     ok: true,
     document: current,
     metadata: { actionType: action.type, affectedIds: ['target'], createdIds: [], changed: true },
@@ -49,6 +55,7 @@ function controllerHarness(document = fixtureDocument()) {
   const controller = new EditorInteractionController({
     getDocument: () => current,
     getActivePageId: () => activePageId,
+    createTransactionId,
     execute,
     onPreviewChange: (preview) => previews.push(preview),
   });
@@ -64,6 +71,7 @@ function controllerHarness(document = fixtureDocument()) {
   });
   return {
     controller,
+    createTransactionId,
     execute,
     previews,
     begin,
@@ -78,13 +86,37 @@ describe('W2.C editor interaction controller', () => {
   it('performs 125 preview updates with zero canonical writes and commits one move on pointerup', () => {
     const h = controllerHarness();
     expect(h.begin()).toBe(true);
+    expect(h.createTransactionId).toHaveBeenCalledTimes(1);
     for (let index = 1; index <= 125; index += 1) h.controller.move(7, 100 + index, 200 + index / 2);
     expect(h.execute).toHaveBeenCalledTimes(0);
     expect(h.previews).toHaveLength(125);
+    expect(h.previews.every((preview) => (
+      preview as { transactionId?: string }
+    ).transactionId === 'gesture-1')).toBe(true);
+    expect(h.previews.every((preview) => (
+      preview as { startFrameU?: unknown }
+    ).startFrameU !== undefined)).toBe(true);
     const result = h.controller.finish(7, 225, 262.5);
     expect(result.status).toBe('committed');
     expect(h.execute).toHaveBeenCalledTimes(1);
     expect(h.execute.mock.calls[0][0].type).toBe('object.move');
+    expect(h.execute.mock.calls[0][1]).toEqual({ transactionId: 'gesture-1' });
+  });
+
+  it('allocates one fresh deterministic transactionId for each successful gesture', () => {
+    const h = controllerHarness();
+    expect(h.begin()).toBe(true);
+    h.controller.cancel('escape');
+    expect(h.createTransactionId).toHaveBeenCalledTimes(1);
+    expect(h.execute).not.toHaveBeenCalled();
+
+    expect(h.begin()).toBe(true);
+    const preview = h.controller.move(7, 125, 225);
+    expect(preview?.transactionId).toBe('gesture-2');
+    expect(h.createTransactionId).toHaveBeenCalledTimes(2);
+    h.controller.finish(7, 125, 225);
+    expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.execute.mock.calls[0][1]).toEqual({ transactionId: 'gesture-2' });
   });
 
   it('commits exactly one complete-frame resize action on pointerup', () => {
@@ -96,6 +128,7 @@ describe('W2.C editor interaction controller', () => {
     expect(result.status).toBe('committed');
     expect(h.execute).toHaveBeenCalledTimes(1);
     expect(h.execute.mock.calls[0][0]).toMatchObject({ type: 'object.resize', objectId: 'target' });
+    expect(h.execute.mock.calls[0][1]).toEqual({ transactionId: 'gesture-1' });
   });
 
   it('keeps one gesture to one Undo step in the real DocumentSession', () => {
@@ -105,7 +138,8 @@ describe('W2.C editor interaction controller', () => {
     const controller = new EditorInteractionController({
       getDocument: () => session.getSnapshot().document,
       getActivePageId: () => session.getSnapshot().document.pages[0].id,
-      execute: (action) => session.execute(action),
+      createTransactionId: () => 'undo-gesture-1',
+      execute: (action, context) => session.execute(action, context),
       onPreviewChange: (value) => { preview = value; },
     });
     const pageId = initial.pages[0].id;
@@ -182,6 +216,7 @@ describe('W2.C editor interaction controller', () => {
   it('treats zero-delta pointerup as a semantic no-op', () => {
     const h = controllerHarness();
     h.begin();
+    expect(h.createTransactionId).toHaveBeenCalledTimes(1);
     expect(h.controller.finish(7, 100, 200).status).toBe('noop');
     expect(h.execute).not.toHaveBeenCalled();
   });

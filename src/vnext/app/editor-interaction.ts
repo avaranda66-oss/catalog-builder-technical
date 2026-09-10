@@ -1,4 +1,9 @@
-import type { ApplicationAction, ApplicationActionResult, FrameU } from '../application';
+import type {
+  ApplicationAction,
+  ApplicationActionResult,
+  ApplicationExecutionContext,
+  FrameU,
+} from '../application';
 import type { CatalogDocument, EditorialObject, Frame, Page } from '../domain';
 import { mmToU } from '../domain';
 import { add, mul, pxToQ, roundRatio, safe } from '../domain/physical';
@@ -25,6 +30,8 @@ export type GestureStaleReason =
 export interface GesturePreview {
   objectId: string;
   pageId: string;
+  transactionId: string;
+  startFrameU: FrameU;
   frameU: FrameU;
   kind: GestureKind;
 }
@@ -33,6 +40,7 @@ interface ActiveGesture {
   pointerId: number;
   objectId: string;
   pageId: string;
+  transactionId: string;
   kind: GestureKind;
   startClientX: number;
   startClientY: number;
@@ -58,7 +66,8 @@ export interface BeginGestureInput {
 export interface EditorInteractionDependencies {
   getDocument(): CatalogDocument;
   getActivePageId(): string;
-  execute(action: ApplicationAction): ApplicationActionResult;
+  createTransactionId(): string;
+  execute(action: ApplicationAction, context: ApplicationExecutionContext): ApplicationActionResult;
   onPreviewChange(preview: GesturePreview | null): void;
 }
 
@@ -205,6 +214,7 @@ export class EditorInteractionController {
       pointerId: input.pointerId,
       objectId: input.objectId,
       pageId: input.pageId,
+      transactionId: this.dependencies.createTransactionId(),
       kind: input.kind,
       startClientX: input.clientX,
       startClientY: input.clientY,
@@ -234,6 +244,8 @@ export class EditorInteractionController {
     return {
       objectId: gesture.objectId,
       pageId: gesture.pageId,
+      transactionId: gesture.transactionId,
+      startFrameU: gesture.startFrameU,
       frameU: previewFrameFromDelta(gesture.startFrameU, gesture.kind, deltaXU, deltaYU),
       kind: gesture.kind,
     };
@@ -279,7 +291,7 @@ export class EditorInteractionController {
     if (!preview || sameFrameU(preview.frameU, gesture.startFrameU)) return { status: 'noop' };
 
     const action = actionForGesture(gesture, preview.frameU);
-    const result = this.dependencies.execute(action);
+    const result = this.dependencies.execute(action, { transactionId: gesture.transactionId });
     if (!result.ok) return { status: 'failed', action, result };
     return { status: 'committed', action, result };
   }

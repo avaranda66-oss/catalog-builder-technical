@@ -25,11 +25,11 @@ Editor state is React-local and equivalent to:
 type EditorSelectionState = {
   activePageId: string;
   selectedObjectIds: readonly string[];
-  mode: 'select';
+  mode: 'select' | 'text-edit';
 };
 ```
 
-W2.C maintains selection cardinality at `0 | 1`; the array shape is only a future multi-selection seam. Page and selection changes do not call `DocumentSession.execute`, do not enter Undo/Redo history, and are not serialized into `CatalogDocument`.
+W2.C maintains selection cardinality at `0 | 1`; the array shape is only a future multi-selection seam. The `text-edit` type member preserves the frozen W2.G seam only: every W2.C runtime assignment remains `mode: 'select'`, with no text-edit activation, caret/Range state, `contentEditable`, or `text.setContent`. Page and selection changes do not call `DocumentSession.execute`, do not enter Undo/Redo history, and are not serialized into `CatalogDocument`.
 
 ## Canonical renderer boundary
 
@@ -37,9 +37,15 @@ W2.C maintains selection cardinality at `0 | 1`; the array shape is only a futur
 
 ## Preview and immutable-start gesture math
 
-`EditorInteractionController.begin()` captures the target/page, pointer id and original client coordinates, immutable canonical `startFrameU`, page physical dimensions in U, rendered page dimensions in Q, and the starting in-memory document identity.
+`EditorInteractionController.begin()` captures the target/page, pointer id and original client coordinates, one fresh injected gesture `transactionId`, immutable canonical `startFrameU`, page physical dimensions in U, rendered page dimensions in Q, and the starting in-memory document identity. `GesturePreview` exposes both the same `transactionId` and `startFrameU` alongside its candidate `frameU`.
 
-Every pointer move computes current delta from the original pointerdown basis and derives a fresh candidate from `startFrameU`. Preview is emitted only through `onPreviewChange`; pointermove never executes an Application Action. This prevents accumulated quantization drift. A zero-delta finish is a no-op.
+Every pointer move computes current delta from the original pointerdown basis and derives a fresh candidate from `startFrameU`. Preview is emitted only through `onPreviewChange`; pointermove never executes an Application Action or transaction metadata. The gesture's injected transaction ID remains stable through all previews. This prevents accumulated quantization drift. A zero-delta finish is a no-op and executes no canonical action.
+
+## Principal amendment — transaction seam
+
+PR #20 received a Principal amendment limited to two frozen contract seams. The interaction dependency now injects `createTransactionId(): string`; one successful `begin()` calls it exactly once and stores that ID on `ActiveGesture`. The final move/resize execution reuses the existing W1 `ApplicationExecutionContext` exactly as `execute(action, { transactionId: gesture.transactionId })`. No application/domain transaction type or W1 session behavior was changed.
+
+Deterministic RED coverage first failed because the pre-amendment controller never requested the injected ID. After the amendment, 125 preview updates retain `gesture-1` with the original `startFrameU`, execute zero canonical actions, and the single pointerup action receives `{ transactionId: 'gesture-1' }`; a second gesture receives `gesture-2`. Cancel and zero-delta no-op paths allocate no canonical gesture action. Existing W1 same-transaction coalescing coverage remains unchanged and green.
 
 ## Browser px → U policy and non-1 scale
 
@@ -49,13 +55,13 @@ The visible `/v2` scale is applied once to the shared `.vnext-page-stage`, not i
 
 ## Move lifecycle
 
-Pointerdown starts from the immutable canonical frame. Pointermove updates only the ephemeral overlay. Pointerup re-resolves canonical state, validates stale preconditions, builds exactly one `object.move({ objectId, xU, yU })`, executes it through the W2.B session seam, and clears preview. Width/height remain unchanged and negative x/y remain legal. One successful gesture is one Undo step.
+Pointerdown starts from the immutable canonical frame and owns one gesture transaction ID. Pointermove updates only the ephemeral overlay. Pointerup re-resolves canonical state, validates stale preconditions, builds exactly one `object.move({ objectId, xU, yU })`, executes it through the W2.B session seam with `{ transactionId: gesture.transactionId }`, and clears preview. Width/height remain unchanged and negative x/y remain legal. One successful gesture is one Undo step.
 
 ## Resize lifecycle and crossing
 
 Handles: `n`, `ne`, `e`, `se`, `s`, `sw`, `w`, `nw`.
 
-Resize preview and commit use complete frames. Left/top/corner math is always derived from the immutable start frame. A controlled axis that crosses the opposite edge is clamped to exactly `1 U`; the origin is adjusted to keep the opposite edge fixed, and the active handle never flips. Pointerup sends exactly one `object.resize({ objectId, xU, yU, widthU, heightU })`.
+Resize preview and commit use complete frames. Left/top/corner math is always derived from the immutable start frame. A controlled axis that crosses the opposite edge is clamped to exactly `1 U`; the origin is adjusted to keep the opposite edge fixed, and the active handle never flips. Pointerup sends exactly one `object.resize({ objectId, xU, yU, widthU, heightU })` with the same gesture transaction context captured at begin.
 
 ## Stale and cancellation policy
 
@@ -95,7 +101,7 @@ For one selected object the Inspector exposes X, Y, Width, and Height in millime
 
 ## W2.B regression preservation
 
-W2.C does not change W2.B application/domain implementation. The existing focused VNext suite remains green, preserving fresh insert identity protection, RichText-local identity scope, lock-aware sibling reorder, Table frame-only resize, Table commit-then-diagnose, Undo/Redo snapshot semantics, and the transactionId seam.
+W2.C does not change W2.B application/domain implementation. The Principal amendment reuses the existing `ApplicationExecutionContext` without modifying W1/W2.B session semantics. The existing focused VNext suite remains green, preserving fresh insert identity protection, RichText-local identity scope, lock-aware sibling reorder, Table frame-only resize, Table commit-then-diagnose, Undo/Redo snapshot semantics, and transactionId coalescing semantics.
 
 ## Chromium evidence
 
@@ -122,15 +128,15 @@ Evidence recorded under ignored scratch path `scratch/w2c-editor-proof/` proves:
 
 ## Tests and gates
 
-- direct W2.C controller/workspace: `2` files, `24/24` tests pass.
-- focused VNext application/proof: `12` files, `148/148` tests pass.
+- direct W2.C controller/workspace: `2` files, `25/25` tests pass.
+- focused VNext application/proof: `12` files, `149/149` tests pass.
 - Chromium `/v2` proof: PASS, Chromium `151.0.7922.34`, scale `0.62`, zero console/page errors, Legacy bootstrap false.
 - export/PDF proof: PASS, exit `0`.
 - `git diff --check`: PASS.
 - `npm run lint`: PASS, `0` errors and `268` pre-existing repository warnings; W2.C adds no lint warning.
 - `npm run typecheck`: PASS.
-- `npm test`: `208` files passed; `2194` passed, `1` skipped (`2195` total).
-- `npm run build`: PASS; Vite transformed `2323` modules and completed production build (`12.56s` in recorded final gate), with existing chunk-size/dynamic-import warnings only.
+- `npm test`: `208` files passed; `2195` passed, `1` skipped (`2196` total).
+- `npm run build`: PASS; production build completed in `13.80s` in the Principal-amendment validation, with existing chunk-size/dynamic-import warnings only.
 
 ## Acceptance Criteria
 
@@ -138,6 +144,7 @@ Evidence recorded under ignored scratch path `scratch/w2c-editor-proof/` proves:
 - [x] Selection uses `selectedObjectIds: readonly string[]` with cardinality `0 | 1`.
 - [x] Selection outline and eight resize handles are siblings of, not props inside, `DocumentRenderer`.
 - [x] Pointermove performs zero canonical writes; successful pointerup executes exactly one move or resize action.
+- [x] Each gesture owns one fresh injected transactionId; preview carries the same transactionId/startFrameU and final pointerup passes that ID through existing `ApplicationExecutionContext`.
 - [x] Gesture math always derives from immutable pointerdown frame and captured physical display basis.
 - [x] Escape, pointercancel, capture/focus loss, page change, stale target, and failed commit clear preview safely.
 - [x] Undo/Redo cancel an active gesture before history navigation.
@@ -146,6 +153,7 @@ Evidence recorded under ignored scratch path `scratch/w2c-editor-proof/` proves:
 - [x] Inspector displays/accepts mm and quantizes finite values with `mmToU`; invalid input does not mutate state.
 - [x] Chromium proof, export proof, focused tests, lint, typecheck, full tests and build pass.
 - [x] No W2.D+ scope enters the implementation.
+- [x] `EditorSelectionState.mode` preserves the frozen `'select' | 'text-edit'` seam while W2.C runtime remains select-only.
 
 ## Tasks
 
