@@ -1,51 +1,125 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE INTELLECTUAL MEMORY
+STATUS: DURABLE POST-W0 PRINCIPAL MEMORY
 
 DATE: 2026-09-09
 
-This document is the durable reasoning and governance handoff for a new ChatGPT Principal. It is intentionally independent of conversation transcripts.
+This file is the durable reconstruction guide for a completely fresh Principal. Verify GitHub and code before trusting any agent summary. Never merge without explicit user authorization.
 
-## ROLE OF PRINCIPAL
+## PRINCIPAL ROLE AND GOVERNANCE
 
-The Principal is simultaneously:
+The Principal acts as:
 
-- **Auditor** — verifies code, math, browser behavior, PDF evidence, and claims;
+- **Auditor** — independently verifies code, tests, browser/PDF evidence, and claims;
 - **Orientador** — keeps implementation aligned with the product mission and frozen contracts;
 - **Pesquisador** — investigates unknowns before freezing them;
-- **Confrontador** — actively searches for counterexamples, hidden authority, false assumptions, and accidental complexity.
+- **Confrontador** — actively searches for counterexamples, hidden authority, and accidental complexity.
 
-The Principal does not treat implementation-agent confidence as evidence.
+Agent reports are not authority. GitHub, code, tests, and artifacts outrank summaries. Never merge without explicit user authorization.
 
-**Agent reports are not authority.**
+### AGENT ROUTING
 
-Always verify GitHub, code, tests, browser evidence, PDF evidence, and artifacts independently.
+- **Terra** — mechanical, simple, and inventory work;
+- **GPT-5.6 Sol Medium** — bounded implementation, documentation, and governance;
+- **GPT-5.6 Sol High** — architecture, domain, persistence, difficult implementation, concurrency/races, and independent hard audit;
+- **Gemini Flash High** — bounded implementation or adversarial/read-only review after contracts are precise;
+- **Astra** — scarce; use only when actual computer-use or visual empirical testing materially adds evidence. Do not spend Astra on work Sol can do.
 
-Never merge without explicit user authorization.
+Model choice never replaces evidence.
 
-## AGENT ROUTING
+## WHAT WE ARE BUILDING
 
-Use scarce/expensive capability only when the task needs it.
+Catalog Builder VNext / PRESYS is a professional technical-catalog authoring system. A non-technical PRESYS employee must be able to create, edit, save, reopen, translate, publish, and share polished technical catalogs on finite physical A4 pages.
 
-- **Terra** — mechanical/simple work.
-- **Sol Medium** — bounded implementation and governance.
-- **Sol High** — architecture, domain, persistence, hard implementation, hard audits.
-- **Gemini Flash High** — bounded implementation or adversarial review after the contract is precise.
-- **Astra** — scarce; use only when computer-use or visual empirical work materially matters.
+The primary acceptance persona is the user's father: a professional office user who needs direct manipulation, predictable recovery, powerful technical tables, translation, and publication without understanding JSON, DOM internals, renderer math, database schemas, or Git.
 
-Do not spend Astra on work Sol can do.
+VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-Model choice never replaces evidence or acceptance criteria.
+## CANONICAL POST-W0 STATE
 
-## PRODUCT MISSION
+Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Build **Catalog Builder VNext / PRESYS** so a non-technical PRESYS employee, especially the user's father, can create, edit, save, reopen, translate, export, and share professional technical catalogs.
+Post-W0 canonical engineering base: `865251dc023148b349a9ceba8051c249c0bbb647`.
 
-VNext must be simpler internally than Legacy while becoming more capable, more editable, more professional, and easier to use.
+Tree: `ede5e561717546a69899f1008c952efeb317b7ad`.
 
-Do not simplify architecture by shrinking the product into a limited page/template editor.
+Parent: `09fe9d49b65b3d4501c4079b6df38f2d97f595c6`.
 
-## PRODUCT ARCHITECTURE
+PR #12: **MERGED**.
+
+PR #13 — FOUNDATION-PROOF-01: **MERGED**.
+
+PR #14 — W0 Foundation Promotion + W0.1 Boundary Hardening: **MERGED**.
+
+W0: **COMPLETE**.
+
+W0.1: **COMPLETE**.
+
+Handoff sync: **PR #15 is the documentation synchronization vehicle**. GitHub is authority for whether it is currently open or merged.
+
+Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**.
+
+W1: **NOT STARTED**.
+
+The engineering-base SHA is intentionally stable in this handoff. A later documentation-only commit does not require a self-referential SHA rewrite.
+
+Post-merge rule: if these synchronized docs are being read from `main` and GitHub confirms PR #15 is merged, treat the handoff sync as **COMPLETE** and proceed to W1 planning/execution under normal Principal governance. If PR #15 is still open, audit and merge authorization remain pending.
+
+## WHAT IS CANONICAL NOW
+
+Production foundation authority lives under `src/vnext/`:
+
+- `src/vnext/domain/` — physical arithmetic, diagnostics, canonical editorial model;
+- `src/vnext/table/` — canonical table model operations and deterministic layout;
+- `src/vnext/rendering/` — React/browser rendering, measurement, resources, render planning, scoped editorial CSS;
+- `src/vnext/publication/` — publication/preflight.
+
+`src/labs/presys-editorial-proof/` is now a fixture, browser harness, and PDF proof harness only. It is not a second engine and must not regain foundational authority.
+
+The production root API `src/vnext/index.ts` exports pure domain/table only. React/browser/rendering imports belong under `src/vnext/rendering`; publication/preflight belongs under `src/vnext/publication`.
+
+## WHAT W0 PROVED AND PROMOTED
+
+FOUNDATION-PROOF-01 passed Principal code, mathematical, Chromium/browser, PDF forensic, and visual artifact review before promotion. W0 then promoted that proven foundation into production ownership without redesigning it.
+
+Preserve these invariants:
+
+- finite physical A4 pages;
+- authored object frames;
+- authored geometry in integer U;
+- renderer/browser measurement in integer Q;
+- exact monotone `minimumUForProjectedQ`;
+- cumulative projected row boundaries;
+- global deterministic rowspan constraint solving;
+- only `AUTO` / `MIN` rows grow;
+- `FIXED` rows never grow;
+- blocking rendered fit is Q/Q;
+- a final postcondition blocks residual overflow;
+- one canonical Table Engine;
+- stable IDs;
+- typed `CellContent`;
+- explicit span/merge ownership;
+- CSS Grid editorial rendering;
+- deterministic resource readiness;
+- structured preflight diagnostics;
+- one canonical editorial render tree;
+- Chromium textual/vector PDF proof.
+
+The mathematical history is already preserved. Do not rewrite or casually reinterpret it. Read `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md` and `docs/vnext/presys-mvp-r0/evidence/proof-result.md` when touching fit, rowspan, measurement, or publication semantics.
+
+## WHAT W0.1 CORRECTED
+
+Principal re-audit before PR #14 merge found two production-boundary defects and closed them.
+
+First, production `DocumentRenderer` renders canonical document content only. It must not accept renderer-authored footer/page-copy. Proof footer/page numbering is lab-only decoration.
+
+Second, public APIs are layered. The root/domain/table public graph remains pure; rendering/browser/resource code is accessed through `src/vnext/rendering`; publication/preflight is accessed through `src/vnext/publication`.
+
+Renderer CSS is scoped beneath `[data-editorial-root]`. Generic production renderer CSS does not own global `@page` policy.
+
+`tests/vnext/proof/architecture-boundary.test.ts` protects these boundaries. Treat failures there as architecture regressions, not test inconvenience.
+
+## PRODUCT MODEL THAT MUST NOT BE REDESIGNED BY DEFAULT
 
 Canonical hierarchy:
 
@@ -56,35 +130,36 @@ Catalog
 → Properties
 ```
 
-Pages are finite physical A4 surfaces.
+Pages are finite physical A4 surfaces. The user owns authored position, size, composition, and page placement. The system owns snapping, guides, safe-margin warnings, overflow diagnostics, and publication validation.
 
-The user owns:
-
-- position;
-- size;
-- composition;
-- page placement.
-
-The system owns:
-
-- snapping;
-- guides;
-- safe-margin warnings;
-- overflow diagnostics;
-- publication validation.
-
-The system must not silently:
-
-- move an object to another page;
-- create continuation pages;
-- resize authored frames;
-- restructure the document.
+The system must not silently move objects to other pages, create continuation pages, resize authored frames, or restructure authored topology.
 
 Measurement and preflight observe authored geometry. They do not become hidden authors.
 
-## CANONICAL PRIMITIVES
+## ONE TABLE ENGINE
 
-Current direction:
+There is one canonical Table Engine. Do not introduce specialized Additel, Fluke, specifications, electrical, accessories, ordering, compatibility, or inserts engines.
+
+The same engine must support generic editorial variation through typed content, semantics, styles, presets, and canonical composition. Existing proven concepts include stable IDs, typed `CellContent`, spans, merge/unmerge fail-closed, group headers, section rows, headerless tables, marker cells, image cells, technical codes, measurements, annotations, footnotes, legends, independent frames, and deterministic physical layout.
+
+Father-V1 UX additionally requires spreadsheet-like selection, TSV/spreadsheet paste, marker-cell bulk toggle, table presets, and an explicit **Fit Height to Content / Ajustar altura** command.
+
+Fit Height is an Application Action/user command. It may write a new authored frame height only when invoked. Renderer measurement must never perform that mutation silently.
+
+## REFERENCE AUDIT — WHAT ADDITEL / FLUKE / ISOTECH TAUGHT US
+
+A reproducibility audit visually inspected 24 reference pages:
+
+- Additel 875 — 8 pages;
+- Additel 761A — 6 pages;
+- Fluke Field Metrology Wells material covering 9140 / 9142 / 9143 / 9144 — 6 pages;
+- Isotech Europa / Venus / Calisto — 4 pages.
+
+The audit studied editorial capability only. Competitor branding, visual identity, product claims, and specifications are not PRESYS source material.
+
+Core result: **the VNext architectural direction remains sound**. The references revealed product-capability gaps rather than a new foundation contradiction.
+
+The smallest coherent primitive set remains approximately:
 
 - Text;
 - Image;
@@ -94,172 +169,161 @@ Current direction:
 - Icon;
 - Group.
 
-Connector is allowed only if a later use case justifies it.
+Complex reference pages should be compositions of those generic primitives, the one canonical Table Engine, and presets/components/templates. Technical diagrams that do not justify a vector editor may be imported as SVG or high-resolution raster assets.
 
-Banner, Header, Footer, and Cover should primarily be compositions, templates, or components built from canonical primitives, not separate mutation/rendering engines.
+## ASTRA + GEMINI UX LAB
 
-## ONE TABLE ENGINE
+Experimental branch: `lab/vnext-editor-ux-astra`.
 
-There is one canonical Table Engine.
+Status: **EXPERIMENTAL / NOT PRODUCTION / DO NOT MERGE BLINDLY**.
 
-Never recreate specialized engines for:
+The work began with Astra and was continued by Gemini after Astra quota exhaustion. The branch is evidence for interaction design, not production domain authority. Do not copy its mock table/domain state, approximate overflow math, ephemeral `useState` persistence, or native HTML-table shortcuts into production.
 
-- specifications;
-- electrical;
-- accessories;
-- ordering;
-- compatibility;
-- inserts.
+High-confidence interaction findings:
 
-Presets and semantic configuration must specialize one engine.
+- direct manipulation should be primary;
+- frequent actions should be contextual;
+- Inspector should own deeper and lower-frequency properties;
+- table range/row/column selection should feel spreadsheet-like;
+- table interaction chrome must remain visually separate from document content;
+- table content must not visually leak uncontrolled beyond its authored frame;
+- explicit Fit Height is preferable to silent geometry mutation;
+- Undo/Redo must be visible and predictable;
+- cover/page templates should create ordinary editable canonical objects;
+- safe margins should probably use hybrid guidance: subtle in repose, stronger during movement, warning rather than hard constraint.
 
-Required/proven capability set:
+Do not freeze exact toolbar layout, Inspector width, colors, opacity, icon count, button wording, or panel placement solely from the lab.
 
-- stable IDs;
-- typed `CellContent`;
-- `rowSpan`;
-- `colSpan`;
-- merge/unmerge fail-closed;
+## UX FACT VS HYPOTHESIS
+
+### HIGH-CONFIDENCE PRODUCT RULES
+
+- finite A4;
+- direct manipulation;
+- contextual common actions;
+- deeper Inspector;
+- spreadsheet-like table selection;
+- visible and predictable Undo/Redo;
+- explicit overflow fixes;
+- templates become editable canonical objects;
+- no silent authored geometry mutation.
+
+### USER-TEST HYPOTHESES
+
+- exact Tool Rail icon count;
+- exact contextual toolbar composition;
+- exact Inspector width;
+- exact safe-guide treatment;
+- `Blocos` vs `Componentes` wording;
+- exact Pages/Layers defaults;
+- exact zoom;
+- exact keyboard workflow;
+- exact color-palette presentation.
+
+A lab preference becoming a hypothesis does not make it architecture.
+
+## FATHER V1 — EXPLICIT SCOPE
+
+Father V1 includes professional editing, canonical advanced tables, templates/starters/components, save/reopen, autosave/recovery, complete translation, professional PDF publication, basic sharing, and diagnostics/preflight.
+
+Product evidence now makes the following explicit requirements rather than optional ideas:
+
+- standalone Image primitive;
+- Shape primitive;
+- Line primitive;
+- Group capability;
+- direct rich-text editing;
+- discoverable insertion UX for common technical symbols such as `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`; this sample is not exhaustive;
+- TSV/spreadsheet clipboard paste into tables;
+- marker-cell bulk toggle for compatibility matrices;
+- explicit Fit Height to Content / Ajustar altura command;
+- table presets;
+- minimum page templates before the first father pilot;
+- minimum catalog starter before the first father pilot;
+- minimum reusable Components / `Blocos` capability before or by the first father pilot;
+- highly discoverable Replace Image;
+- complete semantic translation coverage;
+- professional Chromium PDF publication.
+
+## THE EASY BUTTON LAYER
+
+Powerful internals must produce a fast father-facing path through:
+
+- table presets;
+- page templates;
+- catalog starters;
+- reusable components / `Blocos`;
+- contextual commands.
+
+A preset is configuration/content for the canonical engine. A template is a composition that resolves into canonical editable objects. A component is a reusable canonical object composition. None creates a second renderer or special block engine.
+
+Governance rule: **MINIMUM EASY-BUTTON LAYER BEFORE FATHER PILOT**.
+
+## ROADMAP AFTER W0
+
+No exact dates are frozen, and detailed W6/W7 implementation boundaries may move with evidence. The minimum easy-button requirement may not move behind the first father pilot.
+
+- **W1 — Application Actions + Minimal VNext Shell:** establish typed actions, Undo/Redo-capable mutation semantics, and minimal shell.
+- **W2 — A4 Authoring + Primitives + Direct Manipulation:** canonical primitives, move/resize, finite-page guides/diagnostics, plus minimum page-template insertion seam.
+- **W3 — Save/Reopen/Catalog Library:** versioned persistence, autosave/local recovery, visible conflicts, and a persistable starter/catalog creation path.
+- **W4 — Advanced Table Editor:** structural editing, spreadsheet-style selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, titles/notes/footnotes.
+- **W5 — Complete Translation:** full semantic coverage, stale tracking, protection, coverage audit, and layout review.
+- **W6 — Publication Integration + Minimum Easy-Button Layer + First Father Pilot:** professional PDF/publication plus minimum usable page templates, catalog starter, and starter reusable components before the pilot.
+- **W7 — Evidence-driven maturation:** broaden templates/components, Asset Library, sharing, polish, and father-test corrections.
+
+The old idea that templates/components can wait entirely until W7 is no longer acceptable.
+
+## FIRST FATHER PILOT ACCEPTANCE PATH
+
+Run the first real father pilot once the user can approximately complete this end-to-end workflow:
+
+```text
+New catalog from starter/template
+→ add / duplicate / reorder page
+→ edit title/text directly
+→ insert / replace product image
+→ insert / edit technical table
+→ add rows / columns
+→ create group header / section row
+→ add title / note / footnote
+→ move / resize
+→ receive safe-margin feedback
+→ Undo / Redo
+→ save
+→ close / reopen
+→ translate to Spanish
+→ review warnings
+→ generate professional PDF
+```
+
+Do not wait for every W7 polish item before testing with the father.
+
+## TRANSLATION — COMPLETE COVERAGE CONTRACT
+
+Translation is required for Father V1. Every editable editorial text surface must be represented by stable semantic leaves/policies.
+
+Explicit coverage includes:
+
+- text objects;
+- table TITLE;
+- captions;
 - group headers;
+- column headers;
+- row headers;
 - section rows;
-- headerless tables;
-- marker cells;
-- image cells;
-- technical codes;
-- measurements;
-- annotations;
+- rich-text cells;
+- notes;
 - footnotes;
 - legends;
-- independent frames;
-- deterministic physical layout.
+- cover copy;
+- headers/footers;
+- components/templates.
 
-The table engine is infrastructure for multiple visual catalog patterns. A visual preset must not fork domain/layout authority.
+Technical values/tokens should be protected semantically whenever possible. Source edits make affected localized leaves **STALE**; do not silently overwrite existing translations.
 
-## FOUNDATION-PROOF HISTORY
+If translation makes content no longer fit, surface a diagnostic plus an explicit corrective action. Translation must not silently mutate authored topology or geometry. Do not bake unsupported average expansion percentages into architecture.
 
-### R0
-
-Established the proposed VNext foundation: physical pages, authored frames, selective Legacy salvage, one table engine, deterministic publication, and an isolated proof before production implementation.
-
-### R0.1.2
-
-Closed many deterministic geometry, content, border, text-flow, annotation, and publication contracts.
-
-Its rowspan sequential/equal-deficit policy was empirically falsified by overlapping span constraints that could allocate excess height and create practical false overflow.
-
-Lesson: local sequential deficit distribution was not a valid global optimum.
-
-### R0.1.3
-
-Introduced the global interval/prefix solver for rowSpan height constraints.
-
-Corrected the table-frame false-overflow boundary by comparing rendered table extent in Q against the authored frame projected to Q.
-
-Lesson: a rendered equality in Q must not be converted back through lossy Q→U rounding to manufacture overflow.
-
-### R0.1.4
-
-Principal review found the same Q→U class of bug still present for row/text fit and an additional cumulative projection-phase counterexample.
-
-R0.1.4 keeps browser-measured rendered extent in Q for blocking fit, keeps authored/solver state in U, and uses projection-safe cumulative boundaries with an exact monotone inverse where U growth is required.
-
-R0.1.4 is the current amendment.
-
-### Principal verdict
-
-FOUNDATION-PROOF-01: **GO as architectural foundation**.
-
-Audits completed:
-
-- code: GO;
-- math: GO;
-- Chromium/browser evidence: GO;
-- PDF forensic evidence: GO;
-- visual artifact inspection: GO.
-
-Do not translate this verdict into "finished editor" or "production ready".
-
-## FOUNDATION PROMOTION RULE
-
-Production code has not yet been promoted into `src/vnext`.
-
-The next production foundation must **move/promote the proven core** from the lab into the VNext production boundary. Do not let a lab engine and a newly invented production engine evolve in parallel.
-
-The expected promotion destinations remain conceptually:
-
-- `src/vnext/domain/`;
-- `src/vnext/render/`;
-- `src/vnext/editor/`.
-
-Exact filenames are an implementation detail; preservation of proven authority is the architectural requirement.
-
-## TRANSLATION — CRITICAL CONTRACT
-
-Translation is a father-usable V1 requirement.
-
-Legacy translation is valuable and should be selectively salvaged.
-
-High-value Legacy translation concepts:
-
-- technical token protection;
-- language registry;
-- font management;
-- translation memory/cache;
-- provider gateway;
-- chunking/retry;
-- strict response validation;
-- source/version metadata;
-- coverage audit;
-- layout QA.
-
-Do **not** port Legacy block-specific extractor/applier authority.
-
-VNext invariant:
-
-> Every user-editable editorial text has stable semantic identity and an explicit translation policy: `translate`, `protect`, or `system`.
-
-Explicit translation coverage includes:
-
-- text object;
-- **TABLE TITLE**;
-- table caption;
-- column header;
-- group header;
-- row header;
-- section row;
-- rich-text cell;
-- note;
-- footnote;
-- legend;
-- banner text;
-- header;
-- footer;
-- cover title;
-- cover subtitle;
-- contact labels;
-- component/template text.
-
-Typed technical values should be protected by semantics rather than regex whenever possible:
-
-- measurement;
-- unit;
-- technicalCode;
-- modelId;
-- orderCode;
-- protocol;
-- standard;
-- marker;
-- formula.
-
-When source content changes, mark affected localized leaves **STALE**.
-
-Do not silently overwrite an existing translation.
-
-AI Translation remains **MUST HAVE for father-usable V1**.
-
-Autonomous AI authoring remains **FUTURE**.
-
-## APPLICATION ACTIONS — HUMAN AND FUTURE AI BOUNDARY
+## APPLICATION ACTIONS — HUMAN UI AND FUTURE AI
 
 Frozen direction:
 
@@ -269,322 +333,141 @@ Human UI ─┐
 Future AI ┘
 ```
 
-Typed Application Actions are the mutation contract.
+W1 exists to establish this mutation seam. Actions must validate inputs, return structured IDs/results, respect permissions/versioning, be atomic where appropriate, surface structured failures, and support predictable Undo/Redo/coalescing semantics.
 
-They must:
+React components are presentation/controllers. Zustand or equivalent client state is not the canonical domain mutation API.
 
-- runtime validate inputs;
-- return structured IDs/results;
-- respect permissions;
-- be atomic where appropriate;
-- be Undo/Redo compatible;
-- respect CAS/versioning;
-- surface structured failures instead of partial hidden mutation.
+Future AI should eventually be able to invoke the same ordinary actions as the user, including add page, insert object, move, resize, edit text, insert table, populate table, merge, apply preset, and related safe commands.
 
-React components are presentation/controllers, not mutation contracts.
+AI must not manipulate the DOM directly and must not have unrestricted arbitrary-document-JSON replacement authority.
 
-Zustand is not the domain mutation API.
-
-No separate AI mutation architecture.
-
-No DOM automation as canonical mutation path.
-
-No unrestricted `ReplaceDocument` JSON operation.
-
-Future AI should call the same actions a human-triggered command uses.
-
-## UNDO / REDO
-
-Undo/Redo is practically mandatory before the father test.
-
-Action design must carry transaction/coalescing semantics from the start.
-
-Examples of actions that may need coalescing include drag/resize gestures and continuous text editing. The exact implementation is not frozen, but the action boundary must make safe history possible.
-
-## PRODUCT DATA / PIM
-
-PIM is **FUTURE**.
-
-Define the seam now so future product-data integration does not infect editorial semantics.
-
-Content is either:
-
-- literal content; or
-- explicit typed `DataBinding`.
-
-Example literal:
-
-```text
-TA-25N
-```
-
-Example binding:
-
-```text
-product.ta25n.modelName
-```
-
-No invisible live refresh.
-
-Future product-data updates must be surfaced as:
-
-- review;
-- apply;
-- detach / convert-to-literal.
-
-The authored catalog remains reviewable and deterministic.
-
-## PRESETS / COMPONENTS / TEMPLATES
-
-Persist this taxonomy:
-
-- **STYLE PRESET**;
-- **TABLE PRESET**;
-- **COMPONENT**;
-- **PAGE TEMPLATE**;
-- **CATALOG TEMPLATE**.
-
-Examples:
-
-- PRESYS Dense Specifications;
-- Technical Header;
-- Blue Product Banner;
-- Specifications + Image;
-- TA Family Catalog.
-
-Applying a preset produces canonical editable content/style.
-
-Do not introduce surprise global live propagation in V1.
-
-If reusable instances become linked in a future version, that behavior must be explicit and reviewable.
-
-## AI-GENERATED IMAGES
-
-AI-generated imagery is **FUTURE**.
-
-Preferred architecture:
-
-```text
-AI-generated visual/background
-+
-canonical editable title/model/logo/contact objects
-```
-
-Do not burn catalog copy into a generated raster as the canonical design.
-
-Generated assets should later carry provenance.
+Do not implement autonomous AI authoring during W1 merely because the action seam supports it later.
 
 ## PERSISTENCE
 
-Father-usable V1 requires:
+Father V1 requires save, autosave, reopen, local recovery, and visible conflict handling. Direction remains a versioned canonical whole-document model with CAS semantics.
 
-- save;
-- autosave;
-- reopen;
-- local recovery;
-- visible conflict handling.
+No silent last-write-wins. Existing Supabase/Auth infrastructure may be reused later if validated, but VNext persistence authority must remain isolated from Legacy authority.
 
-Current direction:
+PIM is not a persistence prerequisite for Father V1.
+
+## FUTURE PRODUCT-DATA / PIM SEAM
+
+PIM remains **FUTURE** and is not a Father-V1 dependency. Preserve the product-data seam so future bindings do not infect editorial semantics.
+
+Authored content is conceptually:
 
 ```text
-versioned canonical whole-document persistence
-+ CAS
+literal | explicit typed DataBinding
+
+literal: TA-25N
+binding: product.ta25n.modelName
 ```
 
-No silent last-write-wins.
+Rules:
 
-The same Supabase/Auth infrastructure may be reused if validated, but VNext storage must be isolated from Legacy authority.
+- no invisible live refresh;
+- product-data changes must be reviewable;
+- future refresh flow is explicit: **review → apply**;
+- the user can detach / convert-to-literal;
+- the canonical authored document remains deterministic and reviewable.
 
-The canonical persisted document is versioned product data, not UI component state.
+Do not implement PIM as part of Father V1 and do not make current V1 depend on it.
 
 ## PUBLICATION
 
-Persist this chain:
+Publication remains:
 
 ```text
 canonical document
--> immutable publication snapshot
--> generated PDF artifact
--> share/download
+→ immutable publication snapshot
+→ generated PDF artifact
+→ share / download
 ```
 
-The Chromium textual/vector publication path is proven by FOUNDATION-PROOF-01.
+The Chromium textual/vector path is proven. Do not port Legacy `html2canvas`/`jsPDF` raster page export as VNext publication authority.
 
-Do not port Legacy `html2canvas`/`jsPDF` raster page export.
+Preflight reports blocking errors and warnings. It does not repair authored geometry silently.
 
-Publication preflight must surface blocking errors and warnings without silently changing authored layout.
+## FATHER V1 VS FUTURE
 
-## FATHER-USABLE V1
+### FATHER V1
 
-MUST HAVE:
-
-- create/open/duplicate catalog;
-- A4 pages;
-- text;
-- images/assets;
-- advanced canonical tables;
-- move/resize;
-- page management;
-- Undo/Redo;
-- save/reopen;
-- autosave/local recovery;
-- table presets;
-- cover/page templates;
+- professional editing;
+- canonical tables;
+- minimum templates/starters/components;
+- save/reopen and recovery;
 - translation;
-- layout QA;
-- publication preflight;
-- professional PDF;
-- stored PDF artifact;
-- basic read-only sharing.
-
-This list is the product acceptance direction. Do not demote translation, Undo/Redo, or recovery because they were outside the technical proof.
-
-## FIRST FATHER TEST
-
-Do not wait for the entire V1.
-
-Start the first father pilot when these are present:
-
-- template-first creation;
-- real A4 pages;
-- page add/duplicate/delete/reorder;
-- direct text edit;
-- image insert/replace;
-- one canonical table;
-- basic grouped headers;
-- row/column add/delete;
-- table title/note/footnote;
-- move/resize;
-- snap/safe guide;
-- Undo/Redo;
-- autosave;
-- reopen;
-- local recovery;
-- basic diagnostics;
-- real PDF;
-- first Spanish translation walkthrough.
-
-The father pilot is empirical UX evidence. It is expected to change testable UX details without reopening the canonical architecture by default.
-
-## LEGACY SALVAGE MAP
-
-### HIGH VALUE SALVAGE
-
-- translation machinery;
-- Table Core invariants/pure operations;
-- Auth;
-- Supabase infrastructure;
-- CAS/versioning concepts;
-- assets/media concepts;
-- fonts/icons;
-- PRESYS fixtures/goldens;
-- publication/preflight lessons.
-
-### REBUILD INSIDE VNEXT
-
-- document model;
-- page authority;
-- free/constrained canvas;
-- Inspector;
-- authoring state;
-- production renderer;
-- table editing UX;
-- translation leaf extraction/application.
-
-### DO NOT PORT AS AUTHORITY
-
-- giant `useCatalogStore`;
-- `useLibraryStore` authority;
-- Legacy A4 vertical flow;
-- Smart Flow authored topology;
-- legacy `TableCoreRenderer`;
-- table adapters/bridges;
-- multiple specialized table engines;
-- `html2canvas`/`jsPDF` publication;
-- Presence/Realtime as a V1 prerequisite.
-
-Salvage concepts and pure invariants. Do not carry hidden Legacy authority into VNext merely because code already exists.
-
-## CURRENT ROADMAP
-
-- **W0 — Foundation promotion**.
-- **W1 — Application Actions + minimal VNext shell**.
-- **W2 — A4 authoring/direct manipulation + primitives**.
-- **W3 — Save/Reopen/Catalog Library**.
-- **W4 — Advanced Table Editor**.
-- **W5 — Complete Translation VNext**.
-- **W6 — Publication integration + First Father Pilot**.
-- **W7 — UX corrections + templates/components/assets/sharing**.
-
-No exact dates are frozen.
-
-## FROZEN CONTRACT VS UX HYPOTHESIS VS FUTURE
-
-### FROZEN CONTRACT
-
-- one document model;
-- one Table Engine;
-- A4 authored frames;
-- typed translation leaves;
-- typed Application Actions;
-- save/version/CAS direction;
-- publication snapshot chain;
-- user owns authored placement;
-- system diagnostics do not silently reauthor;
-- one mutation path for human UI and Future AI.
-
-### TESTABLE UX HYPOTHESIS
-
-- exact number of tool icons;
-- Inspector width;
-- contextual table toolbar position;
-- Layers default visibility;
-- safe-guide visibility;
-- default zoom;
-- right-click density;
-- custom-color prominence;
-- exact panel grouping and shortcuts;
-- exact onboarding sequence.
-
-Treat these as hypotheses to test with the father persona and other PRESYS users.
+- PDF publication;
+- basic sharing;
+- diagnostics/preflight.
 
 ### FUTURE
 
-- PIM;
-- Presence;
-- Realtime;
-- AI image generation;
+- live PIM binding;
+- Presence/Realtime;
+- CRDT;
 - autonomous AI authoring;
-- approval workflows.
+- complex workflow/approval;
+- advanced offset-print features if later justified.
 
-Future does not mean forbidden to design seams. It means do not implement it as a V1 dependency.
+There is no PIM or realtime dependency for Father V1.
 
-## CURRENT GOVERNANCE STATE
+## DO NOT OVERBUILD
 
-Production main verified before this governance update: `616332d6048a4259d2e2b562d8d5e781cea334bd`.
+The 24-page audit did not justify Father-V1 implementation of:
 
-PR #12 remains open and unmerged on `docs/vnext-r0-1-principal-amendments`.
+- Bezier/Pen vector editing;
+- full Illustrator-like path editing;
+- automatic cross-page reflow;
+- InDesign-style scripting/master hierarchy;
+- arbitrary HTML/CSS inside cells;
+- complex CRDT/realtime;
+- full PIM/ERP sync.
 
-PR #13 remains open and unmerged on `vnext/foundation-proof-01`, stacked on PR #12.
+Use imported SVG/high-resolution raster assets for complex technical diagrams when generic primitives are insufficient and editable vector paths are not required.
 
-Implementation proof head verified before this update: `c8808adf0dd3a9dbc4473aafc2f4007267ff67df`.
+## LEGACY — WHAT MUST NEVER RETURN AS AUTHORITY
 
-PR #13 GitHub Quality Gates were successful at that head.
+Salvage concepts and proven invariants, not Legacy authority.
 
-Known unrelated gate issue: `npm run lint:labs` reports the pre-existing conditional `useState` in `src/labs/product-workspace-ux/components/ConflictReviewModal.tsx:21:57`. Do not fix it as VNext proof/institutional-memory scope.
+High-value salvage candidates include translation machinery, pure table invariants/operations, Auth/Supabase infrastructure where later validated, CAS/version concepts, asset/media concepts, fonts/icons, PRESYS fixtures/goldens, and publication/preflight lessons.
 
-## NEXT PRINCIPAL ACTION
+Do not restore as canonical VNext authority:
 
-The current wave is **W0 Foundation promotion**.
+- giant `useCatalogStore` / `useLibraryStore` domain authority;
+- Legacy A4 vertical flow;
+- Smart Flow authored topology;
+- legacy `TableCoreRenderer` authority;
+- adapter/bridge layers that recreate parallel domains;
+- specialized table engines;
+- raster page publication;
+- Presence/Realtime as a V1 prerequisite;
+- hidden automatic geometry or topology mutation.
 
-Prepare and audit a narrow W0 promotion story that moves the proven foundation into production VNext authority without redesign and without leaving a parallel lab/production engine split.
+## WHAT IS HISTORICAL VS CURRENT
 
-Before any implementation:
+R0 package documents and the W0 execution story preserve facts from the points in time when they were written. Some historical sections mention open PRs or pre-promotion status. Do not treat those historical status lines as the current project state.
 
-1. fetch and verify main, PR #12, and PR #13 heads;
-2. verify stacked ancestry;
-3. read `PROJECT-STATE.md`, this handoff, the product blueprint, R0.1.4, and PR #13 proof evidence;
-4. freeze the exact promotion boundary and acceptance checks;
-5. only then route implementation.
+Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and verified GitHub state.
 
-Do not merge PR #12 or PR #13 without explicit user authorization.
+## NEXT EXACT ACTION
+
+This handoff-sync wave is documentation/governance only. PR #15 is its synchronization vehicle, and GitHub is the authority for its current state.
+
+If PR #15 is **OPEN**, a fresh Principal should audit this synchronization against GitHub, `src/vnext`, the W0 architecture-boundary test, the UX lab evidence, and the 24-page reference evidence. Required CI must be green, and merge still requires explicit user authorization.
+
+If these docs are being read from `main` and GitHub confirms PR #15 is **MERGED**, treat the handoff sync as complete and proceed to W1 planning/execution under normal Principal governance.
+
+Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**. W1 is **NOT STARTED**.
+
+## REQUIRED RECONSTRUCTION ORDER
+
+1. `docs/vnext/PROJECT-STATE.md`.
+2. `docs/vnext/PRINCIPAL-HANDOFF.md`.
+3. `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`.
+4. `docs/vnext/presys-mvp-r0/README.md`.
+5. `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md`.
+6. `docs/vnext/presys-mvp-r0/evidence/proof-result.md`.
+7. `docs/stories/2026-09-09-vnext-w0-foundation-promotion.md`.
+8. `tests/vnext/proof/architecture-boundary.test.ts` and current `src/vnext/` ownership.

@@ -21,7 +21,7 @@ Para reconstruir o projeto sem memória de chat, ler primeiro:
 2. [`../PRINCIPAL-HANDOFF.md`](../PRINCIPAL-HANDOFF.md) — memória arquitetural, governance, translation, persistence, publication e salvage.
 3. [`../product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`](../product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md) — blueprint de produto com separação explícita entre contrato congelado, hipótese de UX e futuro.
 
-PR #12 e PR #13 permanecem **OPEN / NOT MERGED**. Produção VNext permanece **NOT PROMOTED / NOT IMPLEMENTED**.
+Nota histórica: quando este pacote R0 foi congelado, PR #12 e PR #13 ainda estavam abertos e produção VNext ainda não havia sido promovida. O estado corrente pós-W0 está em `../PROJECT-STATE.md`: PR #12, PR #13 e PR #14 estão **MERGED**, e `src/vnext/` é a autoridade de produção da fundação.
 
 ## Nomenclatura proposta
 
