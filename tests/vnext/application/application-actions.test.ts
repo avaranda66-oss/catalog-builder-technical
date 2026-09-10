@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plainRichText, type CatalogDocument } from '@/vnext';
+import { CatalogDocumentSchema, plainRichText, validateDocument, type CatalogDocument, type RichText } from '@/vnext';
 import {
   ApplicationActionSchema,
   canonicalIdentityIds,
@@ -65,6 +65,45 @@ function complexDocument(): CatalogDocument {
             ],
             legend: [{ id: 'legend-a', markerCode: '●', text: plainRichText('legend-rich', 'Compatível') }],
           },
+        },
+      ],
+    }],
+  };
+}
+
+function sharedLocalRichText(text: string): RichText {
+  return {
+    paragraphs: [{
+      id: 'p-shared',
+      inlines: [{ kind: 'text', id: 't-shared', text, marks: [] }],
+    }],
+  };
+}
+
+function reusedRichTextIdentityDocument(): CatalogDocument {
+  const document = createCatalogDocument(sequenceIds('shared-base'), 'IDs locais compartilhados');
+  return {
+    ...document,
+    pages: [{
+      ...document.pages[0],
+      objects: [
+        {
+          id: 'shared-text-a',
+          type: 'text',
+          frame: { xMm: 12, yMm: 12, widthMm: 80, heightMm: 20 },
+          zIndex: 0,
+          text: sharedLocalRichText('Texto A'),
+          style: {},
+          height: { mode: 'auto' },
+        },
+        {
+          id: 'shared-text-b',
+          type: 'text',
+          frame: { xMm: 12, yMm: 36, widthMm: 80, heightMm: 20 },
+          zIndex: 1,
+          text: sharedLocalRichText('Texto B'),
+          style: {},
+          height: { mode: 'auto' },
         },
       ],
     }],
@@ -179,6 +218,43 @@ describe('VNext Application Actions', () => {
     expect(result.metadata.createdIds).toContain(duplicate.id);
   });
 
+  it('preserves W0 RichText-local identity scope while duplicating with fresh local IDs', () => {
+    const document = reusedRichTextIdentityDocument();
+    const original = JSON.stringify(document);
+
+    expect(CatalogDocumentSchema.safeParse(document).success).toBe(true);
+    expect(validateDocument(document).filter((diagnostic) => diagnostic.severity === 'ERROR')).toEqual([]);
+
+    const session = createDocumentSession(document, { createId: sequenceIds('fresh-shared') });
+    expect(session.getSnapshot().document).toEqual(document);
+
+    const renamed = session.execute({ type: 'document.rename', title: 'Renomeado' });
+    expect(renamed.ok).toBe(true);
+    const afterRename = JSON.stringify(session.getSnapshot().document);
+
+    const duplicated = session.execute({ type: 'page.duplicate', pageId: document.pages[0].id });
+    expect(duplicated.ok).toBe(true);
+    if (!duplicated.ok) return;
+    expect(duplicated.document.pages).toHaveLength(2);
+    expect(validateDocument(duplicated.document).filter((diagnostic) => diagnostic.severity === 'ERROR')).toEqual([]);
+
+    const duplicatedTextObjects = duplicated.document.pages[1].objects.filter((object) => object.type === 'text');
+    expect(duplicatedTextObjects).toHaveLength(2);
+    const duplicatedLocalIds = duplicatedTextObjects.map((object) => {
+      if (object.type !== 'text') throw new Error('Expected text object');
+      return [object.text.paragraphs[0].id, object.text.paragraphs[0].inlines[0].id];
+    });
+    expect(duplicatedLocalIds[0]).not.toEqual(['p-shared', 't-shared']);
+    expect(duplicatedLocalIds[1]).not.toEqual(['p-shared', 't-shared']);
+    expect(duplicatedLocalIds[0]).not.toEqual(duplicatedLocalIds[1]);
+    expect(JSON.stringify(document)).toBe(original);
+
+    expect(session.undo().ok).toBe(true);
+    expect(JSON.stringify(session.getSnapshot().document)).toBe(afterRename);
+    expect(session.redo().ok).toBe(true);
+    expect(session.getSnapshot().document.pages).toHaveLength(2);
+  });
+
   it('fails page duplication on a generated ID collision without changing the document', () => {
     const document = complexDocument();
     const before = JSON.stringify(document);
@@ -190,6 +266,22 @@ describe('VNext Application Actions', () => {
 
     expect(result).toMatchObject({ ok: false, error: { code: 'DUPLICATE_ID' } });
     expect(JSON.stringify(document)).toBe(before);
+  });
+
+  it('does not consume an ID or history entry when page.add targets a missing page', () => {
+    const document = createCatalogDocument(sequenceIds('initial'));
+    let generated = 0;
+    const session = createDocumentSession(document, {
+      createId: () => `counted-${++generated}`,
+    });
+    const before = JSON.stringify(session.getSnapshot().document);
+
+    const result = session.execute({ type: 'page.add', afterPageId: 'missing-page' });
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'PAGE_NOT_FOUND' } });
+    expect(generated).toBe(0);
+    expect(JSON.stringify(session.getSnapshot().document)).toBe(before);
+    expect(session.getSnapshot()).toMatchObject({ canUndo: false, canRedo: false });
   });
 });
 
@@ -247,6 +339,29 @@ describe('VNext in-memory document session', () => {
     expect(session.undo().ok).toBe(true);
     expect(session.getSnapshot().document.title).toBe('Original');
     expect(session.getSnapshot().canUndo).toBe(false);
+  });
+
+  it('treats semantic no-ops as success without creating history or clearing redo', () => {
+    const initial = createCatalogDocument(sequenceIds('initial'), 'Original');
+    const session = createDocumentSession(initial, { createId: sequenceIds('session') });
+
+    const renameNoOp = session.execute({ type: 'document.rename', title: 'Original' });
+    expect(renameNoOp).toMatchObject({ ok: true, metadata: { changed: false } });
+    expect(session.getSnapshot()).toMatchObject({ canUndo: false, canRedo: false });
+
+    session.execute({ type: 'page.add' });
+    const firstPageId = session.getSnapshot().document.pages[0].id;
+    const reorderNoOp = session.execute({ type: 'page.reorder', pageId: firstPageId, targetIndex: 0 });
+    expect(reorderNoOp).toMatchObject({ ok: true, metadata: { changed: false } });
+
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot()).toMatchObject({ canUndo: false, canRedo: true });
+
+    const redoPreservingNoOp = session.execute({ type: 'document.rename', title: 'Original' });
+    expect(redoPreservingNoOp).toMatchObject({ ok: true, metadata: { changed: false } });
+    expect(session.getSnapshot()).toMatchObject({ canUndo: false, canRedo: true });
+    expect(session.redo().ok).toBe(true);
+    expect(session.getSnapshot().document.pages).toHaveLength(2);
   });
 
   it('exposes frozen canonical snapshots so consumers cannot mutate session state directly', () => {

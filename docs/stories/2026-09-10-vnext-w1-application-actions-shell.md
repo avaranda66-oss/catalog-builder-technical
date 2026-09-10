@@ -1,6 +1,6 @@
 # W1 — Application Actions + Minimal VNext Shell
 
-Status: Ready for Review
+Status: Candidate / In Review
 Date: 2026-09-10
 Base SHA: `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`
 Base tree: `98cca67af685892728b63756a90739b306b6c432`
@@ -81,6 +81,9 @@ GPT-5.6 Sol (High)
 - CodeRabbit CLI gate unavailable in this environment: `/home/gabriel/.local/bin/coderabbit` is not installed. This is recorded as unavailable, not passed.
 - PR #16 opened against `main`: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/16`. Initial implementation head before the final documentation commit was `6ff981c5a5f3ca16ec325e054e017fb2c18f6f6c`.
 - Exact final PR head and GitHub Quality Gate conclusion are intentionally sourced from PR #16/final execution evidence after the last commit, avoiding a self-referential story-SHA loop.
+- Principal correction round: restored W0 RichText-local identity scope, added per-RichText fresh-ID duplication, made invalid `page.add` targets consume zero IDs, and defined semantic rename/reorder no-ops as successful non-history actions.
+- Correction focused gates: application + architecture tests 21/21 passed; full VNext tests 88/88 passed.
+- Correction global gates: `npm run lint` passed with 0 errors and 268 existing warnings; `npm run typecheck` passed; `npm test` passed with 2,134 passed and 1 skipped across 204 files; `npm run build` passed; `git diff --check` is recorded with the final pre-commit verification.
 
 ### Completion Notes List
 
@@ -89,7 +92,9 @@ GPT-5.6 Sol (High)
 - Moved Legacy bootstrap to `src/legacy-main.tsx`; `src/main.tsx` selects `/v2` before dynamically importing either VNext or Legacy.
 - Added an isolated in-memory `/v2` shell rendering the canonical A4 VNext document. Its visible Add Page and Undo/Redo controls use the Application runtime, and the UI explicitly states that saving is limited to the current tab.
 - Added application/session coverage and architecture proofs for application purity, mutation authority, bootstrap ordering, and VNext graph isolation.
-- Local implementation, automated gates, browser regression proof, adversarial import/mutation audit, PR creation, and required GitHub Quality Gate verification are complete. The live PR check rollup is the source of truth for the final docs-only head/run so this story does not create a self-referential SHA loop.
+- Principal correction preserves the Foundation contract: paragraph/inline IDs remain local to each `RichText`, while structural document IDs retain canonical global uniqueness. Generation conservatively reserves all used strings without rejecting valid cross-RichText reuse.
+- Page duplication keeps one structural reference mapping and duplicates each independent RichText with fresh local IDs. Invalid `page.add` targets are resolved before allocation. Rename/reorder no-ops return success with `metadata.changed=false` and do not alter Undo/Redo history.
+- The corrected implementation remains a candidate under Principal review. The live PR #16 head/check rollup is the source of truth for exact-head GitHub CI so this story does not create a self-referential SHA loop.
 
 ### File List
 
@@ -112,3 +117,4 @@ GPT-5.6 Sol (High)
 
 - 2026-09-10: Story created from the authorized W1 execution contract before production code changes.
 - 2026-09-10: Implemented W1 Application Actions, in-memory history, isolated `/v2` shell/bootstrap, architecture proofs, and completed local/browser quality gates.
+- 2026-09-10: Principal correction restored canonical RichText identity scopes, hardened `page.add` allocation ordering and no-op history semantics, and added adversarial regressions. W1 remains candidate / in review pending Principal re-audit.

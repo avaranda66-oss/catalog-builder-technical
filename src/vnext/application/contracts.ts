@@ -66,6 +66,7 @@ export interface ActionMetadata {
   actionType: ApplicationActionType;
   affectedIds: readonly string[];
   createdIds: readonly string[];
+  changed: boolean;
 }
 
 export interface ApplicationActionSuccess {

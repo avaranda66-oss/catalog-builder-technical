@@ -59,19 +59,21 @@ export function executeApplicationAction(
   let candidate: CatalogDocument = document;
   let affectedIds: string[] = [];
   let createdIds: string[] = [];
+  let changed = true;
 
   try {
     switch (action.type) {
       case 'document.rename':
-        candidate = { ...document, title: action.title };
+        changed = action.title !== document.title;
+        candidate = changed ? { ...document, title: action.title } : document;
         affectedIds = [document.id];
         break;
       case 'page.add': {
-        const page = createBlankPage(document, dependencies.createId);
         const insertAt = action.afterPageId === undefined
           ? document.pages.length
           : document.pages.findIndex((entry) => entry.id === action.afterPageId) + 1;
         if (action.afterPageId !== undefined && insertAt === 0) return failure('PAGE_NOT_FOUND', action.afterPageId);
+        const page = createBlankPage(document, dependencies.createId);
         candidate = {
           ...document,
           pages: [...document.pages.slice(0, insertAt), page, ...document.pages.slice(insertAt)],
@@ -111,10 +113,13 @@ export function executeApplicationAction(
         if (action.targetIndex >= document.pages.length) {
           return failure('INVALID_REORDER_TARGET', String(action.targetIndex));
         }
-        const pages = [...document.pages];
-        const [page] = pages.splice(currentIndex, 1);
-        pages.splice(action.targetIndex, 0, page);
-        candidate = { ...document, pages };
+        changed = currentIndex !== action.targetIndex;
+        if (changed) {
+          const pages = [...document.pages];
+          const [page] = pages.splice(currentIndex, 1);
+          pages.splice(action.targetIndex, 0, page);
+          candidate = { ...document, pages };
+        }
         affectedIds = [action.pageId];
         break;
       }
@@ -128,6 +133,7 @@ export function executeApplicationAction(
         actionType: action.type,
         affectedIds,
         createdIds,
+        changed,
       },
     };
   } catch (error) {

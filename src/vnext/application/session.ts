@@ -63,6 +63,7 @@ export function createDocumentSession(
     execute: (action, context) => {
       const result = executeApplicationAction(current, action, dependencies);
       if (!result.ok) return result;
+      if (!result.metadata.changed) return { ...result, document: current };
 
       const coalesces = Boolean(context?.transactionId && context.transactionId === lastTransactionId);
       if (!coalesces) undoStack.push(current);
