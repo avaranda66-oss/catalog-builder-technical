@@ -5,7 +5,7 @@ Date: 2026-09-10
 Base SHA: `5e4b9c6f4235761872f94c5e0318a774ee456f39`
 Base tree: `7e21311949db03cda0720e5fd4216bec9a001f77`
 Branch: `feat/vnext-w2c-direct-manipulation-impl`
-PR: pending at implementation-commit time; durable closeout records the real PR after creation.
+PR: #20 — `https://github.com/avaranda66-oss/catalog-builder-technical/pull/20` — OPEN at durable closeout.
 
 PR #19 provenance: W2.B is represented canonically by the squash-merge base above. The preserved pre-squash local head `bec44a3654a22286c9dd3d1c86c201a3c9adee7e` is recovery evidence only and was not cherry-picked.
 
@@ -154,11 +154,13 @@ Evidence recorded under ignored scratch path `scratch/w2c-editor-proof/` proves:
 - [x] Implement visible authoring controls, overlay/handles and Inspector.
 - [x] Add Chromium proof and publication/architecture regressions.
 - [x] Run required gates and scope audit.
-- [ ] Open exactly one PR and record merge-durable project/handoff memory with its real number.
+- [x] Open exactly one PR and record merge-durable project/handoff memory with its real number.
 
 ## File List
 
 - `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md`
+- `docs/vnext/PROJECT-STATE.md`
+- `docs/vnext/PRINCIPAL-HANDOFF.md`
 - `public/assets/vnext/w2c-replacement.png`
 - `src/vnext/app/EditorWorkspace.tsx`
 - `src/vnext/app/VNextApp.tsx`
