@@ -22,6 +22,16 @@ function sequenceIds(prefix = 'id'): IdGenerator {
   return () => `${prefix}-${++next}`;
 }
 
+function listedIds(ids: readonly string[]): IdGenerator {
+  let next = 0;
+  return () => {
+    const id = ids[next];
+    next += 1;
+    if (id === undefined) throw new Error('ID sequence exhausted');
+    return id;
+  };
+}
+
 function countedIds(prefix = 'counted'): { createId: IdGenerator; count: () => number } {
   let generated = 0;
   return {
@@ -164,6 +174,13 @@ function structuralTableIds(table: TableModel): string[] {
     ...table.annotations.map((annotation) => annotation.id),
     ...table.legend.map((entry) => entry.id),
   ];
+}
+
+function richTextIds(richText: { paragraphs: Array<{ id: string; inlines: Array<{ id: string }> }> }): string[] {
+  return richText.paragraphs.flatMap((paragraph) => [
+    paragraph.id,
+    ...paragraph.inlines.map((inline) => inline.id),
+  ]);
 }
 
 function localRichTextIds(table: TableModel): string[] {
@@ -375,6 +392,8 @@ describe('W2.B insert and fresh identity instantiation', () => {
       const seed = tableSeed('caller');
       expect(structuralTableIds(table.table).some((id) => structuralTableIds(seed).includes(id))).toBe(false);
       expect(localRichTextIds(table.table).some((id) => localRichTextIds(seed).includes(id))).toBe(false);
+      expect(table.table.cells[0].rowId).toBe(table.table.rows[0].id);
+      expect(table.table.cells[0].columnId).toBe(table.table.columns[0].id);
       const marker = table.table.cells.find((cell) => cell.content.type === 'marker');
       const covered = table.table.cells.find((cell) => cell.coveredBy);
       expect(marker?.content.type).toBe('marker');
@@ -394,6 +413,79 @@ describe('W2.B insert and fresh identity instantiation', () => {
     expect(JSON.stringify(document.assets)).toBe(originalAssets);
     const allIds = canonicalIdentityIds(document);
     expect(new Set(allIds).size).toBe(allIds.length);
+  });
+
+  it('rejects Text seed-local IDs from the generator and regenerates reused placeholders independently', () => {
+    const document = baseDocument();
+    const text = {
+      paragraphs: [{
+        id: 'caller-p',
+        inlines: [{ kind: 'text' as const, id: 'caller-t', text: 'Texto', marks: [] }],
+      }],
+    };
+    const object = { ...insertSpecs().text, text };
+
+    expect(executeApplicationAction(
+      document,
+      { type: 'object.insert', pageId: document.pages[0].id, object },
+      { createId: listedIds(['new-object', 'caller-p', 'caller-t']) }
+    )).toMatchObject({ ok: false, error: { code: 'DUPLICATE_ID', details: 'caller-p' } });
+
+    const first = executeApplicationAction(
+      document,
+      { type: 'object.insert', pageId: document.pages[0].id, object },
+      { createId: listedIds(['first-object', 'first-p', 'first-t']) }
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const firstText = findObject(first.document, first.metadata.createdIds[0]);
+    expect(firstText.type).toBe('text');
+    if (firstText.type !== 'text') return;
+
+    const second = executeApplicationAction(
+      first.document,
+      { type: 'object.insert', pageId: document.pages[0].id, object },
+      { createId: listedIds(['second-object', 'second-p', 'second-t']) }
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const secondText = findObject(second.document, second.metadata.createdIds[0]);
+    expect(secondText.type).toBe('text');
+    if (secondText.type !== 'text') return;
+
+    const firstIds = richTextIds(firstText.text);
+    const secondIds = richTextIds(secondText.text);
+    expect(firstIds).toEqual(['first-p', 'first-t']);
+    expect(secondIds).toEqual(['second-p', 'second-t']);
+    expect(firstIds).not.toEqual(secondIds);
+    expect(firstIds).not.toContain('caller-p');
+    expect(firstIds).not.toContain('caller-t');
+    expect(secondIds).not.toContain('caller-p');
+    expect(secondIds).not.toContain('caller-t');
+  });
+
+  it.each([
+    ['table', 1, 'caller-table'],
+    ['column', 2, 'caller-column-a'],
+    ['row', 4, 'caller-row-a'],
+    ['cell', 6, 'caller-cell-aa'],
+    ['annotation', 10, 'caller-caption'],
+    ['legend', 12, 'caller-legend'],
+    ['nested RichText', 13, 'caller-cell-rich:p'],
+  ] as const)('rejects Table %s seed identity returned at its allocation point', (_label, allocationIndex, seedId) => {
+    const document = baseDocument();
+    const generated = Array.from({ length: allocationIndex + 1 }, (_, index) => `fresh-${index}`);
+    generated[allocationIndex] = seedId;
+
+    expect(executeApplicationAction(
+      document,
+      {
+        type: 'object.insert',
+        pageId: document.pages[0].id,
+        object: { ...insertSpecs().table, table: tableSeed('caller') },
+      },
+      { createId: listedIds(generated) }
+    )).toMatchObject({ ok: false, error: { code: 'DUPLICATE_ID', details: seedId } });
   });
 
   it('fails known insert conditions before avoidable ID allocation', () => {
@@ -550,6 +642,81 @@ describe('W2.B duplicate, lock and target semantics', () => {
 });
 
 describe('W2.B reorder and image replacement', () => {
+  it('rejects reorder across a locked sibling without mutating canonical state', () => {
+    const document = baseDocument();
+    const page = document.pages[0];
+    const candidate: CatalogDocument = {
+      ...document,
+      pages: [{
+        ...page,
+        objects: [
+          { id: 'a', type: 'shape', frame: { xMm: 1, yMm: 1, widthMm: 1, heightMm: 1 }, zIndex: 0, shape: 'rectangle', style: {} },
+          { id: 'b', type: 'shape', frame: { xMm: 2, yMm: 2, widthMm: 1, heightMm: 1 }, zIndex: 1, locked: true, shape: 'rectangle', style: {} },
+          { id: 'c', type: 'shape', frame: { xMm: 3, yMm: 3, widthMm: 1, heightMm: 1 }, zIndex: 2, shape: 'rectangle', style: {} },
+        ],
+      }],
+    };
+    const before = JSON.stringify(candidate);
+
+    expect(executeApplicationAction(
+      candidate,
+      { type: 'object.reorder', objectId: 'a', targetIndex: 2 },
+      { createId: sequenceIds('unused') }
+    )).toMatchObject({ ok: false, error: { code: 'OBJECT_LOCKED' } });
+    expect(JSON.stringify(candidate)).toBe(before);
+  });
+
+  it('allows reorder when a locked sibling keeps the same array position and zIndex', () => {
+    const document = baseDocument();
+    const page = document.pages[0];
+    const candidate: CatalogDocument = {
+      ...document,
+      pages: [{
+        ...page,
+        objects: [
+          { id: 'a', type: 'shape', frame: { xMm: 1, yMm: 1, widthMm: 1, heightMm: 1 }, zIndex: 0, shape: 'rectangle', style: {} },
+          { id: 'b', type: 'shape', frame: { xMm: 2, yMm: 2, widthMm: 1, heightMm: 1 }, zIndex: 1, locked: true, shape: 'rectangle', style: {} },
+          { id: 'c', type: 'shape', frame: { xMm: 3, yMm: 3, widthMm: 1, heightMm: 1 }, zIndex: 2, shape: 'rectangle', style: {} },
+          { id: 'd', type: 'shape', frame: { xMm: 4, yMm: 4, widthMm: 1, heightMm: 1 }, zIndex: 3, shape: 'rectangle', style: {} },
+        ],
+      }],
+    };
+
+    const reordered = executeApplicationAction(
+      candidate,
+      { type: 'object.reorder', objectId: 'c', targetIndex: 3 },
+      { createId: sequenceIds('unused') }
+    );
+    expect(reordered.ok).toBe(true);
+    if (!reordered.ok) return;
+    expect(reordered.document.pages[0].objects.map((object) => object.id)).toEqual(['a', 'b', 'd', 'c']);
+    expect(reordered.document.pages[0].objects.map((object) => object.zIndex)).toEqual([0, 1, 2, 3]);
+    expect(reordered.document.pages[0].objects[1]).toMatchObject({ id: 'b', locked: true, zIndex: 1 });
+  });
+
+  it('rejects reorder when normalization would rewrite a locked sibling gapped zIndex', () => {
+    const document = baseDocument();
+    const page = document.pages[0];
+    const candidate: CatalogDocument = {
+      ...document,
+      pages: [{
+        ...page,
+        objects: [
+          { id: 'a', type: 'shape', frame: { xMm: 1, yMm: 1, widthMm: 1, heightMm: 1 }, zIndex: 0, shape: 'rectangle', style: {} },
+          { id: 'b', type: 'shape', frame: { xMm: 2, yMm: 2, widthMm: 1, heightMm: 1 }, zIndex: 7, locked: true, shape: 'rectangle', style: {} },
+          { id: 'c', type: 'shape', frame: { xMm: 3, yMm: 3, widthMm: 1, heightMm: 1 }, zIndex: 8, shape: 'rectangle', style: {} },
+          { id: 'd', type: 'shape', frame: { xMm: 4, yMm: 4, widthMm: 1, heightMm: 1 }, zIndex: 9, shape: 'rectangle', style: {} },
+        ],
+      }],
+    };
+
+    expect(executeApplicationAction(
+      candidate,
+      { type: 'object.reorder', objectId: 'c', targetIndex: 3 },
+      { createId: sequenceIds('unused') }
+    )).toMatchObject({ ok: false, error: { code: 'OBJECT_LOCKED', details: 'b' } });
+  });
+
   it('reorders against visual order and normalizes equal, negative, gapped zIndex deterministically', () => {
     const document = baseDocument();
     const page = document.pages[0];
@@ -677,6 +844,34 @@ describe('W2.B Table frame immutability and diagnostics', () => {
 });
 
 describe('W2.B DocumentSession history', () => {
+  it('preserves Redo when reorder is rejected because it would mutate a locked sibling', () => {
+    const document = baseDocument();
+    const page = document.pages[0];
+    const initial: CatalogDocument = {
+      ...document,
+      pages: [{
+        ...page,
+        objects: [
+          { id: 'a', type: 'shape', frame: { xMm: 1, yMm: 1, widthMm: 1, heightMm: 1 }, zIndex: 0, shape: 'rectangle', style: {} },
+          { id: 'b', type: 'shape', frame: { xMm: 2, yMm: 2, widthMm: 1, heightMm: 1 }, zIndex: 1, locked: true, shape: 'rectangle', style: {} },
+          { id: 'c', type: 'shape', frame: { xMm: 3, yMm: 3, widthMm: 1, heightMm: 1 }, zIndex: 2, shape: 'rectangle', style: {} },
+        ],
+      }],
+    };
+    const session = createDocumentSession(initial, { createId: sequenceIds('unused') });
+    expect(session.execute({ type: 'object.move', objectId: 'a', xU: 20_000, yU: 10_000 }).ok).toBe(true);
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().canRedo).toBe(true);
+    const beforeRejected = JSON.stringify(session.getSnapshot().document);
+
+    expect(session.execute({ type: 'object.reorder', objectId: 'c', targetIndex: 0 }))
+      .toMatchObject({ ok: false, error: { code: 'OBJECT_LOCKED', details: 'b' } });
+    expect(JSON.stringify(session.getSnapshot().document)).toBe(beforeRejected);
+    expect(session.getSnapshot().canRedo).toBe(true);
+    expect(session.redo().ok).toBe(true);
+    expect(mmToU(findObject(session.getSnapshot().document, 'a').frame.xMm)).toBe(20_000);
+  });
+
   it('Undo/Redo restores exact snapshots for all seven actions without reallocating insert/duplicate IDs', () => {
     const ids = countedIds('history');
     const initial = allPrimitiveDocument();

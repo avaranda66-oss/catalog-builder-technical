@@ -75,6 +75,8 @@ W2.B mutation payloads use integer U. Serialized Frame remains mm using `written
 
 - Implemented strict W2.B Object Application Actions for all six W2.A primitives through the existing W1 execution/session boundary.
 - Shared fresh-ID instantiation now serves object insert/duplicate and existing page duplication while preserving global structural identity scope and RichText-local identity scope.
+- Principal amendment: fresh object instantiation now also reserves every identity string carried by the insertion seed, including Text local RichText IDs, Table structural IDs, and Table-contained local RichText IDs, so caller seed identities cannot survive merely because `createId` returns the same value.
+- Principal amendment: real object reorder now computes the normalized proposal first and rejects with `OBJECT_LOCKED` whenever a locked sibling's canonical array position or `zIndex` would change, while still permitting reorders that leave every locked sibling unchanged.
 - Table move/resize changes only Frame. A valid resize to an infeasible width remains committed while the existing renderer/Table pipeline reports `TABLE_WIDTH_INFEASIBLE`.
 - PR #19 is the W2.B implementation/promotion vehicle. GitHub is authority for live review/merge state; this story does not claim merge, canonical status, or Principal acceptance.
 
@@ -87,6 +89,16 @@ W2.B mutation payloads use integer U. Serialized Frame remains mm using `written
 - `npm run typecheck`: PASS.
 - `npm test`: PASS — 206 files; 2,158 passed, 1 skipped (2,159 total).
 - `npm run build`: PASS.
+
+### Principal Amendment Validation
+
+- `npx vitest run tests/vnext/application tests/vnext/proof`: PASS via the installed Vitest binary — 10 files, 124/124 tests.
+- `node tests/vnext/proof/export-proof.mjs`: PASS — all 8 screen/print matrix combinations at 1x/2x and 900/1500 widths, native PDF + PDF.js forensics, W2.A representative primitive Chromium/native PDF proof, and R0.1.4 row-span readiness.
+- `git diff --check`: PASS.
+- `npm run lint`: PASS via the exact configured ESLint command — 0 errors, 268 existing warnings.
+- `npm run typecheck`: PASS.
+- `npm test`: PASS — 206 files; 2,170 passed, 1 skipped (2,171 total).
+- `npm run build`: PASS — TypeScript compile plus Vite production build.
 
 ### File List
 
@@ -109,3 +121,4 @@ Selection/direct manipulation, snapping/guides, templates, Group, direct Text ed
 - 2026-09-10: Story created from the authorized W2.B execution work order after independently verifying PR #18 merged and reconstructing canonical `origin/main` SHA/tree.
 - 2026-09-10: W2.B implementation validated through focused VNext proofs, Chromium/native-PDF regression proof, lint/typecheck/full tests/build, committed as `40a0a965be7dee4d6c188ea88e6b5bd5836ea53b`, pushed normally, and carried by PR #19.
 - 2026-09-10: Durable project state and Principal handoff updated with PR #19 merge-durable wording. Before W2.C, independently verify PR #19 merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+- 2026-09-10: Principal amendment for PR #19 closed the two accepted blockers: insertion-seed freshness and lock-aware sibling reorder. Adversarial proofs and full repository gates passed; PR #19 remains the open review vehicle and this record does not claim merge, canonical status, or Principal acceptance.

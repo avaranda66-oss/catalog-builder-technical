@@ -354,6 +354,12 @@ export function executeApplicationAction(
         const normalized = ordered.map((object, arrayIndex) => object.zIndex === arrayIndex
           ? object
           : { ...object, zIndex: arrayIndex });
+        const lockedMutation = normalized.find((object, arrayIndex) => {
+          if (!objectLocked(object)) return false;
+          const prior = before.get(object.id)!;
+          return prior.arrayIndex !== arrayIndex || prior.zIndex !== object.zIndex;
+        });
+        if (lockedMutation) return failure('OBJECT_LOCKED', lockedMutation.id);
         affectedIds = normalized
           .filter((object, arrayIndex) => {
             const prior = before.get(object.id)!;

@@ -164,6 +164,26 @@ function instantiateRichTextWithFreshIds(richText: RichText, allocator: IdAlloca
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
 export type ObjectInstantiationSeed = WithoutId<EditorialObject>;
 
+function instantiationSeedIdentityIds(seed: ObjectInstantiationSeed): string[] {
+  if (seed.type === 'text') return richTextIdentityIds(seed.text);
+  if (seed.type !== 'table') return [];
+
+  const ids = [
+    seed.table.id,
+    ...seed.table.columns.map((column) => column.id),
+    ...seed.table.rows.map((row) => row.id),
+    ...seed.table.cells.map((cell) => cell.id),
+    ...seed.table.annotations.map((annotation) => annotation.id),
+    ...seed.table.legend.map((entry) => entry.id),
+  ];
+  for (const cell of seed.table.cells) {
+    if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
+  }
+  for (const annotation of seed.table.annotations) ids.push(...richTextIdentityIds(annotation.text));
+  for (const entry of seed.table.legend) ids.push(...richTextIdentityIds(entry.text));
+  return ids;
+}
+
 export interface ObjectLocation {
   page: Page;
   object: EditorialObject;
@@ -280,7 +300,10 @@ export function instantiateObjectWithFreshIds(
   seed: ObjectInstantiationSeed,
   createId: IdGenerator
 ): EditorialObject {
-  const allocator = new IdAllocator(reservationIdentityIds(document), createId);
+  const allocator = new IdAllocator(
+    [...reservationIdentityIds(document), ...instantiationSeedIdentityIds(seed)],
+    createId
+  );
   return instantiateObjectWithAllocator(seed, allocator);
 }
 
