@@ -1,4 +1,11 @@
-import { CatalogDocumentSchema, type CatalogDocument, type Page, type RichText } from '../domain';
+import {
+  CatalogDocumentSchema,
+  type CatalogDocument,
+  type EditorialObject,
+  type Page,
+  type RichText,
+  type TableModel,
+} from '../domain';
 import { validateDocument } from '../table';
 import type { ApplicationErrorCode, IdGenerator } from './contracts';
 
@@ -19,25 +26,26 @@ function richTextIdentityIds(richText: RichText): string[] {
   ]);
 }
 
+/** Canonical structural IDs owned by one object. RichText-local IDs are intentionally excluded. */
+export function canonicalObjectIdentityIds(object: EditorialObject): string[] {
+  if (object.type !== 'table') return [object.id];
+  return [
+    object.id,
+    object.table.id,
+    ...object.table.columns.map((column) => column.id),
+    ...object.table.rows.map((row) => row.id),
+    ...object.table.cells.map((cell) => cell.id),
+    ...object.table.annotations.map((annotation) => annotation.id),
+    ...object.table.legend.map((entry) => entry.id),
+  ];
+}
+
 /** IDs whose uniqueness is canonical at CatalogDocument scope. */
 export function canonicalIdentityIds(document: CatalogDocument): string[] {
   const ids = [document.id, ...document.assets.map((asset) => asset.id)];
   for (const page of document.pages) {
     ids.push(page.id);
-    for (const object of page.objects) {
-      ids.push(object.id);
-      if (object.type !== 'table') continue;
-
-      const table = object.table;
-      ids.push(
-        table.id,
-        ...table.columns.map((column) => column.id),
-        ...table.rows.map((row) => row.id),
-        ...table.cells.map((cell) => cell.id),
-        ...table.annotations.map((annotation) => annotation.id),
-        ...table.legend.map((entry) => entry.id),
-      );
-    }
+    for (const object of page.objects) ids.push(...canonicalObjectIdentityIds(object));
   }
   return ids;
 }
@@ -143,7 +151,7 @@ export function createBlankPage(document: CatalogDocument, createId: IdGenerator
   return defaultPage(allocator.next());
 }
 
-function duplicateRichTextWithFreshIds(richText: RichText, allocator: IdAllocator): RichText {
+function instantiateRichTextWithFreshIds(richText: RichText, allocator: IdAllocator): RichText {
   return {
     paragraphs: richText.paragraphs.map((paragraph) => ({
       ...paragraph,
@@ -153,94 +161,139 @@ function duplicateRichTextWithFreshIds(richText: RichText, allocator: IdAllocato
   };
 }
 
+type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
+export type ObjectInstantiationSeed = WithoutId<EditorialObject>;
+
+export interface ObjectLocation {
+  page: Page;
+  object: EditorialObject;
+  pageIndex: number;
+  objectIndex: number;
+}
+
+/** Pure application-layer lookup of canonical object ownership and array position. */
+export function findObjectLocation(document: CatalogDocument, objectId: string): ObjectLocation | undefined {
+  for (let pageIndex = 0; pageIndex < document.pages.length; pageIndex += 1) {
+    const page = document.pages[pageIndex];
+    const objectIndex = page.objects.findIndex((object) => object.id === objectId);
+    if (objectIndex >= 0) return { page, object: page.objects[objectIndex], pageIndex, objectIndex };
+  }
+  return undefined;
+}
+
+export function objectInstantiationSeedFromObject(object: EditorialObject): ObjectInstantiationSeed {
+  const { id: _id, ...seed } = object;
+  return seed as ObjectInstantiationSeed;
+}
+
+function instantiateTableWithFreshIds(table: TableModel, allocator: IdAllocator): TableModel {
+  const mapping = new Map<string, string>();
+  mapping.set(table.id, allocator.next());
+  for (const column of table.columns) mapping.set(column.id, allocator.next());
+  for (const row of table.rows) mapping.set(row.id, allocator.next());
+  for (const cell of table.cells) mapping.set(cell.id, allocator.next());
+  for (const annotation of table.annotations) mapping.set(annotation.id, allocator.next());
+  for (const entry of table.legend) mapping.set(entry.id, allocator.next());
+
+  const mapped = (id: string): string => {
+    const value = mapping.get(id);
+    if (!value) throw new ApplicationDocumentError('DOCUMENT_INVALID', `Unmapped table identity: ${id}`);
+    return value;
+  };
+
+  return {
+    ...table,
+    id: mapped(table.id),
+    columns: table.columns.map((column) => ({ ...column, id: mapped(column.id) })),
+    rows: table.rows.map((row) => ({ ...row, id: mapped(row.id) })),
+    cells: table.cells.map((cell) => ({
+      ...cell,
+      id: mapped(cell.id),
+      rowId: mapped(cell.rowId),
+      columnId: mapped(cell.columnId),
+      coveredBy: cell.coveredBy ? mapped(cell.coveredBy) : undefined,
+      annotationIds: cell.annotationIds?.map(mapped),
+      content: cell.content.type === 'richText'
+        ? { ...cell.content, value: instantiateRichTextWithFreshIds(cell.content.value, allocator) }
+        : cell.content.type === 'marker'
+          ? { ...cell.content, legendEntryId: mapped(cell.content.legendEntryId) }
+          : { ...cell.content },
+    })),
+    annotationIds: table.annotationIds?.map(mapped),
+    annotations: table.annotations.map((annotation) => ({
+      ...annotation,
+      id: mapped(annotation.id),
+      text: instantiateRichTextWithFreshIds(annotation.text, allocator),
+    })),
+    legend: table.legend.map((entry) => ({
+      ...entry,
+      id: mapped(entry.id),
+      text: instantiateRichTextWithFreshIds(entry.text, allocator),
+    })),
+  };
+}
+
+function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator: IdAllocator): EditorialObject {
+  const id = allocator.next();
+  switch (seed.type) {
+    case 'text':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        style: { ...seed.style },
+        text: instantiateRichTextWithFreshIds(seed.text, allocator),
+      };
+    case 'table':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        table: instantiateTableWithFreshIds(seed.table, allocator),
+      };
+    case 'image':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        ...(seed.focalPoint ? { focalPoint: { ...seed.focalPoint } } : {}),
+      };
+    case 'shape':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        style: {
+          ...seed.style,
+          ...(seed.style.stroke ? { stroke: { ...seed.style.stroke } } : {}),
+        },
+      };
+    case 'line':
+    case 'icon':
+      return { ...seed, id, frame: { ...seed.frame } };
+  }
+}
+
+/** Freshly instantiates one object against all identities already reserved by the document. */
+export function instantiateObjectWithFreshIds(
+  document: CatalogDocument,
+  seed: ObjectInstantiationSeed,
+  createId: IdGenerator
+): EditorialObject {
+  const allocator = new IdAllocator(reservationIdentityIds(document), createId);
+  return instantiateObjectWithAllocator(seed, allocator);
+}
+
 export function duplicatePageWithFreshIds(
   document: CatalogDocument,
   page: Page,
   createId: IdGenerator
 ): Page {
   const allocator = new IdAllocator(reservationIdentityIds(document), createId);
-  const mapping = new Map<string, string>();
-  mapping.set(page.id, allocator.next());
-
-  for (const object of page.objects) {
-    mapping.set(object.id, allocator.next());
-    if (object.type !== 'table') continue;
-    const table = object.table;
-    mapping.set(table.id, allocator.next());
-    for (const column of table.columns) mapping.set(column.id, allocator.next());
-    for (const row of table.rows) mapping.set(row.id, allocator.next());
-    for (const cell of table.cells) mapping.set(cell.id, allocator.next());
-    for (const annotation of table.annotations) mapping.set(annotation.id, allocator.next());
-    for (const entry of table.legend) mapping.set(entry.id, allocator.next());
-  }
-
-  const duplicate: Page = {
+  return {
     ...page,
-    id: mapping.get(page.id)!,
+    id: allocator.next(),
     safeArea: page.safeArea ? { ...page.safeArea } : undefined,
-    objects: page.objects.map((object) => {
-      if (object.type === 'text') {
-        return {
-          ...object,
-          id: mapping.get(object.id)!,
-          frame: { ...object.frame },
-          style: { ...object.style },
-          text: duplicateRichTextWithFreshIds(object.text, allocator),
-        };
-      }
-
-      if (object.type !== 'table') {
-        return {
-          ...object,
-          id: mapping.get(object.id)!,
-          frame: { ...object.frame },
-          ...(object.type === 'image' && object.focalPoint ? { focalPoint: { ...object.focalPoint } } : {}),
-          ...(object.type === 'shape' ? {
-            style: {
-              ...object.style,
-              ...(object.style.stroke ? { stroke: { ...object.style.stroke } } : {}),
-            },
-          } : {}),
-        };
-      }
-
-      const table = object.table;
-      return {
-        ...object,
-        id: mapping.get(object.id)!,
-        frame: { ...object.frame },
-        table: {
-          ...table,
-          id: mapping.get(table.id)!,
-          columns: table.columns.map((column) => ({ ...column, id: mapping.get(column.id)! })),
-          rows: table.rows.map((row) => ({ ...row, id: mapping.get(row.id)! })),
-          cells: table.cells.map((cell) => ({
-            ...cell,
-            id: mapping.get(cell.id)!,
-            rowId: mapping.get(cell.rowId)!,
-            columnId: mapping.get(cell.columnId)!,
-            coveredBy: cell.coveredBy ? mapping.get(cell.coveredBy) : undefined,
-            annotationIds: cell.annotationIds?.map((id) => mapping.get(id)!),
-            content: cell.content.type === 'richText'
-              ? { ...cell.content, value: duplicateRichTextWithFreshIds(cell.content.value, allocator) }
-              : cell.content.type === 'marker'
-                ? { ...cell.content, legendEntryId: mapping.get(cell.content.legendEntryId)! }
-                : { ...cell.content },
-          })),
-          annotationIds: table.annotationIds?.map((id) => mapping.get(id)!),
-          annotations: table.annotations.map((annotation) => ({
-            ...annotation,
-            id: mapping.get(annotation.id)!,
-            text: duplicateRichTextWithFreshIds(annotation.text, allocator),
-          })),
-          legend: table.legend.map((entry) => ({
-            ...entry,
-            id: mapping.get(entry.id)!,
-            text: duplicateRichTextWithFreshIds(entry.text, allocator),
-          })),
-        },
-      };
-    }),
+    objects: page.objects.map((object) => instantiateObjectWithAllocator(objectInstantiationSeedFromObject(object), allocator)),
   };
-  return duplicate;
 }
