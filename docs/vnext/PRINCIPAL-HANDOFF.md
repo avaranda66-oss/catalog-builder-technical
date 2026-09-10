@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 AMENDED CONTRACT UNDER PRINCIPAL REVIEW
+STATUS: DURABLE POST-W1 PRINCIPAL MEMORY; W2.0 CONTRACT PRINCIPAL ACCEPTED / READY FOR MERGE
 
 DATE: 2026-09-10
 
@@ -61,7 +61,7 @@ PR #16 — W1 Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
 
 W1: **COMPLETE**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. W2.0 remains under Principal review while the reconciled PR #17 amendment is re-audited. **W2 feature implementation has not started and must not start before Principal acceptance.**
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. The amended W2.0 contract in PR #17 is **PRINCIPAL ACCEPTED / READY FOR MERGE**. PR #17 remains **OPEN** and awaits explicit merge authorization. **W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.**
 
 ## WHAT IS CANONICAL NOW
 
@@ -453,7 +453,7 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 PRs #12 through #16 are merged. W0, W0.1, and W1 are complete. Current canonical main is `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-The next Principal action is to re-audit the amended documentation-only W2.0 contract in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`. PR #17 remains the review vehicle. Do not start W2 feature implementation until the amendment is accepted. Do not merge PR #17 without separate authorization.
+The next governance action is the final explicit merge check and owner authorization for PR #17. The W2.0 contract is Principal accepted and PR #17 remains OPEN. Do not start W2 feature implementation; W2.A may begin only after PR #17 is merged and canonical main is independently verified. Do not merge PR #17 without separate authorization.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

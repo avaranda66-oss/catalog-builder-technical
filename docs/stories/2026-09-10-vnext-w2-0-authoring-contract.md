@@ -1,6 +1,6 @@
 # W2.0 — VNext A4 Authoring Contract
 
-Status: UNDER PRINCIPAL REVIEW — AMENDED FOR RE-AUDIT
+Status: W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
 Date: 2026-09-10
 Base SHA: `0975953da7a8748b483ba8f64cb69c7cdb9172f6`
 Base tree: `d617b9089b2e5dbc94ed02b438e821d7885da6f3`
@@ -24,7 +24,7 @@ Close W1 durably after PR #16 merged and freeze the smallest implementable W2 co
 - [x] GitHub confirms PRs #12, #13, #14, #15, and #16 are merged.
 - [x] Exact `origin/main` is `0975953da7a8748b483ba8f64cb69c7cdb9172f6`.
 - [x] Exact current tree is `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
-- [x] `PROJECT-STATE.md` and `PRINCIPAL-HANDOFF.md` durably record W0/W0.1/W1 as merged/complete and point to W2.0 contract review.
+- [x] `PROJECT-STATE.md` and `PRINCIPAL-HANDOFF.md` durably record W0/W0.1/W1 as merged/complete and record the Principal-accepted W2.0 contract state.
 - [x] W0 R0.1.4 U/Q, row-solving, Table Engine, rendering, publication, and W0.1 layer boundaries are preserved.
 - [x] W1 strict typed Application Actions, immutable session, Undo/Redo, semantic no-op, deterministic ID generation, transaction coalescing, and RichText-local identity scope are preserved.
 - [x] W2 geometry distinguishes canonical authored `*Mm` serialization from integer-U command/layout authority without reopening the Frame schema merely for naming.
@@ -48,9 +48,9 @@ Close W1 durably after PR #16 merged and freeze the smallest implementable W2 co
 - [x] No persistence, Supabase/Auth VNext, translation, advanced table editing, full template/component library, PIM, Presence/Realtime/CRDT, AI authoring, publication redesign, or automatic pagination/reflow is implemented.
 - [x] `src/labs/product-workspace-ux/components/ConflictReviewModal.tsx` remains untouched.
 
-## Principal re-audit focus
+## Principal acceptance
 
-The amendment applies the reconciled Principal decisions without reopening W0/W1. Re-audit should verify: authored `xMm/yMm/widthMm/heightMm` serialization with integer-U operational authority and mm-facing Inspector input; sole Text physical height in `frame.heightMm`; Image focal point; Table resize commit-then-diagnose; stable W0 diagnostic codes; legal overlap without universal publication-warning noise; stale-safe gesture cancellation/preconditions; canonical `1 U` minimum separated from editor UX minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
+The Principal re-audit accepted the amended contract without reopening W0/W1. The accepted direction remains: authored `xMm/yMm/widthMm/heightMm` serialization with integer-U operational authority and mm-facing Inspector input; sole Text physical height in `frame.heightMm`; Image focal point; Table resize commit-then-diagnose; stable W0 diagnostic codes; legal overlap without universal publication-warning noise; stale-safe gesture cancellation/preconditions; canonical `1 U` minimum separated from editor UX minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
 
 ## Required gates
 
@@ -69,10 +69,10 @@ The amendment applies the reconciled Principal decisions without reopening W0/W1
 
 ## Out of scope
 
-No W2 feature implementation is authorized by this story. Historical W0/W1 execution stories remain historical records and are not rewritten to simulate current state.
+No W2 feature implementation is authorized by this story. W2.A may begin only after PR #17 is merged and canonical main is independently verified. Historical W0/W1 execution stories remain historical records and are not rewritten to simulate current state.
 
-READY FOR PRINCIPAL RE-AUDIT
+W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
 
-DO NOT MERGE
+PR #17 REMAINS OPEN — AWAIT EXPLICIT MERGE AUTHORIZATION
 
 DO NOT START W2 IMPLEMENTATION

@@ -1,6 +1,6 @@
 # Catalog Builder VNext — W2 A4 Authoring Contract
 
-STATUS: UNDER PRINCIPAL REVIEW — AMENDED CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
+STATUS: W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE — CONTRACT ONLY, NO W2 FEATURE IMPLEMENTATION
 
 DATE: 2026-09-10
 
@@ -800,14 +800,14 @@ No W2.0 documentation work implements persistence, Supabase/Auth VNext, save/aut
 
 No unrelated Legacy or lab debt is part of W2. In particular, `src/labs/product-workspace-ux/components/ConflictReviewModal.tsx` remains untouched.
 
-## 22. Principal re-audit points
+## 22. Principal acceptance closeout
 
-W2.0 remains under Principal review until this amendment is audited. W2 feature implementation has not started.
+W2.0 contract is Principal accepted. PR #17 remains OPEN and awaits explicit merge authorization. W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.
 
-The re-audit should confirm that the reconciled decisions are represented without reopening W0/W1: authored `*Mm` serialization with U operational authority and mm-facing Inspector controls; sole Text physical-height authority in `frame.heightMm`; Image focal point; commit-then-diagnose Table resize; stable W0 diagnostic codes; legal intentional overlap without universal publication warning; stale-safe gesture lifecycle; canonical-vs-editor resize minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
+The Principal re-audit accepted the reconciled decisions without reopening W0/W1: authored `*Mm` serialization with U operational authority and mm-facing Inspector controls; sole Text physical-height authority in `frame.heightMm`; Image focal point; commit-then-diagnose Table resize; stable W0 diagnostic codes; legal intentional overlap without universal publication warning; stale-safe gesture lifecycle; canonical-vs-editor resize minima; W2.F Group as a W3 gate; minimum visible authoring in W2.C; and minimum direct Text editing in W2.G.
 
-READY FOR PRINCIPAL RE-AUDIT
+W2.0 CONTRACT — PRINCIPAL ACCEPTED / READY FOR MERGE
 
-DO NOT MERGE
+PR #17 REMAINS OPEN — AWAIT EXPLICIT MERGE AUTHORIZATION
 
 DO NOT START W2 IMPLEMENTATION

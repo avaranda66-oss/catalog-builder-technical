@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: POST-W1 CANONICAL BASE; W2.0 AMENDED CONTRACT UNDER PRINCIPAL REVIEW
+STATUS: POST-W1 CANONICAL BASE; W2.0 CONTRACT PRINCIPAL ACCEPTED / READY FOR MERGE
 
 DATE: 2026-09-10
 
@@ -52,7 +52,7 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is also merged, so W1 is canonical on `main` and closed. W2.0 remains **UNDER PRINCIPAL REVIEW** while the reconciled contract amendment in PR #17 is re-audited. **W2 feature implementation has not started and must not start until Principal acceptance.**
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is also merged, so W1 is canonical on `main` and closed. The amended W2.0 contract in PR #17 is **PRINCIPAL ACCEPTED / READY FOR MERGE**. PR #17 remains **OPEN** and awaits explicit merge authorization. **W2 feature implementation has not started. W2.A may begin only after PR #17 is merged and canonical main is independently verified.**
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -402,7 +402,7 @@ PR #15 is **MERGED / COMPLETE** and established the exact W1 base `ff4ce7302fe79
 
 PR #16 is **MERGED / COMPLETE** and established the current canonical post-W1 main `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
 
-Next Principal action: re-audit the amended documentation-only W2.0 contract in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and its W2.0 story. PR #17 remains the review vehicle. Do not merge it without separate authorization, and do not start W2 feature implementation before Principal acceptance of the amendment.
+Next governance action: perform the final explicit merge check and obtain owner authorization for PR #17. The W2.0 contract is Principal accepted, but PR #17 remains OPEN. Do not start W2 feature implementation; W2.A may begin only after PR #17 is merged and canonical main is independently verified.
 
 ## RECONSTRUCTION READING ORDER
 
