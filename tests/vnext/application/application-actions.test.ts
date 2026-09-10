@@ -28,7 +28,6 @@ function complexDocument(): CatalogDocument {
           zIndex: 0,
           text: plainRichText('text-rich', 'PRESYS'),
           style: {},
-          height: { mode: 'auto' },
         },
         {
           id: 'table-object',
@@ -94,7 +93,6 @@ function reusedRichTextIdentityDocument(): CatalogDocument {
           zIndex: 0,
           text: sharedLocalRichText('Texto A'),
           style: {},
-          height: { mode: 'auto' },
         },
         {
           id: 'shared-text-b',
@@ -103,7 +101,6 @@ function reusedRichTextIdentityDocument(): CatalogDocument {
           zIndex: 1,
           text: sharedLocalRichText('Texto B'),
           style: {},
-          height: { mode: 'auto' },
         },
       ],
     }],

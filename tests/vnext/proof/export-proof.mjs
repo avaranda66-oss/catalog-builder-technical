@@ -277,7 +277,9 @@ try {
   await page.emulateMedia({media:'screen'});await load(page,'G05');
   const g05=await page.evaluate(()=>window.proof.document);
   assert.equal(g05.pages[0].objects.find(o=>o.type==='table'&&o.table.id==='g05-code').table.cells[0].content.value,'06.04.0121-00/IN1P/TA-50N-NH-PB-XXXXXXXXXXXX');
-  for(const code of ['SAFE_AREA_VIOLATION','OBJECT_OVERLAP'])assert((await result(page)).diagnostics.some(d=>d.code===code&&d.severity==='WARNING'));
+  const g05Diagnostics=(await result(page)).diagnostics;
+  assert(g05Diagnostics.some(d=>d.code==='SAFE_AREA_VIOLATION'&&d.severity==='WARNING'));
+  assert(!g05Diagnostics.some(d=>d.code==='OBJECT_OVERLAP'),'Intentional overlap must not be universal publication-warning noise');
   await page.screenshot({path:resolve(output,'screens','g05-adversarial.png'),fullPage:true});
   const g03ForQ=await page.evaluate(()=>window.proof.makeFixture('G03'));
   const exactRow=await runDoc(page,quantizedImageRowDocument(g03ForQ,{requiredHeightMm:20,rowHeights:[20],label:'t-q-row-01'}),'T-Q-ROW-01');

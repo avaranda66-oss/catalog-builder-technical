@@ -101,6 +101,8 @@ export function validateDocument(input:unknown):Diagnostic[] {
         ids.push(t.id,...t.columns.map(c=>c.id),...t.rows.map(r=>r.id),...t.cells.map(c=>c.id),...t.annotations.map(a=>a.id),...t.legend.map(l=>l.id));
         out.push(...validateTable(t,doc.assets).map(d=>({...d,pageId:page.id,objectId:object.id})));
       }
+      if((object.type==='image'||object.type==='icon')&&!doc.assets.some(asset=>asset.id===object.assetId))
+        out.push(diagnostic('ASSET_REFERENCE_DANGLING',object.assetId,{pageId:page.id,objectId:object.id}));
     }
   }
   unique(ids,out);

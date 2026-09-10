@@ -36,7 +36,7 @@ function tableObject(table:TableModel,xMm:number,yMm:number,widthMm:number,heigh
   return {id:table.id+':object',type:'table',table,frame:{xMm,yMm,widthMm,heightMm},zIndex:1};
 }
 function textObject(id:string,value:string,xMm:number,yMm:number,widthMm:number,heightMm:number,fontSizePt:number,color=ink,bold=false):EditorialObject {
-  return {id,type:'text',text:plainRichText(id+':text',value),frame:{xMm,yMm,widthMm,heightMm},zIndex:0,height:{mode:'fixed',mm:heightMm},
+  return {id,type:'text',text:plainRichText(id+':text',value),frame:{xMm,yMm,widthMm,heightMm},zIndex:0,
     style:{fontSizePt,color,fontWeight:bold?700:400,paddingMm:{top:0,right:0,bottom:0,left:0}}};
 }
 function page(id:string,title:string,kicker:string,objects:EditorialObject[]):Page {

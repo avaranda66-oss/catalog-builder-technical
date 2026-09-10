@@ -1,5 +1,10 @@
 export {
+  AssetRefSchema,
   CatalogDocumentSchema,
+  DEFAULT_IMAGE_FOCAL_POINT,
+  EditorialObjectSchema,
+  FrameSchema,
+  ImageFocalPointSchema,
   TableModelSchema,
   plainRichText,
 } from './editorial-model';
@@ -11,11 +16,19 @@ export type {
   Column,
   DocumentStyle,
   EditorialObject,
+  Frame,
+  IconObject,
+  ImageFocalPoint,
+  ImageObject,
+  LineObject,
   Page,
   RichText,
   Row,
+  ShapeObject,
   TableModel,
+  TableObject,
   TableStyle,
+  TextObject,
 } from './editorial-model';
 export { VNextError, asDiagnostic, diagnostic } from './diagnostics';
 export type { Diagnostic, Severity } from './diagnostics';

@@ -1,5 +1,6 @@
 export { DocumentRenderer } from './DocumentRenderer';
 export type { DocumentRendererProps } from './DocumentRenderer';
+export { PrimitiveRenderer, imageObjectPosition } from './PrimitiveRenderer';
 export { compilePlans } from './render-plan';
 export type { TablePlan } from './render-plan';
 export {
