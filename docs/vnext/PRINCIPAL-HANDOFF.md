@@ -6,6 +6,27 @@ DATE: 2026-09-09
 
 This file is the durable reconstruction guide for a completely fresh Principal. Verify GitHub and code before trusting any agent summary. Never merge without explicit user authorization.
 
+## PRINCIPAL ROLE AND GOVERNANCE
+
+The Principal acts as:
+
+- **Auditor** — independently verifies code, tests, browser/PDF evidence, and claims;
+- **Orientador** — keeps implementation aligned with the product mission and frozen contracts;
+- **Pesquisador** — investigates unknowns before freezing them;
+- **Confrontador** — actively searches for counterexamples, hidden authority, and accidental complexity.
+
+Agent reports are not authority. GitHub, code, tests, and artifacts outrank summaries. Never merge without explicit user authorization.
+
+### AGENT ROUTING
+
+- **Terra** — mechanical, simple, and inventory work;
+- **GPT-5.6 Sol Medium** — bounded implementation, documentation, and governance;
+- **GPT-5.6 Sol High** — architecture, domain, persistence, difficult implementation, concurrency/races, and independent hard audit;
+- **Gemini Flash High** — bounded implementation or adversarial/read-only review after contracts are precise;
+- **Astra** — scarce; use only when actual computer-use or visual empirical testing materially adds evidence. Do not spend Astra on work Sol can do.
+
+Model choice never replaces evidence.
+
 ## WHAT WE ARE BUILDING
 
 Catalog Builder VNext / PRESYS is a professional technical-catalog authoring system. A non-technical PRESYS employee must be able to create, edit, save, reopen, translate, publish, and share polished technical catalogs on finite physical A4 pages.
@@ -34,13 +55,15 @@ W0: **COMPLETE**.
 
 W0.1: **COMPLETE**.
 
-Current phase: **POST-W0 HANDOFF SYNC**.
+Handoff sync: **PR #15 is the documentation synchronization vehicle**. GitHub is authority for whether it is currently open or merged.
 
 Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**.
 
 W1: **NOT STARTED**.
 
 The engineering-base SHA is intentionally stable in this handoff. A later documentation-only commit does not require a self-referential SHA rewrite.
+
+Post-merge rule: if these synchronized docs are being read from `main` and GitHub confirms PR #15 is merged, treat the handoff sync as **COMPLETE** and proceed to W1 planning/execution under normal Principal governance. If PR #15 is still open, audit and merge authorization remain pending.
 
 ## WHAT IS CANONICAL NOW
 
@@ -328,6 +351,29 @@ No silent last-write-wins. Existing Supabase/Auth infrastructure may be reused l
 
 PIM is not a persistence prerequisite for Father V1.
 
+## FUTURE PRODUCT-DATA / PIM SEAM
+
+PIM remains **FUTURE** and is not a Father-V1 dependency. Preserve the product-data seam so future bindings do not infect editorial semantics.
+
+Authored content is conceptually:
+
+```text
+literal | explicit typed DataBinding
+
+literal: TA-25N
+binding: product.ta25n.modelName
+```
+
+Rules:
+
+- no invisible live refresh;
+- product-data changes must be reviewable;
+- future refresh flow is explicit: **review → apply**;
+- the user can detach / convert-to-literal;
+- the canonical authored document remains deterministic and reviewable.
+
+Do not implement PIM as part of Father V1 and do not make current V1 depend on it.
+
 ## PUBLICATION
 
 Publication remains:
@@ -407,15 +453,13 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-This handoff-sync wave is documentation/governance only. After its PR exists and required CI is green, a fresh Principal should:
+This handoff-sync wave is documentation/governance only. PR #15 is its synchronization vehicle, and GitHub is the authority for its current state.
 
-1. audit this synchronization against GitHub, `src/vnext`, the W0 architecture-boundary test, the UX lab evidence, and the 24-page reference evidence;
-2. authorize merge only if the durable memory is coherent;
-3. after merge, issue the W1 execution prompt.
+If PR #15 is **OPEN**, a fresh Principal should audit this synchronization against GitHub, `src/vnext`, the W0 architecture-boundary test, the UX lab evidence, and the 24-page reference evidence. Required CI must be green, and merge still requires explicit user authorization.
 
-**DO NOT START W1 before this handoff sync is audited.**
+If these docs are being read from `main` and GitHub confirms PR #15 is **MERGED**, treat the handoff sync as complete and proceed to W1 planning/execution under normal Principal governance.
 
-**DO NOT MERGE the handoff-sync PR without Principal/user authorization.**
+Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**. W1 is **NOT STARTED**.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: POST-W0 DURABLE HANDOFF SYNC
+STATUS: POST-W0 ENGINEERING BASE; W1 NOT STARTED
 
 DATE: 2026-09-09
 
@@ -16,8 +16,6 @@ VNext must be simpler internally than Legacy while becoming more capable, editab
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-CURRENT MAIN at the start of this docs-only sync: `865251dc023148b349a9ceba8051c249c0bbb647`.
-
 Post-W0 canonical engineering base SHA: `865251dc023148b349a9ceba8051c249c0bbb647`.
 
 Post-W0 canonical engineering base tree: `ede5e561717546a69899f1008c952efeb317b7ad`.
@@ -32,11 +30,15 @@ PR #14 — W0 Foundation Promotion + W0.1 Production Boundary Hardening: **MERGE
 
 The SHA above is the canonical **engineering base after W0**, not a self-updating pointer to later docs-only commits.
 
+Handoff sync vehicle: **PR #15**. GitHub is authority for whether PR #15 is currently open or merged; do not encode a future merge SHA here.
+
 Always run `git fetch origin --prune` and verify GitHub before acting. Git history and repository evidence outrank agent reports.
 
 ## CURRENT PHASE
 
-**POST-W0 HANDOFF SYNC**.
+Post-W0 engineering base: **ESTABLISHED**.
+
+Handoff synchronization: **PR #15 is the documentation vehicle; verify its live state on GitHub**.
 
 W0 — Foundation Promotion: **MERGED / COMPLETE**.
 
@@ -49,6 +51,8 @@ Foundation: **production-owned and strongly validated**.
 Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
+
+Post-merge rule: if these synchronized docs are being read from `main` and GitHub confirms PR #15 is merged, treat the handoff sync as **COMPLETE** and proceed to W1 planning/execution under normal Principal governance. If PR #15 is still open, Principal audit and merge authorization remain pending. W1 remains **NOT STARTED** in either case until explicitly begun.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -386,15 +390,23 @@ Do not port as VNext authority: giant Legacy stores, Legacy A4 vertical flow, Sm
 
 Older R0 and W0 story documents intentionally preserve the state that existed when those records were written. They may mention open PRs or pre-promotion status as historical facts. Current status authority is this file plus GitHub.
 
-## NEXT PRINCIPAL ACTION
+## KNOWN UNRELATED ISSUE
 
-After this docs-only handoff-sync PR is opened and CI is green:
+`src/labs/product-workspace-ux/components/ConflictReviewModal.tsx:21:57` has a pre-existing conditional `useState` / rules-of-hooks issue surfaced by `lint:labs`.
 
-1. independently audit the durable handoff synchronization;
-2. authorize merge only if the memory is coherent and evidence-backed;
-3. after merge, issue the W1 execution prompt.
+Governance rule: do **not** fix this as part of unrelated VNext waves unless a task explicitly targets it. Keep unrelated lab lint debt out of VNext scope.
 
-W1 remains **NOT STARTED** until that happens.
+## HANDOFF SYNC STATE / NEXT PRINCIPAL ACTION
+
+PR #15 is the durable handoff synchronization vehicle. GitHub decides whether it is currently open or merged.
+
+If PR #15 is **OPEN**, independently audit the synchronized memory and required CI; merge authorization remains pending.
+
+If these docs are being read from `main` and GitHub confirms PR #15 is **MERGED**, treat the handoff sync as complete and proceed to W1 planning/execution under normal Principal governance.
+
+Never infer PR state from the engineering-base SHA, and do not create a self-referential docs SHA loop.
+
+Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**. W1 is **NOT STARTED**.
 
 ## RECONSTRUCTION READING ORDER
 
