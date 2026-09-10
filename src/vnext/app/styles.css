@@ -1,0 +1,49 @@
+@import '@fontsource/noto-sans/400.css';
+@import '@fontsource/noto-sans/600.css';
+@import '@fontsource/noto-sans/700.css';
+
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto Sans', Arial, sans-serif; }
+.vnext-shell, .vnext-shell * { box-sizing: border-box; }
+.vnext-shell { display: flex; min-width: 860px; height: 100%; flex-direction: column; background: #eef2f6; }
+.vnext-topbar { z-index: 2; display: flex; min-height: 74px; align-items: center; justify-content: space-between; border-bottom: 1px solid #d7dee8; background: #fff; padding: 0 24px; }
+.vnext-brand { display: flex; align-items: center; gap: 13px; }
+.vnext-brand-mark { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 7px; background: #003366; color: #fff; font-size: 19px; font-weight: 700; }
+.vnext-product-line { margin-bottom: 2px; color: #66758a; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.vnext-title-row { display: flex; align-items: center; gap: 9px; }
+.vnext-title-row h1 { margin: 0; color: #172033; font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.vnext-badge { border: 1px solid #b9cce3; border-radius: 999px; background: #edf5ff; color: #003f78; font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 3px 7px; text-transform: uppercase; }
+.vnext-actions { display: flex; gap: 8px; }
+.vnext-actions button, .vnext-add-page, .vnext-page-list button { font: inherit; }
+.vnext-actions button { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; border: 1px solid #ccd5e1; border-radius: 6px; background: #fff; color: #26374d; cursor: pointer; font-size: 12px; font-weight: 600; padding: 0 12px; }
+.vnext-actions button:hover:not(:disabled) { background: #f7f9fc; border-color: #9eacbd; }
+.vnext-actions button:disabled { cursor: not-allowed; opacity: .42; }
+.vnext-actions button:focus-visible, .vnext-add-page:focus-visible, .vnext-page-list button:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
+.vnext-workspace { display: grid; min-height: 0; flex: 1; grid-template-columns: 196px minmax(520px,1fr) 240px; }
+.vnext-pages, .vnext-info { min-height: 0; background: #fff; }
+.vnext-pages { display: flex; flex-direction: column; border-right: 1px solid #d7dee8; padding: 18px 13px; }
+.vnext-panel-heading { display: flex; align-items: center; justify-content: space-between; color: #526176; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 0 5px 12px; text-transform: uppercase; }
+.vnext-page-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 5px; overflow-y: auto; }
+.vnext-page-list button { display: flex; width: 100%; align-items: center; gap: 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #526176; cursor: pointer; font-size: 12px; padding: 8px; text-align: left; }
+.vnext-page-list button:hover { background: #f5f7fa; }
+.vnext-page-list button.is-current { border-color: #b9cce3; background: #edf5ff; color: #003f78; font-weight: 700; }
+.vnext-page-icon { display: grid; width: 28px; height: 34px; place-items: center; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 1px 2px rgba(23,32,51,.05); }
+.vnext-add-page { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #003f78; border-radius: 6px; background: #003f78; color: #fff; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 12px; }
+.vnext-add-page:hover { background: #002f59; }
+.vnext-canvas-area { min-width: 0; min-height: 0; overflow: auto; padding: 18px 28px 32px; }
+.vnext-canvas-meta { display: flex; max-width: 620px; align-items: center; justify-content: space-between; margin: 0 auto 12px; }
+.vnext-canvas-meta > div { display: flex; align-items: baseline; gap: 9px; }
+.vnext-canvas-meta strong { color: #2a394d; font-size: 12px; }
+.vnext-canvas-meta div span { color: #7b899b; font-size: 11px; }
+.vnext-memory-status { border: 1px solid #d3dce7; border-radius: 999px; background: #f7f9fb; color: #637287; font-size: 10px; font-weight: 600; padding: 4px 8px; }
+.vnext-document-preview { display: flex; min-height: 700px; justify-content: center; padding: 4px 24px 36px; }
+.vnext-document-preview [data-editorial-root] { zoom: .62; }
+.vnext-document-preview [data-editorial-root] .editorial-page { border: 1px solid #cad3de; box-shadow: 0 18px 44px rgba(42,57,77,.14), 0 3px 10px rgba(42,57,77,.08); }
+.vnext-info { border-left: 1px solid #d7dee8; padding: 22px 20px; }
+.vnext-info-kicker { color: #0067b9; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.vnext-info h2 { margin: 8px 0 10px; color: #1d2b3d; font-size: 16px; line-height: 1.35; }
+.vnext-info h3 { margin: 0 0 7px; color: #33445a; font-size: 12px; }
+.vnext-info p { margin: 0; color: #68778b; font-size: 12px; line-height: 1.55; }
+.vnext-divider { height: 1px; background: #e1e6ed; margin: 20px 0; }
+.vnext-live-status { border-left: 3px solid #0072ce; background: #f2f7fc; color: #33445a !important; margin-top: 18px !important; padding: 8px 10px; }
+@media (max-width: 1100px) { .vnext-workspace { grid-template-columns: 180px minmax(500px,1fr); } .vnext-info { display: none; } .vnext-document-preview [data-editorial-root] { zoom: .58; } }

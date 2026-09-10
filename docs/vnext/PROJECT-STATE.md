@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: POST-W0 ENGINEERING BASE; W1 NOT STARTED
+STATUS: W1 CANDIDATE IMPLEMENTATION; PR #16 IN REVIEW
 
 DATE: 2026-09-09
 
@@ -30,7 +30,9 @@ PR #14 — W0 Foundation Promotion + W0.1 Production Boundary Hardening: **MERGE
 
 The SHA above is the canonical **engineering base after W0**, not a self-updating pointer to later docs-only commits.
 
-Handoff sync vehicle: **PR #15**. GitHub is authority for whether PR #15 is currently open or merged; do not encode a future merge SHA here.
+Handoff sync vehicle: **PR #15 — MERGED / COMPLETE** at `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
+
+W1 review vehicle: **PR #16** from `feat/vnext-w1-application-actions-shell`. While this PR remains open, W1 is a candidate implementation under Principal review; GitHub is authority for its live head/check state.
 
 Always run `git fetch origin --prune` and verify GitHub before acting. Git history and repository evidence outrank agent reports.
 
@@ -38,13 +40,13 @@ Always run `git fetch origin --prune` and verify GitHub before acting. Git histo
 
 Post-W0 engineering base: **ESTABLISHED**.
 
-Handoff synchronization: **PR #15 is the documentation vehicle; verify its live state on GitHub**.
+Handoff synchronization: **COMPLETE** via merged PR #15.
 
 W0 — Foundation Promotion: **MERGED / COMPLETE**.
 
 W0.1 — Production Boundary Hardening: **MERGED / COMPLETE**.
 
-W1 — Application Actions + Minimal VNext Shell: **NOT STARTED**.
+W1 — Application Actions + Minimal VNext Shell: **CANDIDATE IMPLEMENTATION / IN REVIEW — PR #16**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -52,7 +54,7 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-Post-merge rule: if these synchronized docs are being read from `main` and GitHub confirms PR #15 is merged, treat the handoff sync as **COMPLETE** and proceed to W1 planning/execution under normal Principal governance. If PR #15 is still open, Principal audit and merge authorization remain pending. W1 remains **NOT STARTED** in either case until explicitly begun.
+PR #15 is merged, so the post-W0 handoff sync is **COMPLETE**. W1 is now implemented on its dedicated branch and under Principal review in PR #16. Do not infer W1 completion from this candidate branch; GitHub remains authority for the PR state, exact head, and CI.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -268,7 +270,7 @@ Every preset, template, starter, or component must resolve into normal canonical
 No exact dates or detailed W6/W7 implementation boundary are frozen.
 
 - **W0 — Foundation Promotion + W0.1 Boundary Hardening:** merged / complete.
-- **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, minimal shell. **NOT STARTED**.
+- **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, isolated `/v2` shell. **CANDIDATE / IN REVIEW — PR #16**.
 - **W2 — A4 Authoring + Primitives + Direct Manipulation:** finite A4 authoring, primitives, move/resize, guides/diagnostics, plus a minimum page-template insertion seam.
 - **W3 — Save/Reopen/Catalog Library:** versioned persistence, recovery/reopen, and a persistable starter/catalog creation path.
 - **W4 — Advanced Table Editor:** structural table editing plus TSV paste, marker bulk toggle, explicit Fit Height, and table presets.
@@ -398,15 +400,11 @@ Governance rule: do **not** fix this as part of unrelated VNext waves unless a t
 
 ## HANDOFF SYNC STATE / NEXT PRINCIPAL ACTION
 
-PR #15 is the durable handoff synchronization vehicle. GitHub decides whether it is currently open or merged.
+PR #15 is **MERGED / COMPLETE** and established the exact W1 base `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
 
-If PR #15 is **OPEN**, independently audit the synchronized memory and required CI; merge authorization remains pending.
+W1 is implemented on `feat/vnext-w1-application-actions-shell` and is under Principal review in **PR #16**. The PR branch is the candidate vehicle; GitHub decides its live exact head and CI result. Do not create a self-referential docs SHA loop by trying to encode the commit that contains this sentence.
 
-If these docs are being read from `main` and GitHub confirms PR #15 is **MERGED**, treat the handoff sync as complete and proceed to W1 planning/execution under normal Principal governance.
-
-Never infer PR state from the engineering-base SHA, and do not create a self-referential docs SHA loop.
-
-Next engineering wave: **W1 — Application Actions + Minimal VNext Shell**. W1 is **NOT STARTED**.
+Next Principal action: independently audit **PR #16** and its exact-head Quality Gates. Do not merge without separate authorization after Principal GO. Do not start W2 from this candidate state.
 
 ## RECONSTRUCTION READING ORDER
 
