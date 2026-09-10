@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.A PRINCIPAL MEMORY; PR #18 CARRIES IMPLEMENTATION AND GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2.B PRINCIPAL MEMORY; PR #19 IS THE IMPLEMENTATION/PROMOTION VEHICLE AND GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-10
 
@@ -35,15 +35,15 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## VERIFIED W2.A IMPLEMENTATION PROVENANCE
+## VERIFIED W2.B IMPLEMENTATION PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-The verified implementation base for PR #18 is `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
+The verified implementation base for PR #19 / W2.B is `366c4fbed14750193b1a6645c0e3e0c57b82899b`.
 
-Its tree is `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+Its tree is `559726b0a401eb9ab46e6eb1cf7a84264f1630ba`.
 
-This is the independently verified PR #17 merge result from which PR #18 was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
+This is the independently verified PR #18 / W2.A squash-merge result from which PR #19 / W2.B was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
 
 PR #12: **MERGED**.
 
@@ -65,7 +65,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. W2.A implementation is carried by **PR #18**, branch `feat/vnext-w2a-primitives-rendering`. GitHub is authority for its live review/merge state. This handoff does not claim PR #18 is merged or W2.A has final Principal acceptance. Before W2.B, verify PR #18 merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. PR #18 / W2.A was independently verified merged before W2.B began. W2.B implementation/promotion is carried by **PR #19**, branch `feat/vnext-w2b-object-actions`. GitHub is authority for its live review/merge state. This handoff does not claim PR #19 is merged, W2.B is canonical, or W2.B has final Principal acceptance. Before W2.C, verify PR #19 merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
 
 ## WHAT IS CANONICAL NOW
 
@@ -455,9 +455,9 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #17 are merged. W0, W0.1, W1, and the W2.0 contract promotion are complete. PR #18’s verified implementation base is `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+PRs #12 through #17 are merged. W0, W0.1, W1, and the W2.0 contract promotion are complete. PR #18 / W2.A was independently verified merged; its squash-merge result `366c4fbed14750193b1a6645c0e3e0c57b82899b`, tree `559726b0a401eb9ab46e6eb1cf7a84264f1630ba`, is the verified W2.B implementation provenance.
 
-W2.A implementation/promotion vehicle: **PR #18**. Independently review the W2.A story, final diff, focused tests, browser/PDF proof, and full gates. Verify that `frame.heightMm` is the sole authored Text height authority, Image focal-point semantics are normalized/deterministic, the existing Table Engine remains singular, and the canonical renderer has no editor-state dependency. GitHub is authority for the PR’s live state. Before beginning W2.B, verify PR #18 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree. Do not infer final Principal acceptance from this handoff alone.
+W2.B implementation/promotion vehicle: **PR #19**. Independently review the W2.B story, final diff, focused tests, browser/PDF proof, and full gates. Verify strict typed object actions, exact U/mm materialization, fresh structural/Table/RichText-local identity behavior, lock/failure/no-op and Redo safety, deterministic reorder normalization/metadata, Image replace preservation, Table frame-only move/resize with commit-then-diagnose behavior, and W1 Undo/Redo/transactionId compatibility. GitHub is authority for the PR’s live state. Before beginning W2.C, verify PR #19 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree. Do not infer merge, canonical status, or final Principal acceptance from this handoff alone.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
