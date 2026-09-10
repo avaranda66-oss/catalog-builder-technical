@@ -224,7 +224,9 @@ describe('VNext architecture boundary',()=>{
       .filter(path=>/\.ts$/.test(path))
       .map(path=>readFileSync(path,'utf8'))
       .join('\n');
-    expect(applicationSource).not.toMatch(/document\.replace|ReplaceDocument|SetDocument|PatchArbitraryJson|ApplyJsonPatchFromAI|setDocument\s*\(/);
+    expect(applicationSource).not.toMatch(
+      /document\.replace|ReplaceDocument|SetDocument|PatchArbitraryJson|ApplyJsonPatchFromAI|JsonPatch|JSONPatch|setDocument\s*\(|setProperty\s*\(/
+    );
   });
 
   it('scopes renderer CSS and leaves global page policy outside generic rendering',()=>{
