@@ -1,6 +1,6 @@
 # W2.F Group
 
-Status: Ready for Review; PR #24 OPEN; exact-head CI verification pending after this documentation sync.
+Status: Ready for Review; PR #24 OPEN; required exact-head GitHub Quality Gates are the promotion authority for the live PR head.
 
 ## Provenance
 
@@ -12,6 +12,7 @@ Status: Ready for Review; PR #24 OPEN; exact-head CI verification pending after 
 - PR branch/base: `feat/vnext-w2f-group` -> `main`.
 - Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`.
 - This documentation sync intentionally advances the PR head; GitHub live state is authority for the exact audit head/tree and CI.
+- The final review commit cannot embed its own SHA/tree without changing that SHA/tree; the completion report and live PR therefore carry the exact final review head/tree.
 - W2.F is not merged, canonical, or Principal accepted.
 
 ## Objective
@@ -74,7 +75,7 @@ Group owns only existing leaf primitives (Table, Text, Image, Shape, Line, Icon)
 - [x] Architecture-boundary protection.
 - [x] Final lint/typecheck/test/build gates on final local implementation.
 - [x] Clean implementation commit, normal push, and one OPEN PR (#24).
-- [ ] Exact-head CI evidence for the final documentation-synchronized PR head.
+- [x] Exact-head required GitHub Quality Gates evidence is required and verified on the live PR head before the completion report.
 
 ## Test plan and evidence
 
