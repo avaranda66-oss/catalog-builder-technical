@@ -122,6 +122,7 @@ No save/autosave/reopen/Catalog Library/Supabase/CAS/conflict/local recovery/Aut
 - tests/vnext/proof/architecture-boundary.test.ts
 - tests/vnext/proof/authoring-diagnostics.test.ts
 - tests/vnext/proof/editor-text-proof.mjs
+- .github/workflows/quality-gates.yml
 
 ## Dev Agent Record
 
@@ -137,11 +138,15 @@ No save/autosave/reopen/Catalog Library/Supabase/CAS/conflict/local recovery/Aut
 - Full local gates were green before delivery: lint PASS (0 errors, 268 baseline warnings), typecheck PASS, tests PASS (213 files, 2303 passed, 1 skipped), build PASS, `git diff --check` PASS.
 - Real `/v2` W2.G Chromium proof passed with zero console errors, zero page errors, and no Legacy bootstrap. W2.C/W2.D/W2.E/W2.F regressions, export/PDF regression, and PDF technical-symbol evidence passed.
 - Final exact-head GitHub CI is verified and reported after the final documentation commit is pushed.
+- Independent adversarial audit classification: **B — SOUND, SMALL AMENDMENT REQUIRED**, limited to proof completeness and required-CI proof execution; W2.G product semantics remain unchanged.
+- Principal amendment completes the committed W2.G technical-text path with all seven required symbols `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`, and the generated PDF is checked through `pdfjs` extraction.
+- The existing required GitHub job `Lint, typecheck, tests, build` now installs Playwright Chromium and executes the W2.G Chromium/PDF proof plus W2.C, W2.D, W2.E, W2.F, Group export, and canonical export/PDF regression proofs; the required check context name is unchanged.
 
 ## Change Log
 
 - 2026-09-11: Story created on exact verified canonical base before production code changes.
 - 2026-09-11: W2.G implementation completed and validated; PR #26 opened; durable review state synchronized without claiming merge/canonical acceptance.
+- 2026-09-11: Principal proof amendment applied after independent audit classification B: completed seven-symbol PDF coverage and wired the browser/PDF proof matrix into the existing required GitHub quality-gates job. W2.G remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
 
 ## W2.0 deviation
 

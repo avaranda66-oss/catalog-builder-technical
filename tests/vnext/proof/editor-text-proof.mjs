@@ -97,8 +97,8 @@ try {
   assert.deepEqual(afterJitterActivation.frame,original.frame,'Double activation jitter must not change authored frame');
 
   const textarea=page.locator('[data-text-edit-textarea]');
-  const draftBase='± 0.05 °C\n100 Ω\n≤ 50 µV ';
-  const finalText='± 0.05 °C\n100 Ω\n≤ 50 µV ≈';
+  const draftBase='± 0.05 °C\n100 Ω\n≤ 50 µV · ≥ 0 ';
+  const finalText='± 0.05 °C\n100 Ω\n≤ 50 µV · ≥ 0 ≈';
   await textarea.fill(draftBase);
   assert.deepEqual(await textState(page,textId),original,'Typing must not mutate canonical RichText');
   assert.equal(await textChromeInsideRoot(page),0,'Text-edit chrome must remain outside the editorial root');
@@ -129,7 +129,7 @@ try {
   const technicalPdf=await getDocument({data:new Uint8Array(await readFile(technicalPdfPath)),isEvalSupported:false,useSystemFonts:false}).promise;
   const technicalPage=await technicalPdf.getPage(1);
   const technicalText=(await technicalPage.getTextContent()).items.filter((item)=>'str' in item).map((item)=>item.str).join(' ');
-  for(const token of ['±','0.05','°C','100','Ω','≤','50','µV','≈']) assert(technicalText.normalize('NFKC').includes(token.normalize('NFKC')),`PDF missing ${token}: ${JSON.stringify(technicalText)}`);
+  for(const token of ['±','0.05','°C','100','Ω','≤','50','µV','≥','0','≈']) assert(technicalText.normalize('NFKC').includes(token.normalize('NFKC')),`PDF missing ${token}: ${JSON.stringify(technicalText)}`);
   await technicalPdf.destroy();
 
   await page.locator('[data-editor-action="undo"]').click();
@@ -152,7 +152,7 @@ try {
 
   const beforeOverflow=await textState(page,textId);
   await openWithEnter(page,textId);
-  const longText=Array.from({length:12},(_,index)=>`Linha ${index+1}: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≈`).join('\n');
+  const longText=Array.from({length:12},(_,index)=>`Linha ${index+1}: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈`).join('\n');
   await page.locator('[data-text-edit-textarea]').fill(longText);
   assert.deepEqual(await textState(page,textId),beforeOverflow,'Overflow draft must remain outside canonical publication truth');
   await page.locator('[data-editor-action="commit-text"]').click();
