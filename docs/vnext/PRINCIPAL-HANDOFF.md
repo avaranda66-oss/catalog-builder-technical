@@ -455,9 +455,33 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #17 are merged. W0, W0.1, W1, and the W2.0 contract promotion are complete. PR #18 / W2.A was independently verified merged; its squash-merge result `366c4fbed14750193b1a6645c0e3e0c57b82899b`, tree `559726b0a401eb9ab46e6eb1cf7a84264f1630ba`, is the verified W2.B implementation provenance. PR #19 / W2.B was independently verified squash-merged; its result `5e4b9c6f4235761872f94c5e0318a774ee456f39`, tree `7e21311949db03cda0720e5fd4216bec9a001f77`, is the verified W2.C implementation provenance.
+PRs #12 through #20 are merged for the promoted VNext slices through W2.C.
 
-W2.C implementation/promotion vehicle: **PR #20**. Independently review the W2.C story, final diff, focused tests, real Chromium proof, export/PDF proof, and full gates. Verify ephemeral active-page/single-selection state, the editor overlay outside `DocumentRenderer`, immutable-start gesture math, zero canonical writes during pointermove, exactly one typed W2.B move/resize commit on successful pointerup, stale-safe and Escape/pointercancel/capture/focus-loss cancellation, Undo/Redo cancel-first ordering, non-1 scale conversion, all eight handles with 1 U crossing clamp, visible basic authoring actions, mm Inspector, W2.B regression preservation, and publication independence. GitHub is authority for the PR’s live state. Before beginning W2.D, independently verify PR #20 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree. Do not infer merge, canonical status, or final Principal acceptance from this handoff alone.
+Canonical W2.D implementation base: `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+
+W2.D implementation/promotion vehicle: **PR #21**, branch `feat/vnext-w2d-snapping-diagnostics`.
+
+Independently review PR #21's exact final head, story, diff, pure snap tests, editor interaction tests, authoring diagnostics tests, real Chromium W2.C regression proof, dedicated Chromium W2.D proof, export/PDF proof, and full gates.
+
+Verify specifically:
+
+- pure U-space snapping with no React/DOM/browser dependency;
+- deterministic tie policy;
+- move X/Y independence;
+- resize controlled-edge ownership;
+- zero canonical writes during pointermove;
+- exactly one final move/resize action with the original W2.C transactionId;
+- semantic zero-delta no-op even inside snap threshold;
+- ephemeral guides and safe-area chrome outside canonical publication rendering;
+- canonical diagnostic authority and stable codes/severities;
+- no page/safe-area clamp, collision avoidance, auto-grow, or Fit Height;
+- Table commit-then-diagnose behavior;
+- intentional-overlap publication-noise regression;
+- publication/PDF independence.
+
+GitHub is authority for PR #21 live state. This handoff does **not** claim W2.D merged, canonical, or Principal accepted.
+
+Before beginning W2.E, independently verify PR #21 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
@@ -475,3 +499,4 @@ W2.C implementation/promotion vehicle: **PR #20**. Independently review the W2.C
 12. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md`.
 13. `docs/stories/2026-09-10-vnext-w2b-object-actions.md`.
 14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — current PR #20 implementation/evidence record.
+15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — current PR #21 implementation/evidence record.
