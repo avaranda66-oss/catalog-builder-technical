@@ -1,6 +1,6 @@
 # W2.F Group
 
-Status: Ready for Review; PR #24 OPEN; required exact-head GitHub Quality Gates are the promotion authority for the live PR head.
+Status: COMPLETE / CANONICAL; PR #24 MERGED; independently audited and Principal accepted.
 
 ## Provenance
 
@@ -8,12 +8,20 @@ Status: Ready for Review; PR #24 OPEN; required exact-head GitHub Quality Gates 
 - Canonical base tree: `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
 - Branch: `feat/vnext-w2f-group`.
 - Worktree: `C:\Users\Usuario\.codex\worktrees\0cd1\catalog-builder`.
-- PR: #24 — OPEN — `feat(vnext): implement W2.F group`.
+- PR: #24 — MERGED — `feat(vnext): implement W2.F group`.
 - PR branch/base: `feat/vnext-w2f-group` -> `main`.
 - Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`.
-- This documentation sync intentionally advances the PR head; GitHub live state is authority for the exact audit head/tree and CI.
-- The final review commit cannot embed its own SHA/tree without changing that SHA/tree; the completion report and live PR therefore carry the exact final review head/tree.
-- W2.F is not merged, canonical, or Principal accepted.
+- Audited review head/tree: `69353fc31a5121580c17cdf797d10d9f9b799779` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
+- Independent audit classification: **A — READY TO MERGE AS WRITTEN**.
+- Principal classification: **A — W2.F PRINCIPAL ACCEPTED / READY TO MERGE AS WRITTEN**.
+- Explicit authorization for PR #24 was provided and consumed once; it is not reusable.
+- Canonical squash merge SHA: `7793aaa21bfed41d57da861424efdd84a686170d`.
+- Canonical tree: `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
+- Canonical direct parent: `162531024107e1376912363c877f23bdc3389426`.
+- Canonical commit: `feat(vnext): implement W2.F group (#24)`.
+- mergedAt: `2026-09-11T17:10:50Z`.
+- Merge verification: GitHub `main` points to the canonical squash SHA above, and the squash preserved the exact audited review tree while changing the commit SHA.
+- W2.F is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL**.
 
 ## Objective
 
@@ -74,8 +82,8 @@ Group owns only existing leaf primitives (Table, Text, Image, Shape, Line, Icon)
 - [x] Group publication/PDF proof plus existing export/PDF matrix.
 - [x] Architecture-boundary protection.
 - [x] Final lint/typecheck/test/build gates on final local implementation.
-- [x] Clean implementation commit, normal push, and one OPEN PR (#24).
-- [x] Exact-head required GitHub Quality Gates evidence is required and verified on the live PR head before the completion report.
+- [x] Clean implementation history, normal push, and one promotion PR (#24), now merged.
+- [x] Exact-head required GitHub Quality Gates evidence was verified on audited review head `69353fc31a5121580c17cdf797d10d9f9b799779` before merge.
 
 ## Test plan and evidence
 
