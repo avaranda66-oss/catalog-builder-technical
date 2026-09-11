@@ -5,7 +5,7 @@ Date: 2026-09-11
 Base SHA: c220ed1d047d862d8bac30bb8c20702889793fac
 Base tree: 9c018983f2636f318c9092605ca660d33f1bd6f7
 Branch: feat/vnext-w2e-page-template-insertion
-PR: pending
+PR: #22 — https://github.com/avaranda66-oss/catalog-builder-technical/pull/22
 
 ## Goal
 
@@ -47,7 +47,7 @@ GitHub and origin/main independently report PR #21 merged as squash commit c220e
 - [x] Prove renderer/publication independence and compilePlans acceptance.
 - [x] Add and run W2.E Chromium proof plus W2.C/W2.D Chromium regressions and export/PDF proof.
 - [x] Run diff check, lint, typecheck, full tests, build, and scope audit.
-- [ ] Create the real PR without merging, then update durable PROJECT-STATE and PRINCIPAL-HANDOFF with its branch/base/PR facts.
+- [x] Create the real PR without merging, then update durable PROJECT-STATE and PRINCIPAL-HANDOFF with its branch/base/PR facts.
 
 ## Identity model
 
@@ -90,6 +90,7 @@ Group, reusable components/blocks, direct text editing, persistence, translation
 - Full gates: git diff --check PASS; npm run lint PASS with 0 errors / 268 existing warnings; npm run typecheck PASS; npm test PASS with 211 files, 2244 passed, 1 skipped (2245 total); npm run build PASS (Vite build 11.88s).
 - CodeRabbit pre-PR review was attempted through the repository-configured Windows/WSL command, but the configured WSL binary `~/.local/bin/coderabbit` is not installed; no CodeRabbit report was produced.
 - Scope audit of added production lines found no special renderer, persisted/live template metadata, global template singleton, Zustand/Supabase/realtime template authority, duplicate Table remapping, geometry duality, hidden template safeArea default, asset creation, Group, direct text editing, persistence, translation, or AI.
+- Real promotion PR is #22 on branch `feat/vnext-w2e-page-template-insertion`, based exactly on canonical W2.D squash merge `c220ed1d047d862d8bac30bb8c20702889793fac` / tree `9c018983f2636f318c9092605ca660d33f1bd6f7`. Durable PROJECT-STATE and PRINCIPAL-HANDOFF were updated without claiming W2.E merged, canonical, or Principal accepted.
 
 ### File List
 
@@ -112,6 +113,7 @@ Group, reusable components/blocks, direct text editing, persistence, translation
 
 - 2026-09-11: Story created from the W2.E work order on canonical W2.D base c220ed1d.
 - 2026-09-11: W2.E implementation, adversarial identity/history coverage, Chromium proof, W2.C/W2.D regressions, export/PDF proof, and full gates completed.
+- 2026-09-11: PR #22 created without merge; durable project state and Principal handoff synchronized to the real W2.E review vehicle.
 
 ## W2.0 deviation
 

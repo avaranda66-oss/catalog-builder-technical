@@ -1,8 +1,8 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.C PRINCIPAL MEMORY; PR #20 IS THE IMPLEMENTATION/PROMOTION VEHICLE AND GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2.E REVIEW MEMORY; PR #22 IS THE IMPLEMENTATION/PROMOTION VEHICLE AND GITHUB IS LIVE-STATE AUTHORITY
 
-DATE: 2026-09-10
+DATE: 2026-09-11
 
 This file is the durable reconstruction guide for a completely fresh Principal. Verify GitHub and code before trusting any agent summary. Never merge without explicit user authorization.
 
@@ -35,15 +35,15 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## VERIFIED W2.C IMPLEMENTATION PROVENANCE
+## VERIFIED W2.E IMPLEMENTATION PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-The independently verified implementation base for PR #20 / W2.C is `5e4b9c6f4235761872f94c5e0318a774ee456f39`.
+The independently verified implementation base for PR #22 / W2.E is canonical `main` SHA `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
-Its tree is `7e21311949db03cda0720e5fd4216bec9a001f77`.
+Its tree is `9c018983f2636f318c9092605ca660d33f1bd6f7`; its direct parent is `467942edc14a563a44533edba473b1493bade1e6`.
 
-This is the independently verified PR #19 / W2.B squash-merge result from which PR #20 / W2.C was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
+This is the independently verified PR #21 / W2.D squash-merge result from which PR #22 / W2.E was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
 
 PR #12: **MERGED**.
 
@@ -65,7 +65,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. PR #18 / W2.A was independently verified merged before W2.B began. PR #19 / W2.B was independently verified squash-merged before W2.C began, establishing the W2.C provenance base above. W2.C implementation/promotion is carried by **PR #20**, branch `feat/vnext-w2c-direct-manipulation-impl`. GitHub is authority for its live review/merge state. This handoff does not claim PR #20 is merged, W2.C is canonical, or W2.C has final Principal acceptance. Before W2.D, independently verify PR #20 merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, and #21 / W2.D are merged. PR #21 established the W2.E provenance base above. W2.E implementation/promotion is carried by **PR #22**, branch `feat/vnext-w2e-page-template-insertion`. GitHub is authority for its live review/merge state. This handoff does not claim PR #22 is merged, W2.E is canonical, or W2.E has Principal acceptance.
 
 ## WHAT IS CANONICAL NOW
 
@@ -455,33 +455,28 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #20 are merged for the promoted VNext slices through W2.C.
+PRs #12 through #21 are merged for the promoted VNext slices through W2.D.
 
-Canonical W2.D implementation base: `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+Canonical W2.E implementation base: `c220ed1d047d862d8bac30bb8c20702889793fac`, tree `9c018983f2636f318c9092605ca660d33f1bd6f7`.
 
-W2.D implementation/promotion vehicle: **PR #21**, branch `feat/vnext-w2d-snapping-diagnostics`.
+W2.E implementation/promotion vehicle: **PR #22**, branch `feat/vnext-w2e-page-template-insertion`.
 
-Independently review PR #21's exact final head, story, diff, pure snap tests, editor interaction tests, authoring diagnostics tests, real Chromium W2.C regression proof, dedicated Chromium W2.D proof, export/PDF proof, and full gates.
+Independently review PR #22's exact final head, story, diff, template-registry/action tests, deep identity/remapping tests, editor integration tests, real Chromium W2.E proof, W2.C/W2.D Chromium regressions, export/PDF proof, and full gates.
 
 Verify specifically:
 
-- pure U-space snapping with no React/DOM/browser dependency;
-- deterministic tie policy;
-- move X/Y independence;
-- resize controlled-edge ownership;
-- zero canonical writes during pointermove;
-- exactly one final move/resize action with the original W2.C transactionId;
-- semantic zero-delta no-op even inside snap threshold;
-- ephemeral guides and safe-area chrome outside canonical publication rendering;
-- canonical diagnostic authority and stable codes/severities;
-- no page/safe-area clamp, collision avoidance, auto-grow, or Fit Height;
-- Table commit-then-diagnose behavior;
-- intentional-overlap publication-noise regression;
+- typed, injected PageTemplateRegistry with no global/network/Zustand/Supabase/realtime authority;
+- strict `page.template.insert` input and fail-closed runtime template validation before ID generation;
+- reuse of the W2.B allocator/Table remapper and local RichText identity rather than parallel identity machinery;
+- fresh Page/Object/Table identities on repeated insertion, including the 100x allocator-leakage proof;
+- preserved shared AssetRefs, including image content inside Table cells;
+- one-action atomic failure semantics and exact Undo/Redo snapshot identity with no registry lookup or ID regeneration on Redo;
+- registry independence after materialization;
+- ordinary W2.C move/resize plus W2.D snapping/diagnostics on inserted objects;
+- no persisted template metadata, live link, special renderer, or template editor chrome in canonical rendering/publication;
 - publication/PDF independence.
 
-GitHub is authority for PR #21 live state. This handoff does **not** claim W2.D merged, canonical, or Principal accepted.
-
-Before beginning W2.E, independently verify PR #21 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+GitHub is authority for PR #22 live state. This handoff does **not** claim W2.E merged, canonical, or Principal accepted. Do not begin W2.F from this open W2.E review state.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
@@ -498,5 +493,6 @@ Before beginning W2.E, independently verify PR #21 has merged into canonical `ma
 11. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`.
 12. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md`.
 13. `docs/stories/2026-09-10-vnext-w2b-object-actions.md`.
-14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — current PR #20 implementation/evidence record.
-15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — current PR #21 implementation/evidence record.
+14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record.
+15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record.
+16. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — current PR #22 implementation/evidence record.
