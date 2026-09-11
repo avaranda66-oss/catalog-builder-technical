@@ -149,6 +149,10 @@ Agent routing:
 
 Never merge without explicit user authorization. One authorization applies only to one PR and is consumed once.
 
+If an audited or Principal-accepted PR head changes, the prior acceptance does not automatically apply to the new head. The new exact head/tree must be reverified, and re-audited when required, before promotion.
+
+No next implementation wave begins before the previous canonical gate is complete, unless the Principal explicitly documents a justified exception.
+
 ## H. AI-READY AUTHORING INVARIANT
 
 Every meaningful editorial capability added in W3-W6 should, whenever reasonably possible, expose domain/Application Action or structured service authority independent from React/UI mechanics.

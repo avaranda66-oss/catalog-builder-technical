@@ -91,7 +91,7 @@ Canonical authored geometry must remain unchanged when content is edited. Canoni
 - [x] Chromium W2.G proof passes on real `/v2`.
 - [x] W2.C/W2.D/W2.E/W2.F and PDF/export regressions pass.
 - [x] `git diff --check`, lint, typecheck, full tests, and build pass.
-- [x] One non-merged PR exists and durable project/handoff docs contain actual branch/base/PR/implementation-head facts; final exact-head CI is reported after the final push.
+- [x] During W2.G review, one non-merged PR existed and durable project/handoff docs contained actual branch/base/PR/implementation-head facts; final exact-head CI was reported after the final push.
 
 ## Test and proof plan
 
