@@ -266,4 +266,23 @@ describe('VNext architecture boundary',()=>{
     }
     expect(violations,violations.join('\n')).toEqual([]);
   });
+
+  it('keeps W2.E template authority out of canonical domain, rendering, publication, and execution context',()=>{
+    const canonicalSource=[
+      ...filesUnder(resolve(vnextRoot,'domain')),
+      ...filesUnder(resolve(vnextRoot,'rendering')),
+      ...filesUnder(resolve(vnextRoot,'publication')),
+    ].filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    expect(canonicalSource).not.toMatch(
+      /\b(templateId|templateVersion|sourceTemplate|templateRegistry|TemplateRenderer|CoverRenderer|TemplatePage|TemplateObject|PresetRenderer)\b|page\.template\.insert|data-template/
+    );
+
+    const contracts=readFileSync(resolve(vnextRoot,'application/contracts.ts'),'utf8');
+    const source=ts.createSourceFile('contracts.ts',contracts,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+    const context=source.statements.find((statement):statement is ts.InterfaceDeclaration=>
+      ts.isInterfaceDeclaration(statement)&&statement.name.text==='ApplicationExecutionContext');
+    const props=context?.members.flatMap(member=>
+      ts.isPropertySignature(member)&&member.name&&ts.isIdentifier(member.name)?[member.name.text]:[])??[];
+    expect(props).toEqual(['transactionId']);
+  });
 });

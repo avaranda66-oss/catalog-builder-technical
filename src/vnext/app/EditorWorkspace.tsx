@@ -13,6 +13,7 @@ import {
 } from './authoring-diagnostics';
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
+import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -184,6 +185,19 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     const createdPageId = result.metadata.createdIds[0];
     if (createdPageId) setActivePage(createdPageId);
     setStatusMessage('Página adicionada.');
+  };
+
+  const insertPageTemplate = () => {
+    controller.cancel('superseded');
+    const result = session.execute({
+      type: 'page.template.insert',
+      templateId: W2E_PAGE_TEMPLATE_ID,
+      afterPageId: selectedPage.id,
+    });
+    if (!result.ok) { setStatusMessage('Não foi possível inserir o modelo.'); return; }
+    const createdPageId = result.metadata.createdIds[0];
+    if (createdPageId) setActivePage(createdPageId);
+    setStatusMessage('Modelo inserido como página independente.');
   };
 
   const undo = () => {
@@ -371,6 +385,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
             ))}
           </nav>
           <button type="button" className="vnext-add-page" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
+          <button type="button" className="vnext-add-page" data-editor-action="insert-template" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
         </aside>
 
         <main className="vnext-canvas-area">

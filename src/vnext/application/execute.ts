@@ -18,16 +18,33 @@ import {
   duplicatePageWithFreshIds,
   findObjectLocation,
   instantiateObjectWithFreshIds,
+  instantiatePageWithFreshIds,
   objectInstantiationSeedFromObject,
   parseCanonicalDocument,
   type ObjectInstantiationSeed,
 } from './document';
+import {
+  PageTemplateDefinitionError,
+  parsePageTemplateDefinition,
+  type PageTemplateRegistry,
+} from './template-registry';
+
+export interface ApplicationExecutionDependencies {
+  createId: IdGenerator;
+  templateRegistry?: PageTemplateRegistry;
+}
 
 function failure(code: ApplicationErrorCode, details: string): ApplicationActionFailure {
   return { ok: false, error: { code, details } };
 }
 
 function documentFailure(error: unknown): ApplicationActionFailure {
+  if (error instanceof PageTemplateDefinitionError) {
+    return {
+      ok: false,
+      error: { code: 'ACTION_INVALID', details: error.message, issues: error.issues },
+    };
+  }
   if (error instanceof ApplicationDocumentError) return failure(error.code, error.message);
   return failure('DOCUMENT_INVALID', error instanceof Error ? error.message : String(error));
 }
@@ -134,7 +151,7 @@ function objectLocked(object: { locked?: boolean }): boolean {
 export function executeApplicationAction(
   inputDocument: CatalogDocument,
   inputAction: unknown,
-  dependencies: { createId: IdGenerator }
+  dependencies: ApplicationExecutionDependencies
 ): ApplicationActionResult {
   let document: CatalogDocument;
   try {
@@ -170,6 +187,46 @@ export function executeApplicationAction(
         };
         affectedIds = [document.id];
         createdIds = [page.id];
+        break;
+      }
+      case 'page.template.insert': {
+        const rawTemplate = dependencies.templateRegistry?.get(action.templateId);
+        if (!rawTemplate) return failure('TEMPLATE_NOT_FOUND', action.templateId);
+        const template = parsePageTemplateDefinition(rawTemplate);
+        if (template.id !== action.templateId) {
+          return {
+            ok: false,
+            error: {
+              code: 'ACTION_INVALID',
+              details: `Template registry returned "${template.id}" for "${action.templateId}"`,
+              issues: [{ path: 'templateId', message: 'Registry lookup identity mismatch' }],
+            },
+          };
+        }
+        const insertAt = action.afterPageId === undefined
+          ? document.pages.length
+          : document.pages.findIndex((entry) => entry.id === action.afterPageId) + 1;
+        if (action.afterPageId !== undefined && insertAt === 0) return failure('PAGE_NOT_FOUND', action.afterPageId);
+        for (const object of template.objects) {
+          if ((object.type === 'image' || object.type === 'icon') &&
+              !document.assets.some((asset) => asset.id === object.assetId)) {
+            return failure('ASSET_NOT_FOUND', object.assetId);
+          }
+          if (object.type === 'table') {
+            const diagnostics = validateTable(object.table, document.assets)
+              .filter((diagnostic) => diagnostic.severity === 'ERROR');
+            if (diagnostics.length > 0) {
+              return failure('ACTION_INVALID', diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.details}`).join('; '));
+            }
+          }
+        }
+        const page = instantiatePageWithFreshIds(document, template, dependencies.createId);
+        candidate = {
+          ...document,
+          pages: [...document.pages.slice(0, insertAt), page, ...document.pages.slice(insertAt)],
+        };
+        affectedIds = [document.id];
+        createdIds = [page.id, ...page.objects.flatMap((object) => canonicalObjectIdentityIds(object))];
         break;
       }
       case 'page.duplicate': {
