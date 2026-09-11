@@ -1,11 +1,11 @@
 # VNext W2.D - Snapping + Authoring Diagnostics
 
-Status: Implementation Complete Locally - Promotion Pending
+Status: PR #21 Open - Principal Amendment Applied
 Date: 2026-09-11
 Base SHA: 467942edc14a563a44533edba473b1493bade1e6
 Base tree: b9930fd3679e3f73bd6b4221644a1d317176174b
 Branch: feat/vnext-w2d-snapping-diagnostics
-PR: pending canonical ancestry promotion
+PR: #21
 
 ## Goal
 
@@ -13,18 +13,22 @@ Implement W2.D only: deterministic pure-U snapping, ephemeral editor guides, saf
 
 ## Provenance
 
-GitHub independently reports PR #20 merged into main as squash commit 467942edc14a563a44533edba473b1493bade1e6, tree b9930fd3679e3f73bd6b4221644a1d317176174b. The recovery worktree currently descends from final pre-squash W2.C head 57e900c10377f9f406772ae1e1cc62660fb9d5a6, whose tree is identical. No W2.D branch may be pushed from that ancestry. The completed W2.D commit must be transplanted onto the canonical squash parent before remote promotion.
+GitHub independently reports PR #20 merged into main as squash commit 467942edc14a563a44533edba473b1493bade1e6, tree b9930fd3679e3f73bd6b4221644a1d317176174b. The W2.D implementation was transplanted onto that canonical ancestry, promoted through PR #21 on branch feat/vnext-w2d-snapping-diagnostics, and the durable PROJECT-STATE / PRINCIPAL-HANDOFF records were updated with the real promotion vehicle. PR #21 remains open; this story does not claim W2.D merged, canonical, or Principal accepted.
 
 ## Pure snap model
 
 - src/vnext/editor/snapping.ts is browser-independent and operates only on integer U geometry.
 - Candidates: page edges/centers, configured Page.safeArea edges, and sibling object edges/centers.
-- Tie order: smallest absolute U adjustment, then safe-area, page-edge, page-center, object-edge, object-center, then stable object ID / edge ordering.
+- Tie order: smallest absolute U adjustment, then safe-area, page-edge, page-center, object-edge, object-center, then locale-independent stable object ID / edge ordering.
 - Move resolves X and Y independently.
 - Resize resolves only edges owned by the active handle and preserves the uncontrolled opposite edge.
 - Canonical minimum dimension remains 1 U.
 - Threshold is supplied in U. The editor converts an 8 CSS px visual radius to U at gesture start; no snap setting is serialized.
 - Disabled snapping returns the raw candidate and no guides.
+
+## Principal amendment
+
+The final stable-object-ID tie break is explicitly locale-independent. W2.D compares IDs with direct lexical string ordering (`left < right`) rather than `String.localeCompare()`, preserving the existing priority chain while making Unicode IDs deterministic across runtime locales. An adversarial `z` versus `ä` sibling test proves array-order independence and a stable winner without using locale-sensitive expected-value logic.
 
 ## W2.C integration
 
@@ -83,9 +87,10 @@ Full repository gates after final code changes:
 - [x] Add diagnostic, W2.C regression, publication-independence, and overlap tests.
 - [x] Add deterministic Chromium W2.D proof.
 - [x] Run focused proofs, W2.C Chromium regression, export proof, full gates, and scope audit.
-- [ ] Transplant the W2.D implementation commit onto canonical 467942ed ancestry.
-- [ ] Open exactly one PR and verify base/head/tree/files/commits/mergeability.
-- [ ] Update durable project/handoff memory with the real PR number.
+- [x] Transplant the W2.D implementation commit onto canonical 467942ed ancestry.
+- [x] Open exactly one PR and verify base/head/tree/files/commits/mergeability.
+- [x] Update durable project/handoff memory with the real PR number.
+- [x] Apply Principal amendment for locale-independent stable-ID tie breaking and add the Unicode adversarial test.
 
 ## File List
 

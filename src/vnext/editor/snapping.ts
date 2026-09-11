@@ -137,6 +137,11 @@ function relationAllowed(target: Target, source: Source): boolean {
   return source.edge !== 'center';
 }
 
+function compareStableId(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function compareResolution(left: Resolution, right: Resolution): number {
   const distance = Math.abs(left.adjustmentU) - Math.abs(right.adjustmentU);
   if (distance !== 0) return distance;
@@ -144,7 +149,7 @@ function compareResolution(left: Resolution, right: Resolution): number {
   if (kind !== 0) return kind;
   const leftId = left.target.sourceObjectId ?? '';
   const rightId = right.target.sourceObjectId ?? '';
-  const id = leftId.localeCompare(rightId);
+  const id = compareStableId(leftId, rightId);
   if (id !== 0) return id;
   const targetEdge = left.target.edgeOrder - right.target.edgeOrder;
   if (targetEdge !== 0) return targetEdge;

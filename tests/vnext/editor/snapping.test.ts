@@ -108,6 +108,21 @@ describe('W2.D pure U snap engine', () => {
     expect(first.guides[0]).toMatchObject({ sourceObjectId: 'a', positionU: 304 });
   });
 
+  it('breaks equal-distance Unicode sibling ties by locale-independent stable object ID regardless of array insertion order', () => {
+    const z = { objectId: 'z', frameU: { xU: 304, yU: 50, widthU: 50, heightU: 50 } };
+    const aUmlaut = { objectId: 'ä', frameU: { xU: 300, yU: 50, widthU: 50, heightU: 50 } };
+    const candidateFrameU = { xU: 202, yU: 200, widthU: 100, heightU: 80 };
+    const expectedWinnerId = 'z';
+
+    expect('z' < 'ä').toBe(true);
+
+    const first = snap({ candidateFrameU, siblingFramesU: [aUmlaut, z] });
+    const second = snap({ candidateFrameU, siblingFramesU: [z, aUmlaut] });
+
+    expect(first).toEqual(second);
+    expect(first.guides[0]).toMatchObject({ sourceObjectId: expectedWinnerId, positionU: 304 });
+  });
+
   it('supports negative-coordinate snap targets without clamping to the page', () => {
     const result = snap({
       candidateFrameU: { xU: -97, yU: 200, widthU: 100, heightU: 80 },
