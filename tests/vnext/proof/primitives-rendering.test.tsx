@@ -146,4 +146,35 @@ describe('W2.A publication-safe primitive rendering',()=>{
     expect(diagnostics).not.toContainEqual(expect.objectContaining({code:'OBJECT_OVERLAP'}));
     expect(diagnostics).toEqual([]);
   });
+
+  it('renders a Group as one atomic structural wrapper and keeps grouped leaves on existing render paths',()=>{
+    const doc=representativeDocument();
+    const table=emptyTable(1,1);
+    doc.pages[0].objects=[
+      {
+        id:'group',
+        type:'group',
+        frame:frame(10,10,80,55),
+        zIndex:1,
+        objects:[
+          {id:'group-text',type:'text',frame:frame(0,0,50,12),zIndex:0,text:plainRichText('group-text','Texto agrupado'),style:{}},
+          {id:'group-image',type:'image',frame:frame(50,0,20,20),zIndex:1,assetId:'photo',fit:'contain'},
+          {id:'group-table',type:'table',frame:frame(0,20,80,35),zIndex:2,table},
+        ],
+      },
+      {id:'outside',type:'shape',frame:frame(100,10,20,20),zIndex:2,shape:'rectangle',style:{fill:'#173F52'}},
+    ];
+    const {plans,diagnostics}=compilePlans(doc);
+    expect(diagnostics).toEqual([]);
+    expect(plans.get(table.id)).toMatchObject({objectId:'group-table',pageId:'page',tableId:table.id});
+    const html=renderToStaticMarkup(<DocumentRenderer document={doc} plans={plans} assetUrls={new Map([['photo','/photo.jpg']])}/>);
+    const occurrences=(id:string)=>html.match(new RegExp(`data-object-id="${id}"`,'g'))?.length??0;
+    for(const id of ['group','group-text','group-image','group-table','outside'])expect(occurrences(id)).toBe(1);
+    expect(html).toContain('data-object-type="group"');
+    expect(html).toContain('data-primitive-type="text"');
+    expect(html).toContain('data-primitive-type="image"');
+    expect(html).toContain(`data-table-id="${table.id}"`);
+    expect(html).not.toContain('transform:');
+    expect(html.indexOf('data-object-id="group"')).toBeLessThan(html.indexOf('data-object-id="outside"'));
+  });
 });

@@ -314,4 +314,70 @@ describe('W2.C editor interaction controller', () => {
     expect(preview.frameU.xU - start.xU).toBe(mmToU(21));
     expect(preview.frameU.yU - start.yU).toBe(mmToU(29.7));
   });
+
+  it('treats a closed Group as one move/snap rectangle, excludes its children as page-level snap targets, and rejects resize', () => {
+    const base=fixtureDocument();
+    const page=base.pages[0];
+    const grouped:CatalogDocument={
+      ...base,
+      pages:[{
+        ...page,
+        objects:[
+          {
+            id:'group',
+            type:'group',
+            frame:{xMm:20,yMm:30,widthMm:40,heightMm:20},
+            zIndex:0,
+            objects:[
+              {id:'child-a',type:'shape',frame:{xMm:0,yMm:0,widthMm:20,heightMm:20},zIndex:0,shape:'rectangle',style:{}},
+              {id:'child-b',type:'shape',frame:{xMm:20,yMm:0,widthMm:20,heightMm:20},zIndex:1,shape:'rectangle',style:{}},
+            ],
+          },
+          {id:'sibling',type:'shape',frame:{xMm:150,yMm:30,widthMm:20,heightMm:20},zIndex:1,shape:'rectangle',style:{}},
+        ],
+      }],
+    };
+    let current=grouped;
+    const execute=vi.fn((action,_context?:ApplicationExecutionContext):ApplicationActionResult=>({
+      ok:true,
+      document:current,
+      metadata:{actionType:action.type,affectedIds:['group'],createdIds:[],changed:true},
+    }));
+    const controller=new EditorInteractionController({
+      getDocument:()=>current,
+      getActivePageId:()=>current.pages[0].id,
+      createTransactionId:()=> 'group-gesture',
+      execute,
+      onPreviewChange:()=>{},
+    });
+    const beginInput={
+      pointerId:9,
+      objectId:'group',
+      pageId:page.id,
+      clientX:100,
+      clientY:100,
+      pageClientWidthPx:420,
+      pageClientHeightPx:594,
+      snapThresholdPx:8,
+    } as const;
+    expect(controller.begin({...beginInput,kind:{type:'resize',handle:'se'}})).toBe(false);
+    expect(controller.begin({...beginInput,kind:{type:'move'}})).toBe(true);
+    const preview=controller.move(9,102,100)!;
+    expect(preview.guides.some((guide)=>guide.sourceObjectId==='child-a'||guide.sourceObjectId==='child-b')).toBe(false);
+    expect(preview.guides.filter((guide)=>guide.kind.startsWith('object-')).every((guide)=>guide.sourceObjectId==='sibling')).toBe(true);
+    controller.cancel('escape');
+
+    expect(controller.begin({...beginInput,kind:{type:'move'}})).toBe(true);
+    current={
+      ...current,
+      pages:[{
+        ...current.pages[0],
+        objects:current.pages[0].objects.map((object)=>object.type==='group'
+          ? {...object,objects:object.objects.map((child,index)=>index===0?{...child,locked:true}:child)}
+          : object),
+      }],
+    };
+    expect(controller.finish(9,110,100)).toMatchObject({status:'cancelled',reason:'target-locked'});
+    expect(execute).not.toHaveBeenCalled();
+  });
 });

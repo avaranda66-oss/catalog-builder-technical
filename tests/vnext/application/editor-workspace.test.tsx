@@ -279,6 +279,51 @@ describe('W2.C visible editor workspace', () => {
   });
 });
 
+describe('W2.F visible Group workflow', () => {
+  it('supports Ctrl/Cmd-style top-level multi-selection, Group/Ungroup selection transitions, and Group-only chrome', () => {
+    const session=sessionWithDemo();
+    const execute=vi.spyOn(session,'execute');
+    const {container}=render(<VNextApp session={session}/>);
+    fireEvent.click(button(container,'add-text'));
+    const textId=session.getSnapshot().document.pages[0].objects[0].id;
+    fireEvent.click(button(container,'add-shape'));
+    const shapeId=session.getSnapshot().document.pages[0].objects[1].id;
+    setPageRect(container);
+
+    const textHit=container.querySelector<HTMLElement>(`[data-editor-object-id="${textId}"]`)!;
+    const shapeHit=container.querySelector<HTMLElement>(`[data-editor-object-id="${shapeId}"]`)!;
+    fireEvent.pointerDown(textHit,{pointerId:60,button:0,clientX:40,clientY:40});
+    fireEvent.pointerUp(textHit,{pointerId:60,button:0,clientX:40,clientY:40});
+    fireEvent.pointerDown(shapeHit,{pointerId:61,button:0,clientX:200,clientY:40,ctrlKey:true});
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(button(container,'group')).not.toBeDisabled();
+
+    fireEvent.click(button(container,'group'));
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({type:'group.create'});
+    const group=session.getSnapshot().document.pages[0].objects[0];
+    expect(group.type).toBe('group');
+    if(group.type!=='group')return;
+    expect(group.objects.map((child)=>child.id)).toEqual([textId,shapeId]);
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    expect(container.querySelector(`[data-editor-object-id="${group.id}"][data-selected="true"]`)).toBeTruthy();
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(0);
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')).not.toHaveAttribute('readonly');
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="y"]')).not.toHaveAttribute('readonly');
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')).toHaveAttribute('readonly');
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="height"]')).toHaveAttribute('readonly');
+    expect(container.querySelector('[data-editorial-root] [data-editor-action="group"]')).toBeNull();
+    expect(container.querySelector('[data-editorial-root] [data-resize-handle]')).toBeNull();
+    expect(container.querySelector(`[data-editor-object-id="${textId}"]`)).toBeNull();
+    expect(container.querySelector(`[data-editor-object-id="${shapeId}"]`)).toBeNull();
+
+    fireEvent.click(button(container,'ungroup'));
+    expect(execute.mock.calls.at(-1)?.[0]).toEqual({type:'group.ungroup',groupId:group.id});
+    expect(session.getSnapshot().document.pages[0].objects.map((object)=>object.id)).toEqual([textId,shapeId]);
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(button(container,'group')).not.toBeDisabled();
+  });
+});
+
 describe('W2.D visible snapping and diagnostics', () => {
   it('shows ephemeral page-edge guides, clears them away from the target/commit, and disables snapping without changing pointer sampling', () => {
     const session = sessionWithDemo(seedShapeDocument());

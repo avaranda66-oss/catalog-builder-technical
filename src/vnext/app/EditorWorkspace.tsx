@@ -109,7 +109,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const controller = controllerRef.current;
   const selectedPage = document.pages.find((page) => page.id === editorState.activePageId) ?? document.pages[0];
   const selectedPageIndex = document.pages.findIndex((page) => page.id === selectedPage.id);
-  const selectedObjectId = editorState.selectedObjectIds[0];
+  const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
   const previewDocument = React.useMemo(() => ({ ...document, pages: [selectedPage] }), [document, selectedPage]);
   const { plans } = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
@@ -146,9 +146,9 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
       setEditorState({ activePageId: document.pages[0].id, selectedObjectIds: [], mode: 'select' });
       return;
     }
-    const currentSelectedId = editorState.selectedObjectIds[0];
-    if (currentSelectedId && !activePage.objects.some((object) => object.id === currentSelectedId)) {
-      setEditorState((current) => ({ ...current, selectedObjectIds: [] }));
+    const validIds = editorState.selectedObjectIds.filter((objectId) => activePage.objects.some((object) => object.id === objectId));
+    if (validIds.length !== editorState.selectedObjectIds.length) {
+      setEditorState((current) => ({ ...current, selectedObjectIds: validIds }));
     }
   }, [controller, document, editorState.activePageId, editorState.selectedObjectIds]);
 
@@ -176,6 +176,14 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const selectObject = (objectId: string) => {
     setEditorState((current) => ({ ...current, selectedObjectIds: [objectId], mode: 'select' }));
+  };
+
+  const toggleObjectSelection = (objectId: string) => {
+    setEditorState((current) => {
+      const selected = new Set(current.selectedObjectIds);
+      if (selected.has(objectId)) selected.delete(objectId); else selected.add(objectId);
+      return { ...current, selectedObjectIds: [...selected], mode: 'select' };
+    });
   };
 
   const addPage = () => {
@@ -243,6 +251,26 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     setStatusMessage('Objeto duplicado.');
   };
 
+  const groupSelected = () => {
+    if (editorState.selectedObjectIds.length < 2) return;
+    controller.cancel('superseded');
+    const result = session.execute({ type: 'group.create', pageId: selectedPage.id, objectIds: [...editorState.selectedObjectIds] });
+    if (!result.ok) { setStatusMessage('Não foi possível agrupar os objetos.'); return; }
+    const groupId = result.metadata.createdIds[0];
+    setEditorState((current) => ({ ...current, selectedObjectIds: groupId ? [groupId] : [] }));
+    setStatusMessage('Objetos agrupados.');
+  };
+
+  const ungroupSelected = () => {
+    if (!selectedObject || selectedObject.type !== 'group') return;
+    controller.cancel('superseded');
+    const childIds = selectedObject.objects.map((child) => child.id);
+    const result = session.execute({ type: 'group.ungroup', groupId: selectedObject.id });
+    if (!result.ok) { setStatusMessage('Não foi possível desagrupar.'); return; }
+    setEditorState((current) => ({ ...current, selectedObjectIds: childIds }));
+    setStatusMessage('Grupo desfeito.');
+  };
+
   const reorderSelected = (target: 'back' | 'backward' | 'forward' | 'front') => {
     if (!selectedObject) return;
     controller.cancel('superseded');
@@ -275,6 +303,13 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    if (kind.type === 'move' && (event.ctrlKey || event.metaKey)) {
+      controller.cancel('superseded');
+      toggleObjectSelection(object.id);
+      event.currentTarget.focus();
+      return;
+    }
+    if (kind.type === 'resize' && object.type === 'group') return;
     selectObject(object.id);
     event.currentTarget.focus();
     const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;
@@ -319,6 +354,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const commitInspector = (field: keyof InspectorDraft) => {
     if (!selectedObject) return;
+    if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
     controller.cancel('superseded');
     const raw = inspectorDraft[field].trim();
     const numeric = Number(raw);
@@ -423,6 +459,8 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
               </button>
             </div>
             <div className="vnext-tool-group" aria-label="Ações do objeto selecionado">
+              <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2} onClick={groupSelected}>Agrupar</button>
+              <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group'} onClick={ungroupSelected}>Desagrupar</button>
               <button type="button" data-editor-action="duplicate" disabled={!selectedObject} onClick={duplicateSelected}>Duplicar</button>
               <button type="button" data-editor-action="delete" disabled={!selectedObject} onClick={deleteSelected}>Excluir</button>
               <button type="button" data-editor-action="send-back" disabled={!selectedObject} onClick={() => reorderSelected('back')}>Fundo</button>
@@ -461,7 +499,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                   />
                 ))}
                 {selectedPage.objects.map((object) => {
-                  const selected = object.id === selectedObjectId;
+                  const selected = editorState.selectedObjectIds.includes(object.id);
                   const displayedFrame = objectPreviewFrame(object);
                   const objectDiagnostics = pageDiagnostics.filter((diagnostic) => diagnostic.objectId === object.id);
                   const issueSeverity = objectDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR')
@@ -495,7 +533,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
-                          {resizeHandles.map((handle) => (
+                          {object.type !== 'group' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
                             <button
                               key={handle}
                               type="button"
@@ -531,6 +569,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                     <span>{label}</span>
                     <div>
                       <input type="text" inputMode="decimal" data-inspector-field={field} value={inspectorDraft[field]}
+                        readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
                         onChange={(event) => setInspectorDraft((current) => ({ ...current, [field]: event.target.value }))}
                         onBlur={() => commitInspector(field)}
                         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}

@@ -160,6 +160,17 @@ export const ReplaceImageActionSchema = z.object({
   assetId: applicationId,
 }).strict();
 
+export const CreateGroupActionSchema = z.object({
+  type: z.literal('group.create'),
+  pageId: applicationId,
+  objectIds: z.array(applicationId).min(2).refine((values)=>new Set(values).size===values.length,'Group objectIds must be unique'),
+}).strict();
+
+export const UngroupActionSchema = z.object({
+  type: z.literal('group.ungroup'),
+  groupId: applicationId,
+}).strict();
+
 export const ApplicationActionSchema = z.discriminatedUnion('type', [
   RenameDocumentActionSchema,
   AddPageActionSchema,
@@ -174,6 +185,8 @@ export const ApplicationActionSchema = z.discriminatedUnion('type', [
   ResizeObjectActionSchema,
   ReorderObjectActionSchema,
   ReplaceImageActionSchema,
+  CreateGroupActionSchema,
+  UngroupActionSchema,
 ]);
 
 export type ApplicationAction = z.infer<typeof ApplicationActionSchema>;

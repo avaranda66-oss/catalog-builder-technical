@@ -1,7 +1,11 @@
 import {
   CatalogDocumentSchema,
+  findObjectInTree,
+  walkPageObjects,
   type CatalogDocument,
   type EditorialObject,
+  type GroupObject,
+  type LeafEditorialObject,
   type Page,
   type RichText,
   type TableModel,
@@ -28,6 +32,9 @@ function richTextIdentityIds(richText: RichText): string[] {
 
 /** Canonical structural IDs owned by one object. RichText-local IDs are intentionally excluded. */
 export function canonicalObjectIdentityIds(object: EditorialObject): string[] {
+  if (object.type === 'group') {
+    return [object.id, ...object.objects.flatMap((child) => canonicalObjectIdentityIds(child))];
+  }
   if (object.type !== 'table') return [object.id];
   return [
     object.id,
@@ -57,7 +64,7 @@ export function canonicalIdentityIds(document: CatalogDocument): string[] {
 function reservationIdentityIds(document: CatalogDocument): string[] {
   const ids = canonicalIdentityIds(document);
   for (const page of document.pages) {
-    for (const object of page.objects) {
+    for (const { object } of walkPageObjects(page)) {
       if (object.type === 'text') {
         ids.push(...richTextIdentityIds(object.text));
         continue;
@@ -162,9 +169,14 @@ function instantiateRichTextWithFreshIds(richText: RichText, allocator: IdAlloca
 }
 
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
-export type ObjectInstantiationSeed = WithoutId<EditorialObject>;
+export type LeafObjectInstantiationSeed = WithoutId<LeafEditorialObject>;
+export type GroupObjectInstantiationSeed = Omit<GroupObject, 'id' | 'objects'> & {
+  readonly objects: readonly LeafObjectInstantiationSeed[];
+};
+export type ObjectInstantiationSeed = LeafObjectInstantiationSeed | GroupObjectInstantiationSeed;
 
 function instantiationSeedIdentityIds(seed: ObjectInstantiationSeed): string[] {
+  if (seed.type === 'group') return seed.objects.flatMap((child) => instantiationSeedIdentityIds(child));
   if (seed.type === 'text') return richTextIdentityIds(seed.text);
   if (seed.type !== 'table') return [];
 
@@ -189,21 +201,30 @@ export interface ObjectLocation {
   object: EditorialObject;
   pageIndex: number;
   objectIndex: number;
+  parentGroup?: GroupObject;
+  childIndex?: number;
 }
 
 /** Pure application-layer lookup of canonical object ownership and array position. */
 export function findObjectLocation(document: CatalogDocument, objectId: string): ObjectLocation | undefined {
-  for (let pageIndex = 0; pageIndex < document.pages.length; pageIndex += 1) {
-    const page = document.pages[pageIndex];
-    const objectIndex = page.objects.findIndex((object) => object.id === objectId);
-    if (objectIndex >= 0) return { page, object: page.objects[objectIndex], pageIndex, objectIndex };
-  }
-  return undefined;
+  const entry=findObjectInTree(document,objectId);
+  if(!entry)return undefined;
+  return {
+    page:entry.page,
+    object:entry.object,
+    pageIndex:document.pages.indexOf(entry.page),
+    objectIndex:entry.topLevelIndex,
+    ...(entry.parentGroup?{parentGroup:entry.parentGroup,childIndex:entry.childIndex}:{}),
+  };
 }
 
 export function objectInstantiationSeedFromObject(object: EditorialObject): ObjectInstantiationSeed {
+  if(object.type==='group') {
+    const { id:_id,objects,...rest }=object;
+    return { ...rest, objects: objects.map((child)=>objectInstantiationSeedFromObject(child) as LeafObjectInstantiationSeed) };
+  }
   const { id: _id, ...seed } = object;
-  return seed as ObjectInstantiationSeed;
+  return seed as LeafObjectInstantiationSeed;
 }
 
 function instantiateTableWithFreshIds(table: TableModel, allocator: IdAllocator): TableModel {
@@ -291,7 +312,19 @@ function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator
     case 'line':
     case 'icon':
       return { ...seed, id, frame: { ...seed.frame } };
+    case 'group':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        objects: seed.objects.map((child) => instantiateObjectWithAllocator(child, allocator) as LeafEditorialObject),
+      };
   }
+}
+
+/** Allocates one fresh canonical root identity using the same reservation machinery as all W2.B/W2.E instantiation. */
+export function allocateFreshCanonicalId(document:CatalogDocument,createId:IdGenerator):string {
+  return new IdAllocator(reservationIdentityIds(document),createId).next();
 }
 
 /** Freshly instantiates one object against all identities already reserved by the document. */

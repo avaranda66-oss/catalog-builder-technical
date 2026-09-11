@@ -6,6 +6,7 @@ import {
   VNextError,
   asDiagnostic,
   authoredFrames,
+  walkPageObjects,
   validateDocument,
   type CatalogDocument,
   type Diagnostic,
@@ -107,7 +108,7 @@ async function runDocument(input:CatalogDocument,fixture:string):Promise<ProofRe
   finally{await checkpoint('job-end',start,phases);busy=false;}
   durations.totalMs=performance.now()-start;
   const tables=[...currentPlans.values()].map(plan=>{
-    const object=currentDocument.pages.flatMap(p=>p.objects).find(o=>o.type==='table'&&o.table.id===plan.tableId)!;
+    const object=currentDocument.pages.flatMap(p=>walkPageObjects(p).map(entry=>entry.object)).find(o=>o.type==='table'&&o.table.id===plan.tableId)!;
     if(object.type!=='table')throw new VNextError('TABLE_NOT_FOUND');
     return {id:plan.tableId,rows:object.table.rows.length,columns:object.table.columns.length,cells:object.table.cells.length,
       anchors:object.table.cells.filter(c=>!c.coveredBy).length,widthsU:plan.widthsU,trackQ:plan.trackQ,heightsU:plan.heightsU??[],rowQ:plan.rowQ??[],paintEdges:plan.edges.length,suppressed:plan.suppressed};
@@ -146,7 +147,7 @@ export const proofApi={
     await checkpoint('after-pdf',currentJobStart,currentResult.phases);
     return {documentHash:await sha256(JSON.stringify(currentDocument)),framesHash:await sha256(authoredFrames(currentDocument)),layoutStable:true};
   },
-  constraints:()=>currentDocument.pages.flatMap(p=>p.objects).filter(o=>o.type==='table').map(o=>{
+  constraints:()=>currentDocument.pages.flatMap(p=>walkPageObjects(p).map(entry=>entry.object)).filter(o=>o.type==='table').map(o=>{
     if(o.type!=='table')throw new VNextError('TABLE_NOT_FOUND');
     const plan=currentPlans.get(o.table.id)!;
     return {tableId:o.table.id,frameHeightMm:o.frame.heightMm,...tableConstraints(o.table,host,plan),heightsU:plan.heightsU,rows:o.table.rows};

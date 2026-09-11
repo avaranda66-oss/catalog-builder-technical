@@ -218,19 +218,56 @@ Renderer responsibility: render the declared asset inside the frame and surface 
 
 ### 3.7 Group
 
-Group is a required Father-V1 capability, but **W2.A–W2.E must not invent a nested coordinate system to satisfy it quickly**.
+W2.F freezes Group as a canonical persisted editorial object. A Page owns top-level objects; a Group directly owns leaf children. The only legal Group children in Father V1 are Table, Text, Image, Shape, Line, and Icon. Group-inside-Group is invalid, so the maximum ownership depth is Page -> Group -> Leaf. No `parentId`, `memberIds`, hidden React membership tree, or runtime membership registry participates in canonical ownership.
 
-W2.0 therefore reserves Group for a dedicated **W2.F Group Contract + Implementation** slice after single-object direct manipulation and template instantiation are proven. No serialized Group shape is added in W2.A–W2.E.
+The canonical shape is conceptually:
 
-The compatibility seam is explicit:
+```ts
+type LeafEditorialObject = TableObject | TextObject | ImageObject | ShapeObject | LineObject | IconObject;
 
-- editor selection state is modeled as an ordered set/array even while W2.C exposes only single selection;
-- object actions remain object-ID based and can later gain group-specific typed actions without JSON patching;
-- template insertion instantiates ordinary objects and does not require Group;
-- render/publication unions remain exhaustive so Group cannot appear without an explicit renderer/preflight implementation;
-- W2.F must decide child ownership, coordinate space, frame derivation, resize semantics, z-order, duplicate/delete, and ungroup atomically before any production Group object exists.
+type GroupObject = ObjectBase & {
+  type: 'group';
+  frame: Frame;
+  objects: LeafEditorialObject[];
+};
 
-W2.F must not ship a partially defined Group whose move works but resize/z-order/ungroup semantics are ambiguous.
+type EditorialObject = LeafEditorialObject | GroupObject;
+```
+
+A Group has at least two children. Schemas remain strict. W2.F does not add matrices, rotation, scale, auto-layout, parent/member references, editor state, or template metadata to Group.
+
+Group coordinates are explicit and deterministic:
+
+- `Group.frame` is Page-absolute;
+- child frames are Group-local;
+- canonical geometry resolution uses integer U;
+- `group.create` computes the exact tight envelope in U, converts selected leaf frames to local U by subtraction, and persists that envelope;
+- the envelope invariant is `min child x = 0`, `min child y = 0`, `max child right = group width`, and `max child bottom = group height`;
+- Group width/height are not directly editable in W2.F.
+
+W2.F Group is move-only geometry. `object.move(Group)` changes only Group x/y. `object.resize(Group)` fails with `ACTION_INVALID`; no child/font/Table/stroke/image scaling engine exists.
+
+`group.create` accepts at least two unique, unlocked, top-level leaves from one page. The selected leaves must occupy one contiguous interval in canonical visual order (`zIndex`, then page array index). Creation preserves child root IDs, Table structural IDs, RichText local IDs, and AssetRefs; only the Group root gets a fresh canonical ID. The Group replaces that visual block without normalizing unrelated page objects. Children preserve relative paint order, with deterministic internal z-order permitted.
+
+`group.ungroup` requires an unlocked Group with unlocked descendants. It removes the Group, converts local child frames back to Page-absolute U, preserves all child/Table/RichText identities and AssetRefs, and emits the children as one contiguous visual block in the Group's current visual slot.
+
+While a Group is closed, lookup/traversal may find its leaves but direct structural/geometric child mutation is forbidden. `object.move`, `object.resize`, `object.delete`, `object.duplicate`, `object.reorder`, and `image.replace` against a Group child fail atomically. The W2.F edit workflow is Ungroup -> edit -> Group.
+
+Deleting a Group removes the owned closure atomically. Duplicating a Group uses the existing allocator and Table/RichText remappers to create a fresh Group ID, fresh child root IDs, fresh Table structural IDs, and fresh RichText local IDs while preserving AssetRefs and local layout. Duplicate without explicit x/y keeps the exact source Group frame; explicit x/y are honored exactly.
+
+Locking is closure-aware: Group move/delete/duplicate/reorder/ungroup fail when either the Group or any descendant is locked. Group creation rejects any locked selected source.
+
+One pure domain traversal/frame-resolution authority supplies top-level and Group-child ownership context plus resolved Page-absolute U geometry to validation, application lookup, rendering, render planning, measurement, preflight, and editor snap-target filtering. Lookup does not imply mutation permission.
+
+Rendering keeps one canonical render tree rooted at DocumentRenderer. A Group is an atomic Page-absolute structural wrapper; leaves render once through the existing primitive renderers at local absolute positions. Canonical geometry is materialized without CSS transforms, translate, scale, zoom, or matrices. Group and leaf objects each expose exactly one `data-object-id`.
+
+Grouped Tables keep the same TableModel/Table Engine. Grouped RichText keeps the same content semantics. Content diagnostics remain attached to real leaf IDs; Group envelope geometry carries page/safe-area geometry diagnostics without duplicating outside-page errors on descendants.
+
+W2.E template materialization supports Group through the existing instantiation seed, allocator, and identity-remapping machinery. A Group-bearing template allocates fresh Group/child/Table/RichText identities, preserves AssetRefs, validates the entire closure before the first avoidable ID allocation, and never creates runtime template authority.
+
+Selection remains ephemeral. W2.F adds only the minimum multi-selection required to create a Group: click selects one top-level object; Ctrl/Cmd-click toggles top-level objects on the same page. Group selection has move/duplicate/delete/reorder/ungroup chrome, no child drill-down, no resize handles, editable X/Y, and read-only width/height.
+
+W2.F retains `schemaVersion: 1`. W3 remains the first persistence freeze.
 
 ## 4. Selection ownership
 
@@ -506,22 +543,26 @@ Professional technical layouts that need complex diagrams may use declared SVG/h
 
 ## 15. Group decision and W2.F entry criteria
 
-Group implementation is deferred to W2.F, but the feature is not abandoned. W2.F starts only after W2.C proves single-object move/resize transaction semantics and W2.E proves deep fresh-ID instantiation.
+The W2.F Group contract is ratified for implementation with these frozen decisions:
 
-Before Group code is written, W2.F must freeze these questions together:
+- ownership: Page owns top-level objects; Group directly owns leaf children;
+- child types: Table, Text, Image, Shape, Line, Icon only;
+- nesting: forbidden in Father V1;
+- coordinates: Group Page-absolute, children Group-local, canonical arithmetic in integer U;
+- frame: canonical, persisted, explicit tight child envelope created by `group.create`;
+- geometry: Group move changes x/y only; Group resize is unsupported in W2.F;
+- create: at least two unique unlocked top-level leaves from one page, contiguous in canonical visual order;
+- stacking: Group is an atomic stacking context replacing the selected visual block; external ordering is preserved;
+- child mutation: grouped leaves are discoverable but not directly structurally/geometrically editable;
+- ungroup: preserves leaf identities and materializes Page-absolute frames in the Group's current visual slot;
+- duplicate: fresh closure identities using existing allocator/remappers, preserved AssetRefs, no implicit offset;
+- delete: atomic closure deletion;
+- locking: structural Group operations honor the entire lock closure;
+- traversal: one pure canonical ownership/frame-resolution authority is shared across subsystems;
+- templates: W2.E definitions may contain valid non-nested Group closures and use the same instantiation machinery;
+- schema: `schemaVersion: 1` remains unchanged.
 
-- whether children are nested or page-owned references;
-- whether child frames are page-absolute or group-local;
-- whether group frame is authored or derived;
-- exact move semantics;
-- resize behavior and whether scaling content is allowed;
-- z-order inside/outside the group;
-- duplicate/delete/ungroup identity behavior;
-- whether nested groups exist in Father V1.
-
-Until that contract is ratified, W2 UI must not emulate Group by maintaining a hidden parallel object tree.
-
-W2.F completion is a required gate before W3 freezes persisted VNext document serialization.
+W2.F does not add child drill-down, nested Groups, transforms, scaling, multi-object transforms, lasso/marquee, persistence, or direct RichText editing. W2.F completion remains a required gate before W3 freezes persisted VNext document serialization.
 
 ## 16. Page-template insertion seam
 
@@ -770,15 +811,15 @@ Must not implement: template marketplace/library UX, persistence, catalog starte
 
 ### W2.F — Group contract + implementation
 
-Scope: first freeze and then implement Group ownership/coordinates/frame/resize/z-order/duplicate/delete/ungroup semantics as one coherent contract.
+Scope: implement the ratified Group contract in sections 3.7 and 15: direct leaf ownership, Group-local child coordinates, tight persisted envelope, contiguous visual grouping, move-only Group geometry, closure-aware locking/duplicate/delete/ungroup, canonical traversal, renderer/publication parity, W2.E template compatibility, and minimum editor multi-selection.
 
 Dependencies: W2.C and W2.E identity-instantiation semantics.
 
 Visible result: a selected set of ordinary page objects can become a Group and return to equivalent ordinary objects through explicit actions without hidden topology.
 
-Required tests: all group invariants from section 15, fresh duplicate IDs, move/resize semantics, z-order, delete/ungroup, nesting policy, Undo/Redo, renderer/publication parity. W2.F completion is a required gate before W3 serialization freeze.
+Required tests: strict Group schema/envelope/identity/assets; adversarial visual-contiguity and equal-z ordering; create/ungroup/move/reorder/delete/duplicate/lock closure; direct child mutation rejection; deep template identity; grouped Table/Text diagnostics; snapping target filtering; exactly-once rendering; local-to-Page Q/Q measurement; Undo/Redo; Chromium editor proof; existing W2.C/W2.D/W2.E browser regressions; and native PDF/export parity.
 
-Must not implement: nested groups unless separately ratified, component library, reusable live-linked groups, arbitrary transforms/rotation, vector editing.
+Must not implement: W2.G direct text editing, nested groups, component library, reusable live-linked groups, arbitrary transforms/rotation/scaling, advanced multi-object transforms, lasso/marquee, persistence, or vector editing.
 
 ### W2.G — Minimum Direct Text Editing
 

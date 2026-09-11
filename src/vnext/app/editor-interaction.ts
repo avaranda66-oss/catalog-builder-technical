@@ -96,6 +96,10 @@ function findObject(document: CatalogDocument, objectId: string): { page: Page; 
   return undefined;
 }
 
+function objectClosureLocked(object: EditorialObject): boolean {
+  return Boolean(object.locked || (object.type === 'group' && object.objects.some((child) => child.locked)));
+}
+
 export function frameToU(frame: Frame): FrameU {
   return {
     xU: mmToU(frame.xMm),
@@ -234,7 +238,8 @@ export class EditorInteractionController {
     const document = this.dependencies.getDocument();
     if (this.dependencies.getActivePageId() !== input.pageId) return false;
     const location = findObject(document, input.objectId);
-    if (!location || location.page.id !== input.pageId || location.object.locked) return false;
+    if (!location || location.page.id !== input.pageId || objectClosureLocked(location.object)) return false;
+    if (input.kind.type === 'resize' && location.object.type === 'group') return false;
 
     const renderedPageWidthQ = pxToQ(input.pageClientWidthPx);
     const renderedPageHeightQ = pxToQ(input.pageClientHeightPx);
@@ -344,7 +349,7 @@ export class EditorInteractionController {
       const location = findObject(currentDocument, gesture.objectId);
       if (!location) staleReason = 'target-deleted';
       else if (location.page.id !== gesture.pageId) staleReason = 'target-page-changed';
-      else if (location.object.locked) staleReason = 'target-locked';
+      else if (objectClosureLocked(location.object)) staleReason = 'target-locked';
       else if (!sameFrameU(frameToU(location.object.frame), gesture.startFrameU)) staleReason = 'target-frame-changed';
       else if (currentDocument !== gesture.startDocument) staleReason = 'document-changed';
     }

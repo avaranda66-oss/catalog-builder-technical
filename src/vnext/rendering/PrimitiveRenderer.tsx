@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { AssetRef, Border, CatalogDocument, EditorialObject, ImageObject } from '../domain/editorial-model';
+import type { AssetRef, Border, CatalogDocument, ImageObject, LeafEditorialObject } from '../domain/editorial-model';
 import { DEFAULT_IMAGE_FOCAL_POINT } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import type { TablePlan } from './render-plan';
@@ -34,7 +34,7 @@ export function PrimitiveRenderer({
   plans,
   assetUrls,
 }:{
-  object:EditorialObject;
+  object:LeafEditorialObject;
   document:CatalogDocument;
   plans:ReadonlyMap<string,TablePlan>;
   assetUrls:ReadonlyMap<string,string>;

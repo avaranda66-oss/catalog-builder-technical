@@ -4,6 +4,7 @@ import type { LayoutSnapshot } from '../rendering/measurement';
 import { findElement,intrinsicMetrics } from '../rendering/measurement';
 import { add,mmToU,qToU,uToQ } from '../domain/physical';
 import { diagnostic,type Diagnostic } from '../domain/diagnostics';
+import { walkPageObjects } from '../domain/object-tree';
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number):boolean => metrics.widthQ>uToQ(authoredWidthU)||metrics.heightQ>uToQ(authoredHeightU);
 export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
@@ -23,7 +24,7 @@ export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
   const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc)];
   for(const page of doc.pages) {
-    const frames=page.objects.map(object=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
+    const frames=walkPageObjects(page).map(({object})=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
     for(const frame of frames) {
       const {object,w,h}=frame,location={pageId:page.id,objectId:object.id};
       if(object.type==='table') {
