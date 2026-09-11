@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.F CANONICAL MEMORY; W2.G IMPLEMENTED ON REVIEW BRANCH; PR #26 OPEN; NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED; W2 NOT YET CANONICAL-COMPLETE; W3 NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2 COMPLETE / CANONICAL MEMORY; W2.G IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL VIA PR #26; W3 NEXT WAVE / NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -19,13 +19,12 @@ Agent reports are not authority. GitHub, code, tests, and artifacts outrank summ
 
 ### AGENT ROUTING
 
-- **Terra** — mechanical, simple, and inventory work;
-- **GPT-5.6 Sol Medium** — bounded implementation, documentation, and governance;
-- **GPT-5.6 Sol High** — architecture, domain, persistence, difficult implementation, concurrency/races, and independent hard audit;
-- **Gemini Flash High** — bounded implementation or adversarial/read-only review after contracts are precise;
-- **Astra** — scarce; use only when actual computer-use or visual empirical testing materially adds evidence. Do not spend Astra on work Sol can do.
+- **Codex Native2** — implementation/execution: code, tests, proofs, documentation, branch/commit/push, PR creation/update, and CI remediation when authorized by the active task;
+- **Gemini** — independent adversarial audit/research: read-only architectural research, counterexamples, independent audits, amendment re-audits, and pre-wave investigation;
+- **Principal** — architecture/contracts, confrontation, gates, roadmap, coordination, and complete next-agent prompts;
+- **User** — exclusive explicit merge authorization. One authorization applies only to one PR and is consumed once.
 
-Model choice never replaces evidence.
+Model choice never replaces evidence. Never merge without explicit user authorization.
 
 ## WHAT WE ARE BUILDING
 
@@ -35,7 +34,7 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## VERIFIED W2.F CANONICAL PROVENANCE AND REVIEW HISTORY
+## VERIFIED W2 CANONICAL PROVENANCE AND REVIEW HISTORY
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
@@ -73,7 +72,13 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, #22 / W2.E, #23 / W2.E closeout, and #24 / W2.F are merged. **W2.F — Group is frozen and canonical** at `7793aaa21bfed41d57da861424efdd84a686170d`, tree `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. W2.G minimum direct Text editing is implemented on review branch `feat/vnext-w2g-direct-text-editing`; PR #26 is OPEN against `main`; it remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED. Canonical base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
+PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, #22 / W2.E, #23 / W2.E closeout, #24 / W2.F, #25 / W2.F closeout, and #26 / W2.G are merged. **W2 is COMPLETE / CANONICAL**.
+
+PR #26 / W2.G historical implementation branch: `feat/vnext-w2g-direct-text-editing`. Canonical implementation base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`. Initial independent audit: **B — SOUND, SMALL AMENDMENT REQUIRED**, limited to proof completeness and required-CI proof execution evidence. The Principal amendment completed seven-symbol PDF evidence for `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈` and placed the browser/PDF proof matrix inside the existing required GitHub Quality Gate. Accepted review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Independent amendment re-audit: **A — READY TO MERGE AS WRITTEN**. Principal final classification: **A — W2.G PRINCIPAL ACCEPTED / READY TO MERGE AS WRITTEN**.
+
+After explicit user authorization, GitHub squash-merged PR #26 at `2026-09-11T20:10:03Z` as canonical `main` SHA `3810b4c70b9415f43c7cb0360d6525b5a1823c22`, tree `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`, direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`. The canonical merge tree exactly equals the accepted audited review tree. The PR #26 merge authorization was consumed by that merge.
+
+`main` branch protection requires the status context `Lint, typecheck, tests, build`. The audited PR head passed that required check. Post-merge Quality Gate run `34642762581` on canonical `3810b4c...` also completed **SUCCESS**. The required Quality Gate includes the W2.G Chromium/PDF proof and regression browser/PDF proofs. The historical/external Netlify red status was not a required branch-protection context and no W2.G causality was demonstrated.
 
 ## WHAT IS CANONICAL NOW
 
@@ -274,7 +279,7 @@ Governance rule: **MINIMUM EASY-BUTTON LAYER BEFORE FATHER PILOT**.
 No exact dates are frozen, and detailed W6/W7 implementation boundaries may move with evidence. The minimum easy-button requirement may not move behind the first father pilot.
 
 - **W1 — Application Actions + Minimal VNext Shell:** typed actions, immutable session, Undo/Redo/coalescing, and isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
-- **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering with Text-height resolution and Image focal point; W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. W2 is not complete until A–G and the visible basic-authoring path are executable.
+- **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering with Text-height resolution and Image focal point; W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. **COMPLETE / CANONICAL.**
 - **W3 — Save/Reopen/Catalog Library:** versioned persistence, autosave/local recovery, visible conflicts, and a persistable starter/catalog creation path.
 - **W4 — Advanced Table Editor:** structural editing, spreadsheet-style selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, titles/notes/footnotes.
 - **W5 — Complete Translation:** full semantic coverage, stale tracking, protection, coverage audit, and layout review.
@@ -459,52 +464,31 @@ Do not restore as canonical VNext authority:
 
 R0 package documents and the W0 execution story preserve facts from the points in time when they were written. Some historical sections mention open PRs or pre-promotion status. Do not treat those historical status lines as the current project state.
 
-Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and verified GitHub state.
+Current status authority is verified GitHub state plus `docs/vnext/PRINCIPAL-AUDITOR-HANDOFF.md`, `docs/vnext/PROJECT-STATE.md`, and this detailed handoff.
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #24 are merged for the promoted VNext slices through W2.F. W2.F is frozen and canonical.
+W2 is **COMPLETE / CANONICAL** through merged PR #26. Accepted W2.G review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. The canonical merge tree equals the audited review tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**.
 
-Historical W2.F implementation base: `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. Historical review head/tree: `69353fc31a5121580c17cdf797d10d9f9b799779` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. Canonical squash SHA/tree: `7793aaa21bfed41d57da861424efdd84a686170d` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
-
-The frozen W2.F behavior is:
-
-- Page owns top-level objects; Group directly owns leaf children: Page -> Group -> Leaf;
-- nested Group is forbidden;
-- Group coordinates are Page-absolute; child coordinates are Group-local;
-- the persisted Group frame is the exact tight child envelope;
-- grouping requires a visually contiguous source interval in canonical stacking order;
-- Group move changes x/y only;
-- Group resize is unsupported in W2.F;
-- grouped-child structural/geometric mutation is blocked while the Group is closed;
-- Group structural operations honor lock closure across descendants;
-- Group stacking is atomic;
-- ungroup preserves child identities, resolves Group-local coordinates to Page-absolute coordinates, and emits children in the Group's current visual slot;
-- duplicate produces deep fresh Group/child/Table/RichText identities while preserving AssetRefs;
-- one canonical traversal/frame-resolution authority is shared across lookup, validation, rendering, render planning, measurement, preflight, and snap-target filtering;
-- Group continues to use the same Table Engine;
-- W2.E templates remain compatible with valid Group closures through the existing instantiation machinery;
-- `schemaVersion` remains `1`.
-
-Audit evidence includes focused W2.F tests, the real `/v2` Chromium Group proof, unchanged W2.C/W2.D/W2.E Chromium regressions, grouped Text/Image/Table publication/PDF proof, the existing export/PDF screen-print-DPR matrix, and full lint/typecheck/test/build gates. The required GitHub `Lint, typecheck, tests, build` check passed on the audited PR head.
-
-Current review wave: **W2.G — minimum direct Text editing**. It is **IMPLEMENTED ON REVIEW BRANCH `feat/vnext-w2g-direct-text-editing` / PR #26 OPEN / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED**. Initial implementation review head/tree: `286fa9583a6a3d15249e0c67de3e16dcf761529e` / `21cd615a559599ce389141b70ddb32bc04ec9273`. Final review head/tree and exact-head CI are synchronized by the review-branch documentation commit. W2 overall remains **NOT YET CANONICAL-COMPLETE**. W3 is **NOT STARTED**.
+The next wave is **W3 — Save/Reopen/Catalog Library**, but W3 is **NOT STARTED**. First perform independent repository research and contract preparation covering Legacy persistence, Supabase/Auth, versioning, CAS, catalog identity/revision, save/autosave/local recovery/reopen, Catalog Library, starter creation, conflicts and two-tab behavior, assets, and existing persistence tests. The Principal must freeze the W3 contract before implementation begins.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
-1. `docs/vnext/PROJECT-STATE.md`.
-2. `docs/vnext/PRINCIPAL-HANDOFF.md`.
-3. `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`.
-4. `docs/vnext/presys-mvp-r0/README.md`.
-5. `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md`.
-6. `docs/vnext/presys-mvp-r0/evidence/proof-result.md`.
-7. `docs/stories/2026-09-09-vnext-w0-foundation-promotion.md`.
-8. `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md`.
-9. `tests/vnext/proof/architecture-boundary.test.ts` and current `src/vnext/` ownership.
-10. `docs/vnext/W2-A4-AUTHORING-CONTRACT.md`.
-11. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`.
-12. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md`.
-13. `docs/stories/2026-09-10-vnext-w2b-object-actions.md`.
-14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record.
-15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record.
-16. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — W2.E implementation/evidence record for merged PR #22.
+1. `docs/vnext/PRINCIPAL-AUDITOR-HANDOFF.md` — first executive reconstruction document and operating handoff.
+2. `docs/vnext/PROJECT-STATE.md`.
+3. `docs/vnext/PRINCIPAL-HANDOFF.md`.
+4. `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`.
+5. `docs/vnext/presys-mvp-r0/README.md`.
+6. `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md`.
+7. `docs/vnext/presys-mvp-r0/evidence/proof-result.md`.
+8. `docs/stories/2026-09-09-vnext-w0-foundation-promotion.md`.
+9. `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md`.
+10. `tests/vnext/proof/architecture-boundary.test.ts` and current `src/vnext/` ownership.
+11. `docs/vnext/W2-A4-AUTHORING-CONTRACT.md`.
+12. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md`.
+13. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md`.
+14. `docs/stories/2026-09-10-vnext-w2b-object-actions.md`.
+15. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record.
+16. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record.
+17. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — W2.E implementation/evidence record for merged PR #22.
+18. `docs/stories/2026-09-11-vnext-w2g-direct-text-editing.md` — W2.G implementation, independent audit, amendment, re-audit, Principal acceptance, and canonical closeout record.
