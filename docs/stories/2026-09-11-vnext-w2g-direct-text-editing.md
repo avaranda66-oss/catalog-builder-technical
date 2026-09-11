@@ -1,6 +1,6 @@
 # W2.G — Minimum Direct Text Editing
 
-Status: READY FOR REVIEW
+Status: COMPLETE / MERGED / CANONICAL
 
 Date: 2026-09-11
 
@@ -16,7 +16,14 @@ Date: 2026-09-11
 - PR #25: MERGED.
 - Branch: `feat/vnext-w2g-direct-text-editing`.
 - W2.A through W2.F: COMPLETE / CANONICAL.
-- W2.G: IMPLEMENTED ON REVIEW BRANCH / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
+- W2.G: IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL.
+- Accepted review head: `f827d660b9f63548830b15477f843727dd9a70e2`.
+- Accepted review tree: `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
+- Canonical squash main SHA: `3810b4c70b9415f43c7cb0360d6525b5a1823c22`.
+- Canonical main tree: `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
+- Canonical parent: `2d24935b507a240b11165d2e9357f1975cf389ba`.
+- Canonical merge tree equals the accepted audited review tree.
+- Post-merge required Quality Gate run `34642762581`: **SUCCESS**.
 
 ## Objective
 
@@ -84,7 +91,7 @@ Canonical authored geometry must remain unchanged when content is edited. Canoni
 - [x] Chromium W2.G proof passes on real `/v2`.
 - [x] W2.C/W2.D/W2.E/W2.F and PDF/export regressions pass.
 - [x] `git diff --check`, lint, typecheck, full tests, and build pass.
-- [x] One non-merged PR exists and durable project/handoff docs contain actual branch/base/PR/implementation-head facts; final exact-head CI is reported after the final push.
+- [x] During W2.G review, one non-merged PR existed and durable project/handoff docs contained actual branch/base/PR/implementation-head facts; final exact-head CI was reported after the final push.
 
 ## Test and proof plan
 
@@ -132,21 +139,29 @@ No save/autosave/reopen/Catalog Library/Supabase/CAS/conflict/local recovery/Aut
 
 ### Completion Notes
 
-- PR #26 is OPEN against `main`; W2.G remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
-- Canonical base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
+- PR #26 was implemented from canonical base SHA/tree `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0` on `feat/vnext-w2g-direct-text-editing`.
 - Initial implementation review head/tree: `286fa9583a6a3d15249e0c67de3e16dcf761529e` / `21cd615a559599ce389141b70ddb32bc04ec9273`.
 - Full local gates were green before delivery: lint PASS (0 errors, 268 baseline warnings), typecheck PASS, tests PASS (213 files, 2303 passed, 1 skipped), build PASS, `git diff --check` PASS.
 - Real `/v2` W2.G Chromium proof passed with zero console errors, zero page errors, and no Legacy bootstrap. W2.C/W2.D/W2.E/W2.F regressions, export/PDF regression, and PDF technical-symbol evidence passed.
-- Final exact-head GitHub CI is verified and reported after the final documentation commit is pushed.
-- Independent adversarial audit classification: **B — SOUND, SMALL AMENDMENT REQUIRED**, limited to proof completeness and required-CI proof execution; W2.G product semantics remain unchanged.
-- Principal amendment completes the committed W2.G technical-text path with all seven required symbols `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`, and the generated PDF is checked through `pdfjs` extraction.
-- The existing required GitHub job `Lint, typecheck, tests, build` now installs Playwright Chromium and executes the W2.G Chromium/PDF proof plus W2.C, W2.D, W2.E, W2.F, Group export, and canonical export/PDF regression proofs; the required check context name is unchanged.
+- Independent initial adversarial audit classification: **B — SOUND, SMALL AMENDMENT REQUIRED**, limited to proof completeness and required-CI proof execution; W2.G product semantics remained unchanged.
+- The Principal amendment completed the committed W2.G technical-text path with all seven required symbols `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`, and the generated PDF is checked through `pdfjs` extraction.
+- The existing required GitHub job `Lint, typecheck, tests, build` installs Playwright Chromium and executes the W2.G Chromium/PDF proof plus W2.C, W2.D, W2.E, W2.F, Group export, and canonical export/PDF regression proofs; the required check context name is unchanged.
+- Final accepted review head/tree after the Principal amendment: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
+- Independent amendment re-audit classification: **A — READY TO MERGE AS WRITTEN**.
+- Principal final classification: **A — W2.G PRINCIPAL ACCEPTED / READY TO MERGE AS WRITTEN**.
+- The user explicitly authorized the merge of PR #26. That authorization applied to PR #26 only and was consumed by the merge.
+- GitHub squash-merged PR #26 at `2026-09-11T20:10:03Z` as canonical `main` SHA/tree `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`, direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`.
+- The canonical merge tree exactly equals the accepted audited review tree.
+- Post-merge required Quality Gate run `34642762581` completed **SUCCESS** on canonical main.
+- The historical/external Netlify red status was not a required branch-protection context and no W2.G causality was demonstrated.
+- W2.G is **COMPLETE / MERGED / CANONICAL** and closes W2 as **COMPLETE / CANONICAL**. W3 remains **NOT STARTED**.
 
 ## Change Log
 
 - 2026-09-11: Story created on exact verified canonical base before production code changes.
 - 2026-09-11: W2.G implementation completed and validated; PR #26 opened; durable review state synchronized without claiming merge/canonical acceptance.
-- 2026-09-11: Principal proof amendment applied after independent audit classification B: completed seven-symbol PDF coverage and wired the browser/PDF proof matrix into the existing required GitHub quality-gates job. W2.G remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
+- 2026-09-11: Principal proof amendment applied after independent audit classification B: completed seven-symbol PDF coverage and wired the browser/PDF proof matrix into the existing required GitHub quality-gates job.
+- 2026-09-11: Independent amendment re-audit returned A; Principal final verdict returned A; user explicitly authorized merge; PR #26 was squash-merged as `3810b4c70b9415f43c7cb0360d6525b5a1823c22`, preserving audited tree `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`; post-merge Quality Gate run `34642762581` succeeded; W2.G and W2 are canonical-complete.
 
 ## W2.0 deviation
 
