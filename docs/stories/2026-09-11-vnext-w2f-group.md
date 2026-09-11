@@ -1,6 +1,6 @@
 # W2.F Group
 
-Status: Ready for Review locally; GitHub promotion pending.
+Status: Ready for Review; PR #24 OPEN; exact-head CI verification pending after this documentation sync.
 
 ## Provenance
 
@@ -8,7 +8,11 @@ Status: Ready for Review locally; GitHub promotion pending.
 - Canonical base tree: `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
 - Branch: `feat/vnext-w2f-group`.
 - Worktree: `C:\Users\Usuario\.codex\worktrees\0cd1\catalog-builder`.
-- PR: pending; this story must not claim merged/canonical/Principal accepted before those events exist.
+- PR: #24 — OPEN — `feat(vnext): implement W2.F group`.
+- PR branch/base: `feat/vnext-w2f-group` -> `main`.
+- Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`.
+- This documentation sync intentionally advances the PR head; GitHub live state is authority for the exact audit head/tree and CI.
+- W2.F is not merged, canonical, or Principal accepted.
 
 ## Objective
 
@@ -69,7 +73,8 @@ Group owns only existing leaf primitives (Table, Text, Image, Shape, Line, Icon)
 - [x] Group publication/PDF proof plus existing export/PDF matrix.
 - [x] Architecture-boundary protection.
 - [x] Final lint/typecheck/test/build gates on final local implementation.
-- [ ] Clean commit, normal push, one OPEN PR, and exact-head CI evidence.
+- [x] Clean implementation commit, normal push, and one OPEN PR (#24).
+- [ ] Exact-head CI evidence for the final documentation-synchronized PR head.
 
 ## Test plan and evidence
 
