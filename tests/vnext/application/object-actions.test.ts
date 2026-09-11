@@ -223,7 +223,7 @@ function visualOrder(document: CatalogDocument): string[] {
 
 const frameU = { xU: 100_000, yU: 200_000, widthU: 300_000, heightU: 100_000 };
 
-function insertSpecs(): Record<EditorialObject['type'], Record<string, unknown>> {
+function insertSpecs(): Partial<Record<EditorialObject['type'], Record<string, unknown>>> {
   return {
     text: {
       type: 'text',

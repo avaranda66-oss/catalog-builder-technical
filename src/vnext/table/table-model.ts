@@ -1,5 +1,6 @@
 import { CatalogDocumentSchema, TableModelSchema } from '../domain/editorial-model';
 import type { AssetRef, CatalogDocument, Cell, Column, Row, TableModel } from '../domain/editorial-model';
+import { walkPageObjects } from '../domain/object-tree';
 import { diagnostic, VNextError, type Diagnostic } from '../domain/diagnostics';
 import { mul } from '../domain/physical';
 
@@ -94,7 +95,7 @@ export function validateDocument(input:unknown):Diagnostic[] {
   const ids=[doc.id,...doc.assets.map(a=>a.id)];
   for(const page of doc.pages) {
     ids.push(page.id);
-    for(const object of page.objects) {
+    for(const {object} of walkPageObjects(page)) {
       ids.push(object.id);
       if(object.type==='table') {
         const t=object.table;

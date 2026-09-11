@@ -3,6 +3,7 @@ import { plainRichText } from '../domain/editorial-model';
 import { orderedAnchors } from '../table/table-model';
 import { projectTracks, resolveColumns } from '../table/table-layout';
 import { asDiagnostic, type Diagnostic, VNextError } from '../domain/diagnostics';
+import { walkPageObjects } from '../domain/object-tree';
 import { resolveCellStyle, resolveStyle, type ResolvedStyle } from './style';
 import type { PaintEdge } from './border-paint';
 
@@ -15,7 +16,7 @@ export interface TablePlan {
 }
 export function compilePlans(doc:CatalogDocument):{plans:Map<string,TablePlan>;diagnostics:Diagnostic[]} {
   const plans=new Map<string,TablePlan>(),diagnostics:Diagnostic[]=[];
-  for(const page of doc.pages)for(const object of page.objects)if(object.type==='table') {
+  for(const page of doc.pages)for(const {object} of walkPageObjects(page))if(object.type==='table') {
     try {
       const result=resolveColumns(object.table.columns,object.frame.widthMm);
       if(!result.ok)throw new VNextError(result.code,result.details);

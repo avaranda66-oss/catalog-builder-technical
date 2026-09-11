@@ -179,4 +179,52 @@ describe('W2.D canonical authoring diagnostics', () => {
     expect(diagnostics).not.toContainEqual(expect.objectContaining({ code: 'OBJECT_OVERLAP' }));
     expect(diagnostics).toEqual([]);
   });
+
+  it('reports Group envelope geometry once while keeping grouped Text content diagnostics on the real child ID', () => {
+    const base = createW2CDemoDocument(ids('group-diag'));
+    const document: CatalogDocument = {
+      ...base,
+      pages: [{
+        ...base.pages[0],
+        safeArea: { topMm: 10, rightMm: 10, bottomMm: 10, leftMm: 10 },
+        objects: [{
+          id: 'group',
+          type: 'group',
+          frame: { xMm: -1, yMm: 20, widthMm: 40, heightMm: 20 },
+          zIndex: 0,
+          objects: [
+            {
+              id: 'group-text',
+              type: 'text',
+              frame: { xMm: 0, yMm: 0, widthMm: 30, heightMm: 10 },
+              zIndex: 0,
+              text: plainRichText('group-text', ''),
+              style: {},
+            },
+            {
+              id: 'group-shape',
+              type: 'shape',
+              frame: { xMm: 30, yMm: 10, widthMm: 10, heightMm: 10 },
+              zIndex: 1,
+              shape: 'rectangle',
+              style: {},
+            },
+          ],
+        }],
+      }],
+    };
+    const authored = authoredFrameDiagnostics(document);
+    expect(authored).toContainEqual(expect.objectContaining({ code: 'OBJECT_OUTSIDE_PAGE', objectId: 'group' }));
+    expect(authored).not.toContainEqual(expect.objectContaining({ code: 'OBJECT_OUTSIDE_PAGE', objectId: 'group-text' }));
+    expect(authored).not.toContainEqual(expect.objectContaining({ code: 'SAFE_AREA_VIOLATION', objectId: 'group-text' }));
+
+    const root = window.document.createElement('div');
+    root.innerHTML = '<div data-object-id="group-text"><div data-flow-root></div></div>';
+    const flow = root.querySelector<HTMLElement>('[data-flow-root]')!;
+    flow.getBoundingClientRect = () => ({
+      x: 0, y: 0, left: 0, top: 0, right: 500, bottom: 100, width: 500, height: 100, toJSON: () => ({}),
+    });
+    expect(layoutReport(document, new Map(), { facts: [], geometryDiagnostics: [] }, root))
+      .toContainEqual(expect.objectContaining({ code: 'TEXT_OBJECT_OVERFLOW', objectId: 'group-text' }));
+  });
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { EditorialObjectSchema, PageSchema } from '../domain/editorial-model';
-import type { ObjectInstantiationSeed } from './document';
+import { objectInstantiationSeedFromObject, type ObjectInstantiationSeed } from './document';
 
 const templateId = z.string().min(1);
 const cleanText = z.string().min(1).refine(
@@ -55,16 +55,30 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function parseObjectSeed(input: unknown, index: number): ObjectInstantiationSeed {
-  const path = `objects.${index}`;
+function seedWithSyntheticIds(input: unknown, path: string, syntheticId: string): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new PageTemplateDefinitionError([{ path, message: 'Expected canonical object seed' }]);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'id')) {
     throw new PageTemplateDefinitionError([{ path: `${path}.id`, message: 'Root object ID is not allowed in a template seed' }]);
   }
+  const record=input as Record<string,unknown>;
+  if(record.type==='group') {
+    if(!Array.isArray(record.objects))return {...record,id:syntheticId};
+    return {
+      ...record,
+      id:syntheticId,
+      objects:record.objects.map((child,index)=>seedWithSyntheticIds(child,`${path}.objects.${index}`,`${syntheticId}:child:${index}`)),
+    };
+  }
+  return {...record,id:syntheticId};
+}
 
-  const parsed = EditorialObjectSchema.safeParse({ ...(input as Record<string, unknown>), id: `template-seed:${index}` });
+function parseObjectSeed(input: unknown, index: number): ObjectInstantiationSeed {
+  const path = `objects.${index}`;
+  const candidate=seedWithSyntheticIds(input,path,`template-seed:${index}`);
+
+  const parsed = EditorialObjectSchema.safeParse(candidate);
   if (!parsed.success) {
     throw new PageTemplateDefinitionError(parsed.error.issues.map((issue) => ({
       path: [path, ...issue.path].join('.'),
@@ -72,8 +86,7 @@ function parseObjectSeed(input: unknown, index: number): ObjectInstantiationSeed
     })));
   }
 
-  const { id: _id, ...seed } = parsed.data;
-  return seed as ObjectInstantiationSeed;
+  return objectInstantiationSeedFromObject(parsed.data);
 }
 
 export function parsePageTemplateDefinition(input: unknown): PageTemplateDefinition {

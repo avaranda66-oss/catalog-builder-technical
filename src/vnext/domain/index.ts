@@ -3,6 +3,8 @@ export {
   CatalogDocumentSchema,
   DEFAULT_IMAGE_FOCAL_POINT,
   EditorialObjectSchema,
+  GroupObjectSchema,
+  LeafEditorialObjectSchema,
   FrameSchema,
   ImageFocalPointSchema,
   TableModelSchema,
@@ -31,7 +33,11 @@ export type {
   TableStyle,
   TextStyle,
   TextObject,
+  GroupObject,
+  LeafEditorialObject,
 } from './editorial-model';
+export { walkPageObjects, findObjectInTree, frameToCanonicalU, visualPageObjects } from './object-tree';
+export type { CanonicalFrameU, ObjectTreeEntry, VisualPageObject } from './object-tree';
 export { VNextError, asDiagnostic, diagnostic } from './diagnostics';
 export type { Diagnostic, Severity } from './diagnostics';
 export {

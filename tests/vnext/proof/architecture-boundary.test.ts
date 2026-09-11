@@ -285,4 +285,27 @@ describe('VNext architecture boundary',()=>{
       ts.isPropertySignature(member)&&member.name&&ts.isIdentifier(member.name)?[member.name.text]:[])??[];
     expect(props).toEqual(['transactionId']);
   });
+
+  it('keeps W2.F Group topology canonical, shallow, and outside editor/runtime side channels',()=>{
+    const domainSource=filesUnder(resolve(vnextRoot,'domain')).filter(path=>/\.ts$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    const applicationSource=filesUnder(resolve(vnextRoot,'application')).filter(path=>/\.ts$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    const renderingSource=filesUnder(resolve(vnextRoot,'rendering')).filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    const allSource=filesUnder(vnextRoot).filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+    const model=readFileSync(resolve(vnextRoot,'domain/editorial-model.ts'),'utf8');
+    const tree=readFileSync(resolve(vnextRoot,'domain/object-tree.ts'),'utf8');
+    const snapping=readFileSync(resolve(vnextRoot,'editor/snapping.ts'),'utf8');
+
+    expect(model).toMatch(/GroupObjectSchema=.*objects:z\.array\(LeafEditorialObjectSchema\)\.min\(2\)/s);
+    expect(tree).toContain('walkPageObjects');
+    expect(tree).toContain('resolvedFrameU');
+    expect(tree).not.toMatch(/react|HTMLElement|window|ParentNode|CSS|pointer/i);
+    expect(domainSource+'\n'+applicationSource).not.toMatch(/\bselectedObjectIds\b/);
+    expect(allSource).not.toMatch(/\b(parentId|memberIds)\b/);
+    expect(applicationSource.match(/class\s+IdAllocator\b/g)?.length??0).toBe(1);
+    expect(renderingSource).not.toMatch(/GroupRenderer|GroupDocumentRenderer|GroupPublicationRenderer/);
+    expect(allSource).not.toMatch(/GroupTable(?:Engine|Layout)|GroupSnap(?:Engine|Solver)/);
+    expect(snapping).not.toMatch(/\bgroup\b/i);
+    expect(applicationSource).not.toMatch(/text\.setContent|contentEditable|beforeinput|compositionstart|compositionend/i);
+    expect(renderingSource).not.toMatch(/contentEditable|selectionPath|caret|composition/i);
+  });
 });

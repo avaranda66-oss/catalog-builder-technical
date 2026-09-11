@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { mmToU } from './physical';
+import { add, mmToU } from './physical';
 import { VNextError } from './diagnostics';
 
 const id=z.string().min(1);
@@ -112,13 +112,36 @@ const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optiona
 export const ImageFocalPointSchema=z.object({x:finite.min(0).max(1),y:finite.min(0).max(1)}).strict();
 export type ImageFocalPoint=z.infer<typeof ImageFocalPointSchema>;
 export const DEFAULT_IMAGE_FOCAL_POINT:Readonly<ImageFocalPoint>=Object.freeze({x:0.5,y:0.5});
-export const EditorialObjectSchema=z.discriminatedUnion('type',[
+export const LeafEditorialObjectSchema=z.discriminatedUnion('type',[
   z.object({...objectBase,type:z.literal('table'),table:TableModelSchema}).strict(),
   z.object({...objectBase,type:z.literal('text'),text:RichTextSchema,style:TextStyleSchema}).strict(),
   z.object({...objectBase,type:z.literal('image'),assetId:id,fit:z.enum(['contain','cover']),focalPoint:ImageFocalPointSchema.optional()}).strict(),
   z.object({...objectBase,type:z.literal('shape'),shape:z.enum(['rectangle','ellipse']),style:z.object({fill:color.optional(),stroke:BorderSchema.optional()}).strict()}).strict(),
   z.object({...objectBase,type:z.literal('line'),axis:z.enum(['horizontal','vertical']),color}).strict(),
   z.object({...objectBase,type:z.literal('icon'),assetId:id}).strict(),
+]);
+export type LeafEditorialObject=z.infer<typeof LeafEditorialObjectSchema>;
+export const GroupObjectSchema=z.object({...objectBase,type:z.literal('group'),objects:z.array(LeafEditorialObjectSchema).min(2)}).strict().superRefine((group,ctx)=>{
+  try {
+    const widthU=mmToU(group.frame.widthMm),heightU=mmToU(group.frame.heightMm);
+    const frames=group.objects.map(object=>({
+      xU:mmToU(object.frame.xMm),yU:mmToU(object.frame.yMm),
+      widthU:mmToU(object.frame.widthMm),heightU:mmToU(object.frame.heightMm),
+    }));
+    const minX=Math.min(...frames.map(frame=>frame.xU)),minY=Math.min(...frames.map(frame=>frame.yU));
+    const maxRight=Math.max(...frames.map(frame=>add(frame.xU,frame.widthU)));
+    const maxBottom=Math.max(...frames.map(frame=>add(frame.yU,frame.heightU)));
+    if(minX!==0||minY!==0||maxRight!==widthU||maxBottom!==heightU) {
+      ctx.addIssue({code:'custom',message:'GROUP_ENVELOPE_INVALID'});
+    }
+  } catch(error) {
+    ctx.addIssue({code:'custom',message:error instanceof VNextError?error.code:'GROUP_ENVELOPE_INVALID'});
+  }
+});
+export type GroupObject=z.infer<typeof GroupObjectSchema>;
+export const EditorialObjectSchema=z.union([
+  ...LeafEditorialObjectSchema.options,
+  GroupObjectSchema,
 ]);
 export type EditorialObject=z.infer<typeof EditorialObjectSchema>;
 export type TextObject=Extract<EditorialObject,{type:'text'}>;

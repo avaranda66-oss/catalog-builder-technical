@@ -1,6 +1,7 @@
 export {
   AddPageActionSchema,
   ApplicationActionSchema,
+  CreateGroupActionSchema,
   DeleteObjectActionSchema,
   DeletePageActionSchema,
   DuplicateObjectActionSchema,
@@ -21,6 +22,7 @@ export {
   ShapeObjectInsertSpecSchema,
   TableObjectInsertSpecSchema,
   TextObjectInsertSpecSchema,
+  UngroupActionSchema,
 } from './contracts';
 export type {
   ActionMetadata,
@@ -39,9 +41,12 @@ export type {
 export {
   canonicalIdentityIds,
   canonicalObjectIdentityIds,
+  allocateFreshCanonicalId,
   createCatalogDocument,
+  findObjectLocation,
   instantiatePageWithFreshIds,
 } from './document';
+export type { ObjectLocation, ObjectInstantiationSeed, LeafObjectInstantiationSeed, GroupObjectInstantiationSeed } from './document';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';
 export { createDocumentSession } from './session';

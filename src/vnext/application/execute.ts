@@ -1,4 +1,5 @@
-import { mmToU, type CatalogDocument, type Frame, type Page } from '../domain';
+import { frameToCanonicalU, mmToU, visualPageObjects, type CatalogDocument, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page } from '../domain';
+import { add } from '../domain/physical';
 import { validateTable } from '../table';
 import {
   ApplicationActionSchema,
@@ -12,6 +13,7 @@ import {
 } from './contracts';
 import {
   ApplicationDocumentError,
+  allocateFreshCanonicalId,
   canonicalIdentityIds,
   canonicalObjectIdentityIds,
   createBlankPage,
@@ -148,6 +150,54 @@ function objectLocked(object: { locked?: boolean }): boolean {
   return object.locked === true;
 }
 
+function closureLockedId(object: EditorialObject): string | undefined {
+  if (object.locked) return object.id;
+  if (object.type === 'group') return object.objects.find((child) => child.locked)?.id;
+  return undefined;
+}
+
+function groupedChildMutation(location: { parentGroup?: GroupObject }, objectId: string): ApplicationActionFailure | undefined {
+  return location.parentGroup
+    ? failure('ACTION_INVALID', `Direct mutation of grouped child ${objectId} is not supported in W2.F`)
+    : undefined;
+}
+
+function leafFrameAtPageU(group: GroupObject, child: LeafEditorialObject): FrameU {
+  const groupFrame = frameToCanonicalU(group.frame);
+  const childFrame = frameToCanonicalU(child.frame);
+  return {
+    xU: add(groupFrame.xU, childFrame.xU),
+    yU: add(groupFrame.yU, childFrame.yU),
+    widthU: childFrame.widthU,
+    heightU: childFrame.heightU,
+  };
+}
+
+function validateTemplateObjectBeforeAllocation(
+  object: ObjectInstantiationSeed,
+  document: CatalogDocument
+): ApplicationActionFailure | undefined {
+  if (object.type === 'group') {
+    for (const child of object.objects) {
+      const invalid = validateTemplateObjectBeforeAllocation(child, document);
+      if (invalid) return invalid;
+    }
+    return undefined;
+  }
+  if ((object.type === 'image' || object.type === 'icon')
+      && !document.assets.some((asset) => asset.id === object.assetId)) {
+    return failure('ASSET_NOT_FOUND', object.assetId);
+  }
+  if (object.type === 'table') {
+    const diagnostics = validateTable(object.table, document.assets)
+      .filter((diagnostic) => diagnostic.severity === 'ERROR');
+    if (diagnostics.length > 0) {
+      return failure('ACTION_INVALID', diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.details}`).join('; '));
+    }
+  }
+  return undefined;
+}
+
 export function executeApplicationAction(
   inputDocument: CatalogDocument,
   inputAction: unknown,
@@ -208,17 +258,8 @@ export function executeApplicationAction(
           : document.pages.findIndex((entry) => entry.id === action.afterPageId) + 1;
         if (action.afterPageId !== undefined && insertAt === 0) return failure('PAGE_NOT_FOUND', action.afterPageId);
         for (const object of template.objects) {
-          if ((object.type === 'image' || object.type === 'icon') &&
-              !document.assets.some((asset) => asset.id === object.assetId)) {
-            return failure('ASSET_NOT_FOUND', object.assetId);
-          }
-          if (object.type === 'table') {
-            const diagnostics = validateTable(object.table, document.assets)
-              .filter((diagnostic) => diagnostic.severity === 'ERROR');
-            if (diagnostics.length > 0) {
-              return failure('ACTION_INVALID', diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.details}`).join('; '));
-            }
-          }
+          const invalid = validateTemplateObjectBeforeAllocation(object, document);
+          if (invalid) return invalid;
         }
         const page = instantiatePageWithFreshIds(document, template, dependencies.createId);
         candidate = {
@@ -270,6 +311,99 @@ export function executeApplicationAction(
         affectedIds = [action.pageId];
         break;
       }
+      case 'group.create': {
+        const pageIndex = document.pages.findIndex((page) => page.id === action.pageId);
+        if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
+        const page = document.pages[pageIndex];
+        const locations = action.objectIds.map((objectId) => ({ objectId, location: findObjectLocation(document, objectId) }));
+        const missing = locations.find(({ location }) => !location);
+        if (missing) return failure('OBJECT_NOT_FOUND', missing.objectId);
+        const wrongPage = locations.find(({ location }) => location!.page.id !== action.pageId);
+        if (wrongPage) return failure('ACTION_INVALID', `Selected object ${wrongPage.objectId} does not belong to page ${action.pageId}`);
+        const nested = locations.find(({ location }) => location!.parentGroup);
+        if (nested) return failure('ACTION_INVALID', `Selected object ${nested.objectId} is already inside a Group`);
+        const selectedGroup = locations.find(({ location }) => location!.object.type === 'group');
+        if (selectedGroup) return failure('ACTION_INVALID', 'Group cannot contain another Group');
+        const locked = locations.find(({ location }) => location!.object.locked);
+        if (locked) return failure('OBJECT_LOCKED', locked.objectId);
+
+        const selectedIds = new Set(action.objectIds);
+        const visual = visualPageObjects(page);
+        const selectedVisual = visual.filter(({ object }) => selectedIds.has(object.id));
+        if (selectedVisual.length !== action.objectIds.length) return failure('ACTION_INVALID', 'Selected objects must be top-level page objects');
+        const firstVisualIndex = selectedVisual[0].visualIndex;
+        const lastVisualIndex = selectedVisual[selectedVisual.length - 1].visualIndex;
+        if (lastVisualIndex - firstVisualIndex + 1 !== selectedVisual.length
+            || visual.slice(firstVisualIndex, lastVisualIndex + 1).some(({ object }) => !selectedIds.has(object.id))) {
+          return failure('ACTION_INVALID', 'Selected objects must form one contiguous visual block');
+        }
+
+        const ordered = visual.slice(firstVisualIndex, lastVisualIndex + 1);
+        const framesU = ordered.map(({ object }) => frameToCanonicalU(object.frame));
+        const minXU = Math.min(...framesU.map((frame) => frame.xU));
+        const minYU = Math.min(...framesU.map((frame) => frame.yU));
+        const maxRightU = Math.max(...framesU.map((frame) => add(frame.xU, frame.widthU)));
+        const maxBottomU = Math.max(...framesU.map((frame) => add(frame.yU, frame.heightU)));
+        const groupFrameU: FrameU = {
+          xU: minXU,
+          yU: minYU,
+          widthU: add(maxRightU, -minXU),
+          heightU: add(maxBottomU, -minYU),
+        };
+        const childObjects: LeafEditorialObject[] = ordered.map(({ object }, index) => {
+          if (object.type === 'group') throw new ApplicationDocumentError('ACTION_INVALID', 'Nested Group is forbidden');
+          const frameU = frameToCanonicalU(object.frame);
+          return {
+            ...object,
+            zIndex: index,
+            frame: materializeFrameU({
+              xU: add(frameU.xU, -minXU),
+              yU: add(frameU.yU, -minYU),
+              widthU: frameU.widthU,
+              heightU: frameU.heightU,
+            }),
+          };
+        });
+
+        const first = ordered[0];
+        const group: GroupObject = {
+          id: allocateFreshCanonicalId(document, dependencies.createId),
+          type: 'group',
+          frame: materializeFrameU(groupFrameU),
+          zIndex: first.object.zIndex,
+          objects: childObjects,
+        };
+        const selectedArrayIndexes = new Set(ordered.map(({ arrayIndex }) => arrayIndex));
+        const groupedObjects = page.objects.filter((_, index) => !selectedArrayIndexes.has(index));
+        const insertionIndex = page.objects.slice(0, first.arrayIndex).filter((_, index) => !selectedArrayIndexes.has(index)).length;
+        groupedObjects.splice(insertionIndex, 0, group);
+        candidate = pageWithObjects(document, pageIndex, groupedObjects);
+        affectedIds = action.objectIds;
+        createdIds = [group.id];
+        break;
+      }
+      case 'group.ungroup': {
+        const location = findObjectLocation(document, action.groupId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.groupId);
+        if (location.parentGroup || location.object.type !== 'group') return failure('OBJECT_TYPE_MISMATCH', action.groupId);
+        const lockedId = closureLockedId(location.object);
+        if (lockedId) return failure('OBJECT_LOCKED', lockedId);
+        const group = location.object;
+        const children = group.objects
+          .map((object, arrayIndex) => ({ object, arrayIndex }))
+          .sort((left, right) => left.object.zIndex - right.object.zIndex || left.arrayIndex - right.arrayIndex)
+          .map(({ object }) => ({
+            ...object,
+            zIndex: group.zIndex,
+            frame: materializeFrameU(leafFrameAtPageU(group, object)),
+          }));
+        const objects = [...location.page.objects];
+        objects.splice(location.objectIndex, 1, ...children);
+        candidate = pageWithObjects(document, location.pageIndex, objects);
+        affectedIds = [group.id, ...children.map((child) => child.id)];
+        createdIds = [];
+        break;
+      }
       case 'object.insert': {
         const pageIndex = document.pages.findIndex((page) => page.id === action.pageId);
         if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
@@ -308,7 +442,10 @@ export function executeApplicationAction(
       case 'object.delete': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const lockedId = closureLockedId(location.object);
+        if (lockedId) return failure('OBJECT_LOCKED', lockedId);
         candidate = pageWithObjects(
           document,
           location.pageIndex,
@@ -320,7 +457,10 @@ export function executeApplicationAction(
       case 'object.duplicate': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const lockedId = closureLockedId(location.object);
+        if (lockedId) return failure('OBJECT_LOCKED', lockedId);
 
         const frame: Frame = { ...location.object.frame };
         if (action.xU !== undefined) frame.xMm = materializeU(action.xU, 'xU');
@@ -342,7 +482,10 @@ export function executeApplicationAction(
       case 'object.move': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const lockedId = closureLockedId(location.object);
+        if (lockedId) return failure('OBJECT_LOCKED', lockedId);
         const current = projectFrameU(location.object.frame);
         changed = current.xU !== action.xU || current.yU !== action.yU;
         affectedIds = [action.objectId];
@@ -366,6 +509,9 @@ export function executeApplicationAction(
       case 'object.resize': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        if (location.object.type === 'group') return failure('ACTION_INVALID', 'Group resize is not supported in W2.F');
         if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
         const current = projectFrameU(location.object.frame);
         changed = current.xU !== action.xU || current.yU !== action.yU ||
@@ -384,7 +530,10 @@ export function executeApplicationAction(
       case 'object.reorder': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const lockedId = closureLockedId(location.object);
+        if (lockedId) return failure('OBJECT_LOCKED', lockedId);
         const page = location.page;
         if (action.targetIndex >= page.objects.length) {
           return failure('INVALID_Z_ORDER_TARGET', String(action.targetIndex));
@@ -429,6 +578,8 @@ export function executeApplicationAction(
       case 'image.replace': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
         if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
         if (location.object.type !== 'image') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
         if (!document.assets.some((asset) => asset.id === action.assetId)) return failure('ASSET_NOT_FOUND', action.assetId);

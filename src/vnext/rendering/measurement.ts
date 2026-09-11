@@ -5,6 +5,7 @@ import { buildPaint } from './border-paint';
 import { orderedAnchors } from '../table/table-model';
 import { annotationDisplayText,cellDisplayText,legendDisplayText,referencedAnnotations,type TablePlan } from './render-plan';
 import { diagnostic,VNextError,type Diagnostic } from '../domain/diagnostics';
+import { walkPageObjects } from '../domain/object-tree';
 import { sha256 } from './resources';
 
 export function findElement(root:ParentNode,attribute:string,id:string):HTMLElement {
@@ -59,7 +60,7 @@ export function intrinsicMetrics(flow:HTMLElement,rich?:RichText):IntrinsicMetri
 }
 export function measureTables(doc:CatalogDocument,plans:Map<string,TablePlan>,root:HTMLElement):void {
   assertTransformFree(root);
-  for(const page of doc.pages)for(const object of page.objects)if(object.type==='table') {
+  for(const page of doc.pages)for(const {object} of walkPageObjects(page))if(object.type==='table') {
     const table=object.table,plan=plans.get(table.id);
     if(!plan)continue;
     const measured=tableConstraints(table,root,plan);
@@ -100,7 +101,7 @@ function bounds(element:HTMLElement,origin:DOMRect):Bounds {
 export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,root:HTMLElement):Promise<LayoutSnapshot> {
   assertTransformFree(root);
   assertDomIds(root,'data-page-id',doc.pages.map(p=>p.id));
-  assertDomIds(root,'data-object-id',doc.pages.flatMap(p=>p.objects.map(o=>o.id)));
+  assertDomIds(root,'data-object-id',doc.pages.flatMap(page=>walkPageObjects(page).map(entry=>entry.object.id)));
   assertDomIds(root,'data-table-id',[...plans.keys()]);
   const facts:PhysicalLayoutFact[]=[],geometryDiagnostics:Diagnostic[]=[];
   const check=(actual:number,expected:number,description:string,location:Partial<Diagnostic>)=>{
@@ -111,9 +112,10 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
     const authoredWidthU=mmToU(page.widthMm),authoredHeightU=mmToU(page.heightMm),widthQ=pxToQ(rect.width),heightQ=pxToQ(rect.height);
     facts.push({kind:'page',pageId:page.id,authoredWidthU,authoredHeightU,widthQ,heightQ});
     check(widthQ,uToQ(authoredWidthU),'page width',{pageId:page.id});check(heightQ,uToQ(authoredHeightU),'page height',{pageId:page.id});
-    for(const object of page.objects) {
+    for(const entry of walkPageObjects(page)) {
+      const object=entry.object;
       const node=findElement(element,'data-object-id',object.id),b=bounds(node,rect);
-      const authoredXU=mmToU(object.frame.xMm),authoredYU=mmToU(object.frame.yMm),authoredWidthU=mmToU(object.frame.widthMm),authoredHeightU=mmToU(object.frame.heightMm);
+      const {xU:authoredXU,yU:authoredYU,widthU:authoredWidthU,heightU:authoredHeightU}=entry.resolvedFrameU;
       const location={pageId:page.id,objectId:object.id};
       const textFlowSignature=object.type==='text'?await sha256(JSON.stringify(textFlowRecords(node.querySelector<HTMLElement>('[data-flow-root]')!,object.text))):undefined;
       facts.push({kind:'object',...location,authoredXU,authoredYU,authoredWidthU,authoredHeightU,...b,...(textFlowSignature?{textFlowSignature}:{})});

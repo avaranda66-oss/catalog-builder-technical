@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2.E MERGED / CANONICAL VIA PR #22; W2.F GROUP CONTRACT-FIRST IS THE NEXT ENGINEERING WAVE; GITHUB IS AUTHORITY FOR LIVE STATE
+STATUS: W2.F GROUP IMPLEMENTED ON REVIEW BRANCH; PR #24 OPEN; NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED; GITHUB IS AUTHORITY FOR LIVE STATE
 
 DATE: 2026-09-11
 
@@ -12,13 +12,13 @@ PURPOSE: provide the current VNext facts and next action so the project can be r
 
 VNext must be simpler internally than Legacy while becoming more capable, editable, professional, and easy to use.
 
-## VERIFIED W2.E CANONICAL MERGE
+## VERIFIED W2.E CANONICAL MERGE AND W2.F REVIEW PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
 PR #22 / W2.E was independently verified squash-merged into canonical `main` at SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`, with direct parent `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
-That exact canonical W2.E merge result is the implementation base for W2.F.
+PR #23 then merged W2.E closeout documentation into `main` at SHA `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. That post-closeout `main` is the actual W2.F implementation base.
 
 W2.E historical promotion vehicle: **PR #22**, branch `feat/vnext-w2e-page-template-insertion`.
 
@@ -46,6 +46,10 @@ PR #21 — W2.D: **MERGED** at canonical `main` SHA/tree `c220ed1d047d862d8bac30
 
 PR #22 — W2.E: **MERGED / COMPLETE** at canonical `main` SHA/tree `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80` / `470c34f567b2353d17c04330e2bb1cada50983a8`.
 
+PR #23 — W2.E closeout documentation: **MERGED** at `main` SHA/tree `162531024107e1376912363c877f23bdc3389426` / `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
+
+PR #24 — W2.F Group: **OPEN / REVIEW REQUIRED**, branch `feat/vnext-w2f-group`, base `main`. Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`. Live GitHub head may advance for durable documentation sync; verify it before audit.
+
 Always verify GitHub live state before acting. Git history and repository evidence outrank agent reports.
 
 ## CURRENT PHASE
@@ -72,7 +76,7 @@ W2.D — Snapping + Guides + Authoring Diagnostics: **MERGED INTO CANONICAL MAIN
 
 W2.E — Page Template Insertion Seam: **MERGED / COMPLETE VIA PR #22**.
 
-W2.F — Group: **NOT STARTED; CONTRACT-FIRST NEXT WAVE**.
+W2.F — Group: **IMPLEMENTED ON REVIEW BRANCH; PR #24 OPEN; INDEPENDENT AUDIT / PRINCIPAL ACCEPTANCE PENDING**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -80,9 +84,9 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, PR #20 / W2.C, PR #21 / W2.D, and PR #22 / W2.E are merged. PR #22 established the canonical W2.F implementation base SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`.
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, PR #20 / W2.C, PR #21 / W2.D, PR #22 / W2.E, and PR #23 / W2.E closeout are merged. PR #23 established the actual W2.F implementation base SHA `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
 
-W2.F is the next engineering wave. It is contract-first: freeze Group ownership, coordinate model, frame semantics, move, resize/scaling, z-order, duplicate, delete, ungroup, and nesting policy before implementation. GitHub remains authority for live state.
+W2.F's Group contract is frozen in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and implemented on PR #24. The review branch adds canonical direct Group ownership, leaf-only children, Group-local coordinates, tight persisted envelopes, visual-contiguous grouping, move-only Group geometry, closure-aware structural actions, canonical traversal, Group-aware rendering/measurement/diagnostics/templates, and minimum ephemeral multi-selection. W2.F is not canonical until independent audit, Principal acceptance, explicit merge authorization, merge, and post-merge verification.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -428,13 +432,13 @@ Governance rule: do **not** fix this as part of unrelated VNext waves unless a t
 
 ## POST-W2.0 STATE / NEXT PRINCIPAL ACTION
 
-PRs #15 through #22 are **MERGED / COMPLETE** for their respective promoted slices through W2.E.
+PRs #15 through #23 are merged for the promoted/canonical state through W2.E closeout. W2.F is represented by OPEN PR #24 and is not yet promoted.
 
-Canonical W2.F base: `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`.
+Canonical W2.F base: `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
 
-W2.F — Group is the next wave and remains **NOT STARTED**.
+W2.F — Group is **IMPLEMENTED ON PR #24 / OPEN FOR REVIEW**. Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`; verify the live PR head because documentation synchronization may add a later docs-only commit.
 
-Before implementation, freeze the Group contract for ownership, coordinate model, canonical frame, move, resize/scaling, z-order, duplicate, delete, ungroup, and nesting policy. Preserve W2.B identity-instantiation semantics, W2.C direct manipulation, W2.D snapping/diagnostics, W2.E canonical materialization, and renderer/publication parity.
+Next action: independently audit PR #24 against the frozen Group contract, browser/PDF evidence, identity/locking/z-order adversarial cases, and exact-head CI. Do not merge without explicit authorization.
 
 Do not begin W2.G until W2.F is independently audited, Principal accepted, explicitly authorized for merge, and verified canonical on `main`.
 

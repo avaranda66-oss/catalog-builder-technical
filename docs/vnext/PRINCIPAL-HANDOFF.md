@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.E CANONICAL MEMORY; PR #22 IS MERGED; W2.F GROUP CONTRACT-FIRST IS NEXT; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2.E CANONICAL MEMORY + W2.F REVIEW HANDOFF; PR #24 OPEN; W2.F NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -35,7 +35,7 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## VERIFIED W2.E CANONICAL PROVENANCE
+## VERIFIED W2.E CANONICAL PROVENANCE AND W2.F REVIEW BASE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
@@ -43,7 +43,7 @@ PR #22 / W2.E was independently verified squash-merged into canonical `main` at 
 
 Its tree is `470c34f567b2353d17c04330e2bb1cada50983a8`; its direct parent is `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
-This is the canonical W2.E result and the required base for W2.F. Treat this as durable provenance; always verify live GitHub and `origin/main` before acting.
+PR #23 then merged the W2.E closeout documentation into `main` at SHA `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. That post-closeout `main` is the actual W2.F branch base. Treat GitHub as live authority and verify `origin/main` before acting.
 
 PR #12: **MERGED**.
 
@@ -65,7 +65,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-Next engineering wave: **W2.F — Group, contract-first**. PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, and #22 / W2.E are merged. PR #22 established the canonical W2.F provenance base above. W2.F is not started. Freeze the Group contract before implementation. GitHub is authority for live state.
+PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, #22 / W2.E, and #23 / W2.E closeout are merged. **W2.F — Group is implemented on OPEN PR #24**, branch `feat/vnext-w2f-group`, base `main`. Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`. Documentation synchronization may advance the live PR head; verify GitHub before audit. W2.F remains unmerged, non-canonical, and not Principal accepted.
 
 ## WHAT IS CANONICAL NOW
 
@@ -455,28 +455,32 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #22 are merged for the promoted VNext slices through W2.E.
+PRs #12 through #23 are merged for the promoted VNext slices through W2.E closeout. PR #24 is the open W2.F review vehicle.
 
-Canonical W2.F base: `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`.
+Canonical W2.F base: `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
 
-Next action: **W2.F — Group contract freeze and adversarial pre-implementation review**.
+Next action: **independent adversarial audit of OPEN PR #24 against the frozen W2.F Group contract and exact-head CI**.
 
-Before any W2.F code, ratify:
+The ratified W2.F contract implemented by PR #24 is:
 
-- ownership of Group children;
-- coordinate model and child geometry;
-- canonical Group frame semantics;
-- move semantics;
-- resize/scaling semantics;
-- z-order semantics inside and outside Group;
-- duplicate and fresh-ID semantics;
-- delete semantics;
-- ungroup semantics;
-- nesting policy.
+- Page owns top-level objects; Group directly owns leaf-only children;
+- Group frame is Page-absolute; child frames are Group-local; geometry resolution uses integer U;
+- Group frame is persisted and is the exact tight child envelope created explicitly by `group.create`;
+- selected sources must form one contiguous canonical visual interval ordered by zIndex then page array index;
+- Group move changes x/y only; Group resize is rejected in W2.F;
+- grouped leaves remain discoverable but direct structural/geometric mutation is rejected while grouped;
+- delete/duplicate/reorder/ungroup are closure-aware and honor descendant locks;
+- duplicate uses the existing allocator/Table/RichText remappers, renews the full identity closure, preserves AssetRefs, and has no implicit positional offset;
+- ungroup preserves child identities and emits them in the Group's current visual slot;
+- nested Groups are forbidden;
+- one pure canonical traversal/frame-resolution authority is shared across validation, lookup, rendering, render planning, measurement, preflight, and editor snap-target filtering;
+- W2.E templates support valid Group closures through the existing instantiation machinery;
+- schemaVersion remains 1;
+- W2.G direct text editing remains out of scope.
 
-Preserve the canonical hierarchy, one mutation authority, W2.B fresh-ID rules, W2.C direct manipulation, W2.D snapping/diagnostics, W2.E template materialization semantics, and renderer/publication parity.
+Audit evidence includes focused W2.F tests, the real `/v2` Chromium Group proof, unchanged W2.C/W2.D/W2.E Chromium regressions, grouped Text/Image/Table publication/PDF proof, the existing export/PDF screen-print-DPR matrix, and full lint/typecheck/test/build gates. Verify all evidence on the exact live PR head.
 
-W2.F completion remains the required gate before W3 serialization freeze.
+W2.F independent audit and Principal acceptance remain required before merge and before W3 serialization freeze.
 
 Do not begin W2.G until W2.F is implemented, independently audited, Principal accepted, explicitly authorized for merge, and verified canonical.
 
