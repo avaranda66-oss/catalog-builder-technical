@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.E REVIEW MEMORY; PR #22 IS THE IMPLEMENTATION/PROMOTION VEHICLE AND GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2.E CANONICAL MEMORY; PR #22 IS MERGED; W2.F GROUP CONTRACT-FIRST IS NEXT; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -35,15 +35,15 @@ The primary acceptance persona is the user's father: a professional office user 
 
 VNext must remain simpler internally than Legacy while delivering a more capable and easier product.
 
-## VERIFIED W2.E IMPLEMENTATION PROVENANCE
+## VERIFIED W2.E CANONICAL PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-The independently verified implementation base for PR #22 / W2.E is canonical `main` SHA `c220ed1d047d862d8bac30bb8c20702889793fac`.
+PR #22 / W2.E was independently verified squash-merged into canonical `main` at SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`.
 
-Its tree is `9c018983f2636f318c9092605ca660d33f1bd6f7`; its direct parent is `467942edc14a563a44533edba473b1493bade1e6`.
+Its tree is `470c34f567b2353d17c04330e2bb1cada50983a8`; its direct parent is `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
-This is the independently verified PR #21 / W2.D squash-merge result from which PR #22 / W2.E was implemented. It is durable provenance rather than a permanent current-`main` pointer; verify live GitHub and `origin/main` when reconstructing later work.
+This is the canonical W2.E result and the required base for W2.F. Treat this as durable provenance; always verify live GitHub and `origin/main` before acting.
 
 PR #12: **MERGED**.
 
@@ -65,7 +65,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-Next engineering wave: **W2 — A4 Authoring + Primitives + Direct Manipulation**. PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, and #21 / W2.D are merged. PR #21 established the W2.E provenance base above. W2.E implementation/promotion is carried by **PR #22**, branch `feat/vnext-w2e-page-template-insertion`. GitHub is authority for its live review/merge state. This handoff does not claim PR #22 is merged, W2.E is canonical, or W2.E has Principal acceptance.
+Next engineering wave: **W2.F — Group, contract-first**. PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, and #22 / W2.E are merged. PR #22 established the canonical W2.F provenance base above. W2.F is not started. Freeze the Group contract before implementation. GitHub is authority for live state.
 
 ## WHAT IS CANONICAL NOW
 
@@ -455,28 +455,30 @@ Current status authority is `docs/vnext/PROJECT-STATE.md`, this handoff, and ver
 
 ## NEXT EXACT ACTION
 
-PRs #12 through #21 are merged for the promoted VNext slices through W2.D.
+PRs #12 through #22 are merged for the promoted VNext slices through W2.E.
 
-Canonical W2.E implementation base: `c220ed1d047d862d8bac30bb8c20702889793fac`, tree `9c018983f2636f318c9092605ca660d33f1bd6f7`.
+Canonical W2.F base: `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`.
 
-W2.E implementation/promotion vehicle: **PR #22**, branch `feat/vnext-w2e-page-template-insertion`.
+Next action: **W2.F — Group contract freeze and adversarial pre-implementation review**.
 
-Independently review PR #22's exact final head, story, diff, template-registry/action tests, deep identity/remapping tests, editor integration tests, real Chromium W2.E proof, W2.C/W2.D Chromium regressions, export/PDF proof, and full gates.
+Before any W2.F code, ratify:
 
-Verify specifically:
+- ownership of Group children;
+- coordinate model and child geometry;
+- canonical Group frame semantics;
+- move semantics;
+- resize/scaling semantics;
+- z-order semantics inside and outside Group;
+- duplicate and fresh-ID semantics;
+- delete semantics;
+- ungroup semantics;
+- nesting policy.
 
-- typed, injected PageTemplateRegistry with no global/network/Zustand/Supabase/realtime authority;
-- strict `page.template.insert` input and fail-closed runtime template validation before ID generation;
-- reuse of the W2.B allocator/Table remapper and local RichText identity rather than parallel identity machinery;
-- fresh Page/Object/Table identities on repeated insertion, including the 100x allocator-leakage proof;
-- preserved shared AssetRefs, including image content inside Table cells;
-- one-action atomic failure semantics and exact Undo/Redo snapshot identity with no registry lookup or ID regeneration on Redo;
-- registry independence after materialization;
-- ordinary W2.C move/resize plus W2.D snapping/diagnostics on inserted objects;
-- no persisted template metadata, live link, special renderer, or template editor chrome in canonical rendering/publication;
-- publication/PDF independence.
+Preserve the canonical hierarchy, one mutation authority, W2.B fresh-ID rules, W2.C direct manipulation, W2.D snapping/diagnostics, W2.E template materialization semantics, and renderer/publication parity.
 
-GitHub is authority for PR #22 live state. This handoff does **not** claim W2.E merged, canonical, or Principal accepted. Do not begin W2.F from this open W2.E review state.
+W2.F completion remains the required gate before W3 serialization freeze.
+
+Do not begin W2.G until W2.F is implemented, independently audited, Principal accepted, explicitly authorized for merge, and verified canonical.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
@@ -495,4 +497,4 @@ GitHub is authority for PR #22 live state. This handoff does **not** claim W2.E 
 13. `docs/stories/2026-09-10-vnext-w2b-object-actions.md`.
 14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record.
 15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record.
-16. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — current PR #22 implementation/evidence record.
+16. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — W2.E implementation/evidence record for merged PR #22.
