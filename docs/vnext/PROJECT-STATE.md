@@ -1,8 +1,8 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2.C IMPLEMENTATION/PROMOTION VEHICLE IS PR #20; GITHUB IS AUTHORITY FOR LIVE REVIEW/MERGE STATE
+STATUS: W2.D IMPLEMENTATION/PROMOTION VEHICLE IS PR #21; GITHUB IS AUTHORITY FOR LIVE REVIEW/MERGE STATE
 
-DATE: 2026-09-10
+DATE: 2026-09-11
 
 PURPOSE: provide the current VNext facts and next action so the project can be reconstructed from GitHub without chat memory.
 
@@ -12,15 +12,17 @@ PURPOSE: provide the current VNext facts and next action so the project can be r
 
 VNext must be simpler internally than Legacy while becoming more capable, editable, professional, and easy to use.
 
-## VERIFIED W2.C IMPLEMENTATION BASE
+## VERIFIED W2.D IMPLEMENTATION BASE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-The independently verified implementation base for PR #20 / W2.C is SHA `5e4b9c6f4235761872f94c5e0318a774ee456f39`.
+PR #20 / W2.C was independently verified squash-merged into canonical `main` at SHA `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
 
-Its tree is `7e21311949db03cda0720e5fd4216bec9a001f77`.
+That canonical W2.C merge result is the implementation base for W2.D.
 
-This is the independently verified PR #19 / W2.B squash-merge result from which PR #20 / W2.C was implemented. It is provenance, not a permanent pointer to current `main`; always verify live `origin/main` and GitHub before acting.
+W2.D implementation/promotion vehicle: **PR #21**, branch `feat/vnext-w2d-snapping-diagnostics`.
+
+The initial W2.D implementation commit on the promotion branch is `14da76616ed1b5c518628cf82eadf28e43ae95c0`, tree `483bea395ce7a57b850aafa92094b14a8b97b827`, with direct parent `467942edc14a563a44533edba473b1493bade1e6`. GitHub compare verified that branch as one W2.D commit ahead of canonical main and zero commits behind before PR creation.
 
 PR #12: **MERGED**.
 
@@ -28,19 +30,21 @@ PR #13 — FOUNDATION-PROOF-01: **MERGED**.
 
 PR #14 — W0 Foundation Promotion + W0.1 Production Boundary Hardening: **MERGED**.
 
-Handoff sync vehicle: **PR #15 — MERGED / COMPLETE** at `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
+PR #15 — handoff sync: **MERGED / COMPLETE**.
 
-W1 review vehicle: **PR #16 — MERGED / COMPLETE** at `0975953da7a8748b483ba8f64cb69c7cdb9172f6`.
+PR #16 — W1: **MERGED / COMPLETE**.
 
-W2.0 contract promotion vehicle: **PR #17 — MERGED / COMPLETE** at `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`.
+PR #17 — W2.0 contract: **MERGED / COMPLETE**.
 
-PR #18 / W2.A was independently verified merged at `366c4fbed14750193b1a6645c0e3e0c57b82899b`, tree `559726b0a401eb9ab46e6eb1cf7a84264f1630ba`, before W2.B implementation began.
+PR #18 — W2.A: **MERGED / COMPLETE**.
 
-PR #19 / W2.B was independently verified squash-merged before W2.C implementation began, establishing the W2.C provenance base above.
+PR #19 — W2.B: **MERGED / COMPLETE**.
 
-W2.C implementation/promotion vehicle: **PR #20**, branch `feat/vnext-w2c-direct-manipulation-impl`. GitHub is authority for its live review/merge state. This document does not claim that PR #20 is merged, W2.C is canonical, or W2.C has final Principal acceptance.
+PR #20 — W2.C: **MERGED / COMPLETE** at the canonical W2.D base above.
 
-Always run `git fetch origin --prune` and verify GitHub before acting. Git history and repository evidence outrank agent reports.
+PR #21 — W2.D: **OPEN IMPLEMENTATION/PROMOTION VEHICLE**. This document does not claim W2.D is merged, canonical, or finally Principal accepted.
+
+Always verify GitHub live state before acting. Git history and repository evidence outrank agent reports.
 
 ## CURRENT PHASE
 
@@ -60,7 +64,9 @@ W2.A — Primitive Domain + Publication-Safe Rendering: **PR #18 MERGE RESULT VE
 
 W2.B — Object Application Actions: **PR #19 MERGE RESULT VERIFIED AS THE W2.C IMPLEMENTATION BASE**.
 
-W2.C — Editor Selection + Direct Move/Resize: **IMPLEMENTATION/PROMOTION VEHICLE PR #20; LIVE STATE MUST BE VERIFIED ON GITHUB**.
+W2.C — Editor Selection + Direct Move/Resize: **MERGED / COMPLETE VIA PR #20**.
+
+W2.D — Snapping + Guides + Authoring Diagnostics: **IMPLEMENTATION/PROMOTION VEHICLE PR #21; LIVE STATE MUST BE VERIFIED ON GITHUB**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -68,7 +74,9 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 is merged, so W1 is canonical on `main` and closed. PR #17 is also merged; the amended W2.0 contract is **PRINCIPAL ACCEPTED**. PR #18 / W2.A was independently verified merged and established the W2.B implementation provenance SHA `366c4fbed14750193b1a6645c0e3e0c57b82899b`, tree `559726b0a401eb9ab46e6eb1cf7a84264f1630ba`. PR #19 / W2.B was independently verified squash-merged and established the W2.C implementation provenance SHA `5e4b9c6f4235761872f94c5e0318a774ee456f39`, tree `7e21311949db03cda0720e5fd4216bec9a001f77`. W2.C implementation/promotion is carried by **PR #20**. GitHub is authority for its live review/merge state. Before beginning W2.D, independently verify that PR #20 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, and PR #20 / W2.C are merged. PR #20 established the canonical W2.D implementation base SHA `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+
+W2.D implementation/promotion is carried by **PR #21**. GitHub is authority for its live state. Before beginning W2.E, independently verify that PR #21 has merged into canonical `main`, reconstruct the resulting `main` SHA/tree, and complete Principal acceptance of W2.D.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -414,15 +422,17 @@ Governance rule: do **not** fix this as part of unrelated VNext waves unless a t
 
 ## POST-W2.0 STATE / NEXT PRINCIPAL ACTION
 
-PR #15 is **MERGED / COMPLETE** and established the exact W1 base `ff4ce7302fe79ce9c2f431a09b94dd0e0ddaed7f`.
+PRs #15 through #20 are **MERGED / COMPLETE** for their respective promoted slices.
 
-PR #16 is **MERGED / COMPLETE** and established the current canonical post-W1 main `0975953da7a8748b483ba8f64cb69c7cdb9172f6`, tree `d617b9089b2e5dbc94ed02b438e821d7885da6f3`.
+Canonical W2.D base: `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
 
-PR #17 is **MERGED / COMPLETE** and established the verified W2.0 canonical base `8dc43027a8f676fe0cc2e1474e2c02aee9e55cdf`, tree `fa61d3e8cc978a0af928423fc9c21550e618e675`.
+W2.D implementation/promotion vehicle: **PR #21 — `feat(vnext): implement W2.D snapping and authoring diagnostics`**.
 
-PR #19 / W2.B was independently verified squash-merged before W2.C implementation began, establishing the W2.C provenance base `5e4b9c6f4235761872f94c5e0318a774ee456f39`, tree `7e21311949db03cda0720e5fd4216bec9a001f77`.
+Independently audit the PR #21 exact head against the W2.0 contract. Verify pure integer-U snapping; deterministic tie-breaking; zero canonical writes during preview; same W2.C gesture transaction identity through snapped commit; controlled-edge resize ownership; ephemeral guide/safe-area chrome outside `DocumentRenderer`; canonical diagnostic reuse for `SAFE_AREA_VIOLATION`, `OBJECT_OUTSIDE_PAGE`, `TEXT_OBJECT_OVERFLOW`, `TABLE_CONTENT_OVERFLOW`, and `TABLE_WIDTH_INFEASIBLE`; commit-then-diagnose Table behavior; intentional-overlap noise regression; Chromium W2.C and W2.D evidence; export/PDF independence; and full gates.
 
-W2.C implementation/promotion vehicle: **PR #20**. Independently audit ephemeral editor selection/page state, the sibling overlay outside `DocumentRenderer`, immutable-start pointer math, zero canonical writes during pointermove, exactly one typed W2.B move/resize action on successful pointerup, stale/cancel semantics, non-1 scale conversion, eight resize handles and 1 U crossing behavior, visible basic authoring controls, mm Inspector, Chromium evidence, publication independence, W2.B regression protection, and full gates. GitHub is authority for PR #20’s live review/merge state; this record does not claim the PR merged, W2.C became canonical, or W2.C received final Principal acceptance. Before beginning W2.D, independently verify that PR #20 has merged into canonical `main` and reconstruct the resulting `main` SHA/tree.
+This record does **not** claim PR #21 is merged, W2.D is canonical, or W2.D has final Principal acceptance.
+
+Do not begin W2.E until PR #21 is independently accepted and verified merged into canonical `main`.
 
 ## RECONSTRUCTION READING ORDER
 
