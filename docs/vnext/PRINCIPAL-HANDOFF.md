@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2.F CANONICAL MEMORY; PR #24 MERGED; W2.F FROZEN / PRINCIPAL ACCEPTED / CANONICAL; W2.G NEXT; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2.F CANONICAL MEMORY; W2.G IMPLEMENTED ON REVIEW BRANCH; PR #26 OPEN; NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED; W2 NOT YET CANONICAL-COMPLETE; W3 NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -73,7 +73,7 @@ PR #17 — W2.0 A4 Authoring Contract: **MERGED / COMPLETE** at `8dc43027a8f676f
 
 W2.0 contract: **PRINCIPAL ACCEPTED**.
 
-PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, #22 / W2.E, #23 / W2.E closeout, and #24 / W2.F are merged. **W2.F — Group is frozen and canonical** at `7793aaa21bfed41d57da861424efdd84a686170d`, tree `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. W2.G minimum direct Text editing is the next implementation wave and has not been implemented.
+PRs #18 / W2.A, #19 / W2.B, #20 / W2.C, #21 / W2.D, #22 / W2.E, #23 / W2.E closeout, and #24 / W2.F are merged. **W2.F — Group is frozen and canonical** at `7793aaa21bfed41d57da861424efdd84a686170d`, tree `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. W2.G minimum direct Text editing is implemented on review branch `feat/vnext-w2g-direct-text-editing`; PR #26 is OPEN against `main`; it remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED. Canonical base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
 
 ## WHAT IS CANONICAL NOW
 
@@ -488,7 +488,7 @@ The frozen W2.F behavior is:
 
 Audit evidence includes focused W2.F tests, the real `/v2` Chromium Group proof, unchanged W2.C/W2.D/W2.E Chromium regressions, grouped Text/Image/Table publication/PDF proof, the existing export/PDF screen-print-DPR matrix, and full lint/typecheck/test/build gates. The required GitHub `Lint, typecheck, tests, build` check passed on the audited PR head.
 
-Next implementation wave: **W2.G — minimum direct Text editing**. It is **NOT IMPLEMENTED / NOT MERGED / NOT CANONICAL**. W2 overall remains incomplete until W2.G is implemented and accepted.
+Current review wave: **W2.G — minimum direct Text editing**. It is **IMPLEMENTED ON REVIEW BRANCH `feat/vnext-w2g-direct-text-editing` / PR #26 OPEN / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED**. Initial implementation review head/tree: `286fa9583a6a3d15249e0c67de3e16dcf761529e` / `21cd615a559599ce389141b70ddb32bc04ec9273`. Final review head/tree and exact-head CI are synchronized by the review-branch documentation commit. W2 overall remains **NOT YET CANONICAL-COMPLETE**. W3 is **NOT STARTED**.
 
 ## REQUIRED RECONSTRUCTION ORDER
 

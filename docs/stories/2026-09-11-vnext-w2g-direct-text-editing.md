@@ -16,7 +16,7 @@ Date: 2026-09-11
 - PR #25: MERGED.
 - Branch: `feat/vnext-w2g-direct-text-editing`.
 - W2.A through W2.F: COMPLETE / CANONICAL.
-- W2.G: IMPLEMENTING / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
+- W2.G: IMPLEMENTED ON REVIEW BRANCH / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
 
 ## Objective
 
@@ -84,7 +84,7 @@ Canonical authored geometry must remain unchanged when content is edited. Canoni
 - [x] Chromium W2.G proof passes on real `/v2`.
 - [x] W2.C/W2.D/W2.E/W2.F and PDF/export regressions pass.
 - [x] `git diff --check`, lint, typecheck, full tests, and build pass.
-- [ ] One non-merged PR exists and durable project/handoff docs contain actual branch/base/PR/head/tree/CI facts.
+- [x] One non-merged PR exists and durable project/handoff docs contain actual branch/base/PR/implementation-head facts; final exact-head CI is reported after the final push.
 
 ## Test and proof plan
 
@@ -131,11 +131,17 @@ No save/autosave/reopen/Catalog Library/Supabase/CAS/conflict/local recovery/Aut
 
 ### Completion Notes
 
-- Implementation evidence pending.
+- PR #26 is OPEN against `main`; W2.G remains NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED.
+- Canonical base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
+- Initial implementation review head/tree: `286fa9583a6a3d15249e0c67de3e16dcf761529e` / `21cd615a559599ce389141b70ddb32bc04ec9273`.
+- Full local gates were green before delivery: lint PASS (0 errors, 268 baseline warnings), typecheck PASS, tests PASS (213 files, 2303 passed, 1 skipped), build PASS, `git diff --check` PASS.
+- Real `/v2` W2.G Chromium proof passed with zero console errors, zero page errors, and no Legacy bootstrap. W2.C/W2.D/W2.E/W2.F regressions, export/PDF regression, and PDF technical-symbol evidence passed.
+- Final exact-head GitHub CI is verified and reported after the final documentation commit is pushed.
 
 ## Change Log
 
 - 2026-09-11: Story created on exact verified canonical base before production code changes.
+- 2026-09-11: W2.G implementation completed and validated; PR #26 opened; durable review state synchronized without claiming merge/canonical acceptance.
 
 ## W2.0 deviation
 
