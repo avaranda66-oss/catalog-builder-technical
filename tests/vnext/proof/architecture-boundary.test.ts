@@ -305,7 +305,31 @@ describe('VNext architecture boundary',()=>{
     expect(renderingSource).not.toMatch(/GroupRenderer|GroupDocumentRenderer|GroupPublicationRenderer/);
     expect(allSource).not.toMatch(/GroupTable(?:Engine|Layout)|GroupSnap(?:Engine|Solver)/);
     expect(snapping).not.toMatch(/\bgroup\b/i);
-    expect(applicationSource).not.toMatch(/text\.setContent|contentEditable|beforeinput|compositionstart|compositionend/i);
+    expect(applicationSource).not.toMatch(/contentEditable|beforeinput|compositionstart|compositionend/i);
     expect(renderingSource).not.toMatch(/contentEditable|selectionPath|caret|composition/i);
+  });
+
+  it('keeps W2.G direct Text editing draft-only in the editor and canonical mutation in Application',()=>{
+    const editor=readFileSync(resolve(vnextRoot,'app/EditorWorkspace.tsx'),'utf8');
+    const textEditing=readFileSync(resolve(vnextRoot,'application/text-editing.ts'),'utf8');
+    const applicationSource=filesUnder(resolve(vnextRoot,'application'))
+      .filter(path=>/\.ts$/.test(path))
+      .map(path=>readFileSync(path,'utf8'))
+      .join('\n');
+    const publicationSource=[
+      ...filesUnder(resolve(vnextRoot,'rendering')),
+      ...filesUnder(resolve(vnextRoot,'publication')),
+    ].filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
+
+    expect(editor.match(/type:\s*'text\.setContent'/g)?.length??0).toBe(1);
+    expect(editor).toContain('<textarea');
+    expect(editor).not.toMatch(/contentEditable|innerHTML|createRange|selectionPath|DOM\s+Range/i);
+    expect(textEditing).toContain("import type { CanonicalIdAllocator } from './document'");
+    expect(textEditing).not.toMatch(/randomUUID|crypto\.|class\s+IdAllocator\b|\bframe\b/i);
+    expect(applicationSource.match(/class\s+IdAllocator\b/g)?.length??0).toBe(1);
+    expect(applicationSource).not.toMatch(/contentEditable|innerHTML|beforeinput|compositionstart|compositionend/i);
+    expect(publicationSource).not.toMatch(/data-text-edit|vnext-text-symbols|Concluir|Cancelar|technicalSymbols/i);
+    expect(editor+'\n'+textEditing).not.toMatch(/localStorage|sessionStorage|indexedDB|translation|translateText|persistDraft/i);
+    expect(editor).not.toMatch(/parentGroup|childIndex|drill.?down/i);
   });
 });

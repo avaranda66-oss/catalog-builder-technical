@@ -1,7 +1,17 @@
 import React from 'react';
 import { FileText, Plus, Redo2, Undo2 } from 'lucide-react';
-import type { ApplicationAction, DocumentSession, FrameU } from '../application';
-import { mmToU, qCss, uToQ, type CatalogDocument, type Diagnostic, type EditorialObject, type Page } from '../domain';
+import { projectEditableRichText, type ApplicationAction, type DocumentSession, type FrameU } from '../application';
+import {
+  mmToU,
+  qCss,
+  uToQ,
+  type CatalogDocument,
+  type Diagnostic,
+  type EditorialObject,
+  type Page,
+  type RichText,
+  type TextObject,
+} from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
 import {
   diagnosticMessage,
@@ -17,7 +27,14 @@ import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
+type TextEditSession = {
+  objectId: string;
+  pageId: string;
+  expectedText: RichText;
+  draft: string;
+};
 const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+const technicalSymbols = ['±', '°C', 'Ω', 'µ', '≤', '≥', '≈'] as const;
 const SNAP_RADIUS_PX = 8;
 
 function createGestureTransactionId(): string {
@@ -76,6 +93,18 @@ function guideStyle(axis: 'x' | 'y', positionU: number): React.CSSProperties {
     : { top: qCss(uToQ(positionU)) };
 }
 
+function textEditTypography(document: CatalogDocument, object: TextObject): React.CSSProperties {
+  const base = document.style.defaultText;
+  return {
+    fontFamily: object.style.fontFamily ?? base.fontFamily ?? 'Noto Sans',
+    fontSize: `${object.style.fontSizePt ?? base.fontSizePt ?? 10}pt`,
+    lineHeight: object.style.lineHeight ?? base.lineHeight ?? 1.2,
+    fontWeight: object.style.fontWeight ?? base.fontWeight ?? 400,
+    color: object.style.color ?? base.color ?? '#172033',
+    textAlign: object.style.textAlign ?? base.textAlign ?? 'left',
+  };
+}
+
 export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const snapshot = useDocumentSession(session);
   const { document, canUndo, canRedo } = snapshot;
@@ -87,6 +116,16 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
+  const textEditRef = React.useRef<TextEditSession | null>(null);
+  const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const compositionRef = React.useRef(false);
+  const lastTextPointerDownRef = React.useRef<{
+    objectId: string;
+    timeStamp: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const [preview, setPreview] = React.useState<GesturePreview | null>(null);
   const [snappingEnabled, setSnappingEnabled] = React.useState(true);
   const snappingEnabledRef = React.useRef(snappingEnabled);
@@ -111,6 +150,9 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const selectedPageIndex = document.pages.findIndex((page) => page.id === selectedPage.id);
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
+  const editingObject = textEdit
+    ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
+    : undefined;
   const previewDocument = React.useMemo(() => ({ ...document, pages: [selectedPage] }), [document, selectedPage]);
   const { plans } = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
   const pageWidthU = mmToU(selectedPage.widthMm);
@@ -153,6 +195,27 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   }, [controller, document, editorState.activePageId, editorState.selectedObjectIds]);
 
   React.useEffect(() => {
+    if (!textEdit) return;
+    const page = document.pages.find((entry) => entry.id === textEdit.pageId);
+    const object = page?.objects.find((entry) => entry.id === textEdit.objectId);
+    if (page && object?.type === 'text') return;
+    textEditRef.current = null;
+    setTextEdit(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    setStatusMessage('A edição foi encerrada porque o texto não está mais disponível.');
+  }, [document, textEdit]);
+
+  const textEditObjectId = textEdit?.objectId;
+  React.useLayoutEffect(() => {
+    if (!textEditObjectId) return;
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+    textarea.focus();
+    const end = textarea.value.length;
+    textarea.setSelectionRange(end, end);
+  }, [textEditObjectId]);
+
+  React.useEffect(() => {
     if (!selectedObject) {
       setInspectorDraft({ x: '', y: '', width: '', height: '' });
       return;
@@ -170,6 +233,11 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const setActivePage = (pageId: string) => {
     controller.cancel('active-page-change');
+    if (textEditRef.current) {
+      textEditRef.current = null;
+      compositionRef.current = false;
+      setTextEdit(null);
+    }
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
     setStatusMessage(null);
   };
@@ -177,6 +245,66 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const selectObject = (objectId: string) => {
     setEditorState((current) => ({ ...current, selectedObjectIds: [objectId], mode: 'select' }));
   };
+
+  const cancelTextEdit = (message = 'Edição de texto cancelada.') => {
+    if (!textEditRef.current) return false;
+    textEditRef.current = null;
+    compositionRef.current = false;
+    setTextEdit(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    if (message) setStatusMessage(message);
+    return true;
+  };
+
+  const commitTextEdit = (): boolean => {
+    const edit = textEditRef.current;
+    if (!edit) return true;
+    const result = session.execute({
+      type: 'text.setContent',
+      objectId: edit.objectId,
+      expectedText: edit.expectedText,
+      plainText: edit.draft,
+    });
+    textEditRef.current = null;
+    compositionRef.current = false;
+    setTextEdit(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'OBJECT_LOCKED'
+        ? 'O texto foi bloqueado antes da conclusão; o rascunho não foi aplicado.'
+        : 'O texto mudou ou não pode mais ser editado por este modo; o rascunho não foi aplicado.');
+      return false;
+    }
+    setStatusMessage(result.metadata.changed ? 'Texto atualizado.' : 'Texto sem alterações.');
+    return true;
+  };
+
+  const startTextEdit = (object: EditorialObject): boolean => {
+    if (object.type !== 'text') return false;
+    if (object.locked) {
+      setStatusMessage('Texto bloqueado não pode ser editado.');
+      return false;
+    }
+    const plainText = projectEditableRichText(object.text);
+    if (plainText === null) {
+      setStatusMessage('Este texto possui formatação estrutural complexa e não pode ser editado pelo modo simples.');
+      return false;
+    }
+    controller.cancel('superseded');
+    const edit: TextEditSession = {
+      objectId: object.id,
+      pageId: selectedPage.id,
+      expectedText: object.text,
+      draft: plainText,
+    };
+    textEditRef.current = edit;
+    setTextEdit(edit);
+    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'text-edit' });
+    setStatusMessage(null);
+    return true;
+  };
+
+  const finishTextEditBeforeCommand = (): boolean => !textEditRef.current || commitTextEdit();
 
   const toggleObjectSelection = (objectId: string) => {
     setEditorState((current) => {
@@ -187,6 +315,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   };
 
   const addPage = () => {
+    cancelTextEdit('');
     controller.cancel('superseded');
     const result = session.execute({ type: 'page.add', afterPageId: selectedPage.id });
     if (!result.ok) { setStatusMessage('Não foi possível adicionar a página.'); return; }
@@ -196,6 +325,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   };
 
   const insertPageTemplate = () => {
+    cancelTextEdit('');
     controller.cancel('superseded');
     const result = session.execute({
       type: 'page.template.insert',
@@ -209,18 +339,21 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   };
 
   const undo = () => {
+    cancelTextEdit('');
     controller.cancel('history');
     const result = session.undo();
     setStatusMessage(result.ok ? 'Alteração desfeita.' : 'Não há alterações para desfazer.');
   };
 
   const redo = () => {
+    cancelTextEdit('');
     controller.cancel('history');
     const result = session.redo();
     setStatusMessage(result.ok ? 'Alteração refeita.' : 'Não há alterações para refazer.');
   };
 
   const insertObject = (tool: InsertTool) => {
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const currentPage = session.getSnapshot().document.pages.find((page) => page.id === editorState.activePageId);
     if (!currentPage) return;
@@ -234,6 +367,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const deleteSelected = () => {
     if (!selectedObject) return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'object.delete', objectId: selectedObject.id });
     if (!result.ok) { setStatusMessage('Não foi possível excluir o objeto.'); return; }
@@ -243,6 +377,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const duplicateSelected = () => {
     if (!selectedObject) return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'object.duplicate', objectId: selectedObject.id });
     if (!result.ok) { setStatusMessage('Não foi possível duplicar o objeto.'); return; }
@@ -253,6 +388,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const groupSelected = () => {
     if (editorState.selectedObjectIds.length < 2) return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'group.create', pageId: selectedPage.id, objectIds: [...editorState.selectedObjectIds] });
     if (!result.ok) { setStatusMessage('Não foi possível agrupar os objetos.'); return; }
@@ -263,6 +399,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const ungroupSelected = () => {
     if (!selectedObject || selectedObject.type !== 'group') return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const childIds = selectedObject.objects.map((child) => child.id);
     const result = session.execute({ type: 'group.ungroup', groupId: selectedObject.id });
@@ -273,6 +410,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const reorderSelected = (target: 'back' | 'backward' | 'forward' | 'front') => {
     if (!selectedObject) return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const currentPage = session.getSnapshot().document.pages.find((page) => page.id === editorState.activePageId);
     if (!currentPage) return;
@@ -286,12 +424,14 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const replaceSelectedImage = () => {
     if (!selectedObject || selectedObject.type !== 'image') return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'image.replace', objectId: selectedObject.id, assetId: alternateDemoAssetId(selectedObject.assetId) });
     setStatusMessage(result.ok ? 'Imagem substituída.' : 'Não foi possível substituir a imagem.');
   };
 
   const toggleSnapping = () => {
+    if (!finishTextEditBeforeCommand()) return;
     const next = !snappingEnabledRef.current;
     snappingEnabledRef.current = next;
     setSnappingEnabled(next);
@@ -303,6 +443,32 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    if (textEditRef.current) return;
+    if (kind.type === 'move' && object.type === 'text') {
+      const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
+      const previous = lastTextPointerDownRef.current;
+      const isSecondActivation = selected && (
+        event.detail >= 2
+        || Boolean(
+          previous
+          && previous.objectId === object.id
+          && event.timeStamp - previous.timeStamp >= 0
+          && event.timeStamp - previous.timeStamp <= 500
+          && Math.hypot(event.clientX - previous.clientX, event.clientY - previous.clientY) <= 8
+        )
+      );
+      lastTextPointerDownRef.current = {
+        objectId: object.id,
+        timeStamp: event.timeStamp,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      if (isSecondActivation) {
+        controller.cancel('superseded');
+        startTextEdit(object);
+        return;
+      }
+    }
     if (kind.type === 'move' && (event.ctrlKey || event.metaKey)) {
       controller.cancel('superseded');
       toggleObjectSelection(object.id);
@@ -338,7 +504,10 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   };
 
   const describeFinish = (result: FinishGestureResult) => {
-    if (result.status === 'committed') setStatusMessage(result.action.type === 'object.move' ? 'Objeto movido.' : 'Objeto redimensionado.');
+    if (result.status === 'committed') {
+      lastTextPointerDownRef.current = null;
+      setStatusMessage(result.action.type === 'object.move' ? 'Objeto movido.' : 'Objeto redimensionado.');
+    }
     else if (result.status === 'cancelled') setStatusMessage('Gesto cancelado porque o documento mudou.');
     else if (result.status === 'failed') setStatusMessage('A alteração final não pôde ser aplicada.');
   };
@@ -354,6 +523,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
   const commitInspector = (field: keyof InspectorDraft) => {
     if (!selectedObject) return;
+    if (!finishTextEditBeforeCommand()) return;
     if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
     controller.cancel('superseded');
     const raw = inspectorDraft[field].trim();
@@ -380,6 +550,30 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   };
 
   const cancelOnRootKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (textEditRef.current) {
+      if (compositionRef.current) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelTextEdit();
+        return;
+      }
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        event.stopPropagation();
+        commitTextEdit();
+        return;
+      }
+      return;
+    }
+    if (event.key === 'Enter' && selectedObject?.type === 'text') {
+      const target = event.target as HTMLElement;
+      if (!['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target.tagName)) {
+        event.preventDefault();
+        startTextEdit(selectedObject);
+        return;
+      }
+    }
     if (event.key === 'Escape' && controller.cancel('escape')) {
       event.preventDefault();
       setStatusMessage('Gesto cancelado.');
@@ -394,8 +588,57 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     }
   };
 
+  const handleTextEditPointerDownCapture = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!textEditRef.current) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-text-edit-session]')) return;
+    if (target.closest('[data-text-edit-cancel-on-activate]')) {
+      cancelTextEdit('');
+      return;
+    }
+    if (!commitTextEdit()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  const updateTextDraft = (value: string) => {
+    const current = textEditRef.current;
+    if (!current) return;
+    const next = { ...current, draft: value.replace(/\r\n?/g, '\n') };
+    textEditRef.current = next;
+    setTextEdit(next);
+  };
+
+  const insertTechnicalSymbol = (symbol: string) => {
+    const edit = textEditRef.current;
+    const textarea = textAreaRef.current;
+    if (!edit || !textarea) return;
+    const start = textarea.selectionStart ?? edit.draft.length;
+    const end = textarea.selectionEnd ?? start;
+    const nextDraft = edit.draft.slice(0, start) + symbol + edit.draft.slice(end);
+    const nextEdit = { ...edit, draft: nextDraft };
+    const caret = start + symbol.length;
+    textEditRef.current = nextEdit;
+    setTextEdit(nextEdit);
+    queueMicrotask(() => {
+      const current = textAreaRef.current;
+      if (!current) return;
+      current.focus();
+      current.setSelectionRange(caret, caret);
+    });
+  };
+
   return (
-    <div className="vnext-shell" data-vnext-shell="" data-active-page-id={selectedPage.id} onKeyDownCapture={cancelOnRootKey} onBlurCapture={cancelOnRootBlur}>
+    <div
+      className="vnext-shell"
+      data-vnext-shell=""
+      data-active-page-id={selectedPage.id}
+      data-editor-mode={editorState.mode}
+      onPointerDownCapture={handleTextEditPointerDownCapture}
+      onKeyDownCapture={cancelOnRootKey}
+      onBlurCapture={cancelOnRootBlur}
+    >
       <header className="vnext-topbar">
         <div className="vnext-brand">
           <div className="vnext-brand-mark" aria-hidden="true">P</div>
@@ -405,8 +648,8 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
           </div>
         </div>
         <div className="vnext-actions" aria-label="Histórico do documento">
-          <button type="button" data-editor-action="undo" onClick={undo} disabled={!canUndo} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
-          <button type="button" data-editor-action="redo" onClick={redo} disabled={!canRedo} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
+          <button type="button" data-editor-action="undo" data-text-edit-cancel-on-activate="" onClick={undo} disabled={!canUndo} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
+          <button type="button" data-editor-action="redo" data-text-edit-cancel-on-activate="" onClick={redo} disabled={!canRedo} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
         </div>
       </header>
 
@@ -415,13 +658,13 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
           <div className="vnext-panel-heading"><span>Páginas</span><span>{document.pages.length}</span></div>
           <nav className="vnext-page-list" aria-label="Navegação de páginas">
             {document.pages.map((page, index) => (
-              <button key={page.id} type="button" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
+              <button key={page.id} type="button" data-text-edit-cancel-on-activate="" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
                 <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span><span>Página {index + 1}</span>
               </button>
             ))}
           </nav>
-          <button type="button" className="vnext-add-page" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
-          <button type="button" className="vnext-add-page" data-editor-action="insert-template" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
+          <button type="button" className="vnext-add-page" data-text-edit-cancel-on-activate="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
+          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-text-edit-cancel-on-activate="" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
         </aside>
 
         <main className="vnext-canvas-area">
@@ -468,6 +711,14 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
               <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
               <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
               <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image'} onClick={replaceSelectedImage}>Substituir imagem</button>
+              <button
+                type="button"
+                data-editor-action="edit-text"
+                disabled={selectedObject?.type !== 'text' || selectedObject.locked || projectEditableRichText(selectedObject.text) === null}
+                onClick={() => selectedObject && startTextEdit(selectedObject)}
+              >
+                Editar texto
+              </button>
             </div>
           </div>
 
@@ -477,6 +728,38 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
                 if (event.target === event.currentTarget) { controller.cancel('superseded'); setEditorState((current) => ({ ...current, selectedObjectIds: [] })); }
               }}>
+                {textEdit && editingObject && (
+                  <div
+                    className="vnext-text-edit-session"
+                    data-text-edit-session=""
+                    data-text-edit-object-id={editingObject.id}
+                    style={frameStyle(frameToU(editingObject.frame))}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <textarea
+                      ref={textAreaRef}
+                      data-text-edit-textarea=""
+                      aria-label="Editar conteúdo do texto"
+                      value={textEdit.draft}
+                      spellCheck={false}
+                      style={textEditTypography(document, editingObject)}
+                      onChange={(event) => updateTextDraft(event.target.value)}
+                      onCompositionStart={() => { compositionRef.current = true; }}
+                      onCompositionEnd={() => { compositionRef.current = false; }}
+                    />
+                    <div className="vnext-text-edit-toolbar" aria-label="Ferramentas da edição de texto">
+                      <div className="vnext-text-symbols">
+                        {technicalSymbols.map((symbol, index) => (
+                          <button key={symbol} type="button" data-editor-symbol-index={index} onClick={() => insertTechnicalSymbol(symbol)}>
+                            {symbol}
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button" data-editor-action="cancel-text" onClick={() => cancelTextEdit()}>Cancelar</button>
+                      <button type="button" data-editor-action="commit-text" onClick={() => commitTextEdit()}>Concluir</button>
+                    </div>
+                  </div>
+                )}
                 {safeAreaU && (
                   <div
                     className={'vnext-safe-area' + (preview ? ' is-manipulating' : '') + (previewCrossesSafeArea ? ' is-violated' : '')}
@@ -515,6 +798,9 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                       data-editor-preview={preview?.objectId === object.id ? 'true' : undefined}
                       style={{ ...frameStyle(displayedFrame), zIndex: selected ? Number.MAX_SAFE_INTEGER : object.zIndex }}
                       onPointerDown={(event) => beginGesture(event, object, { type: 'move' })}
+                      onDoubleClick={() => {
+                        if (object.type === 'text') startTextEdit(object);
+                      }}
                       onPointerMove={moveGesture}
                       onPointerUp={finishGesture}
                       onPointerCancel={cancelPointerGesture}
@@ -533,7 +819,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
-                          {object.type !== 'group' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
+                          {object.type !== 'group' && editorState.mode !== 'text-edit' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
                             <button
                               key={handle}
                               type="button"

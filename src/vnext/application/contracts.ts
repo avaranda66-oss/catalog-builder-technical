@@ -15,6 +15,13 @@ const cleanTitle = z.string().min(1).refine(
   (value) => ![...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127),
   'Control character'
 );
+const editablePlainText = z.string().refine(
+  (value) => ![...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return (code < 32 && code !== 10) || code === 127;
+  }),
+  'Unsupported ASCII control character'
+);
 
 export const RenameDocumentActionSchema = z.object({
   type: z.literal('document.rename'),
@@ -160,6 +167,13 @@ export const ReplaceImageActionSchema = z.object({
   assetId: applicationId,
 }).strict();
 
+export const SetTextContentActionSchema = z.object({
+  type: z.literal('text.setContent'),
+  objectId: applicationId,
+  expectedText: RichTextSchema,
+  plainText: editablePlainText,
+}).strict();
+
 export const CreateGroupActionSchema = z.object({
   type: z.literal('group.create'),
   pageId: applicationId,
@@ -185,6 +199,7 @@ export const ApplicationActionSchema = z.discriminatedUnion('type', [
   ResizeObjectActionSchema,
   ReorderObjectActionSchema,
   ReplaceImageActionSchema,
+  SetTextContentActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
 ]);

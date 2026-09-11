@@ -41,3 +41,16 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: VNext Chromium and PDF proofs
+        run: |
+          node tests/vnext/proof/editor-text-proof.mjs
+          node tests/vnext/proof/editor-direct-manipulation-proof.mjs
+          node tests/vnext/proof/editor-snapping-diagnostics-proof.mjs
+          node tests/vnext/proof/editor-template-insertion-proof.mjs
+          node tests/vnext/proof/editor-group-proof.mjs
+          node tests/vnext/proof/group-export-proof.mjs
+          node tests/vnext/proof/export-proof.mjs

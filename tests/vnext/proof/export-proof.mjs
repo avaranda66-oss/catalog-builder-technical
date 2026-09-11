@@ -198,7 +198,7 @@ async function inspectPdf(path) {
   return {path,bytes:byteLength,sha256,pageCount:pages.length,summary,pages};
 }
 try {
-  await server.listen();browser=await chromium.launch({headless:true});
+  await server.listen();browser=await chromium.launch({headless:true,args:['--font-render-hinting=none']});
   evidence.chromiumVersion=browser.version();evidence.port=port;evidence.serverLifecycle='Runner creates Vite programmatically; finally closes only this server and its Chromium.';
   let baseline,finalPage,finalContext;
   for(const width of [900,1500])for(const dpr of [1,2])for(const media of ['screen','print']) {

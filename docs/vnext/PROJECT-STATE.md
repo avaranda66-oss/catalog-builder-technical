@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2.F COMPLETE / CANONICAL; PR #24 MERGED; W2.G IS THE NEXT IMPLEMENTATION WAVE; GITHUB IS AUTHORITY FOR LIVE STATE
+STATUS: W2.F COMPLETE / CANONICAL; W2.G IMPLEMENTED ON REVIEW BRANCH; PR #26 OPEN; NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED; W2 NOT YET CANONICAL-COMPLETE; W3 NOT STARTED; GITHUB IS AUTHORITY FOR LIVE STATE
 
 DATE: 2026-09-11
 
@@ -84,9 +84,9 @@ W2.E — Page Template Insertion Seam: **COMPLETE**.
 
 W2.F — Group: **COMPLETE / CANONICAL**.
 
-W2.G — Minimum Direct Text Editing: **NEXT IMPLEMENTATION WAVE; NOT IMPLEMENTED / NOT MERGED / NOT CANONICAL**.
+W2.G — Minimum Direct Text Editing: **IMPLEMENTED ON REVIEW BRANCH `feat/vnext-w2g-direct-text-editing`; PR #26 OPEN; NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED**.
 
-W2 overall is **NOT COMPLETE** until W2.G minimum direct Text editing is implemented and accepted.
+W2 overall is **NOT YET CANONICAL-COMPLETE** until W2.G is independently audited, Principal accepted, and merged. W3 is **NOT STARTED**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -448,7 +448,7 @@ Historical W2.F review base: `162531024107e1376912363c877f23bdc3389426`, tree `c
 
 W2.F — Group is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL**.
 
-Next implementation wave: **W2.G — minimum direct Text editing**. It is **NOT IMPLEMENTED / NOT MERGED / NOT CANONICAL**. W2 overall remains incomplete until W2.G is implemented and accepted.
+Current review wave: **W2.G — minimum direct Text editing**. It is **IMPLEMENTED ON REVIEW BRANCH `feat/vnext-w2g-direct-text-editing` / PR #26 OPEN / NOT MERGED / NOT CANONICAL / NOT PRINCIPAL ACCEPTED**. Canonical base SHA/tree: `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`. Initial implementation review head/tree: `286fa9583a6a3d15249e0c67de3e16dcf761529e` / `21cd615a559599ce389141b70ddb32bc04ec9273`. Final review head/tree and exact-head CI are synchronized by the review-branch documentation commit. W2 overall is **NOT YET CANONICAL-COMPLETE**. W3 is **NOT STARTED**.
 
 ## RECONSTRUCTION READING ORDER
 

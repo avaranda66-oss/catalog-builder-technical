@@ -19,6 +19,7 @@ export {
   ReorderPageActionSchema,
   ReplaceImageActionSchema,
   ResizeObjectActionSchema,
+  SetTextContentActionSchema,
   ShapeObjectInsertSpecSchema,
   TableObjectInsertSpecSchema,
   TextObjectInsertSpecSchema,
@@ -47,6 +48,11 @@ export {
   instantiatePageWithFreshIds,
 } from './document';
 export type { ObjectLocation, ObjectInstantiationSeed, LeafObjectInstantiationSeed, GroupObjectInstantiationSeed } from './document';
+export {
+  projectEditableRichText,
+  reconcileEditableRichText,
+  richTextEquals,
+} from './text-editing';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';
 export { createDocumentSession } from './session';

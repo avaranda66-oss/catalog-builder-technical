@@ -16,6 +16,7 @@ import {
   allocateFreshCanonicalId,
   canonicalIdentityIds,
   canonicalObjectIdentityIds,
+  createCanonicalIdAllocator,
   createBlankPage,
   duplicatePageWithFreshIds,
   findObjectLocation,
@@ -25,6 +26,11 @@ import {
   parseCanonicalDocument,
   type ObjectInstantiationSeed,
 } from './document';
+import {
+  projectEditableRichText,
+  reconcileEditableRichText,
+  richTextEquals,
+} from './text-editing';
 import {
   PageTemplateDefinitionError,
   parsePageTemplateDefinition,
@@ -588,6 +594,41 @@ export function executeApplicationAction(
         if (!changed) break;
 
         const next = { ...location.object, assetId: action.assetId };
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
+      case 'text.setContent': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        if (location.object.type !== 'text') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
+        if (!richTextEquals(location.object.text, action.expectedText)) {
+          return failure('ACTION_INVALID', `Stale text edit for ${action.objectId}`);
+        }
+        if (projectEditableRichText(location.object.text) === null) {
+          return failure('ACTION_INVALID', `Text ${action.objectId} is outside the W2.G direct-editable RichText subset`);
+        }
+
+        const reconciled = reconcileEditableRichText(
+          location.object.text,
+          action.plainText,
+          createCanonicalIdAllocator(document, dependencies.createId)
+        );
+        if (!reconciled) {
+          return failure('ACTION_INVALID', `Text ${action.objectId} is outside the W2.G direct-editable RichText subset`);
+        }
+        affectedIds = [action.objectId];
+        createdIds = [...reconciled.createdIds];
+        changed = !richTextEquals(location.object.text, reconciled.richText);
+        if (!changed) break;
+
+        const next = { ...location.object, text: reconciled.richText };
         candidate = pageWithObjects(
           document,
           location.pageIndex,
