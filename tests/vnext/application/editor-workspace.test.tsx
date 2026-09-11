@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { createDocumentSession, createStaticPageTemplateRegistry } from '@/vnext/application';
-import { mmToU, type CatalogDocument } from '@/vnext/domain';
+import { createDocumentSession, createStaticPageTemplateRegistry, projectEditableRichText } from '@/vnext/application';
+import { mmToU, plainRichText, type CatalogDocument, type RichText } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { isCurrentDiagnosticSource } from '@/vnext/app/authoring-diagnostics';
 import { VNextApp } from '@/vnext/app/VNextApp';
@@ -62,6 +62,76 @@ function seedSafeAreaDocument(frame = { xMm: 5, yMm: 20, widthMm: 40, heightMm: 
       objects: [{ ...document.pages[0].objects[0], frame }],
     }],
   };
+}
+
+function seedTextDocument(options: {
+  text?: RichText;
+  locked?: boolean;
+  includeShape?: boolean;
+  includeSecondPage?: boolean;
+} = {}): CatalogDocument {
+  const base = createW2CDemoDocument(ids('text-seed'));
+  const text = {
+    id: 'text-target',
+    type: 'text' as const,
+    frame: { xMm: 20, yMm: 30, widthMm: 72, heightMm: 20 },
+    zIndex: 0,
+    ...(options.locked ? { locked: true } : {}),
+    text: options.text ?? plainRichText('text-local', 'Modelo'),
+    style: {
+      fontFamily: 'Noto Sans',
+      fontSizePt: 12,
+      lineHeight: 1.2,
+      fontWeight: 700 as const,
+      color: '#172033',
+      textAlign: 'left' as const,
+    },
+  };
+  const shape = {
+    id: 'shape-other',
+    type: 'shape' as const,
+    frame: { xMm: 110, yMm: 30, widthMm: 30, heightMm: 20 },
+    zIndex: 1,
+    shape: 'rectangle' as const,
+    style: { fill: '#edf5ff' },
+  };
+  const firstPage = {
+    ...base.pages[0],
+    objects: options.includeShape ? [text, shape] : [text],
+  };
+  return {
+    ...base,
+    pages: options.includeSecondPage
+      ? [firstPage, { ...base.pages[0], id: 'page-two', objects: [] }]
+      : [firstPage],
+  };
+}
+
+function complexText(): RichText {
+  return {
+    paragraphs: [{
+      id: 'complex-p',
+      inlines: [
+        { kind: 'text', id: 'complex-a', text: 'A', marks: [] },
+        { kind: 'text', id: 'complex-b', text: 'B', marks: ['bold'] },
+      ],
+    }],
+  };
+}
+
+function textObject(document: CatalogDocument) {
+  const object = document.pages.flatMap((page) => page.objects).find((entry) => entry.id === 'text-target');
+  if (!object || object.type !== 'text') throw new Error('Missing text target');
+  return object;
+}
+
+function selectText(container: HTMLElement, pointerId = 80): HTMLElement {
+  setPageRect(container);
+  const hit = container.querySelector<HTMLElement>('[data-editor-object-id="text-target"]');
+  if (!hit) throw new Error('Missing text hit target');
+  fireEvent.pointerDown(hit, { pointerId, button: 0, clientX: 80, clientY: 80 });
+  fireEvent.pointerUp(hit, { pointerId, button: 0, clientX: 80, clientY: 80 });
+  return hit;
 }
 
 function button(container: HTMLElement, action: string): HTMLButtonElement {
@@ -276,6 +346,260 @@ describe('W2.C visible editor workspace', () => {
     fireEvent.click(button(container, 'redo'));
     expect(container.querySelector('[data-editor-preview="true"]')).toBeNull();
     expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(25);
+  });
+});
+
+describe('W2.G direct Text editing workspace', () => {
+  it('activates by Enter and contextual button, keeps the textarea outside publication, and hides resize handles', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} />);
+    const hit = selectText(container);
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(8);
+
+    fireEvent.keyDown(hit, { key: 'Enter' });
+    let textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]');
+    expect(textarea).toBeTruthy();
+    expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-editor-mode', 'text-edit');
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(0);
+    expect(container.querySelector('[data-editorial-root] [data-text-edit-textarea]')).toBeNull();
+    expect(container.querySelector('[data-editorial-root] [data-editor-action="commit-text"]')).toBeNull();
+    fireEvent.click(button(container, 'cancel-text'));
+
+    selectText(container, 81);
+    fireEvent.click(button(container, 'edit-text'));
+    textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]');
+    expect(textarea?.value).toBe('Modelo');
+  });
+
+  it('suppresses the second click of a jittery double activation so the authored frame is unchanged', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    const beforeFrame = textObject(session.getSnapshot().document).frame;
+    const hit = selectText(container, 82);
+
+    fireEvent.pointerDown(hit, { pointerId: 83, button: 0, clientX: 81, clientY: 81 });
+    fireEvent.pointerMove(hit, { pointerId: 83, clientX: 83, clientY: 82 });
+    fireEvent.pointerUp(hit, { pointerId: 83, button: 0, clientX: 83, clientY: 82 });
+
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeTruthy();
+    expect(textObject(session.getSnapshot().document).frame).toEqual(beforeFrame);
+    expect(execute.mock.calls.some(([action]) => action.type === 'object.move')).toBe(false);
+  });
+
+  it('fails safely for locked and complex Text and never exposes grouped Text child editing', () => {
+    const lockedSession = sessionWithDemo(seedTextDocument({ locked: true }));
+    const lockedView = render(<VNextApp session={lockedSession} />);
+    const lockedHit = selectText(lockedView.container, 84);
+    expect(button(lockedView.container, 'edit-text')).toBeDisabled();
+    fireEvent.keyDown(lockedHit, { key: 'Enter' });
+    expect(lockedView.container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    cleanup();
+
+    const complexSession = sessionWithDemo(seedTextDocument({ text: complexText() }));
+    const complexView = render(<VNextApp session={complexSession} />);
+    const complexHit = selectText(complexView.container, 85);
+    expect(button(complexView.container, 'edit-text')).toBeDisabled();
+    fireEvent.keyDown(complexHit, { key: 'Enter' });
+    expect(complexView.container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(complexView.container.querySelector('[role="status"]')?.textContent).toContain('formatação estrutural complexa');
+    cleanup();
+
+    const groupSession = sessionWithDemo();
+    const groupView = render(<VNextApp session={groupSession} />);
+    fireEvent.click(button(groupView.container, 'add-text'));
+    const textId = groupSession.getSnapshot().document.pages[0].objects[0].id;
+    fireEvent.click(button(groupView.container, 'add-shape'));
+    const shapeId = groupSession.getSnapshot().document.pages[0].objects[1].id;
+    setPageRect(groupView.container);
+    const textHit = groupView.container.querySelector<HTMLElement>(`[data-editor-object-id="${textId}"]`)!;
+    const shapeHit = groupView.container.querySelector<HTMLElement>(`[data-editor-object-id="${shapeId}"]`)!;
+    fireEvent.pointerDown(textHit, { pointerId: 86, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(textHit, { pointerId: 86, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.pointerDown(shapeHit, { pointerId: 87, button: 0, clientX: 160, clientY: 40, ctrlKey: true });
+    fireEvent.click(button(groupView.container, 'group'));
+    expect(groupView.container.querySelector(`[data-editor-object-id="${textId}"]`)).toBeNull();
+    expect(button(groupView.container, 'edit-text')).toBeDisabled();
+  });
+
+  it('keeps typing ephemeral, Escape discards it, and one explicit commit preserves frame/style while producing one history step', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const beforeObject = textObject(session.getSnapshot().document);
+    const beforeDocument = session.getSnapshot().document;
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 88);
+    fireEvent.click(button(container, 'edit-text'));
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+
+    fireEvent.change(textarea, { target: { value: 'Rascunho\n± 0.05 °C' } });
+    expect(execute).not.toHaveBeenCalled();
+    expect(session.getSnapshot().document).toBe(beforeDocument);
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+    expect(session.getSnapshot().canUndo).toBe(false);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Modelo');
+
+    selectText(container, 89);
+    fireEvent.click(button(container, 'edit-text'));
+    const textarea2 = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    fireEvent.change(textarea2, { target: { value: 'Final\n100 Ω' } });
+    fireEvent.click(button(container, 'commit-text'));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0].type).toBe('text.setContent');
+    const afterObject = textObject(session.getSnapshot().document);
+    expect(projectEditableRichText(afterObject.text)).toBe('Final\n100 Ω');
+    expect(afterObject.frame).toEqual(beforeObject.frame);
+    expect(afterObject.style).toEqual(beforeObject.style);
+    expect(afterObject.zIndex).toBe(beforeObject.zIndex);
+    expect(session.getSnapshot().canUndo).toBe(true);
+    expect(session.undo().ok).toBe(true);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Modelo');
+    expect(session.redo().ok).toBe(true);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Final\n100 Ω');
+  });
+
+  it('raw blur and window blur retain the draft, while Ctrl/Cmd+Enter commits once', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 90);
+    fireEvent.click(button(container, 'edit-text'));
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    fireEvent.change(textarea, { target: { value: 'Mantido em foco externo' } });
+    fireEvent.blur(textarea);
+    expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Mantido em foco externo');
+    expect(execute).not.toHaveBeenCalled();
+    fireEvent.blur(window);
+    expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Mantido em foco externo');
+    expect(execute).not.toHaveBeenCalled();
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Mantido em foco externo');
+  });
+
+  it('inserts every technical symbol at the textarea selection without committing and restores focus', async () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 91);
+    fireEvent.click(button(container, 'edit-text'));
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    textarea.setSelectionRange(0, textarea.value.length);
+    const symbolButtons = [...container.querySelectorAll<HTMLButtonElement>('[data-editor-symbol-index]')];
+    expect(symbolButtons.map((entry) => entry.textContent)).toEqual(['±', '°C', 'Ω', 'µ', '≤', '≥', '≈']);
+    fireEvent.click(symbolButtons[0]);
+    await waitFor(() => expect(document.activeElement).toBe(textarea));
+    expect(textarea.value).toBe('±');
+    expect(execute).not.toHaveBeenCalled();
+    for (const symbolButton of symbolButtons.slice(1)) {
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      fireEvent.click(symbolButton);
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+    }
+    expect(textarea.value).toBe('±°CΩµ≤≥≈');
+    expect(execute).not.toHaveBeenCalled();
+    fireEvent.click(button(container, 'commit-text'));
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('±°CΩµ≤≥≈');
+  });
+
+  it('controlled click-away commits before another object interaction, while page change cancels', () => {
+    const session = sessionWithDemo(seedTextDocument({ includeShape: true, includeSecondPage: true }));
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 92);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Commit no click-away' } });
+    const shape = container.querySelector<HTMLElement>('[data-editor-object-id="shape-other"]')!;
+    fireEvent.pointerDown(shape, { pointerId: 93, button: 0, clientX: 200, clientY: 80 });
+    fireEvent.pointerUp(shape, { pointerId: 93, button: 0, clientX: 200, clientY: 80 });
+    expect(execute.mock.calls.filter(([action]) => action.type === 'text.setContent')).toHaveLength(1);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit no click-away');
+
+    selectText(container, 94);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Não deve persistir' } });
+    const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button')][1];
+    fireEvent.click(secondPage);
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit no click-away');
+  });
+
+  it('Undo and Redo cancel an unconfirmed draft before navigating canonical history', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const original = textObject(session.getSnapshot().document).text;
+    expect(session.execute({
+      type: 'text.setContent',
+      objectId: 'text-target',
+      expectedText: original,
+      plainText: 'Commit anterior',
+    }).ok).toBe(true);
+    const committed = textObject(session.getSnapshot().document).text;
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 95);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho descartado por Undo' } });
+    fireEvent.click(button(container, 'undo'));
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(textObject(session.getSnapshot().document).text).toEqual(original);
+
+    selectText(container, 96);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho descartado por Redo' } });
+    fireEvent.click(button(container, 'redo'));
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(textObject(session.getSnapshot().document).text).toEqual(committed);
+  });
+
+  it('does not trigger commit during IME composition and commits after composition ends', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 97);
+    fireEvent.click(button(container, 'edit-text'));
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    fireEvent.compositionStart(textarea);
+    fireEvent.change(textarea, { target: { value: 'Calibração á' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true, isComposing: true });
+    expect(execute).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeTruthy();
+    fireEvent.compositionEnd(textarea);
+    fireEvent.click(button(container, 'commit-text'));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Calibração á');
+  });
+
+  it('fails a stale commit closed and keeps the intervening canonical content', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 98);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho stale' } });
+    const expected = textObject(session.getSnapshot().document).text;
+    expect(session.execute({
+      type: 'text.setContent',
+      objectId: 'text-target',
+      expectedText: expected,
+      plainText: 'Mudança concorrente',
+    }).ok).toBe(true);
+    fireEvent.click(button(container, 'commit-text'));
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Mudança concorrente');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('rascunho não foi aplicado');
+  });
+
+  it('closes a no-op edit with one semantic action and no history entry', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 99);
+    fireEvent.click(button(container, 'edit-text'));
+    fireEvent.click(button(container, 'commit-text'));
+    expect(execute.mock.calls.filter(([action]) => action.type === 'text.setContent')).toHaveLength(1);
+    expect(session.getSnapshot().canUndo).toBe(false);
+    expect(session.getSnapshot().canRedo).toBe(false);
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
   });
 });
 

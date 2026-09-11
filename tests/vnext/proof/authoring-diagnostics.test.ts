@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDocumentSession } from '@/vnext/application';
 import { mmToU, plainRichText, uToQ, type CatalogDocument } from '@/vnext/domain';
 import { createMinimalW2CTable, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
@@ -9,6 +9,8 @@ function ids(prefix = 'diag') {
   let next = 0;
   return () => `${prefix}-${++next}`;
 }
+
+afterEach(() => vi.restoreAllMocks());
 
 function shapeDocument(): CatalogDocument {
   const base = createW2CDemoDocument(ids('shape'));
@@ -104,6 +106,86 @@ describe('W2.D canonical authoring diagnostics', () => {
       objectId: 'text-object',
     }));
     expect(JSON.stringify(document.pages[0].objects[0].frame)).toBe(before);
+  });
+
+  it('lets W2.G content edits surface and clear TEXT_OBJECT_OVERFLOW without changing the authored frame', () => {
+    const base = createW2CDemoDocument(ids('text-edit'));
+    const document: CatalogDocument = {
+      ...base,
+      pages: [{
+        ...base.pages[0],
+        objects: [{
+          id: 'text-edit-target',
+          type: 'text',
+          frame: { xMm: 20, yMm: 20, widthMm: 40, heightMm: 10 },
+          zIndex: 0,
+          text: plainRichText('text-edit', 'Curto'),
+          style: {},
+        }],
+      }],
+    };
+    const session = createDocumentSession(document, { createId: ids('text-edit-new') });
+    const original = session.getSnapshot().document.pages[0].objects[0];
+    expect(original.type).toBe('text');
+    if (original.type !== 'text') return;
+    const authoredFrame = JSON.stringify(original.frame);
+
+    const longEdit = session.execute({
+      type: 'text.setContent',
+      objectId: original.id,
+      expectedText: original.text,
+      plainText: 'Linha técnica muito longa para o frame\n± 0.05 °C · 100 Ω · ≤ 50 µV · ≈',
+    });
+    expect(longEdit.ok).toBe(true);
+    const afterLong = session.getSnapshot().document.pages[0].objects[0];
+    expect(afterLong.type).toBe('text');
+    if (afterLong.type !== 'text') return;
+    expect(JSON.stringify(afterLong.frame)).toBe(authoredFrame);
+
+    const root = window.document.createElement('div');
+    root.innerHTML = '<div data-object-id="text-edit-target"><div data-flow-root></div></div>';
+    const flow = root.querySelector<HTMLElement>('[data-flow-root]')!;
+    vi.spyOn(window.document, 'createRange').mockImplementation(() => ({
+      selectNodeContents: () => undefined,
+      getClientRects: () => [],
+    } as unknown as Range));
+    const mountTextRuns = (object: typeof afterLong) => {
+      flow.replaceChildren();
+      for (const paragraph of object.text.paragraphs) {
+        for (const inline of paragraph.inlines) {
+          if (inline.kind !== 'text') continue;
+          const span = window.document.createElement('span');
+          span.dataset.inlineId = inline.id;
+          span.textContent = inline.text;
+          flow.appendChild(span);
+        }
+      }
+    };
+    mountTextRuns(afterLong);
+    flow.getBoundingClientRect = () => ({
+      x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 120, width: 100, height: 120, toJSON: () => ({}),
+    });
+    expect(layoutReport(session.getSnapshot().document, new Map(), { facts: [], geometryDiagnostics: [] }, root))
+      .toContainEqual(expect.objectContaining({ code: 'TEXT_OBJECT_OVERFLOW', objectId: original.id }));
+    expect(JSON.stringify(afterLong.frame)).toBe(authoredFrame);
+
+    const shortEdit = session.execute({
+      type: 'text.setContent',
+      objectId: afterLong.id,
+      expectedText: afterLong.text,
+      plainText: 'Curto',
+    });
+    expect(shortEdit.ok).toBe(true);
+    const afterShort = session.getSnapshot().document.pages[0].objects[0];
+    expect(afterShort.type).toBe('text');
+    if (afterShort.type !== 'text') return;
+    expect(JSON.stringify(afterShort.frame)).toBe(authoredFrame);
+    mountTextRuns(afterShort);
+    flow.getBoundingClientRect = () => ({
+      x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 1, width: 100, height: 1, toJSON: () => ({}),
+    });
+    expect(layoutReport(session.getSnapshot().document, new Map(), { facts: [], geometryDiagnostics: [] }, root))
+      .not.toContainEqual(expect.objectContaining({ code: 'TEXT_OBJECT_OVERFLOW', objectId: original.id }));
   });
 
   it('reports TABLE_CONTENT_OVERFLOW as ERROR without changing the authored Table frame', () => {

@@ -116,6 +116,17 @@ class IdAllocator {
   }
 }
 
+export interface CanonicalIdAllocator {
+  next(): string;
+}
+
+export function createCanonicalIdAllocator(
+  document: CatalogDocument,
+  createId: IdGenerator
+): CanonicalIdAllocator {
+  return new IdAllocator(reservationIdentityIds(document), createId);
+}
+
 function defaultPage(id: string): Page {
   return {
     id,

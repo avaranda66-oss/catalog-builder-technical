@@ -58,6 +58,12 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-snap-guide.is-y { left: 0; right: 0; height: 1px; transform: translateY(-.5px); }
 .vnext-object-hit-target { position: absolute; border: 0; outline: none; background: transparent; cursor: move; touch-action: none; }
 .vnext-object-hit-target.is-selected { z-index: 2147483647 !important; }
+.vnext-text-edit-session { position: absolute; z-index: 2147483647; }
+.vnext-text-edit-session textarea { width: 100%; height: 100%; resize: none; overflow: auto; border: 1.5px solid #0072ce; outline: none; background: rgba(255,255,255,.98); padding: 0; white-space: pre-wrap; }
+.vnext-text-edit-toolbar { position: absolute; left: 0; top: 100%; display: flex; width: max-content; max-width: 520px; align-items: center; gap: 6px; border: 1px solid #b8c7d8; border-radius: 0 0 7px 7px; background: #fff; box-shadow: 0 5px 14px rgba(23,32,51,.14); padding: 6px; }
+.vnext-text-edit-toolbar button { min-width: 30px; min-height: 30px; border: 1px solid #c7d1dd; border-radius: 5px; background: #fff; color: #263a52; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; padding: 0 8px; }
+.vnext-text-edit-toolbar button:hover { border-color: #8da2b8; background: #f6f8fb; }
+.vnext-text-symbols { display: flex; gap: 4px; }
 .vnext-object-diagnostic-badge { position: absolute; right: -8px; top: -8px; z-index: 2147483647; display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #c6921d; border-radius: 999px; background: #fff8e5; color: #815d00; font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none; }
 .vnext-object-diagnostic-badge.is-error { border-color: #c95f5f; background: #fff1f1; color: #9a3030; }
 .vnext-selection-outline { position: absolute; inset: -1px; border: 1.5px solid #0072ce; pointer-events: none; }
