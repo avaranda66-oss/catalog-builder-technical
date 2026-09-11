@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { createDocumentSession } from '@/vnext/application';
+import { createDocumentSession, createStaticPageTemplateRegistry } from '@/vnext/application';
 import { mmToU, type CatalogDocument } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { isCurrentDiagnosticSource } from '@/vnext/app/authoring-diagnostics';
 import { VNextApp } from '@/vnext/app/VNextApp';
+import { W2E_PAGE_TEMPLATE } from '@/vnext/app/page-template-fixtures';
 
 afterEach(cleanup);
 
@@ -27,7 +28,10 @@ function ids(prefix = 'ui') {
 }
 
 function sessionWithDemo(document = createW2CDemoDocument(ids('doc'))) {
-  return createDocumentSession(document, { createId: ids('generated') });
+  return createDocumentSession(document, {
+    createId: ids('generated'),
+    templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]),
+  });
 }
 
 function seedShapeDocument(): CatalogDocument {
@@ -84,6 +88,26 @@ function setPageRect(container: HTMLElement, width = 420, height = 594): HTMLEle
 }
 
 describe('W2.C visible editor workspace', () => {
+  it('inserts the W2.E page template as ordinary content, activates it, and restores exact identities with history', async () => {
+    const session = sessionWithDemo();
+    const { container } = render(<VNextApp session={session} />);
+    const beforePageId = session.getSnapshot().document.pages[0].id;
+
+    fireEvent.click(button(container, 'insert-template'));
+    const inserted = session.getSnapshot().document.pages[1];
+    expect(inserted.objects.map((object) => object.type)).toEqual(['text', 'shape', 'image', 'table']);
+    expect(inserted.safeArea).toEqual({ topMm: 12, rightMm: 12, bottomMm: 12, leftMm: 12 });
+    await waitFor(() => expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-active-page-id', inserted.id));
+    expect(container.querySelector('[data-editorial-root] [data-editor-action="insert-template"]')).toBeNull();
+    const insertedIds = [inserted.id, ...inserted.objects.map((object) => object.id)];
+
+    fireEvent.click(button(container, 'undo'));
+    expect(session.getSnapshot().document.pages.map((page) => page.id)).toEqual([beforePageId]);
+    fireEvent.click(button(container, 'redo'));
+    expect(session.getSnapshot().document.pages[1].id).toBe(insertedIds[0]);
+    expect(session.getSnapshot().document.pages[1].objects.map((object) => object.id)).toEqual(insertedIds.slice(1));
+  });
+
   it('wires all visible basic authoring actions through W2.B and keeps overlay outside DocumentRenderer', async () => {
     const session = sessionWithDemo();
     const execute = vi.spyOn(session, 'execute');

@@ -26,6 +26,12 @@ export const AddPageActionSchema = z.object({
   afterPageId: applicationId.optional(),
 }).strict();
 
+export const InsertPageTemplateActionSchema = z.object({
+  type: z.literal('page.template.insert'),
+  templateId: applicationId,
+  afterPageId: applicationId.optional(),
+}).strict();
+
 export const DuplicatePageActionSchema = z.object({
   type: z.literal('page.duplicate'),
   pageId: applicationId,
@@ -157,6 +163,7 @@ export const ReplaceImageActionSchema = z.object({
 export const ApplicationActionSchema = z.discriminatedUnion('type', [
   RenameDocumentActionSchema,
   AddPageActionSchema,
+  InsertPageTemplateActionSchema,
   DuplicatePageActionSchema,
   DeletePageActionSchema,
   ReorderPageActionSchema,
@@ -177,6 +184,7 @@ export type ObjectInsertSpec = z.infer<typeof ObjectInsertSpecSchema>;
 export type ApplicationErrorCode =
   | 'ACTION_INVALID'
   | 'PAGE_NOT_FOUND'
+  | 'TEMPLATE_NOT_FOUND'
   | 'LAST_PAGE_REQUIRED'
   | 'INVALID_REORDER_TARGET'
   | 'OBJECT_NOT_FOUND'

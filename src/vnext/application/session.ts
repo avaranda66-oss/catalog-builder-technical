@@ -3,10 +3,9 @@ import type {
   ApplicationAction,
   ApplicationActionResult,
   ApplicationExecutionContext,
-  IdGenerator,
 } from './contracts';
 import { parseCanonicalDocument } from './document';
-import { executeApplicationAction } from './execute';
+import { executeApplicationAction, type ApplicationExecutionDependencies } from './execute';
 
 export interface DocumentSessionSnapshot {
   document: CatalogDocument;
@@ -36,7 +35,7 @@ function deepFreeze<T>(value: T): T {
 
 export function createDocumentSession(
   initialDocument: CatalogDocument,
-  dependencies: { createId: IdGenerator }
+  dependencies: ApplicationExecutionDependencies
 ): DocumentSession {
   let current = deepFreeze(parseCanonicalDocument(initialDocument));
   const undoStack: CatalogDocument[] = [];

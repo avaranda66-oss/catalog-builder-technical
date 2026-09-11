@@ -307,6 +307,37 @@ export function instantiateObjectWithFreshIds(
   return instantiateObjectWithAllocator(seed, allocator);
 }
 
+export interface PageInstantiationSeed {
+  readonly safeArea?: Page['safeArea'];
+  readonly objects: readonly ObjectInstantiationSeed[];
+}
+
+/**
+ * Materializes a page in one allocator scope. Template seed identities are reserved
+ * before the first generated ID so table/RichText remapping cannot collide with the
+ * source graph or any identity already present in the document.
+ */
+export function instantiatePageWithFreshIds(
+  document: CatalogDocument,
+  seed: PageInstantiationSeed,
+  createId: IdGenerator
+): Page {
+  const allocator = new IdAllocator(
+    [
+      ...reservationIdentityIds(document),
+      ...seed.objects.flatMap((object) => instantiationSeedIdentityIds(object)),
+    ],
+    createId
+  );
+  return {
+    id: allocator.next(),
+    widthMm: 210,
+    heightMm: 297,
+    ...(seed.safeArea === undefined ? {} : { safeArea: { ...seed.safeArea } }),
+    objects: seed.objects.map((object) => instantiateObjectWithAllocator(object, allocator)),
+  };
+}
+
 export function duplicatePageWithFreshIds(
   document: CatalogDocument,
   page: Page,

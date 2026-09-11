@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2.D IMPLEMENTATION/PROMOTION VEHICLE IS PR #21; GITHUB IS AUTHORITY FOR LIVE REVIEW/MERGE STATE
+STATUS: W2.E IMPLEMENTATION/PROMOTION VEHICLE IS PR #22; W2.D IS MERGED IN CANONICAL MAIN; GITHUB IS AUTHORITY FOR LIVE REVIEW/MERGE STATE
 
 DATE: 2026-09-11
 
@@ -12,17 +12,17 @@ PURPOSE: provide the current VNext facts and next action so the project can be r
 
 VNext must be simpler internally than Legacy while becoming more capable, editable, professional, and easy to use.
 
-## VERIFIED W2.D IMPLEMENTATION BASE
+## VERIFIED W2.E IMPLEMENTATION BASE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-PR #20 / W2.C was independently verified squash-merged into canonical `main` at SHA `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+PR #21 / W2.D was independently verified squash-merged into canonical `main` at SHA `c220ed1d047d862d8bac30bb8c20702889793fac`, tree `9c018983f2636f318c9092605ca660d33f1bd6f7`, with direct parent `467942edc14a563a44533edba473b1493bade1e6`.
 
-That canonical W2.C merge result is the implementation base for W2.D.
+That exact canonical W2.D merge result is the implementation base for W2.E.
 
-W2.D implementation/promotion vehicle: **PR #21**, branch `feat/vnext-w2d-snapping-diagnostics`.
+W2.E implementation/promotion vehicle: **PR #22**, branch `feat/vnext-w2e-page-template-insertion`.
 
-The initial W2.D implementation commit on the promotion branch is `14da76616ed1b5c518628cf82eadf28e43ae95c0`, tree `483bea395ce7a57b850aafa92094b14a8b97b827`, with direct parent `467942edc14a563a44533edba473b1493bade1e6`. GitHub compare verified that branch as one W2.D commit ahead of canonical main and zero commits behind before PR creation.
+The initial W2.E implementation commit on the promotion branch is `a1074269c95cb48374aedf0285ee279fb1cb3c75`, tree `a8beb1ca9d26575b9e5b012fe40dd0ffc0e7779b`, with direct parent `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
 PR #12: **MERGED**.
 
@@ -40,9 +40,11 @@ PR #18 — W2.A: **MERGED / COMPLETE**.
 
 PR #19 — W2.B: **MERGED / COMPLETE**.
 
-PR #20 — W2.C: **MERGED / COMPLETE** at the canonical W2.D base above.
+PR #20 — W2.C: **MERGED / COMPLETE**.
 
-PR #21 — W2.D: **OPEN IMPLEMENTATION/PROMOTION VEHICLE**. This document does not claim W2.D is merged, canonical, or finally Principal accepted.
+PR #21 — W2.D: **MERGED** at canonical `main` SHA/tree `c220ed1d047d862d8bac30bb8c20702889793fac` / `9c018983f2636f318c9092605ca660d33f1bd6f7`.
+
+PR #22 — W2.E: **OPEN IMPLEMENTATION/PROMOTION VEHICLE**. This document does not claim W2.E is merged, canonical, or Principal accepted.
 
 Always verify GitHub live state before acting. Git history and repository evidence outrank agent reports.
 
@@ -66,7 +68,9 @@ W2.B — Object Application Actions: **PR #19 MERGE RESULT VERIFIED AS THE W2.C 
 
 W2.C — Editor Selection + Direct Move/Resize: **MERGED / COMPLETE VIA PR #20**.
 
-W2.D — Snapping + Guides + Authoring Diagnostics: **IMPLEMENTATION/PROMOTION VEHICLE PR #21; LIVE STATE MUST BE VERIFIED ON GITHUB**.
+W2.D — Snapping + Guides + Authoring Diagnostics: **MERGED INTO CANONICAL MAIN VIA PR #21**.
+
+W2.E — Page Template Insertion Seam: **IMPLEMENTATION/PROMOTION VEHICLE PR #22; LIVE STATE MUST BE VERIFIED ON GITHUB**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -74,9 +78,9 @@ Product: **still under construction**.
 
 Do not encode conversational progress percentages as project truth.
 
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, and PR #20 / W2.C are merged. PR #20 established the canonical W2.D implementation base SHA `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, PR #20 / W2.C, and PR #21 / W2.D are merged. PR #21 established the canonical W2.E implementation base SHA `c220ed1d047d862d8bac30bb8c20702889793fac`, tree `9c018983f2636f318c9092605ca660d33f1bd6f7`.
 
-W2.D implementation/promotion is carried by **PR #21**. GitHub is authority for its live state. Before beginning W2.E, independently verify that PR #21 has merged into canonical `main`, reconstruct the resulting `main` SHA/tree, and complete Principal acceptance of W2.D.
+W2.E implementation/promotion is carried by **PR #22**, branch `feat/vnext-w2e-page-template-insertion`. GitHub is authority for its live state. The PR is currently open; this durable state does not claim W2.E merged, canonical, or Principal accepted.
 
 ## CANONICAL PRODUCTION OWNERSHIP
 
@@ -422,17 +426,17 @@ Governance rule: do **not** fix this as part of unrelated VNext waves unless a t
 
 ## POST-W2.0 STATE / NEXT PRINCIPAL ACTION
 
-PRs #15 through #20 are **MERGED / COMPLETE** for their respective promoted slices.
+PRs #15 through #21 are **MERGED / COMPLETE** for their respective promoted slices through W2.D.
 
-Canonical W2.D base: `467942edc14a563a44533edba473b1493bade1e6`, tree `b9930fd3679e3f73bd6b4221644a1d317176174b`.
+Canonical W2.E base: `c220ed1d047d862d8bac30bb8c20702889793fac`, tree `9c018983f2636f318c9092605ca660d33f1bd6f7`.
 
-W2.D implementation/promotion vehicle: **PR #21 — `feat(vnext): implement W2.D snapping and authoring diagnostics`**.
+W2.E implementation/promotion vehicle: **PR #22 — `feat(vnext): implement W2.E page template insertion`**, branch `feat/vnext-w2e-page-template-insertion`.
 
-Independently audit the PR #21 exact head against the W2.0 contract. Verify pure integer-U snapping; deterministic tie-breaking; zero canonical writes during preview; same W2.C gesture transaction identity through snapped commit; controlled-edge resize ownership; ephemeral guide/safe-area chrome outside `DocumentRenderer`; canonical diagnostic reuse for `SAFE_AREA_VIOLATION`, `OBJECT_OUTSIDE_PAGE`, `TEXT_OBJECT_OVERFLOW`, `TABLE_CONTENT_OVERFLOW`, and `TABLE_WIDTH_INFEASIBLE`; commit-then-diagnose Table behavior; intentional-overlap noise regression; Chromium W2.C and W2.D evidence; export/PDF independence; and full gates.
+Independently audit the PR #22 exact head against the W2.0 contract and W2.E work order. Verify strict typed template definitions and registry injection; validation before materialization; reuse of W2.B fresh-ID/Table remapping infrastructure; local RichText identity; shared AssetRefs; same-template-twice and 100x no-reuse proofs; failure atomicity; exact snapshot Undo/Redo without registry or allocator reexecution; registry independence after insertion; ordinary W2.C move/resize and W2.D snapping/diagnostics; no template metadata or special renderer in canonical document/publication; Chromium W2.E evidence; W2.C/W2.D regressions; export/PDF independence; and full gates.
 
-This record does **not** claim PR #21 is merged, W2.D is canonical, or W2.D has final Principal acceptance.
+This record does **not** claim PR #22 is merged, W2.E is canonical, or W2.E has Principal acceptance.
 
-Do not begin W2.E until PR #21 is independently accepted and verified merged into canonical `main`.
+Do not begin W2.F from this open W2.E review state.
 
 ## RECONSTRUCTION READING ORDER
 
@@ -448,4 +452,6 @@ Do not begin W2.E until PR #21 is independently accepted and verified merged int
 10. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md` — W2.0 documentation/review story.
 11. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md` — W2.A implementation record.
 12. `docs/stories/2026-09-10-vnext-w2b-object-actions.md` — W2.B implementation record and PR #19 provenance.
-13. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — current W2.C implementation/evidence record for PR #20.
+13. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record for PR #20.
+14. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record for PR #21.
+15. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — current W2.E implementation/evidence record for PR #22.
