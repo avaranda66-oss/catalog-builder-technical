@@ -1,14 +1,23 @@
 import React from 'react';
 import { FileText, Plus, Redo2, Undo2 } from 'lucide-react';
 import type { ApplicationAction, DocumentSession, FrameU } from '../application';
-import { mmToU, qCss, uToQ, type EditorialObject, type Page } from '../domain';
+import { mmToU, qCss, uToQ, type CatalogDocument, type Diagnostic, type EditorialObject, type Page } from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
+import {
+  diagnosticMessage,
+  EditorDiagnosticsProbe,
+  immediateAuthoringDiagnostics,
+  isCurrentDiagnosticSource,
+  mergeDiagnostics,
+  W2D_DIAGNOSTIC_CODES,
+} from './authoring-diagnostics';
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
 const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+const SNAP_RADIUS_PX = 8;
 
 function createGestureTransactionId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
@@ -37,6 +46,35 @@ function frameStyle(frameU: FrameU): React.CSSProperties {
   };
 }
 
+function safeAreaFrameU(page: Page): FrameU | undefined {
+  if (!page.safeArea) return undefined;
+  const pageWidthU = mmToU(page.widthMm);
+  const pageHeightU = mmToU(page.heightMm);
+  const leftU = mmToU(page.safeArea.leftMm);
+  const rightU = mmToU(page.safeArea.rightMm);
+  const topU = mmToU(page.safeArea.topMm);
+  const bottomU = mmToU(page.safeArea.bottomMm);
+  return {
+    xU: leftU,
+    yU: topU,
+    widthU: pageWidthU - leftU - rightU,
+    heightU: pageHeightU - topU - bottomU,
+  };
+}
+
+function frameContainedBy(frame: FrameU, bounds: FrameU): boolean {
+  return frame.xU >= bounds.xU
+    && frame.yU >= bounds.yU
+    && frame.xU + frame.widthU <= bounds.xU + bounds.widthU
+    && frame.yU + frame.heightU <= bounds.yU + bounds.heightU;
+}
+
+function guideStyle(axis: 'x' | 'y', positionU: number): React.CSSProperties {
+  return axis === 'x'
+    ? { left: qCss(uToQ(positionU)) }
+    : { top: qCss(uToQ(positionU)) };
+}
+
 export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const snapshot = useDocumentSession(session);
   const { document, canUndo, canRedo } = snapshot;
@@ -49,12 +87,20 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<GesturePreview | null>(null);
+  const [snappingEnabled, setSnappingEnabled] = React.useState(true);
+  const snappingEnabledRef = React.useRef(snappingEnabled);
+  snappingEnabledRef.current = snappingEnabled;
+  const [measuredDiagnostics, setMeasuredDiagnostics] = React.useState<{
+    source: CatalogDocument;
+    diagnostics: readonly Diagnostic[];
+  } | null>(null);
   const controllerRef = React.useRef<EditorInteractionController | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = new EditorInteractionController({
       getDocument: () => session.getSnapshot().document,
       getActivePageId: () => activePageIdRef.current,
       createTransactionId: createGestureTransactionId,
+      isSnappingEnabled: () => snappingEnabledRef.current,
       execute: (action, context) => session.execute(action, context),
       onPreviewChange: setPreview,
     });
@@ -68,6 +114,28 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
   const { plans } = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
   const pageWidthU = mmToU(selectedPage.widthMm);
   const pageHeightU = mmToU(selectedPage.heightMm);
+  const safeAreaU = React.useMemo(() => safeAreaFrameU(selectedPage), [selectedPage]);
+  const immediateDiagnostics = React.useMemo(() => immediateAuthoringDiagnostics(document), [document]);
+  const canonicalDiagnostics = React.useMemo(
+    () => mergeDiagnostics(
+      immediateDiagnostics,
+      measuredDiagnostics?.source === document ? measuredDiagnostics.diagnostics : []
+    ).filter((diagnostic) => W2D_DIAGNOSTIC_CODES.has(diagnostic.code)),
+    [document, immediateDiagnostics, measuredDiagnostics]
+  );
+  const selectedDiagnostics = React.useMemo(
+    () => canonicalDiagnostics.filter((diagnostic) => diagnostic.pageId === selectedPage.id && diagnostic.objectId === selectedObjectId),
+    [canonicalDiagnostics, selectedObjectId, selectedPage.id]
+  );
+  const pageDiagnostics = React.useMemo(
+    () => canonicalDiagnostics.filter((diagnostic) => diagnostic.pageId === selectedPage.id),
+    [canonicalDiagnostics, selectedPage.id]
+  );
+  const previewCrossesSafeArea = Boolean(preview && safeAreaU && !frameContainedBy(preview.frameU, safeAreaU));
+  const receiveMeasuredDiagnostics = React.useCallback((source: CatalogDocument, diagnostics: readonly Diagnostic[]) => {
+    if (!isCurrentDiagnosticSource(session.getSnapshot().document, source)) return;
+    setMeasuredDiagnostics({ source, diagnostics });
+  }, [session]);
   const [inspectorDraft, setInspectorDraft] = React.useState<InspectorDraft>({ x: '', y: '', width: '', height: '' });
 
   React.useEffect(() => {
@@ -181,6 +249,14 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     setStatusMessage(result.ok ? 'Imagem substituída.' : 'Não foi possível substituir a imagem.');
   };
 
+  const toggleSnapping = () => {
+    const next = !snappingEnabledRef.current;
+    snappingEnabledRef.current = next;
+    setSnappingEnabled(next);
+    if (controller.isActive()) controller.refreshPreview();
+    setStatusMessage(next ? 'Encaixe ativado.' : 'Encaixe desativado.');
+  };
+
   const beginGesture = (event: React.PointerEvent<HTMLElement>, object: EditorialObject, kind: GestureKind) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -195,6 +271,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
       const started = controller.begin({
         pointerId: event.pointerId, objectId: object.id, pageId: selectedPage.id, kind,
         clientX: event.clientX, clientY: event.clientY, pageClientWidthPx: rect.width, pageClientHeightPx: rect.height,
+        snapThresholdPx: SNAP_RADIUS_PX,
       });
       if (!started) { setStatusMessage('Este objeto não pode ser movido agora.'); return; }
       event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -299,7 +376,17 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
         <main className="vnext-canvas-area">
           <div className="vnext-canvas-meta">
             <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
-            <span className="vnext-memory-status">Rascunho nesta aba</span>
+            <div className="vnext-canvas-statuses">
+              {pageDiagnostics.length > 0 && (
+                <span
+                  className={'vnext-diagnostic-summary ' + (pageDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR') ? 'is-error' : 'is-warning')}
+                  data-page-diagnostic-summary=""
+                >
+                  {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)
+                </span>
+              )}
+              <span className="vnext-memory-status">Rascunho nesta aba</span>
+            </div>
           </div>
           <div className="vnext-authoring-toolbar" aria-label="Adicionar e organizar objetos">
             <div className="vnext-tool-group" aria-label="Adicionar objeto">
@@ -308,6 +395,17 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>Adicionar tabela</button>
               <button type="button" data-editor-action="add-shape" onClick={() => insertObject('shape')}>Adicionar forma</button>
               <button type="button" data-editor-action="add-line" onClick={() => insertObject('line')}>Adicionar linha</button>
+            </div>
+            <div className="vnext-tool-group" aria-label="Assistência de posicionamento">
+              <button
+                type="button"
+                data-editor-action="toggle-snapping"
+                aria-pressed={snappingEnabled}
+                className={snappingEnabled ? 'is-active' : undefined}
+                onClick={toggleSnapping}
+              >
+                {snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado'}
+              </button>
             </div>
             <div className="vnext-tool-group" aria-label="Ações do objeto selecionado">
               <button type="button" data-editor-action="duplicate" disabled={!selectedObject} onClick={duplicateSelected}>Duplicar</button>
@@ -326,9 +424,34 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
                 if (event.target === event.currentTarget) { controller.cancel('superseded'); setEditorState((current) => ({ ...current, selectedObjectIds: [] })); }
               }}>
+                {safeAreaU && (
+                  <div
+                    className={'vnext-safe-area' + (preview ? ' is-manipulating' : '') + (previewCrossesSafeArea ? ' is-violated' : '')}
+                    data-editor-safe-area=""
+                    data-safe-area-preview-violation={previewCrossesSafeArea ? 'true' : undefined}
+                    style={frameStyle(safeAreaU)}
+                    aria-hidden="true"
+                  />
+                )}
+                {preview?.guides.map((guide) => (
+                  <div
+                    key={[guide.axis, guide.positionU, guide.kind, guide.sourceObjectId ?? ''].join(':')}
+                    className={'vnext-snap-guide is-' + guide.axis}
+                    data-snap-guide={guide.axis}
+                    data-snap-guide-kind={guide.kind}
+                    data-snap-guide-position-u={guide.positionU}
+                    data-snap-guide-source-object-id={guide.sourceObjectId}
+                    style={guideStyle(guide.axis, guide.positionU)}
+                    aria-hidden="true"
+                  />
+                ))}
                 {selectedPage.objects.map((object) => {
                   const selected = object.id === selectedObjectId;
                   const displayedFrame = objectPreviewFrame(object);
+                  const objectDiagnostics = pageDiagnostics.filter((diagnostic) => diagnostic.objectId === object.id);
+                  const issueSeverity = objectDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR')
+                    ? 'ERROR'
+                    : objectDiagnostics.some((diagnostic) => diagnostic.severity === 'WARNING') ? 'WARNING' : undefined;
                   return (
                     <div
                       key={object.id}
@@ -344,6 +467,15 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                       onPointerCancel={cancelPointerGesture}
                       onLostPointerCapture={cancelCaptureLoss}
                     >
+                      {issueSeverity && (
+                        <span
+                          className={'vnext-object-diagnostic-badge is-' + issueSeverity.toLowerCase()}
+                          data-editor-diagnostic-badge={issueSeverity}
+                          aria-label={issueSeverity === 'ERROR' ? 'Objeto com erro de publicação' : 'Objeto com aviso de publicação'}
+                        >
+                          {issueSeverity === 'ERROR' ? '!' : '⚠'}
+                        </span>
+                      )}
                       {selected && (
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
@@ -394,6 +526,27 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                 ))}
               </div>
               {selectedObject.type === 'image' && <button type="button" className="vnext-inspector-action" onClick={replaceSelectedImage}>Substituir imagem</button>}
+              <div className="vnext-divider" />
+              <div className="vnext-diagnostics-section" data-editor-diagnostics="">
+                <h3>Diagnósticos</h3>
+                {selectedDiagnostics.length === 0 ? (
+                  <p>Nenhum aviso ou erro para este objeto.</p>
+                ) : (
+                  <ul>
+                    {selectedDiagnostics.map((diagnostic) => (
+                      <li
+                        key={[diagnostic.code, diagnostic.severity, diagnostic.details].join(':')}
+                        className={'is-' + diagnostic.severity.toLowerCase()}
+                        data-diagnostic-code={diagnostic.code}
+                        data-diagnostic-severity={diagnostic.severity}
+                      >
+                        <div><strong>{diagnostic.severity === 'ERROR' ? 'Erro' : 'Aviso'}</strong><code>{diagnostic.code}</code></div>
+                        <p>{diagnosticMessage(diagnostic)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </>
           ) : <p>Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.</p>}
           <div className="vnext-divider" />
@@ -402,6 +555,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
       </div>
+      <EditorDiagnosticsProbe document={document} assetUrls={W2C_DEMO_ASSET_URLS} onDiagnostics={receiveMeasuredDiagnostics} />
     </div>
   );
 }

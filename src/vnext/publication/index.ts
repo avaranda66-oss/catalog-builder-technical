@@ -1,1 +1,1 @@
-export { layoutReport } from './preflight';
+export { authoredFrameDiagnostics, layoutReport } from './preflight';

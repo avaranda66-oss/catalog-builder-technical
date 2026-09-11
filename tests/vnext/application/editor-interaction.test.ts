@@ -119,6 +119,30 @@ describe('W2.C editor interaction controller', () => {
     expect(h.execute.mock.calls[0][1]).toEqual({ transactionId: 'gesture-2' });
   });
 
+  it('preserves the same transactionId through snapped preview and final commit', () => {
+    const h = controllerHarness();
+    expect(h.controller.begin({
+      pointerId: 7,
+      objectId: 'target',
+      pageId: h.current.pages[0].id,
+      kind: { type: 'move' },
+      clientX: 100,
+      clientY: 200,
+      pageClientWidthPx: 420,
+      pageClientHeightPx: 594,
+      snapThresholdPx: 8,
+    })).toBe(true);
+    const preview = h.controller.move(7, 62, 200)!;
+    expect(preview.transactionId).toBe('gesture-1');
+    expect(preview.guides).toContainEqual(expect.objectContaining({ axis: 'x', kind: 'page-edge', positionU: 0 }));
+    expect(preview.frameU.xU).toBe(0);
+    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.controller.finish(7, 62, 200).status).toBe('committed');
+    expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.execute.mock.calls[0][0]).toMatchObject({ type: 'object.move', xU: 0 });
+    expect(h.execute.mock.calls[0][1]).toEqual({ transactionId: 'gesture-1' });
+  });
+
   it('commits exactly one complete-frame resize action on pointerup', () => {
     const h = controllerHarness();
     expect(h.begin({ type: 'resize', handle: 'se' })).toBe(true);
@@ -217,6 +241,23 @@ describe('W2.C editor interaction controller', () => {
     const h = controllerHarness();
     h.begin();
     expect(h.createTransactionId).toHaveBeenCalledTimes(1);
+    expect(h.controller.finish(7, 100, 200).status).toBe('noop');
+    expect(h.execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps a zero-delta selection click as a no-op even when the start frame is inside snap range', () => {
+    const h = controllerHarness(fixtureDocument({ xMm: 1, yMm: 30, widthMm: 40, heightMm: 50 }));
+    expect(h.controller.begin({
+      pointerId: 7,
+      objectId: 'target',
+      pageId: h.current.pages[0].id,
+      kind: { type: 'move' },
+      clientX: 100,
+      clientY: 200,
+      pageClientWidthPx: 420,
+      pageClientHeightPx: 594,
+      snapThresholdPx: 8,
+    })).toBe(true);
     expect(h.controller.finish(7, 100, 200).status).toBe('noop');
     expect(h.execute).not.toHaveBeenCalled();
   });
