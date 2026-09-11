@@ -6,17 +6,26 @@ import { add,mmToU,qToU,uToQ } from '../domain/physical';
 import { diagnostic,type Diagnostic } from '../domain/diagnostics';
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number):boolean => metrics.widthQ>uToQ(authoredWidthU)||metrics.heightQ>uToQ(authoredHeightU);
-export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
-  const result:Diagnostic[]=[...snapshot.geometryDiagnostics];
+export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
+  const result:Diagnostic[]=[];
   for(const page of doc.pages) {
     const pageWidth=mmToU(page.widthMm),pageHeight=mmToU(page.heightMm);
-    const frames=page.objects.map(object=>({object,x:mmToU(object.frame.xMm),y:mmToU(object.frame.yMm),w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
-    for(const frame of frames) {
-      const {object,x,y,w,h}=frame,location={pageId:page.id,objectId:object.id};
+    for(const object of page.objects) {
+      const x=mmToU(object.frame.xMm),y=mmToU(object.frame.yMm),w=mmToU(object.frame.widthMm),h=mmToU(object.frame.heightMm),location={pageId:page.id,objectId:object.id};
       if(x<0||y<0||add(x,w)>pageWidth||add(y,h)>pageHeight)result.push(diagnostic('OBJECT_OUTSIDE_PAGE','Authored frame exceeds physical A4 bounds',location));
       const safe=page.safeArea;
       if(safe&&(x<mmToU(safe.leftMm)||y<mmToU(safe.topMm)||add(x,w)>pageWidth-mmToU(safe.rightMm)||add(y,h)>pageHeight-mmToU(safe.bottomMm)))
         result.push(diagnostic('SAFE_AREA_VIOLATION','Authored frame crosses configured safe area',{...location,severity:'WARNING'}));
+    }
+  }
+  return result;
+}
+export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
+  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc)];
+  for(const page of doc.pages) {
+    const frames=page.objects.map(object=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
+    for(const frame of frames) {
+      const {object,w,h}=frame,location={pageId:page.id,objectId:object.id};
       if(object.type==='table') {
         const plan=plans.get(object.table.id);
         if(!plan)continue;

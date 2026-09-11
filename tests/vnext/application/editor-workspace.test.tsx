@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createDocumentSession } from '@/vnext/application';
 import { mmToU, type CatalogDocument } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
+import { isCurrentDiagnosticSource } from '@/vnext/app/authoring-diagnostics';
 import { VNextApp } from '@/vnext/app/VNextApp';
 
 afterEach(cleanup);
@@ -43,6 +44,18 @@ function seedShapeDocument(): CatalogDocument {
         shape: 'rectangle',
         style: { fill: '#edf5ff' },
       }],
+    }],
+  };
+}
+
+function seedSafeAreaDocument(frame = { xMm: 5, yMm: 20, widthMm: 40, heightMm: 50 }): CatalogDocument {
+  const document = seedShapeDocument();
+  return {
+    ...document,
+    pages: [{
+      ...document.pages[0],
+      safeArea: { topMm: 10, rightMm: 10, bottomMm: 10, leftMm: 10 },
+      objects: [{ ...document.pages[0].objects[0], frame }],
     }],
   };
 }
@@ -239,5 +252,102 @@ describe('W2.C visible editor workspace', () => {
     fireEvent.click(button(container, 'redo'));
     expect(container.querySelector('[data-editor-preview="true"]')).toBeNull();
     expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(25);
+  });
+});
+
+describe('W2.D visible snapping and diagnostics', () => {
+  it('shows ephemeral page-edge guides, clears them away from the target/commit, and disables snapping without changing pointer sampling', () => {
+    const session = sessionWithDemo(seedShapeDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+
+    fireEvent.pointerDown(hit, { pointerId: 20, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(hit, { pointerId: 20, clientX: 62, clientY: 100 });
+    expect(execute).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-snap-guide="x"][data-snap-guide-kind="page-edge"]')).toBeTruthy();
+
+    fireEvent.pointerMove(hit, { pointerId: 20, clientX: 100, clientY: 100 });
+    expect(container.querySelector('[data-snap-guide]')).toBeNull();
+
+    fireEvent.pointerMove(hit, { pointerId: 20, clientX: 62, clientY: 100 });
+    fireEvent.pointerUp(hit, { pointerId: 20, button: 0, clientX: 62, clientY: 100 });
+    expect(container.querySelector('[data-snap-guide]')).toBeNull();
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(0);
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(button(container, 'undo'));
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(20);
+    fireEvent.click(button(container, 'toggle-snapping'));
+    expect(button(container, 'toggle-snapping')).toHaveAttribute('aria-pressed', 'false');
+
+    const restoredHit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+    fireEvent.pointerDown(restoredHit, { pointerId: 21, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(restoredHit, { pointerId: 21, clientX: 62, clientY: 100 });
+    expect(container.querySelector('[data-snap-guide]')).toBeNull();
+    fireEvent.pointerUp(restoredHit, { pointerId: 21, button: 0, clientX: 62, clientY: 100 });
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(1);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows canonical safe-area warning and outside-page error without moving authored geometry, then clears the error after explicit correction', async () => {
+    const session = sessionWithDemo(seedSafeAreaDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 30, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(hit, { pointerId: 30, button: 0, clientX: 100, clientY: 100 });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-diagnostic-code="SAFE_AREA_VIOLATION"][data-diagnostic-severity="WARNING"]')).toBeTruthy();
+    });
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(5);
+    expect(container.querySelector('[data-editor-safe-area]')).toBeTruthy();
+    expect(container.querySelector('[data-editorial-root] [data-editor-safe-area]')).toBeNull();
+    expect(container.querySelector('[data-editorial-root] [data-editor-diagnostic-badge]')).toBeNull();
+
+    const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')!;
+    fireEvent.change(x, { target: { value: '-1' } });
+    fireEvent.blur(x);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-1);
+    await waitFor(() => {
+      expect(container.querySelector('[data-diagnostic-code="OBJECT_OUTSIDE_PAGE"][data-diagnostic-severity="ERROR"]')).toBeTruthy();
+    });
+
+    fireEvent.change(x, { target: { value: '20' } });
+    fireEvent.blur(x);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(20);
+    await waitFor(() => {
+      expect(container.querySelector('[data-diagnostic-code="OBJECT_OUTSIDE_PAGE"]')).toBeNull();
+    });
+  });
+
+  it('keeps guide, safe-area, badge, toggle, and diagnostics chrome outside every canonical editorial root', async () => {
+    const session = sessionWithDemo(seedSafeAreaDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 40, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(hit, { pointerId: 40, clientX: 110, clientY: 100 });
+    await waitFor(() => expect(container.querySelector('[data-editor-diagnostic-badge]')).toBeTruthy());
+
+    for (const root of container.querySelectorAll('[data-editorial-root]')) {
+      expect(root.querySelector('[data-snap-guide]')).toBeNull();
+      expect(root.querySelector('[data-editor-safe-area]')).toBeNull();
+      expect(root.querySelector('[data-editor-diagnostic-badge]')).toBeNull();
+      expect(root.querySelector('[data-editor-diagnostics]')).toBeNull();
+      expect(root.querySelector('[data-editor-action="toggle-snapping"]')).toBeNull();
+    }
+  });
+
+  it('rejects stale diagnostic results by canonical snapshot identity', () => {
+    const first = seedShapeDocument();
+    const second = {
+      ...first,
+      title: 'new canonical snapshot',
+    };
+    expect(isCurrentDiagnosticSource(first, first)).toBe(true);
+    expect(isCurrentDiagnosticSource(second, first)).toBe(false);
   });
 });

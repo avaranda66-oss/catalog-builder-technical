@@ -7,6 +7,7 @@ import type {
 import type { CatalogDocument, EditorialObject, Frame, Page } from '../domain';
 import { mmToU } from '../domain';
 import { add, mul, pxToQ, roundRatio, safe } from '../domain/physical';
+import { resolveSnap, type SnapGuide, type SnapRectU, type SnapSiblingFrameU } from '../editor/snapping';
 
 export type ResizeHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
 export type GestureKind = { type: 'move' } | { type: 'resize'; handle: ResizeHandle };
@@ -33,6 +34,7 @@ export interface GesturePreview {
   transactionId: string;
   startFrameU: FrameU;
   frameU: FrameU;
+  guides: readonly SnapGuide[];
   kind: GestureKind;
 }
 
@@ -49,6 +51,12 @@ interface ActiveGesture {
   renderedPageWidthQ: number;
   renderedPageHeightQ: number;
   startFrameU: FrameU;
+  pageBoundsU: SnapRectU;
+  safeAreaU?: SnapRectU;
+  siblingFramesU: readonly SnapSiblingFrameU[];
+  snapThresholdU: number;
+  lastClientX: number;
+  lastClientY: number;
   startDocument: CatalogDocument;
 }
 
@@ -61,12 +69,14 @@ export interface BeginGestureInput {
   clientY: number;
   pageClientWidthPx: number;
   pageClientHeightPx: number;
+  snapThresholdPx?: number;
 }
 
 export interface EditorInteractionDependencies {
   getDocument(): CatalogDocument;
   getActivePageId(): string;
   createTransactionId(): string;
+  isSnappingEnabled?(): boolean;
   execute(action: ApplicationAction, context: ApplicationExecutionContext): ApplicationActionResult;
   onPreviewChange(preview: GesturePreview | null): void;
 }
@@ -105,6 +115,26 @@ export function sameFrameU(left: FrameU, right: FrameU): boolean {
 function pointerAxisDeltaU(clientDeltaPx: number, pageExtentU: number, renderedPageExtentQ: number): number {
   const pointerDeltaQ = pxToQ(clientDeltaPx);
   return roundRatio(mul(pointerDeltaQ, pageExtentU), renderedPageExtentQ);
+}
+
+function pageSnapGeometry(page: Page, objectId: string): {
+  pageBoundsU: SnapRectU;
+  safeAreaU?: SnapRectU;
+  siblingFramesU: readonly SnapSiblingFrameU[];
+} {
+  const pageWidthU = mmToU(page.widthMm);
+  const pageHeightU = mmToU(page.heightMm);
+  const pageBoundsU = { xU: 0, yU: 0, widthU: pageWidthU, heightU: pageHeightU };
+  const safeAreaU = page.safeArea ? {
+    xU: mmToU(page.safeArea.leftMm),
+    yU: mmToU(page.safeArea.topMm),
+    widthU: add(add(pageWidthU, -mmToU(page.safeArea.leftMm)), -mmToU(page.safeArea.rightMm)),
+    heightU: add(add(pageHeightU, -mmToU(page.safeArea.topMm)), -mmToU(page.safeArea.bottomMm)),
+  } : undefined;
+  const siblingFramesU = page.objects
+    .filter((object) => object.id !== objectId)
+    .map((object) => ({ objectId: object.id, frameU: frameToU(object.frame) }));
+  return { pageBoundsU, safeAreaU, siblingFramesU };
 }
 
 function resizeAxis(
@@ -210,6 +240,14 @@ export class EditorInteractionController {
     const renderedPageHeightQ = pxToQ(input.pageClientHeightPx);
     if (renderedPageWidthQ <= 0 || renderedPageHeightQ <= 0) return false;
 
+    const pageWidthU = mmToU(location.page.widthMm);
+    const pageHeightU = mmToU(location.page.heightMm);
+    const snapThresholdPx = input.snapThresholdPx ?? 0;
+    const snapThresholdU = Math.max(
+      Math.abs(pointerAxisDeltaU(snapThresholdPx, pageWidthU, renderedPageWidthQ)),
+      Math.abs(pointerAxisDeltaU(snapThresholdPx, pageHeightU, renderedPageHeightQ))
+    );
+
     this.active = {
       pointerId: input.pointerId,
       objectId: input.objectId,
@@ -218,11 +256,15 @@ export class EditorInteractionController {
       kind: input.kind,
       startClientX: input.clientX,
       startClientY: input.clientY,
-      pageWidthU: mmToU(location.page.widthMm),
-      pageHeightU: mmToU(location.page.heightMm),
+      pageWidthU,
+      pageHeightU,
       renderedPageWidthQ,
       renderedPageHeightQ,
       startFrameU: frameToU(location.object.frame),
+      ...pageSnapGeometry(location.page, input.objectId),
+      snapThresholdU,
+      lastClientX: input.clientX,
+      lastClientY: input.clientY,
       startDocument: document,
     };
     return true;
@@ -241,19 +283,41 @@ export class EditorInteractionController {
       gesture.pageHeightU,
       gesture.renderedPageHeightQ
     );
+    const candidateFrameU = previewFrameFromDelta(gesture.startFrameU, gesture.kind, deltaXU, deltaYU);
+    const snapped = resolveSnap({
+      candidateFrameU,
+      pageBoundsU: gesture.pageBoundsU,
+      safeAreaU: gesture.safeAreaU,
+      siblingFramesU: gesture.siblingFramesU,
+      thresholdU: gesture.snapThresholdU,
+      axes: { x: true, y: true },
+      resizeHandle: gesture.kind.type === 'resize' ? gesture.kind.handle : undefined,
+      enabled: this.dependencies.isSnappingEnabled?.() ?? true,
+    });
     return {
       objectId: gesture.objectId,
       pageId: gesture.pageId,
       transactionId: gesture.transactionId,
       startFrameU: gesture.startFrameU,
-      frameU: previewFrameFromDelta(gesture.startFrameU, gesture.kind, deltaXU, deltaYU),
+      frameU: snapped.frameU,
+      guides: snapped.guides,
       kind: gesture.kind,
     };
   }
 
   move(pointerId: number, clientX: number, clientY: number): GesturePreview | null {
     if (!this.active || this.active.pointerId !== pointerId) return null;
+    this.active.lastClientX = clientX;
+    this.active.lastClientY = clientY;
     const preview = this.previewAt(clientX, clientY);
+    this.dependencies.onPreviewChange(preview);
+    return preview;
+  }
+
+  refreshPreview(): GesturePreview | null {
+    const gesture = this.active;
+    if (!gesture) return null;
+    const preview = this.previewAt(gesture.lastClientX, gesture.lastClientY);
     this.dependencies.onPreviewChange(preview);
     return preview;
   }
@@ -269,6 +333,7 @@ export class EditorInteractionController {
     const gesture = this.active;
     if (!gesture || gesture.pointerId !== pointerId) return { status: 'idle' };
 
+    const pointerMoved = clientX !== gesture.startClientX || clientY !== gesture.startClientY;
     const preview = this.previewAt(clientX, clientY);
     const currentDocument = this.dependencies.getDocument();
     let staleReason: GestureStaleReason | undefined;
@@ -288,6 +353,7 @@ export class EditorInteractionController {
     this.dependencies.onPreviewChange(null);
 
     if (staleReason) return { status: 'cancelled', reason: staleReason };
+    if (!pointerMoved) return { status: 'noop' };
     if (!preview || sameFrameU(preview.frameU, gesture.startFrameU)) return { status: 'noop' };
 
     const action = actionForGesture(gesture, preview.frameU);
