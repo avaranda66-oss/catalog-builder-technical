@@ -319,4 +319,3 @@ describe('W3.C degraded asset reopen seam', () => {
     expect(document.assets[0]?.sha256).toBe('f'.repeat(64));
   });
 });
-
