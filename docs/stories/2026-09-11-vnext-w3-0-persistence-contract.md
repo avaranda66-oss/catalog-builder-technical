@@ -34,7 +34,10 @@ This is a docs/governance-only story. W3 implementation remains **NOT STARTED**.
 - [x] An explicit VNext persistence boundary is required; Legacy `brand` and `save_catalog_v3` are not final VNext authority.
 - [x] Save semantics require strict CAS, server ACK, monotonic revision, and immutable history.
 - [x] Concurrency forbids silent last-write-wins and stale/late regression.
+- [x] Async Save completion acceptance is lineage-bound; in L1/S1/L2, S1 can acknowledge only captured L1 while L2 remains dirty, and stale completions are inert.
+- [x] A transport timeout is an ambiguous/unknown commit outcome: preserve local work, do not claim `Saved` or guess revision, and reconcile authoritative remote state before the next mutation.
 - [x] Father conflict UX is limited to open-latest or save-local-as-copy; no normal overwrite-remote action.
+- [x] Save-as-copy is new catalog creation with complete fresh canonical identity closure, fresh UUID-compatible root, new persistence/recovery lineage, no inherited CAS/revision authority, and no mutation of the original.
 - [x] Manual Save and autosave share one future `SaveCoordinator`, with manual Save implemented first.
 - [x] Local recovery is exact-catalog scoped and explicitly distinct from `Saved`.
 - [x] Reopen validates/migrates below React and rejects invalid persisted data before session creation.
@@ -45,7 +48,10 @@ This is a docs/governance-only story. W3 implementation remains **NOT STARTED**.
 - [x] Archive remains lifecycle metadata but is CAS-protected and invalidates the shared concurrency token so stale sessions fail closed.
 - [x] Future evidence explicitly covers stale Rename and Archive-vs-stale-Save races, including prevention of stale recreation or implicit unarchive.
 - [x] Starter/Duplicate require complete fresh identity closure while immutable assets may be shared.
+- [x] Valid pre-W3 non-UUID roots are never silently re-ID'd by Save/Reopen; durable persistence requires an explicit compatible new catalog/copy/import path or explicit persistence-incompatible failure.
 - [x] Missing assets preserve references, allow degraded repair editing, surface diagnostics, and block publication.
+- [x] Asset hash/version/dimension/MIME integrity mismatches preserve canonical `AssetRef`, surface diagnostics/degraded repair behavior, and block publication until explicit repair.
+- [x] Structured repository outcomes distinguish not-found, unauthorized, archived, conflict, invalid document, unsupported version, offline, remote failure, and ambiguous commit outcome sufficiently to prevent unsafe retries and archive resurrection.
 - [x] Supabase/Auth/RLS/CAS patterns are salvageable without restoring Legacy catalog authority.
 - [x] Owner-management UX is deferred.
 - [x] `CatalogDocument.schemaVersion` remains `1` unless authored schema changes.

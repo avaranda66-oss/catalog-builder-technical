@@ -52,6 +52,8 @@ For new W3 catalog roots, `catalogId` must be UUID-compatible with durable persi
 
 Duplicate and Starter creation require a fresh complete canonical identity closure. Shared immutable `AssetRef`s may remain shared references.
 
+An already-valid `CatalogDocument` whose root ID is not UUID-compatible remains valid canonical/in-memory/import/proof content. Ordinary Save or Reopen must not silently rewrite that root identity. If such a document must enter durable W3 catalog persistence, the supported boundary is explicit creation of a new persistence-compatible catalog/copy/import result with a fresh UUID-compatible root, complete fresh canonical identity closure, semantically preserved authored content, intentionally shareable immutable `AssetRef`s, and new persistence/recovery lineage while leaving the original document identity untouched. Direct persistence under the old non-UUID identity may instead fail explicitly as persistence-incompatible and then offer that controlled creation path. The old and new roots must never be treated as the same logical catalog.
+
 ## 3. Remote revision
 
 Remote revision is persistence/session state, not authored content.
@@ -118,11 +120,28 @@ capture immutable CatalogDocument
 
 IndexedDB/localStorage writes, queued requests, optimistic UI, toasts, or request-start events do not mean `Saved`.
 
+An asynchronous Save success, error, or timeout completion may affect active-session persistence state only when it is proven to belong to the still-relevant logical catalog, editing/open-session lineage, save operation/attempt lineage, and captured local edit state. Exact implementation fields are not frozen.
+
+Required acknowledgement behavior:
+
+```text
+L1 exists
+→ Save S1 captures L1 and starts
+→ user creates L2 while S1 is in flight
+→ S1 returns success
+```
+
+If S1 is still a valid operation for that session, its acknowledgement may advance the confirmed remote base revision and acknowledges only the local edit state captured by S1. L2 remains dirty/pending. The UI must not become `Saved` merely because S1 succeeded.
+
+If a request was sent but the client times out or loses transport before learning the authoritative result, commit outcome is ambiguous: the server may or may not have committed. Transport timeout therefore proves neither failure nor success. The client must not advance its expected remote revision merely because the request may have succeeded, must not claim `Saved`, must not blindly retry stale authored content against a newly observed revision, and must preserve local work. Before the next remote mutation it must reconcile against authoritative remote state/revision. The future typed persistence layer must be able to represent this ambiguous/unknown commit outcome or an equivalent semantic state; the exact type name is not frozen.
+
 ## 7. Concurrency
 
 No silent last-write-wins.
 
 Only one remote save per catalog/session may be in flight. Additional local edits remain pending/dirty. Late or stale completion must never regress the document, local edit sequence, remote revision, or save status.
+
+A completion from a previous catalog, a previous open/reopen session, a previous login/session lineage, or a stale save attempt is inert with respect to the current editing session.
 
 CAS remains the correctness authority. Realtime/Presence is not required for W3 correctness.
 
@@ -136,6 +155,8 @@ Father V1 conflict choices are:
 - **Save my work as a copy**
 
 Do not silently retry stale local content against a newer revision. Do not expose remote overwrite as a normal Father V1 action. Do not implement automatic document merging in W3. Local conflict work must be protected before any destructive discard.
+
+**Save my work as a copy** is a new-catalog creation path. It must perform the same complete fresh identity closure required for Starter/Duplicate: fresh UUID-compatible root `catalogId`; fresh Page, Object, Group/descendant, Table/Row/Column/Cell, annotation/legend, RichText paragraph/inline, and every other canonical identity-bearing node. Immutable `AssetRef`s may remain shared. The copy inherits no remote revision and no active CAS authority, establishes new persistence lineage and a recovery namespace keyed to the new catalog, and has no live relationship capable of later mutating, overwriting, unarchiving, or resurrecting the original conflicting catalog. The stale source document remains preserved until explicit conflict resolution is safely completed. Exact future action/service naming is not frozen.
 
 ## 9. Manual Save / autosave
 
@@ -275,6 +296,8 @@ If upload fails, do not create a document reference. If asset finalization succe
 
 If a referenced asset later becomes unavailable, preserve the `AssetRef`, open the catalog in degraded repair mode, show an explicit placeholder/diagnostic, and block publication until resolved. Never silently remove or replace the reference.
 
+The same fail-safe class applies when durable resolution materially disagrees with canonical `AssetRef` integrity metadata such as asset version, SHA-256, MIME type, or dimensions. Preserve the canonical `AssetRef`; treat the resource as unavailable/corrupt/integrity-failed for publication; surface an explicit diagnostic; allow degraded repair editing where safe; and block publication while the required asset cannot be verified. Changing the canonical reference requires explicit repair/relink/replacement. Signed-URL expiration alone is runtime resource resolution and must not mutate authored integrity metadata.
+
 ## 17. Supabase / Legacy salvage
 
 SALVAGE:
@@ -348,6 +371,20 @@ Father-facing states must support:
 
 Normal Father UX hides CAS/revision terminology.
 
+The future structured persistence layer must distinguish semantic outcomes sufficient to drive safe retry/lifecycle policy. Exact transport errors, HTTP/PostgreSQL codes, enum names, and TypeScript names are not frozen, but outcomes equivalent to at least the following are required:
+
+- `NOT_FOUND`
+- `UNAUTHORIZED`
+- `ARCHIVED`
+- `CONFLICT`
+- `INVALID_DOCUMENT`
+- `UNSUPPORTED_VERSION`
+- `OFFLINE`
+- `REMOTE_FAILURE`
+- `AMBIGUOUS_COMMIT_OUTCOME`
+
+Safety semantics are frozen: `CONFLICT` suspends blind automatic remote retry and enters explicit conflict flow while preserving local work; `ARCHIVED` never falls through to "not found, therefore create" and cannot implicitly recreate/unarchive; `UNAUTHORIZED`, `INVALID_DOCUMENT`, and `UNSUPPORTED_VERSION` do not enter normal autosave retry loops; `OFFLINE` and `REMOTE_FAILURE` leave local work unsaved/recoverable and never produce false `Saved`; `AMBIGUOUS_COMMIT_OUTCOME` requires authoritative reconciliation before the next mutation and no guessed revision advancement; `NOT_FOUND` does not imply create for an existing catalog unless the explicit lifecycle operation is catalog creation.
+
 ## 22. Out of scope
 
 W3 does not introduce CRDT, Presence, live cursors, Google-Docs-style merging, enterprise locking, approval workflow, branch/version browser, PIM/ERP integration, translation engine, W4 advanced table editing, or autonomous AI authoring.
@@ -383,7 +420,9 @@ W3 implementation must eventually prove at minimum:
 - strict stale-CAS rejection;
 - two-tab conflict behavior;
 - in-flight edit preservation;
-- late response inertness;
+- async completion acceptance is bound to the relevant catalog/session/save-attempt/captured-edit lineage, including the L1/S1/L2 case where S1 may advance confirmed remote base revision but L2 remains dirty;
+- late/stale completions from old catalog/open/login/save-attempt lineage are inert;
+- ambiguous timeout/unknown commit outcome preserves local work, does not guess revision or `Saved`, and reconciles authoritative remote state before the next mutation;
 - `Saved` only after the correct remote ACK;
 - remote failure remains dirty/recoverable;
 - exact-catalog recovery;
@@ -391,6 +430,8 @@ W3 implementation must eventually prove at minimum:
 - unsupported-schema failure;
 - fresh UUID-compatible blank catalog root;
 - full fresh identity closure for Starter/Duplicate;
+- Save-as-copy has zero forbidden canonical identity overlap with the source, may intentionally share immutable `AssetRef`s, uses a fresh UUID-compatible root and new persistence/recovery lineage, inherits no source remote revision, and does not mutate the original;
+- a valid pre-W3 non-UUID-root document remains valid canonical content, ordinary persistence never silently rewrites its root, and explicit compatible copy/import creation yields a UUID-compatible root with complete fresh identity closure while preserving the original identity;
 - archive prevents stale recreation;
 - Library Rename mutates canonical `CatalogDocument.title`, survives save/reopen, and keeps the lightweight title projection equal to the canonical title;
 - successful Rename advances the remote revision and participates in revision history;
@@ -398,6 +439,8 @@ W3 implementation must eventually prove at minimum:
 - Archive race proof: if Tab A and Tab B open revision N and Tab A archives successfully, Tab B normal Save using N is rejected;
 - the same Archive race rejects Tab B stale Rename using N, does not recreate or silently unarchive the catalog, and does not mutate authored snapshot content merely to represent archive;
 - missing-asset degraded editing plus publication block;
+- asset hash/version/dimension/MIME mismatch preserves canonical `AssetRef`, produces explicit integrity diagnostic/degraded repair behavior, and blocks publication until explicit repair;
+- repository/service outcome semantics distinguish not-found, unauthorized, archived, conflict, invalid document, unsupported version, offline, remote failure, and ambiguous commit outcome sufficiently to prevent unsafe retries, false `Saved`, guessed revision advancement, stale recreation, or archive resurrection;
 - Save/autosave do not alter Undo history;
 - reopen starts new Undo history;
 - React has no independent persistence authority;
