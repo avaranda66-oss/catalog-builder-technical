@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { duplicatePageWithFreshIds } from '@/vnext/application/document';
 import {
   mmToU,
   type AssetRef,
@@ -316,6 +317,68 @@ function allFrames(document: CatalogDocument): Array<readonly [string, number, n
 }
 
 describe('W3.A canonical persistence round-trip', () => {
+  it('normalizes the previously application-produced explicit undefined shape to JSON-safe absence without mutating source', () => {
+    const source = canonicalFixture();
+    let generatedId = 0;
+    const duplicate = duplicatePageWithFreshIds(
+      source,
+      source.pages[1],
+      () => `json-safe-generated-${++generatedId}`
+    );
+    const duplicateWithExplicitUndefined = { ...duplicate, safeArea: undefined };
+    const runtimeDocument: CatalogDocument = {
+      ...source,
+      pages: [...source.pages, duplicateWithExplicitUndefined],
+    };
+    const sourceBefore = structuredClone(runtimeDocument);
+
+    expect(Object.prototype.hasOwnProperty.call(runtimeDocument.pages[2], 'safeArea')).toBe(true);
+    expect(runtimeDocument.pages[2].safeArea).toBeUndefined();
+
+    const jsonSafe = parseCanonicalSnapshot(runtimeDocument);
+    const serialized = serializeCanonicalSnapshot(runtimeDocument);
+    const loaded = parseCanonicalSnapshot(serialized);
+    const envelope = parsePersistenceEnvelope(envelopeFor(runtimeDocument));
+
+    expect(Object.prototype.hasOwnProperty.call(jsonSafe.pages[2], 'safeArea')).toBe(false);
+    expect(JSON.parse(serialized)).toEqual(jsonSafe);
+    expect(loaded).toEqual(jsonSafe);
+    expect(envelope.remoteRevision).toBe(17);
+    expect(Object.prototype.hasOwnProperty.call(envelope.documentSnapshot.pages[2], 'safeArea')).toBe(false);
+    expect(envelope.documentSnapshot.source?.serverVersion).toBe(42);
+    expect(runtimeDocument).toEqual(sourceBefore);
+    expect(Object.prototype.hasOwnProperty.call(runtimeDocument.pages[2], 'safeArea')).toBe(true);
+  });
+
+  it('has application duplication omit optional authored properties that have no value', () => {
+    const source = canonicalFixture();
+    const sourceWithoutTableAnnotationIds = structuredClone(source);
+    const sourceTable = sourceWithoutTableAnnotationIds.pages[0].objects.find((object) => object.type === 'table');
+    if (!sourceTable || sourceTable.type !== 'table') throw new Error('Expected table fixture');
+    delete sourceTable.table.annotationIds;
+
+    let generatedId = 0;
+    const duplicateWithoutSafeArea = duplicatePageWithFreshIds(
+      source,
+      source.pages[1],
+      () => `json-safe-page-${++generatedId}`
+    );
+    const duplicateWithTable = duplicatePageWithFreshIds(
+      sourceWithoutTableAnnotationIds,
+      sourceWithoutTableAnnotationIds.pages[0],
+      () => `json-safe-table-${++generatedId}`
+    );
+    const duplicatedTable = duplicateWithTable.objects.find((object) => object.type === 'table');
+    if (!duplicatedTable || duplicatedTable.type !== 'table') throw new Error('Expected duplicated table fixture');
+    const uncoveredCell = duplicatedTable.table.cells.find((cell) => cell.content.type === 'marker');
+    if (!uncoveredCell) throw new Error('Expected uncovered cell fixture');
+
+    expect(Object.prototype.hasOwnProperty.call(duplicateWithoutSafeArea, 'safeArea')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(duplicatedTable.table, 'annotationIds')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(uncoveredCell, 'coveredBy')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(uncoveredCell, 'annotationIds')).toBe(false);
+  });
+
   it('preserves the complete authored CatalogDocument with deep structural equality and object/page ordering', () => {
     const source = canonicalFixture();
     const serialized = serializeCanonicalSnapshot(source);
@@ -370,6 +433,20 @@ describe('W3.A canonical persistence round-trip', () => {
     expect(envelope.documentSnapshot.source?.serverVersion).toBe(42);
   });
 
+  it('preserves legal null persistence metadata rather than treating null as absent', () => {
+    const source = canonicalFixture();
+    const envelope = parsePersistenceEnvelope({
+      ...envelopeFor(source),
+      createdBy: null,
+      updatedBy: null,
+      archivedAt: null,
+    });
+
+    expect(envelope.createdBy).toBeNull();
+    expect(envelope.updatedBy).toBeNull();
+    expect(envelope.archivedAt).toBeNull();
+  });
+
   it('rejects envelope id/title/locale/schema projection mismatches without rewriting the document', () => {
     const source = canonicalFixture();
     const base = envelopeFor(source);
@@ -396,6 +473,7 @@ describe('W3.A canonical persistence round-trip', () => {
     expectContractError(() => parseCanonicalSnapshot({ ...source, schemaVersion: 2 }), 'UNSUPPORTED_VERSION');
     expectContractError(() => parseCanonicalSnapshot('{bad json'), 'INVALID_DOCUMENT');
     expectContractError(() => parseCanonicalSnapshot(signedAssetUrl), 'INVALID_DOCUMENT');
+    expectContractError(() => parseCanonicalSnapshot({ ...source, unexpectedUndefined: undefined }), 'INVALID_DOCUMENT');
     expectContractError(
       () => parseCanonicalSnapshot({ ...source, pages: [{ ...source.pages[0], unexpectedAuthoredField: 'must-not-drop' }, source.pages[1]] }),
       'INVALID_DOCUMENT'

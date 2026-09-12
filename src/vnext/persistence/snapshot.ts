@@ -85,20 +85,37 @@ function validateCanonicalDocument(input: unknown): CatalogDocument {
   return parsed.data;
 }
 
-/** Validates and serializes one complete authored canonical snapshot without normalization or repair. */
+function toJsonSafeValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => toJsonSafeValue(entry));
+  if (value === null || typeof value !== 'object') return value;
+
+  const snapshot: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined) continue;
+    snapshot[key] = toJsonSafeValue(entry);
+  }
+  return snapshot;
+}
+
+function toJsonSafeCanonicalSnapshot(document: CatalogDocument): CatalogDocument {
+  return toJsonSafeValue(document) as CatalogDocument;
+}
+
+/** Validates and serializes one complete authored snapshot in the explicit JSON-safe canonical representation. */
 export function serializeCanonicalSnapshot(document: CatalogDocument): string {
   const canonical = parseCanonicalSnapshot(document);
   return JSON.stringify(canonical);
 }
 
 /**
- * Loads a current-schema canonical snapshot from JSON text or an already-decoded persistence payload.
+ * Loads a current-schema canonical snapshot from JSON text or an already-decoded persistence payload,
+ * representing optional authored values that are undefined by property absence.
  * Unsupported authored schema versions fail before canonical parsing so they cannot be mistaken for corrupt v1 data.
  */
 export function parseCanonicalSnapshot(payload: unknown): CatalogDocument {
   const decoded = decodePersistedPayload(payload);
   inspectSupportedSchemaVersion(decoded);
-  return validateCanonicalDocument(decoded);
+  return toJsonSafeCanonicalSnapshot(validateCanonicalDocument(decoded));
 }
 
 /** Validates persistence metadata/projection consistency without mutating the authored snapshot. */
