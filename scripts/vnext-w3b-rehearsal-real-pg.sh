@@ -90,7 +90,7 @@ if [[ "$create_identical_state" != "1|1|a0000000-0000-4000-8000-0000000000c1|1|1
   echo "Concurrent identical CREATE durable state invalid: $create_identical_state"
   exit 1
 fi
-echo "[PASS] CONCURRENT IDENTICAL CREATE: both callers received revision 1; one row/history mutation; no revision 2"
+echo "[PASS] concurrent identical CREATE: both callers received revision 1; one row/history mutation; no revision 2"
 
 echo "--- CASE C2: concurrent divergent CREATE fails closed ---"
 cat > "$tmp_dir/create-divergent-a.sql" <<'SQL'
