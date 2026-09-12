@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { CustomTableBlock } from '../../src/components/editor/blocks/CustomTableBlock';
 import { TechnicalTableBlock } from '../../src/components/editor/blocks/TechnicalTableBlock';
 import { computePageFlowPlan, PageLayoutFact } from '../../src/domain/page-flow-planner';
@@ -271,26 +271,32 @@ describe('A4.FLOW.R1.3.1 — Principal Counterproof Test Matrix', () => {
       const { rerender } = render(<TestComponent />);
 
       // Let phase reach ready
-      await vi.waitFor(() => expect(latestState?.isLayoutComplete).toBe(true));
+      await waitFor(() => expect(latestState?.isLayoutComplete).toBe(true));
 
       // Trigger 5 accepted material changes
       for (let i = 1; i <= 5; i++) {
+        const previousGenerationToken = latestState?.generationToken;
         Object.defineProperty(targetElement, 'offsetHeight', { value: 50 + i * 20, writable: true, configurable: true });
         act(() => {
           resizeCallback([{ target: targetElement }]);
         });
         rerender(<TestComponent />);
-        await vi.waitFor(() => expect(latestState?.isLayoutComplete).toBe(true));
+        await waitFor(() => {
+          expect(latestState?.generationToken).not.toBe(previousGenerationToken);
+          expect(latestState?.isLayoutComplete).toBe(true);
+        });
       }
 
       // 6th material change: beyond budget! Must NOT be ignored; must produce LAYOUT_UNSTABLE
+      const previousGenerationToken = latestState?.generationToken;
       Object.defineProperty(targetElement, 'offsetHeight', { value: 200, writable: true, configurable: true });
       act(() => {
         resizeCallback([{ target: targetElement }]);
       });
       rerender(<TestComponent />);
 
-      await vi.waitFor(() => {
+      await waitFor(() => {
+        expect(latestState?.generationToken).not.toBe(previousGenerationToken);
         expect(latestState?.layoutPreflight.issues.some((issue: any) => issue.code === 'LAYOUT_UNSTABLE')).toBe(true);
         expect(latestState?.isLayoutReady).toBe(false);
         expect(latestState?.layoutPreflight.canPublish).toBe(false);
