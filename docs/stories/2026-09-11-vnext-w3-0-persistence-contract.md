@@ -40,7 +40,10 @@ This is a docs/governance-only story. W3 implementation remains **NOT STARTED**.
 - [x] Reopen validates/migrates below React and rejects invalid persisted data before session creation.
 - [x] Save/autosave/ACK do not mutate authored Undo history; reopen starts fresh history.
 - [x] Minimum W3 Library is Create/Open/Rename/Duplicate/Archive with lightweight metadata listing.
+- [x] Rename is a canonical `CatalogDocument.title` mutation with strict CAS/revision semantics, not a metadata-only Library update.
 - [x] Father V1 exposes Archive, not hard Delete; Legacy `catalog_status` is not silently repurposed.
+- [x] Archive remains lifecycle metadata but is CAS-protected and invalidates the shared concurrency token so stale sessions fail closed.
+- [x] Future evidence explicitly covers stale Rename and Archive-vs-stale-Save races, including prevention of stale recreation or implicit unarchive.
 - [x] Starter/Duplicate require complete fresh identity closure while immutable assets may be shared.
 - [x] Missing assets preserve references, allow degraded repair editing, surface diagnostics, and block publication.
 - [x] Supabase/Auth/RLS/CAS patterns are salvageable without restoring Legacy catalog authority.

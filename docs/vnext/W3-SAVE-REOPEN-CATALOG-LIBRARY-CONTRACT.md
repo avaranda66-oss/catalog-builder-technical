@@ -209,6 +209,14 @@ Library listing must use lightweight metadata. Do not download every full `Catal
 
 Hard Delete is deferred. Folders, approval workflow, advanced owner management, collaboration, and realtime are outside the W3 minimum.
 
+### Rename authority
+
+`CatalogDocument.title` is canonical authored content. Catalog Library Rename therefore must mutate `CatalogDocument.title` through structured lifecycle/application authority below React; it must not update only a Library/database metadata title or create an independent metadata title authority.
+
+Rename must persist the resulting complete validated `CatalogDocument` snapshot using strict expected-revision CAS. A successful Rename advances the same remote persistence revision used by canonical Save, updates the canonical snapshot and lightweight title projection atomically/consistently, and participates in revision history. A stale Rename fails closed and must not create a Library-only document authority.
+
+The exact future TypeScript action/service name is not frozen here. Names such as `catalog.rename` are illustrative only; the semantic authority above is frozen.
+
 ## 14. Archive
 
 Father V1 W3 exposes Archive, not permanent Delete.
@@ -216,6 +224,24 @@ Father V1 W3 exposes Archive, not permanent Delete.
 Do not silently reuse the Legacy `catalog_status` enum for archive. Repository evidence shows its original values are `draft`, `review`, `approved`, and `published`, while later Legacy RPCs attempted to accept `archived`.
 
 W3 must resolve archive explicitly, preferably through dedicated lifecycle metadata such as `archivedAt` / `archived_at` or an equivalently explicit VNext design. Legacy enum semantics must not be casually extended.
+
+Archive is persistence/lifecycle metadata. Archiving a catalog does not mutate authored `CatalogDocument` content merely to encode lifecycle state; metadata such as `archivedAt` remains outside the authored document.
+
+Archive must execute through structured lifecycle authority below React and must be CAS-protected against the current remote revision/concurrency token. A successful Archive must atomically change lifecycle state and advance or otherwise invalidate that same concurrency token so already-open stale sessions cannot write through it.
+
+After Archive, ordinary Save against the archived catalog fails closed. Stale Rename against the archived catalog fails closed. A stale open tab must not recreate, implicitly unarchive, or overwrite an archived catalog through normal Save. Hard Delete remains outside Father-V1 W3.
+
+Conceptually:
+
+```text
+open r8
+→ Archive expected r8
+→ lifecycle state changes atomically
+→ concurrency token becomes r9 or equivalent
+→ any stale operation using r8 fails
+```
+
+Exact SQL, table, RPC, or token representation is not frozen in W3.0; the concurrency invariant is.
 
 ## 15. Starter / Duplicate
 
@@ -366,6 +392,11 @@ W3 implementation must eventually prove at minimum:
 - fresh UUID-compatible blank catalog root;
 - full fresh identity closure for Starter/Duplicate;
 - archive prevents stale recreation;
+- Library Rename mutates canonical `CatalogDocument.title`, survives save/reopen, and keeps the lightweight title projection equal to the canonical title;
+- successful Rename advances the remote revision and participates in revision history;
+- stale Rename CAS is rejected and no metadata-only title authority exists;
+- Archive race proof: if Tab A and Tab B open revision N and Tab A archives successfully, Tab B normal Save using N is rejected;
+- the same Archive race rejects Tab B stale Rename using N, does not recreate or silently unarchive the catalog, and does not mutate authored snapshot content merely to represent archive;
 - missing-asset degraded editing plus publication block;
 - Save/autosave do not alter Undo history;
 - reopen starts new Undo history;
