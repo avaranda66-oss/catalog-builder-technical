@@ -41,6 +41,14 @@ describe('W3.B VNext persistence migration static contract', () => {
     expect(sql).toContain("USING ERRCODE = '40001'");
   });
 
+  it('serializes CREATE races with insert-only ON CONFLICT arbitration', () => {
+    const createFunction = functionText('create_vnext_catalog_v1');
+    expect(createFunction).toContain('ON CONFLICT (id) DO NOTHING');
+    expect(createFunction).toContain('RETURNING * INTO v_current');
+    expect(createFunction).toContain('WHERE catalog_id = v_catalog_id AND mutation_id = v_mutation_id');
+    expect(createFunction).not.toContain('ON CONFLICT (id) DO UPDATE');
+  });
+
   it('keeps archive outside the authored snapshot and records every successful operation', () => {
     expect(sql).toContain("operation IN ('create', 'save', 'archive')");
     expect(sql).toContain("v_mutation_id, 'archive', p_expected_remote_revision");

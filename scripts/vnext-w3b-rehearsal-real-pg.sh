@@ -27,22 +27,138 @@ run_psql -f supabase/rehearsals/00024_vnext_catalog_persistence_rehearsal.sql
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+echo "--- CASE C1: concurrent identical CREATE converges idempotently ---"
+cat > "$tmp_dir/create-identical-a.sql" <<'SQL'
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT public.create_vnext_catalog_v1(
+  'a0000000-0000-4000-8000-0000000000c1',
+  '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000c1","title":"Concurrent identical CREATE","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb,
+  '{"originKind":"blank","originId":"concurrent-create","originRevision":0}'::jsonb
+);
+SELECT pg_sleep(2);
+COMMIT;
+SQL
+
+cat > "$tmp_dir/create-identical-b.sql" <<'SQL'
+SET ROLE authenticated;
+SET "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT public.create_vnext_catalog_v1(
+  'a0000000-0000-4000-8000-0000000000c1',
+  '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000c1","title":"Concurrent identical CREATE","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb,
+  '{"originKind":"blank","originId":"concurrent-create","originRevision":0}'::jsonb
+);
+SQL
+
+run_psql -At -f "$tmp_dir/create-identical-a.sql" > "$tmp_dir/create-identical-a.log" 2>&1 &
+create_identical_a_pid=$!
+sleep 0.5
+set +e
+run_psql -At -f "$tmp_dir/create-identical-b.sql" > "$tmp_dir/create-identical-b.log" 2>&1
+create_identical_b_status=$?
+wait "$create_identical_a_pid"
+create_identical_a_status=$?
+set -e
+
+if [[ "$create_identical_a_status" -ne 0 || "$create_identical_b_status" -ne 0 ]]; then
+  echo "Concurrent identical CREATE did not succeed for both callers"
+  cat "$tmp_dir/create-identical-a.log"
+  cat "$tmp_dir/create-identical-b.log"
+  exit 1
+fi
+
+create_identical_a_result="$(grep -m1 '"catalogId"' "$tmp_dir/create-identical-a.log" || true)"
+create_identical_b_result="$(grep -m1 '"catalogId"' "$tmp_dir/create-identical-b.log" || true)"
+if [[ -z "$create_identical_a_result" || "$create_identical_a_result" != "$create_identical_b_result" ]]; then
+  echo "Concurrent identical CREATE callers did not receive the same authoritative result"
+  cat "$tmp_dir/create-identical-a.log"
+  cat "$tmp_dir/create-identical-b.log"
+  exit 1
+fi
+
+create_identical_state="$(run_psql -Atc "
+SELECT
+  (SELECT count(*) FROM public.vnext_catalogs WHERE id='10000000-0000-4000-8000-0000000000c1'::uuid) || '|' ||
+  (SELECT remote_revision FROM public.vnext_catalogs WHERE id='10000000-0000-4000-8000-0000000000c1'::uuid) || '|' ||
+  (SELECT last_mutation_id::text FROM public.vnext_catalogs WHERE id='10000000-0000-4000-8000-0000000000c1'::uuid) || '|' ||
+  (SELECT count(*) FROM public.vnext_catalog_revisions WHERE catalog_id='10000000-0000-4000-8000-0000000000c1'::uuid) || '|' ||
+  (SELECT count(*) FROM public.vnext_catalog_revisions WHERE catalog_id='10000000-0000-4000-8000-0000000000c1'::uuid AND mutation_id='a0000000-0000-4000-8000-0000000000c1'::uuid) || '|' ||
+  (SELECT count(*) FROM public.vnext_catalog_revisions WHERE catalog_id='10000000-0000-4000-8000-0000000000c1'::uuid AND revision>1);
+")"
+if [[ "$create_identical_state" != "1|1|a0000000-0000-4000-8000-0000000000c1|1|1|0" ]]; then
+  echo "Concurrent identical CREATE durable state invalid: $create_identical_state"
+  exit 1
+fi
+echo "[PASS] CONCURRENT IDENTICAL CREATE: both callers received revision 1; one row/history mutation; no revision 2"
+
+echo "--- CASE C2: concurrent divergent CREATE fails closed ---"
+cat > "$tmp_dir/create-divergent-a.sql" <<'SQL'
+BEGIN;
+SET LOCAL ROLE authenticated;
+SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT public.create_vnext_catalog_v1(
+  'a0000000-0000-4000-8000-0000000000c2',
+  '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000c2","title":"Concurrent divergent winner","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb,
+  NULL
+);
+SELECT pg_sleep(2);
+COMMIT;
+SQL
+
+cat > "$tmp_dir/create-divergent-b.sql" <<'SQL'
+SET ROLE authenticated;
+SET "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT public.create_vnext_catalog_v1(
+  'a0000000-0000-4000-8000-0000000000c3',
+  '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000c2","title":"Concurrent divergent contender","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb,
+  NULL
+);
+SQL
+
+run_psql -At -f "$tmp_dir/create-divergent-a.sql" > "$tmp_dir/create-divergent-a.log" 2>&1 &
+create_divergent_a_pid=$!
+sleep 0.5
+set +e
+run_psql -At -f "$tmp_dir/create-divergent-b.sql" > "$tmp_dir/create-divergent-b.log" 2>&1
+create_divergent_b_status=$?
+wait "$create_divergent_a_pid"
+create_divergent_a_status=$?
+set -e
+
+if [[ "$create_divergent_a_status" -ne 0 || "$create_divergent_b_status" -eq 0 ]]; then
+  echo "Concurrent divergent CREATE outcome invalid"
+  cat "$tmp_dir/create-divergent-a.log"
+  cat "$tmp_dir/create-divergent-b.log"
+  exit 1
+fi
+grep -q "VNEXT_DUPLICATE_CATALOG" "$tmp_dir/create-divergent-b.log"
+
+create_divergent_state="$(run_psql -Atc "
+SELECT remote_revision || '|' || title || '|' || last_mutation_id::text || '|' ||
+       (SELECT count(*) FROM public.vnext_catalog_revisions r WHERE r.catalog_id=c.id) || '|' ||
+       (SELECT count(*) FROM public.vnext_catalog_revisions r WHERE r.catalog_id=c.id AND r.revision>1)
+FROM public.vnext_catalogs c
+WHERE id='10000000-0000-4000-8000-0000000000c2'::uuid;
+")"
+if [[ "$create_divergent_state" != "1|Concurrent divergent winner|a0000000-0000-4000-8000-0000000000c2|1|0" ]]; then
+  echo "Concurrent divergent CREATE durable state invalid: $create_divergent_state"
+  exit 1
+fi
+echo "[PASS] CONCURRENT DIVERGENT CREATE: one revision-1 winner; contender conflicted; no overwrite or revision 2"
+
 echo "--- CASE A: true SAVE / SAVE contention ---"
 cat > "$tmp_dir/save-a.sql" <<'SQL'
 BEGIN;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
-SELECT id
-FROM public.vnext_catalogs
-WHERE id = '10000000-0000-4000-8000-000000000070'::uuid
-FOR UPDATE;
-SELECT pg_sleep(2);
 SELECT public.save_vnext_catalog_cas_v1(
   '10000000-0000-4000-8000-000000000070',
   1,
   'a0000000-0000-4000-8000-000000000071',
   '{"schemaVersion":1,"id":"10000000-0000-4000-8000-000000000070","title":"SAVE winner A","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb
 );
+SELECT pg_sleep(2);
 COMMIT;
 SQL
 
@@ -92,17 +208,13 @@ cat > "$tmp_dir/race-save.sql" <<'SQL'
 BEGIN;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
-SELECT id
-FROM public.vnext_catalogs
-WHERE id = '10000000-0000-4000-8000-000000000080'::uuid
-FOR UPDATE;
-SELECT pg_sleep(2);
 SELECT public.save_vnext_catalog_cas_v1(
   '10000000-0000-4000-8000-000000000080',
   1,
   'a0000000-0000-4000-8000-000000000081',
   '{"schemaVersion":1,"id":"10000000-0000-4000-8000-000000000080","title":"SAVE race winner","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb
 );
+SELECT pg_sleep(2);
 COMMIT;
 SQL
 

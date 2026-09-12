@@ -92,8 +92,14 @@ jobs:
 
       - name: Execute W3.B real database and concurrency rehearsal
         run: |
+          set -euo pipefail
           chmod +x scripts/vnext-w3b-rehearsal-real-pg.sh
           ./scripts/vnext-w3b-rehearsal-real-pg.sh 2>&1 | tee vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] CONCURRENT IDENTICAL CREATE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] CONCURRENT DIVERGENT CREATE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] SAVE/SAVE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] SAVE/ARCHIVE' vnext-w3b-rehearsal.log
+          grep -Fq 'W3.B REAL DATABASE REHEARSAL PASSED' vnext-w3b-rehearsal.log
 
       - name: Upload rehearsal evidence
         uses: actions/upload-artifact@v4

@@ -106,6 +106,28 @@ BEGIN
 
   BEGIN
     PERFORM public.create_vnext_catalog_v1(
+      v_create_mutation,
+      jsonb_set(v_create, '{title}', '"Divergent create snapshot"'),
+      '{"originKind":"blank","originId":"w3b-rehearsal","originRevision":0}'::jsonb
+    );
+    RAISE EXCEPTION 'POINT-04A divergent create snapshot reuse succeeded';
+  EXCEPTION WHEN serialization_failure THEN
+    IF SQLERRM NOT LIKE '%VNEXT_MUTATION_REUSE%' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.create_vnext_catalog_v1(
+      v_create_mutation,
+      v_create,
+      '{"originKind":"blank","originId":"different-origin","originRevision":0}'::jsonb
+    );
+    RAISE EXCEPTION 'POINT-04B divergent create origin reuse succeeded';
+  EXCEPTION WHEN serialization_failure THEN
+    IF SQLERRM NOT LIKE '%VNEXT_MUTATION_REUSE%' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.create_vnext_catalog_v1(
       'a0000000-0000-4000-8000-000000000011',
       v_create,
       '{"originKind":"blank","originId":"w3b-rehearsal","originRevision":0}'::jsonb
@@ -147,6 +169,17 @@ BEGIN
   THEN
     RAISE EXCEPTION 'POINT-07 save mismatch: %', v_result;
   END IF;
+
+  BEGIN
+    PERFORM public.create_vnext_catalog_v1(
+      v_create_mutation,
+      v_create,
+      '{"originKind":"blank","originId":"w3b-rehearsal","originRevision":0}'::jsonb
+    );
+    RAISE EXCEPTION 'POINT-07A historical create replay succeeded after later mutation';
+  EXCEPTION WHEN serialization_failure THEN
+    IF SQLERRM NOT LIKE '%VNEXT_MUTATION_REPLAY_STALE%' THEN RAISE; END IF;
+  END;
 
   v_result := public.save_vnext_catalog_cas_v1(v_catalog, 1, v_save_mutation, v_saved);
   IF (v_result->>'remoteRevision')::int <> 2 THEN

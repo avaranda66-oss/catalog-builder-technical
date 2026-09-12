@@ -398,37 +398,6 @@ BEGIN
     END IF;
   END IF;
 
-  SELECT * INTO v_current
-  FROM public.vnext_catalogs
-  WHERE id = v_catalog_id
-  FOR UPDATE;
-
-  IF FOUND THEN
-    SELECT * INTO v_replay
-    FROM public.vnext_catalog_revisions
-    WHERE catalog_id = v_catalog_id AND mutation_id = v_mutation_id;
-
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'VNEXT_DUPLICATE_CATALOG: catalog % already exists', v_catalog_id
-        USING ERRCODE = '40001';
-    END IF;
-    IF v_replay.revision <> v_current.remote_revision THEN
-      RAISE EXCEPTION 'VNEXT_MUTATION_REPLAY_STALE: mutation is no longer latest'
-        USING ERRCODE = '40001';
-    END IF;
-    IF v_replay.operation <> 'create'
-      OR v_replay.expected_remote_revision IS NOT NULL
-      OR v_replay.document_snapshot IS DISTINCT FROM p_document_snapshot
-      OR v_replay.origin_kind IS DISTINCT FROM v_origin_kind
-      OR v_replay.origin_id IS DISTINCT FROM v_origin_id
-      OR v_replay.origin_revision IS DISTINCT FROM v_origin_revision
-    THEN
-      RAISE EXCEPTION 'VNEXT_MUTATION_REUSE: mutation id reused with divergent create payload'
-        USING ERRCODE = '40001';
-    END IF;
-    RETURN public.vnext_catalog_envelope_v1(v_current);
-  END IF;
-
   INSERT INTO public.vnext_catalogs (
     id,
     remote_revision,
@@ -459,7 +428,44 @@ BEGIN
     1,
     p_document_snapshot
   )
+  ON CONFLICT (id) DO NOTHING
   RETURNING * INTO v_current;
+
+  IF NOT FOUND THEN
+    SELECT * INTO v_current
+    FROM public.vnext_catalogs
+    WHERE id = v_catalog_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'VNEXT_CONFLICT: catalog % disappeared during create arbitration', v_catalog_id
+        USING ERRCODE = '40001';
+    END IF;
+
+    SELECT * INTO v_replay
+    FROM public.vnext_catalog_revisions
+    WHERE catalog_id = v_catalog_id AND mutation_id = v_mutation_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'VNEXT_DUPLICATE_CATALOG: catalog % already exists', v_catalog_id
+        USING ERRCODE = '40001';
+    END IF;
+    IF v_replay.revision <> v_current.remote_revision THEN
+      RAISE EXCEPTION 'VNEXT_MUTATION_REPLAY_STALE: mutation is no longer latest'
+        USING ERRCODE = '40001';
+    END IF;
+    IF v_replay.operation <> 'create'
+      OR v_replay.expected_remote_revision IS NOT NULL
+      OR v_replay.document_snapshot IS DISTINCT FROM p_document_snapshot
+      OR v_replay.origin_kind IS DISTINCT FROM v_origin_kind
+      OR v_replay.origin_id IS DISTINCT FROM v_origin_id
+      OR v_replay.origin_revision IS DISTINCT FROM v_origin_revision
+    THEN
+      RAISE EXCEPTION 'VNEXT_MUTATION_REUSE: mutation id reused with divergent create payload'
+        USING ERRCODE = '40001';
+    END IF;
+    RETURN public.vnext_catalog_envelope_v1(v_current);
+  END IF;
 
   INSERT INTO public.vnext_catalog_revisions (
     catalog_id,

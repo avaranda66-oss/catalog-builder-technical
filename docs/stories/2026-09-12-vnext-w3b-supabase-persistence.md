@@ -63,6 +63,14 @@ For one catalog, a mutation UUID may replay only when that mutation is still the
 
 The repository adapter distinguishes known pre-dispatch offline state, ordinary remote failure, and an unknown outcome after mutation dispatch. A timeout/network failure after dispatch is `AMBIGUOUS_COMMIT_OUTCOME`; W3.B does not guess a revision, mark Saved, or retry. Future W3.C reconciliation may compare authoritative `getCatalog()` state with `lastMutationId`, but W3.C is not implemented here.
 
+## Final adversarial remediation
+
+The independent final W3.B audit accepted the authority model and identified three focused blockers. This amendment closes them without expanding W3.B scope.
+
+- The real-database workflow now propagates rehearsal failures through its logging pipeline and asserts the required completion markers. SAVE/SAVE and SAVE/ARCHIVE contention acquires locks through the mutation RPC path, with no application-role pre-lock.
+- `SupabaseCatalogRepository` uses `OFFLINE` only before dispatch. After RPC invocation, mutation transport loss is `AMBIGUOUS_COMMIT_OUTCOME`, the equivalent read outcome is `REMOTE_FAILURE`, structured transport codes including `ETIMEDOUT` are recognized, and concrete domain/SQL outcomes retain semantic precedence.
+- `create_vnext_catalog_v1` now arbitrates insertion races with insert-only `ON CONFLICT (id) DO NOTHING RETURNING`. A losing caller loads the committed row under lock and applies the existing replay/divergence/staleness rules. Concurrent exact duplicate CREATE converges on one revision-1 commit; divergent CREATE still fails closed, and CREATE remains non-upsert authority.
+
 ## SQL validation boundary
 
 The database validates only the persistence/security spine: JSON object shape, the exact allowed CatalogDocument top-level key set, exact schema version 1, exact lowercase UUID root consistency, non-empty title/locale projections, required top-level style/pages/assets shape, optional strict `source` root semantics (`documentId` plus safe non-negative integer `serverVersion`), and a 10 MiB defensive snapshot bound. RichText, Table, primitives, Group semantics, geometry, and the rest of the authored schema remain W3.A/domain authority.
@@ -73,7 +81,7 @@ Principal exact-head audit identified and closed direct RPC root structural pois
 
 `supabase/rehearsals/00024_vnext_catalog_persistence_rehearsal.sql` covers create revision/history, duplicate create, unauthorized/viewer mutation denial, editor/admin mutation success, direct DML denial, immutable history, malformed RPC rejection, UUID textual round-trip, save/stale save, archive/stale/already-archived behavior, replay identity, divergent mutation reuse, cross-catalog mutation reuse, lightweight list behavior, RLS/grants, and a rehearsal-only history-insert failure trigger proving transaction rollback. It also bypasses `SupabaseCatalogRepository` with authenticated direct RPC calls to prove unknown root keys and malformed `source` are rejected on CREATE and SAVE, valid `source` with `serverVersion: 0` passes, rejected CREATE produces no current/history row, and rejected SAVE changes neither snapshot, remote revision, last mutation identity, nor history. The direct-RPC poisoning matrix includes `remoteRevision`, `mutationId`, arbitrary root keys, null/empty/string/array `source`, empty `documentId`, negative/fractional/string/unsafe `serverVersion`, and the valid zero-version control.
 
-`scripts/vnext-w3b-rehearsal-real-pg.sh` adds true separate-session contention. SAVE/SAVE holds the row in session A while session B attempts the same expected revision, proving one N+1 winner and one conflict with no N+2/history gap. SAVE/ARCHIVE uses the same pattern and proves one valid transition with no resurrection or current/history divergence.
+`scripts/vnext-w3b-rehearsal-real-pg.sh` adds true separate-session contention. Concurrent identical CREATE forces overlap while the winning CREATE transaction remains open, proving both callers receive the same authoritative revision-1 result with one current row and one history row. Concurrent divergent CREATE proves one revision-1 winner, one conflict, no overwrite, and no revision 2. SAVE/SAVE and SAVE/ARCHIVE invoke the real mutation RPC in session A and keep that transaction open while session B invokes the competing RPC, so contention occurs inside the application mutation path and the stale caller fails under CAS.
 
 The authoritative real-database result is the dedicated GitHub workflow on the exact PR head; local Docker is unavailable in this environment. Run identity and exact-head result are read from GitHub after publication rather than self-referenced inside this commit.
 
@@ -85,7 +93,7 @@ Service-role behavior is not used as application authority; the CI rehearsal rec
 
 ## Local validation
 
-- Focused W3.A/W3.B persistence tests: **40/40 PASS**.
+- Focused W3.A/W3.B persistence tests: **47/47 PASS**.
 - VNext architecture boundary: **13/13 PASS**.
 - Git Bash syntax validation for `scripts/vnext-w3b-rehearsal-real-pg.sh`: **PASS**.
 - Full pre-push repository gates are recorded by the implementation report and exact-head GitHub checks.

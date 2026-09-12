@@ -90,12 +90,28 @@ function rpcMessage(error: VNextPersistenceRpcError): string {
   return [error.message, error.details, error.hint].filter((part): part is string => Boolean(part)).join(' | ');
 }
 
+const TRANSPORT_ERROR_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENETDOWN',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'ABORT_ERR',
+]);
+
 function isTransportLike(error: VNextPersistenceRpcError): boolean {
+  const code = error.code?.toUpperCase();
+  if (code && TRANSPORT_ERROR_CODES.has(code)) return true;
   const message = rpcMessage(error).toLowerCase();
   return /failed to fetch|network|timeout|timed out|connection|econn|abort/.test(message);
 }
 
-function mapRpcError(error: VNextPersistenceRpcError): PersistenceErrorCode {
+function mapSemanticRpcError(error: VNextPersistenceRpcError): PersistenceErrorCode | null {
   const message = rpcMessage(error);
   if (message.includes('VNEXT_NOT_FOUND')) return 'NOT_FOUND';
   if (message.includes('VNEXT_ARCHIVED')) return 'ARCHIVED';
@@ -109,7 +125,7 @@ function mapRpcError(error: VNextPersistenceRpcError): PersistenceErrorCode {
   if (error.code === '42501' || message.includes('VNEXT_UNAUTHORIZED') || message.includes('AUTH_')) return 'UNAUTHORIZED';
   if (error.code === '40001' || error.code === '23505') return 'CONFLICT';
   if (error.code === '22023' || error.code === '22P02' || message.includes('VNEXT_INVALID_DOCUMENT')) return 'INVALID_DOCUMENT';
-  return 'REMOTE_FAILURE';
+  return null;
 }
 
 export class SupabaseCatalogRepository implements CatalogRepository {
@@ -133,14 +149,15 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     try {
       const response = await this.client.rpc(functionName, args);
       if (response.error) {
+        const semanticError = mapSemanticRpcError(response.error);
+        if (semanticError) return failure(semanticError, rpcMessage(response.error));
         if (isTransportLike(response.error)) {
-          if (this.isOffline()) return failure('OFFLINE', rpcMessage(response.error));
           return failure(
             kind === 'mutation' ? 'AMBIGUOUS_COMMIT_OUTCOME' : 'REMOTE_FAILURE',
             rpcMessage(response.error)
           );
         }
-        return failure(mapRpcError(response.error), rpcMessage(response.error));
+        return failure('REMOTE_FAILURE', rpcMessage(response.error));
       }
       if (response.data === null || response.data === undefined) {
         return failure('REMOTE_FAILURE', `${functionName} returned no authoritative payload`);
@@ -151,7 +168,6 @@ export class SupabaseCatalogRepository implements CatalogRepository {
         return contractFailure(error);
       }
     } catch (error) {
-      if (this.isOffline()) return failure('OFFLINE', error instanceof Error ? error.message : String(error));
       return failure(
         kind === 'mutation' ? 'AMBIGUOUS_COMMIT_OUTCOME' : 'REMOTE_FAILURE',
         error instanceof Error ? error.message : String(error)

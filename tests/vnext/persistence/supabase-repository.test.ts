@@ -148,10 +148,29 @@ describe('SupabaseCatalogRepository', () => {
     expect(client.rpc).toHaveBeenCalledTimes(1);
   });
 
-  it('treats a transport-like resolved RPC error as ambiguous even when the client attaches a code', async () => {
+  it('keeps a rejected mutation ambiguous when connectivity changes after dispatch', async () => {
+    const isOffline = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+    const client: VNextPersistenceRpcClient & { rpc: ReturnType<typeof vi.fn> } = {
+      rpc: vi.fn().mockRejectedValue(new Error('request failed')),
+    };
+    const repository = new SupabaseCatalogRepository(client, { isOffline });
+
+    const result = await repository.saveCAS({
+      mutationId: MUTATION_ID,
+      catalogId: CATALOG_ID,
+      expectedRemoteRevision: 1,
+      documentSnapshot: documentFixture(),
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(isOffline).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a code-only ETIMEDOUT signal for post-dispatch mutation ambiguity', async () => {
     const client = clientReturning({
       data: null,
-      error: { code: 'ETIMEDOUT', message: 'network timeout after request dispatch' },
+      error: { code: 'ETIMEDOUT', message: 'request failed' },
     });
     const repository = new SupabaseCatalogRepository(client, { isOffline: () => false });
 
@@ -164,6 +183,36 @@ describe('SupabaseCatalogRepository', () => {
 
     expect(result).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
     expect(client.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps code-only ETIMEDOUT after a read dispatch to REMOTE_FAILURE', async () => {
+    const client = clientReturning({
+      data: null,
+      error: { code: 'ETIMEDOUT', message: 'request failed' },
+    });
+    const repository = new SupabaseCatalogRepository(client, { isOffline: () => false });
+
+    const result = await repository.getCatalog(CATALOG_ID);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'REMOTE_FAILURE' } });
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps concrete PostgreSQL/domain rejection semantic even when its text looks transport-like', async () => {
+    const client = clientReturning({
+      data: null,
+      error: { code: '40001', message: 'VNEXT_CONFLICT: network race lost' },
+    });
+    const repository = new SupabaseCatalogRepository(client, { isOffline: () => false });
+
+    const result = await repository.saveCAS({
+      mutationId: MUTATION_ID,
+      catalogId: CATALOG_ID,
+      expectedRemoteRevision: 1,
+      documentSnapshot: documentFixture(),
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
   });
 
   it('maps non-transport server failures to REMOTE_FAILURE', async () => {
@@ -183,6 +232,21 @@ describe('SupabaseCatalogRepository', () => {
     const repository = new SupabaseCatalogRepository(client, { isOffline: () => true });
 
     const result = await repository.getCatalog(CATALOG_ID);
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'OFFLINE' } });
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it('classifies a known pre-dispatch offline mutation without calling RPC', async () => {
+    const client = clientReturning({ data: envelope(), error: null });
+    const repository = new SupabaseCatalogRepository(client, { isOffline: () => true });
+
+    const result = await repository.saveCAS({
+      mutationId: MUTATION_ID,
+      catalogId: CATALOG_ID,
+      expectedRemoteRevision: 1,
+      documentSnapshot: documentFixture(),
+    });
 
     expect(result).toMatchObject({ ok: false, error: { code: 'OFFLINE' } });
     expect(client.rpc).not.toHaveBeenCalled();
