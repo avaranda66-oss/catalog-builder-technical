@@ -317,6 +317,67 @@ function allFrames(document: CatalogDocument): Array<readonly [string, number, n
 }
 
 describe('W3.A canonical persistence round-trip', () => {
+  it('represents authored numeric negative zero as positive zero without mutating the source document', () => {
+    const source = canonicalFixture();
+    const sourceObject = source.pages[0].objects[0];
+    sourceObject.frame.xMm = -0;
+    sourceObject.frame.yMm = -0.5;
+    sourceObject.zIndex = -1;
+    source.title = '-0';
+    const sourceTable = source.pages[0].objects.find((object) => object.type === 'table');
+    if (!sourceTable || sourceTable.type !== 'table') throw new Error('Expected table fixture');
+    sourceTable.table.annotationIds = [];
+    const sourceBefore = structuredClone(source);
+
+    expect(Object.is(sourceObject.frame.xMm, -0)).toBe(true);
+
+    const snapshot = parseCanonicalSnapshot(source);
+    const serialized = serializeCanonicalSnapshot(source);
+    const decoded = JSON.parse(serialized) as CatalogDocument;
+    const loaded = parseCanonicalSnapshot(serialized);
+
+    expect(Object.is(snapshot.pages[0].objects[0].frame.xMm, -0)).toBe(false);
+    expect(snapshot.pages[0].objects[0].frame.xMm).toBe(0);
+    expect(Object.is(decoded.pages[0].objects[0].frame.xMm, -0)).toBe(false);
+    expect(decoded.pages[0].objects[0].frame.xMm).toBe(0);
+    expect(serialized).toContain('"xMm":0');
+    expect(Object.is(loaded.pages[0].objects[0].frame.xMm, -0)).toBe(false);
+    expect(loaded.pages[0].objects[0].frame.xMm).toBe(0);
+    expect(snapshot.pages[0].objects[0].frame.yMm).toBe(-0.5);
+    expect(snapshot.pages[0].objects[0].zIndex).toBe(-1);
+    expect(snapshot.pages[0].objects[0].frame.widthMm).toBe(source.pages[0].objects[0].frame.widthMm);
+    expect(snapshot.title).toBe('-0');
+    const snapshotGroup = snapshot.pages[0].objects.find((object): object is GroupObject => object.type === 'group');
+    expect(snapshotGroup?.objects[0].frame.xMm).toBe(0);
+    expect(Object.is(snapshotGroup?.objects[0].frame.xMm, -0)).toBe(false);
+    const snapshotTable = snapshot.pages[0].objects.find((object) => object.type === 'table');
+    expect(snapshotTable?.type === 'table' ? snapshotTable.table.annotationIds : undefined).toEqual([]);
+    expect(source).toEqual(sourceBefore);
+    expect(Object.is(source.pages[0].objects[0].frame.xMm, -0)).toBe(true);
+  });
+
+  it('represents persistence revision negative zero as positive zero after envelope validation', () => {
+    const source = canonicalFixture();
+    const input = {
+      ...envelopeFor(source),
+      remoteRevision: -0,
+      origin: { originKind: 'starter', originId: 'starter-psv', originRevision: -0 },
+    };
+
+    expect(Object.is(input.remoteRevision, -0)).toBe(true);
+    expect(Object.is(input.origin.originRevision, -0)).toBe(true);
+
+    const envelope = parsePersistenceEnvelope(input);
+    const handle = persistenceHandleFromEnvelope(envelope);
+
+    expect(Object.is(envelope.remoteRevision, -0)).toBe(false);
+    expect(envelope.remoteRevision).toBe(0);
+    expect(Object.is(envelope.origin?.originRevision, -0)).toBe(false);
+    expect(envelope.origin?.originRevision).toBe(0);
+    expect(Object.is(handle.remoteRevision, -0)).toBe(false);
+    expect(handle.remoteRevision).toBe(0);
+  });
+
   it('normalizes the previously application-produced explicit undefined shape to JSON-safe absence without mutating source', () => {
     const source = canonicalFixture();
     let generatedId = 0;

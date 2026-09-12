@@ -12,14 +12,14 @@ W3.0 gate: PR #28 merged; Quality Gate run `34668097170` completed `SUCCESS` for
 
 ## Objective
 
-Establish the pure VNext persistence seam for one complete validated `CatalogDocument` snapshot plus thin persistence/lifecycle metadata. Prove exact canonical semantic/structural round-trip for JSON-safe canonical documents, with deterministic representational absence for optional authored properties whose runtime value is `undefined`, without introducing a second authored document model.
+Establish the pure VNext persistence seam for one complete validated `CatalogDocument` snapshot plus thin persistence/lifecycle metadata. Prove exact canonical semantic/structural round-trip in the durable JSON-safe representation, with optional object-property `undefined` represented by absence and numeric `-0` represented by numeric `0`, without introducing a second authored document model.
 
 ## Scope / acceptance criteria
 
 - [x] Pure `src/vnext/persistence/` contract layer remains React-, DOM-, Supabase-, network-, browser-storage-, and Legacy-authority-free.
 - [x] Persistence envelope keeps `catalogId`, `remoteRevision`, projections, lifecycle metadata, schema metadata, and the complete `CatalogDocument` snapshot.
 - [x] `remoteRevision` and archive metadata remain outside authored `CatalogDocument`.
-- [x] Snapshot serialization validates the existing canonical VNext document first, then produces the explicit JSON-safe representation by omitting only optional object properties whose value is `undefined`; JSON-safe authored structure, ordering, IDs, integer-U-compatible geometry, and AssetRefs remain exact.
+- [x] Snapshot serialization validates the existing canonical VNext document first, then produces the explicit JSON-safe representation by omitting optional object properties whose value is `undefined` and representing numeric `-0` as `0`; all other defined canonical authored structure, ordering, IDs, integer-U-compatible geometry, and AssetRefs remain exact.
 - [x] Snapshot load inspects schema version, rejects unsupported versions explicitly, and performs canonical schema + domain/table validation without repair.
 - [x] Envelope mismatches for id/title/locale/schema fail explicitly without rewriting authored content.
 - [x] Non-UUID canonical roots still parse; persistence compatibility reports them as incompatible without rewriting the root.
@@ -36,7 +36,7 @@ W3.B+ is out of scope: no Supabase schema/RPC/client, remote implementation, Sav
 ## Architecture decisions
 
 - `CatalogDocument` remains the sole authored authority.
-- Persistence serializes the validated canonical snapshot directly; the only representation step is deterministic omission of object properties whose validated optional value is `undefined`. No normalized page/object/table persistence model exists.
+- Persistence serializes the validated canonical snapshot directly; the only representation changes are deterministic omission of object properties whose validated optional value is `undefined` and deterministic numeric `-0 → +0`. No normalized page/object/table persistence model exists.
 - `CatalogDocument.source.serverVersion` remains authored provenance and is never used as the W3 CAS revision.
 - W3.A defers runtime generation of new UUID roots; it freezes only the pure UUID compatibility boundary.
 - Repository listing returns lightweight metadata and never requires a full document download.
@@ -61,6 +61,20 @@ The focused `src/vnext/**` producer audit found four relevant authored optional-
 
 Regression coverage now proves the historical explicit-`undefined` shape normalizes deterministically to absence, the input remains unchanged, ordinary JSON-safe rich fixtures still deep-round-trip exactly, application duplication naturally omits empty optional authored fields, unknown fields including an unknown `undefined` field remain rejected, legal nullable persistence metadata remains `null`, and remote revision stays outside authored content. The existing rich fixture continues to cover array ordering, IDs, integer-U geometry, Group-local geometry, RichText identities/content, complete Table structure/presentation, all primitives, AssetRefs, and authored provenance.
 
+## Independent negative-zero amendment — 2026-09-12
+
+Independent adversarial audit of PR #29 head `8803c7949d79881ac0dba207964548749e95176e`, tree `3463d756453ecdaa8e3a03c5b206f05b97054aff`, found one JSON-representational counterexample. A canonically valid authored `frame.xMm = -0` passed schema/domain validation and the explicit JSON-safe snapshot still retained IEEE-754 negative zero, while JSON serialization encoded it as numeric `0`. The pre-fix regression reproduced this directly: `Object.is(snapshot.pages[0].objects[0].frame.xMm, -0)` was `true`, so the new positive-zero expectation failed.
+
+For current canonical numeric fields, `-0` and `+0` do not encode distinct authored semantics across the durable JSON boundary. The frozen rule is narrow: validated numeric `-0` becomes numeric `+0`; ordinary negative and positive numbers remain unchanged; textual `"-0"` remains a string. This joins the already-frozen optional-property rule `undefined → absence`. No other normalization is authorized.
+
+Ordering remains decode if needed → inspect `schemaVersion` → `CatalogDocumentSchema` validation → `validateDocument` → JSON-safe representational normalization → JSON serialization. Normalization never runs before canonical validation, so an unknown field whose value is `undefined` is still rejected instead of disappearing.
+
+The conversion builds a fresh graph and does not mutate the source. Regression evidence uses `Object.is` to prove the source retains `-0` while the explicit snapshot, serialized JSON, and reloaded document contain positive zero. It also proves `-0.5`, `-1`, positive values, textual `"-0"`, empty arrays, ordering, nested IDs, Group-local frames, Table topology, AssetRefs, nullable metadata, and authored `source.serverVersion` preserve their existing semantics.
+
+Persistence envelope parsing applies the same durable numeric representation after envelope schema validation: `remoteRevision: -0` and `originRevision: -0` become positive revision zero. Monotonic-revision semantics are unchanged, and `remoteRevision` remains outside `CatalogDocument`.
+
+The architecture scanner observation that it does not explicitly recognize `react-dom` or CommonJS `require` imports remains a non-blocking future hardening opportunity. No W3.A production leak was observed, so this amendment leaves the scanner unchanged.
+
 ## Files
 
 - `src/vnext/application/document.ts`
@@ -70,19 +84,20 @@ Regression coverage now proves the historical explicit-`undefined` shape normali
 - `tests/vnext/persistence/persistence-contracts.test.ts`
 - `tests/vnext/proof/architecture-boundary.test.ts`
 - `docs/stories/2026-09-11-vnext-w3a-persistence-contracts-roundtrip.md`
+- `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`
 - `docs/vnext/PROJECT-STATE.md`
 - `docs/vnext/PRINCIPAL-HANDOFF.md`
 - `docs/vnext/PRINCIPAL-AUDITOR-HANDOFF.md`
 
 ## Tests / proofs
 
-- JSON-safe persistence regression: **13/13 PASS**.
+- JSON-safe persistence regression: **15/15 PASS**.
 - Architecture boundary proof: **13/13 PASS**.
 - Application duplication regressions: `application-actions.test.ts` **14/14 PASS** and `object-actions.test.ts` **26/26 PASS**.
-- Full `npm test`: **214 test files PASS; 2317 tests PASS; 1 skipped; 2318 total**.
+- Full Vitest suite: **214 test files PASS; 2319 tests PASS; 1 skipped; 2320 total**.
 - `npm run typecheck`: **PASS**.
 - `npm run lint`: **PASS with 0 errors / 268 existing warnings**.
-- `npm run build`: **PASS**; Vite built 2331 modules in 10.82s, with existing chunk/dynamic-import warnings.
+- `npm run build`: **PASS**; Vite built 2331 modules in 14.76s, with existing chunk/dynamic-import warnings.
 - Adversarial proof covers JSON-safe undefined omission and source immutability in addition to deep structural equality, integer-U geometry, Group-local geometry, all W2 primitives, RichText identities, Table semantics/presentation, AssetRef integrity metadata, external remote revision, legal null preservation, archive separation, strict projection consistency, unsupported schema failure, invalid-document/unknown-field failure, and non-UUID compatibility without rewrite.
 
 ## PR / CI truth

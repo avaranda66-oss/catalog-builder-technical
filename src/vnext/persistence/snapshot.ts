@@ -85,7 +85,12 @@ function validateCanonicalDocument(input: unknown): CatalogDocument {
   return parsed.data;
 }
 
+function toJsonSafeNumber(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
+
 function toJsonSafeValue(value: unknown): unknown {
+  if (typeof value === 'number') return toJsonSafeNumber(value);
   if (Array.isArray(value)) return value.map((entry) => toJsonSafeValue(entry));
   if (value === null || typeof value !== 'object') return value;
 
@@ -139,10 +144,19 @@ export function parsePersistenceEnvelope(input: unknown): CatalogPersistenceEnve
   if (parsed.data.documentSchemaVersion !== documentSnapshot.schemaVersion) {
     mismatch('documentSchemaVersion does not match documentSnapshot.schemaVersion');
   }
+  const origin = parsed.data.origin
+    ? {
+        originKind: parsed.data.origin.originKind,
+        ...(parsed.data.origin.originId === undefined ? {} : { originId: parsed.data.origin.originId }),
+        ...(parsed.data.origin.originRevision === undefined
+          ? {}
+          : { originRevision: toJsonSafeNumber(parsed.data.origin.originRevision) }),
+      }
+    : undefined;
 
   return {
     catalogId: parsed.data.catalogId,
-    remoteRevision: parsed.data.remoteRevision,
+    remoteRevision: toJsonSafeNumber(parsed.data.remoteRevision),
     title: parsed.data.title,
     locale: parsed.data.locale,
     createdAt: parsed.data.createdAt,
@@ -150,14 +164,14 @@ export function parsePersistenceEnvelope(input: unknown): CatalogPersistenceEnve
     createdBy: parsed.data.createdBy,
     updatedBy: parsed.data.updatedBy,
     archivedAt: parsed.data.archivedAt,
-    ...(parsed.data.origin ? { origin: parsed.data.origin } : {}),
+    ...(origin ? { origin } : {}),
     documentSchemaVersion: CURRENT_PERSISTED_DOCUMENT_SCHEMA_VERSION,
     documentSnapshot,
   };
 }
 
 export function persistenceHandleFromEnvelope(envelope: CatalogPersistenceEnvelope): CatalogPersistenceHandle {
-  return { catalogId: envelope.catalogId, remoteRevision: envelope.remoteRevision };
+  return { catalogId: envelope.catalogId, remoteRevision: toJsonSafeNumber(envelope.remoteRevision) };
 }
 
 /** Reports durable-root compatibility while preserving valid canonical non-UUID identities unchanged. */

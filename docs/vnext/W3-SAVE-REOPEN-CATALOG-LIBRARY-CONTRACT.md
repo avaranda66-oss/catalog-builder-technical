@@ -1,6 +1,6 @@
 # Catalog Builder VNext — W3 Save / Reopen / Catalog Library Contract
 
-STATUS: **W3.0 UNDER REVIEW / NOT CANONICAL YET**
+STATUS: **W3.0 CANONICAL**
 
 DATE: 2026-09-11
 
@@ -8,9 +8,9 @@ PURPOSE: freeze the W3 persistence/lifecycle architecture before any W3 implemen
 
 Canonical base verified before this contract was authored: `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. PR #27 is merged. Post-closeout Quality Gate run `34649885701` completed `SUCCESS` on the canonical SHA.
 
-Input provenance: independent W3 repository research by Gemini is **COMPLETE**. Principal confrontation verdict is **A — W3 RESEARCH ACCEPTED**. This document converts that accepted research and Principal decisions into a reviewable repository contract. It is not canonical until its PR is Principal-audited and explicitly authorized for merge.
+Input provenance: independent W3 repository research by Gemini is **COMPLETE**. Principal confrontation verdict is **A — W3 RESEARCH ACCEPTED**. This document converts that accepted research and Principal decisions into the canonical repository contract. PR #28 was merged; canonical promotion SHA is `b34156c597dcd47a5ab6d154f73ffa7a323d4664`.
 
-W3 implementation is **NOT STARTED**.
+W3.0 is canonical. W3.A is implemented and under review. W3.B is **NOT STARTED**.
 
 ## Father V1 north star
 
@@ -72,6 +72,8 @@ saveStatus
 ## 4. Persistence representation
 
 Persist one complete validated `CatalogDocument` snapshot surrounded by thin persistence/index metadata.
+
+After canonical validation, the durable JSON-safe representation maps optional object-property `undefined` to property absence and numeric `-0` to numeric `0`; all other defined canonical authored structure and values remain exact. No other normalization, default insertion, rounding, array reordering, ID change, unit conversion, or renderer repair is authorized.
 
 Conceptually:
 
@@ -409,7 +411,7 @@ W3.0 implements none of these slices.
 
 W3 implementation must eventually prove at minimum:
 
-- exact `CatalogDocument` serialize/reopen equality;
+- exact semantic/structural `CatalogDocument` serialize/reopen equality in the durable JSON-safe representation, where optional object-property `undefined` is absence and numeric `-0` is numeric `0`, with all other defined canonical authored structure and values exact;
 - exact preservation of integer-U geometry;
 - Text/RichText identity preservation;
 - Table IDs/spans/annotations/legends preservation;
@@ -449,6 +451,6 @@ W3 implementation must eventually prove at minimum:
 
 ## Governance gate
 
-This contract is **UNDER REVIEW / NOT CANONICAL YET**.
+This contract is **CANONICAL**.
 
-Next gate: Principal audit of the W3.0 contract PR. W3 implementation remains blocked until this contract is accepted and merged with explicit user authorization.
+PR #28 merged and promoted W3.0 canonically at `b34156c597dcd47a5ab6d154f73ffa7a323d4664`. The W3.0 governance gate is closed; implementation slices proceed under their own review and merge gates.
