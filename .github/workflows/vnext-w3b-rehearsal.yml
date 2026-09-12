@@ -1,0 +1,116 @@
+name: VNext W3.B Real PostgreSQL Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/00024_vnext_catalog_persistence.sql'
+      - 'supabase/rehearsals/00024_vnext_catalog_persistence_rehearsal.sql'
+      - 'scripts/vnext-w3b-rehearsal-real-pg.sh'
+      - '.github/workflows/vnext-w3b-rehearsal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-db-rehearsal:
+    name: VNext W3.B real DB CAS/history proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL client and Supabase CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          npm install --no-save supabase@2.116.0
+          npx supabase --version
+
+      - name: Isolate migration boundary
+        run: |
+          mkdir -p target_00024 target_00023 pending_00022 pending_00005_00013 pending_00014_00021
+          cp supabase/migrations/00024_vnext_catalog_persistence.sql target_00024/00024_vnext_catalog_persistence.sql
+          rm supabase/migrations/00024_vnext_catalog_persistence.sql
+          cp supabase/migrations/00023_product_dataset_search_index.sql target_00023/00023_product_dataset_search_index.sql
+          rm supabase/migrations/00023_product_dataset_search_index.sql
+          cp supabase/migrations/00022_product_workbook_persistence.sql pending_00022/00022_product_workbook_persistence.sql
+          rm supabase/migrations/00022_product_workbook_persistence.sql
+          mv supabase/migrations/0000[5-9]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[0-3]* pending_00005_00013/ || true
+          mv supabase/migrations/0001[4-9]* pending_00014_00021/ || true
+          mv supabase/migrations/0002[0-1]* pending_00014_00021/ || true
+          ls -la supabase/migrations/
+
+      - name: Start disposable Supabase at 00001-00004
+        run: |
+          npx supabase init
+          npx supabase start
+
+      - name: Apply live-derived baseline bridge
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-live-baseline.sql
+
+      - name: Apply historical migrations 00005-00013
+        run: |
+          mv pending_00005_00013/*.sql supabase/migrations/
+          npx supabase migration up --local
+
+      - name: Apply pre-00014 reconciliation
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-gap2-pre14.sql
+
+      - name: Apply historical migrations 00014-00021
+        run: |
+          mv pending_00014_00021/*.sql supabase/migrations/
+          npx supabase migration up --local
+
+      - name: Apply post-00014 reconciliation
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f scripts/db-release0-gap2-post14.sql
+
+      - name: Apply migration 00022
+        run: |
+          cp pending_00022/00022_product_workbook_persistence.sql supabase/migrations/00022_product_workbook_persistence.sql
+          npx supabase migration up --local
+
+      - name: Apply migration 00023
+        run: |
+          cp target_00023/00023_product_dataset_search_index.sql supabase/migrations/00023_product_dataset_search_index.sql
+          PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/00023_product_dataset_search_index.sql
+
+      - name: Restore W3.B migration
+        run: |
+          cp target_00024/00024_vnext_catalog_persistence.sql supabase/migrations/00024_vnext_catalog_persistence.sql
+
+      - name: Execute W3.B real database and concurrency rehearsal
+        run: |
+          set -euo pipefail
+          chmod +x scripts/vnext-w3b-rehearsal-real-pg.sh
+          ./scripts/vnext-w3b-rehearsal-real-pg.sh 2>&1 | tee vnext-w3b-rehearsal.log
+          grep -Fq '[PROOF] C1 session A reached post-CREATE transaction hold' vnext-w3b-rehearsal.log
+          grep -Fq '[PROOF] C1 session B is blocked by session A' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] concurrent identical CREATE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] CONCURRENT DIVERGENT CREATE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] SAVE/SAVE' vnext-w3b-rehearsal.log
+          grep -Fq '[PASS] SAVE/ARCHIVE' vnext-w3b-rehearsal.log
+          grep -Fq 'W3.B REAL DATABASE REHEARSAL PASSED' vnext-w3b-rehearsal.log
+
+      - name: Upload rehearsal evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vnext-w3b-real-db-evidence
+          path: vnext-w3b-rehearsal.log
+          retention-days: 30
+
+      - name: Stop disposable Supabase
+        if: always()
+        run: npx supabase stop --no-backup || true
