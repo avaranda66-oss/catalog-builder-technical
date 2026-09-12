@@ -17,8 +17,15 @@ import {
   parsePersistenceEnvelope,
   persistenceHandleFromEnvelope,
   serializeCanonicalSnapshot,
+  type ArchiveCatalogCasRequest,
+  type CatalogListItem,
   type CatalogPersistenceEnvelope,
+  type CreateCatalogRequest,
+  type SaveCatalogCasRequest,
 } from '@/vnext/persistence';
+
+const PERSISTED_MUTATION_ID = 'b0000000-0000-0000-0000-000000000001';
+const NEXT_MUTATION_ID = 'b0000000-0000-0000-0000-000000000002';
 
 function richText(prefix: string): RichText {
   return {
@@ -277,6 +284,7 @@ function envelopeFor(document: CatalogDocument): CatalogPersistenceEnvelope {
   return {
     catalogId: document.id,
     remoteRevision: 17,
+    lastMutationId: PERSISTED_MUTATION_ID,
     title: document.title,
     locale: document.locale,
     createdAt: '2026-09-11T20:00:00.000Z',
@@ -488,8 +496,16 @@ describe('W3.A canonical persistence round-trip', () => {
     const firstHandle = persistenceHandleFromEnvelope(envelope);
     const acknowledgedHandle = { ...firstHandle, remoteRevision: 18 };
 
-    expect(firstHandle).toEqual({ catalogId: source.id, remoteRevision: 17 });
-    expect(acknowledgedHandle).toEqual({ catalogId: source.id, remoteRevision: 18 });
+    expect(firstHandle).toEqual({
+      catalogId: source.id,
+      remoteRevision: 17,
+      lastMutationId: PERSISTED_MUTATION_ID,
+    });
+    expect(acknowledgedHandle).toEqual({
+      catalogId: source.id,
+      remoteRevision: 18,
+      lastMutationId: PERSISTED_MUTATION_ID,
+    });
     expect(envelope.documentSnapshot).toEqual(authoredBefore);
     expect(envelope.documentSnapshot.source?.serverVersion).toBe(42);
   });
@@ -555,9 +571,99 @@ describe('W3.A canonical persistence round-trip', () => {
     expect(parsed.id).toBe(source.id);
   });
 
+  it('keeps uppercase UUID roots canonical but persistence-incompatible without normalizing them', () => {
+    const uppercaseRoot = 'A0000000-0000-0000-0000-000000000001';
+    const source = canonicalFixture(uppercaseRoot);
+    const sourceBefore = structuredClone(source);
+
+    const parsed = parseCanonicalSnapshot(serializeCanonicalSnapshot(source));
+    const compatibility = checkCatalogRootPersistenceCompatibility(parsed);
+
+    expect(parsed.id).toBe(uppercaseRoot);
+    expect(parsed).toEqual(sourceBefore);
+    expect(source).toEqual(sourceBefore);
+    expect(compatibility).toEqual({
+      compatible: false,
+      catalogId: uppercaseRoot,
+      reason: 'ROOT_ID_NOT_UUID_COMPATIBLE',
+    });
+  });
+
   it('recognizes UUID-compatible durable roots without changing the identity', () => {
     const source = canonicalFixture();
     expect(checkCatalogRootPersistenceCompatibility(source)).toEqual({ compatible: true, catalogId: source.id });
+  });
+
+  it('accepts and round-trips only canonical lowercase lastMutationId persistence identity', () => {
+    const source = canonicalFixture();
+    const wireEnvelope = { ...envelopeFor(source), lastMutationId: PERSISTED_MUTATION_ID };
+    const serializedEnvelope = JSON.stringify(wireEnvelope);
+    const parsed = parsePersistenceEnvelope(JSON.parse(serializedEnvelope));
+
+    expect(parsed.lastMutationId).toBe(PERSISTED_MUTATION_ID);
+    expect(JSON.parse(serializedEnvelope).lastMutationId).toBe(PERSISTED_MUTATION_ID);
+
+    for (const lastMutationId of [
+      PERSISTED_MUTATION_ID.toUpperCase(),
+      'b0000000-0000-0000-0000-00000000000g',
+      ` ${PERSISTED_MUTATION_ID}`,
+      `${PERSISTED_MUTATION_ID} `,
+      '',
+      17,
+    ]) {
+      expectContractError(
+        () => parsePersistenceEnvelope({ ...envelopeFor(source), lastMutationId }),
+        'INVALID_DOCUMENT'
+      );
+    }
+  });
+
+  it('keeps mutation identity as persistence metadata outside authored state and schemaVersion', () => {
+    const source = canonicalFixture();
+    const schemaVersionBefore = source.schemaVersion;
+
+    const createRequest = {
+      mutationId: PERSISTED_MUTATION_ID,
+      documentSnapshot: source,
+    } satisfies CreateCatalogRequest;
+    const saveRequest = {
+      mutationId: NEXT_MUTATION_ID,
+      catalogId: source.id,
+      expectedRemoteRevision: 17,
+      documentSnapshot: source,
+    } satisfies SaveCatalogCasRequest;
+    const archiveRequest = {
+      mutationId: NEXT_MUTATION_ID,
+      catalogId: source.id,
+      expectedRemoteRevision: 17,
+    } satisfies ArchiveCatalogCasRequest;
+
+    expect(createRequest.mutationId).toBe(PERSISTED_MUTATION_ID);
+    expect(saveRequest.mutationId).toBe(NEXT_MUTATION_ID);
+    expect(archiveRequest.mutationId).toBe(NEXT_MUTATION_ID);
+    expect('mutationId' in source).toBe(false);
+    expect(source.schemaVersion).toBe(schemaVersionBefore);
+  });
+
+  it('keeps CatalogListItem lightweight without document snapshots or mutation acknowledgement state', () => {
+    const source = canonicalFixture();
+    const envelope = envelopeFor(source);
+    const listItem: CatalogListItem = {
+      catalogId: envelope.catalogId,
+      remoteRevision: envelope.remoteRevision,
+      title: envelope.title,
+      locale: envelope.locale,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+      createdBy: envelope.createdBy,
+      updatedBy: envelope.updatedBy,
+      archivedAt: envelope.archivedAt,
+      origin: envelope.origin,
+      documentSchemaVersion: envelope.documentSchemaVersion,
+    };
+
+    expect('documentSnapshot' in listItem).toBe(false);
+    expect('lastMutationId' in listItem).toBe(false);
   });
 
   it('keeps archive lifecycle metadata outside and independent from the authored snapshot', () => {

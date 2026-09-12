@@ -1,6 +1,6 @@
 # W3.A — Persistence Contracts + Exact Canonical Round-Trip
 
-Status: **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL**
+Status: **IMPLEMENTED / AMENDED / UNDER REVIEW / NOT CANONICAL**
 
 Date: 2026-09-11
 
@@ -75,6 +75,24 @@ Persistence envelope parsing applies the same durable numeric representation aft
 
 The architecture scanner observation that it does not explicitly recognize `react-dom` or CommonJS `require` imports remains a non-blocking future hardening opportunity. No W3.A production leak was observed, so this amendment leaves the scanner unchanged.
 
+## Final persistence identity amendment — 2026-09-12
+
+Independent W3.B adversarial preflight identified a forward-contract gap: a lost mutation acknowledgement cannot always be reconciled deterministically from revision alone, and durable root identity needed an exact textual rule before a database adapter is designed. Principal direction therefore amended W3.A only; W3.B remains not started.
+
+Durable root compatibility now requires the exact lowercase UUID textual form `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. The compatibility check performs no trimming, lowercasing, rewriting, or replacement-ID generation. An otherwise-valid canonical document with uppercase UUID root or a legacy non-UUID root remains byte/string-identical authored content and reports `ROOT_ID_NOT_UUID_COMPATIBLE`. Nested canonical IDs are unchanged.
+
+`CreateCatalogRequest`, `SaveCatalogCasRequest`, and `ArchiveCatalogCasRequest` now require `mutationId: string`. The frozen semantic rule requires the same lowercase UUID textual form. Mutation identity is persistence metadata only: it never enters `CatalogDocument`, Undo/Redo, or document `schemaVersion`.
+
+`CatalogPersistenceMetadata` now carries required `lastMutationId`, so exact fetch/mutation envelopes expose the server-confirmed identity of the latest durable mutation. `CatalogPersistenceHandle` carries `catalogId`, `remoteRevision`, and `lastMutationId`. To preserve lightweight Library semantics, `CatalogListItem` is `Omit<CatalogPersistenceMetadata, 'lastMutationId'>`; it contains neither mutation acknowledgement state nor `documentSnapshot`.
+
+Strict persistence-envelope parsing requires `lastMutationId` to use canonical lowercase UUID text. Uppercase, malformed, whitespace-padded, empty, and non-string values fail without normalization. The value survives ordinary object/JSON serialization and parse unchanged.
+
+The future ambiguous-outcome rule is now explicit. For mutation `M1`, an authoritative read with `lastMutationId === M1` proves that exact mutation committed. If remote state remains at the prior revision and `lastMutationId` differs, `M1` did not commit. If remote state advanced under another mutation, conflict/reconciliation is required. The client does not guess a revision or blindly retry.
+
+The future replay rule is scoped by catalog, conceptually `UNIQUE(catalogId, mutationId)`: same mutation identity plus same operation/effective payload may return the prior committed result without another revision advance; the same identity with different intent/payload fails closed with no new revision. No SQL, Supabase client, RPC, SaveCoordinator, UI, recovery, or W3.B implementation was added.
+
+The durable-root rule permits a future W3.B adapter to use a native database UUID only when exact round-trip equality to authored root text is proven. Existing uppercase/non-compatible roots are never normalized and require the already-frozen controlled compatible copy/import path if durable persistence is desired.
+
 ## Files
 
 - `src/vnext/application/document.ts`
@@ -91,13 +109,13 @@ The architecture scanner observation that it does not explicitly recognize `reac
 
 ## Tests / proofs
 
-- JSON-safe persistence regression: **15/15 PASS**.
+- Persistence regression suite after the final identity amendment: **19/19 PASS**, including the original 15 regressions plus lowercase-root compatibility, uppercase-root non-normalization/incompatibility, strict `lastMutationId` parsing/round-trip, required mutation request identity outside authored state, and lightweight `CatalogListItem` behavior.
 - Architecture boundary proof: **13/13 PASS**.
 - Application duplication regressions: `application-actions.test.ts` **14/14 PASS** and `object-actions.test.ts` **26/26 PASS**.
-- Full Vitest suite: **214 test files PASS; 2319 tests PASS; 1 skipped; 2320 total**.
+- Full Vitest suite: **214 test files PASS; 2323 tests PASS; 1 skipped; 2324 total**.
 - `npm run typecheck`: **PASS**.
 - `npm run lint`: **PASS with 0 errors / 268 existing warnings**.
-- `npm run build`: **PASS**; Vite built 2331 modules in 14.76s, with existing chunk/dynamic-import warnings.
+- `npm run build`: **PASS**; Vite built 2331 modules in 16.30s, with existing chunk/dynamic-import warnings.
 - Adversarial proof covers JSON-safe undefined omission and source immutability in addition to deep structural equality, integer-U geometry, Group-local geometry, all W2 primitives, RichText identities, Table semantics/presentation, AssetRef integrity metadata, external remote revision, legal null preservation, archive separation, strict projection consistency, unsupported schema failure, invalid-document/unknown-field failure, and non-UUID compatibility without rewrite.
 
 ## PR / CI truth
@@ -110,6 +128,6 @@ Principal-audited pre-amendment live head/tree and prior CI are recorded above. 
 
 W3.0: **CANONICAL**
 
-W3.A: **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL**
+W3.A: **IMPLEMENTED / AMENDED / UNDER REVIEW / NOT CANONICAL**
 
 W3.B: **NOT STARTED**

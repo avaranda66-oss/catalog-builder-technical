@@ -12,6 +12,8 @@ import {
 const clean = z.string().min(1);
 const safeNonnegativeInteger = z.number().int().safe().nonnegative();
 const safePositiveInteger = z.number().int().safe().positive();
+const CANONICAL_PERSISTENCE_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const canonicalPersistenceUuid = z.string().regex(CANONICAL_PERSISTENCE_UUID_PATTERN);
 
 const OriginMetadataSchema = z.object({
   originKind: clean,
@@ -22,6 +24,7 @@ const OriginMetadataSchema = z.object({
 const PersistenceEnvelopeWireSchema = z.object({
   catalogId: clean,
   remoteRevision: safeNonnegativeInteger,
+  lastMutationId: canonicalPersistenceUuid,
   title: clean,
   locale: clean,
   createdAt: clean,
@@ -33,8 +36,6 @@ const PersistenceEnvelopeWireSchema = z.object({
   documentSchemaVersion: safePositiveInteger,
   documentSnapshot: z.unknown(),
 }).strict();
-
-const UUID_COMPATIBLE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class PersistenceContractError extends Error {
   constructor(
@@ -157,6 +158,7 @@ export function parsePersistenceEnvelope(input: unknown): CatalogPersistenceEnve
   return {
     catalogId: parsed.data.catalogId,
     remoteRevision: toJsonSafeNumber(parsed.data.remoteRevision),
+    lastMutationId: parsed.data.lastMutationId,
     title: parsed.data.title,
     locale: parsed.data.locale,
     createdAt: parsed.data.createdAt,
@@ -171,7 +173,11 @@ export function parsePersistenceEnvelope(input: unknown): CatalogPersistenceEnve
 }
 
 export function persistenceHandleFromEnvelope(envelope: CatalogPersistenceEnvelope): CatalogPersistenceHandle {
-  return { catalogId: envelope.catalogId, remoteRevision: toJsonSafeNumber(envelope.remoteRevision) };
+  return {
+    catalogId: envelope.catalogId,
+    remoteRevision: toJsonSafeNumber(envelope.remoteRevision),
+    lastMutationId: envelope.lastMutationId,
+  };
 }
 
 /** Reports durable-root compatibility while preserving valid canonical non-UUID identities unchanged. */
@@ -179,7 +185,7 @@ export function checkCatalogRootPersistenceCompatibility(
   document: CatalogDocument
 ): CatalogRootPersistenceCompatibility {
   const canonical = parseCanonicalSnapshot(document);
-  return UUID_COMPATIBLE_PATTERN.test(canonical.id)
+  return CANONICAL_PERSISTENCE_UUID_PATTERN.test(canonical.id)
     ? { compatible: true, catalogId: canonical.id }
     : { compatible: false, catalogId: canonical.id, reason: 'ROOT_ID_NOT_UUID_COMPATIBLE' };
 }

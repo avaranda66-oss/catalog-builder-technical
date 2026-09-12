@@ -13,6 +13,7 @@ export interface CatalogOriginMetadata {
 export interface CatalogPersistenceMetadata {
   readonly catalogId: string;
   readonly remoteRevision: number;
+  readonly lastMutationId: string;
   readonly title: string;
   readonly locale: string;
   readonly createdAt: string;
@@ -28,11 +29,12 @@ export interface CatalogPersistenceEnvelope extends CatalogPersistenceMetadata {
   readonly documentSnapshot: CatalogDocument;
 }
 
-export type CatalogListItem = CatalogPersistenceMetadata;
+export type CatalogListItem = Omit<CatalogPersistenceMetadata, 'lastMutationId'>;
 
 export interface CatalogPersistenceHandle {
   readonly catalogId: string;
   readonly remoteRevision: number;
+  readonly lastMutationId: string;
 }
 
 export type CatalogRootPersistenceCompatibility =
@@ -75,17 +77,20 @@ export interface CatalogListQuery {
 }
 
 export interface CreateCatalogRequest {
+  readonly mutationId: string;
   readonly documentSnapshot: CatalogDocument;
   readonly origin?: CatalogOriginMetadata;
 }
 
 export interface SaveCatalogCasRequest {
+  readonly mutationId: string;
   readonly catalogId: string;
   readonly expectedRemoteRevision: number;
   readonly documentSnapshot: CatalogDocument;
 }
 
 export interface ArchiveCatalogCasRequest {
+  readonly mutationId: string;
   readonly catalogId: string;
   readonly expectedRemoteRevision: number;
 }
