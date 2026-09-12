@@ -35,7 +35,6 @@ beforeEach(() => {
   Element.prototype.setPointerCapture = vi.fn();
   Element.prototype.releasePointerCapture = vi.fn();
 });
-
 function textDocument(id = A_ID, title = 'Catalog A', content = 'Modelo'): CatalogDocument {
   return {
     schemaVersion: 1,

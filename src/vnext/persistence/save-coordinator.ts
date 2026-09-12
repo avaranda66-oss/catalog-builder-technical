@@ -35,7 +35,6 @@ interface SaveAttempt {
   readonly previousLastMutationId: string;
   readonly request: SaveCatalogCasRequest;
 }
-
 interface SaveFlight {
   readonly attempt: SaveAttempt;
   readonly promise: Promise<ManualSaveResult>;
