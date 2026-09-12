@@ -1,6 +1,6 @@
 # Catalog Builder VNext — W3 Save / Reopen / Catalog Library Contract
 
-STATUS: **W3.0 UNDER REVIEW / NOT CANONICAL YET**
+STATUS: **W3.0 CANONICAL**
 
 DATE: 2026-09-11
 
@@ -8,9 +8,9 @@ PURPOSE: freeze the W3 persistence/lifecycle architecture before any W3 implemen
 
 Canonical base verified before this contract was authored: `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. PR #27 is merged. Post-closeout Quality Gate run `34649885701` completed `SUCCESS` on the canonical SHA.
 
-Input provenance: independent W3 repository research by Gemini is **COMPLETE**. Principal confrontation verdict is **A — W3 RESEARCH ACCEPTED**. This document converts that accepted research and Principal decisions into a reviewable repository contract. It is not canonical until its PR is Principal-audited and explicitly authorized for merge.
+Input provenance: independent W3 repository research by Gemini is **COMPLETE**. Principal confrontation verdict is **A — W3 RESEARCH ACCEPTED**. This document converts that accepted research and Principal decisions into the canonical repository contract. PR #28 was merged; canonical promotion SHA is `b34156c597dcd47a5ab6d154f73ffa7a323d4664`.
 
-W3 implementation is **NOT STARTED**.
+W3.0 is canonical. W3.A is implemented, amended, under review, and not canonical. W3.B is **NOT STARTED**. The final W3.A persistence-identity amendment was discovered during independent W3.B adversarial preflight; it freezes forward contracts only and does not implement W3.B infrastructure.
 
 ## Father V1 north star
 
@@ -48,11 +48,11 @@ Persistence stores a validated representation of that existing canonical authori
 
 `CatalogDocument.id` is the stable logical `catalogId`.
 
-For new W3 catalog roots, `catalogId` must be UUID-compatible with durable persistence. This does not authorize a global conversion of all nested canonical IDs to UUID. Nested Page/Object/Table/Cell/RichText identities remain governed by the existing canonical allocator.
+For new W3 catalog roots, `catalogId` must use the canonical lowercase UUID textual form `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, with lowercase hexadecimal characters only. Input is never trimmed, lowercased, regenerated, or otherwise normalized to satisfy this rule. This does not authorize a global conversion of all nested canonical IDs to UUID. Nested Page/Object/Table/Cell/RichText identities remain governed by the existing canonical allocator.
 
 Duplicate and Starter creation require a fresh complete canonical identity closure. Shared immutable `AssetRef`s may remain shared references.
 
-An already-valid `CatalogDocument` whose root ID is not UUID-compatible remains valid canonical/in-memory/import/proof content. Ordinary Save or Reopen must not silently rewrite that root identity. If such a document must enter durable W3 catalog persistence, the supported boundary is explicit creation of a new persistence-compatible catalog/copy/import result with a fresh UUID-compatible root, complete fresh canonical identity closure, semantically preserved authored content, intentionally shareable immutable `AssetRef`s, and new persistence/recovery lineage while leaving the original document identity untouched. Direct persistence under the old non-UUID identity may instead fail explicitly as persistence-incompatible and then offer that controlled creation path. The old and new roots must never be treated as the same logical catalog.
+An already-valid `CatalogDocument` whose root ID is not persistence-compatible, including an uppercase UUID or a non-UUID root, remains valid canonical/in-memory/import/proof content when it otherwise satisfies the authored schema. Ordinary Save or Reopen must not silently rewrite that root identity. If such a document must enter durable W3 catalog persistence, the supported boundary is explicit creation of a new persistence-compatible catalog/copy/import result with a fresh canonical lowercase UUID root, complete fresh canonical identity closure, semantically preserved authored content, intentionally shareable immutable `AssetRef`s, and new persistence/recovery lineage while leaving the original document identity untouched. Direct persistence under the old incompatible identity may instead fail explicitly as persistence-incompatible and then offer that controlled creation path. The old and new roots must never be treated as the same logical catalog.
 
 ## 3. Remote revision
 
@@ -63,21 +63,25 @@ Conceptual persistence/session handle:
 ```text
 catalogId
 remoteRevision
+lastMutationId
 localEditSequence
 saveStatus
 ```
 
-`CatalogDocument.source.serverVersion` must not become the live CAS token. A save acknowledgement that advances remote revision must not mutate the authored canonical document or create Undo history. Existing `source.serverVersion` remains provenance semantics unless a future authored-schema contract explicitly changes it.
+`lastMutationId` is persistence/session metadata recording the server-confirmed identity of the latest durable mutation. It is not authored state and never enters `CatalogDocument` or Undo/Redo. `CatalogDocument.source.serverVersion` must not become the live CAS token. A save acknowledgement that advances remote revision must not mutate the authored canonical document or create Undo history. Existing `source.serverVersion` remains provenance semantics unless a future authored-schema contract explicitly changes it.
 
 ## 4. Persistence representation
 
 Persist one complete validated `CatalogDocument` snapshot surrounded by thin persistence/index metadata.
+
+After canonical validation, the durable JSON-safe representation maps optional object-property `undefined` to property absence and numeric `-0` to numeric `0`; all other defined canonical authored structure and values remain exact. No other normalization, default insertion, rounding, array reordering, ID change, unit conversion, or renderer repair is authorized.
 
 Conceptually:
 
 ```text
 catalogId
 remoteRevision
+lastMutationId
 title projection
 locale projection
 createdAt
@@ -100,6 +104,8 @@ W3 may salvage proven mechanisms: Supabase infrastructure, Auth/session, RLS, `r
 
 The eventual W3.B implementation must establish an explicit VNext persistence namespace/payload/repository/RPC boundary. Exact SQL/table/RPC names are not frozen in W3.0. The architectural requirement is that VNext persistence does not hydrate or depend on the Legacy `Catalog` document model.
 
+Because new durable roots use the frozen canonical lowercase UUID textual form, a future persistence adapter may store the root in a native database UUID type provided it proves exact textual round-trip equality back to the authored `CatalogDocument.id`. Existing uppercase or otherwise incompatible roots are never normalized into that storage form; they use the controlled copy/import creation path above when durable persistence is desired.
+
 ## 6. Save semantics
 
 Canonical save flow:
@@ -107,6 +113,7 @@ Canonical save flow:
 ```text
 capture immutable CatalogDocument
 → canonical validation
+→ allocate required persistence mutationId before dispatch
 → expected remote revision
 → server transaction / lock
 → strict CAS
@@ -115,6 +122,8 @@ capture immutable CatalogDocument
 → append immutable revision history
 → remote ACK
 ```
+
+Create, Save CAS, and Archive CAS each carry a required `mutationId` using the same canonical lowercase UUID textual rule as durable roots. The identifier is persistence metadata, is allocated before dispatch, survives ambiguous-outcome handling unchanged, and never enters the authored snapshot or changes `CatalogDocument.schemaVersion`.
 
 `Saved` means the server acknowledged the canonical snapshot corresponding to the latest relevant local edit state.
 
@@ -133,7 +142,11 @@ L1 exists
 
 If S1 is still a valid operation for that session, its acknowledgement may advance the confirmed remote base revision and acknowledges only the local edit state captured by S1. L2 remains dirty/pending. The UI must not become `Saved` merely because S1 succeeded.
 
-If a request was sent but the client times out or loses transport before learning the authoritative result, commit outcome is ambiguous: the server may or may not have committed. Transport timeout therefore proves neither failure nor success. The client must not advance its expected remote revision merely because the request may have succeeded, must not claim `Saved`, must not blindly retry stale authored content against a newly observed revision, and must preserve local work. Before the next remote mutation it must reconcile against authoritative remote state/revision. The future typed persistence layer must be able to represent this ambiguous/unknown commit outcome or an equivalent semantic state; the exact type name is not frozen.
+If a request was sent but the client times out or loses transport before learning the authoritative result, commit outcome is ambiguous: the server may or may not have committed. Transport timeout therefore proves neither failure nor success. The client must not advance its expected remote revision merely because the request may have succeeded, must not claim `Saved`, must not blindly retry stale authored content against a newly observed revision, and must preserve local work. Before the next remote mutation it must reconcile against authoritative remote state/revision plus the server-confirmed `lastMutationId`.
+
+For an ambiguous mutation `M1`, a future authoritative read may conclude: `lastMutationId === M1` means that exact mutation committed; prior remote revision with a different `lastMutationId` means `M1` did not commit; remote state advanced under a different mutation means conflict/reconciliation is required. No revision guessing and no blind automatic retry are authorized. W3.A freezes only the information required for this future W3.B/W3.C behavior.
+
+Mutation identity uniqueness is scoped by logical catalog, conceptually `UNIQUE(catalogId, mutationId)`. Replaying the same mutation ID with the same operation and effective payload may return the already-committed result idempotently and must not advance revision again. Reusing the same mutation ID with different intent or payload fails closed and creates no new revision. W3.A records this principle without adding SQL or a repository implementation.
 
 ## 7. Concurrency
 
@@ -227,6 +240,8 @@ Minimum list metadata:
 - active/archived state
 
 Library listing must use lightweight metadata. Do not download every full `CatalogDocument` merely to render a list.
+
+The W3.A type boundary keeps `lastMutationId` on exact catalog/mutation persistence state while omitting it from `CatalogListItem`; Library rows also contain no `documentSnapshot`.
 
 Hard Delete is deferred. Folders, approval workflow, advanced owner management, collaboration, and realtime are outside the W3 minimum.
 
@@ -409,7 +424,7 @@ W3.0 implements none of these slices.
 
 W3 implementation must eventually prove at minimum:
 
-- exact `CatalogDocument` serialize/reopen equality;
+- exact semantic/structural `CatalogDocument` serialize/reopen equality in the durable JSON-safe representation, where optional object-property `undefined` is absence and numeric `-0` is numeric `0`, with all other defined canonical authored structure and values exact;
 - exact preservation of integer-U geometry;
 - Text/RichText identity preservation;
 - Table IDs/spans/annotations/legends preservation;
@@ -449,6 +464,6 @@ W3 implementation must eventually prove at minimum:
 
 ## Governance gate
 
-This contract is **UNDER REVIEW / NOT CANONICAL YET**.
+This contract is **CANONICAL**.
 
-Next gate: Principal audit of the W3.0 contract PR. W3 implementation remains blocked until this contract is accepted and merged with explicit user authorization.
+PR #28 merged and promoted W3.0 canonically at `b34156c597dcd47a5ab6d154f73ffa7a323d4664`. The W3.0 governance gate is closed; implementation slices proceed under their own review and merge gates.

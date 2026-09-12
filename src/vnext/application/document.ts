@@ -263,15 +263,15 @@ function instantiateTableWithFreshIds(table: TableModel, allocator: IdAllocator)
       id: mapped(cell.id),
       rowId: mapped(cell.rowId),
       columnId: mapped(cell.columnId),
-      coveredBy: cell.coveredBy ? mapped(cell.coveredBy) : undefined,
-      annotationIds: cell.annotationIds?.map(mapped),
+      ...(cell.coveredBy === undefined ? {} : { coveredBy: mapped(cell.coveredBy) }),
+      ...(cell.annotationIds === undefined ? {} : { annotationIds: cell.annotationIds.map(mapped) }),
       content: cell.content.type === 'richText'
         ? { ...cell.content, value: instantiateRichTextWithFreshIds(cell.content.value, allocator) }
         : cell.content.type === 'marker'
           ? { ...cell.content, legendEntryId: mapped(cell.content.legendEntryId) }
           : { ...cell.content },
     })),
-    annotationIds: table.annotationIds?.map(mapped),
+    ...(table.annotationIds === undefined ? {} : { annotationIds: table.annotationIds.map(mapped) }),
     annotations: table.annotations.map((annotation) => ({
       ...annotation,
       id: mapped(annotation.id),
@@ -391,7 +391,7 @@ export function duplicatePageWithFreshIds(
   return {
     ...page,
     id: allocator.next(),
-    safeArea: page.safeArea ? { ...page.safeArea } : undefined,
+    ...(page.safeArea === undefined ? {} : { safeArea: { ...page.safeArea } }),
     objects: page.objects.map((object) => instantiateObjectWithAllocator(objectInstantiationSeedFromObject(object), allocator)),
   };
 }
