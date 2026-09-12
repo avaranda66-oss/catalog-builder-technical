@@ -12,6 +12,9 @@ const forbiddenAuthorities=[
   ['Legacy library store','src/stores/useLibraryStore'],
   ['Legacy coupled auth store','src/stores/useAuthStore'],
   ['Legacy catalog schema authority','src/domain/catalog.schema'],
+  ['Legacy storage persistence authority','src/services/storage.service'],
+  ['Legacy Supabase persistence authority','src/services/supabase.service'],
+  ['Legacy document lifecycle authority','src/services/document-lifecycle.service'],
   ['Legacy A4 canvas','src/components/editor/A4Canvas'],
   ['Legacy A4 page flow','src/domain/page-flow-planner'],
   ['Legacy A4 render planning','src/domain/a4-render-plan'],
@@ -131,6 +134,37 @@ function applicationGraphViolations(entry:string):string[] {
   return violations;
 }
 
+function persistenceGraphViolations(entry:string):string[] {
+  const violations:string[]=[];
+  const forbiddenBrowserIdentifiers=new Set([
+    'window','HTMLElement','HTMLImageElement','ParentNode','CSS','getComputedStyle',
+    'localStorage','sessionStorage','indexedDB','fetch','Response','FontFace','Blob',
+  ]);
+  for(const file of localGraph(entry)){
+    const relFile=normalize(relative(repoRoot,file));
+    if(file.endsWith('.css')){violations.push(`${relFile}: CSS side effect in persistence entry point`);continue;}
+    if(relFile.startsWith('src/vnext/rendering/')||relFile.startsWith('src/vnext/publication/')||relFile.startsWith('src/vnext/app/'))
+      violations.push(`${relFile}: presentation/browser layer reachable from persistence entry point`);
+    const text=readFileSync(file,'utf8');
+    const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+    for(const specifier of specifiers(source)){
+      if(specifier==='react'||specifier.startsWith('react/'))violations.push(`${relFile}: React reachable from persistence entry point`);
+      if(specifier==='@supabase/supabase-js'||specifier.startsWith('@supabase/'))violations.push(`${relFile}: Supabase reachable from persistence entry point`);
+      const target=repoTarget(file,specifier);
+      if(!target)continue;
+      const normalized=normalize(relative(repoRoot,target));
+      const authority=forbiddenAuthorities.find(([,prefix])=>normalized===prefix||normalized.startsWith(prefix+'/'));
+      if(authority)violations.push(`${relFile}: ${authority[0]} -> ${specifier}`);
+    }
+    const visit=(node:ts.Node):void=>{
+      if(ts.isIdentifier(node)&&forbiddenBrowserIdentifiers.has(node.text))violations.push(`${relFile}: browser persistence/runtime authority ${node.text}`);
+      ts.forEachChild(node,visit);
+    };
+    visit(source);
+  }
+  return violations;
+}
+
 function ordinarySelectors(css:string):string[] {
   const source=css.replace(/\/\*[\s\S]*?\*\//g,'').replace(/@import\s+[^;]+;/g,'');
   const selectors:string[]=[];
@@ -195,6 +229,17 @@ describe('VNext architecture boundary',()=>{
     const entry=resolve(vnextRoot,'application/index.ts');
     const violations=applicationGraphViolations(entry);
     expect(violations,violations.join('\n')).toEqual([]);
+  });
+
+  it('keeps the W3.A persistence entry pure and isolated from browser, Supabase, and Legacy persistence authorities',()=>{
+    const entry=resolve(vnextRoot,'persistence/index.ts');
+    const violations=persistenceGraphViolations(entry);
+    expect(violations,violations.join('\n')).toEqual([]);
+
+    const contracts=readFileSync(resolve(vnextRoot,'persistence/contracts.ts'),'utf8');
+    expect(contracts).not.toMatch(/useCatalogStore|StorageService|SupabaseService|catalog\.schema|CatalogPreset|save_catalog_v3/);
+    expect(contracts).not.toMatch(/documentSnapshot\s*:\s*(?:unknown|Record|object)\b/);
+    expect(contracts).toContain('readonly documentSnapshot: CatalogDocument');
   });
 
   it('keeps the VNext app graph isolated from Legacy application authorities',()=>{

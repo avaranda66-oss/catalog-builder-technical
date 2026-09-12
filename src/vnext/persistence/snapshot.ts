@@ -1,0 +1,154 @@
+import { z } from 'zod';
+import { CatalogDocumentSchema, type CatalogDocument } from '../domain';
+import { validateDocument } from '../table';
+import {
+  CURRENT_PERSISTED_DOCUMENT_SCHEMA_VERSION,
+  type CatalogPersistenceEnvelope,
+  type CatalogPersistenceHandle,
+  type CatalogRootPersistenceCompatibility,
+  type PersistenceErrorCode,
+} from './contracts';
+
+const clean = z.string().min(1);
+const safeNonnegativeInteger = z.number().int().safe().nonnegative();
+const safePositiveInteger = z.number().int().safe().positive();
+
+const OriginMetadataSchema = z.object({
+  originKind: clean,
+  originId: clean.optional(),
+  originRevision: safeNonnegativeInteger.optional(),
+}).strict();
+
+const PersistenceEnvelopeWireSchema = z.object({
+  catalogId: clean,
+  remoteRevision: safeNonnegativeInteger,
+  title: clean,
+  locale: clean,
+  createdAt: clean,
+  updatedAt: clean,
+  createdBy: clean.nullable(),
+  updatedBy: clean.nullable(),
+  archivedAt: clean.nullable(),
+  origin: OriginMetadataSchema.optional(),
+  documentSchemaVersion: safePositiveInteger,
+  documentSnapshot: z.unknown(),
+}).strict();
+
+const UUID_COMPATIBLE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export class PersistenceContractError extends Error {
+  constructor(
+    public readonly code: PersistenceErrorCode,
+    message: string
+  ) {
+    super(message);
+    this.name = 'PersistenceContractError';
+  }
+}
+
+function invalidDocument(message: string): never {
+  throw new PersistenceContractError('INVALID_DOCUMENT', message);
+}
+
+function decodePersistedPayload(payload: unknown): unknown {
+  if (typeof payload !== 'string') return payload;
+  try {
+    return JSON.parse(payload) as unknown;
+  } catch (error) {
+    return invalidDocument(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function inspectSupportedSchemaVersion(input: unknown): void {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    invalidDocument('Persisted document payload must be an object');
+  }
+  const schemaVersion = (input as Record<string, unknown>).schemaVersion;
+  if (typeof schemaVersion !== 'number' || !Number.isSafeInteger(schemaVersion)) {
+    invalidDocument('Persisted document schemaVersion must be a safe integer');
+  }
+  if (schemaVersion !== CURRENT_PERSISTED_DOCUMENT_SCHEMA_VERSION) {
+    throw new PersistenceContractError('UNSUPPORTED_VERSION', `Unsupported document schemaVersion: ${schemaVersion}`);
+  }
+}
+
+function validateCanonicalDocument(input: unknown): CatalogDocument {
+  const parsed = CatalogDocumentSchema.safeParse(input);
+  if (!parsed.success) {
+    invalidDocument(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '));
+  }
+
+  const errors = validateDocument(parsed.data).filter((diagnostic) => diagnostic.severity === 'ERROR');
+  if (errors.length > 0) {
+    invalidDocument(errors.map((diagnostic) => `${diagnostic.code}: ${diagnostic.details}`).join('; '));
+  }
+  return parsed.data;
+}
+
+/** Validates and serializes one complete authored canonical snapshot without normalization or repair. */
+export function serializeCanonicalSnapshot(document: CatalogDocument): string {
+  const canonical = parseCanonicalSnapshot(document);
+  return JSON.stringify(canonical);
+}
+
+/**
+ * Loads a current-schema canonical snapshot from JSON text or an already-decoded persistence payload.
+ * Unsupported authored schema versions fail before canonical parsing so they cannot be mistaken for corrupt v1 data.
+ */
+export function parseCanonicalSnapshot(payload: unknown): CatalogDocument {
+  const decoded = decodePersistedPayload(payload);
+  inspectSupportedSchemaVersion(decoded);
+  return validateCanonicalDocument(decoded);
+}
+
+/** Validates persistence metadata/projection consistency without mutating the authored snapshot. */
+export function parsePersistenceEnvelope(input: unknown): CatalogPersistenceEnvelope {
+  const parsed = PersistenceEnvelopeWireSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new PersistenceContractError(
+      'INVALID_DOCUMENT',
+      parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
+    );
+  }
+
+  const documentSnapshot = parseCanonicalSnapshot(parsed.data.documentSnapshot);
+  const mismatch = (message: string): never => {
+    throw new PersistenceContractError('ENVELOPE_MISMATCH', message);
+  };
+
+  if (parsed.data.catalogId !== documentSnapshot.id) mismatch('catalogId does not match documentSnapshot.id');
+  if (parsed.data.title !== documentSnapshot.title) mismatch('title projection does not match documentSnapshot.title');
+  if (parsed.data.locale !== documentSnapshot.locale) mismatch('locale projection does not match documentSnapshot.locale');
+  if (parsed.data.documentSchemaVersion !== documentSnapshot.schemaVersion) {
+    mismatch('documentSchemaVersion does not match documentSnapshot.schemaVersion');
+  }
+
+  return {
+    catalogId: parsed.data.catalogId,
+    remoteRevision: parsed.data.remoteRevision,
+    title: parsed.data.title,
+    locale: parsed.data.locale,
+    createdAt: parsed.data.createdAt,
+    updatedAt: parsed.data.updatedAt,
+    createdBy: parsed.data.createdBy,
+    updatedBy: parsed.data.updatedBy,
+    archivedAt: parsed.data.archivedAt,
+    ...(parsed.data.origin ? { origin: parsed.data.origin } : {}),
+    documentSchemaVersion: CURRENT_PERSISTED_DOCUMENT_SCHEMA_VERSION,
+    documentSnapshot,
+  };
+}
+
+export function persistenceHandleFromEnvelope(envelope: CatalogPersistenceEnvelope): CatalogPersistenceHandle {
+  return { catalogId: envelope.catalogId, remoteRevision: envelope.remoteRevision };
+}
+
+/** Reports durable-root compatibility while preserving valid canonical non-UUID identities unchanged. */
+export function checkCatalogRootPersistenceCompatibility(
+  document: CatalogDocument
+): CatalogRootPersistenceCompatibility {
+  const canonical = parseCanonicalSnapshot(document);
+  return UUID_COMPATIBLE_PATTERN.test(canonical.id)
+    ? { compatible: true, catalogId: canonical.id }
+    : { compatible: false, catalogId: canonical.id, reason: 'ROOT_ID_NOT_UUID_COMPATIBLE' };
+}

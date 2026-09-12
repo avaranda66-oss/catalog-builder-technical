@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal / Auditor Executive Handoff
 
-STATUS: W2 COMPLETE / CANONICAL; W3 INDEPENDENT RESEARCH COMPLETE; W3.0 CONTRACT UNDER REVIEW / NOT CANONICAL YET; W3 IMPLEMENTATION NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: W2 COMPLETE / CANONICAL; W3.0 CONTRACT CANONICAL; W3.A IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.B NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -119,7 +119,7 @@ Do not reproduce every historical story here. Detailed durable evidence lives in
 
 ## F. CURRENT ROADMAP
 
-- **W3 — Save/Reopen/Catalog Library:** independent research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract freeze under review; implementation not started.
+- **W3 — Save/Reopen/Catalog Library:** independent research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract canonical via PR #28; W3.A implemented / under review / not canonical; W3.B not started.
 - **W4 — Advanced Table Editor.**
 - **W5 — Complete Translation VNext.**
 - **W6 — Publication Integration + Minimum Easy Button Layer + First Father Pilot.**
@@ -274,9 +274,9 @@ These must materialize ordinary canonical editable primitives. They are also nat
 
 Independent W3 repository research is **COMPLETE** and the Principal research verdict is **A — W3 RESEARCH ACCEPTED**.
 
-The W3.0 docs/governance contract freeze is recorded in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` and is **UNDER REVIEW / NOT CANONICAL YET**. W3 implementation remains **NOT STARTED**.
+The W3.0 docs/governance contract freeze in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` is **CANONICAL** through merged PR #28 at `main` SHA/tree `b34156c597dcd47a5ab6d154f73ffa7a323d4664` / `0df4eedfcf649a10423a4a3153233ff6c424020f`; Quality Gate run `34668097170` completed **SUCCESS**. W3.A is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** and W3.B is **NOT STARTED**.
 
-Next exact action: Principal audits the exact W3.0 contract PR head/tree for completeness, consistency with W0-W2 frozen architecture, and docs-only scope. No W3 implementation slice may begin before W3.0 is Principal-accepted and merged with explicit user authorization.
+Next exact action: Principal audits the exact W3.A implementation PR head/tree and CI against the canonical W3.0 contract and W0-W2 architecture. Do not begin W3.B and do not merge W3.A without explicit user authorization.
 
 For a fresh reconstruction, read next:
 
