@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2 COMPLETE / CANONICAL; W2.G IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL VIA PR #26; W3 NEXT WAVE / NOT STARTED; GITHUB IS AUTHORITY FOR LIVE STATE
+STATUS: W2 COMPLETE / CANONICAL; W3 INDEPENDENT RESEARCH COMPLETE; W3.0 CONTRACT UNDER REVIEW / NOT CANONICAL YET; W3 IMPLEMENTATION NOT STARTED; GITHUB IS AUTHORITY FOR LIVE STATE
 
 DATE: 2026-09-11
 
@@ -15,6 +15,8 @@ VNext must be simpler internally than Legacy while becoming more capable, editab
 ## VERIFIED W2 CANONICAL MERGE AND W2.G REVIEW PROVENANCE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
+
+PR #27 completed the durable W2 closeout/handoff synchronization and is merged at canonical `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS** on that canonical SHA.
 
 PR #22 / W2.E was independently verified squash-merged into canonical `main` at SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`, with direct parent `c220ed1d047d862d8bac30bb8c20702889793fac`.
 
@@ -72,6 +74,8 @@ PR #25 — W2.F canonical closeout documentation: **MERGED / COMPLETE** at canon
 
 PR #26 — W2.G Minimum Direct Text Editing: **MERGED / COMPLETE / CANONICAL** at canonical squash SHA/tree `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`; audited review head/tree `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
 
+PR #27 — W2 durable closeout / Principal handoff synchronization: **MERGED / COMPLETE / CANONICAL** at `main` SHA/tree `6321155d0b88e52758cfb7138070c036845c359b` / `29b5964878914828778c2125cd177b81b068af17`; direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`; post-closeout Quality Gate run `34649885701` **SUCCESS**.
+
 Always verify GitHub live state before acting. Git history and repository evidence outrank agent reports.
 
 ## CURRENT PHASE
@@ -102,7 +106,7 @@ W2.F — Group: **COMPLETE / CANONICAL**.
 
 W2.G — Minimum Direct Text Editing: **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL — PR #26**.
 
-W2 overall is **COMPLETE / CANONICAL**. W3 is the **NEXT WAVE / NOT STARTED**.
+W2 overall is **COMPLETE / CANONICAL**. Independent W3 repository research is **COMPLETE** with Principal verdict **A — W3 RESEARCH ACCEPTED**. W3.0 contract freeze is **UNDER REVIEW / NOT CANONICAL YET**. W3 implementation is **NOT STARTED**.
 
 Foundation: **production-owned and strongly validated**.
 
@@ -330,7 +334,7 @@ No exact dates or detailed W6/W7 implementation boundary are frozen.
 - **W0 — Foundation Promotion + W0.1 Boundary Hardening:** merged / complete.
 - **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
 - **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering (including Text-height resolution and Image focal point); W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. **COMPLETE / CANONICAL — PR #26 closes W2.**
-- **W3 — Save/Reopen/Catalog Library:** versioned persistence, recovery/reopen, and a persistable starter/catalog creation path.
+- **W3 — Save/Reopen/Catalog Library:** independent research complete; W3.0 contract freeze under review; implementation not started. Frozen contract draft: `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`.
 - **W4 — Advanced Table Editor:** structural table editing plus TSV paste, marker bulk toggle, explicit Fit Height, and table presets.
 - **W5 — Complete Translation:** complete semantic translation coverage and layout review.
 - **W6 — Publication Integration + Minimum Easy-Button Layer + First Father Pilot:** professional publication plus minimum usable page templates, catalog starter, starter reusable components, then the first father pilot.
@@ -458,7 +462,7 @@ Governance rule: do **not** fix this as part of unrelated VNext waves unless a t
 
 ## POST-W2 CANONICAL STATE / NEXT PRINCIPAL ACTION
 
-PRs #15 through #26 are merged for the promoted/canonical state through W2.G. W2 is complete/canonical.
+PRs #15 through #27 are merged for the promoted/canonical state through the durable W2 closeout. W2 is complete/canonical.
 
 Historical W2.F review base: `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. Audited review head/tree: `69353fc31a5121580c17cdf797d10d9f9b799779` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. Canonical squash SHA/tree: `7793aaa21bfed41d57da861424efdd84a686170d` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
 
@@ -466,7 +470,9 @@ W2.F — Group is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / M
 
 W2.G — minimum direct Text editing is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL**. Accepted review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`; direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`. Audited review tree equals canonical merge tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**. W2 overall is **COMPLETE / CANONICAL**.
 
-Next exact action: **W3 — Save/Reopen/Catalog Library RESEARCH / CONTRACT PREPARATION**. Do not implement W3 until independent repository research covers Legacy persistence, Supabase/Auth, versioning/CAS, catalog identity/revision, save/autosave/local recovery/reopen, Catalog Library, starter creation, conflicts/two-tab behavior, assets, and existing persistence tests, after which the Principal freezes the W3 contract.
+Independent W3 repository research is **COMPLETE** and the Principal research verdict is **A — W3 RESEARCH ACCEPTED**. W3.0 now exists as a docs/governance-only contract freeze on a review branch and is **UNDER REVIEW / NOT CANONICAL YET**. W3 implementation remains **NOT STARTED**.
+
+Next exact action: **Principal audit of the W3.0 contract PR** against `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`, the docs-only scope, and live GitHub provenance. Do not begin W3.A or any persistence implementation until W3.0 is Principal-accepted and canonically merged with explicit user authorization.
 
 ## RECONSTRUCTION READING ORDER
 

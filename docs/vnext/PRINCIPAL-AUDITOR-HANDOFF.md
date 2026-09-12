@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal / Auditor Executive Handoff
 
-STATUS: W2 COMPLETE / CANONICAL; W3 NEXT WAVE / NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: W2 COMPLETE / CANONICAL; W3 INDEPENDENT RESEARCH COMPLETE; W3.0 CONTRACT UNDER REVIEW / NOT CANONICAL YET; W3 IMPLEMENTATION NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -8,7 +8,9 @@ PURPOSE: this is the **first executive reconstruction document** for a fresh Pri
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-Canonical W2 closeout: PR #26 is merged. Accepted W2.G review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash `main` SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`, direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`. The canonical merge tree exactly equals the audited review tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**.
+W2 implementation closeout: PR #26 is merged. Accepted W2.G review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`, direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`. The canonical merge tree exactly equals the audited review tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**.
+
+Durable W2 closeout: PR #27 is merged at canonical `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS**.
 
 ## A. PRODUCT MISSION / FATHER NORTH STAR
 
@@ -117,7 +119,7 @@ Do not reproduce every historical story here. Detailed durable evidence lives in
 
 ## F. CURRENT ROADMAP
 
-- **W3 — Save/Reopen/Catalog Library:** next wave; not started.
+- **W3 — Save/Reopen/Catalog Library:** independent research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract freeze under review; implementation not started.
 - **W4 — Advanced Table Editor.**
 - **W5 — Complete Translation VNext.**
 - **W6 — Publication Integration + Minimum Easy Button Layer + First Father Pilot.**
@@ -270,27 +272,11 @@ These must materialize ordinary canonical editable primitives. They are also nat
 
 ## L. NEXT EXACT ACTION
 
-Do not implement W3 blindly.
+Independent W3 repository research is **COMPLETE** and the Principal research verdict is **A — W3 RESEARCH ACCEPTED**.
 
-First perform independent W3 repository research covering:
+The W3.0 docs/governance contract freeze is recorded in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` and is **UNDER REVIEW / NOT CANONICAL YET**. W3 implementation remains **NOT STARTED**.
 
-- Legacy persistence;
-- Supabase/Auth;
-- versioning;
-- CAS;
-- catalog identity/revision;
-- save;
-- autosave;
-- local recovery;
-- reopen;
-- Catalog Library;
-- starter creation;
-- conflicts;
-- two-tab behavior;
-- assets;
-- existing persistence tests.
-
-Then the Principal confronts the research, freezes a W3 contract, defines gates and evidence, and only after that directs Codex Native2 to implement W3.
+Next exact action: Principal audits the exact W3.0 contract PR head/tree for completeness, consistency with W0-W2 frozen architecture, and docs-only scope. No W3 implementation slice may begin before W3.0 is Principal-accepted and merged with explicit user authorization.
 
 For a fresh reconstruction, read next:
 

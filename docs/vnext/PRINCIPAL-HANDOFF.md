@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2 COMPLETE / CANONICAL MEMORY; W2.G IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL VIA PR #26; W3 NEXT WAVE / NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2 COMPLETE / CANONICAL MEMORY; W3 INDEPENDENT RESEARCH COMPLETE; W3.0 CONTRACT UNDER REVIEW / NOT CANONICAL YET; W3 IMPLEMENTATION NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -37,6 +37,8 @@ VNext must remain simpler internally than Legacy while delivering a more capable
 ## VERIFIED W2 CANONICAL PROVENANCE AND REVIEW HISTORY
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
+
+Durable W2 closeout: PR #27 is merged at canonical `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS** on the canonical SHA.
 
 PR #22 / W2.E was independently verified squash-merged into canonical `main` at SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`.
 
@@ -280,7 +282,7 @@ No exact dates are frozen, and detailed W6/W7 implementation boundaries may move
 
 - **W1 — Application Actions + Minimal VNext Shell:** typed actions, immutable session, Undo/Redo/coalescing, and isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
 - **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering with Text-height resolution and Image focal point; W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. **COMPLETE / CANONICAL.**
-- **W3 — Save/Reopen/Catalog Library:** versioned persistence, autosave/local recovery, visible conflicts, and a persistable starter/catalog creation path.
+- **W3 — Save/Reopen/Catalog Library:** independent repository research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract freeze under review in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`; implementation not started.
 - **W4 — Advanced Table Editor:** structural editing, spreadsheet-style selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, titles/notes/footnotes.
 - **W5 — Complete Translation:** full semantic coverage, stale tracking, protection, coverage audit, and layout review.
 - **W6 — Publication Integration + Minimum Easy-Button Layer + First Father Pilot:** professional PDF/publication plus minimum usable page templates, catalog starter, and starter reusable components before the pilot.
@@ -365,6 +367,8 @@ Father V1 requires save, autosave, reopen, local recovery, and visible conflict 
 No silent last-write-wins. Existing Supabase/Auth infrastructure may be reused later if validated, but VNext persistence authority must remain isolated from Legacy authority.
 
 PIM is not a persistence prerequisite for Father V1.
+
+W3.0 now freezes the detailed persistence/lifecycle contract in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`. Until that contract is Principal-audited and canonically merged, it is **UNDER REVIEW / NOT CANONICAL YET** and no W3 implementation slice may begin.
 
 ## FUTURE PRODUCT-DATA / PIM SEAM
 
@@ -470,7 +474,11 @@ Current status authority is verified GitHub state plus `docs/vnext/PRINCIPAL-AUD
 
 W2 is **COMPLETE / CANONICAL** through merged PR #26. Accepted W2.G review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. The canonical merge tree equals the audited review tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**.
 
-The next wave is **W3 — Save/Reopen/Catalog Library**, but W3 is **NOT STARTED**. First perform independent repository research and contract preparation covering Legacy persistence, Supabase/Auth, versioning, CAS, catalog identity/revision, save/autosave/local recovery/reopen, Catalog Library, starter creation, conflicts and two-tab behavior, assets, and existing persistence tests. The Principal must freeze the W3 contract before implementation begins.
+PR #27 then completed the durable W2 closeout/handoff synchronization at canonical `main` SHA/tree `6321155d0b88e52758cfb7138070c036845c359b` / `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS**.
+
+Independent W3 repository research is **COMPLETE** and the Principal verdict is **A — W3 RESEARCH ACCEPTED**. W3.0 contract freeze is **UNDER REVIEW / NOT CANONICAL YET** in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`. W3 implementation is **NOT STARTED**.
+
+The next gate is a Principal audit of the exact W3.0 contract PR head/tree. Only after Principal acceptance plus explicit user-authorized merge may Codex Native2 begin W3.A — Persistence contracts + exact canonical round-trip.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
