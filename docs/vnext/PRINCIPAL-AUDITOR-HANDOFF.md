@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal / Auditor Executive Handoff
 
-STATUS: W2 COMPLETE / CANONICAL; W3.0 CONTRACT CANONICAL; W3.A IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.B NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: W2 COMPLETE / CANONICAL; W3.0 CONTRACT CANONICAL; W3.A CANONICAL; W3.B IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.C NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -119,7 +119,7 @@ Do not reproduce every historical story here. Detailed durable evidence lives in
 
 ## F. CURRENT ROADMAP
 
-- **W3 — Save/Reopen/Catalog Library:** independent research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract canonical via PR #28; W3.A implemented / under review / not canonical; W3.B not started.
+- **W3 — Save/Reopen/Catalog Library:** independent research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract canonical via PR #28; W3.A canonical via PR #29; W3.B implemented / under review / not canonical; W3.C not started.
 - **W4 — Advanced Table Editor.**
 - **W5 — Complete Translation VNext.**
 - **W6 — Publication Integration + Minimum Easy Button Layer + First Father Pilot.**
@@ -274,9 +274,11 @@ These must materialize ordinary canonical editable primitives. They are also nat
 
 Independent W3 repository research is **COMPLETE** and the Principal research verdict is **A — W3 RESEARCH ACCEPTED**.
 
-The W3.0 docs/governance contract freeze in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` is **CANONICAL** through merged PR #28 at `main` SHA/tree `b34156c597dcd47a5ab6d154f73ffa7a323d4664` / `0df4eedfcf649a10423a4a3153233ff6c424020f`; Quality Gate run `34668097170` completed **SUCCESS**. W3.A is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** and W3.B is **NOT STARTED**.
+The W3.0 docs/governance contract freeze in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` is **CANONICAL** through merged PR #28. W3.A is **CANONICAL** through merged PR #29 at `main` SHA/tree `4199108c2e4e0cd2d09a3ec02e2700528a373ff3` / `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`; Quality Gate run `34706862089` completed **SUCCESS**.
 
-Next exact action: Principal audits the exact W3.A implementation PR head/tree and CI against the canonical W3.0 contract and W0-W2 architecture. Do not begin W3.B and do not merge W3.A without explicit user authorization.
+W3.B is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** on `feat/vnext-w3b-supabase-cas-history`, with explicit VNext current/history tables, strict CAS, mutation replay, immutable revision history, auth/RLS/grants, Supabase repository adapter, rollback/security rehearsal, and separate-session concurrency proof infrastructure. W3.C is **NOT STARTED**.
+
+Next exact action: publish the W3.B PR, require repository Quality Gate plus the dedicated W3.B real-database rehearsal on the exact pushed head, then Principal audits that exact head/tree and evidence. Do not start W3.C and do not merge W3.B without explicit user authorization.
 
 For a fresh reconstruction, read next:
 

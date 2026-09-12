@@ -27,3 +27,10 @@ export {
   persistenceHandleFromEnvelope,
   serializeCanonicalSnapshot,
 } from './snapshot';
+export { SupabaseCatalogRepository } from './supabase-repository';
+export type {
+  SupabaseCatalogRepositoryOptions,
+  VNextPersistenceRpcClient,
+  VNextPersistenceRpcError,
+  VNextPersistenceRpcResponse,
+} from './supabase-repository';

@@ -1,6 +1,6 @@
 # W3.A — Persistence Contracts + Exact Canonical Round-Trip
 
-Status: **IMPLEMENTED / AMENDED / UNDER REVIEW / NOT CANONICAL**
+Status: **MERGED / CANONICAL — PR #29**
 
 Date: 2026-09-11
 
@@ -8,7 +8,9 @@ Canonical base: `b34156c597dcd47a5ab6d154f73ffa7a323d4664`
 
 Canonical tree: `0df4eedfcf649a10423a4a3153233ff6c424020f`
 
-W3.0 gate: PR #28 merged; Quality Gate run `34668097170` completed `SUCCESS` for the canonical base.
+W3.0 gate: PR #28 merged; Quality Gate run `34668097170` completed `SUCCESS` for the W3.0 canonical base.
+
+W3.A canonicalization: PR #29 merged at `main` SHA/tree `4199108c2e4e0cd2d09a3ec02e2700528a373ff3` / `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`; post-merge Quality Gate run `34706862089` completed `SUCCESS`.
 
 ## Objective
 
@@ -128,6 +130,8 @@ Principal-audited pre-amendment live head/tree and prior CI are recorded above. 
 
 W3.0: **CANONICAL**
 
-W3.A: **IMPLEMENTED / AMENDED / UNDER REVIEW / NOT CANONICAL**
+W3.A: **MERGED / CANONICAL — PR #29**
 
-W3.B: **NOT STARTED**
+W3.B: **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL**
+
+W3.C: **NOT STARTED**

@@ -1,6 +1,6 @@
 # Catalog Builder VNext — Principal Handoff
 
-STATUS: DURABLE W2 COMPLETE / CANONICAL MEMORY; W3.0 CONTRACT CANONICAL; W3.A IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.B NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
+STATUS: DURABLE W2 COMPLETE / CANONICAL MEMORY; W3.0 CONTRACT CANONICAL; W3.A CANONICAL; W3.B IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.C NOT STARTED; GITHUB IS LIVE-STATE AUTHORITY
 
 DATE: 2026-09-11
 
@@ -282,7 +282,7 @@ No exact dates are frozen, and detailed W6/W7 implementation boundaries may move
 
 - **W1 — Application Actions + Minimal VNext Shell:** typed actions, immutable session, Undo/Redo/coalescing, and isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
 - **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering with Text-height resolution and Image focal point; W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. **COMPLETE / CANONICAL.**
-- **W3 — Save/Reopen/Catalog Library:** independent repository research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract canonical through PR #28; W3.A implemented / under review / not canonical; W3.B not started.
+- **W3 — Save/Reopen/Catalog Library:** independent repository research complete; Principal research verdict **A — W3 RESEARCH ACCEPTED**; W3.0 contract canonical through PR #28; W3.A canonical through PR #29; W3.B implemented / under review / not canonical; W3.C not started.
 - **W4 — Advanced Table Editor:** structural editing, spreadsheet-style selection, TSV paste, marker bulk toggle, explicit Fit Height, table presets, titles/notes/footnotes.
 - **W5 — Complete Translation:** full semantic coverage, stale tracking, protection, coverage audit, and layout review.
 - **W6 — Publication Integration + Minimum Easy-Button Layer + First Father Pilot:** professional PDF/publication plus minimum usable page templates, catalog starter, and starter reusable components before the pilot.
@@ -368,7 +368,7 @@ No silent last-write-wins. Existing Supabase/Auth infrastructure may be reused l
 
 PIM is not a persistence prerequisite for Father V1.
 
-W3.0 freezes the detailed persistence/lifecycle contract in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` and is **CANONICAL** through merged PR #28 at `main` SHA/tree `b34156c597dcd47a5ab6d154f73ffa7a323d4664` / `0df4eedfcf649a10423a4a3153233ff6c424020f`; post-merge Quality Gate run `34668097170` completed **SUCCESS**. W3.A is implemented under review as a pure `src/vnext/persistence/` seam and is not canonical until audited and explicitly authorized for merge. W3.B is not started.
+W3.0 freezes the detailed persistence/lifecycle contract in `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md` and is **CANONICAL** through merged PR #28. W3.A is **CANONICAL** through merged PR #29 at `main` SHA/tree `4199108c2e4e0cd2d09a3ec02e2700528a373ff3` / `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`; post-merge Quality Gate run `34706862089` completed **SUCCESS**. W3.B is implemented under review as the explicit VNext Supabase current/history authority plus strict CAS/replay/security and repository-adapter layer. W3.C is not started.
 
 ## FUTURE PRODUCT-DATA / PIM SEAM
 
@@ -476,9 +476,11 @@ W2 is **COMPLETE / CANONICAL** through merged PR #26. Accepted W2.G review head/
 
 PR #27 then completed the durable W2 closeout/handoff synchronization at canonical `main` SHA/tree `6321155d0b88e52758cfb7138070c036845c359b` / `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS**.
 
-Independent W3 repository research is **COMPLETE** and the Principal verdict is **A — W3 RESEARCH ACCEPTED**. W3.0 contract freeze is **CANONICAL** through merged PR #28. W3.A is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** on `feat/vnext-w3a-persistence-contracts-roundtrip`; it establishes validated full-snapshot serialization/load, thin persistence metadata, external revision state, persistence-root compatibility, repository interfaces, and semantic error contracts without Supabase or save orchestration. W3.B is **NOT STARTED**.
+Independent W3 repository research is **COMPLETE** and the Principal verdict is **A — W3 RESEARCH ACCEPTED**. W3.0 contract freeze is **CANONICAL** through merged PR #28. W3.A is **CANONICAL** through merged PR #29 at `4199108c2e4e0cd2d09a3ec02e2700528a373ff3`, tree `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`, with post-merge Quality Gate `34706862089` **SUCCESS**.
 
-The next gate is a Principal audit of the exact W3.A implementation PR head/tree and CI. Do not begin W3.B and do not merge W3.A without explicit user authorization.
+W3.B is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** on `feat/vnext-w3b-supabase-cas-history`. Its review surface is migration `00024_vnext_catalog_persistence.sql`, the Supabase repository adapter, real sequential/security/failure-injection rehearsal, separate-session concurrency harness, dedicated GitHub real-database workflow, focused tests, and the W3.B story. W3.C is **NOT STARTED**.
+
+The next gate is publication of the W3.B PR and exact-head completion of both required CI surfaces, followed by Principal W3.B audit. Do not start W3.C and do not merge W3.B without explicit user authorization.
 
 ## REQUIRED RECONSTRUCTION ORDER
 
