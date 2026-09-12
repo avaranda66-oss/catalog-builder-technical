@@ -43,6 +43,23 @@ export const W2C_DEMO_ASSET_URLS = new Map<string, string>([
   [W2C_REPLACEMENT_ASSET_ID, '/assets/vnext/w2c-replacement.png'],
 ]);
 
+export function resolveKnownW2CDemoAssetUrls(document: CatalogDocument): ReadonlyMap<string, string> {
+  const urls = new Map<string, string>();
+  for (const asset of document.assets) {
+    const known = W2C_DEMO_ASSETS.find((candidate) =>
+      candidate.id === asset.id
+      && candidate.version === asset.version
+      && candidate.sha256 === asset.sha256
+      && candidate.mime === asset.mime
+      && candidate.widthPx === asset.widthPx
+      && candidate.heightPx === asset.heightPx
+    );
+    const url = known ? W2C_DEMO_ASSET_URLS.get(known.id) : undefined;
+    if (url) urls.set(asset.id, url);
+  }
+  return urls;
+}
+
 export type InsertTool = 'text' | 'image' | 'table' | 'shape' | 'line';
 
 function frame(xMm: number, yMm: number, widthMm: number, heightMm: number) {

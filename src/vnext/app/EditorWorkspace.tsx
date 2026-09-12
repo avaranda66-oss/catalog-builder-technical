@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Plus, Redo2, Undo2 } from 'lucide-react';
+import { FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, type ApplicationAction, type DocumentSession, type FrameU } from '../application';
 import {
   mmToU,
@@ -13,6 +13,11 @@ import {
   type TextObject,
 } from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
+import type {
+  AuthoringBarrierResult,
+  SaveProjection,
+  VNextPersistenceRuntime,
+} from '../persistence';
 import {
   diagnosticMessage,
   EditorDiagnosticsProbe,
@@ -105,7 +110,20 @@ function textEditTypography(document: CatalogDocument, object: TextObject): Reac
   };
 }
 
-export function EditorWorkspace({ session }: { session: DocumentSession }) {
+export interface EditorWorkspacePersistenceProps {
+  readonly runtime: VNextPersistenceRuntime;
+  readonly openSessionId: string;
+  readonly save: SaveProjection;
+  readonly assetUrls: ReadonlyMap<string, string>;
+}
+
+export function EditorWorkspace({
+  session,
+  persistence,
+}: {
+  session: DocumentSession;
+  persistence?: EditorWorkspacePersistenceProps;
+}) {
   const snapshot = useDocumentSession(session);
   const { document, canUndo, canRedo } = snapshot;
   const [editorState, setEditorState] = React.useState<EditorSelectionState>({
@@ -253,31 +271,93 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     setTextEdit(null);
     setEditorState((current) => ({ ...current, mode: 'select' }));
     if (message) setStatusMessage(message);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
 
-  const commitTextEdit = (): boolean => {
+  const applyTextDraft = (edit: TextEditSession) => session.execute({
+    type: 'text.setContent',
+    objectId: edit.objectId,
+    expectedText: edit.expectedText,
+    plainText: edit.draft,
+  });
+
+  const commitTextEdit = (preserveOnFailure = false): boolean => {
     const edit = textEditRef.current;
     if (!edit) return true;
-    const result = session.execute({
-      type: 'text.setContent',
-      objectId: edit.objectId,
-      expectedText: edit.expectedText,
-      plainText: edit.draft,
-    });
-    textEditRef.current = null;
-    compositionRef.current = false;
-    setTextEdit(null);
-    setEditorState((current) => ({ ...current, mode: 'select' }));
+    const result = applyTextDraft(edit);
     if (!result.ok) {
       setStatusMessage(result.error.code === 'OBJECT_LOCKED'
         ? 'O texto foi bloqueado antes da conclusão; o rascunho não foi aplicado.'
         : 'O texto mudou ou não pode mais ser editado por este modo; o rascunho não foi aplicado.');
+      if (!preserveOnFailure) {
+        textEditRef.current = null;
+        compositionRef.current = false;
+        setTextEdit(null);
+        setEditorState((current) => ({ ...current, mode: 'select' }));
+      }
+      persistence?.runtime.workspace.notifyDraftStateChanged();
       return false;
     }
+    textEditRef.current = null;
+    compositionRef.current = false;
+    setTextEdit(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
     setStatusMessage(result.metadata.changed ? 'Texto atualizado.' : 'Texto sem alterações.');
+    persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
+
+  const prepareTextDraftForSave = (): AuthoringBarrierResult => {
+    const edit = textEditRef.current;
+    if (!edit) return { ok: true };
+    if (compositionRef.current) {
+      return {
+        ok: false,
+        reason: 'COMPOSITION_ACTIVE',
+        message: 'Conclua a composição de texto antes de salvar.',
+      };
+    }
+    const result = applyTextDraft(edit);
+    if (!result.ok) {
+      const stale = result.error.code === 'ACTION_INVALID'
+        && result.error.details.startsWith('Stale text edit');
+      setStatusMessage(stale
+        ? 'O texto mudou enquanto este rascunho estava aberto. Revise-o antes de salvar.'
+        : 'O rascunho visível não pode ser salvo ainda.');
+      persistence?.runtime.workspace.notifyDraftStateChanged();
+      return {
+        ok: false,
+        reason: stale
+          ? 'STALE_DRAFT'
+          : result.error.code === 'ACTION_INVALID'
+            ? 'INVALID_DRAFT'
+            : 'COMMIT_FAILED',
+        message: stale
+          ? 'O rascunho de texto ficou desatualizado e foi preservado.'
+          : 'O rascunho de texto foi preservado porque não pôde ser aplicado com segurança.',
+      };
+    }
+    textEditRef.current = null;
+    compositionRef.current = false;
+    setTextEdit(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    setStatusMessage(result.metadata.changed ? 'Texto atualizado para salvar.' : 'Texto pronto para salvar.');
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+    return { ok: true };
+  };
+
+  const prepareTextDraftForSaveRef = React.useRef(prepareTextDraftForSave);
+  prepareTextDraftForSaveRef.current = prepareTextDraftForSave;
+  const persistenceRuntime = persistence?.runtime;
+  const persistenceOpenSessionId = persistence?.openSessionId;
+  React.useEffect(() => {
+    if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
+    return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
+      prepareForSave: () => prepareTextDraftForSaveRef.current(),
+      hasPendingDraft: () => Boolean(textEditRef.current),
+    });
+  }, [persistenceOpenSessionId, persistenceRuntime]);
 
   const startTextEdit = (object: EditorialObject): boolean => {
     if (object.type !== 'text') return false;
@@ -301,6 +381,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     setTextEdit(edit);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'text-edit' });
     setStatusMessage(null);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
 
@@ -592,6 +673,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     if (!textEditRef.current) return;
     const target = event.target as HTMLElement;
     if (target.closest('[data-text-edit-session]')) return;
+    if (target.closest('[data-persistence-save-action]')) return;
     if (target.closest('[data-text-edit-cancel-on-activate]')) {
       cancelTextEdit('');
       return;
@@ -608,6 +690,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
     const next = { ...current, draft: value.replace(/\r\n?/g, '\n') };
     textEditRef.current = next;
     setTextEdit(next);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
   const insertTechnicalSymbol = (symbol: string) => {
@@ -647,7 +730,20 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
             <div className="vnext-title-row"><h1>{document.title}</h1><span className="vnext-badge">VNext</span></div>
           </div>
         </div>
-        <div className="vnext-actions" aria-label="Histórico do documento">
+        <div className="vnext-actions" aria-label="Ações do documento">
+          {persistence && (
+            <button
+              type="button"
+              data-editor-action="save"
+              data-persistence-save-action=""
+              onClick={() => { void persistence.runtime.saveCoordinator.save(); }}
+              disabled={!persistence.save.canSave || persistence.save.phase === 'saving'}
+              aria-label={persistence.save.label}
+            >
+              <SaveIcon size={17} aria-hidden="true" />
+              <span>{persistence.save.label}</span>
+            </button>
+          )}
           <button type="button" data-editor-action="undo" data-text-edit-cancel-on-activate="" onClick={undo} disabled={!canUndo} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
           <button type="button" data-editor-action="redo" data-text-edit-cancel-on-activate="" onClick={redo} disabled={!canRedo} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
         </div>
@@ -679,7 +775,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                   {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)
                 </span>
               )}
-              <span className="vnext-memory-status">Rascunho nesta aba</span>
+              <span className="vnext-memory-status" data-save-state="">{persistence ? persistence.save.label : 'Rascunho nesta aba'}</span>
             </div>
           </div>
           <div className="vnext-authoring-toolbar" aria-label="Adicionar e organizar objetos">
@@ -724,7 +820,7 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
 
           <div className="vnext-document-preview" aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
             <div className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
-              <DocumentRenderer document={previewDocument} plans={plans} assetUrls={W2C_DEMO_ASSET_URLS} />
+              <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
                 if (event.target === event.currentTarget) { controller.cancel('superseded'); setEditorState((current) => ({ ...current, selectedObjectIds: [] })); }
               }}>
@@ -744,8 +840,14 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
                       spellCheck={false}
                       style={textEditTypography(document, editingObject)}
                       onChange={(event) => updateTextDraft(event.target.value)}
-                      onCompositionStart={() => { compositionRef.current = true; }}
-                      onCompositionEnd={() => { compositionRef.current = false; }}
+                      onCompositionStart={() => {
+                        compositionRef.current = true;
+                        persistence?.runtime.workspace.notifyDraftStateChanged();
+                      }}
+                      onCompositionEnd={() => {
+                        compositionRef.current = false;
+                        persistence?.runtime.workspace.notifyDraftStateChanged();
+                      }}
                     />
                     <div className="vnext-text-edit-toolbar" aria-label="Ferramentas da edição de texto">
                       <div className="vnext-text-symbols">
@@ -891,11 +993,15 @@ export function EditorWorkspace({ session }: { session: DocumentSession }) {
           ) : <p>Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.</p>}
           <div className="vnext-divider" />
           <h3>Salvamento</h3>
-          <p>Este W2.C continua somente em memória nesta aba.</p>
+          <p>
+            {persistence
+              ? persistence.save.message ?? persistence.save.label
+              : 'Este documento continua somente em memória nesta aba.'}
+          </p>
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
       </div>
-      <EditorDiagnosticsProbe document={document} assetUrls={W2C_DEMO_ASSET_URLS} onDiagnostics={receiveMeasuredDiagnostics} />
+      <EditorDiagnosticsProbe document={document} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} onDiagnostics={receiveMeasuredDiagnostics} />
     </div>
   );
 }
