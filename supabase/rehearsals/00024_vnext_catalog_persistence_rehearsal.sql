@@ -222,7 +222,11 @@ DECLARE
   v_valid JSONB := '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000b0","title":"Root validation proof","locale":"pt-BR","style":{},"pages":[{}],"assets":[],"source":{"documentId":"source-document-legacy","serverVersion":0}}'::jsonb;
   v_before_snapshot JSONB;
   v_before_revision BIGINT;
+  v_before_mutation UUID;
   v_before_history BIGINT;
+  v_attack_payloads JSONB[];
+  v_attack_labels TEXT[];
+  v_attack_index INTEGER;
 BEGIN
   -- Valid source with serverVersion 0 passes the direct RPC boundary unchanged.
   PERFORM public.create_vnext_catalog_v1(
@@ -268,8 +272,8 @@ BEGIN
     RAISE EXCEPTION 'POINT-11A rejected malformed-source CREATE left durable state';
   END IF;
 
-  SELECT document_snapshot, remote_revision
-    INTO v_before_snapshot, v_before_revision
+  SELECT document_snapshot, remote_revision, last_mutation_id
+    INTO v_before_snapshot, v_before_revision, v_before_mutation
   FROM public.vnext_catalogs
   WHERE id = v_catalog::uuid;
   SELECT count(*) INTO v_before_history
@@ -306,11 +310,54 @@ BEGIN
     IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
   END;
 
+  -- Direct-RPC adversarial matrix: every remaining root/source poisoning form must fail closed.
+  v_attack_payloads := ARRAY[
+    v_valid || '{"mutationId":"poison"}'::jsonb,
+    v_valid || '{"unexpectedField":true}'::jsonb,
+    jsonb_set(v_valid, '{source}', 'null'::jsonb),
+    jsonb_set(v_valid, '{source}', '{}'::jsonb),
+    jsonb_set(v_valid, '{source}', '"not-an-object"'::jsonb),
+    jsonb_set(v_valid, '{source}', '[]'::jsonb),
+    jsonb_set(v_valid, '{source}', '{"documentId":"","serverVersion":0}'::jsonb),
+    jsonb_set(v_valid, '{source}', '{"documentId":"source-document-legacy","serverVersion":-1}'::jsonb),
+    jsonb_set(v_valid, '{source}', '{"documentId":"source-document-legacy","serverVersion":1.5}'::jsonb),
+    jsonb_set(v_valid, '{source}', '{"documentId":"source-document-legacy","serverVersion":"1"}'::jsonb),
+    jsonb_set(v_valid, '{source}', '{"documentId":"source-document-legacy","serverVersion":9007199254740992}'::jsonb)
+  ];
+  v_attack_labels := ARRAY[
+    'mutationId root key',
+    'arbitrary unknown root key',
+    'null source',
+    'empty source',
+    'string source',
+    'array source',
+    'empty source documentId',
+    'negative source serverVersion',
+    'fractional source serverVersion',
+    'string source serverVersion',
+    'unsafe source serverVersion'
+  ];
+
+  FOR v_attack_index IN 1..array_length(v_attack_payloads, 1) LOOP
+    BEGIN
+      PERFORM public.save_vnext_catalog_cas_v1(
+        v_catalog,
+        v_before_revision,
+        ('a0000000-0000-4000-8000-' || lpad(v_attack_index::text, 12, '0')),
+        v_attack_payloads[v_attack_index]
+      );
+      RAISE EXCEPTION 'POINT-11A SAVE accepted %', v_attack_labels[v_attack_index];
+    EXCEPTION WHEN invalid_parameter_value THEN
+      IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
+    END;
+  END LOOP;
+
   IF (SELECT document_snapshot FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_before_snapshot
     OR (SELECT remote_revision FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_before_revision
+    OR (SELECT last_mutation_id FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_before_mutation
     OR (SELECT count(*) FROM public.vnext_catalog_revisions WHERE catalog_id = v_catalog::uuid) IS DISTINCT FROM v_before_history
   THEN
-    RAISE EXCEPTION 'POINT-11A rejected SAVE mutated current state or history';
+    RAISE EXCEPTION 'POINT-11A rejected SAVE mutated snapshot, revision, mutation identity, or history';
   END IF;
 END;
 $$;
