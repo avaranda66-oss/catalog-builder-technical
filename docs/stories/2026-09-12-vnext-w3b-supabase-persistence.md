@@ -28,6 +28,7 @@ Implement the first durable VNext persistence infrastructure without creating a 
 - [x] SAVE and ARCHIVE use row-locking strict CAS; no last-write-wins path exists.
 - [x] Archive state is lifecycle metadata and does not mutate `document_snapshot`.
 - [x] SQL performs only a narrow persistence/security validation spine; W3.A remains the complete canonical validator.
+- [x] Direct RPC snapshots reject unknown CatalogDocument root keys and validate optional `source` with the exact W3.A root key/type/integer semantics.
 - [x] Authenticated readers are authorized through the existing team model; mutations require editor/admin through `require_document_editor_v1()`.
 - [x] Direct application-role table mutation is revoked; RLS remains enabled as defense in depth.
 - [x] SECURITY DEFINER RPCs use fixed `search_path` and authenticated-only grants.
@@ -64,11 +65,13 @@ The repository adapter distinguishes known pre-dispatch offline state, ordinary 
 
 ## SQL validation boundary
 
-The database validates only the persistence/security spine: JSON object shape, exact schema version 1, exact lowercase UUID root consistency, non-empty title/locale projections, required top-level style/pages/assets shape, and a 10 MiB defensive snapshot bound. RichText, Table, primitives, Group semantics, geometry, and the rest of the authored schema remain W3.A/domain authority.
+The database validates only the persistence/security spine: JSON object shape, the exact allowed CatalogDocument top-level key set, exact schema version 1, exact lowercase UUID root consistency, non-empty title/locale projections, required top-level style/pages/assets shape, optional strict `source` root semantics (`documentId` plus safe non-negative integer `serverVersion`), and a 10 MiB defensive snapshot bound. RichText, Table, primitives, Group semantics, geometry, and the rest of the authored schema remain W3.A/domain authority.
+
+Principal exact-head audit identified and closed direct RPC root structural poisoning through unknown top-level CatalogDocument keys / malformed source. The SQL boundary rejects those payloads with `VNEXT_INVALID_DOCUMENT` / SQLSTATE `22023`; it does not strip or normalize them. W3.A remains the complete canonical authored-document validator.
 
 ## Real PostgreSQL/Supabase proof
 
-`supabase/rehearsals/00024_vnext_catalog_persistence_rehearsal.sql` covers create revision/history, duplicate create, unauthorized/viewer mutation denial, editor/admin mutation success, direct DML denial, immutable history, malformed RPC rejection, UUID textual round-trip, save/stale save, archive/stale/already-archived behavior, replay identity, divergent mutation reuse, cross-catalog mutation reuse, lightweight list behavior, RLS/grants, and a rehearsal-only history-insert failure trigger proving transaction rollback.
+`supabase/rehearsals/00024_vnext_catalog_persistence_rehearsal.sql` covers create revision/history, duplicate create, unauthorized/viewer mutation denial, editor/admin mutation success, direct DML denial, immutable history, malformed RPC rejection, UUID textual round-trip, save/stale save, archive/stale/already-archived behavior, replay identity, divergent mutation reuse, cross-catalog mutation reuse, lightweight list behavior, RLS/grants, and a rehearsal-only history-insert failure trigger proving transaction rollback. It also bypasses `SupabaseCatalogRepository` with authenticated direct RPC calls to prove unknown root keys and malformed `source` are rejected on CREATE and SAVE, valid `source` with `serverVersion: 0` passes, rejected CREATE produces no current/history row, and rejected SAVE changes neither snapshot, remote revision, nor history.
 
 `scripts/vnext-w3b-rehearsal-real-pg.sh` adds true separate-session contention. SAVE/SAVE holds the row in session A while session B attempts the same expected revision, proving one N+1 winner and one conflict with no N+2/history gap. SAVE/ARCHIVE uses the same pattern and proves one valid transition with no resurrection or current/history divergence.
 

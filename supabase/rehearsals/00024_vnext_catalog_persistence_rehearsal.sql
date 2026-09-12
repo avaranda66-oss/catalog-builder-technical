@@ -211,6 +211,111 @@ END;
 $$;
 RESET ROLE;
 
+-- POINT 11A: direct authenticated RPC callers cannot poison CatalogDocument root/source structure.
+SET ROLE authenticated;
+SET "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
+DO $$
+DECLARE
+  v_catalog CONSTANT TEXT := '10000000-0000-4000-8000-0000000000b0';
+  v_unknown_create_catalog CONSTANT TEXT := '10000000-0000-4000-8000-0000000000b1';
+  v_bad_source_create_catalog CONSTANT TEXT := '10000000-0000-4000-8000-0000000000b2';
+  v_valid JSONB := '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000b0","title":"Root validation proof","locale":"pt-BR","style":{},"pages":[{}],"assets":[],"source":{"documentId":"source-document-legacy","serverVersion":0}}'::jsonb;
+  v_before_snapshot JSONB;
+  v_before_revision BIGINT;
+  v_before_history BIGINT;
+BEGIN
+  -- Valid source with serverVersion 0 passes the direct RPC boundary unchanged.
+  PERFORM public.create_vnext_catalog_v1(
+    'a0000000-0000-4000-8000-0000000000b0',
+    v_valid,
+    NULL
+  );
+  IF (SELECT document_snapshot FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_valid THEN
+    RAISE EXCEPTION 'POINT-11A valid source was not persisted exactly';
+  END IF;
+
+  -- CREATE: unknown top-level persistence metadata is rejected before any durable row/history exists.
+  BEGIN
+    PERFORM public.create_vnext_catalog_v1(
+      'a0000000-0000-4000-8000-0000000000b1',
+      '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000b1","title":"Poison create","locale":"pt-BR","style":{},"pages":[{}],"assets":[],"remoteRevision":999}'::jsonb,
+      NULL
+    );
+    RAISE EXCEPTION 'POINT-11A CREATE accepted unknown top-level key';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM public.vnext_catalogs WHERE id = v_unknown_create_catalog::uuid)
+    OR EXISTS (SELECT 1 FROM public.vnext_catalog_revisions WHERE catalog_id = v_unknown_create_catalog::uuid)
+  THEN
+    RAISE EXCEPTION 'POINT-11A rejected unknown-key CREATE left durable state';
+  END IF;
+
+  -- CREATE: malformed source with missing strict required fields is rejected atomically.
+  BEGIN
+    PERFORM public.create_vnext_catalog_v1(
+      'a0000000-0000-4000-8000-0000000000b2',
+      '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000b2","title":"Bad source create","locale":"pt-BR","style":{},"pages":[{}],"assets":[],"source":{}}'::jsonb,
+      NULL
+    );
+    RAISE EXCEPTION 'POINT-11A CREATE accepted malformed source';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM public.vnext_catalogs WHERE id = v_bad_source_create_catalog::uuid)
+    OR EXISTS (SELECT 1 FROM public.vnext_catalog_revisions WHERE catalog_id = v_bad_source_create_catalog::uuid)
+  THEN
+    RAISE EXCEPTION 'POINT-11A rejected malformed-source CREATE left durable state';
+  END IF;
+
+  SELECT document_snapshot, remote_revision
+    INTO v_before_snapshot, v_before_revision
+  FROM public.vnext_catalogs
+  WHERE id = v_catalog::uuid;
+  SELECT count(*) INTO v_before_history
+  FROM public.vnext_catalog_revisions
+  WHERE catalog_id = v_catalog::uuid;
+
+  -- SAVE: unknown top-level persistence metadata is rejected without snapshot/revision/history mutation.
+  BEGIN
+    PERFORM public.save_vnext_catalog_cas_v1(
+      v_catalog,
+      v_before_revision,
+      'a0000000-0000-4000-8000-0000000000b3',
+      v_valid || '{"remoteRevision":999}'::jsonb
+    );
+    RAISE EXCEPTION 'POINT-11A SAVE accepted unknown top-level key';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
+  END;
+
+  -- SAVE: source may not contain persistence metadata or any other unknown source key.
+  BEGIN
+    PERFORM public.save_vnext_catalog_cas_v1(
+      v_catalog,
+      v_before_revision,
+      'a0000000-0000-4000-8000-0000000000b4',
+      jsonb_set(
+        v_valid,
+        '{source}',
+        '{"documentId":"source-document-legacy","serverVersion":1,"remoteRevision":4}'::jsonb
+      )
+    );
+    RAISE EXCEPTION 'POINT-11A SAVE accepted malformed source';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM NOT LIKE '%VNEXT_INVALID_DOCUMENT%' THEN RAISE; END IF;
+  END;
+
+  IF (SELECT document_snapshot FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_before_snapshot
+    OR (SELECT remote_revision FROM public.vnext_catalogs WHERE id = v_catalog::uuid) IS DISTINCT FROM v_before_revision
+    OR (SELECT count(*) FROM public.vnext_catalog_revisions WHERE catalog_id = v_catalog::uuid) IS DISTINCT FROM v_before_history
+  THEN
+    RAISE EXCEPTION 'POINT-11A rejected SAVE mutated current state or history';
+  END IF;
+END;
+$$;
+RESET ROLE;
+
 -- POINT 12: authenticated application roles have no direct table DML.
 SET ROLE authenticated;
 SET "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';

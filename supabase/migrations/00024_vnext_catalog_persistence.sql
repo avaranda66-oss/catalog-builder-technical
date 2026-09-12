@@ -148,9 +148,24 @@ AS $$
 DECLARE
   v_schema NUMERIC;
   v_size_bytes BIGINT;
+  v_source_server_version NUMERIC;
 BEGIN
   IF jsonb_typeof(p_snapshot) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: document snapshot must be a JSON object'
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF (p_snapshot - ARRAY[
+    'schemaVersion',
+    'id',
+    'title',
+    'locale',
+    'style',
+    'pages',
+    'assets',
+    'source'
+  ]::TEXT[]) <> '{}'::JSONB THEN
+    RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: document snapshot contains unknown top-level keys'
       USING ERRCODE = '22023';
   END IF;
 
@@ -197,6 +212,36 @@ BEGIN
   THEN
     RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: style object, non-empty pages array and assets array are required'
       USING ERRCODE = '22023';
+  END IF;
+
+  IF p_snapshot ? 'source' THEN
+    IF jsonb_typeof(p_snapshot->'source') IS DISTINCT FROM 'object'
+      OR ((p_snapshot->'source') - ARRAY['documentId', 'serverVersion']::TEXT[]) <> '{}'::JSONB
+      OR NOT ((p_snapshot->'source') ?& ARRAY['documentId', 'serverVersion']::TEXT[])
+    THEN
+      RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: source must contain exactly documentId and serverVersion'
+        USING ERRCODE = '22023';
+    END IF;
+
+    IF jsonb_typeof(p_snapshot->'source'->'documentId') IS DISTINCT FROM 'string'
+      OR length(p_snapshot->'source'->>'documentId') = 0
+    THEN
+      RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: source.documentId must be a non-empty string'
+        USING ERRCODE = '22023';
+    END IF;
+
+    IF jsonb_typeof(p_snapshot->'source'->'serverVersion') IS DISTINCT FROM 'number' THEN
+      RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: source.serverVersion must be a safe non-negative integer'
+        USING ERRCODE = '22023';
+    END IF;
+    v_source_server_version := (p_snapshot->'source'->>'serverVersion')::NUMERIC;
+    IF v_source_server_version < 0
+      OR v_source_server_version <> trunc(v_source_server_version)
+      OR v_source_server_version > 9007199254740991
+    THEN
+      RAISE EXCEPTION 'VNEXT_INVALID_DOCUMENT: source.serverVersion must be a safe non-negative integer'
+        USING ERRCODE = '22023';
+    END IF;
   END IF;
 END;
 $$;

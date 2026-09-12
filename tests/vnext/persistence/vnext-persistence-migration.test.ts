@@ -6,6 +6,18 @@ describe('W3.B VNext persistence migration static contract', () => {
   const migrationPath = path.resolve(__dirname, '../../../supabase/migrations/00024_vnext_catalog_persistence.sql');
   const sql = fs.readFileSync(migrationPath, 'utf8');
 
+  function functionText(name: string): string {
+    const start = sql.indexOf(`CREATE FUNCTION public.${name}`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = sql.indexOf('$$;', start);
+    expect(end).toBeGreaterThan(start);
+    return sql.slice(start, end + 3);
+  }
+
+  function quotedKeys(value: string): string[] {
+    return [...value.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  }
+
   it('creates an explicit VNext namespace without mutating Legacy catalog authority', () => {
     expect(sql).toContain('CREATE TABLE public.vnext_catalogs');
     expect(sql).toContain('CREATE TABLE public.vnext_catalog_revisions');
@@ -38,12 +50,45 @@ describe('W3.B VNext persistence migration static contract', () => {
   });
 
   it('enforces narrow SQL snapshot safety rather than duplicating the authored schema', () => {
+    const validator = functionText('vnext_validate_snapshot_v1');
     expect(sql).toContain('10485760');
-    expect(sql).toContain("jsonb_typeof(p_snapshot->'pages')");
-    expect(sql).toContain("jsonb_typeof(p_snapshot->'style')");
-    expect(sql).toContain("jsonb_typeof(p_snapshot->'assets')");
-    expect(sql).not.toContain('RichText');
-    expect(sql).not.toContain('TableModel');
+    expect(validator).toContain("jsonb_typeof(p_snapshot->'pages')");
+    expect(validator).toContain("jsonb_typeof(p_snapshot->'style')");
+    expect(validator).toContain("jsonb_typeof(p_snapshot->'assets')");
+    expect(validator).not.toContain('RichText');
+    expect(validator).not.toContain('TableModel');
+  });
+
+  it('rejects every CatalogDocument top-level key outside the canonical W3.A root set', () => {
+    const validator = functionText('vnext_validate_snapshot_v1');
+    const rootKeySet = validator.match(/\bp_snapshot\s*-\s*ARRAY\[([\s\S]*?)\]::TEXT\[\]\)\s*<>\s*'\{\}'::JSONB/);
+    expect(rootKeySet).not.toBeNull();
+    expect(quotedKeys(rootKeySet![1])).toEqual([
+      'schemaVersion',
+      'id',
+      'title',
+      'locale',
+      'style',
+      'pages',
+      'assets',
+      'source',
+    ]);
+    expect(validator).toContain('document snapshot contains unknown top-level keys');
+    expect(validator).toContain("USING ERRCODE = '22023'");
+  });
+
+  it('validates optional source as the exact strict W3.A root source object', () => {
+    const validator = functionText('vnext_validate_snapshot_v1');
+    const sourceKeySet = validator.match(/\(p_snapshot->'source'\)\s*-\s*ARRAY\[([^\]]+)\]::TEXT\[\]/);
+    expect(sourceKeySet).not.toBeNull();
+    expect(quotedKeys(sourceKeySet![1])).toEqual(['documentId', 'serverVersion']);
+    expect(validator).toContain("NOT ((p_snapshot->'source') ?& ARRAY['documentId', 'serverVersion']::TEXT[])");
+    expect(validator).toContain("jsonb_typeof(p_snapshot->'source'->'documentId') IS DISTINCT FROM 'string'");
+    expect(validator).toContain("length(p_snapshot->'source'->>'documentId') = 0");
+    expect(validator).toContain("jsonb_typeof(p_snapshot->'source'->'serverVersion') IS DISTINCT FROM 'number'");
+    expect(validator).toContain('v_source_server_version < 0');
+    expect(validator).toContain('v_source_server_version <> trunc(v_source_server_version)');
+    expect(validator).toContain('v_source_server_version > 9007199254740991');
   });
 
   it('makes revision rows engine-immutable and denies application-role DML', () => {
