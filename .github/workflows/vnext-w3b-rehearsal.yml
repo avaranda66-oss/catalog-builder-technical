@@ -95,6 +95,8 @@ jobs:
           set -euo pipefail
           chmod +x scripts/vnext-w3b-rehearsal-real-pg.sh
           ./scripts/vnext-w3b-rehearsal-real-pg.sh 2>&1 | tee vnext-w3b-rehearsal.log
+          grep -Fq '[PROOF] C1 session A reached post-CREATE transaction hold' vnext-w3b-rehearsal.log
+          grep -Fq '[PROOF] C1 session B is blocked by session A' vnext-w3b-rehearsal.log
           grep -Fq '[PASS] concurrent identical CREATE' vnext-w3b-rehearsal.log
           grep -Fq '[PASS] CONCURRENT DIVERGENT CREATE' vnext-w3b-rehearsal.log
           grep -Fq '[PASS] SAVE/SAVE' vnext-w3b-rehearsal.log

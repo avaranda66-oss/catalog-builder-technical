@@ -29,6 +29,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 echo "--- CASE C1: concurrent identical CREATE converges idempotently ---"
 cat > "$tmp_dir/create-identical-a.sql" <<'SQL'
+SET application_name = 'w3b-c1-create-a';
 BEGIN;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
@@ -37,11 +38,12 @@ SELECT public.create_vnext_catalog_v1(
   '{"schemaVersion":1,"id":"10000000-0000-4000-8000-0000000000c1","title":"Concurrent identical CREATE","locale":"pt-BR","style":{},"pages":[{}],"assets":[]}'::jsonb,
   '{"originKind":"blank","originId":"concurrent-create","originRevision":0}'::jsonb
 );
-SELECT pg_sleep(2);
+SELECT pg_sleep(8);
 COMMIT;
 SQL
 
 cat > "$tmp_dir/create-identical-b.sql" <<'SQL'
+SET application_name = 'w3b-c1-create-b';
 SET ROLE authenticated;
 SET "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-000000000001","role":"authenticated"}';
 SELECT public.create_vnext_catalog_v1(
@@ -53,12 +55,73 @@ SQL
 
 run_psql -At -f "$tmp_dir/create-identical-a.sql" > "$tmp_dir/create-identical-a.log" 2>&1 &
 create_identical_a_pid=$!
-sleep 0.5
+
+# C1 must prove the winning CREATE has returned before the contender is even
+# launched. Observing A executing the following pg_sleep inside an open
+# transaction is a positive post-CREATE barrier; a blind shell delay cannot
+# certify this state if the A process was descheduled before the RPC.
+create_identical_a_observation=""
+for _ in $(seq 1 100); do
+  create_identical_a_observation="$(run_psql -Atc "
+SELECT pid::text || '|' || state || '|' || COALESCE(wait_event_type, '') || '|' || COALESCE(wait_event, '')
+FROM pg_stat_activity
+WHERE application_name = 'w3b-c1-create-a'
+  AND state = 'active'
+  AND xact_start IS NOT NULL
+  AND position('pg_sleep' in query) > 0
+LIMIT 1;
+")"
+  if [[ -n "$create_identical_a_observation" ]]; then
+    break
+  fi
+  sleep 0.05
+done
+
+if [[ -z "$create_identical_a_observation" ]]; then
+  echo "C1 session A never reached the observable post-CREATE transaction hold"
+  cat "$tmp_dir/create-identical-a.log"
+  wait "$create_identical_a_pid" || true
+  exit 1
+fi
+echo "[PROOF] C1 session A reached post-CREATE transaction hold"
+echo "[EVIDENCE] C1 session A pg_stat_activity: $create_identical_a_observation"
+
+run_psql -At -f "$tmp_dir/create-identical-b.sql" > "$tmp_dir/create-identical-b.log" 2>&1 &
+create_identical_b_pid=$!
+
+create_identical_block_observation=""
+for _ in $(seq 1 100); do
+  create_identical_block_observation="$(run_psql -Atc "
+SELECT b.pid::text || '|' || a.pid::text || '|' || b.state || '|' || COALESCE(b.wait_event_type, '') || '|' || COALESCE(b.wait_event, '')
+FROM pg_stat_activity AS b
+JOIN pg_stat_activity AS a
+  ON a.application_name = 'w3b-c1-create-a'
+WHERE b.application_name = 'w3b-c1-create-b'
+  AND a.pid = ANY(pg_blocking_pids(b.pid))
+LIMIT 1;
+")"
+  if [[ -n "$create_identical_block_observation" ]]; then
+    break
+  fi
+  sleep 0.05
+done
+
+if [[ -z "$create_identical_block_observation" ]]; then
+  echo "C1 session B never became observably blocked by session A"
+  cat "$tmp_dir/create-identical-a.log"
+  cat "$tmp_dir/create-identical-b.log"
+  wait "$create_identical_a_pid" || true
+  wait "$create_identical_b_pid" || true
+  exit 1
+fi
+echo "[PROOF] C1 session B is blocked by session A"
+echo "[EVIDENCE] C1 pg_blocking_pids(B) contains A: $create_identical_block_observation"
+
 set +e
-run_psql -At -f "$tmp_dir/create-identical-b.sql" > "$tmp_dir/create-identical-b.log" 2>&1
-create_identical_b_status=$?
 wait "$create_identical_a_pid"
 create_identical_a_status=$?
+wait "$create_identical_b_pid"
+create_identical_b_status=$?
 set -e
 
 if [[ "$create_identical_a_status" -ne 0 || "$create_identical_b_status" -ne 0 ]]; then
