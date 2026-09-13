@@ -205,6 +205,12 @@ function button(container: HTMLElement, action: string): HTMLButtonElement {
   return element;
 }
 
+async function waitForEditor(container: HTMLElement): Promise<void> {
+  await waitFor(() => expect(
+    container.querySelector('[data-editor-action="add-shape"]')
+  ).not.toBeNull());
+}
+
 function beginTextEdit(container: HTMLElement): HTMLTextAreaElement {
   setPageRect(container);
   const hit = container.querySelector<HTMLElement>('[data-editor-object-id="text-target"]');
@@ -447,6 +453,7 @@ describe('W3.D typed authoring recovery overlays', () => {
     const recoveryRepository = new InMemoryRecoveryRepository();
     const { runtime, session } = runtimeFor(repositoryBase(), textDocument(), recoveryRepository);
     const { container } = render(<VNextApp runtime={runtime} />);
+    await waitForEditor(container);
     const textarea = beginTextEdit(container);
 
     fireEvent.change(textarea, { target: { value: 'Rascunho efêmero recuperável' } });
@@ -485,6 +492,7 @@ describe('W3.D typed authoring recovery overlays', () => {
       unavailableRecoveryRepository()
     );
     const { container } = render(<VNextApp runtime={runtime} />);
+    await waitForEditor(container);
     act(() => {
       expect(session.execute({ type: 'document.rename', title: 'Saved in cloud' }).ok).toBe(true);
     });
@@ -505,6 +513,7 @@ describe('W3.D typed authoring recovery overlays', () => {
     const recoveryRepository = new InMemoryRecoveryRepository();
     const { runtime, session } = runtimeFor(repositoryBase(), textDocument(), recoveryRepository);
     const { container } = render(<VNextApp runtime={runtime} />);
+    await waitForEditor(container);
     beginTextEdit(container);
     fireEvent.click(button(container, 'cancel-text'));
     const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]');

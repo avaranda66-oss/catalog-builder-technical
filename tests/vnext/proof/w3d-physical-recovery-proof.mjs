@@ -358,6 +358,82 @@ async function runH() {
   await closeRun(run);
 }
 
+async function seedStartupRaceProfile(label, title) {
+  const profile = await newProfile(label);
+  const run = await launchProfile(profile);
+  await clearDatabase(run);
+  const page = await pageFor(run, 'base');
+  await page.locator('[data-editor-action="add-shape"]').waitFor();
+  const original = await api(page, 'snapshot');
+  await api(page, 'editTitle', title);
+  await api(page, 'flushRecovery');
+  const records = await committedRecordsFromFreshConnection(page);
+  const committed = records.find(
+    (entry) => entry.status === 'VALID' && entry.record.openSessionId === original.openSessionId
+  );
+  assert(committed, 'Startup-race seed must be durably committed before restart');
+  assert.equal(committed.record.documentSnapshot.title, title);
+  await hardCrash(run);
+  return { profile, original, committed };
+}
+
+async function runI() {
+  const safe = await seedStartupRaceProfile('startup-race-safe', 'Startup race recovered work');
+  let run = await launchProfile(safe.profile);
+  let page = await pageFor(run, 'delayed-discovery');
+  await page.locator('[data-recovery-startup-state="pending"]').waitFor();
+  assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
+  assert.equal(await page.getByText('Verificando alterações locais…').count(), 1);
+
+  await api(page, 'resolveDiscovery');
+  await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
+  await page.getByRole('button', { name: 'Recuperar minhas alterações' }).click();
+  await page.locator('[data-editor-action="add-shape"]').waitFor();
+  const recovered = await api(page, 'snapshot');
+  assert.equal(recovered.document.title, 'Startup race recovered work');
+  assert.notEqual(recovered.openSessionId, safe.original.openSessionId);
+  assert.equal(recovered.canUndo, false);
+  assert.equal(recovered.canRedo, false);
+  await page.locator('[data-editor-action="add-shape"]').click();
+  assert.equal((await api(page, 'snapshot')).document.pages[0].objects.length, 2);
+  await closeRun(run);
+
+  const adversarial = await seedStartupRaceProfile(
+    'startup-race-adversarial',
+    'Old recovery must remain'
+  );
+  run = await launchProfile(adversarial.profile);
+  page = await pageFor(run, 'delayed-discovery');
+  await page.locator('[data-recovery-startup-state="pending"]').waitFor();
+  assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
+  await api(page, 'resolveDiscovery');
+  await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  const beforeSneak = await api(page, 'snapshot');
+  await api(page, 'editTitle', 'Current authored work survives');
+  await page.getByRole('button', { name: 'Recuperar minhas alterações' }).click();
+  await page.getByText('As alterações atuais mudaram enquanto a recuperação era verificada.').waitFor();
+  const rejected = await api(page, 'snapshot');
+  assert.equal(rejected.document.title, 'Current authored work survives');
+  assert.equal(rejected.openSessionId, beforeSneak.openSessionId);
+  assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
+  const preserved = (await api(page, 'list')).find(
+    (entry) => entry.status === 'VALID'
+      && entry.record.openSessionId === adversarial.original.openSessionId
+  );
+  assert(preserved, 'Rejected stale recovery must preserve the original recovery record');
+  assert.equal(preserved.record.documentSnapshot.title, 'Old recovery must remain');
+  evidence.proofs.I = {
+    editorAbsentWhileDiscoveryPending: true,
+    editorAbsentWhileDecisionPending: true,
+    recoveredSessionBecameEditable: true,
+    staleProgrammaticInstallRejected: true,
+    currentAuthoredWorkPreserved: true,
+    oldRecoveryPreserved: true,
+  };
+  await closeRun(run);
+}
+
 async function runA() {
   const crashProfile = await newProfile('canonical-crash');
   let run = await launchProfile(crashProfile);
@@ -510,7 +586,17 @@ async function runC() {
   await closeRun(run);
 }
 
-const scenarios = { A: runA, B: runB, C: runC, D: runD, E: runE, F: runF, G: runG, H: runH };
+const scenarios = {
+  A: runA,
+  B: runB,
+  C: runC,
+  D: runD,
+  E: runE,
+  F: runF,
+  G: runG,
+  H: runH,
+  I: runI,
+};
 
 async function runProof() {
   const selected = requestedScenario === 'ALL'

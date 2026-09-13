@@ -83,6 +83,8 @@ let lastSaveRequest: SaveCatalogCasRequest | undefined;
 let controlledResolve: ((result: PersistenceResult<CatalogPersistenceEnvelope>) => void) | undefined;
 let activeSave: Promise<unknown> | undefined;
 let committedCache: CatalogPersistenceEnvelope | undefined;
+let discoveryDelayPending = remoteMode === 'delayed-discovery';
+let controlledDiscoveryResolve: ((result: PersistenceResult<CatalogPersistenceEnvelope>) => void) | undefined;
 
 async function pendingEnvelope(): Promise<CatalogPersistenceEnvelope | undefined> {
   const records = await recoveryRepository.listByScope(authorityScopeId);
@@ -103,6 +105,11 @@ const repository: CatalogRepository = {
   createCatalog: () => failure(),
   archiveCAS: () => failure(),
   getCatalog: async () => {
+    if (discoveryDelayPending) {
+      return new Promise((resolve) => {
+        controlledDiscoveryResolve = resolve;
+      });
+    }
     if (committedCache) return { ok: true, value: committedCache };
     if (remoteMode === 'unavailable') return { ok: false, error: { code: 'OFFLINE' } };
     if (remoteMode === 'committed') {
@@ -191,6 +198,12 @@ const proofApi = {
         lastSaveRequest.mutationId
       ),
     });
+  },
+  resolveDiscovery() {
+    if (!controlledDiscoveryResolve) throw new Error('No controlled recovery discovery');
+    discoveryDelayPending = false;
+    controlledDiscoveryResolve({ ok: true, value: envelope(baseDocument()) });
+    controlledDiscoveryResolve = undefined;
   },
   flushRecovery() {
     return runtime.recoveryManager?.flush();

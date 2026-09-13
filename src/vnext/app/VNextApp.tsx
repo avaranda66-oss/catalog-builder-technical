@@ -3,7 +3,7 @@ import { createDocumentSession, createStaticPageTemplateRegistry, type DocumentS
 import type { VNextPersistenceRuntime } from '../persistence';
 import { createW2CDemoDocument } from './editor-defaults';
 import { EditorWorkspace } from './EditorWorkspace';
-import { RecoveryCenter } from './RecoveryCenter';
+import { RecoveryCenter, type RecoveryGatePhase } from './RecoveryCenter';
 import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
 import './styles.css';
 
@@ -23,27 +23,49 @@ function RuntimeWorkspace({ runtime }: { runtime: VNextPersistenceRuntime }) {
     runtime.workspace.getSnapshot,
     runtime.workspace.getSnapshot
   );
+  const [recoveryGate, setRecoveryGate] = React.useState<{
+    readonly authorityScopeId: string;
+    readonly phase: RecoveryGatePhase;
+  }>(() => ({
+    authorityScopeId: snapshot.activeAuthorityScopeId,
+    phase: runtime.recoveryStartup ? 'PENDING' : 'RELEASED',
+  }));
+  const activeRecoveryGatePhase = recoveryGate.authorityScopeId === snapshot.activeAuthorityScopeId
+    ? recoveryGate.phase
+    : 'PENDING';
+  const updateRecoveryGate = React.useCallback((phase: RecoveryGatePhase) => {
+    setRecoveryGate({ authorityScopeId: snapshot.activeAuthorityScopeId, phase });
+  }, [snapshot.activeAuthorityScopeId]);
   const recoveredOverlay = runtime.getRecoveredOverlay(snapshot.binding.openSessionId);
   return (
     <>
-      <EditorWorkspace
-        key={snapshot.binding.openSessionId}
-        session={snapshot.session}
-        persistence={{
-          runtime,
-          openSessionId: snapshot.binding.openSessionId,
-          save: snapshot.save,
-          assetUrls: snapshot.assetUrls,
-          localProtection: snapshot.localProtection,
-          ...(snapshot.localProtectionMessage
-            ? { localProtectionMessage: snapshot.localProtectionMessage }
-            : {}),
-          ...(recoveredOverlay
-            ? { recoveredOverlay }
-            : {}),
-        }}
-      />
-      <RecoveryCenter runtime={runtime} authorityScopeId={snapshot.activeAuthorityScopeId} />
+      {activeRecoveryGatePhase === 'RELEASED' && (
+        <EditorWorkspace
+          key={snapshot.binding.openSessionId}
+          session={snapshot.session}
+          persistence={{
+            runtime,
+            openSessionId: snapshot.binding.openSessionId,
+            save: snapshot.save,
+            assetUrls: snapshot.assetUrls,
+            localProtection: snapshot.localProtection,
+            ...(snapshot.localProtectionMessage
+              ? { localProtectionMessage: snapshot.localProtectionMessage }
+              : {}),
+            ...(recoveredOverlay
+              ? { recoveredOverlay }
+              : {}),
+          }}
+        />
+      )}
+      {runtime.recoveryStartup && (
+        <RecoveryCenter
+          key={snapshot.activeAuthorityScopeId}
+          runtime={runtime}
+          authorityScopeId={snapshot.activeAuthorityScopeId}
+          onGatePhaseChange={updateRecoveryGate}
+        />
+      )}
     </>
   );
 }

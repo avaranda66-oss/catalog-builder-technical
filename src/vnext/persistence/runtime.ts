@@ -1,7 +1,7 @@
 import type { ApplicationExecutionDependencies, DocumentSession } from '../application';
 import type { CatalogDocument } from '../domain';
 import type { AuthoringRecoveryOverlay } from '../recovery/contracts';
-import { RecoveryCoordinator } from '../recovery/coordinator';
+import { RecoveryCoordinator, type AcceptedRecovery } from '../recovery/coordinator';
 import type { RecoveryRepository } from '../recovery/repository';
 import type { RecoverySchedulerClock } from '../recovery/scheduler';
 import { SessionRecoveryManager } from '../recovery/session-manager';
@@ -9,6 +9,7 @@ import { RecoveryStartupCoordinator, type RecoveryStartupCandidate } from '../re
 import type { CatalogPersistenceEnvelope, CatalogRepository } from './contracts';
 import { CanonicalReopenCoordinator } from './reopen-coordinator';
 import { SaveCoordinator } from './save-coordinator';
+import { canonicalDocumentEquivalence } from './equivalence';
 import { parsePersistenceEnvelope } from './snapshot';
 import {
   PersistenceWorkspace,
@@ -32,6 +33,18 @@ export interface VNextPersistenceRuntimeOptions {
   readonly binding?: CatalogPersistenceEnvelope;
   readonly assetUrls?: ReadonlyMap<string, string>;
   readonly resolveAssetUrls?: (document: CatalogDocument) => ReadonlyMap<string, string>;
+}
+
+interface RecoveryInstallGuard {
+  readonly session: DocumentSession;
+  readonly authoringBarrier: AuthoringBarrier;
+  readonly openSessionId: string;
+  readonly authLineage: string;
+  readonly authorityScopeId: string;
+  readonly remoteRevision: number;
+  readonly lastMutationId: string;
+  readonly localSequence: number;
+  readonly documentEquivalence: string;
 }
 
 export class VNextPersistenceRuntime {
@@ -158,6 +171,71 @@ export class VNextPersistenceRuntime {
     if (this.recoveredOverlay?.openSessionId === openSessionId) this.recoveredOverlay = undefined;
   }
 
+  private captureRecoveryInstallGuard(
+    candidate: RecoveryStartupCandidate
+  ): RecoveryInstallGuard | undefined {
+    if (
+      candidate.inspection.status !== 'VALID'
+      || candidate.inspection.record.pendingRemoteMutation
+      || candidate.decision.kind !== 'RECOVERABLE_OVER_SAME_REMOTE_BASE'
+    ) return undefined;
+    const snapshot = this.workspace.getSnapshot();
+    const binding = snapshot.binding;
+    const sessionSnapshot = snapshot.session.getSnapshot();
+    const barrier = this.workspace.getAuthoringBarrier();
+    const remote = candidate.decision.remote;
+    const remoteEquivalence = canonicalDocumentEquivalence(remote.documentSnapshot);
+    const currentEquivalence = canonicalDocumentEquivalence(sessionSnapshot.document);
+    if (
+      binding.kind !== 'PERSISTED'
+      || snapshot.activeAuthorityScopeId !== candidate.inspection.key.authorityScopeId
+      || binding.authorityScopeId !== candidate.inspection.key.authorityScopeId
+      || binding.catalogId !== candidate.inspection.key.catalogId
+      || sessionSnapshot.document.id !== candidate.inspection.key.catalogId
+      || remote.catalogId !== candidate.inspection.key.catalogId
+      || candidate.inspection.record.baseRemoteRevision !== remote.remoteRevision
+      || binding.remoteRevision !== remote.remoteRevision
+      || binding.lastMutationId !== remote.lastMutationId
+      || binding.acknowledgedEquivalence !== remoteEquivalence
+      || currentEquivalence !== remoteEquivalence
+      || snapshot.dirty
+      || barrier.hasPendingDraft()
+      || this.getRecoveredOverlay(binding.openSessionId)
+      || snapshot.save.phase !== 'idle'
+      || this.saveCoordinator.hasUnresolvedActiveMutation()
+    ) return undefined;
+    return {
+      session: snapshot.session,
+      authoringBarrier: barrier,
+      openSessionId: binding.openSessionId,
+      authLineage: binding.authLineage,
+      authorityScopeId: snapshot.activeAuthorityScopeId,
+      remoteRevision: binding.remoteRevision,
+      lastMutationId: binding.lastMutationId,
+      localSequence: sessionSnapshot.localSequence,
+      documentEquivalence: currentEquivalence,
+    };
+  }
+
+  private recoveryInstallGuardIsCurrent(
+    candidate: RecoveryStartupCandidate,
+    expected: RecoveryInstallGuard
+  ): boolean {
+    const current = this.captureRecoveryInstallGuard(candidate);
+    return Boolean(
+      current
+      && current.session === expected.session
+      && current.authoringBarrier === expected.authoringBarrier
+      && current.openSessionId === expected.openSessionId
+      && current.authLineage === expected.authLineage
+      && current.authorityScopeId === expected.authorityScopeId
+      && current.remoteRevision === expected.remoteRevision
+      && current.lastMutationId === expected.lastMutationId
+      && current.localSequence === expected.localSequence
+      && current.documentEquivalence === expected.documentEquivalence
+    );
+  }
+
   async recover(candidate: RecoveryStartupCandidate): Promise<boolean> {
     if (!this.recoveryCoordinator || !this.recoveryManager) return false;
     if (
@@ -165,11 +243,18 @@ export class VNextPersistenceRuntime {
       || candidate.inspection.record.pendingRemoteMutation
       || candidate.decision.kind !== 'RECOVERABLE_OVER_SAME_REMOTE_BASE'
     ) return false;
-    const before = this.workspace.getSnapshot();
-    const accepted = await this.recoveryCoordinator.accept(
-      candidate.inspection,
-      before.activeAuthorityScopeId
-    );
+    const guard = this.captureRecoveryInstallGuard(candidate);
+    if (!guard) return false;
+    let accepted: AcceptedRecovery;
+    try {
+      accepted = await this.recoveryCoordinator.accept(
+        candidate.inspection,
+        guard.authorityScopeId
+      );
+    } catch {
+      return false;
+    }
+    if (!this.recoveryInstallGuardIsCurrent(candidate, guard)) return false;
     this.recoveredOverlay = accepted.overlay
       ? { openSessionId: accepted.openSessionId, overlay: accepted.overlay }
       : undefined;
@@ -178,8 +263,8 @@ export class VNextPersistenceRuntime {
       persistedBindingFromEnvelope(
         candidate.decision.remote,
         accepted.openSessionId,
-        before.binding.authLineage,
-        before.activeAuthorityScopeId,
+        guard.authLineage,
+        guard.authorityScopeId,
         accepted.session.getSnapshot().localSequence
       ),
       this.resolveAssetUrls?.(accepted.session.getSnapshot().document) ?? new Map()
