@@ -68,7 +68,10 @@ export class SaveCoordinator {
     }
 
     if (this.ambiguousAttempt?.openSessionId === binding.openSessionId) {
-      return this.reconcileAmbiguous(this.ambiguousAttempt);
+      const attempt = this.rebindAmbiguousAttempt(this.ambiguousAttempt);
+      if (!attempt) return { ok: false, error: { code: 'STALE_RESULT' } };
+      this.ambiguousAttempt = attempt;
+      return this.reconcileAmbiguous(attempt);
     }
 
     const existing = this.flight;
@@ -156,6 +159,21 @@ export class SaveCoordinator {
       && this.options.workspace.matches(attempt.openSessionId, attempt.authLineage);
   }
 
+  private rebindAmbiguousAttempt(attempt: SaveAttempt): SaveAttempt | undefined {
+    const snapshot = this.options.workspace.getSnapshot();
+    const { binding } = snapshot;
+    if (
+      snapshot.session !== attempt.session
+      || binding.kind !== 'PERSISTED'
+      || binding.openSessionId !== attempt.openSessionId
+      || binding.catalogId !== attempt.request.catalogId
+    ) {
+      return undefined;
+    }
+    if (binding.authLineage === attempt.authLineage) return attempt;
+    return { ...attempt, authLineage: binding.authLineage };
+  }
+
   private acceptEnvelope(
     attempt: SaveAttempt,
     input: CatalogPersistenceEnvelope
@@ -213,7 +231,10 @@ export class SaveCoordinator {
     try {
       result = await this.options.repository.saveCAS(attempt.request);
     } catch (error) {
-      if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+      if (!this.isCurrent(attempt)) {
+        this.ambiguousAttempt = attempt;
+        return { ok: false, error: { code: 'STALE_RESULT' } };
+      }
       this.ambiguousAttempt = attempt;
       this.options.workspace.setPhase(
         'ambiguous',
@@ -222,11 +243,20 @@ export class SaveCoordinator {
       return this.reconcileAmbiguous(attempt);
     }
 
-    if (result.ok) return this.acceptEnvelope(attempt, result.value);
+    if (result.ok) {
+      if (!this.isCurrent(attempt)) {
+        this.ambiguousAttempt = attempt;
+        return { ok: false, error: { code: 'STALE_RESULT' } };
+      }
+      return this.acceptEnvelope(attempt, result.value);
+    }
     if (result.error.code !== 'AMBIGUOUS_COMMIT_OUTCOME') {
       return this.handleKnownFailure(attempt, result.error.code, result.error.message);
     }
-    if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    if (!this.isCurrent(attempt)) {
+      this.ambiguousAttempt = attempt;
+      return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
     this.ambiguousAttempt = attempt;
     return this.reconcileAmbiguous(attempt);
   }

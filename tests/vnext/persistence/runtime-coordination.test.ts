@@ -6,6 +6,11 @@ import {
 } from '@/vnext/application';
 import type { CatalogDocument } from '@/vnext/domain';
 import {
+  advanceAuthLineage,
+  authLineageValue,
+  createAuthLineageState,
+} from '@/vnext/app/auth-lineage';
+import {
   VNextPersistenceRuntime,
   type CatalogPersistenceEnvelope,
   type CatalogRepository,
@@ -198,11 +203,17 @@ describe('W3.C SaveCoordinator causal semantics', () => {
   it('L04 ignores a late ACK after auth lineage changes', async () => {
     const pending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
     let request!: SaveCatalogCasRequest;
+    const getCatalog = vi.fn(() => Promise.resolve({
+      ok: true as const,
+      value: envelope(request.documentSnapshot, 2, request.mutationId),
+    }));
+    const saveCAS = vi.fn((next: SaveCatalogCasRequest) => {
+      request = next;
+      return pending.promise;
+    });
     const { runtime, session } = runtimeFor(repositoryBase({
-      saveCAS: vi.fn((next: SaveCatalogCasRequest) => {
-        request = next;
-        return pending.promise;
-      }),
+      getCatalog,
+      saveCAS,
     }));
     session.execute({ type: 'document.rename', title: 'A local' });
     const save = runtime.saveCoordinator.save();
@@ -212,6 +223,42 @@ describe('W3.C SaveCoordinator causal semantics', () => {
     expect(await save).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
     expect(runtime.workspace.getSnapshot().binding).toMatchObject({ kind: 'PERSISTED', remoteRevision: 1, authLineage: 'user-b:1' });
     expect(session.getSnapshot().document.title).toBe('A local');
+
+    expect(await runtime.saveCoordinator.save()).toMatchObject({ ok: true, acknowledged: true });
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(runtime.workspace.getSnapshot().binding).toMatchObject({
+      kind: 'PERSISTED',
+      remoteRevision: 2,
+      lastMutationId: M1,
+      authLineage: 'user-b:1',
+    });
+  });
+
+  it('AUTH-2 accepts an in-flight Save ACK after repeated same-user SIGNED_IN keeps lineage stable', async () => {
+    const pending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    let request!: SaveCatalogCasRequest;
+    const initialLineage = createAuthLineageState('user-a');
+    const { runtime, session } = runtimeFor(repositoryBase({
+      saveCAS: vi.fn((next: SaveCatalogCasRequest) => {
+        request = next;
+        return pending.promise;
+      }),
+    }), documentFixture(), authLineageValue(initialLineage));
+    session.execute({ type: 'document.rename', title: 'A local' });
+    const save = runtime.saveCoordinator.save();
+
+    const repeatedSignedIn = advanceAuthLineage(initialLineage, 'user-a');
+    runtime.updateAuthLineage(authLineageValue(repeatedSignedIn));
+    pending.resolve({ ok: true, value: envelope(request.documentSnapshot, 2, request.mutationId) });
+
+    expect(await save).toMatchObject({ ok: true, acknowledged: true });
+    expect(runtime.workspace.getSnapshot().binding).toMatchObject({
+      kind: 'PERSISTED',
+      remoteRevision: 2,
+      lastMutationId: M1,
+      authLineage: 'user-a:0',
+    });
   });
 
   it('L05 joins duplicate Save for the same in-flight local state', async () => {
@@ -335,6 +382,60 @@ describe('W3.C SaveCoordinator causal semantics', () => {
     expect(saveCAS).toHaveBeenCalledTimes(2);
     expect(requests[1]).toEqual(requests[0]);
     expect(requests[1].mutationId).toBe(M1);
+  });
+
+  it('reconciles an unresolved ambiguous mutation across a real auth transition without allocating a new mutation', async () => {
+    const requests: SaveCatalogCasRequest[] = [];
+    let readCount = 0;
+    const saveCAS = vi.fn((request: SaveCatalogCasRequest) => {
+      requests.push(request);
+      if (requests.length === 1) {
+        return Promise.resolve({
+          ok: false as const,
+          error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const },
+        });
+      }
+      return Promise.resolve({
+        ok: true as const,
+        value: envelope(request.documentSnapshot, 2, request.mutationId),
+      });
+    });
+    const getCatalog = vi.fn(() => {
+      readCount += 1;
+      if (readCount === 1) {
+        return Promise.resolve({
+          ok: false as const,
+          error: { code: 'REMOTE_FAILURE' as const },
+        });
+      }
+      return Promise.resolve({
+        ok: true as const,
+        value: envelope(documentFixture(), 1, M0),
+      });
+    });
+    const { runtime, session } = runtimeFor(repositoryBase({ getCatalog, saveCAS }));
+    session.execute({ type: 'document.rename', title: 'L1' });
+
+    expect(await runtime.saveCoordinator.save()).toMatchObject({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(true);
+
+    runtime.updateAuthLineage('user-b:1');
+    expect(await runtime.saveCoordinator.save()).toMatchObject({ ok: true, acknowledged: true });
+
+    expect(getCatalog).toHaveBeenCalledTimes(2);
+    expect(saveCAS).toHaveBeenCalledTimes(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[1].mutationId).toBe(M1);
+    expect(runtime.workspace.getSnapshot().binding).toMatchObject({
+      kind: 'PERSISTED',
+      remoteRevision: 2,
+      lastMutationId: M1,
+      authLineage: 'user-b:1',
+    });
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
   });
 
   it('DIRTY-UNDO becomes clean by exact equivalence without rewinding localSequence', async () => {

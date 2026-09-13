@@ -218,10 +218,12 @@ export function EditorWorkspace({
     const object = page?.objects.find((entry) => entry.id === textEdit.objectId);
     if (page && object?.type === 'text') return;
     textEditRef.current = null;
+    compositionRef.current = false;
     setTextEdit(null);
     setEditorState((current) => ({ ...current, mode: 'select' }));
     setStatusMessage('A edição foi encerrada porque o texto não está mais disponível.');
-  }, [document, textEdit]);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+  }, [document, persistence, textEdit]);
 
   const textEditObjectId = textEdit?.objectId;
   React.useLayoutEffect(() => {
@@ -255,6 +257,7 @@ export function EditorWorkspace({
       textEditRef.current = null;
       compositionRef.current = false;
       setTextEdit(null);
+      persistence?.runtime.workspace.notifyDraftStateChanged();
     }
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
     setStatusMessage(null);

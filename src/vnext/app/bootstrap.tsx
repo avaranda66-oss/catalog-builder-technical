@@ -16,6 +16,12 @@ import {
   getVNextSupabaseClient,
   vnextRpcClientFromSupabase,
 } from '../persistence/supabase-client';
+import {
+  ANONYMOUS_AUTH_IDENTITY,
+  advanceAuthLineage,
+  authLineageValue,
+  createAuthLineageState,
+} from './auth-lineage';
 import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-defaults';
 import { VNextApp } from './VNextApp';
 import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
@@ -43,7 +49,7 @@ function unavailableRepository(): CatalogRepository {
 }
 
 function authIdentity(session: Session | null): string {
-  return session?.user.id ?? 'anonymous';
+  return session?.user.id ?? ANONYMOUS_AUTH_IDENTITY;
 }
 
 function activeV2Url(runtime: VNextPersistenceRuntime): string {
@@ -68,9 +74,8 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     : unavailableRepository();
 
   const authSession = supabase ? (await supabase.auth.getSession()).data.session : null;
-  let authEpoch = 0;
-  let activeIdentity = authIdentity(authSession);
-  const lineage = () => `${activeIdentity}:${authEpoch}`;
+  let authLineage = createAuthLineageState(authIdentity(authSession));
+  const lineage = () => authLineageValue(authLineage);
 
   const runtime = new VNextPersistenceRuntime({
     session: initialSession,
@@ -98,15 +103,9 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   }
 
   if (supabase) {
-    supabase.auth.onAuthStateChange((event: AuthChangeEvent, nextSession: Session | null) => {
+    supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
       const nextIdentity = authIdentity(nextSession);
-      if (
-        event !== 'INITIAL_SESSION'
-        && (nextIdentity !== activeIdentity || event === 'SIGNED_IN' || event === 'SIGNED_OUT')
-      ) {
-        authEpoch += 1;
-      }
-      activeIdentity = nextIdentity;
+      authLineage = advanceAuthLineage(authLineage, nextIdentity);
       runtime.updateAuthLineage(lineage());
     });
   }

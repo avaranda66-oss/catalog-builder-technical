@@ -76,6 +76,17 @@ function textDocument(id = A_ID, title = 'Catalog A', content = 'Modelo'): Catal
   };
 }
 
+function twoPageTextDocument(): CatalogDocument {
+  const first = textDocument();
+  return {
+    ...first,
+    pages: [
+      ...first.pages,
+      { id: 'page-second', widthMm: 210, heightMm: 297, objects: [] },
+    ],
+  };
+}
+
 function envelope(
   document: CatalogDocument,
   remoteRevision = 1,
@@ -268,6 +279,29 @@ describe('W3.C Father-visible Save integration', () => {
     expect(authoredText(session.getSnapshot().document)).toBe('Canonical newer');
     expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Draft antigo preservado');
     expect(container.textContent).toContain('rascunho estava aberto');
+  });
+
+  it('DIRTY-DRAFT-CANCEL republishes Saved after page activation discards the only visible draft', () => {
+    const document = twoPageTextDocument();
+    const { runtime, session } = runtimeFor(repositoryBase(), document);
+    const acknowledgedDocument = session.getSnapshot().document;
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+
+    fireEvent.change(textarea, { target: { value: 'Discard this draft' } });
+    expect(runtime.workspace.getSnapshot().dirty).toBe(true);
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Unsaved changes');
+
+    const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    expect(pageButtons).toHaveLength(2);
+    fireEvent.click(pageButtons[1]);
+
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(session.getSnapshot().document).toBe(acknowledgedDocument);
+    expect(runtime.workspace.getSnapshot().dirty).toBe(false);
+    expect(runtime.workspace.getSnapshot().save.label).toBe('Saved');
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved');
   });
 });
 
