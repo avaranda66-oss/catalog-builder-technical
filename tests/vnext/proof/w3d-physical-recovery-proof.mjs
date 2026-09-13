@@ -238,7 +238,7 @@ async function runE() {
   await page.getByRole('button', { name: 'Verificar gravação pendente' }).click();
   assert.equal((await api(page, 'snapshot')).lastSaveRequest, undefined);
   assert.equal((await api(page, 'list')).length, 1);
-  assert.equal(await page.getByRole('button', { name: 'Recuperar trabalho local' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
   evidence.proofs.E.divergentRemotePreservedWithoutReplay = true;
   await closeRun(run);
 }
@@ -311,15 +311,15 @@ async function runH() {
   run = await launchProfile(profile);
   page = await pageFor(run, 'mismatch');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Recuperar trabalho local' }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Inspecionar conteúdo local' }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Ver alterações recuperadas' }).count(), 1);
   assert.equal((await api(page, 'snapshot')).document.title, 'Unexpected same revision');
   await hardCrash(run);
 
   run = await launchProfile(profile);
   page = await pageFor(run, 'newer');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Recuperar trabalho local' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
   const newer = await api(page, 'snapshot');
   assert.equal(newer.document.title, 'Newer remote');
   assert.equal(newer.remoteRevision, 2);
@@ -328,13 +328,13 @@ async function runH() {
   run = await launchProfile(profile);
   page = await pageFor(run, 'unavailable');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Recuperar trabalho local' }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Abrir versão da nuvem' }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Inspecionar conteúdo local' }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Abrir versão salva na nuvem' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Ver alterações recuperadas' }).count(), 1);
   const unavailable = await api(page, 'snapshot');
   assert.equal(unavailable.bindingKind, 'UNBOUND');
   assert.equal((await api(page, 'list')).length, 1);
-  await page.getByRole('button', { name: 'Inspecionar conteúdo local' }).click();
+  await page.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
   assert.equal(
     await page.locator('[data-protected-recovery-inspection] [data-editorial-root]').count(),
     1
@@ -372,7 +372,7 @@ async function runA() {
   run = await launchProfile(crashProfile);
   page = await pageFor(run, 'base');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  await page.getByRole('button', { name: 'Recuperar trabalho local' }).click();
+  await page.getByRole('button', { name: 'Recuperar minhas alterações' }).click();
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor({ state: 'detached' });
   const recovered = await api(page, 'snapshot');
   assert.equal(recovered.document.title, 'Canonical local title before crash');
@@ -425,7 +425,7 @@ async function recoverDraft(profile) {
   const run = await launchProfile(profile);
   const page = await pageFor(run, 'base');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  await page.getByRole('button', { name: 'Recuperar trabalho local' }).click();
+  await page.getByRole('button', { name: 'Recuperar minhas alterações' }).click();
   await page.locator('[data-text-edit-textarea]').waitFor();
   const snapshot = await api(page, 'snapshot');
   assert.equal(await page.locator('[data-text-edit-textarea]').inputValue(), 'Visible draft B');

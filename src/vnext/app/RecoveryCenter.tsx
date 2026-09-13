@@ -20,7 +20,7 @@ function decisionMessage(candidate: RecoveryStartupCandidate): string {
     case 'SAME_REVISION_DIGEST_MISMATCH':
       return 'A revisão remota tem conteúdo inesperado. A recuperação foi bloqueada.';
     case 'REMOTE_UNAVAILABLE':
-      return 'A nuvem está indisponível. Somente a inspeção local protegida é permitida.';
+      return 'Não foi possível verificar a versão da nuvem. Somente a inspeção local protegida é permitida.';
     case 'INVALID_OR_UNSUPPORTED_RECORD':
       return 'O registro local é inválido ou incompatível e não será aberto.';
     case 'REDUNDANT_ALREADY_IN_CLOUD':
@@ -175,7 +175,7 @@ export function RecoveryCenter({
     <section className="vnext-recovery-center" role="dialog" aria-modal="true" aria-label="Recuperação local">
       <div className="vnext-recovery-panel">
         <span className="vnext-info-kicker">Recuperação local</span>
-        <h2>Trabalho protegido encontrado</h2>
+        <h2>Encontramos alterações não salvas neste dispositivo.</h2>
         {message && <p role="status">{message}</p>}
         {candidates.map((candidate) => {
           const valid = candidate.inspection.status === 'VALID';
@@ -189,12 +189,12 @@ export function RecoveryCenter({
               <h3>{candidateTitle(candidate)}</h3>
               <p>{decisionMessage(candidate)}</p>
               <div className="vnext-recovery-actions">
-                {canRecover && <button type="button" onClick={() => void recover(candidate)}>Recuperar trabalho local</button>}
+                {canRecover && <button type="button" onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
                 {pending && <button type="button" onClick={() => void reconcile(candidate)}>Verificar gravação pendente</button>}
-                {canOpenCloud && <button type="button" onClick={() => void openCloud(candidate)}>Abrir versão da nuvem</button>}
+                {canOpenCloud && <button type="button" onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>}
                 <button type="button" onClick={() => setInspectionId(
                   inspectionId === candidate.id ? undefined : candidate.id
-                )}>Inspecionar conteúdo local</button>
+                )}>Ver alterações recuperadas</button>
                 {valid && (
                   <button type="button" onClick={() => void discard(candidate)}>
                     {confirmDiscardId === candidate.id ? 'Confirmar descarte local' : 'Descartar recuperação local'}

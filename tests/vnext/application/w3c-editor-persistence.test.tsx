@@ -552,10 +552,10 @@ describe('W3.D typed authoring recovery overlays', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByRole('dialog', { name: 'Recuperação local' })).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Inspecionar conteúdo local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Ver alterações recuperadas' }));
     expect(view.container.querySelector('[data-protected-recovery-inspection] [data-editorial-root]')).toBeTruthy();
     expect(view.container.textContent).toContain('nenhuma ação salva na nuvem');
-    fireEvent.click(view.getByRole('button', { name: 'Recuperar trabalho local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Recuperar minhas alterações' }));
 
     await waitFor(() => expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull());
     expect(runtime.workspace.getSnapshot().session.getSnapshot()).toMatchObject({
