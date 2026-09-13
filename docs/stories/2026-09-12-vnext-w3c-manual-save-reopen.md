@@ -1,6 +1,6 @@
 # W3.C — Manual Save + Canonical Reopen
 
-Status: **IMPLEMENTED — PRINCIPAL AMENDMENT GATES GREEN / PRINCIPAL RE-AUDIT PENDING**
+Status: **IMPLEMENTED — FINAL PROJECTION AMENDMENT GATES GREEN / PRINCIPAL FINAL PROJECTION RE-AUDIT PENDING**
 
 Date: 2026-09-12
 
@@ -32,6 +32,7 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - Auth lineage changes only when the effective principal identity changes; repeated same-user session confirmation and token refresh preserve the current lineage.
 - An unresolved ambiguous mutation that crosses a real auth transition remains unresolved and may only continue through authoritative reconciliation under the current auth context, preserving the original mutation identity and payload.
 - Every transition that changes pending-draft truth republishes the persistence projection.
+- A failed authoring barrier is a transient authoring-specific blocked projection. A later authoring-state change invalidates only that stale authoring blocker and recomputes the current projection; non-authoring blocked conditions remain authoritative.
 - Reopen validates the authoritative envelope/document, requested identity, current schema, and canonical document before installing a fresh `DocumentSession`.
 - Reopen creates fresh Undo/Redo history and remounts the workspace against the new session identity.
 - Exact-open failure preserves the current safe session.
@@ -53,6 +54,7 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - [x] Real effective-principal transitions advance auth lineage, including A→anonymous, anonymous→A, A→B, and A→anonymous→A.
 - [x] An unresolved ambiguous attempt survives a real auth transition without permitting a different mutation; later Save reconciles/replays the same mutation under current auth authority.
 - [x] Clearing the only visible text draft republishes dirty state so an unchanged acknowledged canonical document returns to Saved.
+- [x] Resolving or cancelling the authoring state that caused a blocked Save clears only that stale authoring blocker: clean ACK-equivalent state returns to Saved, while canonical dirtiness and non-authoring blockers remain authoritative.
 - [x] Canonical reopen uses W3.B `getCatalog`, validates requested identity/envelope/schema/document, resolves through the existing resource seam, and creates a fresh `DocumentSession` with empty history.
 - [x] Direct route `/v2?catalog=<catalogId>` can request exact reopen without building the W3.E library.
 - [x] Unsafe route/open transition is guarded when current work is dirty or has unresolved visible draft work, including work created after an exact-open GET was dispatched.
@@ -86,6 +88,10 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - [x] AUTH-7 — A→anonymous→A produces a lineage distinct from the original A session.
 - [x] AMBIGUOUS-AUTH — unresolved ambiguity across a real auth transition reconciles under current auth and exact-replays only the original mutation when required.
 - [x] DIRTY-DRAFT-CANCEL — page activation discards the only draft, leaves canonical content unchanged, republishes dirty=false, and projects Saved.
+- [x] BLOCKED-DRAFT-CANCEL — IME-blocked Save dispatches no persistence RPC; cancelling that draft leaves canonical content ACK-equivalent and immediately restores `dirty=false`, `phase=idle`, `Saved`.
+- [x] BLOCKED-DRAFT-CANCEL-DIRTY — cancelling only the blocked draft over a dirty canonical edit clears the authoring blocker while preserving `dirty=true` and `Unsaved changes`.
+- [x] COMPOSITION-END-RECOVERY — ending composition invalidates the obsolete authoring-block message while the visible draft remains dirty and Save-enabled.
+- [x] NON-AUTHORING-BLOCK-CONTROL — a draft-state notification does not clear a generic validation/persistence `blocked` condition.
 
 ## Browser proof
 
@@ -95,6 +101,7 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - [x] Reopened session starts with fresh Undo/Redo and accepts a new edit.
 - [x] Valid visible Text draft is included by the Save barrier.
 - [x] Blocked/uncommittable draft cannot produce false Saved.
+- [x] IME-blocked Save → composition end → cancel draft is asserted before any subsequent edit: browser state is ACK-equivalent, zero pending saves, `phase=idle`, `dirty=false`, and `Saved`.
 - [x] Delayed Save followed by explicit safe catalog switch proves the late ACK cannot contaminate the new active catalog.
 
 ## Validation
@@ -108,6 +115,10 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - [x] `npm run build`
 - [x] `git diff --check`
 - [x] Exact amendment implementation head CI — Quality Gate `34727427340` completed `SUCCESS` on `160b402b15caebd2ee64b6e306479a32d187230e`.
+- [x] Final projection focused gate — 29/29 PASS across W3.C application and persistence coordination tests.
+- [x] Final projection Chromium proof — PASS on Chromium 151.0.7922.34 with explicit blocked and immediately resolved snapshots.
+- [x] Final projection full repository suite — 219 files PASS; 2386 PASS; 1 skipped (2387 total).
+- [x] Final projection exact implementation head CI — Quality Gate `34728937141` completed `SUCCESS` on `6cf7d493b6225ac2158714b747ab4ab343daeb59`, including lint, typecheck, tests, build, Playwright Chromium installation, and VNext Chromium/PDF proofs.
 
 ## Implementation and evidence
 
@@ -125,6 +136,12 @@ The Principal auth-lineage amendment moves lineage advancement behind a tiny eff
 
 The Principal dirty-projection amendment republishes persistence state on every W3.C text-draft clearing path that changes `hasPendingDraft()`, including explicit page activation and loss of the edited object. A discarded draft therefore cannot leave a clean acknowledged canonical document falsely projected as `Unsaved changes`.
 
+The independent final W3.C adversarial audit classified the architecture **B — W3.C SOUND, SMALL AMENDMENT REQUIRED** and identified one remaining Father-visible counterexample: an authoring-blocked Save could leave `phase='blocked'` stale after the responsible draft/composition state was resolved, even when the authored document again exactly matched the acknowledged canonical snapshot. The final projection amendment keeps public `SavePhase` unchanged and gives `PersistenceWorkspace` private blocked-source metadata. `SaveCoordinator` marks only failed authoring barriers through the dedicated authoring-block path. A later draft/composition transition clears that authoring-specific stale phase before projection is rebuilt. Generic `setPhase('blocked')` remains non-authoring, so invalid-document or persistence semantic failures are not silently erased.
+
+The primary regression starts from an ACK-clean persisted document, opens a Text draft, enters IME composition, and clicks Save. It proves zero `saveCAS` calls, a visible draft, `dirty=true`, and Father-facing `phase='blocked'`. Cancelling that exact draft proves the textarea is gone, the canonical `CatalogDocument` remains the acknowledged document, there is no unresolved active mutation, the beforeunload predicate is false, and the projection is immediately `phase='idle'`, `dirty=false`, `Saved`. A second regression starts from an already dirty canonical edit and proves that cancelling only the blocked draft clears the authoring phase while retaining `dirty=true` / `Unsaved changes`. Composition-end coverage proves the obsolete blocker message disappears while the remaining draft stays dirty and Save-enabled. A non-authoring control proves draft notification preserves a generic blocked validation condition.
+
+The Chromium proof now exposes `savePhase` and `saveMessage`. Its blocked snapshot records zero pending saves, `phase='blocked'`, `dirty=true`, and the composition message. Immediately after `compositionend` plus cancellation, before any new edit, the `resolvedBlocked` snapshot proves canonical text remains the ACKed `A local two`, remote revision remains 3, zero saves are pending, `phase='idle'`, the message is absent, `dirty=false`, and the Father-facing label is `Saved`. No fixed sleep is used as the correctness oracle for this transition.
+
 Reopen validates the persistence envelope and canonical document, requires exact requested/document identity, creates a fresh `DocumentSession`, binds remote metadata outside authored content, resolves only integrity-matching known demo assets, and replaces the workspace atomically. It now rechecks auth/session/open lineage and unsaved-work state after the GET, preventing a delayed exact-open response from discarding edits or overwriting a newer reopen.
 
 The browser route is `/v2?catalog=<catalogId>`. `beforeunload` protects dirty/unresolved work and `popstate` exact-open uses the same safe reopen coordinator. The editor workspace is keyed by `openSessionId`, remounting interaction controllers for the installed session.
@@ -141,19 +158,29 @@ Focused evidence for the Principal amendment before candidate freeze:
 - Amendment full repository suite: 219 files PASS, 2382 PASS, 1 skipped (2383 total).
 - Build PASS; typecheck PASS; lint 0 errors / 268 warnings; `git diff --check` PASS.
 
+Final projection amendment evidence:
+
+- `tests/vnext/application/w3c-editor-persistence.test.tsx` — 11 PASS, including BLOCKED-DRAFT-CANCEL, dirty-canonical + draft-cancel, composition-end recovery, non-authoring blocked preservation, L17/L17b, and DIRTY-DRAFT-CANCEL.
+- `tests/vnext/persistence/runtime-coordination.test.ts` — 18 PASS; existing conflict, ambiguity, auth, and remote-failure coordination semantics remain green.
+- Combined final-projection focused gate — 29/29 PASS.
+- `tests/vnext/proof/w3c-save-reopen-proof.mjs` — Chromium proof PASS with explicit `blocked` → `resolvedBlocked` evidence before the next scenario.
+- Final-projection full repository suite — 219 files PASS, 2386 PASS, 1 skipped (2387 total).
+- Build PASS; typecheck PASS; lint 0 errors / 268 existing warnings; `git diff --check` PASS.
+- Exact implementation head `6cf7d493b6225ac2158714b747ab4ab343daeb59` / tree `82d16b679ae75b0a84dd4592d98a7c37c9f458c8` — Quality Gate `34728937141` completed `SUCCESS`.
+
 ## Candidate evidence packet
 
 JOB: W3.C
 
 BASE SHA/TREE: `a0bee489deff7af78e056463cf763f3ba4844105` / `8c87e59a32f3761d9d6d21a023e132e3b08a6f09`
 
-TESTED SHA/TREE: `160b402b15caebd2ee64b6e306479a32d187230e` / `befca89f8c79a8aad02c673ce0ed3101c41fe230`.
+TESTED SHA/TREE: `6cf7d493b6225ac2158714b747ab4ab343daeb59` / `82d16b679ae75b0a84dd4592d98a7c37c9f458c8`.
 
-EXACT-HEAD QUALITY GATE: `34727427340` — `COMPLETED / SUCCESS`, including lint, typecheck, tests, build, Playwright Chromium installation, and VNext Chromium/PDF proofs.
+EXACT-HEAD QUALITY GATE: `34728937141` — `COMPLETED / SUCCESS`, including lint, typecheck, tests, build, Playwright Chromium installation, and VNext Chromium/PDF proofs.
 
 CONTRACTS: authoring barrier; monotonic local causality; equivalence-based dirty; one mutation lane; authoritative ACK; ambiguous GET/exact replay; stale session/auth rejection; exact fresh-session reopen; guarded navigation; canonical resource seam.
 
-DELTA: original W3.C candidate plus the focused Principal amendment for effective-principal auth lineage, ambiguity preservation/reconciliation across real auth transitions, draft-clear dirty republishing, deterministic adversarial tests, and story evidence.
+DELTA: original W3.C candidate plus the focused Principal amendment for effective-principal auth lineage, ambiguity preservation/reconciliation across real auth transitions, draft-clear dirty republishing, and the final projection amendment that distinguishes transient authoring blocks from non-authoring blocked conditions and recomputes Father-visible state on authoring transitions.
 
 CLAIMS:
 
@@ -168,12 +195,14 @@ CLAIMS:
 - C9 — repeated same-user auth confirmation/token refresh cannot falsely stale Save; true principal transitions still stale old results → lineage policy + deferred coordinator tests → PASS.
 - C10 — unresolved mutation across auth transition cannot silently disappear or dispatch a different mutation → authoritative reconciliation/exact-replay test → PASS.
 - C11 — discarded visible draft cannot leave an unchanged acknowledged document falsely dirty → real EditorWorkspace page-activation test → PASS.
+- C12 — cancelling the only authoring-blocked draft on an ACK-equivalent document immediately returns SaveProjection to `Saved` without another edit or persistence RPC → application + Chromium proof → PASS.
+- C13 — clearing a stale authoring block does not erase canonical dirtiness or unrelated blocked persistence/validation state → application controls + existing runtime coordination suite → PASS.
 
 NOT PROVEN: W3.D crash recovery, W3.E library UX, W3.F full-identity copy, W3.G cloud asset bridge, W3.H autosave/concurrency/realtime. These are intentionally outside W3.C.
 
 ARTIFACTS: W3.C story; focused tests; deterministic coordinator suite; Chromium fixture/proof; ignored browser evidence packet.
 
-NEXT RISK / NEXT ACTION: synchronize this evidence-only story update on the existing W3.C branch, require the final story-sync head Quality Gate, then return for Principal amendment re-audit. No merge without explicit user authorization.
+NEXT RISK / NEXT ACTION: require the final story-sync head Quality Gate, then return for Principal W3.C final projection re-audit. No merge without explicit user authorization.
 
 ## Scope exclusions
 
