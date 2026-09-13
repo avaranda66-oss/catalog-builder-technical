@@ -241,6 +241,109 @@ describe('W3.C Father-visible Save integration', () => {
     expect(container.textContent).toContain('Conclua a composição de texto antes de salvar.');
   });
 
+  it('BLOCKED-DRAFT-CANCEL clears a resolved authoring block and immediately projects Saved', () => {
+    const saveCAS = vi.fn();
+    const { runtime, session } = runtimeFor(repositoryBase({ saveCAS }));
+    const acknowledgedDocument = session.getSnapshot().document;
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+
+    fireEvent.change(textarea, { target: { value: 'Ainda compondo' } });
+    fireEvent.compositionStart(textarea);
+    fireEvent.click(button(container, 'save'));
+
+    expect(saveCAS).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Ainda compondo');
+    expect(runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: true,
+      save: { phase: 'blocked', label: 'Unsaved changes', dirty: true },
+    });
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
+
+    fireEvent.click(button(container, 'cancel-text'));
+
+    const resolved = runtime.workspace.getSnapshot();
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(session.getSnapshot().document).toBe(acknowledgedDocument);
+    expect(resolved.dirty).toBe(false);
+    expect(resolved.save).toMatchObject({ phase: 'idle', label: 'Saved', dirty: false });
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
+    expect(resolved.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved');
+  });
+
+  it('clears only the authoring block when cancelling a draft over an already dirty canonical edit', () => {
+    const saveCAS = vi.fn();
+    const { runtime, session } = runtimeFor(repositoryBase({ saveCAS }));
+    const original = session.getSnapshot().document.pages[0].objects[0];
+    if (original.type !== 'text') throw new Error('Expected Text');
+    act(() => {
+      expect(session.execute({
+        type: 'text.setContent',
+        objectId: original.id,
+        expectedText: original.text,
+        plainText: 'Canonical dirty',
+      }).ok).toBe(true);
+    });
+    const dirtyCanonicalDocument = session.getSnapshot().document;
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+
+    fireEvent.change(textarea, { target: { value: 'Draft temporário' } });
+    fireEvent.compositionStart(textarea);
+    fireEvent.click(button(container, 'save'));
+    expect(saveCAS).not.toHaveBeenCalled();
+    expect(runtime.workspace.getSnapshot().save.phase).toBe('blocked');
+
+    fireEvent.click(button(container, 'cancel-text'));
+
+    const resolved = runtime.workspace.getSnapshot();
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(session.getSnapshot().document).toBe(dirtyCanonicalDocument);
+    expect(authoredText(session.getSnapshot().document)).toBe('Canonical dirty');
+    expect(resolved.dirty).toBe(true);
+    expect(resolved.save).toMatchObject({ phase: 'idle', label: 'Unsaved changes', dirty: true });
+  });
+
+  it('composition end invalidates the obsolete authoring blocker while the remaining draft stays dirty', () => {
+    const pending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    const saveCAS = vi.fn(() => pending.promise);
+    const { runtime } = runtimeFor(repositoryBase({ saveCAS }));
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+
+    fireEvent.change(textarea, { target: { value: 'Composição concluída' } });
+    fireEvent.compositionStart(textarea);
+    fireEvent.click(button(container, 'save'));
+    expect(saveCAS).not.toHaveBeenCalled();
+    expect(runtime.workspace.getSnapshot().save.phase).toBe('blocked');
+
+    fireEvent.compositionEnd(textarea);
+
+    const recovered = runtime.workspace.getSnapshot();
+    expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Composição concluída');
+    expect(recovered.dirty).toBe(true);
+    expect(recovered.save).toMatchObject({ phase: 'idle', label: 'Unsaved changes', dirty: true, canSave: true });
+    expect(recovered.save.message).toBeUndefined();
+
+    fireEvent.click(button(container, 'save'));
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+  });
+
+  it('draft-state notification preserves a non-authoring blocked condition', () => {
+    const { runtime } = runtimeFor(repositoryBase());
+    runtime.workspace.setPhase('blocked', 'Canonical snapshot failed validation');
+
+    runtime.workspace.notifyDraftStateChanged();
+
+    expect(runtime.workspace.getSnapshot().save).toMatchObject({
+      phase: 'blocked',
+      label: 'Unsaved changes',
+      dirty: true,
+      message: 'Canonical snapshot failed validation',
+    });
+  });
+
   it('L17b blocks an invalid control-character draft and preserves it visibly', () => {
     const saveCAS = vi.fn();
     const { runtime } = runtimeFor(repositoryBase({ saveCAS }));

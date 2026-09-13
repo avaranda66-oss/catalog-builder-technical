@@ -137,6 +137,7 @@ export class PersistenceWorkspace {
   private barrier: AuthoringBarrier = NO_AUTHORING_BARRIER;
   private phase: SavePhase = 'idle';
   private phaseMessage: string | undefined;
+  private blockedSource: 'authoring' | 'non-authoring' | undefined;
   private unsubscribeSession: (() => void) | undefined;
   private session: DocumentSession;
   private binding: PersistenceBinding;
@@ -161,9 +162,16 @@ export class PersistenceWorkspace {
       if (!['saving', 'conflict', 'ambiguous'].includes(this.phase)) {
         this.phase = 'idle';
         this.phaseMessage = undefined;
+        this.blockedSource = undefined;
       }
       this.publish();
     });
+  }
+
+  private clearPhase(): void {
+    this.phase = 'idle';
+    this.phaseMessage = undefined;
+    this.blockedSource = undefined;
   }
 
   private computeDirty(): boolean {
@@ -204,29 +212,39 @@ export class PersistenceWorkspace {
   registerAuthoringBarrier(openSessionId: string, barrier: AuthoringBarrier): () => void {
     if (this.binding.openSessionId !== openSessionId) return () => {};
     this.barrier = barrier;
+    if (this.blockedSource === 'authoring') this.clearPhase();
     this.publish();
     return () => {
       if (this.barrier !== barrier) return;
       this.barrier = NO_AUTHORING_BARRIER;
+      if (this.blockedSource === 'authoring') this.clearPhase();
       this.publish();
     };
   }
 
   notifyDraftStateChanged(): void {
+    if (this.blockedSource === 'authoring') this.clearPhase();
+    this.publish();
+  }
+
+  setAuthoringBlocked(message: string): void {
+    this.phase = 'blocked';
+    this.phaseMessage = message;
+    this.blockedSource = 'authoring';
     this.publish();
   }
 
   setPhase(phase: SavePhase, message?: string): void {
     this.phase = phase;
     this.phaseMessage = message;
+    this.blockedSource = phase === 'blocked' ? 'non-authoring' : undefined;
     this.publish();
   }
 
   updateAuthLineage(authLineage: string): void {
     if (this.binding.authLineage === authLineage) return;
     this.binding = { ...this.binding, authLineage };
-    this.phase = 'idle';
-    this.phaseMessage = undefined;
+    this.clearPhase();
     this.publish();
   }
 
@@ -243,8 +261,7 @@ export class PersistenceWorkspace {
       authLineage,
       acknowledgedLocalSequence
     );
-    this.phase = 'idle';
-    this.phaseMessage = undefined;
+    this.clearPhase();
     this.publish();
     return true;
   }
@@ -259,8 +276,7 @@ export class PersistenceWorkspace {
     this.binding = binding;
     this.assetUrls = assetUrls;
     this.barrier = NO_AUTHORING_BARRIER;
-    this.phase = 'idle';
-    this.phaseMessage = undefined;
+    this.clearPhase();
     this.bindSession();
     this.publish();
   }

@@ -99,7 +99,7 @@ export class SaveCoordinator {
     const barrierResult = barrier.prepareForSave();
     this.options.workspace.notifyDraftStateChanged();
     if (!barrierResult.ok) {
-      this.options.workspace.setPhase('blocked', barrierResult.message);
+      this.options.workspace.setAuthoringBlocked(barrierResult.message);
       return { ok: false, error: { code: 'AUTHORING_BLOCKED', message: barrierResult.message } };
     }
 

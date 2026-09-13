@@ -153,11 +153,25 @@ try {
   await page.waitForTimeout(50);
   const blocked = await proofState(page);
   assert.equal(blocked.pendingSaves, 0);
+  assert.equal(blocked.savePhase, 'blocked');
   assert.equal(blocked.saveLabel, 'Unsaved changes');
+  assert.equal(blocked.dirty, true);
+  assert.equal(blocked.saveMessage, 'Conclua a composição de texto antes de salvar.');
   assert.equal(await textarea(page).inputValue(), 'まだ入力中');
   await textarea(page).dispatchEvent('compositionend');
   await page.locator('[data-editor-action="cancel-text"]').click();
   await textarea(page).waitFor({ state: 'detached' });
+  await page.waitForFunction(() => {
+    const state = window.__W3C_PROOF__.state();
+    return state.saveLabel === 'Saved' && state.dirty === false;
+  });
+  const resolvedBlocked = await proofState(page);
+  assert.equal(resolvedBlocked.text, 'A local two');
+  assert.equal(resolvedBlocked.pendingSaves, 0);
+  assert.equal(resolvedBlocked.savePhase, 'idle');
+  assert.equal(resolvedBlocked.saveLabel, 'Saved');
+  assert.equal(resolvedBlocked.saveMessage, null);
+  assert.equal(resolvedBlocked.dirty, false);
 
   // Dirty route/open transition must be guarded.
   await openTextEditor(page);
@@ -210,6 +224,7 @@ try {
     afterReopen,
     afterReopenEdit,
     blocked,
+    resolvedBlocked,
     guardedOpen,
     beforeLateAckB,
     afterLateAckB,

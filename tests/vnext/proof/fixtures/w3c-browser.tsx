@@ -178,6 +178,8 @@ function activeState() {
     canRedo: snapshot.session.getSnapshot().canRedo,
     dirty: snapshot.dirty,
     saveLabel: snapshot.save.label,
+    savePhase: snapshot.save.phase,
+    saveMessage: snapshot.save.message ?? null,
     openSessionId: snapshot.binding.openSessionId,
     binding: snapshot.binding,
     pendingSaves: repository.pending.length,
