@@ -152,10 +152,20 @@ async function api(page, method, ...args) {
 async function committedRecordsFromFreshConnection(page, scope = 'physical:user-a') {
   return page.evaluate(async ({ databaseName, scope }) => {
     const adapter = await import('/src/vnext/recovery/indexeddb-repository.ts');
+    const application = await import('/src/vnext/application/index.ts');
     const fresh = new adapter.IndexedDbRecoveryRepository({ databaseName });
     const records = await fresh.listByScope(scope);
     await fresh.close();
-    return records;
+    return records.map((inspection) => {
+      if (inspection.status !== 'VALID') return inspection;
+      const object = inspection.record.documentSnapshot.pages[0]?.objects[0];
+      return {
+        ...inspection,
+        canonicalText: object?.type === 'text'
+          ? application.projectEditableRichText(object.text)
+          : null,
+      };
+    });
   }, { databaseName, scope });
 }
 
@@ -406,10 +416,7 @@ async function createDraftCrash(label) {
   assert.equal(committed.record.openSessionId, original.openSessionId);
   assert.equal(committed.record.authoringRecoveryOverlay.draft, 'Visible draft B');
   assert.equal(committed.record.authoringRecoveryOverlay.compositionWasActive, true);
-  assert.equal(
-    committed.record.documentSnapshot.pages[0].objects[0].text.blocks[0].children[0].text,
-    'Canonical A'
-  );
+  assert.equal(committed.canonicalText, 'Canonical A');
   await hardCrash(run);
   return { profile, original, committed };
 }
