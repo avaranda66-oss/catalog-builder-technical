@@ -1,6 +1,6 @@
 # W3.C — Manual Save + Canonical Reopen
 
-Status: **IMPLEMENTED — PRINCIPAL AMENDMENT LOCAL GATES GREEN / EXACT-HEAD CI PENDING**
+Status: **IMPLEMENTED — PRINCIPAL AMENDMENT GATES GREEN / PRINCIPAL RE-AUDIT PENDING**
 
 Date: 2026-09-12
 
@@ -107,7 +107,7 @@ The authored `CatalogDocument` remains the sole document authority. Persistence 
 - [x] `npm test`
 - [x] `npm run build`
 - [x] `git diff --check`
-- [ ] Exact pushed-head required CI.
+- [x] Exact amendment implementation head CI — Quality Gate `34727427340` completed `SUCCESS` on `160b402b15caebd2ee64b6e306479a32d187230e`.
 
 ## Implementation and evidence
 
@@ -147,7 +147,9 @@ JOB: W3.C
 
 BASE SHA/TREE: `a0bee489deff7af78e056463cf763f3ba4844105` / `8c87e59a32f3761d9d6d21a023e132e3b08a6f09`
 
-TESTED SHA/TREE: populated after the Principal amendment candidate commit; exact pushed-head CI remains intentionally pending until push.
+TESTED SHA/TREE: `160b402b15caebd2ee64b6e306479a32d187230e` / `befca89f8c79a8aad02c673ce0ed3101c41fe230`.
+
+EXACT-HEAD QUALITY GATE: `34727427340` — `COMPLETED / SUCCESS`, including lint, typecheck, tests, build, Playwright Chromium installation, and VNext Chromium/PDF proofs.
 
 CONTRACTS: authoring barrier; monotonic local causality; equivalence-based dirty; one mutation lane; authoritative ACK; ambiguous GET/exact replay; stale session/auth rejection; exact fresh-session reopen; guarded navigation; canonical resource seam.
 
@@ -171,7 +173,7 @@ NOT PROVEN: W3.D crash recovery, W3.E library UX, W3.F full-identity copy, W3.G 
 
 ARTIFACTS: W3.C story; focused tests; deterministic coordinator suite; Chromium fixture/proof; ignored browser evidence packet.
 
-NEXT RISK / NEXT ACTION: push the W3.C Principal amendment candidate, require exact-new-head CI, synchronize this evidence with that run, then return for Principal amendment re-audit. No merge without explicit user authorization.
+NEXT RISK / NEXT ACTION: synchronize this evidence-only story update on the existing W3.C branch, require the final story-sync head Quality Gate, then return for Principal amendment re-audit. No merge without explicit user authorization.
 
 ## Scope exclusions
 
