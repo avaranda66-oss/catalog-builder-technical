@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDocumentSession, type ApplicationExecutionDependencies } from '@/vnext/application';
 import type { CatalogDocument } from '@/vnext/domain';
 import {
+  PersistenceWorkspace,
+  SaveCoordinator,
   VNextPersistenceRuntime,
+  persistedBindingFromEnvelope,
   type CatalogPersistenceEnvelope,
   type CatalogRepository,
   type PersistenceResult,
@@ -70,6 +73,17 @@ function envelope(
 
 function failure<T>(): Promise<PersistenceResult<T>> {
   return Promise.resolve({ ok: false, error: { code: 'REMOTE_FAILURE' } });
+}
+
+function unavailableRecoveryRepository(): RecoveryRepository {
+  return {
+    putIfNewer: () => Promise.reject(
+      new RecoveryStorageError('STORAGE_UNAVAILABLE', 'IndexedDB unavailable')
+    ),
+    get: () => Promise.resolve(undefined),
+    listByScope: () => Promise.resolve([]),
+    deleteIfGeneration: () => Promise.resolve({ status: 'NOT_FOUND' }),
+  };
 }
 
 function repositoryBase(overrides: Partial<CatalogRepository> = {}): CatalogRepository {
@@ -143,28 +157,176 @@ describe('W3.D Save recovery lifecycle', () => {
     expect(await currentRecord(recoveryRepository)).toBeUndefined();
   });
 
-  it('does not dispatch remotely when the preflight recovery transaction cannot commit', async () => {
-    const unavailable: RecoveryRepository = {
-      putIfNewer: () => Promise.reject(
-        new RecoveryStorageError('STORAGE_UNAVAILABLE', 'IndexedDB unavailable')
-      ),
-      get: () => Promise.resolve(undefined),
-      listByScope: () => Promise.resolve([]),
-      deleteIfGeneration: () => Promise.resolve({ status: 'NOT_FOUND' }),
-    };
-    const saveCAS = vi.fn(() => failure<CatalogPersistenceEnvelope>());
-    const { runtime, session } = runtimeFor(repositoryBase({ saveCAS }), unavailable);
-    session.execute({ type: 'document.rename', title: 'Must stay local' });
-
-    expect(await runtime.saveCoordinator.save()).toMatchObject({
-      ok: false,
-      error: { code: 'RECOVERY_UNAVAILABLE' },
+  it('LP-01 accepts an authoritative cloud ACK while local protection remains unavailable', async () => {
+    let request!: SaveCatalogCasRequest;
+    let resolveRemote!: (result: PersistenceResult<CatalogPersistenceEnvelope>) => void;
+    const remote = new Promise<PersistenceResult<CatalogPersistenceEnvelope>>((resolve) => {
+      resolveRemote = resolve;
     });
-    expect(saveCAS).not.toHaveBeenCalled();
+    const saveCAS = vi.fn((next: SaveCatalogCasRequest) => {
+      request = next;
+      return remote;
+    });
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS }),
+      unavailableRecoveryRepository()
+    );
+    session.execute({ type: 'document.rename', title: 'Cloud-bound L1' });
+
+    const save = runtime.saveCoordinator.save();
+    await vi.waitFor(() => expect(saveCAS).toHaveBeenCalledTimes(1));
     expect(runtime.workspace.getSnapshot()).toMatchObject({
       dirty: true,
       localProtection: 'unavailable',
+      localProtectionMessage: 'Proteção local indisponível.',
+      save: { phase: 'saving', label: 'Saving…' },
     });
+
+    resolveRemote({
+      ok: true,
+      value: envelope(request.documentSnapshot, 2, request.mutationId),
+    });
+    expect(await save).toMatchObject({ ok: true, acknowledged: true });
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: false,
+      localProtection: 'unavailable',
+      localProtectionMessage: 'Proteção local indisponível.',
+      save: { phase: 'idle', label: 'Saved' },
+      binding: { kind: 'PERSISTED', remoteRevision: 2, lastMutationId: MUTATION_1 },
+    });
+  });
+
+  it('LP-02 preserves normal remote failures when local protection is unavailable', async () => {
+    const cases = [
+      { code: 'OFFLINE' as const, phase: 'unavailable', label: 'Offline / unavailable' },
+      { code: 'REMOTE_FAILURE' as const, phase: 'unavailable', label: 'Offline / unavailable' },
+      { code: 'CONFLICT' as const, phase: 'conflict', label: 'Conflict' },
+      { code: 'UNAUTHORIZED' as const, phase: 'unauthorized', label: 'Offline / unavailable' },
+    ];
+
+    for (const expected of cases) {
+      const saveCAS = vi.fn(() => Promise.resolve({
+        ok: false as const,
+        error: { code: expected.code },
+      }));
+      const { runtime, session } = runtimeFor(
+        repositoryBase({ saveCAS }),
+        unavailableRecoveryRepository()
+      );
+      session.execute({ type: 'document.rename', title: `Remote ${expected.code}` });
+
+      expect(await runtime.saveCoordinator.save()).toMatchObject({
+        ok: false,
+        error: { code: expected.code },
+      });
+      expect(saveCAS).toHaveBeenCalledTimes(1);
+      expect(runtime.workspace.getSnapshot()).toMatchObject({
+        dirty: true,
+        localProtection: 'unavailable',
+        save: { phase: expected.phase, label: expected.label },
+      });
+      expect(runtime.workspace.getSnapshot().save.label).not.toBe('Saved');
+    }
+  });
+
+  it('LP-03 reconciles an ambiguous cloud save without replacing its mutation identity', async () => {
+    let request!: SaveCatalogCasRequest;
+    const saveCAS = vi.fn((next: SaveCatalogCasRequest) => {
+      request = next;
+      return Promise.resolve({
+        ok: false as const,
+        error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const },
+      });
+    });
+    const getCatalog = vi.fn(() => Promise.resolve({
+      ok: true as const,
+      value: envelope(request.documentSnapshot, 2, request.mutationId),
+    }));
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS, getCatalog }),
+      unavailableRecoveryRepository()
+    );
+    session.execute({ type: 'document.rename', title: 'Ambiguous but committed' });
+
+    expect(await runtime.saveCoordinator.save()).toMatchObject({ ok: true, acknowledged: true });
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+    expect(request.mutationId).toBe(MUTATION_1);
+    expect(runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: false,
+      localProtection: 'unavailable',
+      save: { label: 'Saved' },
+      binding: { remoteRevision: 2, lastMutationId: MUTATION_1 },
+    });
+  });
+
+  it('LP-04 keeps unresolved ambiguity honest without inventing recovery durability', async () => {
+    const saveCAS = vi.fn(() => Promise.resolve({
+      ok: false as const,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const },
+    }));
+    const getCatalog = vi.fn(() => Promise.resolve({
+      ok: false as const,
+      error: { code: 'REMOTE_FAILURE' as const, message: 'Verification unavailable' },
+    }));
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS, getCatalog }),
+      unavailableRecoveryRepository()
+    );
+    session.execute({ type: 'document.rename', title: 'Ambiguous and unresolved' });
+
+    expect(await runtime.saveCoordinator.save()).toMatchObject({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+    expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(true);
+    expect(runtime.recoveryManager?.getLastWrittenRecord()).toBeUndefined();
+    expect(runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: true,
+      localProtection: 'unavailable',
+      save: { phase: 'ambiguous', label: 'Could not verify save' },
+    });
+  });
+
+  it('does not dispatch a failed preflight after auth lineage changes', async () => {
+    const session = createDocumentSession(documentFixture(), applicationDependencies);
+    const workspace = new PersistenceWorkspace(
+      session,
+      persistedBindingFromEnvelope(
+        envelope(),
+        OPEN_SESSION_ID,
+        'user-a:0',
+        AUTHORITY_SCOPE_ID,
+        0
+      )
+    );
+    let rejectPreflight!: (reason: Error) => void;
+    const beforeDispatch = vi.fn(() => new Promise<void>((_resolve, reject) => {
+      rejectPreflight = reject;
+    }));
+    const saveCAS = vi.fn(() => failure<CatalogPersistenceEnvelope>());
+    const coordinator = new SaveCoordinator({
+      workspace,
+      repository: repositoryBase({ saveCAS }),
+      createMutationId: () => MUTATION_1,
+      recoveryLifecycle: {
+        beforeDispatch,
+        afterAcknowledged: () => Promise.resolve(),
+      },
+    });
+    session.execute({ type: 'document.rename', title: 'Stale L1' });
+
+    const save = coordinator.save();
+    await vi.waitFor(() => expect(beforeDispatch).toHaveBeenCalledTimes(1));
+    workspace.updateAuthLineage('user-a:1');
+    rejectPreflight(new Error('IndexedDB unavailable'));
+
+    expect(await save).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    expect(saveCAS).not.toHaveBeenCalled();
+    expect(workspace.getSnapshot().localProtection).toBe('available');
   });
 
   it('ACK S1 cannot erase newer L2 recovery and rebases it without the acknowledged pending mutation', async () => {

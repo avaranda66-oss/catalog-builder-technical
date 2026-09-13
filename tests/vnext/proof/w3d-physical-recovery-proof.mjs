@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createWriteStream, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -16,6 +17,12 @@ const fixtureUrl = `http://127.0.0.1:${serverPort}/tests/vnext/proof/fixtures/w3
 const blankUrl = `http://127.0.0.1:${serverPort}/tests/vnext/proof/fixtures/w3d-indexeddb.html`;
 const databaseName = 'catalog_builder_vnext_recovery_physical_proof';
 const requestedScenario = (process.env.W3D_PHYSICAL_PROOF_SCENARIO ?? 'ALL').toUpperCase();
+const durableEvidencePath = process.env.W3D_PHYSICAL_PROOF_EVIDENCE_PATH
+  ? resolve(root, process.env.W3D_PHYSICAL_PROOF_EVIDENCE_PATH)
+  : undefined;
+const execFileAsync = promisify(execFile);
+const testedImplementationHead = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
+const testedImplementationTree = (await execFileAsync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root })).stdout.trim();
 const profilePaths = [];
 const spawnedProcesses = new Set();
 let debugOffset = 0;
@@ -185,6 +192,8 @@ async function createPendingCrash(profile, title) {
 }
 
 const evidence = {
+  testedImplementationHead,
+  testedImplementationTree,
   chromiumVersion: undefined,
   hardTermination: 'Chromium OS process terminated without page, context, or browser close',
   profileReuse: true,
@@ -519,7 +528,12 @@ try {
   await runProof();
   proofPassed = true;
   const resultPath = resolve(output, `result-${requestedScenario.toLowerCase().replaceAll(',', '-')}.json`);
-  await writeFile(resultPath, JSON.stringify({ status: 'PASS', scenario: requestedScenario, ...evidence }, null, 2));
+  const result = JSON.stringify({ status: 'PASS', scenario: requestedScenario, ...evidence }, null, 2);
+  await writeFile(resultPath, result);
+  if (durableEvidencePath) {
+    await mkdir(dirname(durableEvidencePath), { recursive: true });
+    await writeFile(durableEvidencePath, result);
+  }
   console.log(`W3.D physical recovery proof PASS: ${resultPath}`);
 } catch (error) {
   const resultPath = resolve(output, `result-${requestedScenario.toLowerCase().replaceAll(',', '-')}.json`);

@@ -15,7 +15,12 @@ import {
   type PersistenceResult,
   type SaveCatalogCasRequest,
 } from '@/vnext/persistence';
-import { InMemoryRecoveryRepository, digestCanonicalDocument } from '@/vnext/recovery';
+import {
+  InMemoryRecoveryRepository,
+  RecoveryStorageError,
+  digestCanonicalDocument,
+  type RecoveryRepository,
+} from '@/vnext/recovery';
 import { recoveryRecord } from '../recovery/fixtures';
 
 const A_ID = '11111111-1111-4111-8111-111111111111';
@@ -125,6 +130,17 @@ function unavailable<T>(): Promise<PersistenceResult<T>> {
   return Promise.resolve({ ok: false, error: { code: 'REMOTE_FAILURE' } });
 }
 
+function unavailableRecoveryRepository(): RecoveryRepository {
+  return {
+    putIfNewer: () => Promise.reject(
+      new RecoveryStorageError('STORAGE_UNAVAILABLE', 'IndexedDB unavailable')
+    ),
+    get: () => Promise.resolve(undefined),
+    listByScope: () => Promise.resolve([]),
+    deleteIfGeneration: () => Promise.resolve({ status: 'NOT_FOUND' }),
+  };
+}
+
 function repositoryBase(overrides: Partial<CatalogRepository> = {}): CatalogRepository {
   return {
     listCatalogs: () => unavailable(),
@@ -144,7 +160,7 @@ function ids(prefix: string) {
 function runtimeFor(
   repository: CatalogRepository,
   document = textDocument(),
-  recoveryRepository?: InMemoryRecoveryRepository
+  recoveryRepository?: RecoveryRepository
 ) {
   const dependencies: ApplicationExecutionDependencies = { createId: ids('generated') };
   const session = createDocumentSession(document, dependencies);
@@ -456,6 +472,33 @@ describe('W3.D typed authoring recovery overlays', () => {
     await act(async () => runtime.recoveryManager?.flush());
     expect(await recoveryRepository.get(recoveryKey)).toBeUndefined();
     expect(authoredText(session.getSnapshot().document)).toBe('Modelo');
+  });
+
+  it('LP-FATHER projects cloud Saved and local protection unavailable independently', async () => {
+    const saveCAS = vi.fn((request: SaveCatalogCasRequest) => Promise.resolve({
+      ok: true as const,
+      value: envelope(request.documentSnapshot, 2, request.mutationId),
+    }));
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS }),
+      textDocument(),
+      unavailableRecoveryRepository()
+    );
+    const { container } = render(<VNextApp runtime={runtime} />);
+    act(() => {
+      expect(session.execute({ type: 'document.rename', title: 'Saved in cloud' }).ok).toBe(true);
+    });
+
+    fireEvent.click(button(container, 'save'));
+
+    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved'));
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: false,
+      localProtection: 'unavailable',
+      save: { label: 'Saved' },
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Proteção local indisponível.');
   });
 
   it('persists an Inspector draft as a typed overlay without committing a keystroke', async () => {

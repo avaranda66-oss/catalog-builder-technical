@@ -19,8 +19,7 @@ export type SaveFailureCode =
   | 'AUTHORING_BLOCKED'
   | 'SAVE_IN_FLIGHT_NEWER_WORK'
   | 'STALE_RESULT'
-  | 'REMOTE_DIVERGENCE'
-  | 'RECOVERY_UNAVAILABLE';
+  | 'REMOTE_DIVERGENCE';
 
 export type ManualSaveResult =
   | { readonly ok: true; readonly acknowledged: boolean; readonly joined?: boolean }
@@ -282,13 +281,9 @@ export class SaveCoordinator {
     if (!this.isCurrent(prepared)) return { ok: false, error: { code: 'STALE_RESULT' } };
     try {
       await this.options.recoveryLifecycle.beforeDispatch(prepared.pendingRemoteMutation!);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Proteção local indisponível.';
-      this.options.workspace.setLocalProtectionUnavailable(
-        message
-      );
-      this.options.workspace.setPhase('blocked', message);
-      return { ok: false, error: { code: 'RECOVERY_UNAVAILABLE', message } };
+    } catch {
+      if (!this.isCurrent(prepared)) return { ok: false, error: { code: 'STALE_RESULT' } };
+      this.options.workspace.setLocalProtectionUnavailable();
     }
     if (!this.isCurrent(prepared)) return { ok: false, error: { code: 'STALE_RESULT' } };
     return this.dispatchAttempt(prepared);
