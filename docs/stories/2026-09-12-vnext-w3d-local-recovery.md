@@ -248,7 +248,7 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 - Canonical base SHA/tree: `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` / `d08158a1c2f3e0e10c6812008e1356322815d81f`
 - Tested implementation SHA/tree: `66aa64efe91bcb8540bcab1b399ae35a3236e2c9` / `c26acc9a9c399e441f42b505a05f8545d9d52f57`
 - Branch: `feat/vnext-w3d-local-recovery`
-- PR / exact-head CI: to be populated by the Constitution-authorized DevOps push/PR step; no merge authorized.
+- PR: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/33`; exact-head CI evidence is the GitHub check suite attached to the final pushed head; no merge authorized.
 - Not proven: physical browser quota exhaustion. Quota mapping/no-fallback and prior-record preservation are proven at the injected IndexedDB failure boundary. Whole-machine power loss is not claimed; OS-level Chromium process termination and same-profile restart are proven.
 - Known limitations: recovery intentionally has no cross-tab merge/winner, cloud overwrite, save-as-copy, autosave, realtime coordination, or W3.E+ behavior.
 
