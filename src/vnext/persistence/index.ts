@@ -34,3 +34,31 @@ export type {
   VNextPersistenceRpcError,
   VNextPersistenceRpcResponse,
 } from './supabase-repository';
+export { canonicalDocumentEquivalence } from './equivalence';
+export { CanonicalReopenCoordinator } from './reopen-coordinator';
+export type {
+  CanonicalReopenCoordinatorOptions,
+  ReopenResult,
+} from './reopen-coordinator';
+export { SaveCoordinator } from './save-coordinator';
+export type {
+  ManualSaveResult,
+  SaveCoordinatorOptions,
+  SaveFailureCode,
+} from './save-coordinator';
+export { VNextPersistenceRuntime } from './runtime';
+export type { VNextPersistenceRuntimeOptions } from './runtime';
+export {
+  PersistenceWorkspace,
+  createUnboundPersistenceBinding,
+  persistedBindingFromEnvelope,
+} from './workspace';
+export type {
+  AuthoringBarrier,
+  AuthoringBarrierBlockReason,
+  AuthoringBarrierResult,
+  PersistenceBinding,
+  PersistenceWorkspaceSnapshot,
+  SavePhase,
+  SaveProjection,
+} from './workspace';

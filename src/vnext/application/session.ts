@@ -11,6 +11,8 @@ export interface DocumentSessionSnapshot {
   document: CatalogDocument;
   canUndo: boolean;
   canRedo: boolean;
+  /** Monotonic authored-state causality. It advances on each accepted state change, including Undo/Redo. */
+  localSequence: number;
 }
 
 export type HistoryResult =
@@ -42,13 +44,20 @@ export function createDocumentSession(
   const redoStack: CatalogDocument[] = [];
   const listeners = new Set<() => void>();
   let lastTransactionId: string | undefined;
-  let snapshot: DocumentSessionSnapshot = deepFreeze({ document: current, canUndo: false, canRedo: false });
+  let localSequence = 0;
+  let snapshot: DocumentSessionSnapshot = deepFreeze({
+    document: current,
+    canUndo: false,
+    canRedo: false,
+    localSequence,
+  });
 
   const publish = (): void => {
     snapshot = deepFreeze({
       document: current,
       canUndo: undoStack.length > 0,
       canRedo: redoStack.length > 0,
+      localSequence,
     });
     for (const listener of listeners) listener();
   };
@@ -68,6 +77,7 @@ export function createDocumentSession(
       if (!coalesces) undoStack.push(current);
       redoStack.length = 0;
       current = deepFreeze(result.document);
+      localSequence += 1;
       lastTransactionId = context?.transactionId;
       publish();
       return { ...result, document: current };
@@ -77,6 +87,7 @@ export function createDocumentSession(
       if (!previous) return { ok: false, error: { code: 'NOTHING_TO_UNDO', details: 'No prior document snapshot' } };
       redoStack.push(current);
       current = previous;
+      localSequence += 1;
       lastTransactionId = undefined;
       publish();
       return { ok: true, snapshot };
@@ -86,6 +97,7 @@ export function createDocumentSession(
       if (!next) return { ok: false, error: { code: 'NOTHING_TO_REDO', details: 'No later document snapshot' } };
       undoStack.push(current);
       current = next;
+      localSequence += 1;
       lastTransactionId = undefined;
       publish();
       return { ok: true, snapshot };
