@@ -1,14 +1,11 @@
 import type { ApplicationExecutionDependencies, DocumentSession } from '../application';
 import type { CatalogDocument } from '../domain';
-import {
-  RecoveryCoordinator,
-  RecoveryStartupCoordinator,
-  SessionRecoveryManager,
-  type AuthoringRecoveryOverlay,
-  type RecoveryRepository,
-  type RecoverySchedulerClock,
-  type RecoveryStartupCandidate,
-} from '../recovery';
+import type { AuthoringRecoveryOverlay } from '../recovery/contracts';
+import { RecoveryCoordinator } from '../recovery/coordinator';
+import type { RecoveryRepository } from '../recovery/repository';
+import type { RecoverySchedulerClock } from '../recovery/scheduler';
+import { SessionRecoveryManager } from '../recovery/session-manager';
+import { RecoveryStartupCoordinator, type RecoveryStartupCandidate } from '../recovery/startup';
 import type { CatalogPersistenceEnvelope, CatalogRepository } from './contracts';
 import { CanonicalReopenCoordinator } from './reopen-coordinator';
 import { SaveCoordinator } from './save-coordinator';

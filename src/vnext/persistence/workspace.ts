@@ -1,5 +1,5 @@
 import type { DocumentSession } from '../application';
-import type { AuthoringRecoveryOverlay } from '../recovery';
+import type { AuthoringRecoveryOverlay } from '../recovery/contracts';
 import type { CatalogPersistenceEnvelope } from './contracts';
 import { canonicalDocumentEquivalence } from './equivalence';
 
