@@ -16,6 +16,7 @@ import {
   getVNextSupabaseClient,
   vnextRpcClientFromSupabase,
 } from '../persistence/supabase-client';
+import { IndexedDbRecoveryRepository } from '../recovery';
 import {
   ANONYMOUS_AUTH_IDENTITY,
   advanceAuthLineage,
@@ -52,6 +53,11 @@ function authIdentity(session: Session | null): string {
   return session?.user.id ?? ANONYMOUS_AUTH_IDENTITY;
 }
 
+function authorityScopeId(identity: string): string {
+  const deployment = import.meta.env.VITE_SUPABASE_URL || window.location.origin;
+  return JSON.stringify(['catalog-builder-vnext', deployment, window.location.origin, identity]);
+}
+
 function activeV2Url(runtime: VNextPersistenceRuntime): string {
   const binding = runtime.workspace.getSnapshot().binding;
   return binding.kind === 'PERSISTED'
@@ -76,6 +82,8 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   const authSession = supabase ? (await supabase.auth.getSession()).data.session : null;
   let authLineage = createAuthLineageState(authIdentity(authSession));
   const lineage = () => authLineageValue(authLineage);
+  const identity = () => authLineage.identity;
+  const recoveryRepository = new IndexedDbRecoveryRepository();
 
   const runtime = new VNextPersistenceRuntime({
     session: initialSession,
@@ -84,6 +92,8 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     createMutationId: createBrowserId,
     createOpenSessionId: createBrowserId,
     authLineage: lineage(),
+    authorityScopeId: authorityScopeId(identity()),
+    recoveryRepository,
     assetUrls: resolveKnownW2CDemoAssetUrls(initialSession.getSnapshot().document),
     resolveAssetUrls: resolveKnownW2CDemoAssetUrls,
   });
@@ -106,9 +116,11 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
       const nextIdentity = authIdentity(nextSession);
       authLineage = advanceAuthLineage(authLineage, nextIdentity);
-      runtime.updateAuthLineage(lineage());
+      runtime.updateAuthContext(lineage(), authorityScopeId(nextIdentity));
     });
   }
+
+  void navigator.storage?.persist?.().catch(() => false);
 
   window.addEventListener('beforeunload', (event) => {
     const snapshot = runtime.workspace.getSnapshot();

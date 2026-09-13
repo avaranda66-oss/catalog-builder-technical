@@ -2,9 +2,12 @@ import type { ApplicationExecutionDependencies, DocumentSession } from '../appli
 import type { CatalogDocument } from '../domain';
 import {
   RecoveryCoordinator,
+  RecoveryStartupCoordinator,
   SessionRecoveryManager,
+  type AuthoringRecoveryOverlay,
   type RecoveryRepository,
   type RecoverySchedulerClock,
+  type RecoveryStartupCandidate,
 } from '../recovery';
 import type { CatalogPersistenceEnvelope, CatalogRepository } from './contracts';
 import { CanonicalReopenCoordinator } from './reopen-coordinator';
@@ -40,8 +43,12 @@ export class VNextPersistenceRuntime {
   readonly reopenCoordinator: CanonicalReopenCoordinator;
   readonly recoveryCoordinator: RecoveryCoordinator | undefined;
   readonly recoveryManager: SessionRecoveryManager | undefined;
+  readonly recoveryStartup: RecoveryStartupCoordinator | undefined;
+  private recoveredOverlay: { readonly openSessionId: string; readonly overlay: AuthoringRecoveryOverlay } | undefined;
+  private readonly resolveAssetUrls: ((document: CatalogDocument) => ReadonlyMap<string, string>) | undefined;
 
   constructor(options: VNextPersistenceRuntimeOptions) {
+    this.resolveAssetUrls = options.resolveAssetUrls;
     const openSessionId = options.createOpenSessionId();
     const authorityScopeId = options.authorityScopeId ?? options.authLineage.split(':')[0];
     const binding = options.binding
@@ -77,7 +84,8 @@ export class VNextPersistenceRuntime {
           getSource: () => {
             const snapshot = this.workspace.getSnapshot();
             const { binding: activeBinding } = snapshot;
-            const authoringRecoveryOverlay = this.workspace.captureRecoveryOverlay();
+            const authoringRecoveryOverlay = this.workspace.captureRecoveryOverlay()
+              ?? this.getRecoveredOverlay(activeBinding.openSessionId);
             return {
               ownerAuthorityScopeId: activeBinding.authorityScopeId,
               activeAuthorityScopeId: snapshot.activeAuthorityScopeId,
@@ -101,6 +109,13 @@ export class VNextPersistenceRuntime {
           maxWaitMs: options.recoveryMaxWaitMs,
           onProtectionAvailable: () => this.workspace.setLocalProtectionAvailable(),
           onProtectionUnavailable: () => this.workspace.setLocalProtectionUnavailable(),
+        })
+      : undefined;
+    this.recoveryStartup = this.recoveryCoordinator
+      ? new RecoveryStartupCoordinator({
+          coordinator: this.recoveryCoordinator,
+          repository: options.repository,
+          getActiveAuthorityScopeId: () => this.workspace.getSnapshot().activeAuthorityScopeId,
         })
       : undefined;
     this.saveCoordinator = new SaveCoordinator({
@@ -130,7 +145,54 @@ export class VNextPersistenceRuntime {
   }
 
   updateAuthContext(authLineage: string, authorityScopeId: string): void {
+    if (this.workspace.getSnapshot().activeAuthorityScopeId !== authorityScopeId) {
+      this.recoveredOverlay = undefined;
+    }
     this.workspace.updateAuthContext(authLineage, authorityScopeId);
+  }
+
+  getRecoveredOverlay(openSessionId: string): AuthoringRecoveryOverlay | undefined {
+    return this.recoveredOverlay?.openSessionId === openSessionId
+      ? this.recoveredOverlay.overlay
+      : undefined;
+  }
+
+  consumeRecoveredOverlay(openSessionId: string): void {
+    if (this.recoveredOverlay?.openSessionId === openSessionId) this.recoveredOverlay = undefined;
+  }
+
+  async recover(candidate: RecoveryStartupCandidate): Promise<boolean> {
+    if (!this.recoveryCoordinator || !this.recoveryManager) return false;
+    if (
+      candidate.inspection.status !== 'VALID'
+      || candidate.inspection.record.pendingRemoteMutation
+      || candidate.decision.kind !== 'RECOVERABLE_OVER_SAME_REMOTE_BASE'
+    ) return false;
+    const before = this.workspace.getSnapshot();
+    const accepted = await this.recoveryCoordinator.accept(
+      candidate.inspection,
+      before.activeAuthorityScopeId
+    );
+    this.recoveredOverlay = accepted.overlay
+      ? { openSessionId: accepted.openSessionId, overlay: accepted.overlay }
+      : undefined;
+    this.workspace.replaceActive(
+      accepted.session,
+      persistedBindingFromEnvelope(
+        candidate.decision.remote,
+        accepted.openSessionId,
+        before.binding.authLineage,
+        before.activeAuthorityScopeId,
+        accepted.session.getSnapshot().localSequence
+      ),
+      this.resolveAssetUrls?.(accepted.session.getSnapshot().document) ?? new Map()
+    );
+    await this.recoveryManager.flush();
+    const cleanup = await this.recoveryCoordinator.deleteIfGeneration(
+      candidate.inspection.key,
+      candidate.inspection.record.recoveryGeneration
+    );
+    return cleanup.status === 'DELETED' || cleanup.status === 'NOT_FOUND';
   }
 
   registerAuthoringBarrier(

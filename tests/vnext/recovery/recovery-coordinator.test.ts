@@ -89,6 +89,26 @@ describe('W3.D recovery coordinator and decisions', () => {
     await expect(decideRecovery(inspection, { status: 'UNAVAILABLE' })).resolves.toEqual({ kind: 'REMOTE_UNAVAILABLE' });
   });
 
+  it('does not discard a typed authoring overlay merely because its canonical snapshot matches remote', async () => {
+    const base = recoveryDocument('Cloud base');
+    const record = await recoveryRecord({
+      documentSnapshot: base,
+      snapshotDigest: await digestCanonicalDocument(base),
+      authoringRecoveryOverlay: {
+        kind: 'INSPECTOR_FRAME_DRAFT_V1',
+        pageId: 'page-1',
+        objectId: 'object-1',
+        expectedFrame: { xMm: 1, yMm: 2, widthMm: 3, heightMm: 4 },
+        draft: { x: '1.5', y: '2', width: '3', height: '4' },
+      },
+    });
+    const inspection = { status: 'VALID' as const, key: recoveryKeyOf(record), record };
+    await expect(decideRecovery(inspection, {
+      status: 'AVAILABLE',
+      envelope: envelope(base),
+    })).resolves.toMatchObject({ kind: 'RECOVERABLE_OVER_SAME_REMOTE_BASE' });
+  });
+
   it('proves a committed pending mutation only with its exact identity, revision and payload digest', async () => {
     const attemptedDocumentSnapshot = recoveryDocument('Attempted');
     const attemptDigest = await digestCanonicalDocument(attemptedDocumentSnapshot);

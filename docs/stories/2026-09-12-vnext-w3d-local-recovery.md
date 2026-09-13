@@ -108,32 +108,32 @@ The Father can edit a catalog, suffer a browser/tab/computer failure, return, di
 
 ## Mandatory deterministic recovery matrix
 
-- [ ] R01 — Immediate first dirty write.
-- [ ] R02 — Debounce and maximum wait.
-- [ ] R03 — Stale generation cannot overwrite.
-- [ ] R04 — Aborted write preserves previous record.
-- [ ] R05 — Quota failure and no localStorage fallback.
-- [ ] R06 — Exact pre-Save flush.
-- [ ] R07 — L2 recovery during S1 flight.
-- [ ] R08 — ACK S1 cannot delete newer L2.
-- [ ] R09 — Exact ACK-covered cleanup.
-- [ ] R10 — Ambiguous request preserved.
-- [ ] R11 — Restart plus `lastMutationId` proves commit.
-- [ ] R12 — Restart plus exact-base exact replay of same identity/payload.
-- [ ] R13 — Divergent remote conflict.
-- [ ] R14 — Same revision/digest mismatch.
-- [ ] R15 — Edit then Undo to remote is redundant cleanup.
-- [ ] R16 — Two tabs have independent records.
-- [ ] R17 — No timestamp automatic winner.
-- [ ] R18 — Logout A preserves recovery.
-- [ ] R19 — B cannot see A.
-- [ ] R20 — A login again sees A.
-- [ ] R21 — Exact discard only.
-- [ ] R22 — Recovered session has fresh Undo/Redo.
-- [ ] R23 — Corrupt record rejected and preserved.
-- [ ] R24 — Unsupported format rejected and preserved.
-- [ ] R25 — Remote unavailable leads only to protected inspection.
-- [ ] R26 — Newer remote never overwrites.
+- [x] R01 — Immediate first dirty write.
+- [x] R02 — Debounce and maximum wait.
+- [x] R03 — Stale generation cannot overwrite.
+- [x] R04 — Aborted write preserves previous record.
+- [x] R05 — Quota failure and no localStorage fallback.
+- [x] R06 — Exact pre-Save flush.
+- [x] R07 — L2 recovery during S1 flight.
+- [x] R08 — ACK S1 cannot delete newer L2.
+- [x] R09 — Exact ACK-covered cleanup.
+- [x] R10 — Ambiguous request preserved.
+- [x] R11 — Restart plus `lastMutationId` proves commit.
+- [x] R12 — Restart plus exact-base exact replay of same identity/payload.
+- [x] R13 — Divergent remote conflict.
+- [x] R14 — Same revision/digest mismatch.
+- [x] R15 — Edit then Undo to remote is redundant cleanup.
+- [x] R16 — Two tabs have independent records.
+- [x] R17 — No timestamp automatic winner.
+- [x] R18 — Logout A preserves recovery.
+- [x] R19 — B cannot see A.
+- [x] R20 — A login again sees A.
+- [x] R21 — Exact discard only.
+- [x] R22 — Recovered session has fresh Undo/Redo.
+- [x] R23 — Corrupt record rejected and preserved.
+- [x] R24 — Unsupported format rejected and preserved.
+- [x] R25 — Remote unavailable leads only to protected inspection.
+- [x] R26 — Newer remote never overwrites.
 
 ## Mandatory visible-draft tests
 
@@ -168,8 +168,8 @@ Use `rg --files`, symbol/text search, and focused reads against the actual repos
 - [x] Define pure strict recovery types, validation, canonical SHA-256 digest derivation, generation-conditional operations, and remote-comparison decisions without a second document authority.
 - [x] Build the IndexedDB adapter and transaction-completion/error behavior, including shared-storage test support and no-fallback enforcement.
 - [x] Integrate scheduling and recovery lifecycle below React with the existing session/workspace/save authority; preserve S1/L2 and ambiguous mutation rules.
-- [ ] Integrate typed visible-draft overlays only through discovered authoring barriers; inventory all visible ephemeral surfaces and escalate uncovered loss paths.
-- [ ] Integrate recovery discovery, Father UX, protected inspection, exact discard, and same-profile auth scope behavior without normal remote overwrite/copy implementation.
+- [x] Integrate typed visible-draft overlays only through discovered authoring barriers; inventory all visible ephemeral surfaces and escalate uncovered loss paths.
+- [x] Integrate recovery discovery, Father UX, protected inspection, exact discard, and same-profile auth scope behavior without normal remote overwrite/copy implementation.
 - [ ] Implement R01–R26 and DRAFT-01–05 focused deterministic/application/adapter/race tests with explicit claim/oracle mapping.
 - [ ] Implement and run physical Chromium proofs A–H with durable evidence artifacts; verify intermediate conditions directly.
 - [ ] Run independent adversarial review for stale generation, stale cleanup, malformed records, digest mismatch, replay identity/payload drift, user/tab isolation, false `Saved`, and future-wave leakage.
@@ -194,6 +194,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | 2026-09-12 | 0.2.0 | Development started under root authority; Lane B Recovery Core lease activated. | @dev |
 | 2026-09-13 | 0.3.0 | Recovery core contracts, repository, decisions, coordinator, and scheduler implemented with focused evidence. | @dev |
 | 2026-09-13 | 0.4.0 | Dedicated IndexedDB adapter implemented and proven in real Chromium. | @dev |
+| 2026-09-13 | 0.5.0 | W3.C lifecycle, typed draft overlays, startup decisions, protected Father UX, and auth-scoped production persistence integrated. | @dev |
 | 2026-09-13 | 0.5.0 | Recovery scheduling and W3.C Save lifecycle integrated with exact preflight durability, S1/L2 rebasing, ambiguity preservation, and digest-guarded replay. | @dev |
 
 ## CodeRabbit Integration
@@ -231,10 +232,11 @@ No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were us
 - Frozen seams used: W3.A `serializeCanonicalSnapshot`, W3.C `DocumentSession` factory/session authority, and `CatalogPersistenceEnvelope` remote comparison.
 - Added strict v1 records, exact tuple keys, SHA-256 validation, typed Text/Inspector overlays, exact pending mutation capture, generation-conditional in-memory semantics, seven-way remote decisions, fresh-session acceptance, and recovery scheduling.
 - Phase-1 evidence: 3 focused test files / 13 tests PASS; typecheck PASS; focused ESLint PASS; `git diff --check` PASS.
-- End-to-end lifecycle, crash/restart, visible-draft, and same-profile browser claims remain unproven and unchecked.
+- Physical crash/restart, visible-draft crash, and same-profile browser claims remain unproven and unchecked.
 - Added the dedicated `catalog_builder_vnext_recovery` IndexedDB adapter with strict transaction completion, atomic generation ordering, conditional delete, scope index, typed failures, and corrupt-record preservation.
 - Phase-2 evidence: 4 recovery test files / 16 tests PASS; typecheck and focused ESLint PASS; real Chromium adapter proof PASS with fresh-connection readback, schema/version creation, concurrent G2 protection, aborted G3 preserving G2, per-tab/per-user scope enumeration, and corrupt delete preservation. Quota behavior is an explicitly injected typed-boundary oracle; no physical quota exhaustion is claimed.
-- Phase-3 evidence: the runtime now owns a session recovery manager below React; first-dirty/debounced scheduling, exact pending-mutation preflight, no remote dispatch after failed local preflight, S1/L2 rebasing, generation-conditional cleanup, immutable record scope, exact ambiguous payload retention, and same-revision digest rejection are covered by 6 focused lifecycle tests. Combined recovery/lifecycle scope: 6 files / 40 tests PASS; typecheck and focused ESLint PASS; `git diff --check` PASS.
+- Phase-3/5 focused evidence: exact pre-dispatch pending-mutation commit, S1/L2 rebase, conditional cleanup, ambiguous restart proof/replay, same-revision digest guard, Undo cleanup, scoped discovery, fresh-session recovery, Text/Inspector overlay capture/restore, protected inspection, and explicit two-step discard are green. Physical crash/restart proofs remain unchecked.
+- Phase-3 evidence: the runtime now owns a session recovery manager below React; first-dirty/debounced scheduling, exact pending-mutation preflight, no remote dispatch after failed local preflight, S1/L2 rebasing, generation-conditional cleanup, immutable record scope, exact ambiguous payload retention, same-revision digest rejection, and Undo redundancy cleanup are covered by 7 focused lifecycle tests.
 
 ## File list
 
@@ -248,11 +250,19 @@ No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were us
 - `src/vnext/recovery/repository.ts`
 - `src/vnext/recovery/scheduler.ts`
 - `src/vnext/recovery/session-manager.ts`
+- `src/vnext/recovery/startup.ts`
 - `src/vnext/persistence/reopen-coordinator.ts`
 - `src/vnext/persistence/runtime.ts`
 - `src/vnext/persistence/save-coordinator.ts`
 - `src/vnext/persistence/workspace.ts`
+- `src/vnext/app/bootstrap.tsx`
+- `src/vnext/app/EditorWorkspace.tsx`
+- `src/vnext/app/RecoveryCenter.tsx`
+- `src/vnext/app/VNextApp.tsx`
+- `src/vnext/app/styles.css`
+- `tests/vnext/application/w3c-editor-persistence.test.tsx`
 - `tests/vnext/persistence/recovery-lifecycle.test.ts`
+- `tests/vnext/recovery/recovery-startup.test.ts`
 - `tests/vnext/recovery/fixtures.ts`
 - `tests/vnext/recovery/recovery-contracts.test.ts`
 - `tests/vnext/recovery/recovery-coordinator.test.ts`

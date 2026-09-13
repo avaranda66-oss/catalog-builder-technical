@@ -256,7 +256,28 @@ describe('W3.D Save recovery lifecycle', () => {
     await runtime.recoveryManager?.flush();
 
     expect(await recoveryRepository.listByScope('user-b')).toEqual([]);
+    expect(await runtime.recoveryStartup?.discover('user-a')).toEqual([]);
     expect(validRecord(await currentRecord(recoveryRepository)).authorityScopeId).toBe(AUTHORITY_SCOPE_ID);
     expect(validRecord(await currentRecord(recoveryRepository)).documentSnapshot.title).toBe('User A work');
+
+    runtime.updateAuthContext('user-a:2', 'user-a');
+    expect(await runtime.recoveryStartup?.discover('user-a')).toHaveLength(1);
+  });
+
+  it('removes redundant recovery after Undo returns exactly to the remote snapshot', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const { runtime, session } = runtimeFor(repositoryBase(), recoveryRepository);
+    session.execute({ type: 'document.rename', title: 'Temporary edit' });
+    await runtime.recoveryManager?.flush();
+    expect((await currentRecord(recoveryRepository))?.status).toBe('VALID');
+
+    expect(session.undo().ok).toBe(true);
+    await runtime.recoveryManager?.flush();
+
+    expect(session.getSnapshot()).toMatchObject({
+      document: { title: 'Original' },
+      localSequence: 2,
+    });
+    expect(await currentRecord(recoveryRepository)).toBeUndefined();
   });
 });

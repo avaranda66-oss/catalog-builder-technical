@@ -35,7 +35,7 @@ export async function decideRecovery(
   ) {
     return { kind: 'REDUNDANT_ALREADY_IN_CLOUD', remote: remote.envelope };
   }
-  if (remoteDigest === record.snapshotDigest) {
+  if (remoteDigest === record.snapshotDigest && !record.authoringRecoveryOverlay) {
     return { kind: 'REDUNDANT_ALREADY_IN_CLOUD', remote: remote.envelope };
   }
   if (remote.envelope.remoteRevision === record.baseRemoteRevision) {

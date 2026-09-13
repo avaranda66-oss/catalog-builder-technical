@@ -15,6 +15,8 @@ import {
   type PersistenceResult,
   type SaveCatalogCasRequest,
 } from '@/vnext/persistence';
+import { InMemoryRecoveryRepository, digestCanonicalDocument } from '@/vnext/recovery';
+import { recoveryRecord } from '../recovery/fixtures';
 
 const A_ID = '11111111-1111-4111-8111-111111111111';
 const B_ID = '22222222-2222-4222-8222-222222222222';
@@ -139,17 +141,27 @@ function ids(prefix: string) {
   return () => `${prefix}-${++next}`;
 }
 
-function runtimeFor(repository: CatalogRepository, document = textDocument()) {
+function runtimeFor(
+  repository: CatalogRepository,
+  document = textDocument(),
+  recoveryRepository?: InMemoryRecoveryRepository
+) {
   const dependencies: ApplicationExecutionDependencies = { createId: ids('generated') };
   const session = createDocumentSession(document, dependencies);
+  const openSessionIds = [
+    'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  ];
   let open = 0;
   const runtime = new VNextPersistenceRuntime({
     session,
     repository,
     applicationDependencies: dependencies,
     createMutationId: () => M1,
-    createOpenSessionId: () => `open-${++open}`,
+    createOpenSessionId: () => openSessionIds[open++] ?? 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     authLineage: 'user-a:0',
+    authorityScopeId: 'user-a',
+    recoveryRepository,
     binding: envelope(document),
   });
   return { runtime, session };
@@ -405,6 +417,153 @@ describe('W3.C Father-visible Save integration', () => {
     expect(runtime.workspace.getSnapshot().save.label).toBe('Saved');
     expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
     expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved');
+  });
+});
+
+describe('W3.D typed authoring recovery overlays', () => {
+  const recoveryKey = {
+    authorityScopeId: 'user-a',
+    catalogId: A_ID,
+    openSessionId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  } as const;
+
+  it('persists a visible uncommitted Text draft without changing the canonical document', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const { runtime, session } = runtimeFor(repositoryBase(), textDocument(), recoveryRepository);
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+
+    fireEvent.change(textarea, { target: { value: 'Rascunho efêmero recuperável' } });
+    fireEvent.compositionStart(textarea);
+    await act(async () => runtime.recoveryManager?.flush());
+
+    const inspection = await recoveryRepository.get(recoveryKey);
+    expect(inspection?.status).toBe('VALID');
+    if (!inspection || inspection.status !== 'VALID') throw new Error('Expected valid recovery');
+    expect(inspection.record.documentSnapshot).toEqual(session.getSnapshot().document);
+    expect(authoredText(inspection.record.documentSnapshot)).toBe('Modelo');
+    expect(inspection.record.authoringRecoveryOverlay).toMatchObject({
+      kind: 'TEXT_DRAFT_V1',
+      pageId: 'page-1111',
+      objectId: 'text-target',
+      draft: 'Rascunho efêmero recuperável',
+      compositionWasActive: true,
+    });
+    expect(authoredText(session.getSnapshot().document)).toBe('Modelo');
+
+    fireEvent.compositionEnd(textarea);
+    fireEvent.click(button(container, 'cancel-text'));
+    await act(async () => runtime.recoveryManager?.flush());
+    expect(await recoveryRepository.get(recoveryKey)).toBeUndefined();
+    expect(authoredText(session.getSnapshot().document)).toBe('Modelo');
+  });
+
+  it('persists an Inspector draft as a typed overlay without committing a keystroke', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const { runtime, session } = runtimeFor(repositoryBase(), textDocument(), recoveryRepository);
+    const { container } = render(<VNextApp runtime={runtime} />);
+    beginTextEdit(container);
+    fireEvent.click(button(container, 'cancel-text'));
+    const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]');
+    if (!x) throw new Error('Missing Inspector x field');
+
+    fireEvent.change(x, { target: { value: '42.75' } });
+    await act(async () => runtime.recoveryManager?.flush());
+
+    const inspection = await recoveryRepository.get(recoveryKey);
+    expect(inspection?.status).toBe('VALID');
+    if (!inspection || inspection.status !== 'VALID') throw new Error('Expected valid recovery');
+    expect(inspection.record.authoringRecoveryOverlay).toMatchObject({
+      kind: 'INSPECTOR_FRAME_DRAFT_V1',
+      pageId: 'page-1111',
+      objectId: 'text-target',
+      expectedFrame: { xMm: 20, yMm: 30, widthMm: 72, heightMm: 20 },
+      draft: { x: '42.75', y: '30', width: '72', height: '20' },
+    });
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(20);
+  });
+
+  it('restores a Text overlay into a fresh empty-history session while canonical content stays old', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const cloud = textDocument();
+    const text = cloud.pages[0].objects[0];
+    if (text.type !== 'text') throw new Error('Expected Text object');
+    const record = await recoveryRecord({
+      authorityScopeId: 'user-a',
+      catalogId: A_ID,
+      openSessionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      localEditSequence: 0,
+      baseRemoteRevision: 1,
+      baseRemoteSnapshotDigest: await digestCanonicalDocument(cloud),
+      documentSnapshot: cloud,
+      snapshotDigest: await digestCanonicalDocument(cloud),
+      authoringRecoveryOverlay: {
+        kind: 'TEXT_DRAFT_V1',
+        pageId: cloud.pages[0].id,
+        objectId: text.id,
+        expectedText: text.text,
+        draft: 'Rascunho restaurado depois da queda',
+        compositionWasActive: true,
+      },
+    });
+    await recoveryRepository.putIfNewer(record);
+    const repository = repositoryBase({
+      getCatalog: () => Promise.resolve({ ok: true, value: envelope(cloud) }),
+    });
+    const { runtime } = runtimeFor(repository, cloud, recoveryRepository);
+    const [candidate] = await runtime.recoveryStartup!.discover('user-a');
+
+    expect(candidate?.decision.kind).toBe('RECOVERABLE_OVER_SAME_REMOTE_BASE');
+    expect(await runtime.recover(candidate!)).toBe(true);
+    const recoveredSession = runtime.workspace.getSnapshot().session;
+    expect(recoveredSession.getSnapshot()).toMatchObject({ canUndo: false, canRedo: false });
+    expect(authoredText(recoveredSession.getSnapshot().document)).toBe('Modelo');
+
+    const { container } = render(<VNextApp runtime={runtime} />);
+    await waitFor(() => expect(
+      container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value
+    ).toBe('Rascunho restaurado depois da queda'));
+    expect(authoredText(recoveredSession.getSnapshot().document)).toBe('Modelo');
+    expect(runtime.workspace.captureRecoveryOverlay()).toMatchObject({
+      kind: 'TEXT_DRAFT_V1',
+      draft: 'Rascunho restaurado depois da queda',
+      compositionWasActive: false,
+    });
+  });
+
+  it('offers protected inspection and installs an eligible recovery only after explicit confirmation', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const cloud = textDocument();
+    const local = { ...cloud, title: 'Título local protegido' };
+    const record = await recoveryRecord({
+      authorityScopeId: 'user-a',
+      catalogId: A_ID,
+      openSessionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      baseRemoteRevision: 1,
+      baseRemoteSnapshotDigest: await digestCanonicalDocument(cloud),
+      documentSnapshot: local,
+      snapshotDigest: await digestCanonicalDocument(local),
+    });
+    await recoveryRepository.putIfNewer(record);
+    const repository = repositoryBase({
+      getCatalog: () => Promise.resolve({ ok: true, value: envelope(cloud) }),
+    });
+    const { runtime } = runtimeFor(repository, cloud, recoveryRepository);
+    const view = render(<VNextApp runtime={runtime} />);
+
+    await waitFor(() => expect(view.getByRole('dialog', { name: 'Recuperação local' })).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Inspecionar conteúdo local' }));
+    expect(view.container.querySelector('[data-protected-recovery-inspection] [data-editorial-root]')).toBeTruthy();
+    expect(view.container.textContent).toContain('nenhuma ação salva na nuvem');
+    fireEvent.click(view.getByRole('button', { name: 'Recuperar trabalho local' }));
+
+    await waitFor(() => expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull());
+    expect(runtime.workspace.getSnapshot().session.getSnapshot()).toMatchObject({
+      document: { title: 'Título local protegido' },
+      canUndo: false,
+      canRedo: false,
+    });
+    expect(runtime.workspace.getSnapshot()).toMatchObject({ dirty: true });
   });
 });
 

@@ -81,7 +81,12 @@ export class SessionRecoveryManager {
   private scheduleCurrent(): void {
     const source = this.options.getSource();
     if (!this.ownsActiveScope(source)) return;
-    if (!source.dirty && !source.authoringRecoveryOverlay && !this.pendingRemoteMutation) return;
+    if (
+      !source.dirty
+      && !source.authoringRecoveryOverlay
+      && !this.pendingRemoteMutation
+      && !this.lastWrittenRecord
+    ) return;
     const token = sourceToken(source, this.pendingRemoteMutation);
     if (token === this.lastScheduledToken) return;
     this.lastScheduledToken = token;
@@ -90,6 +95,19 @@ export class SessionRecoveryManager {
 
   private async persist(source: SessionRecoverySource, baseOverride?: CatalogPersistenceEnvelope): Promise<void> {
     if (!this.ownsActiveScope(source)) return;
+    if (!source.dirty && !source.authoringRecoveryOverlay && !this.pendingRemoteMutation) {
+      const written = this.lastWrittenRecord;
+      if (!written) return;
+      const deletion = await this.options.coordinator.deleteIfGeneration(
+        sourceKey(source),
+        written.recoveryGeneration
+      );
+      if (deletion.status === 'DELETED' || deletion.status === 'NOT_FOUND') {
+        this.lastWrittenRecord = undefined;
+      }
+      this.options.onProtectionAvailable?.();
+      return;
+    }
     const baseRemoteSnapshot = baseOverride?.documentSnapshot ?? source.baseRemoteSnapshot;
     const outcome = await this.options.coordinator.write({
       ...sourceKey(source),
