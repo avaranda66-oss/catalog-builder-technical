@@ -1,5 +1,7 @@
 import type { DocumentSession } from '../application';
 import type { CatalogDocument } from '../domain';
+import type { PendingRemoteMutation } from '../recovery/contracts';
+import { digestCanonicalDocument } from '../recovery/digest';
 import type {
   CatalogPersistenceEnvelope,
   CatalogRepository,
@@ -17,7 +19,8 @@ export type SaveFailureCode =
   | 'AUTHORING_BLOCKED'
   | 'SAVE_IN_FLIGHT_NEWER_WORK'
   | 'STALE_RESULT'
-  | 'REMOTE_DIVERGENCE';
+  | 'REMOTE_DIVERGENCE'
+  | 'RECOVERY_UNAVAILABLE';
 
 export type ManualSaveResult =
   | { readonly ok: true; readonly acknowledged: boolean; readonly joined?: boolean }
@@ -26,24 +29,39 @@ export type ManualSaveResult =
       readonly error: { readonly code: SaveFailureCode; readonly message?: string };
     };
 
-interface SaveAttempt {
+interface SaveAttemptBase {
   readonly openSessionId: string;
   readonly authLineage: string;
   readonly session: DocumentSession;
   readonly localSequence: number;
   readonly equivalence: string;
   readonly previousLastMutationId: string;
+  readonly baseRemoteSnapshot: CatalogDocument;
   readonly request: SaveCatalogCasRequest;
 }
+
+interface SaveAttempt extends SaveAttemptBase {
+  readonly baseRemoteSnapshotDigest?: string;
+  readonly pendingRemoteMutation?: PendingRemoteMutation;
+}
 interface SaveFlight {
-  readonly attempt: SaveAttempt;
+  readonly attempt: SaveAttemptBase;
   readonly promise: Promise<ManualSaveResult>;
+}
+
+export interface SaveRecoveryLifecycle {
+  beforeDispatch(pendingRemoteMutation: PendingRemoteMutation): Promise<void>;
+  afterAcknowledged(
+    pendingRemoteMutation: PendingRemoteMutation,
+    envelope: CatalogPersistenceEnvelope
+  ): Promise<void>;
 }
 
 export interface SaveCoordinatorOptions {
   readonly workspace: PersistenceWorkspace;
   readonly repository: CatalogRepository;
   readonly createMutationId: () => string;
+  readonly recoveryLifecycle?: SaveRecoveryLifecycle;
 }
 
 export class SaveCoordinator {
@@ -127,13 +145,14 @@ export class SaveCoordinator {
       return { ok: true, acknowledged: true };
     }
 
-    const attempt: SaveAttempt = {
+    const attempt: SaveAttemptBase = {
       openSessionId: currentBinding.openSessionId,
       authLineage: currentBinding.authLineage,
       session,
       localSequence: afterBarrier.localSequence,
       equivalence,
       previousLastMutationId: currentBinding.lastMutationId,
+      baseRemoteSnapshot: currentBinding.acknowledgedSnapshot,
       request: {
         mutationId: this.options.createMutationId(),
         catalogId: currentBinding.catalogId,
@@ -143,7 +162,7 @@ export class SaveCoordinator {
     };
 
     this.options.workspace.setPhase('saving');
-    const promise = this.dispatchAttempt(attempt);
+    const promise = this.prepareAndDispatchAttempt(attempt);
     const flight: SaveFlight = { attempt, promise };
     this.flight = flight;
     try {
@@ -153,7 +172,7 @@ export class SaveCoordinator {
     }
   }
 
-  private isCurrent(attempt: SaveAttempt): boolean {
+  private isCurrent(attempt: SaveAttemptBase): boolean {
     const snapshot = this.options.workspace.getSnapshot();
     return snapshot.session === attempt.session
       && this.options.workspace.matches(attempt.openSessionId, attempt.authLineage);
@@ -174,10 +193,10 @@ export class SaveCoordinator {
     return { ...attempt, authLineage: binding.authLineage };
   }
 
-  private acceptEnvelope(
+  private async acceptEnvelope(
     attempt: SaveAttempt,
     input: CatalogPersistenceEnvelope
-  ): ManualSaveResult {
+  ): Promise<ManualSaveResult> {
     if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
     let envelope: CatalogPersistenceEnvelope;
     try {
@@ -200,12 +219,26 @@ export class SaveCoordinator {
       return { ok: false, error: { code: 'REMOTE_DIVERGENCE' } };
     }
     this.ambiguousAttempt = undefined;
-    this.options.workspace.acknowledge(
+    if (this.options.recoveryLifecycle && attempt.pendingRemoteMutation) {
+      try {
+        await this.options.recoveryLifecycle.afterAcknowledged(
+          attempt.pendingRemoteMutation,
+          envelope
+        );
+      } catch (error) {
+        this.options.workspace.setLocalProtectionUnavailable(
+          error instanceof Error ? error.message : 'Proteção local indisponível.'
+        );
+      }
+    }
+    if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    const acknowledged = this.options.workspace.acknowledge(
       attempt.openSessionId,
       attempt.authLineage,
       envelope,
       attempt.localSequence
     );
+    if (!acknowledged) return { ok: false, error: { code: 'STALE_RESULT' } };
     return { ok: true, acknowledged: true };
   }
 
@@ -224,6 +257,41 @@ export class SaveCoordinator {
       this.options.workspace.setPhase('blocked', message);
     }
     return { ok: false, error: { code, ...(message ? { message } : {}) } };
+  }
+
+  private async prepareAndDispatchAttempt(attempt: SaveAttemptBase): Promise<ManualSaveResult> {
+    if (!this.options.recoveryLifecycle) return this.dispatchAttempt(attempt);
+    const [baseRemoteSnapshotDigest, attemptDigest] = await Promise.all([
+      digestCanonicalDocument(attempt.baseRemoteSnapshot),
+      digestCanonicalDocument(attempt.request.documentSnapshot),
+    ]);
+    const prepared: SaveAttempt = {
+      ...attempt,
+      baseRemoteSnapshotDigest,
+      pendingRemoteMutation: {
+        mutationId: attempt.request.mutationId,
+        catalogId: attempt.request.catalogId,
+        expectedRemoteRevision: attempt.request.expectedRemoteRevision,
+        previousLastMutationId: attempt.previousLastMutationId,
+        capturedLocalEditSequence: attempt.localSequence,
+        attemptedDocumentSnapshot: attempt.request.documentSnapshot,
+        attemptDigestAlgorithm: 'SHA-256',
+        attemptDigest,
+      },
+    };
+    if (!this.isCurrent(prepared)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    try {
+      await this.options.recoveryLifecycle.beforeDispatch(prepared.pendingRemoteMutation!);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Proteção local indisponível.';
+      this.options.workspace.setLocalProtectionUnavailable(
+        message
+      );
+      this.options.workspace.setPhase('blocked', message);
+      return { ok: false, error: { code: 'RECOVERY_UNAVAILABLE', message } };
+    }
+    if (!this.isCurrent(prepared)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    return this.dispatchAttempt(prepared);
   }
 
   private async dispatchAttempt(attempt: SaveAttempt): Promise<ManualSaveResult> {
@@ -311,6 +379,21 @@ export class SaveCoordinator {
         'Authoritative state diverged while reconciling save'
       );
       return { ok: false, error: { code: 'CONFLICT' } };
+    }
+
+    const [authoritativeDigest, expectedBaseDigest] = await Promise.all([
+      digestCanonicalDocument(authoritative.documentSnapshot),
+      attempt.baseRemoteSnapshotDigest
+        ? Promise.resolve(attempt.baseRemoteSnapshotDigest)
+        : digestCanonicalDocument(attempt.baseRemoteSnapshot),
+    ]);
+    if (authoritativeDigest !== expectedBaseDigest) {
+      this.ambiguousAttempt = undefined;
+      this.options.workspace.setPhase(
+        'conflict',
+        'Authoritative state digest does not match the captured remote base'
+      );
+      return { ok: false, error: { code: 'REMOTE_DIVERGENCE' } };
     }
 
     let replay: PersistenceResult<CatalogPersistenceEnvelope>;

@@ -113,6 +113,10 @@ export class RecoveryCoordinator {
     return this.options.repository.listByScope(authorityScopeId);
   }
 
+  deleteIfGeneration(key: RecoveryKey, expectedGeneration: number) {
+    return this.serialize(key, () => this.options.repository.deleteIfGeneration(key, expectedGeneration));
+  }
+
   async compare(inspection: RecoveryInspection | undefined, remote: RemoteRecoveryState): Promise<RecoveryDecision> {
     return decideRecovery(inspection, remote, this.options.digestBytes);
   }

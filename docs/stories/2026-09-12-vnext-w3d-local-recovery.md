@@ -167,7 +167,7 @@ Use `rg --files`, symbol/text search, and focused reads against the actual repos
 - [x] Recon and API freeze: perform the mandated discovery; map contracts and non-overlapping file leases; synchronize this story's File List before implementation.
 - [x] Define pure strict recovery types, validation, canonical SHA-256 digest derivation, generation-conditional operations, and remote-comparison decisions without a second document authority.
 - [x] Build the IndexedDB adapter and transaction-completion/error behavior, including shared-storage test support and no-fallback enforcement.
-- [ ] Integrate scheduling and recovery lifecycle below React with the existing session/workspace/save authority; preserve S1/L2 and ambiguous mutation rules.
+- [x] Integrate scheduling and recovery lifecycle below React with the existing session/workspace/save authority; preserve S1/L2 and ambiguous mutation rules.
 - [ ] Integrate typed visible-draft overlays only through discovered authoring barriers; inventory all visible ephemeral surfaces and escalate uncovered loss paths.
 - [ ] Integrate recovery discovery, Father UX, protected inspection, exact discard, and same-profile auth scope behavior without normal remote overwrite/copy implementation.
 - [ ] Implement R01–R26 and DRAFT-01–05 focused deterministic/application/adapter/race tests with explicit claim/oracle mapping.
@@ -194,6 +194,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | 2026-09-12 | 0.2.0 | Development started under root authority; Lane B Recovery Core lease activated. | @dev |
 | 2026-09-13 | 0.3.0 | Recovery core contracts, repository, decisions, coordinator, and scheduler implemented with focused evidence. | @dev |
 | 2026-09-13 | 0.4.0 | Dedicated IndexedDB adapter implemented and proven in real Chromium. | @dev |
+| 2026-09-13 | 0.5.0 | Recovery scheduling and W3.C Save lifecycle integrated with exact preflight durability, S1/L2 rebasing, ambiguity preservation, and digest-guarded replay. | @dev |
 
 ## CodeRabbit Integration
 
@@ -233,6 +234,7 @@ No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were us
 - End-to-end lifecycle, crash/restart, visible-draft, and same-profile browser claims remain unproven and unchecked.
 - Added the dedicated `catalog_builder_vnext_recovery` IndexedDB adapter with strict transaction completion, atomic generation ordering, conditional delete, scope index, typed failures, and corrupt-record preservation.
 - Phase-2 evidence: 4 recovery test files / 16 tests PASS; typecheck and focused ESLint PASS; real Chromium adapter proof PASS with fresh-connection readback, schema/version creation, concurrent G2 protection, aborted G3 preserving G2, per-tab/per-user scope enumeration, and corrupt delete preservation. Quota behavior is an explicitly injected typed-boundary oracle; no physical quota exhaustion is claimed.
+- Phase-3 evidence: the runtime now owns a session recovery manager below React; first-dirty/debounced scheduling, exact pending-mutation preflight, no remote dispatch after failed local preflight, S1/L2 rebasing, generation-conditional cleanup, immutable record scope, exact ambiguous payload retention, and same-revision digest rejection are covered by 6 focused lifecycle tests. Combined recovery/lifecycle scope: 6 files / 40 tests PASS; typecheck and focused ESLint PASS; `git diff --check` PASS.
 
 ## File list
 
@@ -245,6 +247,12 @@ No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were us
 - `src/vnext/recovery/indexeddb-repository.ts`
 - `src/vnext/recovery/repository.ts`
 - `src/vnext/recovery/scheduler.ts`
+- `src/vnext/recovery/session-manager.ts`
+- `src/vnext/persistence/reopen-coordinator.ts`
+- `src/vnext/persistence/runtime.ts`
+- `src/vnext/persistence/save-coordinator.ts`
+- `src/vnext/persistence/workspace.ts`
+- `tests/vnext/persistence/recovery-lifecycle.test.ts`
 - `tests/vnext/recovery/fixtures.ts`
 - `tests/vnext/recovery/recovery-contracts.test.ts`
 - `tests/vnext/recovery/recovery-coordinator.test.ts`

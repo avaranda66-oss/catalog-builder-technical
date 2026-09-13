@@ -5,3 +5,4 @@ export * from './digest';
 export * from './indexeddb-repository';
 export * from './repository';
 export * from './scheduler';
+export * from './session-manager';
