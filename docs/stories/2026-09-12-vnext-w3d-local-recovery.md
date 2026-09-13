@@ -1,6 +1,6 @@
 # W3.D — Local Crash Recovery
 
-Status: **InProgress**
+Status: **Ready for Review**
 
 Date: 2026-09-12
 
@@ -86,25 +86,25 @@ The Father can edit a catalog, suffer a browser/tab/computer failure, return, di
 
 ## Acceptance criteria
 
-- [ ] W3.D uses the existing VNext persistence/session authority below React and preserves W3.0–W3.C contracts, including canonical `CatalogDocument` sole authority and W2.G authoring semantics.
-- [ ] IndexedDB is the only recovery store and has a dedicated VNext database; no Legacy authority, localStorage fallback, OPFS requirement, DOM/React serialization, or Undo serialization exists.
-- [ ] Strict validated records and keys implement exact authority scope, catalog, and session isolation; corrupt/unknown/unsupported records fail closed and remain preserved.
-- [ ] SHA-256 digests cover deterministic canonical persistence representation; unexpected equal-revision digest mismatch does not auto-install recovery.
-- [ ] Recovery generations prevent stale overwrite and exact generation-conditional cleanup prevents stale deletion.
-- [ ] Scheduling has first-dirty leading persistence, 750 ms trailing debounce, 3000 ms maximum wait, latest-state coalescing, and per-key serialization, all deterministically proven with a fake clock.
-- [ ] IDB durability proof observes transaction completion and proves abort/quota/later-write preservation/version creation/shared-storage behavior.
-- [ ] A typed, target- and expected-source-qualified visible-draft overlay preserves recoverable Father-visible work without canonical keystroke mutation or generic UI capture.
-- [ ] Recovery installs a validated canonical snapshot into a fresh `DocumentSession`, with empty Undo/Redo and a new `openSessionId`; compatible overlays are restored ephemerally only.
-- [ ] Recovery text cancel is canonical no-op; confirmation is one `text.setContent` and one Undo; IME recovery remains noncanonical; stale expected source is not auto-applied.
-- [ ] Exact pending remote mutations survive restart and use only W3.C same-mutation-id/same-payload replay or authoritative proof; no guessed mutation identity, revision, `Saved`, or overwrite occurs.
-- [ ] Pre-dispatch exact recovery flush, S1/L2 continued recovery, ACK-vs-newer-L2 protection, exact ACK-covered cleanup, and ambiguous dispatch preservation are proven.
-- [ ] The typed comparison layer decides before installation and covers no recovery, redundant, same-base recoverable, remote conflict, same-revision digest mismatch, unavailable remote, and invalid/unsupported record.
-- [ ] Remote-newer/different and remote-unavailable paths retain local work, never overwrite cloud, and provide only safe Father choices/protected inspection.
-- [ ] Two same-profile tabs produce distinct session IDs and recovery records with no timestamp authority or overwrite.
-- [ ] Same-profile A→B→A authentication proves B cannot enumerate/open/delete A records, A recovery survives logout, A sees it on return, and explicit discard touches only the exact authenticated scoped record.
-- [ ] UI uses Father language, never equates local protection/recovery with `Saved`, and never exposes implementation terminology.
-- [ ] Recovery retention has no age expiry and is removed only by authoritative redundancy plus conditional cleanup or exact authenticated user discard.
-- [ ] The story checklist, task checkboxes, file list, claim-to-oracle evidence packet, and implementation/evidence notes are synchronized by the implementing developer.
+- [x] W3.D uses the existing VNext persistence/session authority below React and preserves W3.0–W3.C contracts, including canonical `CatalogDocument` sole authority and W2.G authoring semantics.
+- [x] IndexedDB is the only recovery store and has a dedicated VNext database; no Legacy authority, localStorage fallback, OPFS requirement, DOM/React serialization, or Undo serialization exists.
+- [x] Strict validated records and keys implement exact authority scope, catalog, and session isolation; corrupt/unknown/unsupported records fail closed and remain preserved.
+- [x] SHA-256 digests cover deterministic canonical persistence representation; unexpected equal-revision digest mismatch does not auto-install recovery.
+- [x] Recovery generations prevent stale overwrite and exact generation-conditional cleanup prevents stale deletion.
+- [x] Scheduling has first-dirty leading persistence, 750 ms trailing debounce, 3000 ms maximum wait, latest-state coalescing, and per-key serialization, all deterministically proven with a fake clock.
+- [x] IDB durability proof observes transaction completion and proves abort/quota/later-write preservation/version creation/shared-storage behavior.
+- [x] A typed, target- and expected-source-qualified visible-draft overlay preserves recoverable Father-visible work without canonical keystroke mutation or generic UI capture.
+- [x] Recovery installs a validated canonical snapshot into a fresh `DocumentSession`, with empty Undo/Redo and a new `openSessionId`; compatible overlays are restored ephemerally only.
+- [x] Recovery text cancel is canonical no-op; confirmation is one `text.setContent` and one Undo; IME recovery remains noncanonical; stale expected source is not auto-applied.
+- [x] Exact pending remote mutations survive restart and use only W3.C same-mutation-id/same-payload replay or authoritative proof; no guessed mutation identity, revision, `Saved`, or overwrite occurs.
+- [x] Pre-dispatch exact recovery flush, S1/L2 continued recovery, ACK-vs-newer-L2 protection, exact ACK-covered cleanup, and ambiguous dispatch preservation are proven.
+- [x] The typed comparison layer decides before installation and covers no recovery, redundant, same-base recoverable, remote conflict, same-revision digest mismatch, unavailable remote, and invalid/unsupported record.
+- [x] Remote-newer/different and remote-unavailable paths retain local work, never overwrite cloud, and provide only safe Father choices/protected inspection.
+- [x] Two same-profile tabs produce distinct session IDs and recovery records with no timestamp authority or overwrite.
+- [x] Same-profile A→B→A authentication proves B cannot enumerate/open/delete A records, A recovery survives logout, A sees it on return, and explicit discard touches only the exact authenticated scoped record.
+- [x] UI uses Father language, never equates local protection/recovery with `Saved`, and never exposes implementation terminology.
+- [x] Recovery retention has no age expiry and is removed only by authoritative redundancy plus conditional cleanup or exact authenticated user discard.
+- [x] The story checklist, task checkboxes, file list, claim-to-oracle evidence packet, and implementation/evidence notes are synchronized by the implementing developer.
 
 ## Mandatory deterministic recovery matrix
 
@@ -137,24 +137,24 @@ The Father can edit a catalog, suffer a browser/tab/computer failure, return, di
 
 ## Mandatory visible-draft tests
 
-- [ ] DRAFT-01 — visible Text draft → recovery → crash → accepted recovery: canonical old text remains and the draft restores visibly.
-- [ ] DRAFT-02 — cancelling a recovered draft retains canonical old text and creates no Undo entry.
-- [ ] DRAFT-03 — confirming a recovered draft dispatches one `text.setContent`, creates one Undo unit, and produces the confirmed content.
-- [ ] DRAFT-04 — IME crash recovery preserves intent as noncanonical draft work.
-- [ ] DRAFT-05 — stale expected source does not auto-apply.
+- [x] DRAFT-01 — visible Text draft → recovery → crash → accepted recovery: canonical old text remains and the draft restores visibly.
+- [x] DRAFT-02 — cancelling a recovered draft retains canonical old text and creates no Undo entry.
+- [x] DRAFT-03 — confirming a recovered draft dispatches one `text.setContent`, creates one Undo unit, and produces the confirmed content.
+- [x] DRAFT-04 — IME crash recovery preserves intent as noncanonical draft work.
+- [x] DRAFT-05 — stale expected source does not auto-apply.
 
 ## Mandatory physical Chromium/Playwright shared-storage browser proofs
 
 Unit tests alone are insufficient. Run real Chromium/Playwright evidence against one persisted browser profile/storage location. Every proof records scenario execution, a directly asserted intermediate durability/isolation condition, and postconditions; fixed sleeps, close actions, inspected PASS text, isolated browser contexts, or uninspected records are not proof.
 
-- [ ] A — Hard crash/restart: edit; prove IndexedDB transaction completion; hard-close page/browser; reopen the same storage; discover and remotely compare recovery; accept it; prove restored state has fresh Undo/Redo and can continue editing.
-- [ ] B — Visible noncanonical Text draft crash: canonical A; visibly type B without confirmation; prove typed overlay transaction completion; hard-close/reopen same storage; accept recovery; prove canonical remains A and draft B is visible; confirm; prove exactly one canonical action and content B.
-- [ ] C — Save dispatch/recovery race: prove exact pre-Save persistence, allow S1 in flight and L2 editing/recovery, acknowledge S1, and inspect that L2's newer recovery survives rather than being stale-cleaned.
-- [ ] D — Pending-mutation restart reconciliation: physically preserve a dispatched/no-ACK pending mutation, restart with same storage, fetch remote first, and prove `lastMutationId` matching commits only that captured mutation with no false `Saved` beforehand.
-- [ ] E — Exact replay identity/payload: physically restart from an exact expected remote base after ambiguous dispatch and prove replay uses the original mutation identity and payload, never a new identity; prove divergent remote becomes conflict instead.
-- [ ] F — Two tabs: same browser profile/storage and same catalog in two tabs; prove two `openSessionId`s and two inspected records; neither record overwrites the other and no timestamp winner/merge occurs.
-- [ ] G — Same-profile auth scope: A writes recovery; B logs in through the same storage and cannot enumerate/open/delete A; A returns and sees its recovery. Isolated contexts with separate storage are prohibited evidence.
-- [ ] H — Fail-closed recovery choices: physically prove same-revision/digest mismatch and newer/different remote do not install/overwrite; prove remote-unavailable exposes only clearly local protected inspection and no remote Save/fake binding.
+- [x] A — Hard crash/restart: edit; prove IndexedDB transaction completion; hard-close page/browser; reopen the same storage; discover and remotely compare recovery; accept it; prove restored state has fresh Undo/Redo and can continue editing.
+- [x] B — Visible noncanonical Text draft crash: canonical A; visibly type B without confirmation; prove typed overlay transaction completion; hard-close/reopen same storage; accept recovery; prove canonical remains A and draft B is visible; confirm; prove exactly one canonical action and content B.
+- [x] C — Save dispatch/recovery race: prove exact pre-Save persistence, allow S1 in flight and L2 editing/recovery, acknowledge S1, and inspect that L2's newer recovery survives rather than being stale-cleaned.
+- [x] D — Pending-mutation restart reconciliation: physically preserve a dispatched/no-ACK pending mutation, restart with same storage, fetch remote first, and prove `lastMutationId` matching commits only that captured mutation with no false `Saved` beforehand.
+- [x] E — Exact replay identity/payload: physically restart from an exact expected remote base after ambiguous dispatch and prove replay uses the original mutation identity and payload, never a new identity; prove divergent remote becomes conflict instead.
+- [x] F — Two tabs: same browser profile/storage and same catalog in two tabs; prove two `openSessionId`s and two inspected records; neither record overwrites the other and no timestamp winner/merge occurs.
+- [x] G — Same-profile auth scope: A writes recovery; B logs in through the same storage and cannot enumerate/open/delete A; A returns and sees its recovery. Isolated contexts with separate storage are prohibited evidence.
+- [x] H — Fail-closed recovery choices: physically prove same-revision/digest mismatch and newer/different remote do not install/overwrite; prove remote-unavailable exposes only clearly local protected inspection and no remote Save/fake binding.
 
 ## Developer file-discovery mandate
 
@@ -170,10 +170,10 @@ Use `rg --files`, symbol/text search, and focused reads against the actual repos
 - [x] Integrate scheduling and recovery lifecycle below React with the existing session/workspace/save authority; preserve S1/L2 and ambiguous mutation rules.
 - [x] Integrate typed visible-draft overlays only through discovered authoring barriers; inventory all visible ephemeral surfaces and escalate uncovered loss paths.
 - [x] Integrate recovery discovery, Father UX, protected inspection, exact discard, and same-profile auth scope behavior without normal remote overwrite/copy implementation.
-- [ ] Implement R01–R26 and DRAFT-01–05 focused deterministic/application/adapter/race tests with explicit claim/oracle mapping.
-- [ ] Implement and run physical Chromium proofs A–H with durable evidence artifacts; verify intermediate conditions directly.
-- [ ] Run independent adversarial review for stale generation, stale cleanup, malformed records, digest mismatch, replay identity/payload drift, user/tab isolation, false `Saved`, and future-wave leakage.
-- [ ] Update every completed checkbox, the Dev Agent Record, File List, validation results, browser artifacts, claim matrix, known limitations, and evidence packet; then run required repository gates.
+- [x] Implement R01–R26 and DRAFT-01–05 focused deterministic/application/adapter/race tests with explicit claim/oracle mapping.
+- [x] Implement and run physical Chromium proofs A–H with durable evidence artifacts; verify intermediate conditions directly.
+- [x] Run independent adversarial review for stale generation, stale cleanup, malformed records, digest mismatch, replay identity/payload drift, user/tab isolation, false `Saved`, and future-wave leakage.
+- [x] Update every completed checkbox, the Dev Agent Record, File List, validation results, browser artifacts, claim matrix, known limitations, and evidence packet; then run required repository gates.
 
 ## Governance, scope guard, and stop conditions
 
@@ -196,6 +196,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | 2026-09-13 | 0.4.0 | Dedicated IndexedDB adapter implemented and proven in real Chromium. | @dev |
 | 2026-09-13 | 0.5.0 | W3.C lifecycle, typed draft overlays, startup decisions, protected Father UX, and auth-scoped production persistence integrated. | @dev |
 | 2026-09-13 | 0.5.0 | Recovery scheduling and W3.C Save lifecycle integrated with exact preflight durability, S1/L2 rebasing, ambiguity preservation, and digest-guarded replay. | @dev |
+| 2026-09-13 | 0.6.0 | Physical Chromium A–H evidence, full gates, canonical Father copy, and adversarial candidate audit completed. | @dev |
 
 ## CodeRabbit Integration
 
@@ -224,23 +225,51 @@ GPT-5 Codex root agent (single-root continuation).
 
 ### Debug log references
 
-No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were used directly.
+Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the consolidated durable result is `docs/qa/evidence/vnext-w3d/physical-proof-result.json`.
 
 ### Completion notes
 
-- Inherited from the interrupted orchestration: the complete W3.D story only. No partial recovery production/test files existed.
+- This continuation inherited completed production phases and a category-B physical-proof harness. The harness was preserved, split into sequential A–H scenarios, and hardened so only spawned Chromium processes are terminated, profile release waits are bounded, failed profiles/logs are retained, and cleanup cannot become a correctness oracle.
 - Frozen seams used: W3.A `serializeCanonicalSnapshot`, W3.C `DocumentSession` factory/session authority, and `CatalogPersistenceEnvelope` remote comparison.
 - Added strict v1 records, exact tuple keys, SHA-256 validation, typed Text/Inspector overlays, exact pending mutation capture, generation-conditional in-memory semantics, seven-way remote decisions, fresh-session acceptance, and recovery scheduling.
 - Phase-1 evidence: 3 focused test files / 13 tests PASS; typecheck PASS; focused ESLint PASS; `git diff --check` PASS.
-- Physical crash/restart, visible-draft crash, and same-profile browser claims remain unproven and unchecked.
 - Added the dedicated `catalog_builder_vnext_recovery` IndexedDB adapter with strict transaction completion, atomic generation ordering, conditional delete, scope index, typed failures, and corrupt-record preservation.
 - Phase-2 evidence: 4 recovery test files / 16 tests PASS; typecheck and focused ESLint PASS; real Chromium adapter proof PASS with fresh-connection readback, schema/version creation, concurrent G2 protection, aborted G3 preserving G2, per-tab/per-user scope enumeration, and corrupt delete preservation. Quota behavior is an explicitly injected typed-boundary oracle; no physical quota exhaustion is claimed.
-- Phase-3/5 focused evidence: exact pre-dispatch pending-mutation commit, S1/L2 rebase, conditional cleanup, ambiguous restart proof/replay, same-revision digest guard, Undo cleanup, scoped discovery, fresh-session recovery, Text/Inspector overlay capture/restore, protected inspection, and explicit two-step discard are green. Physical crash/restart proofs remain unchecked.
+- Phase-3/5 focused evidence: exact pre-dispatch pending-mutation commit, S1/L2 rebase, conditional cleanup, ambiguous restart proof/replay, same-revision digest guard, Undo cleanup, scoped discovery, fresh-session recovery, Text/Inspector overlay capture/restore, protected inspection, and explicit two-step discard are green.
 - Phase-3 evidence: the runtime now owns a session recovery manager below React; first-dirty/debounced scheduling, exact pending-mutation preflight, no remote dispatch after failed local preflight, S1/L2 rebasing, generation-conditional cleanup, immutable record scope, exact ambiguous payload retention, same-revision digest rejection, and Undo redundancy cleanup are covered by 7 focused lifecycle tests.
+- Physical A–H evidence PASS in Chromium `151.0.7922.34`. A fresh IndexedDB connection observed committed records before each hard kill; restart reused the same profile. Text Cancel produced zero canonical actions, Confirm produced one action/Undo unit, S1 ACK preserved L2, pending mutation proof/replay retained exact identity and payload, two tabs produced two records, B was denied A enumerate/open/delete, and mismatch/newer/unavailable paths failed closed.
+- The full repository gate passed after correcting a browser-adapter reachability defect caught by `architecture-boundary.test.ts`: lint (zero errors; existing warnings only), typecheck, 225 test files / 2,419 passed / 1 skipped, build, and `git diff --check`.
+- Existing VNext Chromium/native-PDF proofs all PASS: W2.C direct manipulation, W2.F groups, W2.D snapping/diagnostics, W2.E template insertion, W2.G Text, W2.A export/native PDF, W2.F group export/PDF, W3.C Save/Reopen, and the W3.D IndexedDB adapter.
+- Root adversarial audit found and fixed two candidate defects: pure persistence graph reachability (`e1dc011`) and noncanonical Father recovery labels (`66aa64e`). No stale generation/cleanup, malformed-record deletion, digest bypass, replay drift, user/tab collision, false `Saved`, or W3.E+ leakage remained.
+
+### Evidence packet
+
+- JOB: `W3.D`
+- Canonical base SHA/tree: `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` / `d08158a1c2f3e0e10c6812008e1356322815d81f`
+- Tested implementation SHA/tree: `66aa64efe91bcb8540bcab1b399ae35a3236e2c9` / `c26acc9a9c399e441f42b505a05f8545d9d52f57`
+- Branch: `feat/vnext-w3d-local-recovery`
+- PR / exact-head CI: to be populated by the Constitution-authorized DevOps push/PR step; no merge authorized.
+- Not proven: physical browser quota exhaustion. Quota mapping/no-fallback and prior-record preservation are proven at the injected IndexedDB failure boundary. Whole-machine power loss is not claimed; OS-level Chromium process termination and same-profile restart are proven.
+- Known limitations: recovery intentionally has no cross-tab merge/winner, cloud overwrite, save-as-copy, autosave, realtime coordination, or W3.E+ behavior.
+
+| Claim | Oracle | Evidence | Result |
+| --- | --- | --- | --- |
+| R01–R05 strict records, scheduling, ordering, abort/quota behavior | Parsed records, fake clock, generation/CAS results, preserved prior record | `tests/vnext/recovery/*`, W3.D IndexedDB adapter proof | PASS |
+| R06–R15 Save lifecycle and ambiguity | Exact pre-dispatch record, S1/L2 generations, ACK cleanup result, exact mutation/digest comparison | `tests/vnext/persistence/recovery-lifecycle.test.ts`, `tests/vnext/recovery/recovery-startup.test.ts` | PASS |
+| R16–R26 isolation, fresh session, corruption, fail-closed decisions | Scoped inspected records, conditional delete, new session identity/history, decision kind | Recovery focused tests and physical F–H | PASS |
+| DRAFT-01–05 Text/Inspector overlays | Canonical snapshot remains old, visible typed overlay restored, sequence/Undo delta, expected-source guard | `tests/vnext/application/w3c-editor-persistence.test.tsx`, physical B | PASS |
+| A hard crash/restart | Fresh-connection transaction read before OS kill; same profile; new session ID/history | `docs/qa/evidence/vnext-w3d/physical-proof-result.json` A | PASS |
+| B visible draft crash | Fresh-connection overlay read; two hard-crash paths; Cancel 0 / Confirm 1 canonical action | Same evidence B | PASS |
+| C ACK S1 cannot erase L2 | Record inspected before dispatch, after L2, and after ACK/rebase | Same evidence C | PASS |
+| D–E pending mutation durability/reconciliation | Restarted record identity/payload, no false Saved, remote proof or exact replay only | Same evidence D–E | PASS |
+| F–G shared-storage tab/user isolation | One persistent context/storage, actual records, foreign operations denied, A returns | Same evidence F–G | PASS |
+| H mismatch/newer/unavailable fail closed | No recovery action, cloud state retained, UNBOUND protected canonical renderer | Same evidence H | PASS |
+| Repository and existing proof gates | Command exit status and asserted proof outputs | lint, typecheck, full Vitest, build, diff-check, VNext Chromium/PDF suite | PASS |
 
 ## File list
 
 - `docs/stories/2026-09-12-vnext-w3d-local-recovery.md`
+- `docs/qa/evidence/vnext-w3d/physical-proof-result.json`
 - `src/vnext/recovery/contracts.ts`
 - `src/vnext/recovery/coordinator.ts`
 - `src/vnext/recovery/decision.ts`
@@ -269,4 +298,7 @@ No debug log. Focused Vitest, TypeScript, ESLint, and `git diff --check` were us
 - `tests/vnext/recovery/recovery-indexeddb.test.ts`
 - `tests/vnext/recovery/recovery-scheduler.test.ts`
 - `tests/vnext/proof/fixtures/w3d-indexeddb.html`
+- `tests/vnext/proof/fixtures/w3d-browser.html`
+- `tests/vnext/proof/fixtures/w3d-browser.tsx`
 - `tests/vnext/proof/w3d-indexeddb-adapter-proof.mjs`
+- `tests/vnext/proof/w3d-physical-recovery-proof.mjs`
