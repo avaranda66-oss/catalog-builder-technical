@@ -99,6 +99,12 @@ export function RecoveryCenter({
         const pending = candidate.inspection.status === 'VALID'
           ? candidate.inspection.record.pendingRemoteMutation
           : undefined;
+        if (pending) {
+          runtime.workspace.setPhase(
+            'ambiguous',
+            'Há uma gravação anterior que ainda precisa ser verificada.'
+          );
+        }
         if (candidate.decision.kind === 'REDUNDANT_ALREADY_IN_CLOUD' && !pending) {
           if (runtime.workspace.getSnapshot().activeAuthorityScopeId !== authorityScopeId) return;
           await startup.discard(candidate, authorityScopeId);
