@@ -189,9 +189,20 @@ export function RecoveryCenter({
       setConfirmDiscardId(candidate.id);
       return;
     }
-    const result = await runtime.recoveryStartup?.discard(candidate, authorityScopeId);
-    if (result?.status === 'DELETED' || result?.status === 'NOT_FOUND') remove(candidate.id);
-    else setMessage('O registro não foi descartado porque mudou ou é inválido.');
+    try {
+      const result = await runtime.recoveryStartup?.discard(candidate, authorityScopeId);
+      if (result?.status === 'DELETED' || result?.status === 'NOT_FOUND') {
+        remove(candidate.id);
+        return;
+      }
+      await refresh();
+      setMessage(result?.status === 'VALID_PRESERVED'
+        ? 'O registro mudou e foi verificado novamente. Escolha uma opção segura para continuar.'
+        : 'O registro mudou e não foi descartado. Verifique-o novamente.');
+    } catch {
+      await refresh();
+      setMessage('Não foi possível descartar a recuperação local. Tente novamente.');
+    }
   };
 
   const continueWithoutRecovery = () => {
@@ -256,11 +267,9 @@ export function RecoveryCenter({
                 <button type="button" onClick={() => setInspectionId(
                   inspectionId === candidate.id ? undefined : candidate.id
                 )}>Ver alterações recuperadas</button>
-                {valid && (
-                  <button type="button" onClick={() => void discard(candidate)}>
-                    {confirmDiscardId === candidate.id ? 'Confirmar descarte local' : 'Descartar recuperação local'}
-                  </button>
-                )}
+                <button type="button" onClick={() => void discard(candidate)}>
+                  {confirmDiscardId === candidate.id ? 'Confirmar descarte local' : 'Descartar recuperação local'}
+                </button>
               </div>
               {inspectionId === candidate.id && (
                 <ProtectedRecoveryInspection candidate={candidate} />

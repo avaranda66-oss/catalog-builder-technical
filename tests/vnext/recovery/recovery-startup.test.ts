@@ -103,6 +103,49 @@ describe('W3.D restart pending-mutation reconciliation', () => {
     expect(await controller.discover(AUTHORITY_SCOPE_ID)).toHaveLength(1);
   });
 
+  it('INVALID-ESCAPE-04 rejects foreign-authority invalid discard', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord();
+    recoveryRepository.seedRaw(recoveryKeyOf(record), { corrupt: true });
+    const controller = startup(recoveryRepository, repositoryBase({}));
+    const [candidate] = await controller.discover(AUTHORITY_SCOPE_ID);
+
+    await expect(controller.discard(candidate!, 'deployment:workspace:user-b')).rejects.toThrow(
+      'Foreign authority scope'
+    );
+    expect((await recoveryRepository.get(recoveryKeyOf(record)))?.status).toBe('INVALID');
+  });
+
+  it('INVALID-ESCAPE-05 revalidates and preserves a valid current replacement', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord();
+    const key = recoveryKeyOf(record);
+    recoveryRepository.seedRaw(key, { corrupt: true });
+    const controller = startup(recoveryRepository, repositoryBase({}));
+    const [candidate] = await controller.discover(AUTHORITY_SCOPE_ID);
+    recoveryRepository.seedRaw(key, record);
+
+    expect(await controller.discard(candidate!, AUTHORITY_SCOPE_ID)).toEqual({ status: 'VALID_PRESERVED' });
+    expect((await recoveryRepository.get(key))?.status).toBe('VALID');
+  });
+
+  it('INVALID-ESCAPE-08 explicitly deletes an unsupported version only after discard', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord();
+    const key = recoveryKeyOf(record);
+    recoveryRepository.seedRaw(key, { ...record, recordFormatVersion: 2 });
+    const controller = startup(recoveryRepository, repositoryBase({}));
+    const [candidate] = await controller.discover(AUTHORITY_SCOPE_ID);
+
+    expect(candidate).toMatchObject({
+      inspection: { status: 'INVALID', error: { code: 'UNSUPPORTED_RECORD_VERSION' } },
+      decision: { kind: 'INVALID_OR_UNSUPPORTED_RECORD' },
+    });
+    expect((await recoveryRepository.get(key))?.status).toBe('INVALID');
+    expect(await controller.discard(candidate!, AUTHORITY_SCOPE_ID)).toEqual({ status: 'DELETED' });
+    expect(await recoveryRepository.get(key)).toBeUndefined();
+  });
+
   it('replays only the persisted mutation identity and exact payload against its proven base', async () => {
     const recoveryRepository = new InMemoryRecoveryRepository();
     const record = await pendingRecord();

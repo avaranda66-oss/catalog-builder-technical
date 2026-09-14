@@ -74,6 +74,10 @@ class GatedRecoveryRepository implements RecoveryRepository {
   deleteIfGeneration(key: RecoveryKey, expectedGeneration: number): Promise<RecoveryDeleteResult> {
     return this.delegate.deleteIfGeneration(key, expectedGeneration);
   }
+
+  deleteInvalidIfStillInvalid(key: RecoveryKey): Promise<RecoveryDeleteResult> {
+    return this.delegate.deleteInvalidIfStillInvalid(key);
+  }
 }
 
 function unavailable<T>(): Promise<PersistenceResult<T>> {
@@ -490,6 +494,7 @@ describe('W3.D startup recovery race defense', () => {
       get: (key) => memory.get(key),
       listByScope: (scope) => scope === AUTHORITY_A ? pendingA.promise : memory.listByScope(scope),
       deleteIfGeneration,
+      deleteInvalidIfStillInvalid: (key) => memory.deleteInvalidIfStillInvalid(key),
     };
     const { runtime } = makeRuntime(recoveryRepository);
     const view = render(<VNextApp runtime={runtime} />);
@@ -524,5 +529,103 @@ describe('W3.D startup recovery race defense', () => {
     fireEvent.click(view.getByRole('button', { name: 'Continuar sem recuperação local' }));
     await waitForEditor(view.container);
     expect(runtime.workspace.getSnapshot().localProtection).toBe('unavailable');
+  });
+
+  it('INVALID-ESCAPE-01/02/03 gates, confirms, deletes the exact invalid record, and releases', async () => {
+    const memory = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord({ authorityScopeId: AUTHORITY_A, openSessionId: SESSION_A });
+    const key = {
+      authorityScopeId: record.authorityScopeId,
+      catalogId: record.catalogId,
+      openSessionId: record.openSessionId,
+    };
+    memory.seedRaw(key, { corrupt: true });
+    const deleteInvalid = vi.spyOn(memory, 'deleteInvalidIfStillInvalid');
+    const { runtime } = makeRuntime(memory);
+    const view = render(<VNextApp runtime={runtime} />);
+
+    await waitFor(() => expect(view.getByText(
+      'O registro local é inválido ou incompatível e não será aberto.'
+    )).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Ver alterações recuperadas' }));
+    expect(view.getByText('Registro local inválido preservado')).toBeTruthy();
+    expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
+    expect(deleteInvalid).not.toHaveBeenCalled();
+    expect((await memory.get(key))?.status).toBe('INVALID');
+
+    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
+    expect(view.getByRole('button', { name: 'Confirmar descarte local' })).toBeTruthy();
+    expect(deleteInvalid).not.toHaveBeenCalled();
+    expect((await memory.get(key))?.status).toBe('INVALID');
+
+    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    await waitForEditor(view.container);
+    expect(deleteInvalid).toHaveBeenCalledTimes(1);
+    expect(await memory.get(key)).toBeUndefined();
+  });
+
+  it('INVALID-ESCAPE-09 keeps the editor gated when explicit invalid removal fails', async () => {
+    const memory = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord({ authorityScopeId: AUTHORITY_A, openSessionId: SESSION_A });
+    const key = {
+      authorityScopeId: record.authorityScopeId,
+      catalogId: record.catalogId,
+      openSessionId: record.openSessionId,
+    };
+    memory.seedRaw(key, { corrupt: true });
+    const recoveryRepository: RecoveryRepository = {
+      putIfNewer: (next) => memory.putIfNewer(next),
+      get: (nextKey) => memory.get(nextKey),
+      listByScope: (scope) => memory.listByScope(scope),
+      deleteIfGeneration: (nextKey, generation) => memory.deleteIfGeneration(nextKey, generation),
+      deleteInvalidIfStillInvalid: () => Promise.reject(new Error('storage details stay hidden')),
+    };
+    const { runtime } = makeRuntime(recoveryRepository);
+    const view = render(<VNextApp runtime={runtime} />);
+
+    await waitFor(() => expect(view.getByText(
+      'O registro local é inválido ou incompatível e não será aberto.'
+    )).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+
+    await waitFor(() => expect(view.getByText(
+      'Não foi possível descartar a recuperação local. Tente novamente.'
+    )).toBeTruthy());
+    expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
+    expect(view.container.textContent).not.toContain('storage details');
+    expect((await memory.get(key))?.status).toBe('INVALID');
+  });
+
+  it('INVALID-ESCAPE-05 refreshes safe choices when the invalid record becomes valid', async () => {
+    const memory = new InMemoryRecoveryRepository();
+    const cloud = recoveryDocument('Cloud base');
+    const record = await recoveryRecord({
+      authorityScopeId: AUTHORITY_A,
+      openSessionId: SESSION_A,
+      baseRemoteRevision: 7,
+      baseRemoteSnapshotDigest: await digestCanonicalDocument(cloud),
+      documentSnapshot: { ...cloud, title: 'Now valid local work' },
+    });
+    const key = {
+      authorityScopeId: record.authorityScopeId,
+      catalogId: record.catalogId,
+      openSessionId: record.openSessionId,
+    };
+    memory.seedRaw(key, { corrupt: true });
+    const { runtime } = makeRuntime(memory, cloud);
+    const view = render(<VNextApp runtime={runtime} />);
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'Descartar recuperação local' })).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
+    memory.seedRaw(key, record);
+    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'Recuperar minhas alterações' })).toBeTruthy());
+    expect(view.getByText(
+      'O registro mudou e foi verificado novamente. Escolha uma opção segura para continuar.'
+    )).toBeTruthy();
+    expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
+    expect((await memory.get(key))?.status).toBe('VALID');
   });
 });

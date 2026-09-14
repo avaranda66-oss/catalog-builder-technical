@@ -27,7 +27,8 @@ export type RecoveryDeleteResult =
   | { readonly status: 'DELETED' }
   | { readonly status: 'NOT_FOUND' }
   | { readonly status: 'STALE'; readonly storedGeneration?: number }
-  | { readonly status: 'INVALID_PRESERVED' };
+  | { readonly status: 'INVALID_PRESERVED' }
+  | { readonly status: 'VALID_PRESERVED' };
 
 export type RecoveryStorageErrorCode =
   | 'INVALID_RECORD'
@@ -48,6 +49,7 @@ export interface RecoveryRepository {
   get(key: RecoveryKey): Promise<RecoveryInspection | undefined>;
   listByScope(authorityScopeId: string): Promise<readonly RecoveryInspection[]>;
   deleteIfGeneration(key: RecoveryKey, expectedGeneration: number): Promise<RecoveryDeleteResult>;
+  deleteInvalidIfStillInvalid(key: RecoveryKey): Promise<RecoveryDeleteResult>;
 }
 
 interface MemoryEntry {
@@ -140,5 +142,19 @@ export class InMemoryRecoveryRepository implements RecoveryRepository {
     }
     this.entries.delete(token);
     return { status: 'DELETED' };
+  }
+
+  async deleteInvalidIfStillInvalid(key: RecoveryKey): Promise<RecoveryDeleteResult> {
+    const parsed = parseRecoveryKey(key);
+    const token = recoveryKeyToken(parsed);
+    for (;;) {
+      const entry = this.entries.get(token);
+      if (!entry) return { status: 'NOT_FOUND' };
+      const inspection = await this.inspect(entry);
+      if (this.entries.get(token) !== entry) continue;
+      if (inspection.status === 'VALID') return { status: 'VALID_PRESERVED' };
+      this.entries.delete(token);
+      return { status: 'DELETED' };
+    }
   }
 }

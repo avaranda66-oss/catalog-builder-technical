@@ -255,6 +255,49 @@ export class IndexedDbRecoveryRepository implements RecoveryRepository {
     }
   }
 
+  async deleteInvalidIfStillInvalid(key: RecoveryKey): Promise<RecoveryDeleteResult> {
+    try {
+      const database = await this.database();
+      const transaction = database.transaction(VNEXT_RECOVERY_STORE_NAME, 'readwrite', { durability: 'strict' });
+      const store = transaction.objectStore(VNEXT_RECOVERY_STORE_NAME);
+      const exactKey = tuple(key);
+      const existing = await store.get(exactKey);
+      if (!existing) {
+        await transaction.done;
+        return { status: 'NOT_FOUND' };
+      }
+
+      let settled = false;
+      let inspection: RecoveryInspection | undefined;
+      let inspectionFailure: unknown;
+      const pendingInspection = this.inspect(existing).then(
+        (result) => {
+          inspection = result;
+          settled = true;
+        },
+        (error: unknown) => {
+          inspectionFailure = error;
+          settled = true;
+        }
+      );
+      while (!settled) {
+        // Keep the exact-key read/write transaction active while SHA-256 validation completes.
+        await store.get(exactKey);
+      }
+      await pendingInspection;
+      if (inspectionFailure) throw inspectionFailure;
+      if (inspection?.status !== 'INVALID') {
+        await transaction.done;
+        return { status: 'VALID_PRESERVED' };
+      }
+      await store.delete(exactKey);
+      await transaction.done;
+      return { status: 'DELETED' };
+    } catch (error) {
+      throw mapIndexedDbFailure(error);
+    }
+  }
+
   async close(): Promise<void> {
     const database = await this.databasePromise;
     database?.close();

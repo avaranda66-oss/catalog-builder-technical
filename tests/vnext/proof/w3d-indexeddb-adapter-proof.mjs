@@ -38,6 +38,7 @@ try {
     const sessionB = '33333333-3333-4333-8333-333333333333';
     const sessionRace = '66666666-6666-4666-8666-666666666666';
     const sessionCorrupt = '77777777-7777-4777-8777-777777777777';
+    const sessionChanged = '88888888-8888-4888-8888-888888888888';
     const scopeA = 'deployment:workspace:user-a';
     const scopeB = 'deployment:workspace:user-b';
     const document = (title) => ({
@@ -112,6 +113,14 @@ try {
       recordToken: '{"corrupt":true}',
       rawRecord: { corrupt: true },
     });
+    corruptTransaction.objectStore(adapter.VNEXT_RECOVERY_STORE_NAME).put({
+      authorityScopeId: scopeA,
+      catalogId,
+      openSessionId: sessionChanged,
+      recoveryGeneration: 10,
+      recordToken: '{"unsupported":true}',
+      rawRecord: { recordFormatVersion: 99 },
+    });
     await new Promise((resolve, reject) => {
       corruptTransaction.oncomplete = () => resolve(undefined);
       corruptTransaction.onerror = () => reject(corruptTransaction.error);
@@ -136,10 +145,41 @@ try {
     opened.close();
     const afterAbort = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionA });
     const corruptRead = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionCorrupt });
+    const changedInvalidRead = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionChanged });
     const corruptDelete = await second.deleteIfGeneration(
       { authorityScopeId: scopeA, catalogId, openSessionId: sessionCorrupt },
       9
     );
+    const invalidDelete = await second.deleteInvalidIfStillInvalid(
+      { authorityScopeId: scopeA, catalogId, openSessionId: sessionCorrupt }
+    );
+    const changedValid = await makeRecord(1, 'Valid replacement', scopeA, sessionChanged);
+    const replacementDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(databaseName);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const replacementTransaction = replacementDatabase.transaction(adapter.VNEXT_RECOVERY_STORE_NAME, 'readwrite');
+    replacementTransaction.objectStore(adapter.VNEXT_RECOVERY_STORE_NAME).put({
+      authorityScopeId: scopeA,
+      catalogId,
+      openSessionId: sessionChanged,
+      recoveryGeneration: changedValid.recoveryGeneration,
+      recordToken: JSON.stringify(changedValid),
+      rawRecord: changedValid,
+    });
+    await new Promise((resolve, reject) => {
+      replacementTransaction.oncomplete = () => resolve(undefined);
+      replacementTransaction.onerror = () => reject(replacementTransaction.error);
+      replacementTransaction.onabort = () => reject(replacementTransaction.error);
+    });
+    replacementDatabase.close();
+    const validPreserve = await second.deleteInvalidIfStillInvalid(
+      { authorityScopeId: scopeA, catalogId, openSessionId: sessionChanged }
+    );
+    const corruptAfterDelete = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionCorrupt });
+    const changedAfterDelete = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionChanged });
+    const neighborAfterDelete = await second.get({ authorityScopeId: scopeA, catalogId, openSessionId: sessionB });
     await first.close();
     await second.close();
     return {
@@ -155,7 +195,13 @@ try {
       stores,
       afterAbortGeneration: afterAbort?.status === 'VALID' ? afterAbort.record.recoveryGeneration : null,
       corruptStatus: corruptRead?.status,
+      changedInvalidStatus: changedInvalidRead?.status,
       corruptDelete,
+      invalidDelete,
+      validPreserve,
+      corruptAfterDelete: corruptAfterDelete?.status ?? 'NOT_FOUND',
+      changedAfterDelete: changedAfterDelete?.status,
+      neighborAfterDelete: neighborAfterDelete?.status,
     };
   });
 
@@ -171,7 +217,13 @@ try {
   assert.deepEqual(result.stores, ['recoveryRecords']);
   assert.equal(result.afterAbortGeneration, 2, 'aborted later transaction must preserve G2');
   assert.equal(result.corruptStatus, 'INVALID', 'corrupt raw record must fail closed');
+  assert.equal(result.changedInvalidStatus, 'INVALID', 'unsupported raw record must be inspected before replacement');
   assert.deepEqual(result.corruptDelete, { status: 'INVALID_PRESERVED' });
+  assert.deepEqual(result.invalidDelete, { status: 'DELETED' });
+  assert.deepEqual(result.validPreserve, { status: 'VALID_PRESERVED' });
+  assert.equal(result.corruptAfterDelete, 'NOT_FOUND', 'confirmed invalid exact record must be deleted');
+  assert.equal(result.changedAfterDelete, 'VALID', 'valid replacement must survive stale invalid deletion intent');
+  assert.equal(result.neighborAfterDelete, 'VALID', 'neighboring exact key must remain untouched');
   await writeFile(resolve(output, 'result.json'), JSON.stringify({ status: 'PASS', ...result }, null, 2));
   console.log(`W3.D IndexedDB adapter proof PASS: ${resolve(output, 'result.json')}`);
 } finally {

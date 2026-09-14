@@ -434,6 +434,132 @@ async function runI() {
   await closeRun(run);
 }
 
+async function seedInvalidEscapeProfile() {
+  const profile = await newProfile('invalid-escape');
+  const run = await launchProfile(profile);
+  await clearDatabase(run);
+  const page = run.context.pages()[0] ?? await run.context.newPage();
+  await page.goto(blankUrl);
+  const seeded = await page.evaluate(async ({ databaseName }) => {
+    const adapter = await import('/src/vnext/recovery/indexeddb-repository.ts');
+    const digest = await import('/src/vnext/recovery/digest.ts');
+    const catalogId = '11111111-1111-4111-8111-111111111111';
+    const invalidKey = {
+      authorityScopeId: 'physical:user-a',
+      catalogId,
+      openSessionId: '77777777-7777-4777-8777-777777777777',
+    };
+    const neighborKey = {
+      authorityScopeId: 'physical:user-b',
+      catalogId,
+      openSessionId: '88888888-8888-4888-8888-888888888888',
+    };
+    const document = (title) => ({
+      schemaVersion: 1,
+      id: catalogId,
+      title,
+      locale: 'pt-BR',
+      style: {
+        fonts: [{ family: 'Noto Sans', revision: '5.3.0', weight: 400, style: 'normal' }],
+        defaultText: {
+          fontFamily: 'Noto Sans',
+          fontSizePt: 12,
+          lineHeight: 1.2,
+          fontWeight: 400,
+          color: '#172033',
+        },
+        palette: ['#172033'],
+      },
+      pages: [{ id: 'page-1', widthMm: 210, heightMm: 297, objects: [] }],
+      assets: [],
+    });
+    const base = document('Cloud A');
+    const neighborDocument = document('Neighbor remains');
+    const neighbor = {
+      recordFormatVersion: 1,
+      ...neighborKey,
+      recoveryGeneration: 1,
+      localEditSequence: 1,
+      baseRemoteRevision: 1,
+      baseRemoteSnapshotDigest: await digest.digestCanonicalDocument(base),
+      documentSchemaVersion: 1,
+      documentSnapshot: neighborDocument,
+      snapshotDigestAlgorithm: 'SHA-256',
+      snapshotDigest: await digest.digestCanonicalDocument(neighborDocument),
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
+    };
+    const repository = new adapter.IndexedDbRecoveryRepository({ databaseName });
+    await repository.putIfNewer(neighbor);
+    await repository.close();
+
+    const database = await new Promise((resolveOpen, rejectOpen) => {
+      const request = indexedDB.open(databaseName);
+      request.onsuccess = () => resolveOpen(request.result);
+      request.onerror = () => rejectOpen(request.error);
+    });
+    const transaction = database.transaction(adapter.VNEXT_RECOVERY_STORE_NAME, 'readwrite');
+    transaction.objectStore(adapter.VNEXT_RECOVERY_STORE_NAME).put({
+      ...invalidKey,
+      recoveryGeneration: 99,
+      recordToken: '{"corrupt":true}',
+      rawRecord: { recordFormatVersion: 99, corrupt: true },
+    });
+    await new Promise((resolveTransaction, rejectTransaction) => {
+      transaction.oncomplete = () => resolveTransaction(undefined);
+      transaction.onerror = () => rejectTransaction(transaction.error);
+      transaction.onabort = () => rejectTransaction(transaction.error);
+    });
+    database.close();
+    return { invalidKey, neighborKey };
+  }, { databaseName });
+  await hardCrash(run);
+  return { profile, ...seeded };
+}
+
+async function runJ() {
+  const seeded = await seedInvalidEscapeProfile();
+  const run = await launchProfile(seeded.profile);
+  const page = await pageFor(run, 'base');
+  await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
+  assert.equal(
+    await page.getByText('O registro local é inválido ou incompatível e não será aberto.').count(),
+    1
+  );
+  const beforeDiscard = await committedRecordsFromFreshConnection(page);
+  assert.equal(beforeDiscard.length, 1);
+  assert.equal(beforeDiscard[0].status, 'INVALID');
+  assert.deepEqual(beforeDiscard[0].key, seeded.invalidKey);
+
+  await page.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
+  assert.equal(await page.getByText('Registro local inválido preservado').count(), 1);
+  await page.getByRole('button', { name: 'Descartar recuperação local' }).click();
+  await page.getByRole('button', { name: 'Confirmar descarte local' }).waitFor();
+  const afterFirstClick = await committedRecordsFromFreshConnection(page);
+  assert.equal(afterFirstClick.length, 1, 'First discard click must not delete invalid recovery');
+  assert.equal(afterFirstClick[0].status, 'INVALID');
+
+  await page.getByRole('button', { name: 'Confirmar descarte local' }).click();
+  await page.locator('[data-editor-action="add-shape"]').waitFor();
+  const afterConfirmation = await committedRecordsFromFreshConnection(page);
+  const neighborAfterConfirmation = await committedRecordsFromFreshConnection(page, 'physical:user-b');
+  assert.equal(afterConfirmation.length, 0, 'Confirmed exact invalid recovery must be removed');
+  assert.equal(neighborAfterConfirmation.length, 1, 'Neighboring recovery must remain');
+  assert.equal(neighborAfterConfirmation[0].status, 'VALID');
+  assert.deepEqual(neighborAfterConfirmation[0].key, seeded.neighborKey);
+  evidence.proofs.J = {
+    editorGatedForInvalidRecord: true,
+    invalidRecordNotAutomaticallyDeleted: true,
+    protectedDiagnosticVisible: true,
+    firstDiscardClickPreservedRecord: true,
+    confirmedExactRecordDeleted: true,
+    neighboringRecordPreserved: true,
+    editorReleasedAfterResolution: true,
+  };
+  await closeRun(run);
+}
+
 async function runA() {
   const crashProfile = await newProfile('canonical-crash');
   let run = await launchProfile(crashProfile);
@@ -596,6 +722,7 @@ const scenarios = {
   G: runG,
   H: runH,
   I: runI,
+  J: runJ,
 };
 
 async function runProof() {

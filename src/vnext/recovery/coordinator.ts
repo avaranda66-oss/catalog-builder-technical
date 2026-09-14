@@ -117,6 +117,10 @@ export class RecoveryCoordinator {
     return this.serialize(key, () => this.options.repository.deleteIfGeneration(key, expectedGeneration));
   }
 
+  deleteInvalidIfStillInvalid(key: RecoveryKey) {
+    return this.serialize(key, () => this.options.repository.deleteInvalidIfStillInvalid(key));
+  }
+
   async compare(inspection: RecoveryInspection | undefined, remote: RemoteRecoveryState): Promise<RecoveryDecision> {
     return decideRecovery(inspection, remote, this.options.digestBytes);
   }

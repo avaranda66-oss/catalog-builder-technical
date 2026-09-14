@@ -84,4 +84,39 @@ describe('W3.D strict RecoveryRecord', () => {
     repository.seedRaw(recoveryKeyOf(valid), { corrupt: true });
     await expect(repository.putIfNewer(valid)).rejects.toBeInstanceOf(RecoveryStorageError);
   });
+
+  it('INVALID-ESCAPE-05 preserves a valid replacement observed at deletion time', async () => {
+    const repository = new InMemoryRecoveryRepository();
+    const valid = await recoveryRecord();
+    const key = recoveryKeyOf(valid);
+    repository.seedRaw(key, { corrupt: true });
+    expect((await repository.get(key))?.status).toBe('INVALID');
+
+    repository.seedRaw(key, valid);
+
+    expect(await repository.deleteInvalidIfStillInvalid(key)).toEqual({ status: 'VALID_PRESERVED' });
+    expect((await repository.get(key))?.status).toBe('VALID');
+  });
+
+  it('INVALID-ESCAPE-06/07 deletes only the exact invalid session/catalog/scope key', async () => {
+    const repository = new InMemoryRecoveryRepository();
+    const invalid = await recoveryRecord();
+    const otherSession = await recoveryRecord({ openSessionId: SESSION_B });
+    const otherCatalogId = '44444444-4444-4444-8444-444444444444';
+    const otherCatalog = await recoveryRecord({
+      catalogId: otherCatalogId,
+      documentSnapshot: { ...recoveryDocument('Other catalog'), id: otherCatalogId },
+    });
+    const otherScope = await recoveryRecord({ authorityScopeId: 'deployment:workspace:user-b' });
+    repository.seedRaw(recoveryKeyOf(invalid), { corrupt: true });
+    await repository.putIfNewer(otherSession);
+    await repository.putIfNewer(otherCatalog);
+    await repository.putIfNewer(otherScope);
+
+    expect(await repository.deleteInvalidIfStillInvalid(recoveryKeyOf(invalid))).toEqual({ status: 'DELETED' });
+    expect(await repository.get(recoveryKeyOf(invalid))).toBeUndefined();
+    expect((await repository.get(recoveryKeyOf(otherSession)))?.status).toBe('VALID');
+    expect((await repository.get(recoveryKeyOf(otherCatalog)))?.status).toBe('VALID');
+    expect((await repository.get(recoveryKeyOf(otherScope)))?.status).toBe('VALID');
+  });
 });

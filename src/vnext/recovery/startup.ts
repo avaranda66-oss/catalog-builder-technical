@@ -115,7 +115,9 @@ export class RecoveryStartupCoordinator {
     authorityScopeId: string
   ): Promise<RecoveryDeleteResult> {
     const inspection = this.inspect(candidate, authorityScopeId);
-    if (inspection.status !== 'VALID') return { status: 'INVALID_PRESERVED' };
+    if (inspection.status !== 'VALID') {
+      return this.options.coordinator.deleteInvalidIfStillInvalid(inspection.key);
+    }
     return this.options.coordinator.deleteIfGeneration(
       inspection.key,
       inspection.record.recoveryGeneration

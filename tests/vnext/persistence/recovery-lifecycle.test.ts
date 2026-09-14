@@ -83,6 +83,7 @@ function unavailableRecoveryRepository(): RecoveryRepository {
     get: () => Promise.resolve(undefined),
     listByScope: () => Promise.resolve([]),
     deleteIfGeneration: () => Promise.resolve({ status: 'NOT_FOUND' }),
+    deleteInvalidIfStillInvalid: () => Promise.resolve({ status: 'NOT_FOUND' }),
   };
 }
 
