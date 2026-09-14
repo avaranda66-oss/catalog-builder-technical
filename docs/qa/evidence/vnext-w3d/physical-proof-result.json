@@ -1,8 +1,8 @@
 {
   "status": "PASS",
   "scenario": "ALL",
-  "testedImplementationHead": "50a7b5a37b91008c0c52fc1c66a33d0070c4e9b7",
-  "testedImplementationTree": "adf1623b730a47968e94453abc0cd128bc94382a",
+  "testedImplementationHead": "852615a2285d62e2504535933749cb9f4ac07370",
+  "testedImplementationTree": "7aef1eba949e4cdd05cac5127459882107ea1971",
   "chromiumVersion": "151.0.7922.34",
   "hardTermination": "Chromium OS process terminated without page, context, or browser close",
   "profileReuse": true,
@@ -12,11 +12,11 @@
       "storedIdentity": {
         "authorityScopeId": "physical:user-a",
         "catalogId": "11111111-1111-4111-8111-111111111111",
-        "openSessionId": "8ef117cb-3abc-42b0-b897-6e5286888574",
+        "openSessionId": "3fe0206b-aa9a-43f6-8c94-d45e81a5c510",
         "recoveryGeneration": 1
       },
       "hardRestartSameProfile": true,
-      "newOpenSessionId": "4c5c82b6-eb76-4827-aa23-bf9cf3c7cea4",
+      "newOpenSessionId": "d266d97a-beb4-4612-99f9-9d288cccf99e",
       "freshUndoRedo": true,
       "continuedEditing": true
     },
@@ -36,13 +36,13 @@
       "rebasedRemoteRevision": 2
     },
     "D": {
-      "mutationId": "448f411c-2810-4adb-a266-98a1254d9bee",
+      "mutationId": "65b99795-6177-4e25-bc7c-bd732f699472",
       "noFalseSavedBeforeVerification": true,
       "authoritativeProofWithoutReplay": true
     },
     "E": {
-      "originalMutationId": "5febb382-d987-4572-ac16-936501053232",
-      "replayMutationId": "5febb382-d987-4572-ac16-936501053232",
+      "originalMutationId": "28c16abe-3272-408b-9b37-e8b5b542a44a",
+      "replayMutationId": "28c16abe-3272-408b-9b37-e8b5b542a44a",
       "exactPayload": true,
       "divergentRemotePreservedWithoutReplay": true
     },
@@ -63,6 +63,14 @@
       "newerRemoteOverwritten": false,
       "remoteUnavailableBindingKind": "UNBOUND",
       "protectedCanonicalInspection": true
+    },
+    "I": {
+      "editorAbsentWhileDiscoveryPending": true,
+      "editorAbsentWhileDecisionPending": true,
+      "recoveredSessionBecameEditable": true,
+      "staleProgrammaticInstallRejected": true,
+      "currentAuthoredWorkPreserved": true,
+      "oldRecoveryPreserved": true
     }
   }
 }

@@ -155,6 +155,7 @@ Unit tests alone are insufficient. Run real Chromium/Playwright evidence against
 - [x] F — Two tabs: same browser profile/storage and same catalog in two tabs; prove two `openSessionId`s and two inspected records; neither record overwrites the other and no timestamp winner/merge occurs.
 - [x] G — Same-profile auth scope: A writes recovery; B logs in through the same storage and cannot enumerate/open/delete A; A returns and sees its recovery. Isolated contexts with separate storage are prohibited evidence.
 - [x] H — Fail-closed recovery choices: physically prove same-revision/digest mismatch and newer/different remote do not install/overwrite; prove remote-unavailable exposes only clearly local protected inspection and no remote Save/fake binding.
+- [x] I — Startup recovery race: delay initial discovery and prove ordinary authoring is structurally unavailable before discovery and while an actionable decision is pending; then prove safe recovery unlocks the recovered session, while a stale programmatic install is rejected without losing current authored work or the old recovery.
 
 ## Developer file-discovery mandate
 
@@ -171,7 +172,7 @@ Use `rg --files`, symbol/text search, and focused reads against the actual repos
 - [x] Integrate typed visible-draft overlays only through discovered authoring barriers; inventory all visible ephemeral surfaces and escalate uncovered loss paths.
 - [x] Integrate recovery discovery, Father UX, protected inspection, exact discard, and same-profile auth scope behavior without normal remote overwrite/copy implementation.
 - [x] Implement R01–R26 and DRAFT-01–05 focused deterministic/application/adapter/race tests with explicit claim/oracle mapping.
-- [x] Implement and run physical Chromium proofs A–H with durable evidence artifacts; verify intermediate conditions directly.
+- [x] Implement and run physical Chromium proofs A–I with durable evidence artifacts; verify intermediate conditions directly.
 - [x] Run independent adversarial review for stale generation, stale cleanup, malformed records, digest mismatch, replay identity/payload drift, user/tab isolation, false `Saved`, and future-wave leakage.
 - [x] Update every completed checkbox, the Dev Agent Record, File List, validation results, browser artifacts, claim matrix, known limitations, and evidence packet; then run required repository gates.
 
@@ -198,6 +199,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | 2026-09-13 | 0.5.0 | Recovery scheduling and W3.C Save lifecycle integrated with exact preflight durability, S1/L2 rebasing, ambiguity preservation, and digest-guarded replay. | @dev |
 | 2026-09-13 | 0.6.0 | Physical Chromium A–H evidence, full gates, canonical Father copy, and adversarial candidate audit completed. | @dev |
 | 2026-09-13 | 0.7.0 | Principal amendment applied: local Recovery failure remains visible but no longer blocks or replaces authoritative cloud Save behavior. | @dev |
+| 2026-09-14 | 0.8.0 | Gemini verdict B / Principal B1 amendment applied: startup discovery now gates authoring, recovery installation is pre/post stale-safe, Open Cloud preserves unsaved work, and physical scenario I proves the race correction. | @dev |
 
 ## CodeRabbit Integration
 
@@ -213,7 +215,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | Technical implementation guidance | PASS | Strict recovery contract, lifecycle constraints, discovery mandate, and known predecessor seams provide implementation guidance without inventing architecture. |
 | Reference effectiveness | PASS | Required starting references identify the exact documents and relevant sections; predecessor requirements are summarized in this story. |
 | Self-containment | PASS | Identity, validation, overlay, lifecycle, UX, retention, scope exclusions, and stop conditions are recorded here. |
-| Testing guidance | PASS | R01–R26, DRAFT-01–05, physical shared-storage proofs A–H, no-false-green standard, and required gates are explicit. |
+| Testing guidance | PASS | R01–R26, DRAFT-01–05, STARTUP-RACE-01–10, physical shared-storage proofs A–I, no-false-green standard, and required gates are explicit. |
 | CodeRabbit integration | N/A | Disabled by `core-config.yaml`; the required disabled notice is present. |
 
 **Final assessment: READY.** A developer can begin only after the mandated repository recon/API-and-file-lease freeze. Any discovered contradiction or stop condition is a Principal decision, not an implementation assumption.
@@ -230,7 +232,7 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 
 ### Completion notes
 
-- This continuation inherited completed production phases and a category-B physical-proof harness. The harness was preserved, split into sequential A–H scenarios, and hardened so only spawned Chromium processes are terminated, profile release waits are bounded, failed profiles/logs are retained, and cleanup cannot become a correctness oracle.
+- This continuation inherited completed production phases and a category-B physical-proof harness. The harness was preserved, extended through sequential A–I scenarios, and hardened so only spawned Chromium processes are terminated, profile release waits are bounded, failed profiles/logs are retained, and cleanup cannot become a correctness oracle.
 - Frozen seams used: W3.A `serializeCanonicalSnapshot`, W3.C `DocumentSession` factory/session authority, and `CatalogPersistenceEnvelope` remote comparison.
 - Added strict v1 records, exact tuple keys, SHA-256 validation, typed Text/Inspector overlays, exact pending mutation capture, generation-conditional in-memory semantics, seven-way remote decisions, fresh-session acceptance, and recovery scheduling.
 - Phase-1 evidence: 3 focused test files / 13 tests PASS; typecheck PASS; focused ESLint PASS; `git diff --check` PASS.
@@ -240,16 +242,20 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 - Phase-3 evidence: the runtime owns a session recovery manager below React; first-dirty/debounced scheduling, best-effort exact pending-mutation preflight, S1/L2 rebasing, generation-conditional cleanup, immutable record scope, exact ambiguous payload retention, same-revision digest rejection, and Undo redundancy cleanup are covered by 11 focused lifecycle tests.
 - Principal amendment `50a7b5a` removed the unreachable/misleading `RECOVERY_UNAVAILABLE` ManualSave result. A failed local preflight now marks `Proteção local indisponível.`, rechecks session/auth lineage, and continues through the unchanged W3.C remote dispatch/reconciliation path. Authoritative ACK can project cloud `Saved` while local protection remains unavailable; known remote failures and unresolved ambiguity remain authoritative and never become false `Saved`.
 - LP-01–LP-04 plus the Father projection and stale-preflight race pass through the real `SaveCoordinator`: cloud ACK, OFFLINE/REMOTE_FAILURE/CONFLICT/UNAUTHORIZED, authoritative ambiguous proof, unresolved ambiguity, exact mutation identity, no invented durability, and no stale cross-lineage dispatch are covered. The accepted degraded condition remains explicit: a crash after an unprotected dispatch may not be locally recoverable.
-- Physical A–H evidence was regenerated and PASS in Chromium `151.0.7922.34` against amended implementation `50a7b5a37b91008c0c52fc1c66a33d0070c4e9b7` / `adf1623b730a47968e94453abc0cd128bc94382a`. A fresh IndexedDB connection observed committed records before each hard kill; restart reused the same profile. Text Cancel produced zero canonical actions, Confirm produced one action/Undo unit, S1 ACK preserved L2, pending mutation proof/replay retained exact identity and payload, two tabs produced two records, B was denied A enumerate/open/delete, and mismatch/newer/unavailable paths failed closed.
-- The full repository gate passed after the Principal amendment: lint (zero errors; existing warnings only), typecheck, 225 test files / 2,424 passed / 1 skipped, build, and `git diff --check`.
+- Gemini's final adversarial audit returned verdict B with one blocking B1 counterexample: remote open could render an interactive editor before asynchronous recovery discovery, allowing `Lnew` to be authored and then clobbered by an older recovery. Principal amendment `852615a` fixes that counterexample without reopening accepted Recovery architecture.
+- The runtime-backed app now withholds `EditorWorkspace` while initial discovery is unresolved and while an actionable candidate awaits a decision. `RecoveryCenter` remains available for recovery, protected inspection, discard, retry, and safe continuation; discovery failure is Father-readable, and generation/authority invalidation makes late results inert.
+- `runtime.recover()` independently validates clean/draft-free/save-safe authority, session, binding, remote-decision equivalence, and candidate state both before and after asynchronous acceptance. Any advancement preserves the live session and old recovery. Post-startup Open Cloud and acknowledged-reconciliation paths use ordinary unsaved-change protection rather than an unconditional discard bypass.
+- STARTUP-RACE-01–10 pass through the real runtime/component path and cover initial/candidate gates, canonical and draft defenses, async TOCTOU, auth/session drift, stale remote decisions, dirty Open Cloud, safe recovery, and late discovery. The affected validation is 61/61 PASS.
+- Physical A–I evidence was regenerated and PASS in Chromium `151.0.7922.34` against amended production implementation `852615a2285d62e2504535933749cb9f4ac07370` / `7aef1eba949e4cdd05cac5127459882107ea1971`. A fresh IndexedDB connection observed committed records before each hard kill; restart reused the same profile. Text Cancel produced zero canonical actions, Confirm produced one action/Undo unit, S1 ACK preserved L2, pending mutation proof/replay retained exact identity and payload, two tabs produced two records, B was denied A enumerate/open/delete, mismatch/newer/unavailable paths failed closed, and scenario I proved both structural startup gating and stale-install rejection with current work and old recovery preserved.
+- The full repository gate passed after the startup-race amendment: lint (zero errors; existing warnings only), typecheck, 226 test files / 2,435 passed / 1 skipped, build, and `git diff --check`.
 - Existing VNext Chromium/native-PDF proofs all PASS: W2.C direct manipulation, W2.F groups, W2.D snapping/diagnostics, W2.E template insertion, W2.G Text, W2.A export/native PDF, W2.F group export/PDF, W3.C Save/Reopen, and the W3.D IndexedDB adapter.
-- Root adversarial audit found and fixed three candidate defects: pure persistence graph reachability (`e1dc011`), noncanonical Father recovery labels (`66aa64e`), and local-protection failure suppressing cloud Save (`50a7b5a`). No stale generation/cleanup, malformed-record deletion, digest bypass, replay drift, user/tab collision, false `Saved`, or W3.E+ leakage remained.
+- Root adversarial audit found and fixed four candidate defects: pure persistence graph reachability (`e1dc011`), noncanonical Father recovery labels (`66aa64e`), local-protection failure suppressing cloud Save (`50a7b5a`), and the startup recovery clobber race (`852615a`). No stale generation/cleanup, malformed-record deletion, digest bypass, replay drift, user/tab collision, false `Saved`, startup clobber, or W3.E+ leakage remained.
 
 ### Evidence packet
 
 - JOB: `W3.D`
 - Canonical base SHA/tree: `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` / `d08158a1c2f3e0e10c6812008e1356322815d81f`
-- Tested implementation SHA/tree: `50a7b5a37b91008c0c52fc1c66a33d0070c4e9b7` / `adf1623b730a47968e94453abc0cd128bc94382a`
+- Tested production implementation SHA/tree: `852615a2285d62e2504535933749cb9f4ac07370` / `7aef1eba949e4cdd05cac5127459882107ea1971`
 - Branch: `feat/vnext-w3d-local-recovery`
 - PR: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/33`; exact-head CI evidence is the GitHub check suite attached to the final pushed head; no merge authorized.
 - Not proven: physical browser quota exhaustion. Quota mapping/no-fallback and prior-record preservation are proven at the injected IndexedDB failure boundary. Whole-machine power loss is not claimed; OS-level Chromium process termination and same-profile restart are proven.
@@ -268,6 +274,7 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 | D–E pending mutation durability/reconciliation | Restarted record identity/payload, no false Saved, remote proof or exact replay only | Same evidence D–E | PASS |
 | F–G shared-storage tab/user isolation | One persistent context/storage, actual records, foreign operations denied, A returns | Same evidence F–G | PASS |
 | H mismatch/newer/unavailable fail closed | No recovery action, cloud state retained, UNBOUND protected canonical renderer | Same evidence H | PASS |
+| STARTUP-RACE-01–10 / physical I | Structural editor absence while discovery/decision is pending; pre/post stale rejection preserves current session, draft/work, and old recovery; safe recovery unlocks a fresh session | `tests/vnext/application/w3d-startup-race.test.tsx`, same evidence I | PASS |
 | Repository and existing proof gates | Command exit status and asserted proof outputs | lint, typecheck, full Vitest, build, diff-check, VNext Chromium/PDF suite | PASS |
 
 ## File list
@@ -294,6 +301,7 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 - `src/vnext/app/VNextApp.tsx`
 - `src/vnext/app/styles.css`
 - `tests/vnext/application/w3c-editor-persistence.test.tsx`
+- `tests/vnext/application/w3d-startup-race.test.tsx`
 - `tests/vnext/persistence/recovery-lifecycle.test.ts`
 - `tests/vnext/recovery/recovery-startup.test.ts`
 - `tests/vnext/recovery/fixtures.ts`
