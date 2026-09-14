@@ -200,6 +200,7 @@ At candidate freeze, update this story with: JOB `W3.D`; base SHA/tree; tested S
 | 2026-09-13 | 0.6.0 | Physical Chromium A–H evidence, full gates, canonical Father copy, and adversarial candidate audit completed. | @dev |
 | 2026-09-13 | 0.7.0 | Principal amendment applied: local Recovery failure remains visible but no longer blocks or replaces authoritative cloud Save behavior. | @dev |
 | 2026-09-14 | 0.8.0 | Gemini verdict B / Principal B1 amendment applied: startup discovery now gates authoring, recovery installation is pre/post stale-safe, Open Cloud preserves unsaved work, and physical scenario I proves the race correction. | @dev |
+| 2026-09-14 | 0.9.0 | Principal invalid-record escape amendment applied: exact-key delete-if-still-invalid, two-step Father confirmation, stale-valid preservation, and physical scenario J prevent permanent authoring denial without weakening fail-closed recovery. | @dev |
 
 ## CodeRabbit Integration
 
@@ -250,16 +251,22 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 - The full repository gate passed after the startup-race amendment: lint (zero errors; existing warnings only), typecheck, 226 test files / 2,435 passed / 1 skipped, build, and `git diff --check`.
 - Existing VNext Chromium/native-PDF proofs all PASS: W2.C direct manipulation, W2.F groups, W2.D snapping/diagnostics, W2.E template insertion, W2.G Text, W2.A export/native PDF, W2.F group export/PDF, W3.C Save/Reopen, and the W3.D IndexedDB adapter.
 - Root adversarial audit found and fixed four candidate defects: pure persistence graph reachability (`e1dc011`), noncanonical Father recovery labels (`66aa64e`), local-protection failure suppressing cloud Save (`50a7b5a`), and the startup recovery clobber race (`852615a`). No stale generation/cleanup, malformed-record deletion, digest bypass, replay drift, user/tab collision, false `Saved`, startup clobber, or W3.E+ leakage remained.
+- Principal invalid-record escape finding: a preserved `INVALID_OR_UNSUPPORTED_RECORD` could hold the structural authoring gate indefinitely because it had no explicit safe resolution. Amendment `7b88d8d` adds repository `deleteInvalidIfStillInvalid(exactKey)` semantics, serialized coordinator/startup routing, and the existing two-click Father discard pattern for invalid candidates without auto-delete, repair, install, or generation trust.
+- INVALID-ESCAPE-01–09 pass: invalid discovery gates and preserves; first click does not delete; confirmation deletes only the exact current invalid key; foreign scope is rejected; a valid replacement returns `VALID_PRESERVED` and is rediscovered; neighboring session/catalog/scope records remain; unsupported versions use the same path; and storage failure retains the gate with Father-safe messaging. The affected recovery/W3.C set is 68/68 PASS.
+- The real IndexedDB adapter proof revalidates the current raw record while holding one strict read/write transaction active through SHA-256 validation. It proves invalid exact deletion, stale-invalid/valid-replacement preservation, and neighboring-key isolation.
+- Physical scenario J seeds corrupt A-scope and valid B-scope neighboring records in the same real IndexedDB/profile, restarts Chromium, proves the editor is gated and no auto-delete occurs, verifies first-click preservation, confirms exact deletion through a fresh connection, preserves the neighbor, and releases the editor. Full physical A–J is PASS against production `7b88d8d5d2ead080e2e20489b9477f20094544b2` / `27f4fd9dbeece2880c20540840e6a5c8c881c13e`.
+- The final local repository gate after this amendment is PASS: lint (zero errors; existing 268 warnings), typecheck, 226 test files / 2,443 passed / 1 skipped, build, `git diff --check`, all existing VNext Chromium/native-PDF proofs, W3.C Save/Reopen, and the strengthened W3.D IndexedDB adapter proof.
+- Root scope audit now includes the explicit invalid-record escape: no automatic cleanup, broad delete, cross-scope access, stale valid deletion, fallback store, Recovery redesign, W3.E implementation, or merge authority was introduced.
 
 ### Evidence packet
 
 - JOB: `W3.D`
 - Canonical base SHA/tree: `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` / `d08158a1c2f3e0e10c6812008e1356322815d81f`
-- Tested production implementation SHA/tree: `852615a2285d62e2504535933749cb9f4ac07370` / `7aef1eba949e4cdd05cac5127459882107ea1971`
+- Tested production implementation SHA/tree: `7b88d8d5d2ead080e2e20489b9477f20094544b2` / `27f4fd9dbeece2880c20540840e6a5c8c881c13e`
 - Branch: `feat/vnext-w3d-local-recovery`
 - PR: `https://github.com/avaranda66-oss/catalog-builder-technical/pull/33`; exact-head CI evidence is the GitHub check suite attached to the final pushed head; no merge authorized.
 - Not proven: physical browser quota exhaustion. Quota mapping/no-fallback and prior-record preservation are proven at the injected IndexedDB failure boundary. Whole-machine power loss is not claimed; OS-level Chromium process termination and same-profile restart are proven.
-- Known limitations: recovery intentionally has no cross-tab merge/winner, cloud overwrite, save-as-copy, autosave, realtime coordination, or W3.E+ behavior.
+- Known limitations: recovery intentionally has no cross-tab merge/winner, cloud overwrite, save-as-copy, autosave, realtime coordination, invalid-record repair/import, or W3.E+ behavior. Invalid records can only be inspected and explicitly removed by their exact authority/catalog/session key.
 
 | Claim | Oracle | Evidence | Result |
 | --- | --- | --- | --- |
@@ -275,6 +282,7 @@ Generated proof output is under `scratch/w3d-physical-recovery-proof/`; the cons
 | F–G shared-storage tab/user isolation | One persistent context/storage, actual records, foreign operations denied, A returns | Same evidence F–G | PASS |
 | H mismatch/newer/unavailable fail closed | No recovery action, cloud state retained, UNBOUND protected canonical renderer | Same evidence H | PASS |
 | STARTUP-RACE-01–10 / physical I | Structural editor absence while discovery/decision is pending; pre/post stale rejection preserves current session, draft/work, and old recovery; safe recovery unlocks a fresh session | `tests/vnext/application/w3d-startup-race.test.tsx`, same evidence I | PASS |
+| INVALID-ESCAPE-01–09 / physical J | No auto-delete; two-step exact invalid removal; current valid replacement and neighboring keys preserved; failure remains gated; confirmed removal releases editor | Recovery contract/startup/application tests, W3.D IndexedDB adapter proof, same evidence J | PASS |
 | Repository and existing proof gates | Command exit status and asserted proof outputs | lint, typecheck, full Vitest, build, diff-check, VNext Chromium/PDF suite | PASS |
 
 ## File list

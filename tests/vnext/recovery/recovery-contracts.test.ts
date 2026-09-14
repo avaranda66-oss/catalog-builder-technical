@@ -115,6 +115,7 @@ describe('W3.D strict RecoveryRecord', () => {
 
     expect(await repository.deleteInvalidIfStillInvalid(recoveryKeyOf(invalid))).toEqual({ status: 'DELETED' });
     expect(await repository.get(recoveryKeyOf(invalid))).toBeUndefined();
+    expect(await repository.deleteInvalidIfStillInvalid(recoveryKeyOf(invalid))).toEqual({ status: 'NOT_FOUND' });
     expect((await repository.get(recoveryKeyOf(otherSession)))?.status).toBe('VALID');
     expect((await repository.get(recoveryKeyOf(otherCatalog)))?.status).toBe('VALID');
     expect((await repository.get(recoveryKeyOf(otherScope)))?.status).toBe('VALID');
