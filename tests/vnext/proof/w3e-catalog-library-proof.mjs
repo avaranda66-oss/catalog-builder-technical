@@ -113,10 +113,20 @@ try {
 
   await page.getByRole('tab', { name: 'Ativos' }).click();
   const beforeCreateOpenId = (await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.state())).lastOpenedCatalogId;
+  await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.armAmbiguousCreate());
   await page.getByRole('button', { name: 'Novo catálogo' }).click();
   await page.waitForFunction((previous) => window.__W3E_LIBRARY_PROOF__.state().lastOpenedCatalogId !== previous, beforeCreateOpenId);
   const afterCreate = await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.state());
+  const ambiguousCreate = await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.ambiguousCreateEvidence());
   assert(afterCreate.activeTitles.includes('Novo catálogo'));
+  assert.equal(ambiguousCreate.dispatches, 2, 'Ambiguous Create must replay exactly one create dispatch');
+  assert.equal(ambiguousCreate.firstVerificationNotFound, true, 'First authoritative verification must observe NOT_FOUND');
+  assert.equal(ambiguousCreate.firstCatalogId, ambiguousCreate.replayCatalogId, 'Replay must reuse the exact catalogId');
+  assert.equal(ambiguousCreate.firstMutationId, ambiguousCreate.replayMutationId, 'Replay must reuse the exact mutationId');
+  assert.equal(ambiguousCreate.sameDocument, true, 'Replay must reuse the exact canonical document payload');
+  assert.equal(ambiguousCreate.sameOrigin, true, 'Replay must reuse the exact origin payload');
+  assert.equal(ambiguousCreate.replayAccepted, true, 'Repository must accept the exact replay');
+  assert.equal(ambiguousCreate.logicalCatalogCount, 1, 'Ambiguous Create must leave exactly one logical catalog');
   await page.waitForFunction(
     (catalogId) => window.__W3E_LIBRARY_PROOF__.state().lastCanonicalOpen?.catalogId === catalogId
       && window.__W3E_LIBRARY_PROOF__.state().lastCanonicalOpen?.ok === true,
@@ -200,6 +210,7 @@ try {
     actionHeights,
     archivedTitles,
     afterCreate,
+    ambiguousCreate,
     consoleErrors,
     pageErrors,
   };

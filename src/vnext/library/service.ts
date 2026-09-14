@@ -8,6 +8,7 @@ import {
   canonicalDocumentEquivalence,
   parsePersistenceEnvelope,
   type CatalogListItem,
+  type CatalogOriginMetadata,
   type CatalogPersistenceEnvelope,
   type CatalogPersistenceMetadata,
   type CatalogRepository,
@@ -16,6 +17,7 @@ import {
 
 export type CatalogLibraryView = 'active' | 'archived';
 export type CatalogLibrarySort = 'updated-desc' | 'title-asc' | 'title-desc';
+export type CatalogLibraryCreateState = 'idle' | 'pending-verification';
 
 export interface CatalogLibraryQuery {
   readonly view?: CatalogLibraryView;
@@ -53,7 +55,14 @@ interface PendingCreateAttempt {
   readonly authority: CatalogLibraryAuthority;
   readonly documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
   readonly mutationId: string;
-  readonly message?: string;
+  readonly origin?: CatalogOriginMetadata;
+}
+
+function sameCreateOrigin(left: CatalogOriginMetadata | undefined, right: CatalogOriginMetadata | undefined): boolean {
+  if (!left || !right) return left === right;
+  return left.originKind === right.originKind
+    && left.originId === right.originId
+    && left.originRevision === right.originRevision;
 }
 
 function failure<T>(code: CatalogLibraryFailureCode, message?: string): CatalogLibraryResult<T> {
@@ -133,6 +142,49 @@ export class CatalogLibraryService {
     return left.authLineage === right.authLineage && left.authorityScopeId === right.authorityScopeId;
   }
 
+  getCreateState(): CatalogLibraryCreateState {
+    if (!this.pendingCreate) return 'idle';
+    if (!this.authorityIsCurrent(this.pendingCreate.authority)) {
+      this.pendingCreate = undefined;
+      return 'idle';
+    }
+    return 'pending-verification';
+  }
+
+  private createRequest(pending: PendingCreateAttempt) {
+    return {
+      mutationId: pending.mutationId,
+      documentSnapshot: pending.documentSnapshot,
+      ...(pending.origin ? { origin: pending.origin } : {}),
+    };
+  }
+
+  private async replayPendingCreate(
+    pending: PendingCreateAttempt
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+    if (!this.authorityIsCurrent(pending.authority)) {
+      this.pendingCreate = undefined;
+      return this.staleAuthority();
+    }
+    const replay = await this.options.repository.createCatalog(this.createRequest(pending));
+    if (!this.authorityIsCurrent(pending.authority)) {
+      this.pendingCreate = undefined;
+      return this.staleAuthority();
+    }
+    if (!replay.ok) {
+      return failure(replay.error.code, replay.error.message);
+    }
+    const verified = this.verifiedCreateAcknowledgement(
+      replay.value,
+      pending.documentSnapshot.id,
+      pending.mutationId,
+      pending.documentSnapshot,
+      pending.origin
+    );
+    if (verified.ok) this.pendingCreate = undefined;
+    return verified;
+  }
+
   private async reconcilePendingCreate(
     pending: PendingCreateAttempt
   ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
@@ -146,13 +198,24 @@ export class CatalogLibraryService {
       return this.staleAuthority();
     }
     if (!verification.ok) {
-      return failure('AMBIGUOUS_COMMIT_OUTCOME', pending.message);
+      if (verification.error.code === 'NOT_FOUND') {
+        return this.replayPendingCreate(pending);
+      }
+      if (
+        verification.error.code === 'OFFLINE'
+        || verification.error.code === 'REMOTE_FAILURE'
+        || verification.error.code === 'AMBIGUOUS_COMMIT_OUTCOME'
+      ) {
+        return failure('AMBIGUOUS_COMMIT_OUTCOME', verification.error.message);
+      }
+      return failure(verification.error.code, verification.error.message);
     }
     const verified = this.verifiedCreateAcknowledgement(
       verification.value,
       pending.documentSnapshot.id,
       pending.mutationId,
-      pending.documentSnapshot
+      pending.documentSnapshot,
+      pending.origin
     );
     if (verified.ok) this.pendingCreate = undefined;
     return verified;
@@ -162,7 +225,8 @@ export class CatalogLibraryService {
     value: CatalogPersistenceEnvelope,
     catalogId: string,
     mutationId: string,
-    expectedDocument: CatalogPersistenceEnvelope['documentSnapshot']
+    expectedDocument: CatalogPersistenceEnvelope['documentSnapshot'],
+    expectedOrigin: CatalogOriginMetadata | undefined
   ): CatalogLibraryResult<CatalogPersistenceEnvelope> {
     let envelope: CatalogPersistenceEnvelope;
     try {
@@ -177,6 +241,7 @@ export class CatalogLibraryService {
       || envelope.remoteRevision !== 1
       || envelope.archivedAt !== null
       || canonicalDocumentEquivalence(envelope.documentSnapshot) !== canonicalDocumentEquivalence(expectedDocument)
+      || !sameCreateOrigin(envelope.origin, expectedOrigin)
     ) {
       return failure('REMOTE_DIVERGENCE', 'Create acknowledgement does not prove the requested catalog mutation');
     }
@@ -209,23 +274,21 @@ export class CatalogLibraryService {
     const mutationId = this.options.createMutationId();
     if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
     const pending: PendingCreateAttempt = { authority, documentSnapshot, mutationId };
-    const result = await this.options.repository.createCatalog({
-      mutationId,
-      documentSnapshot,
-    });
+    const result = await this.options.repository.createCatalog(this.createRequest(pending));
     if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
     if (!result.ok) {
       if (result.error.code !== 'AMBIGUOUS_COMMIT_OUTCOME') {
         return failure(result.error.code, result.error.message);
       }
-      this.pendingCreate = { ...pending, message: result.error.message };
-      return this.reconcilePendingCreate(this.pendingCreate);
+      this.pendingCreate = pending;
+      return this.reconcilePendingCreate(pending);
     }
     const verified = this.verifiedCreateAcknowledgement(
       result.value,
       documentSnapshot.id,
       mutationId,
-      documentSnapshot
+      documentSnapshot,
+      pending.origin
     );
     if (!verified.ok) this.pendingCreate = pending;
     return verified;

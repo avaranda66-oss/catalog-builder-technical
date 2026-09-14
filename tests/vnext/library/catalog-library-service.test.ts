@@ -196,7 +196,7 @@ describe('W3.E CatalogLibraryService', () => {
     expect(repository.createCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it('LIB-07 reconciles an ambiguous create only when GET proves the exact mutation and document', async () => {
+  it('CREATE-AMB-01 reconciles an ambiguous create when GET proves exact C1/M1 with one create dispatch', async () => {
     const storage = new MemoryCatalogRepository();
     const repository: CatalogRepository = {
       listCatalogs: storage.listCatalogs,
@@ -225,7 +225,55 @@ describe('W3.E CatalogLibraryService', () => {
     expect(storage.getCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it('LIB-07 keeps an unresolved ambiguous create bound to the same catalog until exact reconciliation succeeds', async () => {
+  it('CREATE-AMB-05 rejects a verification envelope with divergent Create origin and keeps the same pending identity', async () => {
+    const storage = new MemoryCatalogRepository();
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: vi.fn(async (catalogId: string) => {
+        const current = await storage.getCatalog(catalogId);
+        if (!current.ok) return current;
+        return {
+          ok: true as const,
+          value: {
+            ...current.value,
+            origin: { originKind: 'starter', originId: 'unexpected-origin' },
+          },
+        };
+      }),
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        const committed = await storage.createCatalog(request);
+        expect(committed.ok).toBe(true);
+        return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(860);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+    });
+
+    expect(await library.createBlank('Origem divergente')).toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_DIVERGENCE' },
+    });
+    expect(library.getCreateState()).toBe('pending-verification');
+    expect(repository.createCatalog).toHaveBeenCalledTimes(1);
+
+    expect(await library.createBlank('não aloca C2')).toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_DIVERGENCE' },
+    });
+    expect(repository.createCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('CREATE-AMB-02 preserves C1/M1 across transport-unavailable verification without allocating C2/M2', async () => {
     const storage = new MemoryCatalogRepository();
     let getAttempts = 0;
     const repository: CatalogRepository = {
@@ -262,6 +310,190 @@ describe('W3.E CatalogLibraryService', () => {
     expect(repository.createCatalog).toHaveBeenCalledTimes(1);
     expect(repository.getCatalog).toHaveBeenCalledTimes(2);
     expect(storage.listCatalogs).not.toHaveBeenCalled();
+  });
+
+  it('CREATE-AMB-03 replays the exact C1/M1/document after authoritative NOT_FOUND and makes forward progress', async () => {
+    const storage = new MemoryCatalogRepository();
+    const dispatched: CreateCatalogRequest[] = [];
+    let createAttempt = 0;
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: vi.fn(() => Promise.resolve({ ok: false as const, error: { code: 'NOT_FOUND' as const } })),
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        dispatched.push(request);
+        createAttempt += 1;
+        if (createAttempt === 1) return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+        return storage.createCatalog(request);
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(880);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+    });
+
+    const result = await library.createBlank('Replay seguro');
+    expect(result.ok).toBe(true);
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[1].documentSnapshot.id).toBe(dispatched[0].documentSnapshot.id);
+    expect(dispatched[1].mutationId).toBe(dispatched[0].mutationId);
+    expect(dispatched[1].documentSnapshot).toEqual(dispatched[0].documentSnapshot);
+    expect(dispatched[1].origin).toEqual(dispatched[0].origin);
+    const listed = await storage.listCatalogs();
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.value).toHaveLength(1);
+    expect(library.getCreateState()).toBe('idle');
+  });
+
+  it('CREATE-AMB-04 keeps the same C1/M1 pending when exact replay is also ambiguous and later GET proves it', async () => {
+    const storage = new MemoryCatalogRepository();
+    const dispatched: CreateCatalogRequest[] = [];
+    let createAttempt = 0;
+    let getAttempt = 0;
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: vi.fn(async (catalogId: string) => {
+        getAttempt += 1;
+        if (getAttempt === 1) return { ok: false as const, error: { code: 'NOT_FOUND' as const } };
+        return storage.getCatalog(catalogId);
+      }),
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        dispatched.push(request);
+        createAttempt += 1;
+        if (createAttempt === 1) return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+        const committed = await storage.createCatalog(request);
+        expect(committed.ok).toBe(true);
+        return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(890);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+    });
+
+    const unresolved = await library.createBlank('Replay ainda incerto');
+    expect(unresolved).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(library.getCreateState()).toBe('pending-verification');
+    const resolved = await library.createBlank('título novo deve ser ignorado');
+    expect(resolved.ok).toBe(true);
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[1]).toEqual(dispatched[0]);
+    const listed = await storage.listCatalogs();
+    expect(listed.ok && listed.value).toHaveLength(1);
+    expect(library.getCreateState()).toBe('idle');
+  });
+
+  it('CREATE-AMB-05 rejects a divergent replay acknowledgement without allocating a new create identity', async () => {
+    const storage = new MemoryCatalogRepository();
+    const dispatched: CreateCatalogRequest[] = [];
+    let createAttempt = 0;
+    let getAttempt = 0;
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: vi.fn(() => {
+        getAttempt += 1;
+        return Promise.resolve(getAttempt === 1
+          ? { ok: false as const, error: { code: 'NOT_FOUND' as const } }
+          : { ok: false as const, error: { code: 'REMOTE_FAILURE' as const } });
+      }),
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        dispatched.push(request);
+        createAttempt += 1;
+        if (createAttempt === 1) return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+        return {
+          ok: true as const,
+          value: {
+            catalogId: request.documentSnapshot.id,
+            remoteRevision: 2,
+            lastMutationId: uuid(9998),
+            title: request.documentSnapshot.title,
+            locale: request.documentSnapshot.locale,
+            createdAt: '2026-09-14T12:00:00.000Z',
+            updatedAt: '2026-09-14T12:00:00.000Z',
+            createdBy: 'user-a',
+            updatedBy: 'user-a',
+            archivedAt: null,
+            documentSchemaVersion: 1 as const,
+            documentSnapshot: request.documentSnapshot,
+          },
+        };
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(895);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+    });
+
+    expect(await library.createBlank('Divergence')).toMatchObject({ ok: false, error: { code: 'REMOTE_DIVERGENCE' } });
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[1]).toEqual(dispatched[0]);
+    expect(library.getCreateState()).toBe('pending-verification');
+    expect(await library.createBlank('não aloca C2')).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(dispatched).toHaveLength(2);
+  });
+
+  it('CREATE-AMB-06 invalidates A pending create on authority switch and never reconciles or replays it under B', async () => {
+    const storage = new MemoryCatalogRepository();
+    const dispatched: CreateCatalogRequest[] = [];
+    let lineage = 'user-a:1';
+    let scope = 'workspace:user-a';
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: vi.fn(() => Promise.resolve({ ok: false as const, error: { code: 'REMOTE_FAILURE' as const } })),
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        dispatched.push(request);
+        if (dispatched.length === 1) return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+        return storage.createCatalog(request);
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(897);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => lineage,
+      authorityScopeId: () => scope,
+    });
+
+    expect(await library.createBlank('Authority A')).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(library.getCreateState()).toBe('pending-verification');
+    const attemptA = dispatched[0];
+    lineage = 'user-b:2';
+    scope = 'workspace:user-b';
+    expect(library.getCreateState()).toBe('idle');
+    const underB = await library.createBlank('Authority B');
+    expect(underB.ok).toBe(true);
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[1].documentSnapshot.id).not.toBe(attemptA.documentSnapshot.id);
+    expect(dispatched[1].mutationId).not.toBe(attemptA.mutationId);
+    expect(repository.getCatalog).toHaveBeenCalledTimes(1);
   });
 
   it('LIB-07 rejects a create acknowledgement that does not prove the dispatched mutation', async () => {

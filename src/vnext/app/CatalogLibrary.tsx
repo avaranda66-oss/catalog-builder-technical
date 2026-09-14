@@ -50,7 +50,9 @@ function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'creat
   if (code === 'INVALID_DOCUMENT' || code === 'UNSUPPORTED_VERSION' || code === 'ENVELOPE_MISMATCH') {
     return 'Este catálogo contém dados que não puderam ser validados com segurança.';
   }
-  if (code === 'AMBIGUOUS_COMMIT_OUTCOME') return 'Não foi possível confirmar o resultado no servidor. Atualize a biblioteca antes de repetir a ação.';
+  if (code === 'AMBIGUOUS_COMMIT_OUTCOME') return action === 'create'
+    ? 'Não foi possível confirmar a criação. Tente novamente para verificar o mesmo catálogo.'
+    : 'Não foi possível confirmar o resultado no servidor. Tente novamente.';
   if (code === 'INVALID_TITLE') return 'Digite um nome para o catálogo.';
   if (action === 'create') return 'Não foi possível criar o novo catálogo.';
   if (action === 'rename') return 'Não foi possível renomear este catálogo.';
@@ -109,6 +111,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const dialogTrigger = React.useRef<HTMLElement | null>(null);
   const renameDialog = React.useRef<HTMLFormElement | null>(null);
   const archiveDialog = React.useRef<HTMLElement | null>(null);
+  const createPending = service.getCreateState() === 'pending-verification';
 
   const rememberDialogTrigger = () => {
     dialogTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -232,7 +235,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
         </div>
         <button type="button" className="vnext-library-create" onClick={() => { void createBlank(); }} disabled={busy}>
           <FilePlus2 size={18} aria-hidden="true" />
-          {busy ? 'Criando…' : 'Novo catálogo'}
+          {busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
         </button>
       </header>
 
@@ -271,7 +274,9 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
         {error && (
           <div className="vnext-library-error" role="alert">
             <span>{error}</span>
-            <button type="button" onClick={() => { void load(); }}>Tentar novamente</button>
+            <button type="button" onClick={() => { if (createPending) void createBlank(); else void load(); }}>
+              {createPending ? 'Verificar criação' : 'Tentar novamente'}
+            </button>
           </div>
         )}
 
@@ -301,7 +306,9 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
             <FilePlus2 size={30} aria-hidden="true" />
             <h3>Comece seu primeiro catálogo</h3>
             <p>Crie um catálogo em branco para começar a trabalhar.</p>
-            <button type="button" className="vnext-library-create" onClick={() => { void createBlank(); }} disabled={busy}>Criar novo catálogo</button>
+            <button type="button" className="vnext-library-create" onClick={() => { void createBlank(); }} disabled={busy}>
+              {createPending ? 'Verificar criação' : 'Criar novo catálogo'}
+            </button>
           </div>
         ) : (
           <div className="vnext-library-empty is-search">

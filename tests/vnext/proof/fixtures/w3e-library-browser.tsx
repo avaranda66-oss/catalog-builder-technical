@@ -20,7 +20,7 @@ import type {
   PersistenceResult,
   SaveCatalogCasRequest,
 } from '@/vnext/persistence';
-import { VNextPersistenceRuntime } from '@/vnext/persistence';
+import { VNextPersistenceRuntime, canonicalDocumentEquivalence } from '@/vnext/persistence';
 import {
   CURRENT_RECOVERY_RECORD_FORMAT_VERSION,
   InMemoryRecoveryRepository,
@@ -74,9 +74,46 @@ class BrowserLibraryRepository implements CatalogRepository {
   readonly records = new Map<string, CatalogPersistenceEnvelope>();
   listCalls = 0;
   getCalls = 0;
+  private ambiguousArmed = false;
+  private ambiguousAttempt?: CreateCatalogRequest;
+  private ambiguousReplay?: CreateCatalogRequest;
+  private ambiguousFirstVerificationNotFound = false;
+  private ambiguousReplayAccepted = false;
 
   constructor(initial: readonly CatalogPersistenceEnvelope[]) {
     for (const record of initial) this.records.set(record.catalogId, record);
+  }
+
+  armAmbiguousCreate(): void {
+    this.ambiguousArmed = true;
+    this.ambiguousAttempt = undefined;
+    this.ambiguousReplay = undefined;
+    this.ambiguousFirstVerificationNotFound = false;
+    this.ambiguousReplayAccepted = false;
+  }
+
+  ambiguousCreateEvidence() {
+    const first = this.ambiguousAttempt;
+    const replay = this.ambiguousReplay;
+    const sameDocument = Boolean(first && replay
+      && canonicalDocumentEquivalence(first.documentSnapshot) === canonicalDocumentEquivalence(replay.documentSnapshot));
+    const sameOrigin = Boolean(first && replay
+      && JSON.stringify(first.origin ?? null) === JSON.stringify(replay.origin ?? null));
+    const logicalCatalogCount = first
+      ? [...this.records.values()].filter((record) => record.catalogId === first.documentSnapshot.id).length
+      : 0;
+    return {
+      dispatches: Number(Boolean(first)) + Number(Boolean(replay)),
+      firstVerificationNotFound: this.ambiguousFirstVerificationNotFound,
+      replayAccepted: this.ambiguousReplayAccepted,
+      firstCatalogId: first?.documentSnapshot.id ?? null,
+      replayCatalogId: replay?.documentSnapshot.id ?? null,
+      firstMutationId: first?.mutationId ?? null,
+      replayMutationId: replay?.mutationId ?? null,
+      sameDocument,
+      sameOrigin,
+      logicalCatalogCount,
+    };
   }
 
   listCatalogs = async (query: CatalogListQuery = {}): Promise<PersistenceResult<readonly CatalogListItem[]>> => {
@@ -90,12 +127,32 @@ class BrowserLibraryRepository implements CatalogRepository {
   getCatalog = async (catalogId: string): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
     this.getCalls += 1;
     const record = this.records.get(catalogId);
+    if (!record && this.ambiguousAttempt?.documentSnapshot.id === catalogId) {
+      this.ambiguousFirstVerificationNotFound = true;
+    }
     return record
       ? { ok: true, value: record }
       : { ok: false, error: { code: 'NOT_FOUND' } };
   };
 
   createCatalog = async (request: CreateCatalogRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
+    if (this.ambiguousArmed) {
+      this.ambiguousArmed = false;
+      this.ambiguousAttempt = request;
+      return { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } };
+    }
+    if (
+      this.ambiguousAttempt
+      && !this.ambiguousReplayAccepted
+      && request.documentSnapshot.id === this.ambiguousAttempt.documentSnapshot.id
+    ) {
+      this.ambiguousReplay = request;
+      const exactReplay = request.mutationId === this.ambiguousAttempt.mutationId
+        && canonicalDocumentEquivalence(request.documentSnapshot)
+          === canonicalDocumentEquivalence(this.ambiguousAttempt.documentSnapshot)
+        && JSON.stringify(request.origin ?? null) === JSON.stringify(this.ambiguousAttempt.origin ?? null);
+      if (!exactReplay) return { ok: false, error: { code: 'CONFLICT' } };
+    }
     if (this.records.has(request.documentSnapshot.id)) return { ok: false, error: { code: 'CONFLICT' } };
     const next: CatalogPersistenceEnvelope = {
       catalogId: request.documentSnapshot.id,
@@ -108,10 +165,12 @@ class BrowserLibraryRepository implements CatalogRepository {
       createdBy: 'proof-user',
       updatedBy: 'proof-user',
       archivedAt: null,
+      ...(request.origin ? { origin: request.origin } : {}),
       documentSchemaVersion: 1,
       documentSnapshot: request.documentSnapshot,
     };
     this.records.set(next.catalogId, next);
+    if (this.ambiguousReplay) this.ambiguousReplayAccepted = true;
     return { ok: true, value: next };
   };
 
@@ -334,6 +393,8 @@ declare global {
         readonly recoveryGeneration: number;
       }>;
       recoveryCount(): Promise<number>;
+      armAmbiguousCreate(): void;
+      ambiguousCreateEvidence(): ReturnType<BrowserLibraryRepository['ambiguousCreateEvidence']>;
     };
   }
 }
@@ -357,6 +418,8 @@ window.__W3E_LIBRARY_PROOF__ = {
   staleSaveAfterArchive,
   seedRecovery,
   recoveryCount: async () => (await recoveryRepository.listByScope(authorityScopeId)).length,
+  armAmbiguousCreate: () => repository.armAmbiguousCreate(),
+  ambiguousCreateEvidence: () => repository.ambiguousCreateEvidence(),
 };
 
 renderLibrary();

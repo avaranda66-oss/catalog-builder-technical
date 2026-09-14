@@ -4,6 +4,7 @@ export {
 } from './service';
 export type {
   CatalogLibraryFailureCode,
+  CatalogLibraryCreateState,
   CatalogLibraryQuery,
   CatalogLibraryResult,
   CatalogLibraryServiceOptions,
