@@ -1,6 +1,6 @@
 # W3.E — Catalog Library
 
-Status: **Ready for Principal W3.E Implementation Audit — DO NOT MERGE**
+Status: **Ready for Principal W3.E Ambiguous-Create Re-Audit — DO NOT MERGE**
 
 Date: 2026-09-14
 
@@ -153,6 +153,7 @@ One root integration writer owns all files in this session because the real AIOX
 | 2026-09-14 | 0.3.0 | First adversarial audit findings integrated: auth-lineage async protection, hardened Create ACK reconciliation, stale-list race protection, production-route proof coverage, and dialog keyboard/focus behavior. | @dev |
 | 2026-09-14 | 0.4.0 | Recovered second read-only audit returned B with two localized blockers; both received narrow amendments and regression coverage, followed by an A-accept amendment micro-audit. | @dev |
 | 2026-09-14 | 1.0.0 | Delivery candidate frozen with full closure gates and canonical proof set green; W3.F implementation remains not started. | @dev |
+| 2026-09-14 | 1.1.0 | Principal ambiguous-create amendment: same-attempt replay/verification, Father retry UX, origin-exact ACK/GET proof, regression/browser evidence, and refreshed closure gates. | @dev |
 
 ## Dev Agent Record
 
@@ -172,6 +173,11 @@ Codex Native2 root orchestrator. Real AIOX Task/subagent spawning was checked in
 - `.aiox/external-runs/20260914-141312-w3e-independent-reaudit/metadata.json`
 - `.aiox/external-runs/20260914-141312-w3e-independent-reaudit/output.md`
 - `.aiox/external-runs/20260914-141312-w3e-independent-reaudit/prompt.md`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/codex.log`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/command.txt`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/metadata.json`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/output.md`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/prompt.md`
 - `docs/stories/2026-09-14-vnext-w3e-catalog-library.md`
 - `src/vnext/app/CatalogLibrary.tsx`
 - `src/vnext/app/EditorWorkspace.tsx`
@@ -200,20 +206,51 @@ Codex Native2 root orchestrator. Real AIOX Task/subagent spawning was checked in
 ### Evidence packet
 
 - JOB: `W3.E`
-- Canonical base SHA/tree: `e37cdf3105626ce83763964f8d2a56a1fda1e01b` / `c7bf0865b9f51dd4ea624a196f08dec496aeed67`
-- Branch: `feat/vnext-w3e-catalog-library`
-- First independent audit: localized findings fixed before the recovered second audit.
-- Recovered second independent audit: **B — SMALL AMENDMENT REQUIRED** for exact-open auth lifetime and unresolved ambiguous Create retry.
-- Final amendment 1: exact-open auth listener is installed before asynchronous reopen and invalidates/removes stale-authority UI before reload.
-- Final amendment 2: unresolved ambiguous Create retains the exact catalog/mutation attempt and retries exact reconciliation instead of generating a second catalog.
-- Narrow amendment micro-audit: **A — ACCEPT**.
-- Focused amendment validation: 3 files / 48 tests PASS (`catalog-library-service`, `runtime-coordination`, `architecture-boundary`).
-- Full suite: 229 files PASS; 2,463 tests PASS; 1 skipped.
+- Canonical base SHA/tree: `e37cdf3105626ce83763964f8d2a56a1fda1e01b` / `c7bf0865b9f51dd4ea624a196f08dec496aeed67`.
+- Branch / PR: `feat/vnext-w3e-catalog-library` / `#34`.
+- Previous promoted W3.E head/tree before this Principal amendment: `68d3930894355b2155d6f17162deb3fb07bcdb9a` / `44954ee9d4f1a2d080e5441e23ce9ba746418d8b`.
+- Principal counterexample: an ambiguous Create retained C1/M1 in memory but could not make forward progress after authoritative `NOT_FOUND`; Father-facing refresh guidance could discard the pending identity and permit C2/M2.
+- Corrected pending state machine: while the same-authority attempt is pending, `catalogId`, `mutationId`, exact document snapshot, and optional origin are immutable; retries reconcile or replay that exact logical Create and ignore a newly requested title.
+- `NOT_FOUND` now replays `createCatalog()` with the exact same mutation/document/origin. Transport-unavailable verification preserves the attempt without replay. Exact GET/ACK proof clears pending only after catalog ID, document ID/equivalence, mutation ID, revision `1`, unarchived state, and origin all match.
+- Father UX no longer instructs refresh after unresolved Create ambiguity. Pending state projects as `Verificar criação` / `Verificando…`; React does not own mutation identity.
+- Authority separation remains fail-closed: A→B invalidates A's active pending operation; B cannot reconcile or replay A's identity.
+- Mandatory CREATE-AMB-01..07 coverage is present. CREATE-AMB-05 additionally covers the independent audit's origin-divergence counterexample.
+- Dedicated browser ambiguous-create evidence: first dispatch ambiguous; first GET `NOT_FOUND`; replay uses the same catalog ID `00000000-0000-4000-8000-000000001027`, same mutation ID `00000000-0000-4000-8000-000000001029`, same canonical document and same origin; replay accepted; `logicalCatalogCount=1`; canonical Open succeeds.
+- Single required narrow read-only micro-audit: **B — BLOCKER**. It found that the first amendment's exact ACK/GET proof omitted Create `origin`. The remaining inspected paths were consistent with the amendment. No second broad or narrow independent audit was launched.
+- Audit remediation: `verifiedCreateAcknowledgement()` now requires exact optional-origin equality, including `undefined` versus present origin. A focused regression proves divergent origin returns `REMOTE_DIVERGENCE`, preserves the pending attempt, and allocates no second Create identity/dispatch.
+- New production amendment commit: `293a29774b5f63bff05ea555547053e9a49c3b56`.
+- New production tree: `a25eefdae9acfb5bd6e574f4ab68d96e6bded10f`.
+- Production parent: `68d3930894355b2155d6f17162deb3fb07bcdb9a`.
+- Focused post-remediation validation: 5 files / 57 tests PASS (`catalog-library-service`, `catalog-library-ui`, `catalog-library-open-recovery`, `runtime-coordination`, `architecture-boundary`).
+- Full suite: 229 files PASS; 2,469 tests PASS; 1 skipped (2,470 total).
 - Lint: PASS, 0 errors / 268 existing warnings.
 - Typecheck: PASS.
 - Build: PASS.
-- Dedicated W3.E Chromium + mobile proof: PASS on Chromium `151.0.7922.34`; initial metadata listing `listCalls=2`, `getCalls=0`; persisted edit/reopen `1 → 2 → 2` pages at revision 2; stale Save after Archive rejected with `ARCHIVED`; mobile 320/360/390 has no horizontal overflow.
-- Canonical VNext proof set: 11/11 PASS, including native PDF/PDF.js export, W3.C Save/Reopen, both W3.D recovery proofs, and W3.E.
-- Known boundary: no cross-tab dirty-state discovery is introduced; remote CAS/archive authority remains the defense for independent stale tabs.
+- `git diff --check`: PASS.
+- Dedicated W3.E Chromium + mobile proof: PASS on Chromium `151.0.7922.34`; initial metadata listing `listCalls=2`, `getCalls=0`; persisted edit/reopen `1 → 2 → 2` pages at revision 2; stale Save after Archive rejected with `ARCHIVED`; mobile 320/360/390 has no horizontal overflow; ambiguous replay evidence proves identity/payload/origin reuse and one logical catalog.
+- Canonical VNext proof set after the final production remediation: **11/11 PASS**, including native PDF/PDF.js export, W3.C Save/Reopen, both W3.D recovery proofs, and W3.E.
+- Scope audit: no W3.F, Duplicate, Starter, Save-as-copy, Hard Delete, Restore/Unarchive, autosave, CRDT, Realtime, localStorage fallback, or Recovery redesign was added by this amendment.
+- Known boundary: the pending Create attempt is intentionally service-memory state; the UI no longer instructs browser refresh, and no prohibited persistence fallback was introduced.
 - W3.F IMPLEMENTATION NOT STARTED.
-- PR: pending `@devops` push/create after commit; DO NOT MERGE.
+- Remote state at final pre-push verification: `main=e37cdf3105626ce83763964f8d2a56a1fda1e01b`, PR #34 head `68d3930894355b2155d6f17162deb3fb07bcdb9a`; no drift. Push/new exact-head CI pending `@devops`. DO NOT MERGE.
+
+### Principal ambiguous-create amendment exact delta files
+
+Production/tests/proof commit `293a29774b5f63bff05ea555547053e9a49c3b56`:
+
+- `src/vnext/app/CatalogLibrary.tsx`
+- `src/vnext/library/index.ts`
+- `src/vnext/library/service.ts`
+- `tests/vnext/library/catalog-library-service.test.ts`
+- `tests/vnext/library/catalog-library-ui.test.tsx`
+- `tests/vnext/proof/fixtures/w3e-library-browser.tsx`
+- `tests/vnext/proof/w3e-catalog-library-proof.mjs`
+
+Evidence/story follow-up:
+
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/codex.log`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/command.txt`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/metadata.json`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/output.md`
+- `.aiox/external-runs/20260914-140132-w3e-ambiguous-create-micro-audit/prompt.md`
+- `docs/stories/2026-09-14-vnext-w3e-catalog-library.md`
