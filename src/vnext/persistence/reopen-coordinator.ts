@@ -59,10 +59,12 @@ export class CanonicalReopenCoordinator {
     }
 
     const authLineage = before.binding.authLineage;
+    const authorityScopeId = before.activeAuthorityScopeId;
     const result = await this.options.repository.getCatalog(catalogId);
     const afterRead = this.options.workspace.getSnapshot();
     if (
       afterRead.binding.authLineage !== authLineage
+      || afterRead.activeAuthorityScopeId !== authorityScopeId
       || afterRead.binding.openSessionId !== before.binding.openSessionId
       || afterRead.session !== before.session
     ) {
@@ -107,6 +109,7 @@ export class CanonicalReopenCoordinator {
       envelope,
       openSessionId,
       authLineage,
+      authorityScopeId,
       session.getSnapshot().localSequence
     );
     const assetUrls =

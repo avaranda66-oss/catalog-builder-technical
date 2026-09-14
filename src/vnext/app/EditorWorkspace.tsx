@@ -13,6 +13,7 @@ import {
   type TextObject,
 } from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
+import type { AuthoringRecoveryOverlay } from '../recovery';
 import type {
   AuthoringBarrierResult,
   SaveProjection,
@@ -115,6 +116,9 @@ export interface EditorWorkspacePersistenceProps {
   readonly openSessionId: string;
   readonly save: SaveProjection;
   readonly assetUrls: ReadonlyMap<string, string>;
+  readonly recoveredOverlay?: AuthoringRecoveryOverlay;
+  readonly localProtection: 'available' | 'unavailable';
+  readonly localProtectionMessage?: string;
 }
 
 export function EditorWorkspace({
@@ -198,6 +202,16 @@ export function EditorWorkspace({
     setMeasuredDiagnostics({ source, diagnostics });
   }, [session]);
   const [inspectorDraft, setInspectorDraft] = React.useState<InspectorDraft>({ x: '', y: '', width: '', height: '' });
+  const inspectorDraftRef = React.useRef(inspectorDraft);
+  inspectorDraftRef.current = inspectorDraft;
+  const inspectorTargetRef = React.useRef<{
+    pageId: string;
+    objectId: string;
+    expectedFrame: EditorialObject['frame'];
+  } | null>(null);
+  inspectorTargetRef.current = selectedObject
+    ? { pageId: selectedPage.id, objectId: selectedObject.id, expectedFrame: selectedObject.frame }
+    : null;
 
   React.useEffect(() => {
     const activePage = document.pages.find((page) => page.id === editorState.activePageId);
@@ -237,10 +251,14 @@ export function EditorWorkspace({
 
   React.useEffect(() => {
     if (!selectedObject) {
-      setInspectorDraft({ x: '', y: '', width: '', height: '' });
+      const empty = { x: '', y: '', width: '', height: '' };
+      inspectorDraftRef.current = empty;
+      setInspectorDraft(empty);
       return;
     }
-    setInspectorDraft({ x: String(selectedObject.frame.xMm), y: String(selectedObject.frame.yMm), width: String(selectedObject.frame.widthMm), height: String(selectedObject.frame.heightMm) });
+    const next = { x: String(selectedObject.frame.xMm), y: String(selectedObject.frame.yMm), width: String(selectedObject.frame.widthMm), height: String(selectedObject.frame.heightMm) };
+    inspectorDraftRef.current = next;
+    setInspectorDraft(next);
   }, [selectedObject]);
 
   React.useEffect(() => {
@@ -352,15 +370,119 @@ export function EditorWorkspace({
 
   const prepareTextDraftForSaveRef = React.useRef(prepareTextDraftForSave);
   prepareTextDraftForSaveRef.current = prepareTextDraftForSave;
+  const captureRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
+    const edit = textEditRef.current;
+    if (edit) {
+      return {
+        kind: 'TEXT_DRAFT_V1',
+        pageId: edit.pageId,
+        objectId: edit.objectId,
+        expectedText: edit.expectedText,
+        draft: edit.draft,
+        compositionWasActive: compositionRef.current,
+      };
+    }
+    const target = inspectorTargetRef.current;
+    if (!target) return undefined;
+    const draft = inspectorDraftRef.current;
+    const canonical = {
+      x: String(target.expectedFrame.xMm),
+      y: String(target.expectedFrame.yMm),
+      width: String(target.expectedFrame.widthMm),
+      height: String(target.expectedFrame.heightMm),
+    };
+    if (
+      draft.x === canonical.x
+      && draft.y === canonical.y
+      && draft.width === canonical.width
+      && draft.height === canonical.height
+    ) return undefined;
+    return {
+      kind: 'INSPECTOR_FRAME_DRAFT_V1',
+      pageId: target.pageId,
+      objectId: target.objectId,
+      expectedFrame: target.expectedFrame,
+      draft,
+    };
+  };
+  const captureRecoveryOverlayRef = React.useRef(captureRecoveryOverlay);
+  captureRecoveryOverlayRef.current = captureRecoveryOverlay;
+  const prepareAuthoringForSave = (): AuthoringBarrierResult => {
+    const textResult = prepareTextDraftForSaveRef.current();
+    if (!textResult.ok) return textResult;
+    if (captureRecoveryOverlayRef.current()?.kind === 'INSPECTOR_FRAME_DRAFT_V1') {
+      setStatusMessage('Conclua ou reverta a edição do Inspector antes de salvar.');
+      return {
+        ok: false,
+        reason: 'INVALID_DRAFT',
+        message: 'O rascunho do Inspector foi preservado e precisa ser concluído antes de salvar.',
+      };
+    }
+    return { ok: true };
+  };
+  const prepareAuthoringForSaveRef = React.useRef(prepareAuthoringForSave);
+  prepareAuthoringForSaveRef.current = prepareAuthoringForSave;
   const persistenceRuntime = persistence?.runtime;
   const persistenceOpenSessionId = persistence?.openSessionId;
   React.useEffect(() => {
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
-      prepareForSave: () => prepareTextDraftForSaveRef.current(),
-      hasPendingDraft: () => Boolean(textEditRef.current),
+      prepareForSave: () => prepareAuthoringForSaveRef.current(),
+      hasPendingDraft: () => Boolean(captureRecoveryOverlayRef.current()),
+      captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
+
+  const recoveredOverlay = persistence?.recoveredOverlay;
+  const restoredOverlayRef = React.useRef<AuthoringRecoveryOverlay | undefined>(undefined);
+  React.useEffect(() => {
+    if (!recoveredOverlay || restoredOverlayRef.current === recoveredOverlay) return;
+    restoredOverlayRef.current = recoveredOverlay;
+    const page = session.getSnapshot().document.pages.find(
+      (entry) => entry.id === recoveredOverlay.pageId
+    );
+    const object = page?.objects.find((entry) => entry.id === recoveredOverlay.objectId);
+    let restored = false;
+    if (
+      recoveredOverlay.kind === 'TEXT_DRAFT_V1'
+      && object?.type === 'text'
+      && JSON.stringify(object.text) === JSON.stringify(recoveredOverlay.expectedText)
+    ) {
+      const edit: TextEditSession = {
+        pageId: recoveredOverlay.pageId,
+        objectId: recoveredOverlay.objectId,
+        expectedText: recoveredOverlay.expectedText,
+        draft: recoveredOverlay.draft,
+      };
+      textEditRef.current = edit;
+      compositionRef.current = false;
+      setTextEdit(edit);
+      setEditorState({
+        activePageId: recoveredOverlay.pageId,
+        selectedObjectIds: [recoveredOverlay.objectId],
+        mode: 'text-edit',
+      });
+      restored = true;
+    } else if (
+      recoveredOverlay.kind === 'INSPECTOR_FRAME_DRAFT_V1'
+      && object
+      && JSON.stringify(object.frame) === JSON.stringify(recoveredOverlay.expectedFrame)
+    ) {
+      inspectorDraftRef.current = recoveredOverlay.draft;
+      setInspectorDraft(recoveredOverlay.draft);
+      setEditorState({
+        activePageId: recoveredOverlay.pageId,
+        selectedObjectIds: [recoveredOverlay.objectId],
+        mode: 'select',
+      });
+      restored = true;
+    }
+    persistenceRuntime?.consumeRecoveredOverlay(persistenceOpenSessionId!);
+    setStatusMessage(restored
+      ? 'Rascunho local recuperado. Confirme ou cancele antes de salvar.'
+      : 'O rascunho local não pôde ser aplicado porque o objeto mudou.');
+    persistenceRuntime?.workspace.notifyDraftStateChanged();
+  }, [persistenceOpenSessionId, persistenceRuntime, recoveredOverlay, session]);
 
   const startTextEdit = (object: EditorialObject): boolean => {
     if (object.type !== 'text') return false;
@@ -707,12 +829,20 @@ export function EditorWorkspace({
     const caret = start + symbol.length;
     textEditRef.current = nextEdit;
     setTextEdit(nextEdit);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
     queueMicrotask(() => {
       const current = textAreaRef.current;
       if (!current) return;
       current.focus();
       current.setSelectionRange(caret, caret);
     });
+  };
+
+  const updateInspectorDraft = (field: keyof InspectorDraft, value: string) => {
+    const next = { ...inspectorDraftRef.current, [field]: value };
+    inspectorDraftRef.current = next;
+    setInspectorDraft(next);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
   return (
@@ -961,7 +1091,7 @@ export function EditorWorkspace({
                     <div>
                       <input type="text" inputMode="decimal" data-inspector-field={field} value={inspectorDraft[field]}
                         readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
-                        onChange={(event) => setInspectorDraft((current) => ({ ...current, [field]: event.target.value }))}
+                        onChange={(event) => updateInspectorDraft(field, event.target.value)}
                         onBlur={() => commitInspector(field)}
                         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
                       />
@@ -1001,6 +1131,11 @@ export function EditorWorkspace({
               ? persistence.save.message ?? persistence.save.label
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
+          {persistence?.localProtection === 'unavailable' && (
+            <p className="vnext-live-status" role="alert">
+              {persistence.localProtectionMessage ?? 'Proteção local indisponível.'}
+            </p>
+          )}
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
       </div>

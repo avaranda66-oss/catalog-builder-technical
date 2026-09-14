@@ -1,0 +1,85 @@
+{
+  "status": "PASS",
+  "scenario": "ALL",
+  "testedImplementationHead": "7b88d8d5d2ead080e2e20489b9477f20094544b2",
+  "testedImplementationTree": "27f4fd9dbeece2880c20540840e6a5c8c881c13e",
+  "chromiumVersion": "151.0.7922.34",
+  "hardTermination": "Chromium OS process terminated without page, context, or browser close",
+  "profileReuse": true,
+  "proofs": {
+    "A": {
+      "transactionObservedFromFreshConnection": true,
+      "storedIdentity": {
+        "authorityScopeId": "physical:user-a",
+        "catalogId": "11111111-1111-4111-8111-111111111111",
+        "openSessionId": "6bfd744a-317e-4451-b34a-d6246eaaba04",
+        "recoveryGeneration": 1
+      },
+      "hardRestartSameProfile": true,
+      "newOpenSessionId": "5f0bb5b5-9078-4016-9570-e06b0fe3131a",
+      "freshUndoRedo": true,
+      "continuedEditing": true
+    },
+    "B": {
+      "transactionObservedFromFreshConnection": true,
+      "compositionIntentPersisted": true,
+      "canonicalBeforeConfirmation": "Canonical A",
+      "visibleRecoveredDraft": "Visible draft B",
+      "cancelCanonicalActionCount": 0,
+      "confirmCanonicalActionCount": 1,
+      "oneActionUndoRestored": "Canonical A"
+    },
+    "C": {
+      "preDispatchPendingTitle": "S1",
+      "newerLocalTitle": "L2",
+      "survivedAck": true,
+      "rebasedRemoteRevision": 2
+    },
+    "D": {
+      "mutationId": "6d687a76-78aa-4bec-b414-bbb2dd7397b2",
+      "noFalseSavedBeforeVerification": true,
+      "authoritativeProofWithoutReplay": true
+    },
+    "E": {
+      "originalMutationId": "75e72655-2c0f-455d-b6bc-62546163774d",
+      "replayMutationId": "75e72655-2c0f-455d-b6bc-62546163774d",
+      "exactPayload": true,
+      "divergentRemotePreservedWithoutReplay": true
+    },
+    "F": {
+      "recordCount": 2,
+      "distinctOpenSessionIds": 2
+    },
+    "G": {
+      "bEnumeratedA": 0,
+      "bEnumeratedOwn": 0,
+      "bInspectDenied": true,
+      "bDiscardDenied": true,
+      "bRecoverDenied": true,
+      "aReturnedRecords": 1
+    },
+    "H": {
+      "sameRevisionMismatchInstalled": false,
+      "newerRemoteOverwritten": false,
+      "remoteUnavailableBindingKind": "UNBOUND",
+      "protectedCanonicalInspection": true
+    },
+    "I": {
+      "editorAbsentWhileDiscoveryPending": true,
+      "editorAbsentWhileDecisionPending": true,
+      "recoveredSessionBecameEditable": true,
+      "staleProgrammaticInstallRejected": true,
+      "currentAuthoredWorkPreserved": true,
+      "oldRecoveryPreserved": true
+    },
+    "J": {
+      "editorGatedForInvalidRecord": true,
+      "invalidRecordNotAutomaticallyDeleted": true,
+      "protectedDiagnosticVisible": true,
+      "firstDiscardClickPreservedRecord": true,
+      "confirmedExactRecordDeleted": true,
+      "neighboringRecordPreserved": true,
+      "editorReleasedAfterResolution": true
+    }
+  }
+}

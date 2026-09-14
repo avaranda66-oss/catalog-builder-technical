@@ -1,4 +1,5 @@
 import type { DocumentSession } from '../application';
+import type { AuthoringRecoveryOverlay } from '../recovery/contracts';
 import type { CatalogPersistenceEnvelope } from './contracts';
 import { canonicalDocumentEquivalence } from './equivalence';
 
@@ -19,11 +20,13 @@ export type AuthoringBarrierResult =
 export interface AuthoringBarrier {
   prepareForSave(): AuthoringBarrierResult;
   hasPendingDraft(): boolean;
+  captureRecoveryOverlay?(): AuthoringRecoveryOverlay | undefined;
 }
 
 const NO_AUTHORING_BARRIER: AuthoringBarrier = {
   prepareForSave: () => ({ ok: true }),
   hasPendingDraft: () => false,
+  captureRecoveryOverlay: () => undefined,
 };
 
 export type PersistenceBinding =
@@ -31,16 +34,20 @@ export type PersistenceBinding =
       readonly kind: 'UNBOUND';
       readonly openSessionId: string;
       readonly authLineage: string;
+      readonly authorityScopeId: string;
       readonly initialEquivalence: string;
+      readonly initialSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
     }
   | {
       readonly kind: 'PERSISTED';
       readonly openSessionId: string;
       readonly authLineage: string;
+      readonly authorityScopeId: string;
       readonly catalogId: string;
       readonly remoteRevision: number;
       readonly lastMutationId: string;
       readonly acknowledgedEquivalence: string;
+      readonly acknowledgedSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
       readonly acknowledgedLocalSequence: number;
     };
 
@@ -74,18 +81,24 @@ export interface PersistenceWorkspaceSnapshot {
   readonly assetUrls: ReadonlyMap<string, string>;
   readonly dirty: boolean;
   readonly save: SaveProjection;
+  readonly activeAuthorityScopeId: string;
+  readonly localProtection: 'available' | 'unavailable';
+  readonly localProtectionMessage?: string;
 }
 
 export function createUnboundPersistenceBinding(
   session: DocumentSession,
   openSessionId: string,
-  authLineage: string
+  authLineage: string,
+  authorityScopeId: string
 ): PersistenceBinding {
   return {
     kind: 'UNBOUND',
     openSessionId,
     authLineage,
+    authorityScopeId,
     initialEquivalence: canonicalDocumentEquivalence(session.getSnapshot().document),
+    initialSnapshot: session.getSnapshot().document,
   };
 }
 
@@ -93,16 +106,19 @@ export function persistedBindingFromEnvelope(
   envelope: CatalogPersistenceEnvelope,
   openSessionId: string,
   authLineage: string,
+  authorityScopeId: string,
   localSequence: number
 ): PersistenceBinding {
   return {
     kind: 'PERSISTED',
     openSessionId,
     authLineage,
+    authorityScopeId,
     catalogId: envelope.catalogId,
     remoteRevision: envelope.remoteRevision,
     lastMutationId: envelope.lastMutationId,
     acknowledgedEquivalence: canonicalDocumentEquivalence(envelope.documentSnapshot),
+    acknowledgedSnapshot: envelope.documentSnapshot,
     acknowledgedLocalSequence: localSequence,
   };
 }
@@ -141,6 +157,9 @@ export class PersistenceWorkspace {
   private unsubscribeSession: (() => void) | undefined;
   private session: DocumentSession;
   private binding: PersistenceBinding;
+  private activeAuthorityScopeId: string;
+  private localProtection: 'available' | 'unavailable' = 'available';
+  private localProtectionMessage: string | undefined;
   private assetUrls: ReadonlyMap<string, string>;
   private snapshot: PersistenceWorkspaceSnapshot;
 
@@ -151,6 +170,7 @@ export class PersistenceWorkspace {
   ) {
     this.session = session;
     this.binding = binding;
+    this.activeAuthorityScopeId = binding.authorityScopeId;
     this.assetUrls = assetUrls;
     this.snapshot = this.buildSnapshot();
     this.bindSession();
@@ -190,6 +210,9 @@ export class PersistenceWorkspace {
       assetUrls: this.assetUrls,
       dirty,
       save: projection(this.binding, dirty, this.phase, this.phaseMessage),
+      activeAuthorityScopeId: this.activeAuthorityScopeId,
+      localProtection: this.localProtection,
+      ...(this.localProtectionMessage ? { localProtectionMessage: this.localProtectionMessage } : {}),
     };
   }
 
@@ -207,6 +230,10 @@ export class PersistenceWorkspace {
 
   getAuthoringBarrier(): AuthoringBarrier {
     return this.barrier;
+  }
+
+  captureRecoveryOverlay(): AuthoringRecoveryOverlay | undefined {
+    return this.barrier.captureRecoveryOverlay?.();
   }
 
   registerAuthoringBarrier(openSessionId: string, barrier: AuthoringBarrier): () => void {
@@ -248,6 +275,34 @@ export class PersistenceWorkspace {
     this.publish();
   }
 
+  updateAuthContext(authLineage: string, authorityScopeId: string): void {
+    const changedLineage = this.binding.authLineage !== authLineage;
+    const changedScope = this.activeAuthorityScopeId !== authorityScopeId;
+    if (!changedLineage && !changedScope) return;
+    this.activeAuthorityScopeId = authorityScopeId;
+    if (changedLineage) this.binding = { ...this.binding, authLineage };
+    if (changedScope) {
+      this.localProtection = 'available';
+      this.localProtectionMessage = undefined;
+    }
+    this.clearPhase();
+    this.publish();
+  }
+
+  setLocalProtectionAvailable(): void {
+    if (this.localProtection === 'available' && !this.localProtectionMessage) return;
+    this.localProtection = 'available';
+    this.localProtectionMessage = undefined;
+    this.publish();
+  }
+
+  setLocalProtectionUnavailable(message = 'Proteção local indisponível.'): void {
+    if (this.localProtection === 'unavailable' && this.localProtectionMessage === message) return;
+    this.localProtection = 'unavailable';
+    this.localProtectionMessage = message;
+    this.publish();
+  }
+
   acknowledge(
     openSessionId: string,
     authLineage: string,
@@ -259,6 +314,7 @@ export class PersistenceWorkspace {
       envelope,
       openSessionId,
       authLineage,
+      this.binding.authorityScopeId,
       acknowledgedLocalSequence
     );
     this.clearPhase();
@@ -274,6 +330,7 @@ export class PersistenceWorkspace {
     this.unsubscribeSession?.();
     this.session = session;
     this.binding = binding;
+    this.activeAuthorityScopeId = binding.authorityScopeId;
     this.assetUrls = assetUrls;
     this.barrier = NO_AUTHORING_BARRIER;
     this.clearPhase();
