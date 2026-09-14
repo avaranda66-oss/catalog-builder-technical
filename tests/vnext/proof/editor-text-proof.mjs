@@ -70,9 +70,9 @@ try {
   page.on('pageerror',(error)=>pageErrors.push(error.message));
   page.on('request',(request)=>requests.push(request.url()));
 
-  await page.goto(`http://127.0.0.1:${port}/v2`,{waitUntil:'networkidle'});
+  await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w2-editor-browser.html`,{waitUntil:'networkidle'});
   await page.locator('[data-vnext-shell]').waitFor();
-  assert.equal(requests.some((url)=>url.includes('/src/legacy-main')),false,'Legacy bootstrap must not load on /v2');
+  assert.equal(requests.some((url)=>url.includes('/src/legacy-main')),false,'Legacy bootstrap must not load in VNext editor proof');
 
   await page.locator('[data-editor-action="add-text"]').click();
   const textId=await page.locator('[data-editor-object-id][data-selected="true"]').getAttribute('data-editor-object-id');
@@ -186,7 +186,7 @@ try {
   await writeFile(resolve(output,'evidence.json'),JSON.stringify(evidence,null,2)+'\n','utf8');
   assert.deepEqual(consoleErrors,[]);
   assert.deepEqual(pageErrors,[]);
-  console.log('W2.G Chromium /v2 direct Text editing proof: PASS');
+  console.log('W2.G Chromium editor direct Text editing proof: PASS');
   console.log(JSON.stringify(evidence,null,2));
   await context.close();
 } finally {

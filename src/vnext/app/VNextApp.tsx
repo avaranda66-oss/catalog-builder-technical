@@ -15,9 +15,10 @@ function createBrowserId(): string {
 export interface VNextAppProps {
   session?: DocumentSession;
   runtime?: VNextPersistenceRuntime;
+  onRequestLibrary?: () => void;
 }
 
-function RuntimeWorkspace({ runtime }: { runtime: VNextPersistenceRuntime }) {
+function RuntimeWorkspace({ runtime, onRequestLibrary }: { runtime: VNextPersistenceRuntime; onRequestLibrary?: () => void }) {
   const snapshot = React.useSyncExternalStore(
     runtime.workspace.subscribe,
     runtime.workspace.getSnapshot,
@@ -43,6 +44,7 @@ function RuntimeWorkspace({ runtime }: { runtime: VNextPersistenceRuntime }) {
         <EditorWorkspace
           key={snapshot.binding.openSessionId}
           session={snapshot.session}
+          onRequestLibrary={onRequestLibrary}
           persistence={{
             runtime,
             openSessionId: snapshot.binding.openSessionId,
@@ -80,8 +82,8 @@ function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSess
   return <EditorWorkspace session={session} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, onRequestLibrary }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} />
+    ? <RuntimeWorkspace runtime={runtime} onRequestLibrary={onRequestLibrary} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} />;
 }

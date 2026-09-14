@@ -52,9 +52,9 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('request', (request) => requests.push(request.url()));
 
-  await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
+  await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w2-editor-browser.html`, { waitUntil: 'networkidle' });
   await page.locator('[data-vnext-shell]').waitFor();
-  assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load on /v2');
+  assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load in VNext editor proof');
   assert.equal(await page.locator('[data-editor-safe-area]').count(), 1, 'Configured Page.safeArea must render once in editor overlay');
 
   const pageBox = await page.locator('[data-editorial-root] [data-page-id]').first().boundingBox();
@@ -208,7 +208,7 @@ try {
   await writeFile(resolve(output, 'evidence.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(pageErrors, []);
-  console.log('W2.D Chromium /v2 proof: PASS');
+  console.log('W2.D Chromium editor proof: PASS');
   console.log(JSON.stringify(evidence, null, 2));
   await context.close();
 } finally {

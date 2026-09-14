@@ -112,3 +112,101 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-recovery-inspection textarea { width: 100%; min-height: 72px; margin-top: 6px; }
 .vnext-recovery-document-preview { height: 260px; overflow: hidden; margin: 10px 0; }
 .vnext-recovery-document-preview > [data-editorial-root] { width: 210mm; transform: scale(.28); transform-origin: top left; }
+
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; clip-path: inset(50%) !important; }
+.vnext-library-shell, .vnext-library-shell * { box-sizing: border-box; }
+.vnext-library-shell { width: 100%; min-width: 0; height: 100%; overflow: auto; background: #f4f6f8; color: #172033; }
+.vnext-library-header { position: sticky; top: 0; z-index: 20; display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #d9e0e8; background: rgb(255 255 255 / .97); padding: 0 max(22px, calc((100vw - 1160px) / 2)); backdrop-filter: blur(10px); }
+.vnext-library-header h1 { margin: 1px 0 0; color: #172033; font-size: 20px; letter-spacing: -.02em; }
+.vnext-library-create { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #003f78; border-radius: 7px; background: #003f78; color: #fff; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 16px; }
+.vnext-library-create:hover:not(:disabled) { background: #002f59; }
+.vnext-library-create:disabled { cursor: not-allowed; opacity: .55; }
+.vnext-library-content { width: min(1116px, calc(100% - 44px)); margin: 0 auto; padding: 54px 0 72px; }
+.vnext-library-intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+.vnext-library-eyebrow { color: #0067b9; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.vnext-library-intro h2 { margin: 7px 0 6px; color: #172033; font-size: clamp(25px, 3vw, 34px); line-height: 1.15; letter-spacing: -.035em; }
+.vnext-library-intro p { margin: 0; color: #66758a; font-size: 14px; line-height: 1.55; }
+.vnext-library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid #dbe2ea; border-bottom: 1px solid #dbe2ea; padding: 13px 0; }
+.vnext-library-tabs { display: flex; gap: 4px; }
+.vnext-library-tabs button { min-height: 40px; border: 0; border-radius: 6px; background: transparent; color: #5e6d80; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 14px; }
+.vnext-library-tabs button:hover { background: #e9eef4; }
+.vnext-library-tabs button.is-selected { background: #e6f0f9; color: #003f78; }
+.vnext-library-controls { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.vnext-library-search, .vnext-library-sort { display: flex; min-height: 42px; align-items: center; gap: 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #67768a; padding: 0 11px; }
+.vnext-library-search { width: min(320px, 36vw); }
+.vnext-library-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #24364d; font: inherit; font-size: 13px; }
+.vnext-library-search input::placeholder { color: #8592a2; }
+.vnext-library-sort select { min-width: 118px; border: 0; outline: 0; background: transparent; color: #33445a; font: inherit; font-size: 12px; font-weight: 600; }
+.vnext-library-list { display: grid; border-bottom: 1px solid #dbe2ea; }
+.vnext-library-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 24px; min-height: 104px; border-top: 1px solid #dbe2ea; background: transparent; padding: 20px 4px; }
+.vnext-library-row-main { min-width: 0; }
+.vnext-library-row h2 { overflow: hidden; margin: 0 0 7px; color: #1c2b3d; font-size: 18px; line-height: 1.3; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.vnext-library-meta { display: flex; flex-wrap: wrap; gap: 6px; color: #728095; font-size: 12px; }
+.vnext-library-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.vnext-library-row-actions button, .vnext-library-dialog-actions button, .vnext-library-error button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #c8d2de; border-radius: 6px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 0 12px; }
+.vnext-library-row-actions button:hover, .vnext-library-dialog-actions button:hover, .vnext-library-error button:hover { border-color: #8fa2b6; background: #f7f9fb; }
+.vnext-library-row-actions button.is-primary, .vnext-library-dialog-actions button.is-primary { border-color: #003f78; background: #003f78; color: #fff; }
+.vnext-library-row-actions button.is-primary:hover, .vnext-library-dialog-actions button.is-primary:hover { background: #002f59; }
+.vnext-library-dialog-actions button.is-danger { border-color: #a34242; background: #a34242; color: #fff; }
+.vnext-library-dialog-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.vnext-library-archived-state { border: 1px solid #cfd7e1; border-radius: 999px; background: #eef2f6; color: #657488; font-size: 11px; font-weight: 700; padding: 6px 10px; }
+.vnext-library-loading, .vnext-library-empty { display: grid; min-height: 300px; place-items: center; align-content: center; gap: 8px; color: #637287; text-align: center; }
+.vnext-library-loading { font-size: 13px; }
+.vnext-library-empty svg { color: #547b9f; }
+.vnext-library-empty h3 { margin: 5px 0 0; color: #26384d; font-size: 20px; letter-spacing: -.02em; }
+.vnext-library-empty p { max-width: 470px; margin: 0 0 12px; color: #728095; font-size: 13px; line-height: 1.55; }
+.vnext-library-empty.is-search { min-height: 230px; }
+.vnext-library-error { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; border: 1px solid #e0b3b3; border-radius: 8px; background: #fff5f5; color: #7e3030; font-size: 13px; line-height: 1.45; padding: 12px 14px; }
+.vnext-library-dialog-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; overflow: auto; background: rgb(15 23 42 / .58); padding: 20px; }
+.vnext-library-dialog { position: relative; width: min(480px, 100%); border: 1px solid #ccd6e2; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgb(15 23 42 / .24); padding: 26px; }
+.vnext-library-dialog h2 { margin: 0 36px 8px 0; color: #1d2d42; font-size: 20px; line-height: 1.3; letter-spacing: -.02em; }
+.vnext-library-dialog p { margin: 0 0 19px; color: #66758a; font-size: 13px; line-height: 1.55; }
+.vnext-library-dialog label { display: grid; gap: 7px; color: #45566d; font-size: 12px; font-weight: 700; }
+.vnext-library-dialog label input { width: 100%; min-height: 44px; border: 1px solid #bdc9d6; border-radius: 7px; outline: 0; color: #1e3046; font: inherit; font-size: 14px; padding: 0 11px; }
+.vnext-library-dialog label input:focus { border-color: #0072ce; box-shadow: 0 0 0 3px rgb(0 114 206 / .13); }
+.vnext-library-dialog-close { position: absolute; right: 18px; top: 18px; display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #657488; cursor: pointer; }
+.vnext-library-dialog-close:hover { background: #eef2f6; }
+.vnext-library-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.vnext-library-shell button:focus-visible, .vnext-library-shell input:focus-visible, .vnext-library-shell select:focus-visible { outline: 3px solid rgb(0 114 206 / .28); outline-offset: 2px; }
+.vnext-open-failure { display: grid; place-items: center; padding: 24px; }
+.vnext-open-failure > section { width: min(520px, 100%); text-align: center; }
+.vnext-open-failure .vnext-brand-mark { margin: 0 auto 18px; }
+.vnext-open-failure h1 { margin: 0 0 10px; color: #1d2d42; font-size: 26px; }
+.vnext-open-failure p { margin: 0 auto 22px; color: #66758a; line-height: 1.6; }
+
+@media (max-width: 700px) {
+  .vnext-library-header { min-height: 70px; gap: 12px; padding: 10px 14px; }
+  .vnext-library-header .vnext-brand { min-width: 0; }
+  .vnext-library-header .vnext-brand-mark { width: 34px; height: 34px; flex: none; }
+  .vnext-library-header .vnext-product-line { display: none; }
+  .vnext-library-header h1 { font-size: 18px; }
+  .vnext-library-header > .vnext-library-create { min-height: 42px; padding: 0 12px; }
+  .vnext-library-content { width: 100%; padding: 34px 14px 54px; }
+  .vnext-library-intro { margin-bottom: 22px; }
+  .vnext-library-intro h2 { font-size: 26px; }
+  .vnext-library-toolbar { align-items: stretch; flex-direction: column; gap: 10px; }
+  .vnext-library-tabs { width: 100%; }
+  .vnext-library-tabs button { flex: 1; }
+  .vnext-library-controls { width: 100%; }
+  .vnext-library-search { width: 100%; flex: 1; }
+  .vnext-library-sort { max-width: 154px; }
+  .vnext-library-sort select { min-width: 0; width: 100%; }
+  .vnext-library-row { grid-template-columns: 1fr; gap: 16px; padding: 20px 2px; }
+  .vnext-library-row h2 { font-size: 17px; white-space: normal; }
+  .vnext-library-row-actions { display: grid; grid-template-columns: 1.15fr 1fr 1fr; justify-content: stretch; }
+  .vnext-library-row-actions button { min-width: 0; min-height: 44px; padding: 0 8px; }
+  .vnext-library-archived-state { justify-self: start; }
+  .vnext-library-error { align-items: stretch; flex-direction: column; }
+  .vnext-library-dialog-backdrop { align-items: end; padding: 10px; }
+  .vnext-library-dialog { max-height: calc(100dvh - 20px); overflow: auto; border-radius: 14px 14px 10px 10px; padding: 22px 18px; }
+  .vnext-library-dialog-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .vnext-library-dialog-actions button { min-height: 46px; }
+}
+
+@media (max-width: 380px) {
+  .vnext-library-header > .vnext-library-create span { display: none; }
+  .vnext-library-controls { align-items: stretch; flex-direction: column; }
+  .vnext-library-sort { width: 100%; max-width: none; }
+  .vnext-library-row-actions { grid-template-columns: 1fr; }
+  .vnext-library-row-actions button { width: 100%; }
+}
