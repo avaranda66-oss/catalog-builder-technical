@@ -99,6 +99,15 @@ export class CanonicalReopenCoordinator {
     if (envelope.catalogId !== catalogId || envelope.documentSnapshot.id !== catalogId) {
       return { ok: false, error: { code: 'REQUESTED_ID_MISMATCH' } };
     }
+    if (envelope.archivedAt !== null) {
+      return {
+        ok: false,
+        error: {
+          code: 'ARCHIVED',
+          message: 'Catalog is archived',
+        },
+      };
+    }
 
     const session = createDocumentSession(
       envelope.documentSnapshot,

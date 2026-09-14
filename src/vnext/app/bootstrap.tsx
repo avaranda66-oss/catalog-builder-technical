@@ -6,6 +6,7 @@ import {
   createStaticPageTemplateRegistry,
   type ApplicationExecutionDependencies,
 } from '../application';
+import { CatalogLibraryService, type CatalogLibraryFailureCode } from '../library';
 import {
   SupabaseCatalogRepository,
   VNextPersistenceRuntime,
@@ -23,6 +24,7 @@ import {
   authLineageValue,
   createAuthLineageState,
 } from './auth-lineage';
+import { CatalogLibrary, CatalogOpenFailure } from './CatalogLibrary';
 import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-defaults';
 import { VNextApp } from './VNextApp';
 import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
@@ -65,15 +67,17 @@ function activeV2Url(runtime: VNextPersistenceRuntime): string {
     : '/v2';
 }
 
+function openFailureCode(code: string): CatalogLibraryFailureCode {
+  if (code === 'REQUESTED_ID_MISMATCH') return 'ENVELOPE_MISMATCH';
+  if (code === 'UNSAVED_CHANGES') return 'STALE_RESULT';
+  return code as CatalogLibraryFailureCode;
+}
+
 export async function mountVNextApp(root: HTMLElement): Promise<void> {
   const applicationDependencies: ApplicationExecutionDependencies = {
     createId: createBrowserId,
     templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]),
   };
-  const initialSession = createDocumentSession(
-    createW2CDemoDocument(createBrowserId),
-    applicationDependencies
-  );
   const supabase = getVNextSupabaseClient();
   const repository: CatalogRepository = supabase
     ? new SupabaseCatalogRepository(vnextRpcClientFromSupabase(supabase))
@@ -83,6 +87,41 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   let authLineage = createAuthLineageState(authIdentity(authSession));
   const lineage = () => authLineageValue(authLineage);
   const identity = () => authLineage.identity;
+  const requestedCatalogId = new URLSearchParams(window.location.search).get('catalog');
+
+  if (!requestedCatalogId) {
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies,
+      createId: createBrowserId,
+      createMutationId: createBrowserId,
+      createOpenSessionId: createBrowserId,
+      authLineage: lineage,
+      authorityScopeId: () => authorityScopeId(identity()),
+    });
+    if (supabase) {
+      supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
+        const previousIdentity = authLineage.identity;
+        const nextIdentity = authIdentity(nextSession);
+        authLineage = advanceAuthLineage(authLineage, nextIdentity);
+        if (nextIdentity !== previousIdentity) window.location.reload();
+      });
+    }
+    ReactDOM.createRoot(root).render(
+      <React.StrictMode>
+        <CatalogLibrary
+          service={library}
+          onOpen={(catalogId) => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
+        />
+      </React.StrictMode>
+    );
+    return;
+  }
+
+  const initialSession = createDocumentSession(
+    createW2CDemoDocument(createBrowserId),
+    applicationDependencies
+  );
   const recoveryRepository = new IndexedDbRecoveryRepository();
 
   const runtime = new VNextPersistenceRuntime({
@@ -98,26 +137,37 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     resolveAssetUrls: resolveKnownW2CDemoAssetUrls,
   });
 
-  const requestedCatalogId = new URLSearchParams(window.location.search).get('catalog');
-  if (requestedCatalogId) {
-    const opened = await runtime.reopenCoordinator.open(
-      requestedCatalogId,
-      { allowDiscardUnsaved: true }
-    );
-    if (!opened.ok) {
-      runtime.workspace.setPhase(
-        opened.error.code === 'UNAUTHORIZED' ? 'unauthorized' : 'unavailable',
-        opened.error.message ?? 'Não foi possível abrir o catálogo solicitado.'
-      );
-    }
-  }
-
+  let authorityInvalidated = false;
   if (supabase) {
     supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
+      const previousIdentity = authLineage.identity;
       const nextIdentity = authIdentity(nextSession);
       authLineage = advanceAuthLineage(authLineage, nextIdentity);
       runtime.updateAuthContext(lineage(), authorityScopeId(nextIdentity));
+      if (nextIdentity === previousIdentity) return;
+      authorityInvalidated = true;
+      root.replaceChildren();
+      window.location.reload();
     });
+  }
+
+  if (authorityInvalidated) return;
+
+  const opened = await runtime.reopenCoordinator.open(
+    requestedCatalogId,
+    { allowDiscardUnsaved: true }
+  );
+  if (authorityInvalidated) return;
+  if (!opened.ok) {
+    ReactDOM.createRoot(root).render(
+      <React.StrictMode>
+        <CatalogOpenFailure
+          code={openFailureCode(opened.error.code)}
+          onBack={() => window.location.assign('/v2')}
+        />
+      </React.StrictMode>
+    );
+    return;
   }
 
   void navigator.storage?.persist?.().catch(() => false);
@@ -131,23 +181,29 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
 
   window.addEventListener('popstate', () => {
     const targetCatalogId = new URLSearchParams(window.location.search).get('catalog');
-    const active = runtime.workspace.getSnapshot().binding;
-    if (!targetCatalogId) {
-      if (active.kind === 'PERSISTED') {
-        window.history.replaceState(null, '', activeV2Url(runtime));
-      }
+    const snapshot = runtime.workspace.getSnapshot();
+    const active = snapshot.binding;
+    if (active.kind === 'PERSISTED' && targetCatalogId === active.catalogId) return;
+    if (snapshot.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()) {
+      window.history.replaceState(null, '', activeV2Url(runtime));
+      runtime.workspace.setPhase('blocked', 'Salve suas alterações antes de sair deste catálogo.');
       return;
     }
-    if (active.kind === 'PERSISTED' && active.catalogId === targetCatalogId) return;
-    void runtime.reopenCoordinator.open(targetCatalogId).then((result) => {
-      if (result.ok) return;
-      window.history.replaceState(null, '', activeV2Url(runtime));
-    });
+    window.location.reload();
   });
+
+  const requestLibrary = () => {
+    const snapshot = runtime.workspace.getSnapshot();
+    if (snapshot.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()) {
+      runtime.workspace.setPhase('blocked', 'Salve suas alterações antes de voltar aos catálogos.');
+      return;
+    }
+    window.location.assign('/v2');
+  };
 
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <VNextApp runtime={runtime} />
+      <VNextApp runtime={runtime} onRequestLibrary={requestLibrary} />
     </React.StrictMode>
   );
 }

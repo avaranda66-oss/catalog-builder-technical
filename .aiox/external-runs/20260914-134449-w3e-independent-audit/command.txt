@@ -1,0 +1,1 @@
+codex -a never -s read-only exec -C 'C:\Users\Usuario\.codex\worktrees\972f\catalog-builder' -o 'C:\Users\Usuario\.codex\worktrees\972f\catalog-builder\.aiox\external-runs\20260914-134449-w3e-independent-audit\output.md' -

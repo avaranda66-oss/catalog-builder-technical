@@ -254,6 +254,23 @@ describe('VNext architecture boundary',()=>{
     expect(violations,violations.join('\n')).toEqual([]);
   });
 
+  it('invalidates an exact-open production route before an async reopen can survive an account switch',()=>{
+    const file=resolve(vnextRoot,'app/bootstrap.tsx');
+    const text=readFileSync(file,'utf8');
+    const runtimeIndex=text.indexOf('const runtime = new VNextPersistenceRuntime');
+    const listenerIndex=text.indexOf('supabase.auth.onAuthStateChange',runtimeIndex);
+    const openIndex=text.indexOf('await runtime.reopenCoordinator.open',runtimeIndex);
+    expect(runtimeIndex).toBeGreaterThanOrEqual(0);
+    expect(listenerIndex).toBeGreaterThan(runtimeIndex);
+    expect(openIndex).toBeGreaterThan(listenerIndex);
+    const guard=text.slice(listenerIndex,openIndex);
+    expect(guard).toContain('runtime.updateAuthContext');
+    expect(guard).toContain('authorityInvalidated = true');
+    expect(guard).toContain('root.replaceChildren()');
+    expect(guard).toContain('window.location.reload()');
+    expect(text.slice(openIndex,openIndex+260)).toContain('if (authorityInvalidated) return;');
+  });
+
   it('selects the VNext or Legacy entry before either application graph is loaded',()=>{
     const file=resolve(repoRoot,'src/main.tsx');
     const text=readFileSync(file,'utf8');

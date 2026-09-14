@@ -1,0 +1,29 @@
+{
+  "provider": "codex",
+  "slug": "w3e-ambiguous-create-micro-audit",
+  "created_at": "2026-09-14T17:01:32.8001790Z",
+  "workdir": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder",
+  "sandbox": "read-only",
+  "model": null,
+  "profile": null,
+  "foreground": true,
+  "allow_dirty": true,
+  "prompt_source": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\scratch\\w3e-audit\\ambiguous-create-micro-audit.md",
+  "run_dir": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\.aiox\\external-runs\\20260914-140132-w3e-ambiguous-create-micro-audit",
+  "prompt": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\.aiox\\external-runs\\20260914-140132-w3e-ambiguous-create-micro-audit\\prompt.md",
+  "output": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\.aiox\\external-runs\\20260914-140132-w3e-ambiguous-create-micro-audit\\output.md",
+  "log": "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\.aiox\\external-runs\\20260914-140132-w3e-ambiguous-create-micro-audit\\codex.log",
+  "command": "codex",
+  "args": [
+    "-a",
+    "never",
+    "-s",
+    "read-only",
+    "exec",
+    "-C",
+    "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder",
+    "-o",
+    "C:\\Users\\Usuario\\.codex\\worktrees\\972f\\catalog-builder\\.aiox\\external-runs\\20260914-140132-w3e-ambiguous-create-micro-audit\\output.md",
+    "-"
+  ]
+}

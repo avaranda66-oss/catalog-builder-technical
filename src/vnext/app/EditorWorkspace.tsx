@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, type ApplicationAction, type DocumentSession, type FrameU } from '../application';
 import {
   mmToU,
@@ -124,9 +124,11 @@ export interface EditorWorkspacePersistenceProps {
 export function EditorWorkspace({
   session,
   persistence,
+  onRequestLibrary,
 }: {
   session: DocumentSession;
   persistence?: EditorWorkspacePersistenceProps;
+  onRequestLibrary?: () => void;
 }) {
   const snapshot = useDocumentSession(session);
   const { document, canUndo, canRedo } = snapshot;
@@ -864,6 +866,18 @@ export function EditorWorkspace({
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
+          {persistence && onRequestLibrary && (
+            <button
+              type="button"
+              data-editor-action="library"
+              data-text-edit-cancel-on-activate=""
+              onClick={onRequestLibrary}
+              aria-label="Voltar aos catálogos"
+            >
+              <FolderOpen size={17} aria-hidden="true" />
+              <span>Catálogos</span>
+            </button>
+          )}
           {persistence && (
             <button
               type="button"

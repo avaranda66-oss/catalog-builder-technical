@@ -49,13 +49,13 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('request', (request) => requests.push(request.url()));
 
-  await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
+  await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w2-editor-browser.html`, { waitUntil: 'networkidle' });
   const shell = page.locator('[data-vnext-shell]');
   await shell.waitFor();
   const initialPageId = await shell.getAttribute('data-active-page-id');
   assert(initialPageId);
   assert.equal(await page.locator('.vnext-page-list button').count(), 1);
-  assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load on /v2');
+  assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load in VNext editor proof');
 
   await page.locator('[data-editor-action="insert-template"]').click();
   await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list button').length === 2);
@@ -161,7 +161,7 @@ try {
   await writeFile(resolve(output, 'evidence.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(pageErrors, []);
-  console.log('W2.E Chromium /v2 proof: PASS');
+  console.log('W2.E Chromium editor proof: PASS');
   console.log(JSON.stringify(evidence, null, 2));
   await context.close();
 } finally {

@@ -502,6 +502,21 @@ describe('W3.C canonical reopen', () => {
     expect(runtime.workspace.getSnapshot().binding).toMatchObject({ catalogId: A_ID });
   });
 
+  it('REOPEN-4 archived catalog fails closed before any editable session is installed', async () => {
+    const archived = {
+      ...envelope(documentFixture(B_ID, 'Archived catalog'), 6, M2),
+      archivedAt: '2026-09-14T12:00:00.000Z',
+    };
+    const { runtime, session } = runtimeFor(repositoryBase({
+      getCatalog: vi.fn(() => Promise.resolve({ ok: true as const, value: archived })),
+    }));
+    const before = runtime.workspace.getSnapshot().binding;
+    const result = await runtime.reopenCoordinator.open(B_ID);
+    expect(result).toMatchObject({ ok: false, error: { code: 'ARCHIVED' } });
+    expect(runtime.workspace.getSnapshot().session).toBe(session);
+    expect(runtime.workspace.getSnapshot().binding).toEqual(before);
+  });
+
   it('REOPEN-RACE preserves edits made after GET dispatch instead of installing the fetched catalog', async () => {
     const pending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
     const { runtime, session } = runtimeFor(repositoryBase({
