@@ -41,6 +41,34 @@ try {
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
+  // Phase 1: Production /v2 bootstrap + W3.F wiring smoke
+  const productionRequests = [];
+  page.on('request', (req) => productionRequests.push(req.url()));
+  await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
+  await page.locator('[data-catalog-library]').waitFor();
+  assert.equal(
+    productionRequests.some((url) => url.includes('/src/legacy-main')),
+    false,
+    'Legacy bootstrap must not be loaded on /v2 route'
+  );
+  await page.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
+  const productionChooser = page.getByRole('dialog', { name: 'Novo catálogo' });
+  await productionChooser.waitFor();
+  assert.equal(
+    await productionChooser.getByRole('button', { name: /Ficha técnica essencial/ }).count(),
+    1,
+    'Registered production Starter "Ficha técnica essencial" must be present in the production chooser'
+  );
+  await productionChooser.getByRole('button', { name: 'Fechar' }).click();
+  await productionChooser.waitFor({ state: 'detached' });
+  const productionSmoke = {
+    v2Mounted: true,
+    legacyBootstrapLoaded: false,
+    essentialStarterPresent: true,
+    chooserDismissedCleanly: true,
+  };
+
+  // Phase 2: Controlled repository Father-flow proof
   await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w3e-library-browser.html?proof=w3f`, { waitUntil: 'networkidle' });
   await page.locator('[data-catalog-library]').waitFor();
 
@@ -120,10 +148,31 @@ try {
   assert.deepEqual(starterTwo.origin, starterOne.origin);
   assert.equal(structuralIntersection(starterOne.structuralIds, starterTwo.structuralIds).length, 0);
 
-  await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.armAmbiguousCreate());
+  // Unresolved ambiguity phase: arm ambiguous create with verification held offline
+  await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.armAmbiguousCreate(true));
   const sourceRowForReplay = await rowByTitle(page, 'Álpha Calibradores');
   await sourceRowForReplay.getByRole('button', { name: 'Duplicar' }).click();
+
+  // 1. Pending state must become visible and primary action is "Verificar criação"
+  const pendingAlert = page.getByRole('alert');
+  await pendingAlert.waitFor();
+  const verifyButtons = page.getByRole('button', { name: 'Verificar criação' });
+  assert((await verifyButtons.count()) >= 1, 'Primary resolution action "Verificar criação" must be visible');
+  assert.equal(await page.getByRole('button', { name: 'Novo catálogo' }).count(), 0, 'Novo catálogo must not be accessible during pending create');
+
+  // 2. All row Open/Duplicate/Rename/Archive actions must be disabled
+  const sourceActionButtons = sourceRowForReplay.locator('button');
+  const sourceActionCount = await sourceActionButtons.count();
+  assert.equal(sourceActionCount, 4, 'Row must have 4 action buttons');
+  for (let i = 0; i < sourceActionCount; i += 1) {
+    assert.equal(await sourceActionButtons.nth(i).isDisabled(), true, 'Row action button must be disabled while createPending is true');
+  }
+
+  // 3. Allow authoritative verification and resolve pending create
+  await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.allowVerification());
+  await verifyButtons.first().click();
   await page.waitForFunction(() => window.__W3E_LIBRARY_PROOF__.ambiguousCreateEvidence().replayAccepted);
+
   const ambiguousDuplicate = await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.ambiguousCreateEvidence());
   assert.equal(ambiguousDuplicate.dispatches, 2);
   assert.equal(ambiguousDuplicate.firstVerificationNotFound, true);
@@ -132,6 +181,12 @@ try {
   assert.equal(ambiguousDuplicate.sameDocument, true);
   assert.equal(ambiguousDuplicate.sameOrigin, true);
   assert.equal(ambiguousDuplicate.logicalCatalogCount, 1, 'Ambiguous Duplicate must not create a ghost catalog');
+
+  // 4. Once resolved, row actions must be re-enabled and "Novo catálogo" restored
+  await page.getByRole('button', { name: 'Novo catálogo' }).waitFor();
+  for (let i = 0; i < sourceActionCount; i += 1) {
+    assert.equal(await sourceActionButtons.nth(i).isDisabled(), false, 'Row action button must re-enable once pending create is resolved');
+  }
 
   const sourceAfterAllClones = await page.evaluate((catalogId) => window.__W3E_LIBRARY_PROOF__.catalog(catalogId), sourceId);
   assert.equal(sourceAfterAllClones?.equivalence, sourceBefore.equivalence);
@@ -184,6 +239,12 @@ try {
   assert.deepEqual(pageErrors, []);
   const evidence = {
     chromiumVersion: browser.version(),
+    productionSmoke,
+    pendingNavigationAmendment: {
+      rowActionsDisabledDuringPending: true,
+      resolutionViaVerificarCriacao: true,
+      reenabledAfterResolution: true,
+    },
     sourceBefore,
     duplicateBeforeEdit,
     duplicateAfterEdit,

@@ -237,22 +237,25 @@ Final assessment: **READY**. The user supplied the complete Principal execution 
 | 2026-09-14 | 0.1.0 | W3.F implementation story created from the frozen Principal contract and exact live W3.E provenance. Status: Ready. | @sm |
 | 2026-09-14 | 0.2.0 | Development started in orchestrated sequential mode. Status: Ready → InProgress. | @dev |
 | 2026-09-15 | 1.0.0 | W3.F implementation, focused tests, browser/mobile proofs, full ladder, and adversarial audit completed. Status: InProgress → InReview. | @dev / @qa |
+| 2026-09-15 | 1.1.0 | W3.F Principal Narrow Amendment: pending-create navigation safety, PENDING-NAV-01..06, production /v2 bootstrap smoke, and controlled proof distinction. Status: InReview. | @dev / @qa |
 
 ## Dev Agent Record
 
 ### Agent model used
 
-Gemini 3.8 Flash (delivery closure continuation)
+Gemini 3.8 Flash (delivery closure continuation & principal amendment)
 
 ### Debug Log References
 
-- Focused W3.F tests: 53 passed in 4.04s (`catalog-clone.test.ts`, `catalog-starter-registry.test.ts`, `catalog-library-service.test.ts`, `catalog-library-ui.test.tsx`, `architecture-boundary.test.ts`, `catalog-library-open-recovery.test.tsx`).
-- Full unit/property test suite: 231 files passed, 2484 passed, 1 skipped in 72.28s (`npm test`).
+- Focused W3.F tests: 59 passed in 4.12s (`catalog-clone.test.ts`, `catalog-starter-registry.test.ts`, `catalog-library-service.test.ts`, `catalog-library-ui.test.tsx` [10 tests, including PENDING-NAV-01..06], `architecture-boundary.test.ts`, `catalog-library-open-recovery.test.tsx`).
+- Full unit/property test suite: 231 files passed, 2490 passed, 1 skipped in 71.85s (`npm test`).
 - Typecheck: clean (`tsc --noEmit` exit code 0).
 - Linter: 0 errors, 268 existing warnings (`npm run lint`).
-- Build: clean production bundle built in 17.68s (`npm run build`).
+- Build: clean production bundle built in 17.50s (`npm run build`).
 - Git diff whitespace check: clean (`git diff --check` exit code 0).
 - Dedicated W3.F Chromium/mobile proof: PASS (`w3f-starter-duplicate-proof.mjs`).
+  - Phase 1 (Production `/v2` bootstrap smoke): `/v2` mounted, legacy bootstrap excluded, registered Starter present in chooser, dialog dismissed cleanly.
+  - Phase 2 (Controlled repository Father-flow proof): nontrivial duplicate, independent save/reopen, starter disjointness, unresolved ambiguity gating with row actions disabled, same-attempt reconciliation via `Verificar criação`, and post-resolution re-enablement.
 - Canonical VNext proofs: 11/11 PASS (`w3e-catalog-library-proof.mjs`, `w3c-save-reopen-proof.mjs`, `w3d-indexeddb-adapter-proof.mjs`, `w3d-physical-recovery-proof.mjs`, `editor-direct-manipulation-proof.mjs`, `editor-group-proof.mjs`, `editor-snapping-diagnostics-proof.mjs`, `editor-template-insertion-proof.mjs`, `editor-text-proof.mjs`, `export-proof.mjs`, `group-export-proof.mjs`).
 
 ### Completion Notes List
@@ -266,6 +269,7 @@ Gemini 3.8 Flash (delivery closure continuation)
 - Typed deterministic origin metadata (`CreateCatalogRequest.origin`) for Duplicate (`originKind: 'duplicate'`) and Starter (`originKind: 'starter'`).
 - Single shared Create authority: `createBlank`, `duplicate`, and `createFromStarter` all funnel through `createPreparedDocument` and the hardened W3.E Create state machine.
 - Ambiguous Create replay reuses the exact same attempt (`catalogId`, `mutationId`, `documentSnapshot`, `origin`), preventing ghost copies.
+- Pending-create navigation safety: when `service.getCreateState() === 'pending-verification'`, row actions (`Abrir`, `Duplicar`, `Renomear`, `Arquivar`) are disabled, new catalog chooser is suppressed, and `beforeunload` warning is installed to prevent silent in-app destruction of the in-memory attempt.
 - Auth isolation enforces that operations started under one authority cannot complete into or be viewed by another authority.
 - Library UX extended with `Duplicar` row action and `Novo catálogo` modal chooser offering `Em branco` and registered Starters.
 - Full mobile responsiveness at 320, 360, and 390 px with touch targets >= 44px and zero horizontal overflow.
@@ -300,7 +304,8 @@ Gemini 3.8 Flash (delivery closure continuation)
 - ORIGIN-01..04: Verified PASS via `tests/vnext/library/catalog-library-service.test.ts`.
 - DUP-01..08: Verified PASS via unit, UI, and browser proof.
 - STARTER-01..06: Verified PASS via registry tests, service tests, and browser proof.
-- Browser Father proof: Verified PASS via `w3f-starter-duplicate-proof.mjs`.
+- PENDING-NAV-01..06: Verified PASS via `tests/vnext/library/catalog-library-ui.test.tsx` and dedicated browser proof.
+- Browser Father proof: Verified PASS via `w3f-starter-duplicate-proof.mjs`, explicitly distinguishing Phase 1 production `/v2` smoke from Phase 2 controlled repository Father-flow proof.
 
 ### Constrained Adversarial Audit
 

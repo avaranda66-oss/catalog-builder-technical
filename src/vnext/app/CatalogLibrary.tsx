@@ -127,6 +127,26 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const createPending = service.getCreateState() === 'pending-verification';
   const starters = service.listStarters();
 
+  React.useEffect(() => {
+    if (createPending) {
+      setCreateChooserOpen(false);
+      setRenameTarget(undefined);
+      setArchiveTarget(undefined);
+    }
+  }, [createPending]);
+
+  React.useEffect(() => {
+    if (!createPending) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [createPending]);
+
   const rememberDialogTrigger = () => {
     dialogTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   };
@@ -215,7 +235,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   };
 
   const duplicateCatalog = async (item: CatalogListItem) => {
-    if (busy) return;
+    if (busy || createPending) return;
     setBusy(true);
     setDuplicateTargetId(item.catalogId);
     setError(undefined);
@@ -229,9 +249,26 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
     await load();
   };
 
+  const verifyPendingCreate = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    const result = await service.createBlank();
+    setBusy(false);
+    if (!result.ok) {
+      setError(failureMessage(result.error.code, 'create'));
+      return;
+    }
+    if (result.value.origin?.originKind === 'duplicate') {
+      await load();
+      return;
+    }
+    onOpen(result.value.catalogId);
+  };
+
   const requestNewCatalog = () => {
     if (createPending) {
-      void createBlank();
+      void verifyPendingCreate();
       return;
     }
     rememberDialogTrigger();
@@ -240,7 +277,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
 
   const submitRename = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!renameTarget || busy) return;
+    if (!renameTarget || busy || createPending) return;
     setBusy(true);
     setError(undefined);
     const result = await service.rename(renameTarget.catalogId, renameTitle);
@@ -258,7 +295,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   };
 
   const confirmArchive = async () => {
-    if (!archiveTarget || busy) return;
+    if (!archiveTarget || busy || createPending) return;
     const target = archiveTarget;
     setBusy(true);
     setError(undefined);
@@ -334,7 +371,7 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
         {error && (
           <div className="vnext-library-error" role="alert">
             <span>{error}</span>
-            <button type="button" onClick={() => { if (createPending) void createBlank(); else void load(); }}>
+            <button type="button" onClick={() => { if (createPending) void verifyPendingCreate(); else void load(); }}>
               {createPending ? 'Verificar criação' : 'Tentar novamente'}
             </button>
           </div>
@@ -349,11 +386,11 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
                 key={item.catalogId}
                 item={item}
                 view={view}
-                onOpen={() => onOpen(item.catalogId)}
+                onOpen={() => { if (!busy && !createPending) onOpen(item.catalogId); }}
                 onDuplicate={() => { void duplicateCatalog(item); }}
-                onRename={() => { rememberDialogTrigger(); setRenameTarget(item); setRenameTitle(item.title); }}
-                onArchive={() => { rememberDialogTrigger(); setArchiveTarget(item); }}
-                disabled={busy}
+                onRename={() => { if (!busy && !createPending) { rememberDialogTrigger(); setRenameTarget(item); setRenameTitle(item.title); } }}
+                onArchive={() => { if (!busy && !createPending) { rememberDialogTrigger(); setArchiveTarget(item); } }}
+                disabled={busy || createPending}
                 duplicating={duplicateTargetId === item.catalogId}
               />
             ))}

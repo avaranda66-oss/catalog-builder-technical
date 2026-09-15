@@ -105,6 +105,7 @@ class BrowserLibraryRepository implements CatalogRepository {
   listCalls = 0;
   getCalls = 0;
   private ambiguousArmed = false;
+  private holdVerification = false;
   private ambiguousAttempt?: CreateCatalogRequest;
   private ambiguousReplay?: CreateCatalogRequest;
   private ambiguousFirstVerificationNotFound = false;
@@ -114,12 +115,17 @@ class BrowserLibraryRepository implements CatalogRepository {
     for (const record of initial) this.records.set(record.catalogId, record);
   }
 
-  armAmbiguousCreate(): void {
+  armAmbiguousCreate(holdVerification = false): void {
     this.ambiguousArmed = true;
+    this.holdVerification = holdVerification;
     this.ambiguousAttempt = undefined;
     this.ambiguousReplay = undefined;
     this.ambiguousFirstVerificationNotFound = false;
     this.ambiguousReplayAccepted = false;
+  }
+
+  allowVerification(): void {
+    this.holdVerification = false;
   }
 
   ambiguousCreateEvidence() {
@@ -156,6 +162,9 @@ class BrowserLibraryRepository implements CatalogRepository {
 
   getCatalog = async (catalogId: string): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
     this.getCalls += 1;
+    if (this.holdVerification && this.ambiguousAttempt?.documentSnapshot.id === catalogId) {
+      return { ok: false, error: { code: 'OFFLINE', message: 'Transport unavailable' } };
+    }
     const record = this.records.get(catalogId);
     if (!record && this.ambiguousAttempt?.documentSnapshot.id === catalogId) {
       this.ambiguousFirstVerificationNotFound = true;
@@ -435,7 +444,8 @@ declare global {
         readonly structuralIds: readonly string[];
         readonly equivalence: string;
       } | null;
-      armAmbiguousCreate(): void;
+      armAmbiguousCreate(holdVerification?: boolean): void;
+      allowVerification(): void;
       ambiguousCreateEvidence(): ReturnType<BrowserLibraryRepository['ambiguousCreateEvidence']>;
     };
   }
@@ -475,7 +485,8 @@ window.__W3E_LIBRARY_PROOF__ = {
         }
       : null;
   },
-  armAmbiguousCreate: () => repository.armAmbiguousCreate(),
+  armAmbiguousCreate: (holdVerification?: boolean) => repository.armAmbiguousCreate(holdVerification),
+  allowVerification: () => repository.allowVerification(),
   ambiguousCreateEvidence: () => repository.ambiguousCreateEvidence(),
 };
 
