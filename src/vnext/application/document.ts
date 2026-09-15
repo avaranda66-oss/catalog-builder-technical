@@ -30,6 +30,8 @@ function richTextIdentityIds(richText: RichText): string[] {
   ]);
 }
 
+const CANONICAL_CLONED_CATALOG_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** Canonical structural IDs owned by one object. RichText-local IDs are intentionally excluded. */
 export function canonicalObjectIdentityIds(object: EditorialObject): string[] {
   if (object.type === 'group') {
@@ -53,6 +55,40 @@ export function canonicalIdentityIds(document: CatalogDocument): string[] {
   for (const page of document.pages) {
     ids.push(page.id);
     for (const object of page.objects) ids.push(...canonicalObjectIdentityIds(object));
+  }
+  return ids;
+}
+
+/**
+ * Complete authored identity closure for clone/audit work. Immutable AssetRef IDs
+ * and CatalogDocument.source.documentId are references outside this structural
+ * closure and are intentionally excluded.
+ */
+export function authoredStructuralIdentityIds(document: CatalogDocument): string[] {
+  const ids = [document.id];
+  for (const page of document.pages) {
+    ids.push(page.id);
+    for (const { object } of walkPageObjects(page)) {
+      ids.push(object.id);
+      if (object.type === 'text') {
+        ids.push(...richTextIdentityIds(object.text));
+        continue;
+      }
+      if (object.type !== 'table') continue;
+      ids.push(
+        object.table.id,
+        ...object.table.columns.map((column) => column.id),
+        ...object.table.rows.map((row) => row.id),
+        ...object.table.cells.map((cell) => cell.id),
+        ...object.table.annotations.map((annotation) => annotation.id),
+        ...object.table.legend.map((entry) => entry.id)
+      );
+      for (const cell of object.table.cells) {
+        if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
+      }
+      for (const annotation of object.table.annotations) ids.push(...richTextIdentityIds(annotation.text));
+      for (const entry of object.table.legend) ids.push(...richTextIdentityIds(entry.text));
+    }
   }
   return ids;
 }
@@ -330,6 +366,49 @@ function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator
         frame: { ...seed.frame },
         objects: seed.objects.map((child) => instantiateObjectWithAllocator(child, allocator) as LeafEditorialObject),
       };
+  }
+}
+
+function instantiateCatalogPageWithAllocator(page: Page, allocator: IdAllocator): Page {
+  return {
+    ...page,
+    id: allocator.next(),
+    ...(page.safeArea === undefined ? {} : { safeArea: { ...page.safeArea } }),
+    objects: page.objects.map((object) => instantiateObjectWithAllocator(objectInstantiationSeedFromObject(object), allocator)),
+  };
+}
+
+export interface CatalogCloneOptions {
+  readonly title?: string;
+}
+
+/**
+ * The single application-layer authority for complete CatalogDocument cloning.
+ * Duplicate, Starter materialization, and future Save-as-copy callers share this
+ * allocator/remapping path; persistence provenance remains outside authored data.
+ */
+export class CatalogCloneService {
+  constructor(private readonly createId: IdGenerator) {}
+
+  clone(source: CatalogDocument, options: CatalogCloneOptions = {}): CatalogDocument {
+    const canonicalSource = parseCanonicalDocument(source);
+    const allocator = new IdAllocator(reservationIdentityIds(canonicalSource), this.createId);
+    const catalogId = allocator.next();
+    if (!CANONICAL_CLONED_CATALOG_ID.test(catalogId)) {
+      throw new ApplicationDocumentError(
+        'DOCUMENT_INVALID',
+        'Cloned catalog root must be an exact canonical lowercase UUID'
+      );
+    }
+    const clone: CatalogDocument = {
+      ...canonicalSource,
+      id: catalogId,
+      ...(options.title === undefined ? {} : { title: options.title }),
+      pages: canonicalSource.pages.map((page) => instantiateCatalogPageWithAllocator(page, allocator)),
+      assets: canonicalSource.assets.map((asset) => ({ ...asset })),
+      ...(canonicalSource.source === undefined ? {} : { source: { ...canonicalSource.source } }),
+    };
+    return parseCanonicalDocument(clone);
   }
 }
 

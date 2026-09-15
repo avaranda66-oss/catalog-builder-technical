@@ -6,7 +6,11 @@ import {
   createStaticPageTemplateRegistry,
   type ApplicationExecutionDependencies,
 } from '../application';
-import { CatalogLibraryService, type CatalogLibraryFailureCode } from '../library';
+import {
+  CatalogLibraryService,
+  createDefaultCatalogStarterRegistry,
+  type CatalogLibraryFailureCode,
+} from '../library';
 import {
   SupabaseCatalogRepository,
   VNextPersistenceRuntime,
@@ -98,6 +102,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       createOpenSessionId: createBrowserId,
       authLineage: lineage,
       authorityScopeId: () => authorityScopeId(identity()),
+      starterRegistry: createDefaultCatalogStarterRegistry(),
     });
     if (supabase) {
       supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {

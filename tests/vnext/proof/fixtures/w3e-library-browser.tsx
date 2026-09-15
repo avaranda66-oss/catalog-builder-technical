@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {
+  CatalogCloneService,
+  authoredStructuralIdentityIds,
   createCatalogDocument,
   createDocumentSession,
   createStaticPageTemplateRegistry,
@@ -8,7 +10,7 @@ import {
 } from '@/vnext/application';
 import { CatalogLibrary } from '@/vnext/app/CatalogLibrary';
 import { VNextApp } from '@/vnext/app/VNextApp';
-import { CatalogLibraryService } from '@/vnext/library';
+import { CatalogLibraryService, createDefaultCatalogStarterRegistry } from '@/vnext/library';
 import type {
   ArchiveCatalogCasRequest,
   CatalogListItem,
@@ -39,6 +41,7 @@ const dependencies: ApplicationExecutionDependencies = {
   createId,
   templateRegistry: createStaticPageTemplateRegistry([]),
 };
+const starterRegistry = createDefaultCatalogStarterRegistry();
 
 function envelope(
   id: string,
@@ -70,11 +73,39 @@ function envelope(
   };
 }
 
+function nontrivialEnvelope(id: string, title: string, updatedAt: string): CatalogPersistenceEnvelope {
+  const starter = starterRegistry.get('essential-technical-sheet');
+  if (!starter) throw new Error('Missing proof starter');
+  let rootPending = true;
+  const documentSnapshot = new CatalogCloneService(() => {
+    if (rootPending) {
+      rootPending = false;
+      return id;
+    }
+    return createId();
+  }).clone(starter.sourceDocument, { title });
+  return {
+    catalogId: id,
+    remoteRevision: 4,
+    lastMutationId: createId(),
+    title,
+    locale: documentSnapshot.locale,
+    createdAt: '2026-09-01T12:00:00.000Z',
+    updatedAt,
+    createdBy: 'proof-user',
+    updatedBy: 'proof-user',
+    archivedAt: null,
+    documentSchemaVersion: 1,
+    documentSnapshot,
+  };
+}
+
 class BrowserLibraryRepository implements CatalogRepository {
   readonly records = new Map<string, CatalogPersistenceEnvelope>();
   listCalls = 0;
   getCalls = 0;
   private ambiguousArmed = false;
+  private holdVerification = false;
   private ambiguousAttempt?: CreateCatalogRequest;
   private ambiguousReplay?: CreateCatalogRequest;
   private ambiguousFirstVerificationNotFound = false;
@@ -84,12 +115,17 @@ class BrowserLibraryRepository implements CatalogRepository {
     for (const record of initial) this.records.set(record.catalogId, record);
   }
 
-  armAmbiguousCreate(): void {
+  armAmbiguousCreate(holdVerification = false): void {
     this.ambiguousArmed = true;
+    this.holdVerification = holdVerification;
     this.ambiguousAttempt = undefined;
     this.ambiguousReplay = undefined;
     this.ambiguousFirstVerificationNotFound = false;
     this.ambiguousReplayAccepted = false;
+  }
+
+  allowVerification(): void {
+    this.holdVerification = false;
   }
 
   ambiguousCreateEvidence() {
@@ -126,6 +162,9 @@ class BrowserLibraryRepository implements CatalogRepository {
 
   getCatalog = async (catalogId: string): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
     this.getCalls += 1;
+    if (this.holdVerification && this.ambiguousAttempt?.documentSnapshot.id === catalogId) {
+      return { ok: false, error: { code: 'OFFLINE', message: 'Transport unavailable' } };
+    }
     const record = this.records.get(catalogId);
     if (!record && this.ambiguousAttempt?.documentSnapshot.id === catalogId) {
       this.ambiguousFirstVerificationNotFound = true;
@@ -218,7 +257,7 @@ const IDS = {
 } as const;
 
 const repository = new BrowserLibraryRepository([
-  envelope(IDS.alpha, 'Álpha Calibradores', '2026-09-14T10:00:00.000Z'),
+  nontrivialEnvelope(IDS.alpha, 'Álpha Calibradores', '2026-09-14T10:00:00.000Z'),
   envelope(IDS.beta, 'Beta Pressão', '2026-09-14T11:00:00.000Z'),
   envelope(IDS.zeta, 'Zeta Temperatura', '2026-09-14T09:00:00.000Z'),
   envelope(IDS.archived, 'Catálogo Histórico', '2026-09-13T09:00:00.000Z', '2026-09-13T10:00:00.000Z'),
@@ -232,6 +271,7 @@ const service = new CatalogLibraryService({
   createOpenSessionId: createId,
   authLineage: () => 'proof-user:0',
   authorityScopeId: () => 'proof:workspace:user',
+  starterRegistry,
 });
 
 let lastOpenedCatalogId: string | null = null;
@@ -239,6 +279,7 @@ let lastCanonicalOpen: { readonly catalogId: string; readonly ok: boolean; reado
 let recoveryTargetCatalogId: string | null = null;
 const recoveryRepository = new InMemoryRecoveryRepository();
 const authorityScopeId = 'proof:workspace:user';
+const w3fMode = new URLSearchParams(window.location.search).get('proof') === 'w3f';
 
 function createRuntime(binding?: CatalogPersistenceEnvelope, withRecovery = false): VNextPersistenceRuntime {
   const document = binding?.documentSnapshot ?? createCatalogDocument(createId, 'Proof bootstrap');
@@ -276,7 +317,7 @@ async function openFromLibrary(catalogId: string): Promise<void> {
   lastCanonicalOpen = opened.ok
     ? { catalogId, ok: true }
     : { catalogId, ok: false, code: opened.error.code };
-  if (opened.ok && withRecovery) {
+  if (opened.ok && (withRecovery || w3fMode)) {
     rootRenderer.render(
       <React.StrictMode>
         <VNextApp runtime={runtime} onRequestLibrary={renderLibrary} />
@@ -393,7 +434,18 @@ declare global {
         readonly recoveryGeneration: number;
       }>;
       recoveryCount(): Promise<number>;
-      armAmbiguousCreate(): void;
+      catalog(catalogId: string): {
+        readonly catalogId: string;
+        readonly title: string;
+        readonly remoteRevision: number;
+        readonly origin: CatalogPersistenceEnvelope['origin'];
+        readonly pageCount: number;
+        readonly objectTypes: readonly string[];
+        readonly structuralIds: readonly string[];
+        readonly equivalence: string;
+      } | null;
+      armAmbiguousCreate(holdVerification?: boolean): void;
+      allowVerification(): void;
       ambiguousCreateEvidence(): ReturnType<BrowserLibraryRepository['ambiguousCreateEvidence']>;
     };
   }
@@ -418,7 +470,23 @@ window.__W3E_LIBRARY_PROOF__ = {
   staleSaveAfterArchive,
   seedRecovery,
   recoveryCount: async () => (await recoveryRepository.listByScope(authorityScopeId)).length,
-  armAmbiguousCreate: () => repository.armAmbiguousCreate(),
+  catalog: (catalogId) => {
+    const record = repository.records.get(catalogId);
+    return record
+      ? {
+          catalogId: record.catalogId,
+          title: record.title,
+          remoteRevision: record.remoteRevision,
+          origin: record.origin,
+          pageCount: record.documentSnapshot.pages.length,
+          objectTypes: record.documentSnapshot.pages.flatMap((page) => page.objects.map((object) => object.type)),
+          structuralIds: [...authoredStructuralIdentityIds(record.documentSnapshot)].sort(),
+          equivalence: canonicalDocumentEquivalence(record.documentSnapshot),
+        }
+      : null;
+  },
+  armAmbiguousCreate: (holdVerification?: boolean) => repository.armAmbiguousCreate(holdVerification),
+  allowVerification: () => repository.allowVerification(),
   ambiguousCreateEvidence: () => repository.ambiguousCreateEvidence(),
 };
 
