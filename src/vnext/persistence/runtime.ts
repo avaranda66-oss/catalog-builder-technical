@@ -32,7 +32,9 @@ export interface VNextPersistenceRuntimeOptions {
   readonly recoveryMaxWaitMs?: number;
   readonly binding?: CatalogPersistenceEnvelope;
   readonly assetUrls?: ReadonlyMap<string, string>;
-  readonly resolveAssetUrls?: (document: CatalogDocument) => ReadonlyMap<string, string>;
+  readonly resolveAssetUrls?: (
+    document: CatalogDocument
+  ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
 }
 
 interface RecoveryInstallGuard {
@@ -55,7 +57,7 @@ export class VNextPersistenceRuntime {
   readonly recoveryManager: SessionRecoveryManager | undefined;
   readonly recoveryStartup: RecoveryStartupCoordinator | undefined;
   private recoveredOverlay: { readonly openSessionId: string; readonly overlay: AuthoringRecoveryOverlay } | undefined;
-  private readonly resolveAssetUrls: ((document: CatalogDocument) => ReadonlyMap<string, string>) | undefined;
+  private readonly resolveAssetUrls: ((document: CatalogDocument) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>) | undefined;
 
   constructor(options: VNextPersistenceRuntimeOptions) {
     this.resolveAssetUrls = options.resolveAssetUrls;
@@ -258,6 +260,10 @@ export class VNextPersistenceRuntime {
     this.recoveredOverlay = accepted.overlay
       ? { openSessionId: accepted.openSessionId, overlay: accepted.overlay }
       : undefined;
+    const resolvedUrls = this.resolveAssetUrls?.(accepted.session.getSnapshot().document);
+    const assetUrls =
+      (resolvedUrls instanceof Promise ? await resolvedUrls : resolvedUrls)
+      ?? new Map<string, string>();
     this.workspace.replaceActive(
       accepted.session,
       persistedBindingFromEnvelope(
@@ -267,7 +273,7 @@ export class VNextPersistenceRuntime {
         guard.authorityScopeId,
         accepted.session.getSnapshot().localSequence
       ),
-      this.resolveAssetUrls?.(accepted.session.getSnapshot().document) ?? new Map()
+      assetUrls
     );
     await this.recoveryManager.flush();
     const cleanup = await this.recoveryCoordinator.deleteIfGeneration(

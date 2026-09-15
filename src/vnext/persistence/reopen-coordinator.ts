@@ -33,7 +33,9 @@ export interface CanonicalReopenCoordinatorOptions {
   readonly repository: CatalogRepository;
   readonly applicationDependencies: ApplicationExecutionDependencies;
   readonly createOpenSessionId: () => string;
-  readonly resolveAssetUrls?: (document: CatalogDocument) => ReadonlyMap<string, string>;
+  readonly resolveAssetUrls?: (
+    document: CatalogDocument
+  ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
   readonly canLeave?: () => boolean;
 }
 
@@ -121,8 +123,9 @@ export class CanonicalReopenCoordinator {
       authorityScopeId,
       session.getSnapshot().localSequence
     );
+    const resolved = this.options.resolveAssetUrls?.(envelope.documentSnapshot);
     const assetUrls =
-      this.options.resolveAssetUrls?.(envelope.documentSnapshot)
+      (resolved instanceof Promise ? await resolved : resolved)
       ?? new Map<string, string>();
     this.options.workspace.replaceActive(session, binding, assetUrls);
     return { ok: true, envelope };

@@ -14,6 +14,7 @@ import {
 } from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
 import type { AuthoringRecoveryOverlay } from '../recovery';
+import type { AssetPersistenceBridge } from '../asset';
 import type {
   AuthoringBarrierResult,
   SaveProjection,
@@ -119,6 +120,7 @@ export interface EditorWorkspacePersistenceProps {
   readonly recoveredOverlay?: AuthoringRecoveryOverlay;
   readonly localProtection: 'available' | 'unavailable';
   readonly localProtectionMessage?: string;
+  readonly assetBridge?: AssetPersistenceBridge;
 }
 
 export function EditorWorkspace({
@@ -143,6 +145,7 @@ export function EditorWorkspace({
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const textEditRef = React.useRef<TextEditSession | null>(null);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const compositionRef = React.useRef(false);
   const lastTextPointerDownRef = React.useRef<{
     objectId: string;
@@ -638,6 +641,63 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Imagem substituída.' : 'Não foi possível substituir a imagem.');
   };
 
+  const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedObject || selectedObject.type !== 'image') return;
+    event.target.value = '';
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+
+    if (!persistence?.assetBridge) {
+      const result = session.execute({
+        type: 'image.replace',
+        objectId: selectedObject.id,
+        assetId: alternateDemoAssetId(selectedObject.assetId),
+      });
+      setStatusMessage(result.ok ? 'Imagem substituída (modo demo).' : 'Não foi possível substituir a imagem.');
+      return;
+    }
+
+    setStatusMessage('Enviando imagem…');
+    try {
+      const buffer = await file.arrayBuffer();
+      const uploadResult = await persistence.assetBridge.upload({
+        bytes: buffer,
+        filename: file.name,
+        mimeHint: file.type,
+        context: {
+          authLineage: persistence.runtime.workspace.getSnapshot().binding.authLineage,
+          authorityScopeId: persistence.runtime.workspace.getSnapshot().activeAuthorityScopeId,
+        },
+      });
+
+      if (!uploadResult.ok) {
+        setStatusMessage(`Falha no upload: ${uploadResult.error.message}`);
+        return;
+      }
+
+      const actionResult = session.execute({
+        type: 'image.replace',
+        objectId: selectedObject.id,
+        assetId: uploadResult.record.asset.id,
+        asset: uploadResult.record.asset,
+      });
+
+      if (!actionResult.ok) {
+        setStatusMessage('Falha ao vincular imagem ao documento.');
+        return;
+      }
+
+      persistence.runtime.workspace.setAssetUrl(
+        uploadResult.record.asset.id,
+        uploadResult.record.runtimeUrl
+      );
+      setStatusMessage('Imagem enviada e vinculada com sucesso.');
+    } catch (error) {
+      setStatusMessage(`Erro no envio da imagem: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const toggleSnapping = () => {
     if (!finishTextEditBeforeCommand()) return;
     const next = !snappingEnabledRef.current;
@@ -954,6 +1014,16 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
               <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
               <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image'} onClick={replaceSelectedImage}>Substituir imagem</button>
+              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image'} onClick={() => fileInputRef.current?.click()}>Upload imagem</button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                data-editor-action="upload-image-input"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleImageFileChange}
+                aria-hidden="true"
+              />
               <button
                 type="button"
                 data-editor-action="edit-text"

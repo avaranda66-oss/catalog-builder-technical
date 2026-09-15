@@ -1,4 +1,4 @@
-import { frameToCanonicalU, mmToU, visualPageObjects, type CatalogDocument, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page } from '../domain';
 import { add } from '../domain/physical';
 import { validateTable } from '../table';
 import {
@@ -202,6 +202,19 @@ function validateTemplateObjectBeforeAllocation(
     }
   }
   return undefined;
+}
+
+function assetRefEquals(left: AssetRef, right: AssetRef): boolean {
+  return (
+    left.id === right.id &&
+    left.version === right.version &&
+    left.sha256 === right.sha256 &&
+    left.mime === right.mime &&
+    left.widthPx === right.widthPx &&
+    left.heightPx === right.heightPx &&
+    left.name === right.name &&
+    left.alt === right.alt
+  );
 }
 
 export function executeApplicationAction(
@@ -581,21 +594,71 @@ export function executeApplicationAction(
         candidate = pageWithObjects(document, location.pageIndex, normalized);
         break;
       }
+      case 'asset.register': {
+        const parsedAsset = AssetRefSchema.safeParse(action.asset);
+        if (!parsedAsset.success) {
+          return failure('ACTION_INVALID', parsedAsset.error.message);
+        }
+        const existing = candidate.assets.find((asset) => asset.id === action.asset.id);
+        if (existing) {
+          if (assetRefEquals(existing, action.asset)) {
+            changed = false;
+            affectedIds = [action.asset.id];
+            break;
+          }
+          return failure('ACTION_INVALID', `Asset ID ${action.asset.id} already exists with divergent metadata`);
+        }
+        candidate = {
+          ...candidate,
+          assets: [...candidate.assets, action.asset],
+        };
+        changed = true;
+        affectedIds = [action.asset.id];
+        createdIds = [action.asset.id];
+        break;
+      }
       case 'image.replace': {
-        const location = findObjectLocation(document, action.objectId);
+        const replacementAsset = action.asset;
+        let assetAdded = false;
+        if (replacementAsset !== undefined) {
+          if (replacementAsset.id !== action.assetId) {
+            return failure('ACTION_INVALID', `Action assetId ${action.assetId} does not match asset payload id ${replacementAsset.id}`);
+          }
+          const parsedAsset = AssetRefSchema.safeParse(replacementAsset);
+          if (!parsedAsset.success) {
+            return failure('ACTION_INVALID', parsedAsset.error.message);
+          }
+          const existing = candidate.assets.find((asset) => asset.id === replacementAsset.id);
+          if (existing) {
+            if (!assetRefEquals(existing, replacementAsset)) {
+              return failure('ACTION_INVALID', `Asset ID ${replacementAsset.id} already exists with divergent metadata`);
+            }
+          } else {
+            candidate = {
+              ...candidate,
+              assets: [...candidate.assets, replacementAsset],
+            };
+            assetAdded = true;
+            createdIds = [replacementAsset.id];
+          }
+        }
+
+        const location = findObjectLocation(candidate, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
         const childFailure = groupedChildMutation(location, action.objectId);
         if (childFailure) return childFailure;
         if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
         if (location.object.type !== 'image') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
-        if (!document.assets.some((asset) => asset.id === action.assetId)) return failure('ASSET_NOT_FOUND', action.assetId);
-        changed = location.object.assetId !== action.assetId;
-        affectedIds = [action.objectId];
-        if (!changed) break;
+        if (!candidate.assets.some((asset) => asset.id === action.assetId)) return failure('ASSET_NOT_FOUND', action.assetId);
+
+        const imageChanged = location.object.assetId !== action.assetId;
+        changed = assetAdded || imageChanged;
+        affectedIds = action.asset !== undefined ? [action.objectId, action.asset.id] : [action.objectId];
+        if (!imageChanged) break;
 
         const next = { ...location.object, assetId: action.assetId };
         candidate = pageWithObjects(
-          document,
+          candidate,
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { CatalogDocument } from '../domain';
 import {
+  AssetRefSchema,
   BorderSchema,
   ImageFocalPointSchema,
   RichTextSchema,
@@ -165,6 +166,12 @@ export const ReplaceImageActionSchema = z.object({
   type: z.literal('image.replace'),
   objectId: applicationId,
   assetId: applicationId,
+  asset: AssetRefSchema.optional(),
+}).strict();
+
+export const RegisterAssetActionSchema = z.object({
+  type: z.literal('asset.register'),
+  asset: AssetRefSchema,
 }).strict();
 
 export const SetTextContentActionSchema = z.object({
@@ -199,6 +206,7 @@ export const ApplicationActionSchema = z.discriminatedUnion('type', [
   ResizeObjectActionSchema,
   ReorderObjectActionSchema,
   ReplaceImageActionSchema,
+  RegisterAssetActionSchema,
   SetTextContentActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,

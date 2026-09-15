@@ -21,6 +21,12 @@ import {
   getVNextSupabaseClient,
   vnextRpcClientFromSupabase,
 } from '../persistence/supabase-client';
+import type { CatalogDocument } from '../domain';
+import {
+  DefaultAssetPersistenceBridge,
+  SupabaseAssetRepository,
+  supabaseStorageClientFromSupabase,
+} from '../asset';
 import { IndexedDbRecoveryRepository } from '../recovery';
 import {
   ANONYMOUS_AUTH_IDENTITY,
@@ -128,6 +134,34 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     applicationDependencies
   );
   const recoveryRepository = new IndexedDbRecoveryRepository();
+  const assetRepository = supabase
+    ? new SupabaseAssetRepository(
+        vnextRpcClientFromSupabase(supabase),
+        supabaseStorageClientFromSupabase(supabase.storage)
+      )
+    : undefined;
+  const assetBridge = assetRepository
+    ? new DefaultAssetPersistenceBridge(assetRepository)
+    : undefined;
+
+  const resolveAssetUrls = async (
+    doc: CatalogDocument
+  ): Promise<ReadonlyMap<string, string>> => {
+    const map = new Map<string, string>(resolveKnownW2CDemoAssetUrls(doc));
+    if (assetBridge) {
+      try {
+        const resolved = await assetBridge.resolveDocument(doc, { authLineage: lineage() });
+        for (const [id, state] of resolved.entries()) {
+          if (state.status === 'resolved') {
+            map.set(id, state.url);
+          }
+        }
+      } catch {
+        // Degraded editing: remote asset failure is ephemeral runtime state
+      }
+    }
+    return map;
+  };
 
   const runtime = new VNextPersistenceRuntime({
     session: initialSession,
@@ -139,7 +173,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     authorityScopeId: authorityScopeId(identity()),
     recoveryRepository,
     assetUrls: resolveKnownW2CDemoAssetUrls(initialSession.getSnapshot().document),
-    resolveAssetUrls: resolveKnownW2CDemoAssetUrls,
+    resolveAssetUrls,
   });
 
   let authorityInvalidated = false;
@@ -208,7 +242,11 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
 
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <VNextApp runtime={runtime} onRequestLibrary={requestLibrary} />
+      <VNextApp
+        runtime={runtime}
+        assetBridge={assetBridge}
+        onRequestLibrary={requestLibrary}
+      />
     </React.StrictMode>
   );
 }

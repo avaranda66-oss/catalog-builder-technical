@@ -303,6 +303,18 @@ export class PersistenceWorkspace {
     this.publish();
   }
 
+  updateAssetUrls(urls: ReadonlyMap<string, string>): void {
+    this.assetUrls = urls;
+    this.publish();
+  }
+
+  setAssetUrl(assetId: string, url: string): void {
+    const next = new Map(this.assetUrls);
+    next.set(assetId, url);
+    this.assetUrls = next;
+    this.publish();
+  }
+
   acknowledge(
     openSessionId: string,
     authLineage: string,

@@ -53,6 +53,12 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
       return 'O conteúdo da tabela ultrapassa a altura criada. Redimensione o quadro ou ajuste o conteúdo manualmente.';
     case 'TABLE_WIDTH_INFEASIBLE':
       return 'A largura criada não comporta as restrições das colunas. A tabela continua com a largura escolhida até você corrigir.';
+    case 'ASSET_UNAVAILABLE':
+      return 'A imagem remota está temporariamente indisponível ou offline.';
+    case 'ASSET_INTEGRITY_FAILED':
+      return 'A imagem remota falhou na verificação de integridade dos bytes.';
+    case 'ASSET_REFERENCE_DANGLING':
+      return 'A referência da imagem não foi encontrada nos metadados do documento.';
     default:
       return diagnostic.details;
   }
