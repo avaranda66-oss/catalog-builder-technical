@@ -1,7 +1,6 @@
 import type { AssetRef, CatalogDocument } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { sha256 } from '../asset/integrity';
-import { sniffImageDimensions, sniffImageMime } from '../asset/sniff';
 
 export { sha256 };
 
@@ -57,11 +56,6 @@ export async function resolveAssets(doc:CatalogDocument,resolveAssetUrl:AssetUrl
       if(!response.ok)throw new VNextError('REQUIRED_ASSET_MISSING',asset.id);
       const bytes=await response.arrayBuffer();
       if(await sha256(bytes)!==asset.sha256)throw new VNextError('ASSET_HASH_MISMATCH',asset.id);
-      const detectedMime = sniffImageMime(bytes);
-      if(!detectedMime || detectedMime !== asset.mime)throw new VNextError('ASSET_MIME_MISMATCH',asset.id);
-      const dimensions = sniffImageDimensions(bytes);
-      if(dimensions && (dimensions.widthPx !== asset.widthPx || dimensions.heightPx !== asset.heightPx))
-        throw new VNextError('ASSET_DIMENSIONS_MISMATCH',asset.id);
       const blob=new Blob([bytes],{type:asset.mime});
       urls.set(asset.id,URL.createObjectURL(blob));
       manifest.push({id:asset.id,version:asset.version,sha256:asset.sha256,widthPx:asset.widthPx,heightPx:asset.heightPx,mime:asset.mime});
