@@ -1,6 +1,7 @@
 import React from 'react';
 import { createDocumentSession, createStaticPageTemplateRegistry, type DocumentSession } from '../application';
 import type { VNextPersistenceRuntime } from '../persistence';
+import type { AssetPersistenceBridge } from '../asset';
 import { createW2CDemoDocument } from './editor-defaults';
 import { EditorWorkspace } from './EditorWorkspace';
 import { RecoveryCenter, type RecoveryGatePhase } from './RecoveryCenter';
@@ -15,10 +16,19 @@ function createBrowserId(): string {
 export interface VNextAppProps {
   session?: DocumentSession;
   runtime?: VNextPersistenceRuntime;
+  assetBridge?: AssetPersistenceBridge;
   onRequestLibrary?: () => void;
 }
 
-function RuntimeWorkspace({ runtime, onRequestLibrary }: { runtime: VNextPersistenceRuntime; onRequestLibrary?: () => void }) {
+function RuntimeWorkspace({
+  runtime,
+  assetBridge,
+  onRequestLibrary,
+}: {
+  runtime: VNextPersistenceRuntime;
+  assetBridge?: AssetPersistenceBridge;
+  onRequestLibrary?: () => void;
+}) {
   const snapshot = React.useSyncExternalStore(
     runtime.workspace.subscribe,
     runtime.workspace.getSnapshot,
@@ -50,6 +60,7 @@ function RuntimeWorkspace({ runtime, onRequestLibrary }: { runtime: VNextPersist
             openSessionId: snapshot.binding.openSessionId,
             save: snapshot.save,
             assetUrls: snapshot.assetUrls,
+            assetRuntimeStates: snapshot.assetRuntimeStates,
             localProtection: snapshot.localProtection,
             ...(snapshot.localProtectionMessage
               ? { localProtectionMessage: snapshot.localProtectionMessage }
@@ -57,6 +68,7 @@ function RuntimeWorkspace({ runtime, onRequestLibrary }: { runtime: VNextPersist
             ...(recoveredOverlay
               ? { recoveredOverlay }
               : {}),
+            assetBridge,
           }}
         />
       )}
@@ -82,8 +94,8 @@ function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSess
   return <EditorWorkspace session={session} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, onRequestLibrary }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} onRequestLibrary={onRequestLibrary} />
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} />;
 }

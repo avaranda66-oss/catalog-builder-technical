@@ -54,3 +54,4 @@ jobs:
           node tests/vnext/proof/editor-group-proof.mjs
           node tests/vnext/proof/group-export-proof.mjs
           node tests/vnext/proof/export-proof.mjs
+          node tests/vnext/proof/w3g-asset-persistence-proof.mjs

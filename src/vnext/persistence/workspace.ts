@@ -1,4 +1,5 @@
 import type { DocumentSession } from '../application';
+import type { AssetRuntimeState } from '../asset/contracts';
 import type { AuthoringRecoveryOverlay } from '../recovery/contracts';
 import type { CatalogPersistenceEnvelope } from './contracts';
 import { canonicalDocumentEquivalence } from './equivalence';
@@ -79,6 +80,7 @@ export interface PersistenceWorkspaceSnapshot {
   readonly session: DocumentSession;
   readonly binding: PersistenceBinding;
   readonly assetUrls: ReadonlyMap<string, string>;
+  readonly assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState>;
   readonly dirty: boolean;
   readonly save: SaveProjection;
   readonly activeAuthorityScopeId: string;
@@ -161,17 +163,20 @@ export class PersistenceWorkspace {
   private localProtection: 'available' | 'unavailable' = 'available';
   private localProtectionMessage: string | undefined;
   private assetUrls: ReadonlyMap<string, string>;
+  private assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState>;
   private snapshot: PersistenceWorkspaceSnapshot;
 
   constructor(
     session: DocumentSession,
     binding: PersistenceBinding,
-    assetUrls: ReadonlyMap<string, string> = new Map()
+    assetUrls: ReadonlyMap<string, string> = new Map(),
+    assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map()
   ) {
     this.session = session;
     this.binding = binding;
     this.activeAuthorityScopeId = binding.authorityScopeId;
     this.assetUrls = assetUrls;
+    this.assetRuntimeStates = assetRuntimeStates;
     this.snapshot = this.buildSnapshot();
     this.bindSession();
   }
@@ -208,6 +213,7 @@ export class PersistenceWorkspace {
       session: this.session,
       binding: this.binding,
       assetUrls: this.assetUrls,
+      assetRuntimeStates: this.assetRuntimeStates,
       dirty,
       save: projection(this.binding, dirty, this.phase, this.phaseMessage),
       activeAuthorityScopeId: this.activeAuthorityScopeId,
@@ -303,6 +309,38 @@ export class PersistenceWorkspace {
     this.publish();
   }
 
+  updateAssetUrls(urls: ReadonlyMap<string, string>): void {
+    this.assetUrls = urls;
+    this.publish();
+  }
+
+  setAssetUrl(assetId: string, url: string): void {
+    const next = new Map(this.assetUrls);
+    if (url) {
+      next.set(assetId, url);
+    } else {
+      next.delete(assetId);
+    }
+    this.assetUrls = next;
+    this.publish();
+  }
+
+  getAssetRuntimeStates(): ReadonlyMap<string, AssetRuntimeState> {
+    return this.assetRuntimeStates;
+  }
+
+  setAssetRuntimeState(assetId: string, state: AssetRuntimeState): void {
+    const next = new Map(this.assetRuntimeStates);
+    next.set(assetId, state);
+    this.assetRuntimeStates = next;
+    this.publish();
+  }
+
+  updateAssetRuntimeStates(states: ReadonlyMap<string, AssetRuntimeState>): void {
+    this.assetRuntimeStates = states;
+    this.publish();
+  }
+
   acknowledge(
     openSessionId: string,
     authLineage: string,
@@ -325,13 +363,15 @@ export class PersistenceWorkspace {
   replaceActive(
     session: DocumentSession,
     binding: PersistenceBinding,
-    assetUrls: ReadonlyMap<string, string>
+    assetUrls: ReadonlyMap<string, string> = new Map(),
+    assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map()
   ): void {
     this.unsubscribeSession?.();
     this.session = session;
     this.binding = binding;
     this.activeAuthorityScopeId = binding.authorityScopeId;
     this.assetUrls = assetUrls;
+    this.assetRuntimeStates = assetRuntimeStates;
     this.barrier = NO_AUTHORING_BARRIER;
     this.clearPhase();
     this.bindSession();

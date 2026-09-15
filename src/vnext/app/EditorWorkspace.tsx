@@ -14,8 +14,9 @@ import {
 } from '../domain';
 import { compilePlans, DocumentRenderer } from '../rendering';
 import type { AuthoringRecoveryOverlay } from '../recovery';
-import type {
-  AuthoringBarrierResult,
+import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
+import {
+  type AuthoringBarrierResult,
   SaveProjection,
   VNextPersistenceRuntime,
 } from '../persistence';
@@ -25,6 +26,7 @@ import {
   immediateAuthoringDiagnostics,
   isCurrentDiagnosticSource,
   mergeDiagnostics,
+  runtimeAssetDiagnostics,
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
@@ -116,9 +118,11 @@ export interface EditorWorkspacePersistenceProps {
   readonly openSessionId: string;
   readonly save: SaveProjection;
   readonly assetUrls: ReadonlyMap<string, string>;
+  readonly assetRuntimeStates?: ReadonlyMap<string, AssetRuntimeState>;
   readonly recoveredOverlay?: AuthoringRecoveryOverlay;
   readonly localProtection: 'available' | 'unavailable';
   readonly localProtectionMessage?: string;
+  readonly assetBridge?: AssetPersistenceBridge;
 }
 
 export function EditorWorkspace({
@@ -143,6 +147,7 @@ export function EditorWorkspace({
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const textEditRef = React.useRef<TextEditSession | null>(null);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const compositionRef = React.useRef(false);
   const lastTextPointerDownRef = React.useRef<{
     objectId: string;
@@ -186,9 +191,10 @@ export function EditorWorkspace({
   const canonicalDiagnostics = React.useMemo(
     () => mergeDiagnostics(
       immediateDiagnostics,
+      runtimeAssetDiagnostics(document, persistence?.assetRuntimeStates),
       measuredDiagnostics?.source === document ? measuredDiagnostics.diagnostics : []
     ).filter((diagnostic) => W2D_DIAGNOSTIC_CODES.has(diagnostic.code)),
-    [document, immediateDiagnostics, measuredDiagnostics]
+    [document, immediateDiagnostics, measuredDiagnostics, persistence?.assetRuntimeStates]
   );
   const selectedDiagnostics = React.useMemo(
     () => canonicalDiagnostics.filter((diagnostic) => diagnostic.pageId === selectedPage.id && diagnostic.objectId === selectedObjectId),
@@ -638,6 +644,93 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Imagem substituída.' : 'Não foi possível substituir a imagem.');
   };
 
+  const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedObject || selectedObject.type !== 'image') return;
+    event.target.value = '';
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+
+    if (!persistence?.assetBridge) {
+      const result = session.execute({
+        type: 'image.replace',
+        objectId: selectedObject.id,
+        assetId: alternateDemoAssetId(selectedObject.assetId),
+      });
+      setStatusMessage(result.ok ? 'Imagem substituída (modo demo).' : 'Não foi possível substituir a imagem.');
+      return;
+    }
+
+    setStatusMessage('Enviando imagem…');
+    try {
+      const buffer = await file.arrayBuffer();
+      const snapshotBefore = persistence.runtime.workspace.getSnapshot();
+      const initialLineage = {
+        authLineage: snapshotBefore.binding.authLineage,
+        authorityScopeId: snapshotBefore.activeAuthorityScopeId,
+        openSessionId: snapshotBefore.binding.openSessionId,
+        catalogId: snapshotBefore.binding.kind === 'PERSISTED' ? snapshotBefore.binding.catalogId : undefined,
+      };
+
+      const uploadResult = await persistence.assetBridge.upload({
+        bytes: buffer,
+        filename: file.name,
+        mimeHint: file.type,
+        context: initialLineage,
+      });
+
+      if (!uploadResult.ok) {
+        setStatusMessage(`Falha no upload: ${uploadResult.error.message}`);
+        return;
+      }
+
+      // Recheck active lineage immediately before applying image.replace (Point 10)
+      const snapshotAfter = persistence.runtime.workspace.getSnapshot();
+      const isStale =
+        snapshotAfter.binding.openSessionId !== initialLineage.openSessionId ||
+        snapshotAfter.binding.authLineage !== initialLineage.authLineage ||
+        snapshotAfter.activeAuthorityScopeId !== initialLineage.authorityScopeId ||
+        (snapshotAfter.binding.kind === 'PERSISTED' && snapshotAfter.binding.catalogId !== initialLineage.catalogId);
+
+      if (isStale) {
+        setStatusMessage('Operação descartada: a sessão ou autoridade foi alterada durante o upload.');
+        return;
+      }
+
+      const actionResult = session.execute({
+        type: 'image.replace',
+        objectId: selectedObject.id,
+        assetId: uploadResult.asset.id,
+        asset: uploadResult.asset,
+      });
+
+      if (!actionResult.ok) {
+        setStatusMessage('Falha ao vincular imagem ao documento.');
+        return;
+      }
+
+      // Preserve typed asset runtime state (Points 12, 14)
+      persistence.runtime.workspace.setAssetRuntimeState(
+        uploadResult.asset.id,
+        uploadResult.runtimeState
+      );
+
+      if (uploadResult.runtimeState.status === 'resolved') {
+        persistence.runtime.workspace.setAssetUrl(
+          uploadResult.asset.id,
+          uploadResult.runtimeState.url
+        );
+        setStatusMessage('Imagem enviada e vinculada com sucesso.');
+      } else if (uploadResult.runtimeState.status === 'integrity-failed') {
+        setStatusMessage('Imagem vinculada, mas falhou na verificação de integridade. Você pode substituir ou tentar novamente.');
+      } else {
+        setStatusMessage('Imagem vinculada, mas a pré-visualização está indisponível. Você pode substituir ou tentar novamente.');
+      }
+    } catch (error) {
+      setStatusMessage(`Erro no envio da imagem: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const toggleSnapping = () => {
     if (!finishTextEditBeforeCommand()) return;
     const next = !snappingEnabledRef.current;
@@ -954,6 +1047,16 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
               <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
               <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image'} onClick={replaceSelectedImage}>Substituir imagem</button>
+              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image'} onClick={() => fileInputRef.current?.click()}>Upload imagem</button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                data-editor-action="upload-image-input"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleImageFileChange}
+                aria-hidden="true"
+              />
               <button
                 type="button"
                 data-editor-action="edit-text"
@@ -1064,6 +1167,26 @@ export function EditorWorkspace({
                           {issueSeverity === 'ERROR' ? '!' : '⚠'}
                         </span>
                       )}
+                      {object.type === 'image' && (() => {
+                        const assetState = persistence?.assetRuntimeStates?.get(object.assetId);
+                        if (!assetState || assetState.status === 'resolved') return null;
+                        const isIntegrity = assetState.status === 'integrity-failed';
+                        return (
+                          <div
+                            className="vnext-image-repair-indicator"
+                            data-editor-image-repair={object.id}
+                            data-asset-status={assetState.status}
+                          >
+                            <span className="repair-icon">⚠️</span>
+                            <span className="repair-title">
+                              {isIntegrity ? 'Falha de integridade' : 'Imagem indisponível'}
+                            </span>
+                            <span className="repair-hint">
+                              Substitua ou envie nova imagem
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {selected && (
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />

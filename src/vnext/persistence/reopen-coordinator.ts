@@ -1,3 +1,4 @@
+import type { AssetRuntimeState } from '../asset/contracts';
 import {
   createDocumentSession,
   type ApplicationExecutionDependencies,
@@ -28,12 +29,34 @@ export type ReopenResult =
       };
     };
 
+export interface ReopenAssetResolutionPayload {
+  readonly urls: ReadonlyMap<string, string>;
+  readonly states: ReadonlyMap<string, AssetRuntimeState>;
+}
+
+export type ReopenAssetResolutionResult =
+  | ReadonlyMap<string, string>
+  | ReopenAssetResolutionPayload;
+
+function isReopenAssetPayload(
+  payload: unknown
+): payload is ReopenAssetResolutionPayload {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'urls' in payload &&
+    'states' in payload
+  );
+}
+
 export interface CanonicalReopenCoordinatorOptions {
   readonly workspace: PersistenceWorkspace;
   readonly repository: CatalogRepository;
   readonly applicationDependencies: ApplicationExecutionDependencies;
   readonly createOpenSessionId: () => string;
-  readonly resolveAssetUrls?: (document: CatalogDocument) => ReadonlyMap<string, string>;
+  readonly resolveAssetUrls?: (
+    document: CatalogDocument
+  ) => ReopenAssetResolutionResult | Promise<ReopenAssetResolutionResult>;
   readonly canLeave?: () => boolean;
 }
 
@@ -121,10 +144,33 @@ export class CanonicalReopenCoordinator {
       authorityScopeId,
       session.getSnapshot().localSequence
     );
-    const assetUrls =
-      this.options.resolveAssetUrls?.(envelope.documentSnapshot)
+    const resolved = this.options.resolveAssetUrls?.(envelope.documentSnapshot);
+    const resolvedPayload =
+      (resolved instanceof Promise ? await resolved : resolved)
       ?? new Map<string, string>();
-    this.options.workspace.replaceActive(session, binding, assetUrls);
+
+    // Second authority/stale gate AFTER async asset resolution (Point 11)
+    const afterResolve = this.options.workspace.getSnapshot();
+    if (
+      afterResolve.binding.authLineage !== authLineage ||
+      afterResolve.activeAuthorityScopeId !== authorityScopeId ||
+      afterResolve.binding.openSessionId !== before.binding.openSessionId ||
+      afterResolve.session !== before.session
+    ) {
+      return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
+
+    let assetUrls: ReadonlyMap<string, string>;
+    let assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map();
+
+    if (isReopenAssetPayload(resolvedPayload)) {
+      assetUrls = resolvedPayload.urls;
+      assetRuntimeStates = resolvedPayload.states;
+    } else {
+      assetUrls = resolvedPayload as ReadonlyMap<string, string>;
+    }
+
+    this.options.workspace.replaceActive(session, binding, assetUrls, assetRuntimeStates);
     return { ok: true, envelope };
   }
 }

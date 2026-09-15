@@ -11,11 +11,13 @@ import {
   createAuthLineageState,
 } from '@/vnext/app/auth-lineage';
 import {
+  createUnboundPersistenceBinding,
   VNextPersistenceRuntime,
   type CatalogPersistenceEnvelope,
   type CatalogRepository,
   type PersistenceResult,
   type SaveCatalogCasRequest,
+  type VNextPersistenceRuntimeOptions,
 } from '@/vnext/persistence';
 
 const A_ID = '11111111-1111-4111-8111-111111111111';
@@ -104,7 +106,8 @@ const applicationDependencies: ApplicationExecutionDependencies = {
 function runtimeFor(
   repository: CatalogRepository,
   document = documentFixture(),
-  authLineage = 'user-a:0'
+  authLineage = 'user-a:0',
+  extraOptions: Partial<VNextPersistenceRuntimeOptions> = {}
 ): { runtime: VNextPersistenceRuntime; session: DocumentSession } {
   const session = createDocumentSession(document, applicationDependencies);
   let mutationIndex = 0;
@@ -118,6 +121,7 @@ function runtimeFor(
     createOpenSessionId: () => `open-${++openIndex}`,
     authLineage,
     binding: envelope(document),
+    ...extraOptions,
   });
   return { runtime, session };
 }
@@ -577,5 +581,40 @@ describe('W3.C canonical reopen', () => {
     });
     expect(runtime.workspace.getSnapshot().session).toBe(session);
     expect(session.getSnapshot().document.title).toBe('Keep me');
+  });
+
+  it('REOPEN-ASSET-RACE: authority or session change during async asset resolution returns STALE_RESULT', async () => {
+    const pendingAssetResolution = deferred<ReadonlyMap<string, string>>();
+    const getCatalog = vi.fn((_catalogId: string) =>
+      Promise.resolve({ ok: true as const, value: envelope(documentFixture(B_ID, 'Persisted B'), 4, M1) })
+    );
+    const { runtime } = runtimeFor(repositoryBase({ getCatalog }), documentFixture(), 'user-a:0', {
+      resolveAssetUrls: () => pendingAssetResolution.promise,
+    });
+
+    const reopenB = runtime.reopenCoordinator.open(B_ID, { allowDiscardUnsaved: true });
+
+    // Allow getCatalog to complete and reach the async asset resolution await
+    await new Promise((r) => setTimeout(r, 10));
+
+    // While asset resolution is in-flight, workspace replaces active with another session/binding
+    const newSession = createDocumentSession(documentFixture(C_ID, 'Active C'), applicationDependencies);
+    runtime.workspace.replaceActive(
+      newSession,
+      createUnboundPersistenceBinding(newSession, 'open-c', 'user-a:0', 'user-a')
+    );
+
+    const activeBeforeResolve = runtime.workspace.getSnapshot().session;
+    expect(activeBeforeResolve.getSnapshot().document.id).toBe(C_ID);
+
+    // Resolve asset resolution for the older reopen
+    pendingAssetResolution.resolve(new Map());
+
+    const result = await reopenB;
+    expect(result).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+
+    // Active session remains C, B was NOT installed
+    expect(runtime.workspace.getSnapshot().session).toBe(activeBeforeResolve);
+    expect(runtime.workspace.getSnapshot().session.getSnapshot().document.id).toBe(C_ID);
   });
 });

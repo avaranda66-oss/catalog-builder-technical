@@ -1,11 +1,8 @@
 import type { AssetRef, CatalogDocument } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
+import { sha256 } from '../asset/integrity';
 
-export async function sha256(value:string|ArrayBuffer):Promise<string> {
-  const bytes=typeof value==='string'?new TextEncoder().encode(value):new Uint8Array(value);
-  const digest=await crypto.subtle.digest('SHA-256',bytes);
-  return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-}
+export { sha256 };
 
 export interface ResourceManifest {
   rendererVersion:string;

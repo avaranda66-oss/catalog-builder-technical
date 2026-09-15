@@ -41,6 +41,14 @@ try {
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
+  await page.route('**/rest/v1/**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+    });
+  });
+
   // Phase 1: Production /v2 bootstrap + W3.F wiring smoke
   const productionRequests = [];
   page.on('request', (req) => productionRequests.push(req.url()));

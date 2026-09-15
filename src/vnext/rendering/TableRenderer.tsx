@@ -32,7 +32,7 @@ export function TableRenderer({table,plan,assets,assetUrls}:{table:TableModel;pl
               padding:`${qCss(style.paddingQ.top)} ${qCss(style.paddingQ.right)} ${qCss(style.paddingQ.bottom)} ${qCss(style.paddingQ.left)}`}}>
             <div data-flow-root="">
               {rich&&<RichTextRenderer rich={rich} nowrap={resolveWrap(cell)==='nowrap'}/>}
-              {asset&&image&&<img data-asset-id={asset.id} src={assetUrls.get(asset.id)} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
+              {asset&&image&&<img data-asset-id={asset.id} src={assetUrls.get(asset.id) || undefined} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
                 style={{display:'block',width:qCss(uToQ(mmToU(image.targetWidthMm))),height:qCss(uToQ(mmToU(image.targetHeightMm))),objectFit:image.fit}}/>}
             </div>
           </div>;

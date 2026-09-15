@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogDocument, Diagnostic } from '../domain';
+import type { AssetRuntimeState } from '../asset';
 import { captureSnapshot, compilePlans, DocumentRenderer, measureTables } from '../rendering';
 import { authoredFrameDiagnostics, layoutReport } from '../publication';
 
@@ -10,7 +11,68 @@ export const W2D_DIAGNOSTIC_CODES = new Set([
   'TEXT_OBJECT_OVERFLOW',
   'TABLE_CONTENT_OVERFLOW',
   'TABLE_WIDTH_INFEASIBLE',
+  'ASSET_UNAVAILABLE',
+  'ASSET_INTEGRITY_FAILED',
 ]);
+
+export function runtimeAssetDiagnostics(
+  document: CatalogDocument,
+  assetRuntimeStates?: ReadonlyMap<string, AssetRuntimeState>
+): Diagnostic[] {
+  if (!assetRuntimeStates || assetRuntimeStates.size === 0) return [];
+  const diagnostics: Diagnostic[] = [];
+
+  for (const page of document.pages) {
+    for (const object of page.objects) {
+      if (object.type === 'image' || object.type === 'icon') {
+        const state = assetRuntimeStates.get(object.assetId);
+        if (state && state.status !== 'resolved') {
+          const isIntegrity = state.status === 'integrity-failed';
+          const details =
+            state.status === 'integrity-failed'
+              ? state.message
+              : state.status === 'unavailable'
+              ? state.error
+              : 'Asset offline';
+          diagnostics.push({
+            code: isIntegrity ? 'ASSET_INTEGRITY_FAILED' : 'ASSET_UNAVAILABLE',
+            severity: 'WARNING',
+            pageId: page.id,
+            objectId: object.id,
+            details,
+          });
+        }
+      } else if (object.type === 'table') {
+        for (const cell of object.table.cells) {
+          if (cell.content.type === 'image') {
+            const state = assetRuntimeStates.get(cell.content.assetId);
+            if (state && state.status !== 'resolved') {
+              const isIntegrity = state.status === 'integrity-failed';
+              const details =
+                state.status === 'integrity-failed'
+                  ? state.message
+                  : state.status === 'unavailable'
+                  ? state.error
+                  : 'Asset offline';
+              diagnostics.push({
+                code: isIntegrity ? 'ASSET_INTEGRITY_FAILED' : 'ASSET_UNAVAILABLE',
+                severity: 'WARNING',
+                pageId: page.id,
+                objectId: object.id,
+                tableId: object.table.id,
+                rowId: cell.rowId,
+                cellId: cell.id,
+                details,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return diagnostics;
+}
 
 function diagnosticKey(diagnostic: Diagnostic): string {
   return [
@@ -53,6 +115,12 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
       return 'O conteúdo da tabela ultrapassa a altura criada. Redimensione o quadro ou ajuste o conteúdo manualmente.';
     case 'TABLE_WIDTH_INFEASIBLE':
       return 'A largura criada não comporta as restrições das colunas. A tabela continua com a largura escolhida até você corrigir.';
+    case 'ASSET_UNAVAILABLE':
+      return 'A imagem remota está temporariamente indisponível ou offline.';
+    case 'ASSET_INTEGRITY_FAILED':
+      return 'A imagem remota falhou na verificação de integridade dos bytes.';
+    case 'ASSET_REFERENCE_DANGLING':
+      return 'A referência da imagem não foi encontrada nos metadados do documento.';
     default:
       return diagnostic.details;
   }
