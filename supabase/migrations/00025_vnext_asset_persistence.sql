@@ -9,14 +9,14 @@ BEGIN;
 -- 1. Tabela public.vnext_assets (Metadados Imutáveis de Ativos VNext)
 CREATE TABLE public.vnext_assets (
   id UUID NOT NULL,
-  version TEXT NOT NULL CHECK (length(version) > 0),
+  version TEXT NOT NULL CHECK (version = '1'),
   sha256 TEXT NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
   mime TEXT NOT NULL CHECK (mime IN ('image/png', 'image/jpeg', 'image/webp')),
   width_px INTEGER NOT NULL CHECK (width_px > 0),
   height_px INTEGER NOT NULL CHECK (height_px > 0),
-  name TEXT NOT NULL CHECK (length(name) > 0),
-  alt TEXT NOT NULL DEFAULT '',
-  storage_bucket TEXT NOT NULL DEFAULT 'product-assets',
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+  alt TEXT NOT NULL CHECK (length(trim(alt)) > 0),
+  storage_bucket TEXT NOT NULL DEFAULT 'product-assets' CHECK (storage_bucket = 'product-assets'),
   storage_path TEXT NOT NULL,
   file_size BIGINT NOT NULL CHECK (file_size > 0),
   created_by UUID REFERENCES public.profiles(id),
@@ -103,9 +103,9 @@ BEGIN
   -- 2. Validação da identidade do ativo (UUID canônico minúsculo)
   v_asset_uuid := public.vnext_require_canonical_uuid_text_v1(p_asset_id, 'assetId');
 
-  -- 3. Validação de versão
-  IF p_version IS NULL OR length(trim(p_version)) = 0 THEN
-    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: version must be non-empty' USING ERRCODE = '22023';
+  -- 3. Validação de versão (W3.G aceita estritamente versão '1')
+  IF p_version IS DISTINCT FROM '1' THEN
+    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: version must be exactly "1"' USING ERRCODE = '22023';
   END IF;
 
   -- 4. Validação de hash SHA-256 (64 hexadecimais minúsculos)
@@ -126,16 +126,19 @@ BEGIN
     RAISE EXCEPTION 'VNEXT_INVALID_ASSET: height_px must be positive' USING ERRCODE = '22023';
   END IF;
 
-  -- 7. Validação de nome e tamanho
+  -- 7. Validação de nome, alt e tamanho
   IF p_name IS NULL OR length(trim(p_name)) = 0 THEN
     RAISE EXCEPTION 'VNEXT_INVALID_ASSET: name must be non-empty' USING ERRCODE = '22023';
+  END IF;
+  IF p_alt IS NULL OR length(trim(p_alt)) = 0 THEN
+    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: alt must be non-empty' USING ERRCODE = '22023';
   END IF;
   IF p_file_size IS NULL OR p_file_size <= 0 THEN
     RAISE EXCEPTION 'VNEXT_INVALID_ASSET: file_size must be positive' USING ERRCODE = '22023';
   END IF;
 
   -- 8. Validação estrita do caminho de armazenamento
-  v_expected_path := 'vnext/' || p_asset_id || '/' || p_version || '.' || CASE
+  v_expected_path := 'vnext/' || p_asset_id || '/1.' || CASE
     WHEN p_mime = 'image/png' THEN 'png'
     WHEN p_mime = 'image/webp' THEN 'webp'
     WHEN p_mime = 'image/jpeg' THEN (CASE WHEN p_storage_path LIKE '%.jpg' THEN 'jpg' ELSE 'jpeg' END)
@@ -147,13 +150,28 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  -- 9. Lock transacional para evitar corrida na mesma tupla (id, version)
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_asset_id || ':' || p_version, 0));
+  -- 9. Confirmação da existência do objeto durável no Storage
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'storage' AND table_name = 'objects'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM storage.objects
+      WHERE bucket_id = 'product-assets'
+        AND name = p_storage_path
+    ) THEN
+      RAISE EXCEPTION 'VNEXT_STORAGE_OBJECT_NOT_FOUND: storage object does not exist at %', p_storage_path
+        USING ERRCODE = '40400';
+    END IF;
+  END IF;
 
-  -- 10. Verificação de idempotência / conflito
+  -- 10. Lock transacional para evitar corrida na mesma tupla (id, version)
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_asset_id || ':1', 0));
+
+  -- 11. Verificação de idempotência / conflito
   SELECT * INTO v_existing
   FROM public.vnext_assets
-  WHERE id = v_asset_uuid AND version = p_version;
+  WHERE id = v_asset_uuid AND version = '1';
 
   IF FOUND THEN
     IF v_existing.sha256 <> p_sha256
@@ -161,8 +179,9 @@ BEGIN
        OR v_existing.width_px <> p_width_px
        OR v_existing.height_px <> p_height_px
        OR v_existing.storage_path <> p_storage_path
-       OR v_existing.name <> p_name
-       OR coalesce(v_existing.alt, '') <> coalesce(p_alt, '')
+       OR v_existing.name <> trim(p_name)
+       OR v_existing.alt <> trim(p_alt)
+       OR v_existing.file_size <> p_file_size
     THEN
       RAISE EXCEPTION 'VNEXT_CONFLICT: asset version already exists with divergent metadata'
         USING ERRCODE = '40001';
@@ -176,31 +195,31 @@ BEGIN
       'widthPx', v_existing.width_px,
       'heightPx', v_existing.height_px,
       'name', v_existing.name,
-      'alt', coalesce(v_existing.alt, '')
+      'alt', v_existing.alt
     );
   END IF;
 
-  -- 11. Inserção do novo ativo imutável
+  -- 12. Inserção do novo ativo imutável
   INSERT INTO public.vnext_assets (
     id, version, sha256, mime, width_px, height_px,
     name, alt, storage_bucket, storage_path, file_size,
     created_by
   ) VALUES (
-    v_asset_uuid, p_version, p_sha256, p_mime, p_width_px, p_height_px,
-    p_name, coalesce(p_alt, ''), 'product-assets', p_storage_path, p_file_size,
+    v_asset_uuid, '1', p_sha256, p_mime, p_width_px, p_height_px,
+    trim(p_name), trim(p_alt), 'product-assets', p_storage_path, p_file_size,
     v_actor
   );
 
-  -- 12. Retorno do AssetRef canônico validado
+  -- 13. Retorno do AssetRef canônico validado
   RETURN jsonb_build_object(
     'id', p_asset_id,
-    'version', p_version,
+    'version', '1',
     'sha256', p_sha256,
     'mime', p_mime,
     'widthPx', p_width_px,
     'heightPx', p_height_px,
-    'name', p_name,
-    'alt', coalesce(p_alt, '')
+    'name', trim(p_name),
+    'alt', trim(p_alt)
   );
 END;
 $$;

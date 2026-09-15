@@ -34,7 +34,13 @@ export interface VNextPersistenceRuntimeOptions {
   readonly assetUrls?: ReadonlyMap<string, string>;
   readonly resolveAssetUrls?: (
     document: CatalogDocument
-  ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
+  ) =>
+    | ReadonlyMap<string, string>
+    | { urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, any> }
+    | Promise<
+        | ReadonlyMap<string, string>
+        | { urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, any> }
+      >;
 }
 
 interface RecoveryInstallGuard {
@@ -57,7 +63,7 @@ export class VNextPersistenceRuntime {
   readonly recoveryManager: SessionRecoveryManager | undefined;
   readonly recoveryStartup: RecoveryStartupCoordinator | undefined;
   private recoveredOverlay: { readonly openSessionId: string; readonly overlay: AuthoringRecoveryOverlay } | undefined;
-  private readonly resolveAssetUrls: ((document: CatalogDocument) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>) | undefined;
+  private readonly resolveAssetUrls: ((document: CatalogDocument) => any) | undefined;
 
   constructor(options: VNextPersistenceRuntimeOptions) {
     this.resolveAssetUrls = options.resolveAssetUrls;
@@ -261,9 +267,26 @@ export class VNextPersistenceRuntime {
       ? { openSessionId: accepted.openSessionId, overlay: accepted.overlay }
       : undefined;
     const resolvedUrls = this.resolveAssetUrls?.(accepted.session.getSnapshot().document);
-    const assetUrls =
+    const resolvedPayload =
       (resolvedUrls instanceof Promise ? await resolvedUrls : resolvedUrls)
       ?? new Map<string, string>();
+
+    // Recheck guard after async resolution
+    if (!this.recoveryInstallGuardIsCurrent(candidate, guard)) return false;
+
+    let assetUrls: ReadonlyMap<string, string>;
+    let assetRuntimeStates: ReadonlyMap<string, any> = new Map();
+    if (
+      resolvedPayload &&
+      typeof (resolvedPayload as any).urls !== 'undefined' &&
+      typeof (resolvedPayload as any).states !== 'undefined'
+    ) {
+      assetUrls = (resolvedPayload as any).urls;
+      assetRuntimeStates = (resolvedPayload as any).states;
+    } else {
+      assetUrls = resolvedPayload as ReadonlyMap<string, string>;
+    }
+
     this.workspace.replaceActive(
       accepted.session,
       persistedBindingFromEnvelope(
@@ -273,7 +296,8 @@ export class VNextPersistenceRuntime {
         guard.authorityScopeId,
         accepted.session.getSnapshot().localSequence
       ),
-      assetUrls
+      assetUrls,
+      assetRuntimeStates
     );
     await this.recoveryManager.flush();
     const cleanup = await this.recoveryCoordinator.deleteIfGeneration(

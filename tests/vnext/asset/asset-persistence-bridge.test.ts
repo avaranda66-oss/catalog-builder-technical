@@ -312,26 +312,141 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
     expect(res.state.asset).toEqual(upload.asset); // AssetRef remains completely intact!
   });
 
-  it('ASSET-07: durable metadata version disagreeing with AssetRef fails closed', async () => {
-    const repository = new TestAssetRepository();
-    const png = createMockPng();
-    const bridge = new DefaultAssetPersistenceBridge(repository);
+  describe('ASSET-07: durable metadata comparison against canonical AssetRef', () => {
+    it('ASSET-07a: durable metadata version disagreeing with AssetRef fails closed before byte fetch', async () => {
+      let byteFetchCalled = false;
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        fetchBytes: async () => {
+          byteFetchCalled = true;
+          return png.buffer as ArrayBuffer;
+        },
+      });
 
-    const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
-    expect(upload.ok).toBe(true);
-    if (!upload.ok) return;
+      const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
 
-    // Requesting resolution with mismatched version
-    const corruptedRef: AssetRef = {
-      ...upload.asset,
-      version: '2', // Disagrees with durable version '1'
-    };
+      const corruptedRef: AssetRef = {
+        ...upload.asset,
+        version: '2', // Disagrees with durable version '1'
+      };
 
-    const res = await bridge.resolve(corruptedRef);
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.state.status).toBe('integrity-failed');
-    expect((res.state as any).code).toBe('ASSET_VERSION_MISMATCH');
+      const res = await bridge.resolve(corruptedRef);
+      expect(res.ok).toBe(false);
+      expect(res.state.status).toBe('integrity-failed');
+      expect((res.state as any).code).toBe('DURABLE_METADATA_MISMATCH');
+      expect(byteFetchCalled).toBe(false);
+    });
+
+    it('ASSET-07b: durable metadata SHA-256 disagreeing with AssetRef fails closed before byte fetch', async () => {
+      let byteFetchCalled = false;
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        fetchBytes: async () => {
+          byteFetchCalled = true;
+          return png.buffer as ArrayBuffer;
+        },
+      });
+
+      const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+
+      const corruptedRef: AssetRef = {
+        ...upload.asset,
+        sha256: 'a'.repeat(64), // Disagrees with durable SHA
+      };
+
+      const res = await bridge.resolve(corruptedRef);
+      expect(res.ok).toBe(false);
+      expect(res.state.status).toBe('integrity-failed');
+      expect((res.state as any).code).toBe('DURABLE_METADATA_MISMATCH');
+      expect(byteFetchCalled).toBe(false);
+    });
+
+    it('ASSET-07c: durable metadata MIME disagreeing with AssetRef fails closed before byte fetch', async () => {
+      let byteFetchCalled = false;
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        fetchBytes: async () => {
+          byteFetchCalled = true;
+          return png.buffer as ArrayBuffer;
+        },
+      });
+
+      const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+
+      const corruptedRef: AssetRef = {
+        ...upload.asset,
+        mime: 'image/webp', // Disagrees with durable MIME image/png
+      };
+
+      const res = await bridge.resolve(corruptedRef);
+      expect(res.ok).toBe(false);
+      expect(res.state.status).toBe('integrity-failed');
+      expect((res.state as any).code).toBe('DURABLE_METADATA_MISMATCH');
+      expect(byteFetchCalled).toBe(false);
+    });
+
+    it('ASSET-07d: durable metadata dimensions disagreeing with AssetRef fails closed before byte fetch', async () => {
+      let byteFetchCalled = false;
+      const repository = new TestAssetRepository();
+      const png = createMockPng(800, 600);
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        fetchBytes: async () => {
+          byteFetchCalled = true;
+          return png.buffer as ArrayBuffer;
+        },
+      });
+
+      const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+
+      const corruptedRef: AssetRef = {
+        ...upload.asset,
+        widthPx: 1200, // Disagrees with durable width 800
+      };
+
+      const res = await bridge.resolve(corruptedRef);
+      expect(res.ok).toBe(false);
+      expect(res.state.status).toBe('integrity-failed');
+      expect((res.state as any).code).toBe('DURABLE_METADATA_MISMATCH');
+      expect(byteFetchCalled).toBe(false);
+    });
+
+    it('ASSET-07e: durable storage path mismatch fails closed before byte fetch', async () => {
+      let byteFetchCalled = false;
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        fetchBytes: async () => {
+          byteFetchCalled = true;
+          return png.buffer as ArrayBuffer;
+        },
+      });
+
+      const upload = await bridge.finalizeUpload({ bytes: png, name: 'flow.png', alt: 'Flow' });
+      expect(upload.ok).toBe(true);
+      if (!upload.ok) return;
+
+      // Corrupt durable record storage path
+      const key = `${upload.asset.id}:1`;
+      const record = repository.assets.get(key)!;
+      repository.assets.set(key, { ...record, storagePath: `vnext/${upload.asset.id}/tampered.png` });
+
+      const res = await bridge.resolve(upload.asset);
+      expect(res.ok).toBe(false);
+      expect(res.state.status).toBe('integrity-failed');
+      expect((res.state as any).code).toBe('DURABLE_METADATA_MISMATCH');
+      expect(byteFetchCalled).toBe(false);
+    });
   });
 
   it('ASSET-08: uploading different bytes allocates fresh UUID, version "1", and never overwrites prior object', async () => {
@@ -788,6 +903,200 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
 
     // Should run safely even in environments where URL.revokeObjectURL is unavailable or throws
     expect(() => bridge.revokeObjectURLs()).not.toThrow();
+  });
+
+  describe('AMBIG: ambiguous finalization outcome and reconciliation', () => {
+    it('AMBIG-01: server committed but finalization response was lost (reconciliation returns exact record)', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      const originalFinalize = repository.finalizeAsset.bind(repository);
+      let callCount = 0;
+      repository.finalizeAsset = async (params: any) => {
+        callCount++;
+        await originalFinalize(params);
+        throw new Error('NETWORK_TIMEOUT_POST_COMMIT');
+      };
+
+      const result = await bridge.finalizeUpload({ bytes: png, name: 'ambig.png', alt: 'Ambig' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.asset.version).toBe('1');
+      expect(result.asset.name).toBe('ambig.png');
+      expect(callCount).toBe(1);
+    });
+
+    it('AMBIG-02: server did not commit and reconciliation reports NOT_FOUND (replays with same attempt)', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      let attempts = 0;
+      const originalFinalize = repository.finalizeAsset.bind(repository);
+      repository.finalizeAsset = async (params: any) => {
+        attempts++;
+        if (attempts === 1) {
+          return { ok: false, error: { code: 'REMOTE_FAILURE', message: 'Connection dropped' } };
+        }
+        return await originalFinalize(params);
+      };
+
+      const result = await bridge.finalizeUpload({ bytes: png, name: 'replay.png', alt: 'Replay' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(attempts).toBe(2);
+      expect(result.asset.name).toBe('replay.png');
+    });
+
+    it('AMBIG-03: reconciliation unavailable preserves pending attempt and fails closed', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      repository.failFinalize = true;
+      repository.throwOnGet = true;
+
+      const result = await bridge.finalizeUpload({ bytes: png, name: 'unavail.png', alt: 'Unavail' });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('AMBIGUOUS_COMMIT_OUTCOME');
+
+      // Now fix getAsset: subsequent attempt reconciles the pending attempt
+      repository.throwOnGet = false;
+      repository.failFinalize = false;
+
+      const retryResult = await bridge.finalizeUpload({ bytes: png, name: 'unavail.png', alt: 'Unavail' });
+      expect(retryResult.ok).toBe(true);
+    });
+
+    it('AMBIG-04: divergent durable result fails closed with CONFLICT', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      repository.finalizeAsset = async (_params: any) => {
+        return { ok: false, error: { code: 'REMOTE_FAILURE', message: 'Timeout' } };
+      };
+
+      repository.getAsset = async (id: string) => {
+        return {
+          ok: true as const,
+          record: {
+            id,
+            version: '1',
+            sha256: '0'.repeat(64),
+            mime: 'image/png',
+            widthPx: 100,
+            heightPx: 100,
+            name: 'other.png',
+            alt: 'Other',
+            fileSize: 100,
+            storageBucket: 'product-assets',
+            storagePath: `vnext/${id}/1.png`,
+            createdAt: new Date().toISOString(),
+          },
+        };
+      };
+
+      const result = await bridge.finalizeUpload({ bytes: png, name: 'conflict.png', alt: 'Conflict' });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('CONFLICT');
+    });
+  });
+
+  describe('STALE: true async stale completion proofs', () => {
+    it('STALE-01: upload begins in S1, workspace changes to S2 while in-flight, S1 completion returns STALE_RESULT and S2 is untouched', async () => {
+      const repository = new TestAssetRepository();
+      let activeSessionId = 'session-s1';
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        getActiveLineage: () => ({
+          openSessionId: activeSessionId,
+          authLineage: 'auth:user-1',
+        }),
+      });
+
+      const s2Doc: CatalogDocument = {
+        ...minimalTestDocument(),
+        id: 'doc-s2',
+        title: 'Document S2',
+      };
+      const s2DocBefore = JSON.stringify(s2Doc);
+
+      let resolveUploadBytes!: (val: any) => void;
+      const uploadBytesPromise = new Promise((resolve) => {
+        resolveUploadBytes = resolve;
+      });
+
+      const originalUploadBytes = repository.uploadBytes.bind(repository);
+      repository.uploadBytes = async (path, bytes, mime) => {
+        await uploadBytesPromise;
+        return originalUploadBytes(path, bytes, mime);
+      };
+
+      const png = createMockPng();
+      const uploadPromise = bridge.upload({
+        bytes: png,
+        filename: 'stale.png',
+        context: { openSessionId: 'session-s1', authLineage: 'auth:user-1' },
+      });
+
+      // While upload is in flight, workspace switches active session to S2
+      activeSessionId = 'session-s2';
+
+      resolveUploadBytes({ ok: true });
+
+      const uploadResult = await uploadPromise;
+      expect(uploadResult.ok).toBe(false);
+      if (uploadResult.ok) return;
+      expect(uploadResult.error.code).toBe('STALE_RESULT');
+
+      expect(JSON.stringify(s2Doc)).toBe(s2DocBefore);
+    });
+
+    it('STALE-02: authLineage changes during in-flight upload, returns STALE_RESULT and document is untouched', async () => {
+      const repository = new TestAssetRepository();
+      let activeAuthLineage = 'auth:user-1';
+      const bridge = new DefaultAssetPersistenceBridge(repository, {
+        getActiveLineage: () => ({
+          openSessionId: 'session-s1',
+          authLineage: activeAuthLineage,
+        }),
+      });
+
+      const doc = minimalTestDocument();
+      const docBefore = JSON.stringify(doc);
+
+      let resolveUploadBytes!: (val: any) => void;
+      const uploadBytesPromise = new Promise((resolve) => {
+        resolveUploadBytes = resolve;
+      });
+
+      const originalUploadBytes = repository.uploadBytes.bind(repository);
+      repository.uploadBytes = async (path, bytes, mime) => {
+        await uploadBytesPromise;
+        return originalUploadBytes(path, bytes, mime);
+      };
+
+      const png = createMockPng();
+      const uploadPromise = bridge.upload({
+        bytes: png,
+        filename: 'stale-auth.png',
+        context: { openSessionId: 'session-s1', authLineage: 'auth:user-1' },
+      });
+
+      activeAuthLineage = 'auth:user-2';
+
+      resolveUploadBytes({ ok: true });
+
+      const uploadResult = await uploadPromise;
+      expect(uploadResult.ok).toBe(false);
+      if (uploadResult.ok) return;
+      expect(uploadResult.error.code).toBe('STALE_RESULT');
+
+      expect(JSON.stringify(doc)).toBe(docBefore);
+    });
   });
 });
 

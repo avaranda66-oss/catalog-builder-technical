@@ -28,11 +28,42 @@ export interface DefaultAssetPersistenceBridgeOptions {
   readonly getActiveLineage?: () => AssetLineageContext;
 }
 
+interface PendingFinalizationAttempt {
+  readonly assetId: string;
+  readonly version: string;
+  readonly sha256: string;
+  readonly mime: string;
+  readonly widthPx: number;
+  readonly heightPx: number;
+  readonly name: string;
+  readonly alt: string;
+  readonly fileSize: number;
+  readonly storagePath: string;
+}
+
+function isLineageStale(before?: AssetLineageContext, current?: AssetLineageContext): boolean {
+  if (!before || !current) return false;
+  if (before.openSessionId !== undefined && current.openSessionId !== undefined && before.openSessionId !== current.openSessionId) {
+    return true;
+  }
+  if (before.authLineage !== undefined && current.authLineage !== undefined && before.authLineage !== current.authLineage) {
+    return true;
+  }
+  if (before.authorityScopeId !== undefined && current.authorityScopeId !== undefined && before.authorityScopeId !== current.authorityScopeId) {
+    return true;
+  }
+  if (before.catalogId !== undefined && current.catalogId !== undefined && before.catalogId !== current.catalogId) {
+    return true;
+  }
+  return false;
+}
+
 export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   private readonly cache = new Map<string, CachedUrlEntry>();
   private readonly inFlight = new Map<string, Promise<AssetResolutionResult>>();
   private readonly activeBlobUrls = new Set<string>();
   private currentAuthLineage: string | undefined;
+  private pendingFinalization?: PendingFinalizationAttempt;
 
   constructor(
     private readonly repository: AssetRepository,
@@ -70,6 +101,22 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     // 3. Compute SHA-256
     const hash = await sha256(bytes);
 
+    // Reconcile pending finalization if exists (Point 9)
+    if (this.pendingFinalization) {
+      const reconciled = await this.reconcilePendingAttempt(this.pendingFinalization);
+      if (reconciled.ok) {
+        this.pendingFinalization = undefined;
+        if (reconciled.asset.sha256 === hash) {
+          return reconciled;
+        }
+      } else if (reconciled.error.code === 'AMBIGUOUS_COMMIT_OUTCOME') {
+        return reconciled;
+      } else if (reconciled.error.code === 'CONFLICT') {
+        this.pendingFinalization = undefined;
+        return reconciled;
+      }
+    }
+
     // 4. Determine canonical asset UUID and version
     const assetId =
       input.assetId && CANONICAL_UUID_PATTERN.test(input.assetId)
@@ -83,11 +130,20 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       };
     }
 
-    const version = input.version && input.version.trim() ? input.version.trim() : '1';
-    const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg';
-    const storagePath = `vnext/${assetId}/${version}.${extension}`;
+    if (input.version !== undefined && input.version !== '1') {
+      return {
+        ok: false,
+        error: { code: 'INVALID_VERSION', message: 'W3.G accepts only version "1"' },
+      };
+    }
 
-    // 5. Check lineage before upload dispatch
+    const version = '1';
+    const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg';
+    const storagePath = `vnext/${assetId}/1.${extension}`;
+    const name = input.name.trim() || 'imagem';
+    const alt = (input.alt && input.alt.trim()) || name;
+
+    // 5. Check lineage before upload dispatch (Point 10)
     const lineageBefore = context ?? this.options.getActiveLineage?.();
 
     // 6. Upload binary bytes to immutable storage path
@@ -99,34 +155,142 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       };
     }
 
-    // 7. Check lineage before finalization
+    // 7. Check lineage before finalization (Point 10)
     const currentLineage = this.options.getActiveLineage?.();
-    if (
-      lineageBefore?.authLineage &&
-      currentLineage?.authLineage &&
-      lineageBefore.authLineage !== currentLineage.authLineage
-    ) {
+    if (isLineageStale(lineageBefore, currentLineage)) {
       return {
         ok: false,
-        error: { code: 'STALE_RESULT', message: 'Auth lineage changed during asset upload' },
+        error: { code: 'STALE_RESULT', message: 'Lineage or authority changed during asset upload' },
       };
     }
 
-    // 8. Finalize metadata atomically via RPC
-    const finalizationResult = await this.repository.finalizeAsset({
+    // 8. Finalize metadata atomically via RPC with ambiguous outcome reconciliation
+    const finalizationParams: PendingFinalizationAttempt = {
       assetId,
       version,
       sha256: hash,
       mime,
       widthPx: dimensions.widthPx,
       heightPx: dimensions.heightPx,
-      name: input.name.trim() || assetId,
-      alt: input.alt?.trim() ?? '',
+      name,
+      alt,
       fileSize: bytes.byteLength,
       storagePath,
-    });
+    };
+
+    let finalizationResult: AssetFinalizationResult;
+    try {
+      finalizationResult = await this.repository.finalizeAsset(finalizationParams);
+    } catch {
+      finalizationResult = await this.reconcilePendingAttempt(finalizationParams);
+    }
+
+    if (
+      !finalizationResult.ok &&
+      (finalizationResult.error.code === 'REMOTE_FAILURE' ||
+        finalizationResult.error.code === 'TIMEOUT' ||
+        finalizationResult.error.code === 'NETWORK_ERROR' ||
+        finalizationResult.error.code === 'AMBIGUOUS')
+    ) {
+      finalizationResult = await this.reconcilePendingAttempt(finalizationParams);
+    }
+
+    if (!finalizationResult.ok && finalizationResult.error.code === 'AMBIGUOUS_COMMIT_OUTCOME') {
+      this.pendingFinalization = finalizationParams;
+      return finalizationResult;
+    } else if (finalizationResult.ok) {
+      this.pendingFinalization = undefined;
+    }
+
+    // 9. Check lineage after finalization (Point 10)
+    const postFinalizeLineage = this.options.getActiveLineage?.();
+    if (isLineageStale(lineageBefore, postFinalizeLineage)) {
+      return {
+        ok: false,
+        error: { code: 'STALE_RESULT', message: 'Lineage or authority changed during asset finalization' },
+      };
+    }
 
     return finalizationResult;
+  }
+
+  private async reconcilePendingAttempt(params: {
+    readonly assetId: string;
+    readonly version: string;
+    readonly sha256: string;
+    readonly mime: string;
+    readonly widthPx: number;
+    readonly heightPx: number;
+    readonly name: string;
+    readonly alt: string;
+    readonly fileSize: number;
+    readonly storagePath: string;
+  }): Promise<AssetFinalizationResult> {
+    let check;
+    try {
+      check = await this.repository.getAsset(params.assetId, params.version);
+    } catch {
+      return {
+        ok: false,
+        error: {
+          code: 'AMBIGUOUS_COMMIT_OUTCOME',
+          message: 'Finalization transport failed and reconciliation is unavailable',
+        },
+      };
+    }
+
+    if (!check.ok) {
+      return {
+        ok: false,
+        error: {
+          code: 'AMBIGUOUS_COMMIT_OUTCOME',
+          message: 'Finalization transport failed and state could not be verified',
+        },
+      };
+    }
+
+    if (check.record === null) {
+      // Authoritative NOT_FOUND: metadata did not commit. Replay finalization with SAME attempt
+      return await this.repository.finalizeAsset(params);
+    }
+
+    // Durable record exists: verify exact equality
+    const r = check.record;
+    const matches =
+      r.id === params.assetId &&
+      r.version === params.version &&
+      r.sha256 === params.sha256 &&
+      r.mime === params.mime &&
+      r.widthPx === params.widthPx &&
+      r.heightPx === params.heightPx &&
+      r.name === params.name &&
+      r.alt === params.alt &&
+      r.fileSize === params.fileSize &&
+      r.storagePath === params.storagePath;
+
+    if (matches) {
+      return {
+        ok: true,
+        asset: {
+          id: params.assetId,
+          version: '1',
+          sha256: params.sha256,
+          mime: params.mime as any,
+          widthPx: params.widthPx,
+          heightPx: params.heightPx,
+          name: params.name,
+          alt: params.alt,
+        },
+      };
+    } else {
+      return {
+        ok: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'Durable asset exists with divergent metadata',
+        },
+      };
+    }
   }
 
   async resolve(
@@ -193,14 +357,31 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
           };
         }
 
-        // Verify version matches
-        if (record.version !== asset.version) {
+        // Verify all durable metadata matches canonical AssetRef (Point 8)
+        const expectedExtension =
+          asset.mime === 'image/png' ? 'png' : asset.mime === 'image/webp' ? 'webp' : 'jpeg';
+        const expectedPath = `vnext/${asset.id}/${asset.version}.${expectedExtension}`;
+        const isCompatiblePath =
+          record.storagePath === expectedPath ||
+          (asset.mime === 'image/jpeg' && record.storagePath === `vnext/${asset.id}/${asset.version}.jpg`);
+
+        if (
+          record.id !== asset.id ||
+          record.version !== asset.version ||
+          record.sha256 !== asset.sha256 ||
+          record.mime !== asset.mime ||
+          record.widthPx !== asset.widthPx ||
+          record.heightPx !== asset.heightPx ||
+          record.name !== asset.name ||
+          record.alt !== asset.alt ||
+          !isCompatiblePath
+        ) {
           return {
             ok: false,
             state: {
               status: 'integrity-failed',
-              code: 'ASSET_VERSION_MISMATCH',
-              message: `Version mismatch: expected ${asset.version}, found ${record.version}`,
+              code: 'DURABLE_METADATA_MISMATCH',
+              message: `Durable metadata mismatch for asset ${asset.id}`,
               asset,
             },
           };
@@ -348,21 +529,37 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   }
 
   async upload(params: AssetUploadParams): Promise<AssetUploadResult> {
+    const lineageBefore = params.context ?? this.options.getActiveLineage?.();
+    const name = (params.name ?? params.filename ?? 'imagem').trim() || 'imagem';
+    const alt = (params.alt ?? params.filename ?? name).trim() || name;
+
     const finalization = await this.finalizeUpload(
       {
         bytes: params.bytes,
-        name: params.name ?? params.filename ?? 'imagem',
-        alt: params.alt ?? params.filename ?? 'imagem',
+        name,
+        alt,
       },
       params.context
     );
     if (!finalization.ok) {
       return { ok: false, error: finalization.error };
     }
+
+    // Check lineage after finalization
+    const currentLineage = this.options.getActiveLineage?.();
+    if (isLineageStale(lineageBefore, currentLineage)) {
+      return {
+        ok: false,
+        error: { code: 'STALE_RESULT', message: 'Lineage or authority changed during upload' },
+      };
+    }
+
     const resolved = await this.resolve(finalization.asset, params.context);
     const runtimeUrl = resolved.ok ? resolved.state.url : '';
     return {
       ok: true,
+      asset: finalization.asset,
+      runtimeState: resolved.state,
       record: {
         asset: finalization.asset,
         runtimeUrl,

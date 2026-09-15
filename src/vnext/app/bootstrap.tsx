@@ -26,6 +26,8 @@ import {
   DefaultAssetPersistenceBridge,
   SupabaseAssetRepository,
   supabaseStorageClientFromSupabase,
+  type AssetRuntimeState,
+  type AssetLineageContext,
 } from '../asset';
 import { IndexedDbRecoveryRepository } from '../recovery';
 import {
@@ -140,27 +142,36 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
         supabaseStorageClientFromSupabase(supabase.storage)
       )
     : undefined;
+  let getActiveLineage: () => AssetLineageContext = () => ({
+    authLineage: lineage(),
+    authorityScopeId: authorityScopeId(identity()),
+  });
+
   const assetBridge = assetRepository
-    ? new DefaultAssetPersistenceBridge(assetRepository)
+    ? new DefaultAssetPersistenceBridge(assetRepository, {
+        getActiveLineage: () => getActiveLineage(),
+      })
     : undefined;
 
   const resolveAssetUrls = async (
     doc: CatalogDocument
-  ): Promise<ReadonlyMap<string, string>> => {
-    const map = new Map<string, string>(resolveKnownW2CDemoAssetUrls(doc));
+  ): Promise<{ urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, AssetRuntimeState> }> => {
+    const urls = new Map<string, string>(resolveKnownW2CDemoAssetUrls(doc));
+    const states = new Map<string, AssetRuntimeState>();
     if (assetBridge) {
       try {
-        const resolved = await assetBridge.resolveDocument(doc, { authLineage: lineage() });
-        for (const [id, state] of resolved.entries()) {
-          if (state.status === 'resolved') {
-            map.set(id, state.url);
-          }
+        const resolved = await assetBridge.resolveDocumentAssets(doc, { authLineage: lineage() });
+        for (const [id, url] of resolved.urls.entries()) {
+          urls.set(id, url);
+        }
+        for (const [id, state] of resolved.states.entries()) {
+          states.set(id, state);
         }
       } catch {
         // Degraded editing: remote asset failure is ephemeral runtime state
       }
     }
-    return map;
+    return { urls, states };
   };
 
   const runtime = new VNextPersistenceRuntime({
@@ -175,6 +186,16 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     assetUrls: resolveKnownW2CDemoAssetUrls(initialSession.getSnapshot().document),
     resolveAssetUrls,
   });
+
+  getActiveLineage = (): AssetLineageContext => {
+    const snapshot = runtime.workspace.getSnapshot();
+    return {
+      authLineage: lineage(),
+      authorityScopeId: authorityScopeId(identity()),
+      openSessionId: snapshot.binding.openSessionId,
+      catalogId: snapshot.binding.kind === 'PERSISTED' ? snapshot.binding.catalogId : undefined,
+    };
+  };
 
   let authorityInvalidated = false;
   if (supabase) {

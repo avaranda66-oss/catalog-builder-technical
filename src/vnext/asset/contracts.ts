@@ -1,25 +1,27 @@
+import { z } from 'zod';
 import type { AssetRef, CatalogDocument } from '../domain/editorial-model';
 import type { AssetIntegrityResult } from './integrity';
-import type { SupportedImageMime } from './sniff';
 
 export type { AssetRef } from '../domain/editorial-model';
 export type { AssetIntegrityResult } from './integrity';
 export type { SupportedImageMime } from './sniff';
 
-export interface AssetRecord {
-  readonly id: string;
-  readonly version: string;
-  readonly sha256: string;
-  readonly mime: SupportedImageMime;
-  readonly widthPx: number;
-  readonly heightPx: number;
-  readonly name: string;
-  readonly alt: string;
-  readonly storageBucket: string;
-  readonly storagePath: string;
-  readonly fileSize: number;
-  readonly createdAt: string;
-}
+export const AssetRecordSchema = z.object({
+  id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+  version: z.literal('1'),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  mime: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+  widthPx: z.number().int().positive(),
+  heightPx: z.number().int().positive(),
+  name: z.string().min(1),
+  alt: z.string().min(1),
+  storageBucket: z.literal('product-assets'),
+  storagePath: z.string().regex(/^vnext\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/1\.(png|jpeg|jpg|webp)$/),
+  fileSize: z.number().int().positive(),
+  createdAt: z.string().min(1),
+}).strict();
+
+export type AssetRecord = z.infer<typeof AssetRecordSchema>;
 
 export interface AssetUploadInput {
   readonly bytes: ArrayBuffer | Uint8Array;
@@ -138,7 +140,12 @@ export interface AssetUploadParams {
 }
 
 export type AssetUploadResult =
-  | { readonly ok: true; readonly record: { readonly asset: AssetRef; readonly runtimeUrl: string } }
+  | {
+      readonly ok: true;
+      readonly asset: AssetRef;
+      readonly runtimeState: AssetRuntimeState;
+      readonly record: { readonly asset: AssetRef; readonly runtimeUrl: string };
+    }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } };
 
 export interface AssetPersistenceBridge {

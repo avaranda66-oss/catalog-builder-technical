@@ -57,6 +57,18 @@ describe('W3.G — Migration 00025 Static Verification', () => {
   it('MIG-08: guarantees idempotent replay for exact metadata and fails closed on divergent metadata', () => {
     expect(sql).toMatch(/IF FOUND THEN/i);
     expect(sql).toMatch(/v_existing\.sha256 <> p_sha256/i);
+    expect(sql).toMatch(/v_existing\.file_size <> p_file_size/i);
     expect(sql).toMatch(/RAISE EXCEPTION 'VNEXT_CONFLICT: asset version already exists with divergent metadata'/i);
+  });
+
+  it('MIG-09: freezes W3.G version to exactly "1" in table constraint and RPC validation', () => {
+    expect(sql).toMatch(/version TEXT NOT NULL CHECK \(version = '1'\)/i);
+    expect(sql).toMatch(/p_version IS DISTINCT FROM '1'/i);
+  });
+
+  it('MIG-10: confirms durable storage object exists in storage.objects before finalization', () => {
+    expect(sql).toMatch(/SELECT 1 FROM storage\.objects/i);
+    expect(sql).toMatch(/bucket_id = 'product-assets'/i);
+    expect(sql).toMatch(/VNEXT_STORAGE_OBJECT_NOT_FOUND/i);
   });
 });

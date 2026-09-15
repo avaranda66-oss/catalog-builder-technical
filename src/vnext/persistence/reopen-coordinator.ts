@@ -1,3 +1,4 @@
+import type { AssetRuntimeState } from '../asset/contracts';
 import {
   createDocumentSession,
   type ApplicationExecutionDependencies,
@@ -28,6 +29,15 @@ export type ReopenResult =
       };
     };
 
+export interface ReopenAssetResolutionPayload {
+  readonly urls: ReadonlyMap<string, string>;
+  readonly states: ReadonlyMap<string, AssetRuntimeState>;
+}
+
+export type ReopenAssetResolutionResult =
+  | ReadonlyMap<string, string>
+  | ReopenAssetResolutionPayload;
+
 export interface CanonicalReopenCoordinatorOptions {
   readonly workspace: PersistenceWorkspace;
   readonly repository: CatalogRepository;
@@ -35,7 +45,7 @@ export interface CanonicalReopenCoordinatorOptions {
   readonly createOpenSessionId: () => string;
   readonly resolveAssetUrls?: (
     document: CatalogDocument
-  ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
+  ) => ReopenAssetResolutionResult | Promise<ReopenAssetResolutionResult>;
   readonly canLeave?: () => boolean;
 }
 
@@ -124,10 +134,37 @@ export class CanonicalReopenCoordinator {
       session.getSnapshot().localSequence
     );
     const resolved = this.options.resolveAssetUrls?.(envelope.documentSnapshot);
-    const assetUrls =
+    const resolvedPayload =
       (resolved instanceof Promise ? await resolved : resolved)
       ?? new Map<string, string>();
-    this.options.workspace.replaceActive(session, binding, assetUrls);
+
+    // Second authority/stale gate AFTER async asset resolution (Point 11)
+    const afterResolve = this.options.workspace.getSnapshot();
+    if (
+      afterResolve.binding.authLineage !== authLineage ||
+      afterResolve.activeAuthorityScopeId !== authorityScopeId ||
+      afterResolve.binding.openSessionId !== before.binding.openSessionId ||
+      afterResolve.session !== before.session
+    ) {
+      return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
+
+    let assetUrls: ReadonlyMap<string, string>;
+    let assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map();
+
+    if (
+      resolvedPayload &&
+      typeof (resolvedPayload as any).urls !== 'undefined' &&
+      typeof (resolvedPayload as any).states !== 'undefined'
+    ) {
+      const payload = resolvedPayload as ReopenAssetResolutionPayload;
+      assetUrls = payload.urls;
+      assetRuntimeStates = payload.states;
+    } else {
+      assetUrls = resolvedPayload as ReadonlyMap<string, string>;
+    }
+
+    this.options.workspace.replaceActive(session, binding, assetUrls, assetRuntimeStates);
     return { ok: true, envelope };
   }
 }

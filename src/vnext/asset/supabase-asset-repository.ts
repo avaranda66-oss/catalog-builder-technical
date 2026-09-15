@@ -1,11 +1,12 @@
 import { AssetRefSchema } from '../domain/editorial-model';
-import type {
-  AssetFinalizationResult,
-  AssetRecord,
-  AssetRepository,
-  VNextAssetRpcClient,
-  VNextAssetRpcResponse,
-  VNextAssetStorageClient,
+import {
+  AssetRecordSchema,
+  type AssetFinalizationResult,
+  type AssetRecord,
+  type AssetRepository,
+  type VNextAssetRpcClient,
+  type VNextAssetRpcResponse,
+  type VNextAssetStorageClient,
 } from './contracts';
 
 export interface SupabaseAssetRepositoryOptions {
@@ -92,8 +93,18 @@ export class SupabaseAssetRepository implements AssetRepository {
       return { ok: true, record: null };
     }
 
-    const record = response.data as AssetRecord;
-    return { ok: true, record };
+    const parsed = AssetRecordSchema.safeParse(response.data);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_REMOTE_METADATA',
+          message: `Corrupt remote asset metadata: ${parsed.error.message}`,
+        },
+      };
+    }
+
+    return { ok: true, record: parsed.data };
   }
 
   async uploadBytes(

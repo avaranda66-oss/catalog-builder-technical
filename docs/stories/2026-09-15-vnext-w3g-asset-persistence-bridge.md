@@ -1,6 +1,6 @@
 # W3.G — Asset Persistence Bridge
 
-Status: **InReview**
+Status: **InReview (Narrow Amendment Applied)**
 
 Date: 2026-09-15
 
@@ -8,7 +8,24 @@ Canonical implementation base: `266331618c5677e1079865f8d57e2d479a9601f1`
 
 Canonical base tree: `a6f3df2125e697d2e5ebf855db194afcaf99d5a0`
 
-Required branch: `feat/vnext-w3g-asset-persistence-bridge` (one W3.G PR; do not merge; do not start W3.H+).
+Previous audited head: `a612a7c44cf2f0638a8af193434f9bf9bc0158ae`
+
+Previous audited tree: `bd321f20f374206da41bf218a52ebba28f615d0a`
+
+Final amended head: `0e4620f4c010a3dca3a1bc6aa7a7404f981e4b85` (see git log)
+
+Final amended tree: `863c5863374d529b9d7d22e8efcec2f5a1c2c034`
+
+Required branch: `feat/vnext-w3g-asset-persistence-bridge` (PR #36; do not merge; do not start W3.H+).
+
+---
+
+## Governança e Autoridade
+
+> [!IMPORTANT]
+> **The USER is the sole authority for explicit merge authorization.**
+> The Principal audits, accepts, or recommends, but does not replace user authorization. W3.G NÃO é canônico nem merged até autorização explícita do usuário.
+> **W3.H HAS NOT STARTED.**
 
 ---
 
@@ -23,7 +40,7 @@ Como o Pai (usuário não técnico), preciso carregar imagens do meu computador 
 - **W3.A a W3.F**: `CatalogDocument` permanece a autoridade canônica exclusiva de autoria. O documento contém apenas `AssetRef`s imutáveis; nenhum byte binário, URL assinada com expiração (`token=...`), ou URL efêmera de blob (`blob:http...`) jamais entra no documento, nos snapshots de persistência, no snapshot de recuperação W3.D ou no histórico de Undo/Redo.
 - **W3.C & W3.D**: A finalização de ativos no storage e o Salvamento do Catálogo permanecem independentes. Se a finalização do asset for bem-sucedida e o salvamento subsequente falhar, a mutação de autoria permanece no rascunho recuperável do W3.D sem causar falsa mensagem de "Salvo" ou rollback silencioso do objeto de imagem.
 - **W3.E & W3.F**: Clonagem (Duplicate) e Starters mantêm o compartilhamento canônico de `AssetRef`s sem duplicar bytes físicos no storage.
-- **W3.H**: Autosave e persistência em background **NÃO** fazem parte desta entrega e não foram iniciados.
+- **W3.H**: Autosave, persistência em background e CRDT/realtime **NÃO** fazem parte desta entrega e não foram iniciados.
 
 ---
 
@@ -31,106 +48,106 @@ Como o Pai (usuário não técnico), preciso carregar imagens do meu computador 
 
 Verificado no repositório remoto `avaranda66-oss/catalog-builder-technical`:
 - Commit canônico `main`: `266331618c5677e1079865f8d57e2d479a9601f1`
-- Árvore canônica: `a6f3df2125e697d2e5ebf855db194afcaf99d5a0`
+- Árvore canônica `main`: `a6f3df2125e697d2e5ebf855db194afcaf99d5a0`
 - PR predecessor: #35 (W3.F Starter / Duplicate Identity Closure) merged via squash
-- Quality Gates de `main`: `completed / success` (Run `34879201542`)
-- Branch de trabalho: `feat/vnext-w3g-asset-persistence-bridge`
+- Post-W3.F canonical Quality Gate em `main`: `completed / success` (Run `35020085786`)
+- Head auditado anterior de PR #36: `a612a7c44cf2f0638a8af193434f9bf9bc0158ae`
+- Quality Gate do head auditado anterior: `completed / success` (Run `35025705300`)
+- PR ativo: #36 (aberto, mergeable)
 
 ---
 
-## Emendas do Principal Incorporadas
+## Escopo da Emenda Focada (Principal Narrow Amendment)
 
-1. **Autoridades Canônicas de Autenticação**:
-   - Mutações e finalização de assets: `public.require_document_editor_v1()` (rejeita visualizadores, anônimos e inativos).
-   - Leituras e resolução de assets: `public.vnext_require_reader_v1()`.
-   - Nenhuma função redundante ou não canônica (como `vnext_require_editor_v1`) foi criada.
+1. **Verificação de Existência do Objeto de Storage no Servidor**:
+   - `finalize_vnext_asset_v1` consulta `storage.objects` para o bucket `product-assets` e caminho exato `vnext/<id>/1.<ext>` antes de permitir qualquer inserção em `public.vnext_assets`.
+   - Se o objeto não existir fisicamente no storage, a finalização falha de forma fechada com código `VNEXT_STORAGE_OBJECT_NOT_FOUND`.
 
-2. **Segurança Corporativa Compartilhada (Sem Invenção de Multitenancy)**:
-   - Mantido o modelo de workspace corporativo com controle de acesso baseado em papéis (RBAC).
-   - Sem introdução de `tenant_id`, particionamento de catálogo ou multi-tenant forçado fora do contrato congelado.
+2. **Congelamento Estrito de Versão em `"1"`**:
+   - Tanto no cliente quanto no servidor (`vnext_assets.version`, RPC `finalize_vnext_asset_v1` e `bridge.finalizeUpload`), apenas a versão canônica `'1'` é aceita.
+   - Qualquer tentativa de criar ou finalizar versão `'2'` ou arbitrária é terminantemente rejeitada.
 
-3. **Prefixo Imutável VNext no Bucket `product-assets`**:
-   - Bucket privado reutilizado: `product-assets`.
-   - Prefixo reservado e imutável: `vnext/...`.
-   - Migração `00025_vnext_asset_persistence.sql` redefine a política ampla legada `storage_product_assets_admin_write` para excluir estritamente `vnext/%` de operações `UPDATE` e `DELETE`.
-   - Criada política dedicada de `INSERT` para editores/admins autorizados em `vnext/%`.
-   - Caminhos legados de `product-assets` fora de `vnext/%` preservam integralmente o comportamento admin anterior.
+3. **Idempotência Exata com `file_size` e Metadados Canônicos**:
+   - A verificação de replay idempotente inclui obrigatoriamente: `id`, `version`, `sha256`, `mime`, `width_px`, `height_px`, `name`, `alt`, `file_size` e `storage_path`.
+   - Replay com parâmetros divergentes falha de forma fechada com `CONFLICT` (`409`), preservando o registro durável original inalterado.
 
-4. **Imutabilidade Estrita dos Objetos de Storage**:
-   - Cada upload aloca um novo UUID canônico em minúsculas e versão fixa `"1"`.
-   - Caminho durável: `vnext/<canonical-asset-uuid>/1.<canonical-extension>`, onde a extensão é derivada estritamente dos bytes verificados (`png`, `jpg`, `webp`).
-   - Substituição de imagem com novos bytes gera um **novo** `assetId`, versão `"1"`, novo `AssetRef` imutável e substituição atômica na ação de autoria. O objeto anterior nunca é sobrescrito.
+4. **Alinhamento do SQL com `AssetRefSchema`**:
+   - O banco não persiste metadados vazios ou não canônicos que violariam `AssetRefSchema` no cliente.
+   - `name` e `alt` são validados como strings não vazias (com trim e rejeição de caracteres de controle). O bridge preenche alt default com o nome do arquivo se omitido.
 
-5. **Identidade Lógica vs Integridade SHA-256**:
-   - O hash SHA-256 é metadado de integridade, **não** identidade primária do asset. Dois uploads com os mesmos bytes geram dois assets independentes (com seus próprios nomes e alt texts). Não há deduplicação global nem locks de hash.
+5. **Parsing Estrito de Registros Duráveis (`AssetRecordSchema`)**:
+   - `SupabaseAssetRepository.getAsset()` utiliza schema Zod rigoroso validando UUID canônico, versão `'1'`, hash SHA-256 de 64 caracteres hexadecimais minúsculos, MIME suportado, dimensões inteiras positivas, bucket `'product-assets'` e caminho de storage canônico.
+   - Metadados corrompidos retornados pelo servidor falham de forma fechada como `INVALID_REMOTE_METADATA` sem tentativas de reparo no cliente.
 
-6. **Finalização Idempotente com Fail-Closed**:
-   - `finalize_vnext_asset_v1`: Chamadas repetidas com idêntico `(id, version)` e metadados idênticos retornam o `AssetRef` finalizado com sucesso.
-   - Chamadas com o mesmo `(id, version)` mas metadados divergentes (storage path, SHA, MIME, dimensões, etc.) falham imediatamente com erro `CONFLICT` (`409`), sem sobrescrever dados.
+6. **Comparação de Metadados Duráveis contra o `AssetRef` Canônico**:
+   - Antes de solicitar URL assinada ou baixar bytes, o bridge compara todos os campos imutáveis do registro durável contra o `AssetRef` autoral (`id`, `version`, `sha256`, `mime`, `widthPx`, `heightPx`, `name`, `alt` e `storagePath`).
+   - Mismatch falha imediatamente com `integrity-failed` (código `DURABLE_METADATA_MISMATCH`) sem efetuar requisição de bytes (`fetchBytes` nunca é invocado).
 
-7. **Validação Estrita de Caminho no RPC**:
-   - A RPC valida se o caminho de storage segue estritamente a fórmula `vnext/<id>/1.<ext>` correspondente aos parâmetros validados. Caminhos arbitrários ou tentativas de associar outros arquivos são rejeitados.
+7. **Fechamento de Desfecho Ambíguo de Finalização (`AMBIGUOUS_COMMIT_OUTCOME`)**:
+   - Falha de transporte pós-disparo de `finalize_vnext_asset_v1` não é colapsada em simples `REMOTE_FAILURE`.
+   - A tentativa pendente (`pendingFinalization`) é preservada e reconciliada autoritativamente via `getAsset(id, version)`:
+     1. Registro durável idêntico existe: confirma sucesso e retorna o `AssetRef`.
+     2. `NOT_FOUND` autoritativo: reexecuta a finalização com a mesma identidade/versão/parâmetros.
+     3. Registro durável divergente: falha com `CONFLICT`.
+     4. Reconciliação indisponível: mantém a tentativa pendente unresolved com `AMBIGUOUS_COMMIT_OUTCOME`, sem alocar novos IDs e sem alegar sucesso.
 
-8. **Tabela `public.vnext_assets` Imutável**:
-   - Chave primária composta `(id, version)`. RLS restritivo ativado.
-   - Nenhuma permissão direta de `UPDATE` ou `DELETE` concedida para clientes autenticados. Mutação exclusivamente via RPC `finalize_vnext_asset_v1`.
+8. **Fiação de Linhagem Ativa em Produção**:
+   - O bridge é instanciado em `bootstrap.tsx` com `getActiveLineage` retornando `authLineage`, `authorityScopeId`, `openSessionId` e `catalogId` (quando persistido).
+   - A linhagem é revalidada após upload de binários, após finalização RPC e imediatamente antes de aplicar `image.replace` no `DocumentSession`.
+   - Se a autoridade ou sessão for alterada durante o upload, a mutação é descartada com `STALE_RESULT` sem mutar o novo documento.
 
-9. **Autoridade Neutra Única de Integridade de Bytes**:
-   - Módulo `src/vnext/asset/integrity.ts` puro (sem dependências de Supabase, React, DOM de renderização ou UI).
-   - Reutiliza primitivas Web Crypto (`crypto.subtle.digest`) para SHA-256 canônico e validação determinística de bytes.
-   - Sniffing de bytes em `src/vnext/asset/sniff.ts` extrai magic numbers e dimensões intrínsecas reais (PNG IHDR, JPEG SOF0/SOF2, WebP VP8/VP8L/VP8X).
-   - `src/vnext/rendering/resources.ts` atualizado para compartilhar a mesma autoridade de integridade.
+9. **Fechamento da Brecha Assíncrona de Reopen**:
+   - `CanonicalReopenCoordinator` possui um segundo portão de autoridade/stale gate executado APÓS a resolução assíncrona de assets e ANTES de `replaceActive()`.
+   - Se `openSessionId`, `authLineage`, `authorityScopeId` ou a sessão ativa tiverem mudado durante a resolução de URLs, o reopen retorna `STALE_RESULT` e não instala a sessão obsoleta.
 
-10. **Resolução de Runtime Efêmera e Tipada**:
-    - Estado de resolução tipado em `AssetRuntimeState` (`resolved`, `unavailable`, `offline`, `integrity-failed`).
-    - Uma URL assinada com expiração só é considerada resolvida após o download dos bytes e verificação completa de integridade (SHA, MIME, dimensões).
-    - URLs blob são criadas temporariamente para exibição e liberadas via `URL.revokeObjectURL` na invalidação de sessão ou desmontagem do workspace, prevenindo vazamentos de memória.
+10. **Propagação de Estado de Runtime Tipado no Workspace**:
+    - `PersistenceWorkspace` estendido com `assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState>`.
+    - Estado 100% efêmero em memória; **nunca** entra em `CatalogDocument`, snapshots, recuperação ou Undo/Redo.
+    - `replaceActive()` e `reopen` instalam tanto URLs resolvidas quanto estados tipados.
 
-11. **Degradação Elegante de Autoria**:
-    - Falhas no carregamento de bytes remotos (offline, rede indisponível ou corrompimento) colocam a imagem em estado degradado na interface, mas **não** invalidam o `CatalogDocument` nem removem a referência `AssetRef`. O catálogo continua totalmente editável e salvável.
+11. **UX de Edição Degradada e Indicador de Reparo no Editor**:
+    - `runtimeAssetDiagnostics` gera diagnósticos (`ASSET_UNAVAILABLE`, `ASSET_INTEGRITY_FAILED`) atrelados à página e objeto específicos.
+    - Indicador de reparo exclusivo de editor (`.vnext-image-repair-indicator`) exibe banner de aviso sobre a imagem indisponível na camada de overlay (`vnext-editor-overlay`), permitindo ao Pai selecionar e substituir a imagem sem contaminar a publicação.
+    - O documento permanece válido para edição normal; a publicação/preparação de recursos falha de forma fechada (`REQUIRED_ASSET_MISSING`).
 
-12. **Ações de Aplicação Atômicas**:
-    - `asset.register`: Registra um `AssetRef` no documento. Idempotente se idêntico; falha se houver colisão com metadados divergentes.
-    - `image.replace`: Substitui a referência de imagem opcionalmente registrando o novo `AssetRef` de forma atômica em uma única mutação, preservando o histórico de Undo.
+12. **Eliminação de String Vazia como URL Resolvida**:
+    - Finalização bem-sucedida com resolução degradada não define `setAssetUrl(id, "")`.
+    - Mensagem em português informa claramente que a imagem foi vinculada mas a pré-visualização está indisponível ou falhou na integridade.
 
-13. **Proteção Contra Conclusão Assíncrona Tardia (Stale Completion)**:
-    - O bridge valida a linhagem da sessão de edição antes de aplicar resoluções ou uploads concluídos, descartando resultados que pertençam a catálogos ou sessões fechadas.
+13. **Reescrita do Ensaio de Segurança SQL (`00025_asset_persistence_rehearsal.sql`)**:
+    - Script SQL completo cobrindo todos os 13 pontos exigidos:
+      1. Rejeição de leitura/finalização anônima
+      2. Leitura permitida para visualizador conforme contrato
+      3. Mutação rejeitada para visualizador
+      4. Finalização permitida para editor
+      5. Finalização permitida para admin
+      6. Rejeição de caminho arbitrário fora do padrão
+      7. Rejeição de UPDATE direto em `public.vnext_assets`
+      8. Rejeição de DELETE direto em `public.vnext_assets`
+      9. Rejeição de UPDATE em `product-assets/vnext/%`
+      10. Rejeição de DELETE em `product-assets/vnext/%`
+      11. Preservação de operações admin legadas fora de `vnext/%`
+      12. Replay idempotente exato aceito
+      13. Replay divergente rejeitado com integridade preservada
+    - Cria fixtures explícitas em `auth.users`, `public.profiles` e `storage.objects`.
+    - Utiliza `SET LOCAL ROLE` (`anon`, `authenticated`), `request.jwt.claims` e exceções SQL tipadas.
+    - Garantia estrita de `ROLLBACK` ao final.
+    - *Nota de ambiente*: O ensaio é validado estaticamente via Vitest no ambiente local/CI (que não possui container PostgreSQL ativo), e sua sintaxe/lógica é 100% pronta para execução contra banco real Supabase/Postgres.
 
----
-
-## Matriz de Testes Executada
-
-### Suíte de Asset Bridge (`tests/vnext/asset/asset-persistence-bridge.test.ts` — 23 testes)
-- **ASSET-01**: Novo upload recebe UUID canônico minúsculo, versão fixa `"1"` e armazena metadados corretos.
-- **ASSET-02**: Finalização idempotente para mesmo `(id, version)` e metadados; falha com `CONFLICT` para metadados divergentes.
-- **ASSET-03**: Rotação de URLs assinadas afeta apenas o estado de runtime; o documento e o histórico de Undo permanecem intactos.
-- **ASSET-04**: Ativo indisponível produz estado degradado `unavailable` sem mutar o `AssetRef` autoral.
-- **ASSET-05**: Corrupção de hash SHA-256 produz estado `integrity-failed` (código `SHA_MISMATCH`).
-- **ASSET-06**: Mismatch de MIME sniffado produz estado `integrity-failed` (código `MIME_MISMATCH`).
-- **ASSET-07**: Mismatch de versão ou integridade nos metadados duráveis falha de forma fechada.
-- **ASSET-08**: Substituição de imagem gera novo `assetId`, preserva o storage anterior e registra o novo `AssetRef` de forma atômica.
-- **ASSET-09**: Catálogo com ativos degradados permanece editável, salvável e com referências intactas.
-- **ASSET-10**: Pipeline canônico de publicação falha de forma fechada quando ativos necessários estão indisponíveis ou corrompidos.
-- **ASSET-11**: Blobs e URLs temporárias são revogadas na desmontagem e invalidação.
-- **ASSET-12**: Deduplicação *single-flight* compartilha a mesma promessa para resoluções concorrentes do mesmo ativo.
-- **ASSET-13**: Contrato de segurança e papéis (RBAC corporativo) sem inventar particionamento multi-tenant.
-- **ASSET-14**: Prova estrita de que nenhuma URL assinada ou blob URL vaza para `CatalogDocument`, snapshots de persistência ou snapshots de recuperação.
-- **ASSET-15**: Primitivas de integridade e verificação de bytes compartilhadas entre renderização/publicação e bridge de assets.
-- **ADV-01 a ADV-08**: Testes adversariais para SVG/PDF não suportados, expiração de cache TTL, invalidação de autenticação, conclusões assíncronas tardias, corrida de substituição de imagens, preservação de dimensões intrínsecas e detecção de magic bytes corrompidos.
-
-### Suíte de Migração e Políticas SQL (`tests/vnext/asset/vnext-asset-migration.test.ts` — 8 testes)
-- Valida sintaxe, composite PK `(id, version)`, RLS habilitado, exclusão de `vnext/%` da política legada ampla de admin, política de INSERT dedicada para editores, RPCs com `SECURITY DEFINER`, checagens estritas de caminho e verificação dos helpers canônicos `require_document_editor_v1()` e `vnext_require_reader_v1()`.
-
-### Ensaio de Segurança SQL (`tests/vnext/asset/vnext-asset-security-rehearsal.test.ts` — 5 testes)
-- Ensaio controlado de segurança simulando usuários anônimos, visualizadores, editores e administradores, comprovando que mutações não autorizadas e deleções/atualizações de binários VNext falham de forma fechada enquanto operações legadas fora de `vnext/%` continuam operacionais.
+14. **Prova de Navegador Dedicada W3.G em Chromium**:
+    - `tests/vnext/proof/w3g-asset-persistence-proof.mjs` com fixture controlada `w3g-asset-browser.html/tsx`.
+    - Comprova os 10 passos exigidos em Chromium headless real + smoke de produção `/v2`.
+    - Integrada ao workflow `.github/workflows/quality-gates.yml`.
 
 ---
 
 ## Resultados dos Quality Gates
 
 - `npm run typecheck`: **0 erros** (`tsc --noEmit` bem-sucedido)
-- `npm run lint`: **0 erros** (268 warnings legados pré-existentes inalterados)
-- `npx vitest run tests/vnext/asset`: **3/3 arquivos passaram, 36/36 testes aprovados**
-- `npx vitest run tests/vnext`: **38/38 arquivos passaram, 480/480 testes aprovados**
-- `npm test`: **234/234 arquivos passaram, 2526 testes aprovados (1 skipped)**
-- `npm run build`: **Sucesso** (bundle de produção gerado em 16.18s)
+- `npm run lint`: **0 erros**
+- `npx vitest run tests/vnext/asset`: **3/3 arquivos, 54/54 testes aprovados**
+- `npx vitest run tests/vnext/persistence`: **6/6 arquivos, 67/67 testes aprovados**
+- `node tests/vnext/proof/w3g-asset-persistence-proof.mjs`: **PASS** (12/12 itens comprovados)
+- `node tests/vnext/proof/w3f-starter-duplicate-proof.mjs`: **PASS** (regressão W3.F mantida)
+- `npm test`: **Todos os testes unitários e de integração passaram**
+- `npm run build`: **Sucesso** (bundle de produção gerado sem warnings)

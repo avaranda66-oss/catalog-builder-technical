@@ -49,7 +49,7 @@ export function PrimitiveRenderer({
     case 'image': {
       const asset=assetFor(document.assets,object.assetId);
       return <img data-primitive-type="image" data-asset-id={asset.id} className="editorial-media editorial-image"
-        src={assetUrls.get(asset.id)} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
+        src={assetUrls.get(asset.id) || undefined} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
         style={{display:'block',width:'100%',height:'100%',objectFit:object.fit,objectPosition:imageObjectPosition(object)}}/>;
     }
     case 'shape':
@@ -62,7 +62,7 @@ export function PrimitiveRenderer({
     case 'icon': {
       const asset=assetFor(document.assets,object.assetId);
       return <img data-primitive-type="icon" data-asset-id={asset.id} className="editorial-media editorial-icon"
-        src={assetUrls.get(asset.id)} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
+        src={assetUrls.get(asset.id) || undefined} alt={asset.alt} width={asset.widthPx} height={asset.heightPx}
         style={{display:'block',width:'100%',height:'100%',objectFit:'contain',objectPosition:'50% 50%'}}/>;
     }
     default:return assertNever(object);

@@ -60,6 +60,7 @@ function RuntimeWorkspace({
             openSessionId: snapshot.binding.openSessionId,
             save: snapshot.save,
             assetUrls: snapshot.assetUrls,
+            assetRuntimeStates: snapshot.assetRuntimeStates,
             localProtection: snapshot.localProtection,
             ...(snapshot.localProtectionMessage
               ? { localProtectionMessage: snapshot.localProtectionMessage }
