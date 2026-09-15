@@ -51,7 +51,7 @@ try {
   assert(initialRepositoryFacts.listCalls >= 1, 'Library must list through lightweight metadata repository query');
   assert.equal(initialRepositoryFacts.getCalls, 0, 'Initial Library listing must not fetch full CatalogDocument rows');
   assert.deepEqual(await rowTitles(page), ['Beta Pressão', 'Álpha Calibradores', 'Zeta Temperatura']);
-  assert.equal(await page.getByText('Duplicar', { exact: true }).count(), 0);
+  assert.equal(await page.getByText('Duplicar', { exact: true }).count(), 3);
   assert.equal(await page.getByText('Excluir', { exact: true }).count(), 0);
   assert.equal(await page.getByText('Restaurar', { exact: true }).count(), 0);
 
@@ -115,6 +115,7 @@ try {
   const beforeCreateOpenId = (await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.state())).lastOpenedCatalogId;
   await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.armAmbiguousCreate());
   await page.getByRole('button', { name: 'Novo catálogo' }).click();
+  await page.getByRole('dialog', { name: 'Novo catálogo' }).getByRole('button', { name: /Em branco/ }).click();
   await page.waitForFunction((previous) => window.__W3E_LIBRARY_PROOF__.state().lastOpenedCatalogId !== previous, beforeCreateOpenId);
   const afterCreate = await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.state());
   const ambiguousCreate = await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.ambiguousCreateEvidence());

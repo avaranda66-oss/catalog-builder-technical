@@ -31,7 +31,7 @@ function item(title: string, suffix: string, archived = false): CatalogListItem 
 function serviceWithList(
   list: CatalogLibraryService['list']
 ): CatalogLibraryService {
-  return { list, getCreateState: () => 'idle' } as unknown as CatalogLibraryService;
+  return { list, listStarters: () => [], getCreateState: () => 'idle' } as unknown as CatalogLibraryService;
 }
 
 describe('W3.E CatalogLibrary UI coordination', () => {
@@ -73,6 +73,7 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     expect(getByText('Ativo mais novo')).toBeInTheDocument();
     expect(queryByText('Arquivado atrasado')).toBeNull();
     expect(getByRole('button', { name: 'Abrir' })).toBeInTheDocument();
+    expect(getByRole('button', { name: 'Duplicar' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Renomear' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Arquivar' })).toBeInTheDocument();
   });
@@ -123,6 +124,7 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     });
     const service = {
       list,
+      listStarters: () => [],
       createBlank,
       getCreateState: () => pending ? 'pending-verification' : 'idle',
     } as unknown as CatalogLibraryService;
@@ -132,6 +134,7 @@ describe('W3.E CatalogLibrary UI coordination', () => {
 
     const create = await waitFor(() => getByRole('button', { name: 'Novo catálogo' }));
     fireEvent.click(create);
+    fireEvent.click(getByRole('button', { name: /Em branco/ }));
     const alert = await waitFor(() => getByRole('alert'));
     expect(alert).toHaveTextContent('Não foi possível confirmar a criação. Tente novamente para verificar o mesmo catálogo.');
     expect(queryByText(/Atualize a biblioteca/i)).toBeNull();
@@ -141,5 +144,61 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     fireEvent.click(retry!);
     await waitFor(() => expect(createBlank).toHaveBeenCalledTimes(2));
     expect(createBlank.mock.calls).toEqual([[], []]);
+  });
+
+  it('W3.F exposes compact Duplicate and Starter flows below React authority', async () => {
+    const source = item('Catálogo base', '40');
+    const copy = item('Cópia de Catálogo base', '41');
+    const list = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: [source] })
+      .mockResolvedValue({ ok: true, value: [copy, source] });
+    const duplicateEnvelope = {
+      ...copy,
+      lastMutationId: '00000000-0000-4000-8000-000000000042',
+      origin: { originKind: 'duplicate', originId: source.catalogId, originRevision: 1 },
+      documentSnapshot: {
+        schemaVersion: 1,
+        id: copy.catalogId,
+        title: copy.title,
+        locale: 'pt-BR',
+        style: { fonts: [{ family: 'Noto Sans', revision: '5.3.0', weight: 400 as const, style: 'normal' as const }], defaultText: {}, palette: ['#172033'] },
+        pages: [{ id: 'copy-page', widthMm: 210 as const, heightMm: 297 as const, objects: [] }],
+        assets: [],
+      },
+    };
+    const duplicate = vi.fn().mockResolvedValue({ ok: true, value: duplicateEnvelope });
+    const createFromStarter = vi.fn().mockResolvedValue({ ok: true, value: duplicateEnvelope });
+    const createBlank = vi.fn().mockResolvedValue({ ok: true, value: duplicateEnvelope });
+    const onOpen = vi.fn();
+    const service = {
+      list,
+      duplicate,
+      createFromStarter,
+      createBlank,
+      listStarters: () => [{
+        starterId: 'essential',
+        revision: 1,
+        label: 'Ficha técnica essencial',
+        description: 'Título e tabela básica.',
+        category: 'Ficha técnica',
+      }],
+      getCreateState: () => 'idle',
+    } as unknown as CatalogLibraryService;
+    const { getByRole, getByText } = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+
+    fireEvent.click(await waitFor(() => getByRole('button', { name: 'Duplicar' })));
+    await waitFor(() => expect(duplicate).toHaveBeenCalledWith(source.catalogId));
+    await waitFor(() => expect(getByText('Cópia de Catálogo base')).toBeInTheDocument());
+
+    fireEvent.click(getByRole('button', { name: 'Novo catálogo' }));
+    expect(getByRole('dialog', { name: 'Novo catálogo' })).toBeInTheDocument();
+    expect(getByRole('button', { name: /Em branco/ })).toBeInTheDocument();
+    fireEvent.click(getByRole('button', { name: /Ficha técnica essencial/ }));
+    await waitFor(() => expect(createFromStarter).toHaveBeenCalledWith('essential'));
+    expect(onOpen).toHaveBeenCalledWith(copy.catalogId);
+
+    fireEvent.click(getByRole('button', { name: 'Novo catálogo' }));
+    fireEvent.click(getByRole('button', { name: /Em branco/ }));
+    await waitFor(() => expect(createBlank).toHaveBeenCalledTimes(1));
   });
 });

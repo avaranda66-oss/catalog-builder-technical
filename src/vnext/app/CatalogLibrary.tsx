@@ -4,8 +4,10 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   Clock3,
+  Copy,
   FilePlus2,
   FolderOpen,
+  LayoutTemplate,
   Pencil,
   Search,
   X,
@@ -54,6 +56,7 @@ function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'creat
     ? 'Não foi possível confirmar a criação. Tente novamente para verificar o mesmo catálogo.'
     : 'Não foi possível confirmar o resultado no servidor. Tente novamente.';
   if (code === 'INVALID_TITLE') return 'Digite um nome para o catálogo.';
+  if (code === 'STARTER_NOT_FOUND') return 'Este modelo inicial não está mais disponível. Escolha outro modelo.';
   if (action === 'create') return 'Não foi possível criar o novo catálogo.';
   if (action === 'rename') return 'Não foi possível renomear este catálogo.';
   if (action === 'archive') return 'Não foi possível arquivar este catálogo.';
@@ -65,13 +68,19 @@ function CatalogRow({
   view,
   onOpen,
   onRename,
+  onDuplicate,
   onArchive,
+  disabled,
+  duplicating,
 }: {
   readonly item: CatalogListItem;
   readonly view: CatalogLibraryView;
   readonly onOpen: () => void;
   readonly onRename: () => void;
+  readonly onDuplicate: () => void;
   readonly onArchive: () => void;
+  readonly disabled: boolean;
+  readonly duplicating: boolean;
 }) {
   return (
     <article className="vnext-library-row" data-library-catalog-id={item.catalogId}>
@@ -85,9 +94,10 @@ function CatalogRow({
       </div>
       {view === 'active' ? (
         <div className="vnext-library-row-actions" aria-label={`Ações de ${item.title}`}>
-          <button type="button" className="is-primary" onClick={onOpen}><FolderOpen size={17} aria-hidden="true" />Abrir</button>
-          <button type="button" onClick={onRename}><Pencil size={16} aria-hidden="true" />Renomear</button>
-          <button type="button" onClick={onArchive}><Archive size={16} aria-hidden="true" />Arquivar</button>
+          <button type="button" className="is-primary" onClick={onOpen} disabled={disabled}><FolderOpen size={17} aria-hidden="true" />Abrir</button>
+          <button type="button" onClick={onDuplicate} disabled={disabled}><Copy size={16} aria-hidden="true" />{duplicating ? 'Duplicando…' : 'Duplicar'}</button>
+          <button type="button" onClick={onRename} disabled={disabled}><Pencil size={16} aria-hidden="true" />Renomear</button>
+          <button type="button" onClick={onArchive} disabled={disabled}><Archive size={16} aria-hidden="true" />Arquivar</button>
         </div>
       ) : (
         <div className="vnext-library-archived-state">Arquivado</div>
@@ -107,32 +117,37 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const [renameTarget, setRenameTarget] = React.useState<CatalogListItem | undefined>();
   const [renameTitle, setRenameTitle] = React.useState('');
   const [archiveTarget, setArchiveTarget] = React.useState<CatalogListItem | undefined>();
+  const [createChooserOpen, setCreateChooserOpen] = React.useState(false);
+  const [duplicateTargetId, setDuplicateTargetId] = React.useState<string | undefined>();
   const loadGeneration = React.useRef(0);
   const dialogTrigger = React.useRef<HTMLElement | null>(null);
   const renameDialog = React.useRef<HTMLFormElement | null>(null);
   const archiveDialog = React.useRef<HTMLElement | null>(null);
+  const createDialog = React.useRef<HTMLElement | null>(null);
   const createPending = service.getCreateState() === 'pending-verification';
+  const starters = service.listStarters();
 
   const rememberDialogTrigger = () => {
     dialogTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   };
 
   React.useEffect(() => {
-    if (renameTarget || archiveTarget) return;
+    if (renameTarget || archiveTarget || createChooserOpen) return;
     const trigger = dialogTrigger.current;
     dialogTrigger.current = null;
     if (trigger?.isConnected) trigger.focus();
-  }, [archiveTarget, renameTarget]);
+  }, [archiveTarget, createChooserOpen, renameTarget]);
 
   const handleDialogKeyboard = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
       setRenameTarget(undefined);
       setArchiveTarget(undefined);
+      setCreateChooserOpen(false);
       return;
     }
     if (event.key !== 'Tab') return;
-    const dialog = renameDialog.current ?? archiveDialog.current;
+    const dialog = renameDialog.current ?? archiveDialog.current ?? createDialog.current;
     if (!dialog) return;
     const focusable = [...dialog.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -177,11 +192,50 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
     setError(undefined);
     const result = await service.createBlank();
     setBusy(false);
+    setCreateChooserOpen(false);
     if (!result.ok) {
       setError(failureMessage(result.error.code, 'create'));
       return;
     }
     onOpen(result.value.catalogId);
+  };
+
+  const createFromStarter = async (starterId: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    const result = await service.createFromStarter(starterId);
+    setBusy(false);
+    setCreateChooserOpen(false);
+    if (!result.ok) {
+      setError(failureMessage(result.error.code, 'create'));
+      return;
+    }
+    onOpen(result.value.catalogId);
+  };
+
+  const duplicateCatalog = async (item: CatalogListItem) => {
+    if (busy) return;
+    setBusy(true);
+    setDuplicateTargetId(item.catalogId);
+    setError(undefined);
+    const result = await service.duplicate(item.catalogId);
+    setBusy(false);
+    setDuplicateTargetId(undefined);
+    if (!result.ok) {
+      setError(failureMessage(result.error.code, 'create'));
+      return;
+    }
+    await load();
+  };
+
+  const requestNewCatalog = () => {
+    if (createPending) {
+      void createBlank();
+      return;
+    }
+    rememberDialogTrigger();
+    setCreateChooserOpen(true);
   };
 
   const submitRename = async (event: React.FormEvent) => {
@@ -233,9 +287,15 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
             <h1>Catálogos</h1>
           </div>
         </div>
-        <button type="button" className="vnext-library-create" onClick={() => { void createBlank(); }} disabled={busy}>
+        <button
+          type="button"
+          className="vnext-library-create"
+          onClick={requestNewCatalog}
+          disabled={busy}
+          aria-label={busy ? (createPending ? 'Verificando criação' : 'Criando catálogo') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
+        >
           <FilePlus2 size={18} aria-hidden="true" />
-          {busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
+          <span>{busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
         </button>
       </header>
 
@@ -290,8 +350,11 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
                 item={item}
                 view={view}
                 onOpen={() => onOpen(item.catalogId)}
+                onDuplicate={() => { void duplicateCatalog(item); }}
                 onRename={() => { rememberDialogTrigger(); setRenameTarget(item); setRenameTitle(item.title); }}
                 onArchive={() => { rememberDialogTrigger(); setArchiveTarget(item); }}
+                disabled={busy}
+                duplicating={duplicateTargetId === item.catalogId}
               />
             ))}
           </div>
@@ -305,8 +368,8 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
           <div className="vnext-library-empty">
             <FilePlus2 size={30} aria-hidden="true" />
             <h3>Comece seu primeiro catálogo</h3>
-            <p>Crie um catálogo em branco para começar a trabalhar.</p>
-            <button type="button" className="vnext-library-create" onClick={() => { void createBlank(); }} disabled={busy}>
+            <p>Comece em branco ou use um modelo inicial preparado.</p>
+            <button type="button" className="vnext-library-create" onClick={requestNewCatalog} disabled={busy}>
               {createPending ? 'Verificar criação' : 'Criar novo catálogo'}
             </button>
           </div>
@@ -318,6 +381,28 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
           </div>
         )}
       </section>
+
+      {createChooserOpen && (
+        <div className="vnext-library-dialog-backdrop">
+          <section ref={createDialog} className="vnext-library-dialog vnext-library-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-title">
+            <button type="button" className="vnext-library-dialog-close" aria-label="Fechar" onClick={() => setCreateChooserOpen(false)}><X size={18} /></button>
+            <h2 id="create-title">Novo catálogo</h2>
+            <p>Escolha um ponto de partida. Depois de criado, o catálogo será totalmente independente.</p>
+            <div className="vnext-library-create-options">
+              <button type="button" autoFocus onClick={() => { void createBlank(); }} disabled={busy}>
+                <FilePlus2 size={20} aria-hidden="true" />
+                <span><strong>Em branco</strong><small>Comece com uma página vazia.</small></span>
+              </button>
+              {starters.map((starter) => (
+                <button key={starter.starterId} type="button" onClick={() => { void createFromStarter(starter.starterId); }} disabled={busy}>
+                  <LayoutTemplate size={20} aria-hidden="true" />
+                  <span><strong>{starter.label}</strong>{starter.description && <small>{starter.description}</small>}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {renameTarget && (
         <div className="vnext-library-dialog-backdrop">

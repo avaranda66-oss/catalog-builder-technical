@@ -394,4 +394,33 @@ describe('VNext architecture boundary',()=>{
     expect(editor+'\n'+textEditing).not.toMatch(/localStorage|sessionStorage|indexedDB|translation|translateText|persistDraft/i);
     expect(editor).not.toMatch(/parentGroup|childIndex|drill.?down/i);
   });
+
+  it('keeps W3.F on one application clone authority and the hardened W3.E Create coordinator',()=>{
+    const applicationSource=filesUnder(resolve(vnextRoot,'application'))
+      .filter(path=>/\.ts$/.test(path))
+      .map(path=>readFileSync(path,'utf8'))
+      .join('\n');
+    const documentSource=readFileSync(resolve(vnextRoot,'application/document.ts'),'utf8');
+    const librarySource=readFileSync(resolve(vnextRoot,'library/service.ts'),'utf8');
+    const starterSource=readFileSync(resolve(vnextRoot,'library/starter-registry.ts'),'utf8');
+    const duplicateBlock=librarySource.slice(
+      librarySource.indexOf('async duplicate('),
+      librarySource.indexOf('async createFromStarter(')
+    );
+    const starterBlock=librarySource.slice(
+      librarySource.indexOf('async createFromStarter('),
+      librarySource.indexOf('async rename(')
+    );
+
+    expect(applicationSource.match(/class\s+IdAllocator\b/g)?.length??0).toBe(1);
+    expect(applicationSource.match(/class\s+CatalogCloneService\b/g)?.length??0).toBe(1);
+    expect(documentSource).not.toMatch(/JSON\.(?:parse|stringify)|structuredClone|innerHTML|outerHTML/);
+    expect(duplicateBlock).toContain('this.cloneService.clone');
+    expect(duplicateBlock).toContain('return this.createPreparedDocument');
+    expect(duplicateBlock).not.toContain('repository.createCatalog');
+    expect(starterBlock).toContain('this.cloneService.clone');
+    expect(starterBlock).toContain('return this.createPreparedDocument');
+    expect(starterBlock).not.toContain('repository.createCatalog');
+    expect(starterSource).not.toMatch(/react|renderer|localStorage|sessionStorage|indexedDB/i);
+  });
 });

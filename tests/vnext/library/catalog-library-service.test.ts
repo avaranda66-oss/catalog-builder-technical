@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  authoredStructuralIdentityIds,
   createStaticPageTemplateRegistry,
   type ApplicationExecutionDependencies,
 } from '@/vnext/application';
 import {
   CatalogLibraryService,
+  createDefaultCatalogStarterRegistry,
   projectCatalogLibraryItems,
 } from '@/vnext/library';
 import type {
@@ -68,6 +70,7 @@ class MemoryCatalogRepository implements CatalogRepository {
       createdBy: 'user-a',
       updatedBy: 'user-a',
       archivedAt: null,
+      ...(request.origin ? { origin: request.origin } : {}),
       documentSchemaVersion: 1,
       documentSnapshot: request.documentSnapshot,
     };
@@ -587,9 +590,9 @@ describe('W3.E CatalogLibraryService', () => {
     expect(repository.current(original.catalogId).title).toBe('Ativo');
   });
 
-  it('LIB-22/23/24 exposes no duplicate, delete, or restore operation', () => {
+  it('W3.F activates Duplicate while hard delete and restore remain excluded', () => {
     const library = service(new MemoryCatalogRepository(), 2200) as unknown as Record<string, unknown>;
-    expect(library.duplicate).toBeUndefined();
+    expect(library.duplicate).toBeTypeOf('function');
     expect(library.delete).toBeUndefined();
     expect(library.restore).toBeUndefined();
   });
@@ -665,5 +668,180 @@ describe('W3.E CatalogLibraryService', () => {
     archivePending.resolve({ ok: true, value: repository.current(original.catalogId) });
     await expect(archive).resolves.toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
     expect(repository.archiveCAS).not.toHaveBeenCalled();
+  });
+});
+
+describe('W3.F Duplicate and Starter creation', () => {
+  it('DUP-01..06 clones the authoritative revision into an independent catalog with exact origin', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Transmissor XPTO', 3000);
+    repository.advance(source.catalogId);
+    const authoritative = repository.current(source.catalogId);
+    const sourceBefore = JSON.stringify(authoritative);
+    const result = await service(repository, 3100).duplicate(source.catalogId);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.catalogId).not.toBe(source.catalogId);
+    expect(result.value.title).toBe('Cópia de Transmissor XPTO');
+    expect(result.value.origin).toEqual({
+      originKind: 'duplicate',
+      originId: source.catalogId,
+      originRevision: authoritative.remoteRevision,
+    });
+    expect(JSON.stringify(repository.current(source.catalogId))).toBe(sourceBefore);
+    const sourceIds = new Set(authoredStructuralIdentityIds(authoritative.documentSnapshot));
+    expect(authoredStructuralIdentityIds(result.value.documentSnapshot).some((id) => sourceIds.has(id))).toBe(false);
+
+    const duplicateSaved = await repository.saveCAS({
+      mutationId: uuid(3200),
+      catalogId: result.value.catalogId,
+      expectedRemoteRevision: 1,
+      documentSnapshot: { ...result.value.documentSnapshot, title: 'Duplicata editada' },
+    });
+    expect(duplicateSaved.ok).toBe(true);
+    expect(repository.current(source.catalogId).title).toBe('Transmissor XPTO');
+
+    const sourceSaved = await repository.saveCAS({
+      mutationId: uuid(3201),
+      catalogId: source.catalogId,
+      expectedRemoteRevision: authoritative.remoteRevision,
+      documentSnapshot: { ...authoritative.documentSnapshot, title: 'Fonte editada' },
+    });
+    expect(sourceSaved.ok).toBe(true);
+    expect(repository.current(result.value.catalogId).title).toBe('Duplicata editada');
+  });
+
+  it('DUP-07 replays one ambiguous Duplicate with the exact same document, mutation, and origin', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Fonte ambígua', 3300);
+    const requests: CreateCatalogRequest[] = [];
+    repository.createCatalog.mockImplementation(async (request) => {
+      requests.push(request);
+      if (requests.length === 1) {
+        return { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } };
+      }
+      const envelope: CatalogPersistenceEnvelope = {
+        catalogId: request.documentSnapshot.id,
+        remoteRevision: 1,
+        lastMutationId: request.mutationId,
+        title: request.documentSnapshot.title,
+        locale: request.documentSnapshot.locale,
+        createdAt: '2026-09-14T18:00:00.000Z',
+        updatedAt: '2026-09-14T18:00:00.000Z',
+        createdBy: 'user-a',
+        updatedBy: 'user-a',
+        archivedAt: null,
+        ...(request.origin ? { origin: request.origin } : {}),
+        documentSchemaVersion: 1,
+        documentSnapshot: request.documentSnapshot,
+      };
+      repository.seed(envelope);
+      return { ok: true, value: envelope };
+    });
+
+    const result = await service(repository, 3400).duplicate(source.catalogId);
+    expect(result.ok).toBe(true);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[0].origin).toEqual({
+      originKind: 'duplicate',
+      originId: source.catalogId,
+      originRevision: 1,
+    });
+    expect(repository.listCatalogs).not.toHaveBeenCalled();
+  });
+
+  it('DUP-08 makes a source fetch completion inert after an auth authority switch', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Fonte A', 3500);
+    const pendingRead = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    repository.getCatalog.mockImplementationOnce(() => pendingRead.promise);
+    let lineage = 'user-a:1';
+    let scope = 'workspace:user-a';
+    const ids = idSequence(3600);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => lineage,
+      authorityScopeId: () => scope,
+    });
+
+    const duplicate = library.duplicate(source.catalogId);
+    lineage = 'user-b:2';
+    scope = 'workspace:user-b';
+    pendingRead.resolve({ ok: true, value: repository.current(source.catalogId) });
+    await expect(duplicate).resolves.toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    expect(repository.createCatalog).toHaveBeenCalledTimes(1); // source setup only
+  });
+
+  it('ORIGIN-04 rejects divergent Duplicate origin and preserves the exact pending attempt', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Fonte divergente', 3700);
+    let divergentClone: CatalogPersistenceEnvelope | undefined;
+    repository.createCatalog.mockImplementationOnce(async (request) => {
+      divergentClone = {
+        catalogId: request.documentSnapshot.id,
+        remoteRevision: 1,
+        lastMutationId: request.mutationId,
+        title: request.documentSnapshot.title,
+        locale: request.documentSnapshot.locale,
+        createdAt: '2026-09-14T19:00:00.000Z',
+        updatedAt: '2026-09-14T19:00:00.000Z',
+        createdBy: 'user-a',
+        updatedBy: 'user-a',
+        archivedAt: null,
+        origin: { originKind: 'starter', originId: 'wrong', originRevision: 99 },
+        documentSchemaVersion: 1,
+        documentSnapshot: request.documentSnapshot,
+      };
+      repository.seed(divergentClone);
+      return { ok: true, value: divergentClone };
+    });
+    const library = service(repository, 3800);
+
+    expect(await library.duplicate(source.catalogId)).toMatchObject({ ok: false, error: { code: 'REMOTE_DIVERGENCE' } });
+    expect(library.getCreateState()).toBe('pending-verification');
+    expect(await library.duplicate(source.catalogId)).toMatchObject({ ok: false, error: { code: 'REMOTE_DIVERGENCE' } });
+    expect(repository.createCatalog).toHaveBeenCalledTimes(2); // source setup plus one clone dispatch
+    expect(divergentClone).toBeDefined();
+  });
+
+  it('STARTER-01..06 materializes repeatable metadata through disjoint canonical clones', async () => {
+    const repository = new MemoryCatalogRepository();
+    const ids = idSequence(3900);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+      starterRegistry: createDefaultCatalogStarterRegistry(),
+    });
+    expect(library.listStarters()).toEqual([{
+      starterId: 'essential-technical-sheet',
+      revision: 1,
+      label: 'Ficha técnica essencial',
+      description: 'Título e tabela básica para começar uma ficha de produto.',
+      category: 'Ficha técnica',
+    }]);
+
+    const first = await library.createFromStarter('essential-technical-sheet');
+    const second = await library.createFromStarter('essential-technical-sheet');
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(first.value.origin).toEqual({ originKind: 'starter', originId: 'essential-technical-sheet', originRevision: 1 });
+    expect(second.value.origin).toEqual(first.value.origin);
+    expect(first.value.documentSnapshot.title).toBe('Ficha técnica essencial');
+    const firstIds = new Set(authoredStructuralIdentityIds(first.value.documentSnapshot));
+    expect(authoredStructuralIdentityIds(second.value.documentSnapshot).some((id) => firstIds.has(id))).toBe(false);
+    expect(first.value.catalogId).not.toBe(second.value.catalogId);
+    expect(await library.createFromStarter('missing')).toMatchObject({ ok: false, error: { code: 'STARTER_NOT_FOUND' } });
   });
 });

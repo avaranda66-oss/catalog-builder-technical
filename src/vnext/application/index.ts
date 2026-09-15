@@ -40,14 +40,24 @@ export type {
   ObjectInsertSpec,
 } from './contracts';
 export {
+  ApplicationDocumentError,
+  authoredStructuralIdentityIds,
   canonicalIdentityIds,
   canonicalObjectIdentityIds,
   allocateFreshCanonicalId,
+  CatalogCloneService,
   createCatalogDocument,
   findObjectLocation,
   instantiatePageWithFreshIds,
+  parseCanonicalDocument,
 } from './document';
-export type { ObjectLocation, ObjectInstantiationSeed, LeafObjectInstantiationSeed, GroupObjectInstantiationSeed } from './document';
+export type {
+  CatalogCloneOptions,
+  ObjectLocation,
+  ObjectInstantiationSeed,
+  LeafObjectInstantiationSeed,
+  GroupObjectInstantiationSeed,
+} from './document';
 export {
   projectEditableRichText,
   reconcileEditableRichText,
