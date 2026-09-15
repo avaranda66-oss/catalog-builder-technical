@@ -3,6 +3,7 @@ import type { AssetRef, CatalogDocument } from '../../../src/vnext/domain/editor
 import { AssetRefSchema } from '../../../src/vnext/domain/editorial-model';
 import {
   DefaultAssetPersistenceBridge,
+  AssetRecordSchema,
   type AssetFinalizationResult,
   type AssetRecord,
   type AssetRepository,
@@ -1003,6 +1004,163 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error.code).toBe('CONFLICT');
+    });
+
+    it('AMBIG-05: same bytes / same SHA but different name + alt creates two distinct assets once the first is resolved', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      // 1. First upload: dispatch fails with transport timeout and reconciliation is temporarily unavailable
+      let firstAttempt = true;
+      const originalFinalize = repository.finalizeAsset.bind(repository);
+      let capturedAssetAId = '';
+      repository.finalizeAsset = async (params: any) => {
+        if (firstAttempt) {
+          firstAttempt = false;
+          capturedAssetAId = params.assetId;
+          await originalFinalize(params);
+          throw new Error('ETIMEDOUT');
+        }
+        return await originalFinalize(params);
+      };
+
+      repository.throwOnGet = true; // Reconciliation initially unavailable
+
+      // Call 1 with name 'Asset A' -> returns AMBIGUOUS_COMMIT_OUTCOME (Rule A: blocks allocation)
+      const res1 = await bridge.finalizeUpload({ bytes: png, name: 'Asset A', alt: 'Alt A' });
+      expect(res1.ok).toBe(false);
+      if (res1.ok) return;
+      expect(res1.error.code).toBe('AMBIGUOUS_COMMIT_OUTCOME');
+
+      // Now reconciliation becomes available (server has 'Asset A' committed)
+      repository.throwOnGet = false;
+
+      // Call 2 with identical bytes/SHA but different name/alt 'Asset B'
+      // Rule C triggers: resolves pending 'Asset A', clears pending, and allocates new 'Asset B'
+      const res2 = await bridge.finalizeUpload({ bytes: png, name: 'Asset B', alt: 'Alt B' });
+      expect(res2.ok).toBe(true);
+      if (!res2.ok) return;
+      const assetB = res2.asset;
+      expect(assetB.name).toBe('Asset B');
+
+      // The two assets must have distinct identities even though SHA is identical!
+      expect(capturedAssetAId).not.toBe(assetB.id);
+      expect(repository.assets.size).toBe(2);
+
+      const recordA = repository.assets.get(`${capturedAssetAId}:1`);
+      const recordB = repository.assets.get(`${assetB.id}:1`);
+      expect(recordA).toBeDefined();
+      expect(recordB).toBeDefined();
+      expect(recordA!.sha256).toBe(recordB!.sha256);
+      expect(recordA!.name).toBe('Asset A');
+      expect(recordB!.name).toBe('Asset B');
+    });
+
+    it('AMBIG-06: replay-after-NOT_FOUND can itself become ambiguous; later reconciliation returns same exact AssetRef with zero second identity allocation', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      let finalizeCalls = 0;
+      const originalFinalize = repository.finalizeAsset.bind(repository);
+
+      // Attempt 1: finalization fails before commit (server doesn't receive it)
+      // Attempt 2 (replay): commits on server, but transport response is lost (ETIMEDOUT)
+      repository.finalizeAsset = async (params: any) => {
+        finalizeCalls++;
+        if (finalizeCalls === 1) {
+          return { ok: false, error: { code: 'NETWORK_ERROR', message: 'First dispatch failed' } };
+        }
+        if (finalizeCalls === 2) {
+          await originalFinalize(params); // commits on server!
+          throw new Error('ETIMEDOUT');
+        }
+        return await originalFinalize(params);
+      };
+
+      // Call 1: initial dispatch fails -> getAsset returns NOT_FOUND -> replay called -> replay throws ETIMEDOUT -> returns AMBIGUOUS_COMMIT_OUTCOME
+      const res1 = await bridge.finalizeUpload({ bytes: png, name: 'sensor.png', alt: 'Sensor' });
+      expect(res1.ok).toBe(false);
+      if (res1.ok) return;
+      expect(res1.error.code).toBe('AMBIGUOUS_COMMIT_OUTCOME');
+
+      // Call 2: next reconciliation discovers the committed exact record from replay!
+      const res2 = await bridge.finalizeUpload({ bytes: png, name: 'sensor.png', alt: 'Sensor' });
+      expect(res2.ok).toBe(true);
+      if (!res2.ok) return;
+      expect(res2.asset.name).toBe('sensor.png');
+
+      // Total logical assets created must be exactly 1
+      expect(repository.assets.size).toBe(1);
+    });
+
+    it('UPLOAD-CONTRACT: AssetUploadResult contains asset and runtimeState with no empty runtimeUrl dual representation', async () => {
+      const repository = new TestAssetRepository();
+      const png = createMockPng();
+      const bridge = new DefaultAssetPersistenceBridge(repository);
+
+      // Force resolution to return unavailable
+      repository.createSignedUrl = async () => ({ ok: false, error: 'Storage offline' });
+
+      const result = await bridge.upload({ bytes: png, filename: 'offline.png' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.asset.name).toBe('offline.png');
+      expect(result.runtimeState.status).toBe('unavailable');
+
+      // Verify no record or runtimeUrl property exists
+      expect((result as any).runtimeUrl).toBeUndefined();
+      expect((result as any).record).toBeUndefined();
+    });
+
+    it('JPEG-CANONICAL: .jpg storage path is rejected by AssetRecordSchema while .jpeg is accepted', () => {
+      const validRecord = {
+        id: 'a0000000-0000-4000-8000-000000000001',
+        version: '1',
+        sha256: 'a'.repeat(64),
+        mime: 'image/jpeg',
+        widthPx: 800,
+        heightPx: 600,
+        name: 'test.jpeg',
+        alt: 'Test',
+        storageBucket: 'product-assets',
+        storagePath: 'vnext/a0000000-0000-4000-8000-000000000001/1.jpeg',
+        fileSize: 1024,
+        createdAt: new Date().toISOString(),
+      };
+
+      expect(() => AssetRecordSchema.parse(validRecord)).not.toThrow();
+
+      const invalidJpgRecord = {
+        ...validRecord,
+        storagePath: 'vnext/a0000000-0000-4000-8000-000000000001/1.jpg',
+      };
+      expect(() => AssetRecordSchema.parse(invalidJpgRecord)).toThrow();
+    });
+
+    it('CLEAN-SCHEMA: control characters in name or alt are rejected by AssetRecordSchema', () => {
+      const baseRecord = {
+        id: 'a0000000-0000-4000-8000-000000000001',
+        version: '1',
+        sha256: 'a'.repeat(64),
+        mime: 'image/png',
+        widthPx: 800,
+        heightPx: 600,
+        name: 'test.png',
+        alt: 'Test',
+        storageBucket: 'product-assets',
+        storagePath: 'vnext/a0000000-0000-4000-8000-000000000001/1.png',
+        fileSize: 1024,
+        createdAt: new Date().toISOString(),
+      };
+
+      expect(() => AssetRecordSchema.parse(baseRecord)).not.toThrow();
+
+      // Control character in name (e.g. newline or char 0)
+      expect(() => AssetRecordSchema.parse({ ...baseRecord, name: 'test\n.png' })).toThrow();
+      expect(() => AssetRecordSchema.parse({ ...baseRecord, name: 'test\x00.png' })).toThrow();
+      expect(() => AssetRecordSchema.parse({ ...baseRecord, alt: 'alt\x7F' })).toThrow();
     });
   });
 

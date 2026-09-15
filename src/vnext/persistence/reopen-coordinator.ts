@@ -38,6 +38,17 @@ export type ReopenAssetResolutionResult =
   | ReadonlyMap<string, string>
   | ReopenAssetResolutionPayload;
 
+function isReopenAssetPayload(
+  payload: unknown
+): payload is ReopenAssetResolutionPayload {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'urls' in payload &&
+    'states' in payload
+  );
+}
+
 export interface CanonicalReopenCoordinatorOptions {
   readonly workspace: PersistenceWorkspace;
   readonly repository: CatalogRepository;
@@ -152,14 +163,9 @@ export class CanonicalReopenCoordinator {
     let assetUrls: ReadonlyMap<string, string>;
     let assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map();
 
-    if (
-      resolvedPayload &&
-      typeof (resolvedPayload as any).urls !== 'undefined' &&
-      typeof (resolvedPayload as any).states !== 'undefined'
-    ) {
-      const payload = resolvedPayload as ReopenAssetResolutionPayload;
-      assetUrls = payload.urls;
-      assetRuntimeStates = payload.states;
+    if (isReopenAssetPayload(resolvedPayload)) {
+      assetUrls = resolvedPayload.urls;
+      assetRuntimeStates = resolvedPayload.states;
     } else {
       assetUrls = resolvedPayload as ReadonlyMap<string, string>;
     }

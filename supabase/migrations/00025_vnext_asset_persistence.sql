@@ -14,10 +14,10 @@ CREATE TABLE public.vnext_assets (
   mime TEXT NOT NULL CHECK (mime IN ('image/png', 'image/jpeg', 'image/webp')),
   width_px INTEGER NOT NULL CHECK (width_px > 0),
   height_px INTEGER NOT NULL CHECK (height_px > 0),
-  name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-  alt TEXT NOT NULL CHECK (length(trim(alt)) > 0),
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name !~ '[\x00-\x1F\x7F]'),
+  alt TEXT NOT NULL CHECK (length(trim(alt)) > 0 AND alt !~ '[\x00-\x1F\x7F]'),
   storage_bucket TEXT NOT NULL DEFAULT 'product-assets' CHECK (storage_bucket = 'product-assets'),
-  storage_path TEXT NOT NULL,
+  storage_path TEXT NOT NULL CHECK (storage_path ~ '^vnext/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/1\.(png|jpeg|webp)$'),
   file_size BIGINT NOT NULL CHECK (file_size > 0),
   created_by UUID REFERENCES public.profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -126,22 +126,22 @@ BEGIN
     RAISE EXCEPTION 'VNEXT_INVALID_ASSET: height_px must be positive' USING ERRCODE = '22023';
   END IF;
 
-  -- 7. Validação de nome, alt e tamanho
-  IF p_name IS NULL OR length(trim(p_name)) = 0 THEN
-    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: name must be non-empty' USING ERRCODE = '22023';
+  -- 7. Validação de nome, alt e tamanho (alinhado a AssetRefSchema clean: sem caracteres de controle < 32 ou 127)
+  IF p_name IS NULL OR length(trim(p_name)) = 0 OR p_name ~ '[\x00-\x1F\x7F]' THEN
+    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: name must be non-empty and free of control characters' USING ERRCODE = '22023';
   END IF;
-  IF p_alt IS NULL OR length(trim(p_alt)) = 0 THEN
-    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: alt must be non-empty' USING ERRCODE = '22023';
+  IF p_alt IS NULL OR length(trim(p_alt)) = 0 OR p_alt ~ '[\x00-\x1F\x7F]' THEN
+    RAISE EXCEPTION 'VNEXT_INVALID_ASSET: alt must be non-empty and free of control characters' USING ERRCODE = '22023';
   END IF;
   IF p_file_size IS NULL OR p_file_size <= 0 THEN
     RAISE EXCEPTION 'VNEXT_INVALID_ASSET: file_size must be positive' USING ERRCODE = '22023';
   END IF;
 
-  -- 8. Validação estrita do caminho de armazenamento
+  -- 8. Validação estrita do caminho de armazenamento (congelado: image/jpeg -> jpeg)
   v_expected_path := 'vnext/' || p_asset_id || '/1.' || CASE
     WHEN p_mime = 'image/png' THEN 'png'
     WHEN p_mime = 'image/webp' THEN 'webp'
-    WHEN p_mime = 'image/jpeg' THEN (CASE WHEN p_storage_path LIKE '%.jpg' THEN 'jpg' ELSE 'jpeg' END)
+    WHEN p_mime = 'image/jpeg' THEN 'jpeg'
     ELSE ''
   END;
 

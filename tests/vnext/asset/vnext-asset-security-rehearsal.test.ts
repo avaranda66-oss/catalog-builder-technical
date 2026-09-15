@@ -21,6 +21,25 @@ describe('W3.G — Asset Security Rehearsal Static Contract Verification', () =>
     expect(rehearsalSql).toContain("'viewer'");
   });
 
+  it('REHEARSAL-UUID: all user fixture UUIDs parse as valid canonical lowercase hex UUIDs', () => {
+    const canonicalUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const adminMatch = rehearsalSql.match(/v_admin\s+UUID\s*:=\s*'([^']+)'/);
+    const editorMatch = rehearsalSql.match(/v_editor\s+UUID\s*:=\s*'([^']+)'/);
+    const viewerMatch = rehearsalSql.match(/v_viewer\s+UUID\s*:=\s*'([^']+)'/);
+
+    expect(adminMatch).not.toBeNull();
+    expect(editorMatch).not.toBeNull();
+    expect(viewerMatch).not.toBeNull();
+
+    expect(adminMatch![1]).toMatch(canonicalUuidRegex);
+    expect(editorMatch![1]).toMatch(canonicalUuidRegex);
+    expect(viewerMatch![1]).toMatch(canonicalUuidRegex);
+
+    // Verify specifically that viewer UUID has valid hex 'f1' instead of invalid 'v1'
+    expect(viewerMatch![1]).toBe('90000000-0000-4000-8000-0000000000f1');
+    expect(rehearsalSql).not.toContain('90000000-0000-4000-8000-0000000000v1');
+  });
+
   it('REHEARSAL-03: POINT 01 — anonymous mutation rejected fail-closed', () => {
     expect(rehearsalSql).toContain('POINT 01');
     expect(rehearsalSql).toContain('SET LOCAL ROLE anon;');
@@ -30,7 +49,7 @@ describe('W3.G — Asset Security Rehearsal Static Contract Verification', () =>
 
   it('REHEARSAL-04: POINT 02 — viewer mutation rejected fail-closed', () => {
     expect(rehearsalSql).toContain('POINT 02');
-    expect(rehearsalSql).toContain('90000000-0000-4000-8000-0000000000v1');
+    expect(rehearsalSql).toContain('90000000-0000-4000-8000-0000000000f1');
     expect(rehearsalSql).toContain('WHEN insufficient_privilege');
     expect(rehearsalSql).toContain('POINT-02-FAIL');
   });
@@ -47,9 +66,12 @@ describe('W3.G — Asset Security Rehearsal Static Contract Verification', () =>
     expect(rehearsalSql).toContain('90000000-0000-4000-8000-0000000000a1');
   });
 
-  it('REHEARSAL-07: POINT 06 — arbitrary storage path finalization rejected', () => {
+  it('REHEARSAL-07: POINT 06 — arbitrary storage path, .jpg path, and control characters rejected', () => {
     expect(rehearsalSql).toContain('POINT 06');
     expect(rehearsalSql).toContain('vnext/arbitrary-path/escape.png');
+    expect(rehearsalSql).toContain('vnext/a0000000-0000-4000-8000-000000000001/1.jpg');
+    expect(rehearsalSql).toContain('chr(10)');
+    expect(rehearsalSql).toContain('chr(127)');
     expect(rehearsalSql).toContain("WHEN sqlstate '22023'");
     expect(rehearsalSql).toContain('POINT-06-FAIL');
   });

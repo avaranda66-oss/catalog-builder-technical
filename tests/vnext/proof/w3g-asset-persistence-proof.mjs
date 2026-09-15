@@ -45,7 +45,7 @@ try {
     });
   });
 
-  // Phase 1: Production /v2 bootstrap + W3.G seam smoke
+  // Phase 1: Production /v2 route verification
   const productionRequests = [];
   page.on('request', (req) => productionRequests.push(req.url()));
   await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
@@ -59,7 +59,7 @@ try {
   const productionSmoke = {
     v2Mounted: true,
     legacyBootstrapLoaded: false,
-    productionSeamVerified: true,
+    productionRouteVerified: true,
   };
 
   // Phase 2: Controlled repository W3.G Father-flow proof

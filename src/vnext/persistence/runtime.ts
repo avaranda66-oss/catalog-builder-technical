@@ -6,6 +6,7 @@ import type { RecoveryRepository } from '../recovery/repository';
 import type { RecoverySchedulerClock } from '../recovery/scheduler';
 import { SessionRecoveryManager } from '../recovery/session-manager';
 import { RecoveryStartupCoordinator, type RecoveryStartupCandidate } from '../recovery/startup';
+import type { AssetRuntimeState } from '../asset/contracts';
 import type { CatalogPersistenceEnvelope, CatalogRepository } from './contracts';
 import { CanonicalReopenCoordinator } from './reopen-coordinator';
 import { SaveCoordinator } from './save-coordinator';
@@ -17,6 +18,24 @@ import {
   persistedBindingFromEnvelope,
   type AuthoringBarrier,
 } from './workspace';
+
+export interface RuntimeAssetResolutionPayload {
+  readonly urls: ReadonlyMap<string, string>;
+  readonly states: ReadonlyMap<string, AssetRuntimeState>;
+}
+
+export type RuntimeAssetResolutionResult =
+  | ReadonlyMap<string, string>
+  | RuntimeAssetResolutionPayload;
+
+function isRuntimeAssetPayload(payload: unknown): payload is RuntimeAssetResolutionPayload {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'urls' in payload &&
+    'states' in payload
+  );
+}
 
 export interface VNextPersistenceRuntimeOptions {
   readonly session: DocumentSession;
@@ -34,13 +53,7 @@ export interface VNextPersistenceRuntimeOptions {
   readonly assetUrls?: ReadonlyMap<string, string>;
   readonly resolveAssetUrls?: (
     document: CatalogDocument
-  ) =>
-    | ReadonlyMap<string, string>
-    | { urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, any> }
-    | Promise<
-        | ReadonlyMap<string, string>
-        | { urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, any> }
-      >;
+  ) => RuntimeAssetResolutionResult | Promise<RuntimeAssetResolutionResult>;
 }
 
 interface RecoveryInstallGuard {
@@ -63,7 +76,9 @@ export class VNextPersistenceRuntime {
   readonly recoveryManager: SessionRecoveryManager | undefined;
   readonly recoveryStartup: RecoveryStartupCoordinator | undefined;
   private recoveredOverlay: { readonly openSessionId: string; readonly overlay: AuthoringRecoveryOverlay } | undefined;
-  private readonly resolveAssetUrls: ((document: CatalogDocument) => any) | undefined;
+  private readonly resolveAssetUrls:
+    | ((document: CatalogDocument) => RuntimeAssetResolutionResult | Promise<RuntimeAssetResolutionResult>)
+    | undefined;
 
   constructor(options: VNextPersistenceRuntimeOptions) {
     this.resolveAssetUrls = options.resolveAssetUrls;
@@ -275,16 +290,12 @@ export class VNextPersistenceRuntime {
     if (!this.recoveryInstallGuardIsCurrent(candidate, guard)) return false;
 
     let assetUrls: ReadonlyMap<string, string>;
-    let assetRuntimeStates: ReadonlyMap<string, any> = new Map();
-    if (
-      resolvedPayload &&
-      typeof (resolvedPayload as any).urls !== 'undefined' &&
-      typeof (resolvedPayload as any).states !== 'undefined'
-    ) {
-      assetUrls = (resolvedPayload as any).urls;
-      assetRuntimeStates = (resolvedPayload as any).states;
+    let assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState> = new Map();
+    if (isRuntimeAssetPayload(resolvedPayload)) {
+      assetUrls = resolvedPayload.urls;
+      assetRuntimeStates = resolvedPayload.states;
     } else {
-      assetUrls = resolvedPayload as ReadonlyMap<string, string>;
+      assetUrls = resolvedPayload;
     }
 
     this.workspace.replaceActive(

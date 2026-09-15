@@ -14,7 +14,7 @@ DO $$
 DECLARE
   v_admin UUID := '90000000-0000-4000-8000-0000000000a1';
   v_editor UUID := '90000000-0000-4000-8000-0000000000e1';
-  v_viewer UUID := '90000000-0000-4000-8000-0000000000v1';
+  v_viewer UUID := '90000000-0000-4000-8000-0000000000f1';
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') THEN
     INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data)
@@ -108,7 +108,7 @@ RESET ROLE;
 -- POINT 02: Visualizador (viewer) tem mutação rejeitada
 -- ------------------------------------------------------------------------------
 SET LOCAL ROLE authenticated;
-SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-0000000000v1","role":"authenticated"}';
+SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-0000000000f1","role":"authenticated"}';
 DO $$
 DECLARE
   v_failed BOOLEAN := false;
@@ -141,7 +141,7 @@ RESET ROLE;
 -- POINT 03: Visualizador tem permissão de leitura conforme o contrato
 -- ------------------------------------------------------------------------------
 SET LOCAL ROLE authenticated;
-SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-0000000000v1","role":"authenticated"}';
+SET LOCAL "request.jwt.claims" = '{"sub":"90000000-0000-4000-8000-0000000000f1","role":"authenticated"}';
 DO $$
 DECLARE
   v_res JSONB;
@@ -241,6 +241,75 @@ BEGIN
 
   IF NOT v_failed THEN
     RAISE EXCEPTION 'POINT-06-FAIL: arbitrary storage path must be rejected';
+  END IF;
+
+  -- Sub-check: .jpg is rejected for image/jpeg (only canonical .jpeg is allowed)
+  v_failed := false;
+  BEGIN
+    PERFORM public.finalize_vnext_asset_v1(
+      'a0000000-0000-4000-8000-000000000001',
+      '1',
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      'image/jpeg',
+      800,
+      600,
+      'sensor.jpeg',
+      'Sensor alt',
+      1024,
+      'vnext/a0000000-0000-4000-8000-000000000001/1.jpg'
+    );
+  EXCEPTION WHEN sqlstate '22023' THEN
+    v_failed := true;
+  END;
+
+  IF NOT v_failed THEN
+    RAISE EXCEPTION 'POINT-06-FAIL: .jpg storage path must be rejected in favor of canonical .jpeg';
+  END IF;
+
+  -- Sub-check: control characters in name are rejected before insert
+  v_failed := false;
+  BEGIN
+    PERFORM public.finalize_vnext_asset_v1(
+      'a0000000-0000-4000-8000-000000000001',
+      '1',
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      'image/png',
+      800,
+      600,
+      'sensor' || chr(10) || '.png',
+      'Sensor alt',
+      1024,
+      'vnext/a0000000-0000-4000-8000-000000000001/1.png'
+    );
+  EXCEPTION WHEN sqlstate '22023' THEN
+    v_failed := true;
+  END;
+
+  IF NOT v_failed THEN
+    RAISE EXCEPTION 'POINT-06-FAIL: control characters in name must be rejected';
+  END IF;
+
+  -- Sub-check: control characters in alt are rejected before insert
+  v_failed := false;
+  BEGIN
+    PERFORM public.finalize_vnext_asset_v1(
+      'a0000000-0000-4000-8000-000000000001',
+      '1',
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      'image/png',
+      800,
+      600,
+      'sensor.png',
+      'Sensor' || chr(127) || 'alt',
+      1024,
+      'vnext/a0000000-0000-4000-8000-000000000001/1.png'
+    );
+  EXCEPTION WHEN sqlstate '22023' THEN
+    v_failed := true;
+  END;
+
+  IF NOT v_failed THEN
+    RAISE EXCEPTION 'POINT-06-FAIL: control characters in alt must be rejected';
   END IF;
 END;
 $$;

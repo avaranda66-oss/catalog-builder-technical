@@ -11,7 +11,7 @@ import type {
   AssetUploadResult,
 } from './contracts';
 import { sha256, verifyAssetBytes, type AssetIntegrityResult } from './integrity';
-import { sniffImageDimensions, sniffImageMime } from './sniff';
+import { sniffImageDimensions, sniffImageMime, type SupportedImageMime } from './sniff';
 
 const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -32,7 +32,7 @@ interface PendingFinalizationAttempt {
   readonly assetId: string;
   readonly version: string;
   readonly sha256: string;
-  readonly mime: string;
+  readonly mime: SupportedImageMime;
   readonly widthPx: number;
   readonly heightPx: number;
   readonly name: string;
@@ -41,34 +41,80 @@ interface PendingFinalizationAttempt {
   readonly storagePath: string;
 }
 
+export function isTransportAmbiguousCode(code?: string | null): boolean {
+  if (!code) return false;
+  const upper = code.toUpperCase();
+  return (
+    upper === 'AMBIGUOUS_COMMIT_OUTCOME' ||
+    upper === 'AMBIGUOUS' ||
+    upper === 'REMOTE_FAILURE' ||
+    upper === 'TIMEOUT' ||
+    upper === 'ETIMEDOUT' ||
+    upper === 'NETWORK_ERROR' ||
+    upper === 'FETCH_ERROR' ||
+    upper === 'ECONNRESET' ||
+    upper === 'UND_ERR_CONNECT_TIMEOUT'
+  );
+}
+
+export function isTransportAmbiguousError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === 'string' && isTransportAmbiguousCode(code)) return true;
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('network') ||
+      msg.includes('timeout') ||
+      msg.includes('timedout') ||
+      msg.includes('etimedout') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('connection')
+    );
+  }
+  return false;
+}
+
 function isLineageStale(before?: AssetLineageContext, current?: AssetLineageContext): boolean {
   if (!before || !current) return false;
-  if (before.openSessionId !== undefined && current.openSessionId !== undefined && before.openSessionId !== current.openSessionId) {
+  if (before.authLineage && current.authLineage && before.authLineage !== current.authLineage) {
     return true;
   }
-  if (before.authLineage !== undefined && current.authLineage !== undefined && before.authLineage !== current.authLineage) {
+  if (
+    before.authorityScopeId &&
+    current.authorityScopeId &&
+    before.authorityScopeId !== current.authorityScopeId
+  ) {
     return true;
   }
-  if (before.authorityScopeId !== undefined && current.authorityScopeId !== undefined && before.authorityScopeId !== current.authorityScopeId) {
+  if (
+    before.openSessionId &&
+    current.openSessionId &&
+    before.openSessionId !== current.openSessionId
+  ) {
     return true;
   }
-  if (before.catalogId !== undefined && current.catalogId !== undefined && before.catalogId !== current.catalogId) {
+  if (before.catalogId && current.catalogId && before.catalogId !== current.catalogId) {
     return true;
   }
   return false;
 }
 
 export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
+  private readonly repository: AssetRepository;
+  private readonly options: DefaultAssetPersistenceBridgeOptions;
   private readonly cache = new Map<string, CachedUrlEntry>();
   private readonly inFlight = new Map<string, Promise<AssetResolutionResult>>();
   private readonly activeBlobUrls = new Set<string>();
-  private currentAuthLineage: string | undefined;
+  private currentAuthLineage?: string;
   private pendingFinalization?: PendingFinalizationAttempt;
 
-  constructor(
-    private readonly repository: AssetRepository,
-    private readonly options: DefaultAssetPersistenceBridgeOptions = {}
-  ) {}
+  constructor(repository: AssetRepository, options: DefaultAssetPersistenceBridgeOptions = {}) {
+    this.repository = repository;
+    this.options = options;
+  }
 
   async finalizeUpload(
     input: AssetUploadInput,
@@ -80,7 +126,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
     const bytes = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
 
-    // 1. Derive MIME from bytes
+    // 1. Sniff MIME type
     const mime = sniffImageMime(bytes);
     if (!mime) {
       return {
@@ -101,23 +147,56 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     // 3. Compute SHA-256
     const hash = await sha256(bytes);
 
-    // Reconcile pending finalization if exists (Point 9)
+    if (input.version !== undefined && input.version !== '1') {
+      return {
+        ok: false,
+        error: { code: 'INVALID_VERSION', message: 'W3.G accepts only version "1"' },
+      };
+    }
+    const version = '1';
+
+    const name = input.name.trim() || 'imagem';
+    const alt = (input.alt && input.alt.trim()) || name;
+
+    // Reconcile pending finalization if exists (Point 5 & 6)
     if (this.pendingFinalization) {
-      const reconciled = await this.reconcilePendingAttempt(this.pendingFinalization);
-      if (reconciled.ok) {
-        this.pendingFinalization = undefined;
-        if (reconciled.asset.sha256 === hash) {
+      const pending = this.pendingFinalization;
+      const isSameLogicalAttempt =
+        pending.sha256 === hash &&
+        pending.mime === mime &&
+        pending.widthPx === dimensions.widthPx &&
+        pending.heightPx === dimensions.heightPx &&
+        pending.name === name &&
+        pending.alt === alt &&
+        pending.version === version &&
+        (input.assetId === undefined || input.assetId === pending.assetId);
+
+      const reconciled = await this.reconcilePendingAttempt(pending);
+
+      if (!reconciled.ok) {
+        if (reconciled.error.code === 'AMBIGUOUS_COMMIT_OUTCOME') {
+          // Rule A: pending attempt remains unresolved. Block allocation of new identity and return AMBIGUOUS_COMMIT_OUTCOME
           return reconciled;
         }
-      } else if (reconciled.error.code === 'AMBIGUOUS_COMMIT_OUTCOME') {
+        if (reconciled.error.code === 'CONFLICT') {
+          this.pendingFinalization = undefined;
+          return reconciled;
+        }
         return reconciled;
-      } else if (reconciled.error.code === 'CONFLICT') {
+      }
+
+      // Reconciled successfully!
+      if (isSameLogicalAttempt) {
+        // Rule B: current invocation is the same logical attempt. Return reconciled exact AssetRef.
         this.pendingFinalization = undefined;
         return reconciled;
       }
+
+      // Rule C: current invocation is a different logical upload. Clear resolved pending attempt and continue normally.
+      this.pendingFinalization = undefined;
     }
 
-    // 4. Determine canonical asset UUID and version
+    // 4. Determine canonical asset UUID
     const assetId =
       input.assetId && CANONICAL_UUID_PATTERN.test(input.assetId)
         ? input.assetId
@@ -130,18 +209,8 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       };
     }
 
-    if (input.version !== undefined && input.version !== '1') {
-      return {
-        ok: false,
-        error: { code: 'INVALID_VERSION', message: 'W3.G accepts only version "1"' },
-      };
-    }
-
-    const version = '1';
     const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg';
     const storagePath = `vnext/${assetId}/1.${extension}`;
-    const name = input.name.trim() || 'imagem';
-    const alt = (input.alt && input.alt.trim()) || name;
 
     // 5. Check lineage before upload dispatch (Point 10)
     const lineageBefore = context ?? this.options.getActiveLineage?.();
@@ -181,17 +250,21 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     let finalizationResult: AssetFinalizationResult;
     try {
       finalizationResult = await this.repository.finalizeAsset(finalizationParams);
-    } catch {
-      finalizationResult = await this.reconcilePendingAttempt(finalizationParams);
+    } catch (err) {
+      if (isTransportAmbiguousError(err)) {
+        finalizationResult = await this.reconcilePendingAttempt(finalizationParams);
+      } else {
+        return {
+          ok: false,
+          error: {
+            code: 'REMOTE_FAILURE',
+            message: err instanceof Error ? err.message : 'Finalization failed',
+          },
+        };
+      }
     }
 
-    if (
-      !finalizationResult.ok &&
-      (finalizationResult.error.code === 'REMOTE_FAILURE' ||
-        finalizationResult.error.code === 'TIMEOUT' ||
-        finalizationResult.error.code === 'NETWORK_ERROR' ||
-        finalizationResult.error.code === 'AMBIGUOUS')
-    ) {
+    if (!finalizationResult.ok && isTransportAmbiguousCode(finalizationResult.error.code)) {
       finalizationResult = await this.reconcilePendingAttempt(finalizationParams);
     }
 
@@ -214,27 +287,21 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     return finalizationResult;
   }
 
-  private async reconcilePendingAttempt(params: {
-    readonly assetId: string;
-    readonly version: string;
-    readonly sha256: string;
-    readonly mime: string;
-    readonly widthPx: number;
-    readonly heightPx: number;
-    readonly name: string;
-    readonly alt: string;
-    readonly fileSize: number;
-    readonly storagePath: string;
-  }): Promise<AssetFinalizationResult> {
+  private async reconcilePendingAttempt(
+    params: PendingFinalizationAttempt
+  ): Promise<AssetFinalizationResult> {
     let check;
     try {
       check = await this.repository.getAsset(params.assetId, params.version);
-    } catch {
+    } catch (err) {
       return {
         ok: false,
         error: {
           code: 'AMBIGUOUS_COMMIT_OUTCOME',
-          message: 'Finalization transport failed and reconciliation is unavailable',
+          message:
+            err instanceof Error
+              ? `Reconciliation transport failed: ${err.message}`
+              : 'Finalization transport failed and reconciliation is unavailable',
         },
       };
     }
@@ -251,7 +318,39 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
     if (check.record === null) {
       // Authoritative NOT_FOUND: metadata did not commit. Replay finalization with SAME attempt
-      return await this.repository.finalizeAsset(params);
+      let replayResult: AssetFinalizationResult;
+      try {
+        replayResult = await this.repository.finalizeAsset(params);
+      } catch (err) {
+        if (isTransportAmbiguousError(err)) {
+          return {
+            ok: false,
+            error: {
+              code: 'AMBIGUOUS_COMMIT_OUTCOME',
+              message: 'Replay finalization transport failed; preserving attempt for reconciliation',
+            },
+          };
+        }
+        return {
+          ok: false,
+          error: {
+            code: 'REMOTE_FAILURE',
+            message: err instanceof Error ? err.message : 'Replay finalization failed',
+          },
+        };
+      }
+
+      if (!replayResult.ok && isTransportAmbiguousCode(replayResult.error.code)) {
+        return {
+          ok: false,
+          error: {
+            code: 'AMBIGUOUS_COMMIT_OUTCOME',
+            message: 'Replay finalization returned ambiguous outcome; preserving attempt',
+          },
+        };
+      }
+
+      return replayResult;
     }
 
     // Durable record exists: verify exact equality
@@ -275,7 +374,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
           id: params.assetId,
           version: '1',
           sha256: params.sha256,
-          mime: params.mime as any,
+          mime: params.mime,
           widthPx: params.widthPx,
           heightPx: params.heightPx,
           name: params.name,
@@ -555,15 +654,10 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     }
 
     const resolved = await this.resolve(finalization.asset, params.context);
-    const runtimeUrl = resolved.ok ? resolved.state.url : '';
     return {
       ok: true,
       asset: finalization.asset,
       runtimeState: resolved.state,
-      record: {
-        asset: finalization.asset,
-        runtimeUrl,
-      },
     };
   }
 

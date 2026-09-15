@@ -71,4 +71,21 @@ describe('W3.G — Migration 00025 Static Verification', () => {
     expect(sql).toMatch(/bucket_id = 'product-assets'/i);
     expect(sql).toMatch(/VNEXT_STORAGE_OBJECT_NOT_FOUND/i);
   });
+
+  it('MIG-11: enforces clean string semantics rejecting control characters in name and alt', () => {
+    // Table constraint checks
+    expect(sql).toMatch(/name TEXT NOT NULL CHECK \(length\(trim\(name\)\) > 0 AND name !~ '\[\\x00-\\x1F\\x7F\]'\)/i);
+    expect(sql).toMatch(/alt TEXT NOT NULL CHECK \(length\(trim\(alt\)\) > 0 AND alt !~ '\[\\x00-\\x1F\\x7F\]'\)/i);
+    // RPC validation checks
+    expect(sql).toMatch(/p_name ~ '\[\\x00-\\x1F\\x7F\]'/i);
+    expect(sql).toMatch(/p_alt ~ '\[\\x00-\\x1F\\x7F\]'/i);
+  });
+
+  it('MIG-12: freezes canonical JPEG storage path extension strictly to .jpeg (no .jpg)', () => {
+    // Table storage_path constraint allows only png, jpeg, webp
+    expect(sql).toMatch(/storage_path TEXT NOT NULL CHECK \(storage_path ~ '\^vnext\/\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{12\}\/1\\\.\(png\|jpeg\|webp\)\$'\)/i);
+    // RPC derives 'jpeg' for image/jpeg without inspecting caller path for .jpg
+    expect(sql).toMatch(/WHEN p_mime = 'image\/jpeg' THEN 'jpeg'/i);
+    expect(sql).not.toMatch(/WHEN p_mime = 'image\/jpeg' THEN \(CASE WHEN/i);
+  });
 });

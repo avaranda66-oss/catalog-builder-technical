@@ -6,6 +6,14 @@ export type { AssetRef } from '../domain/editorial-model';
 export type { AssetIntegrityResult } from './integrity';
 export type { SupportedImageMime } from './sniff';
 
+const cleanString = z
+  .string()
+  .min(1)
+  .refine(
+    (s) => !Array.from(s).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127),
+    'Control characters are not permitted'
+  );
+
 export const AssetRecordSchema = z.object({
   id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
   version: z.literal('1'),
@@ -13,10 +21,10 @@ export const AssetRecordSchema = z.object({
   mime: z.enum(['image/png', 'image/jpeg', 'image/webp']),
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),
-  name: z.string().min(1),
-  alt: z.string().min(1),
+  name: cleanString,
+  alt: cleanString,
   storageBucket: z.literal('product-assets'),
-  storagePath: z.string().regex(/^vnext\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/1\.(png|jpeg|jpg|webp)$/),
+  storagePath: z.string().regex(/^vnext\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/1\.(png|jpeg|webp)$/),
   fileSize: z.number().int().positive(),
   createdAt: z.string().min(1),
 }).strict();
@@ -144,7 +152,6 @@ export type AssetUploadResult =
       readonly ok: true;
       readonly asset: AssetRef;
       readonly runtimeState: AssetRuntimeState;
-      readonly record: { readonly asset: AssetRef; readonly runtimeUrl: string };
     }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } };
 
