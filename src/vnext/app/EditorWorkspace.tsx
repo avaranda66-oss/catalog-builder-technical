@@ -976,7 +976,7 @@ export function EditorWorkspace({
               type="button"
               data-editor-action="save"
               data-persistence-save-action=""
-              onClick={() => { void persistence.runtime.saveCoordinator.save(); }}
+              onClick={() => { void persistence.runtime.manualSave(); }}
               disabled={!persistence.save.canSave || persistence.save.phase === 'saving'}
               aria-label={persistence.save.label}
             >
@@ -1268,6 +1268,37 @@ export function EditorWorkspace({
               ? persistence.save.message ?? persistence.save.label
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
+          {persistence?.save.phase === 'conflict' && (
+            <div data-persistence-conflict-actions="">
+              <p>Este catálogo mudou em outro lugar. Seu trabalho continua preservado nesta sessão.</p>
+              <button
+                type="button"
+                className="vnext-inspector-action"
+                onClick={() => {
+                  void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
+                    if (!result.ok) {
+                      setStatusMessage(result.error.message ?? 'Não foi possível abrir a versão mais recente.');
+                    }
+                  });
+                }}
+              >
+                Abrir versão mais recente
+              </button>
+              <button
+                type="button"
+                className="vnext-inspector-action"
+                onClick={() => {
+                  void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
+                    if (!result.ok) {
+                      setStatusMessage(result.error.message ?? 'Não foi possível salvar seu trabalho como cópia.');
+                    }
+                  });
+                }}
+              >
+                Salvar meu trabalho como cópia
+              </button>
+            </div>
+          )}
           {persistence?.localProtection === 'unavailable' && (
             <p className="vnext-live-status" role="alert">
               {persistence.localProtectionMessage ?? 'Proteção local indisponível.'}

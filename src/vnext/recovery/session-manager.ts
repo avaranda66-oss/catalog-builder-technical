@@ -169,6 +169,15 @@ export class SessionRecoveryManager {
     await this.persist(source, envelope);
   }
 
+  async reject(pendingRemoteMutation: PendingRemoteMutation): Promise<void> {
+    if (this.pendingRemoteMutation?.mutationId !== pendingRemoteMutation.mutationId) return;
+    const source = this.options.getSource();
+    if (!this.ownsActiveScope(source)) return;
+    this.pendingRemoteMutation = undefined;
+    this.lastScheduledToken = undefined;
+    await this.persist(source);
+  }
+
   getLastWrittenRecord(): RecoveryRecord | undefined {
     return this.lastWrittenRecord;
   }
