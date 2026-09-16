@@ -54,6 +54,7 @@ export interface SaveRecoveryLifecycle {
     pendingRemoteMutation: PendingRemoteMutation,
     envelope: CatalogPersistenceEnvelope
   ): Promise<void>;
+  afterRejected?(pendingRemoteMutation: PendingRemoteMutation): Promise<void>;
 }
 
 export interface SaveCoordinatorOptions {
@@ -75,6 +76,17 @@ export class SaveCoordinator {
       (this.flight && this.flight.attempt.openSessionId === active.openSessionId)
       || (this.ambiguousAttempt && this.ambiguousAttempt.openSessionId === active.openSessionId)
     );
+  }
+
+  async waitForActiveSave(): Promise<void> {
+    const active = this.flight;
+    if (!active) return;
+    try {
+      await active.promise;
+    } catch {
+      // The owning save call reports the failure. Waiting here only serializes the next attempt.
+    }
+    if (this.flight === active) await Promise.resolve();
   }
 
   async save(): Promise<ManualSaveResult> {
@@ -241,12 +253,22 @@ export class SaveCoordinator {
     return { ok: true, acknowledged: true };
   }
 
-  private handleKnownFailure(
+  private async handleKnownFailure(
     attempt: SaveAttempt,
     code: PersistenceErrorCode,
     message?: string
-  ): ManualSaveResult {
+  ): Promise<ManualSaveResult> {
     if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    if (this.options.recoveryLifecycle?.afterRejected && attempt.pendingRemoteMutation) {
+      try {
+        await this.options.recoveryLifecycle.afterRejected(attempt.pendingRemoteMutation);
+      } catch (error) {
+        this.options.workspace.setLocalProtectionUnavailable(
+          error instanceof Error ? error.message : 'Proteção local indisponível.'
+        );
+      }
+      if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
     if (code === 'CONFLICT') this.options.workspace.setPhase('conflict', message);
     else if (code === 'UNAUTHORIZED') {
       this.options.workspace.setPhase('unauthorized', message ?? 'Sign in again to save');

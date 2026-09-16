@@ -7,6 +7,10 @@ import type { RecoverySchedulerClock } from '../recovery/scheduler';
 import { SessionRecoveryManager } from '../recovery/session-manager';
 import { RecoveryStartupCoordinator, type RecoveryStartupCandidate } from '../recovery/startup';
 import type { AssetRuntimeState } from '../asset/contracts';
+import { CatalogCloneService } from '../application';
+import { AutosaveCoordinator, type AutosaveClock } from './autosave-coordinator';
+import { ConflictResolutionCoordinator } from './conflict-resolution-coordinator';
+import { PreparedCatalogCreateCoordinator } from './create-coordinator';
 import type { CatalogPersistenceEnvelope, CatalogRepository } from './contracts';
 import { CanonicalReopenCoordinator } from './reopen-coordinator';
 import { SaveCoordinator } from './save-coordinator';
@@ -49,6 +53,10 @@ export interface VNextPersistenceRuntimeOptions {
   readonly recoveryClock?: RecoverySchedulerClock;
   readonly recoveryTrailingMs?: number;
   readonly recoveryMaxWaitMs?: number;
+  readonly autosave?: false | {
+    readonly debounceMs?: number;
+    readonly clock?: AutosaveClock;
+  };
   readonly binding?: CatalogPersistenceEnvelope;
   readonly assetUrls?: ReadonlyMap<string, string>;
   readonly resolveAssetUrls?: (
@@ -71,7 +79,9 @@ interface RecoveryInstallGuard {
 export class VNextPersistenceRuntime {
   readonly workspace: PersistenceWorkspace;
   readonly saveCoordinator: SaveCoordinator;
+  readonly autosaveCoordinator: AutosaveCoordinator | undefined;
   readonly reopenCoordinator: CanonicalReopenCoordinator;
+  readonly conflictResolutionCoordinator: ConflictResolutionCoordinator;
   readonly recoveryCoordinator: RecoveryCoordinator | undefined;
   readonly recoveryManager: SessionRecoveryManager | undefined;
   readonly recoveryStartup: RecoveryStartupCoordinator | undefined;
@@ -159,9 +169,20 @@ export class VNextPersistenceRuntime {
         ? {
             beforeDispatch: (pending) => this.recoveryManager!.flushPendingMutation(pending),
             afterAcknowledged: (pending, envelope) => this.recoveryManager!.acknowledge(pending, envelope),
+            afterRejected: (pending) => this.recoveryManager!.reject(pending),
           }
         : undefined,
     });
+    this.autosaveCoordinator = options.autosave
+      ? new AutosaveCoordinator({
+          workspace: this.workspace,
+          saveCoordinator: this.saveCoordinator,
+          ...(options.autosave.debounceMs === undefined
+            ? {}
+            : { debounceMs: options.autosave.debounceMs }),
+          ...(options.autosave.clock === undefined ? {} : { clock: options.autosave.clock }),
+        })
+      : undefined;
     this.reopenCoordinator = new CanonicalReopenCoordinator({
       workspace: this.workspace,
       repository: options.repository,
@@ -170,11 +191,24 @@ export class VNextPersistenceRuntime {
       resolveAssetUrls: options.resolveAssetUrls,
       canLeave: () => !this.saveCoordinator.hasUnresolvedActiveMutation(),
     });
+    this.conflictResolutionCoordinator = new ConflictResolutionCoordinator({
+      workspace: this.workspace,
+      reopenCoordinator: this.reopenCoordinator,
+      createCoordinator: new PreparedCatalogCreateCoordinator({
+        repository: options.repository,
+        createMutationId: options.createMutationId,
+        authLineage: () => this.workspace.getSnapshot().binding.authLineage,
+        authorityScopeId: () => this.workspace.getSnapshot().activeAuthorityScopeId,
+      }),
+      cloneService: new CatalogCloneService(options.applicationDependencies.createId),
+      ...(this.recoveryManager ? { recoveryManager: this.recoveryManager } : {}),
+    });
     this.recoveryManager?.start();
   }
 
   updateAuthLineage(authLineage: string): void {
     this.workspace.updateAuthLineage(authLineage);
+    this.autosaveCoordinator?.resumeAfterAuthorityChange();
   }
 
   updateAuthContext(authLineage: string, authorityScopeId: string): void {
@@ -182,6 +216,7 @@ export class VNextPersistenceRuntime {
       this.recoveredOverlay = undefined;
     }
     this.workspace.updateAuthContext(authLineage, authorityScopeId);
+    this.autosaveCoordinator?.resumeAfterAuthorityChange();
   }
 
   getRecoveredOverlay(openSessionId: string): AuthoringRecoveryOverlay | undefined {
@@ -323,5 +358,18 @@ export class VNextPersistenceRuntime {
     barrier: AuthoringBarrier
   ): () => void {
     return this.workspace.registerAuthoringBarrier(openSessionId, barrier);
+  }
+
+  manualSave(): Promise<import('./save-coordinator').ManualSaveResult> {
+    return this.autosaveCoordinator?.flush() ?? this.saveCoordinator.save();
+  }
+
+  retryRemoteSave(): Promise<import('./save-coordinator').ManualSaveResult> {
+    return this.autosaveCoordinator?.retryNow() ?? this.saveCoordinator.save();
+  }
+
+  async dispose(): Promise<void> {
+    this.autosaveCoordinator?.dispose();
+    await this.recoveryManager?.close();
   }
 }

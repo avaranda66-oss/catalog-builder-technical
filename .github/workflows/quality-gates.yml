@@ -55,3 +55,4 @@ jobs:
           node tests/vnext/proof/group-export-proof.mjs
           node tests/vnext/proof/export-proof.mjs
           node tests/vnext/proof/w3g-asset-persistence-proof.mjs
+          node tests/vnext/proof/w3h-autosave-concurrency-proof.mjs
