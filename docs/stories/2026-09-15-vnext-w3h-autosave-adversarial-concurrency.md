@@ -12,6 +12,8 @@ Required branch: `feat/vnext-w3h-autosave-concurrency`
 
 Promotion vehicle: one PR to `main`; **do not merge**. The USER is the sole authority for explicit merge authorization.
 
+Promotion PR: **#37** — `feat(vnext): add W3.H autosave and adversarial concurrency`.
+
 ---
 
 ## Story
@@ -63,7 +65,7 @@ Como o Pai (usuário não técnico), quero que minhas alterações sejam salvas 
 - [x] Add deterministic autosave/concurrency/conflict/archive/recovery/Undo tests.
 - [x] Add `tests/vnext/proof/w3h-autosave-concurrency-proof.mjs` and wire it into required Quality Gates.
 - [x] Run focused tests, lint, typecheck, full tests, build, W3.H Chromium proof, and canonical proof regressions.
-- [ ] Commit, push, open/update exactly one PR, inspect exact-head CI, and report evidence. Do not merge.
+- [x] Commit, push, and open exactly one PR (#37). Exact-head CI is the final promotion evidence; do not merge.
 
 ## File list
 
