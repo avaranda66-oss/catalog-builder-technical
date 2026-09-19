@@ -1,6 +1,6 @@
 # W3.I — Father Browser Flow / W3 Closeout
 
-Status: **In Progress**
+Status: **Ready for Remote Quality Gate**
 
 Date: 2026-09-19
 
@@ -127,7 +127,7 @@ Como o Pai (usuário não técnico), quero concluir em um único fluxo de navega
 - [x] No false Saved state appears.
 - [x] UI re-entry causes no duplicate remote Save/Create.
 - [x] Disposal leaves no unresolved timer/listener.
-- [ ] Existing W2/W3 proof matrix remains green.
+- [x] Existing W2/W3 proof matrix remains green.
 
 ## Controlled-vs-production evidence distinction
 
@@ -161,8 +161,8 @@ The integrated proof must assert and log enough state to audit the production bo
 - [x] Add W3.I to required Quality Gates only after the proof is stable.
 - [x] Smoke 320, 360, and 390 px action reachability and horizontal overflow.
 - [x] Run focused W3.I proof/tests once stable.
-- [ ] Run one final complete local validation ladder and canonical regression proof matrix.
-- [ ] Update validation results, acceptance checklist, and complete File List.
+- [x] Run one final complete local validation ladder and canonical regression proof matrix.
+- [x] Update validation results, acceptance checklist, and complete File List.
 - [ ] Commit and push a small coherent candidate; create exactly one PR; do not merge.
 - [ ] Wait for exact-head GitHub Quality Gate `COMPLETED / SUCCESS`.
 
@@ -178,19 +178,20 @@ Focused candidate validation before the final full ladder:
 - Focused fixture ESLint and proof syntax check: **PASS**.
 - `git diff --check`: **PASS**.
 
-Required final ladder:
+Final local ladder:
 
-- Focused W3.I tests/proof.
-- `npm run lint` with zero errors.
-- `npm run typecheck`.
-- `npm test`.
-- `npm run build`.
-- `git diff --check`.
-- W3.I integrated Chromium proof and production bootstrap smoke.
-- W3.H and W3.G proofs.
-- Relevant W3.F, W3.D, and W3.C regressions.
-- Canonical W2 Chromium/PDF matrix.
-- Exact-head GitHub Quality Gate.
+- Focused W3.I integrated Chromium proof: **PASS** (1 proof; W3I-01..10 and three mobile widths).
+- `npm run lint`: **PASS**, 0 errors and the unchanged 268-warning repository baseline.
+- `npm run typecheck`: **PASS**.
+- `npm test`: **PASS**, 241 test files; 2,594 passed and 1 skipped (2,595 total).
+- `npm run build`: **PASS**; only existing Vite dynamic-import/chunk-size advisories were emitted.
+- `git diff --check`: **PASS**.
+- W3.I integrated Chromium proof and production `/v2` bootstrap smoke: **PASS**.
+- W3.H and W3.G Chromium proofs: **PASS**.
+- W3.F, both W3.D physical/IndexedDB, and W3.C Chromium proofs: **PASS**.
+- Canonical W2 Chromium/native-PDF matrix (7 proofs): **PASS**.
+- Complete browser/PDF regression ladder: **PASS**, 14 proof scripts.
+- Exact-head GitHub Quality Gate: pending branch publication and PR creation; the final executor report will identify the exact run.
 
 ## File List
 
@@ -211,7 +212,7 @@ Required final ladder:
 | Testing guidance | PASS | Focused proof, final regression matrix, browser error capture, bounded waits, and mobile widths are measurable. |
 | Scope control | PASS | W4, redesign, architecture replacement, realtime/presence/CRDT, hard delete, restore/unarchive, and dependency modernization are excluded. |
 
-Final assessment: **READY / IN PROGRESS**. The user supplied the complete Principal execution contract and explicitly authorized implementation.
+Final assessment: **READY FOR REMOTE QUALITY GATE**. The controlled W3.I Father journey, production bootstrap smoke, full local test/build ladder, and required W2/W3 proof matrix are green. Publication and exact-head CI remain delivery-only steps.
 
 ## Change Log
 
@@ -219,6 +220,7 @@ Final assessment: **READY / IN PROGRESS**. The user supplied the complete Princi
 | --- | --- | --- | --- |
 | 2026-09-19 | 0.1.0 | W3.I closeout story created from the Principal execution contract after exact live provenance verification; implementation started. | @sm / @dev |
 | 2026-09-19 | 0.2.0 | Integrated Father proof completed; deterministic Starter asset fixture added; narrow mobile Recovery/conflict containment defects corrected and proved at 320/360/390 px. | @dev / @qa |
+| 2026-09-19 | 0.3.0 | Final local ladder completed: 241 test files, 2,594 passing tests, 14 proof scripts, zero lint errors, typecheck/build/diff-check green; ready for exact-head remote gate. | @dev / @qa |
 
 ## Dev Agent Record
 
@@ -236,7 +238,11 @@ GPT-5 Codex
 - A deterministic Starter variant supplies the canonical immutable `AssetRef` needed by the existing image UI; this corrected fixture data and did not change product architecture.
 - Chromium exposed a real 320 px Recovery overflow (`scrollWidth` approximately 860 px). Narrow CSS containment corrected intrinsic preview/panel sizing.
 - The next mobile checkpoint exposed the existing shell `min-width: 860px` and hidden inspector at conflict state. A narrow mobile stacking rule contains the shell and makes conflict actions reachable without changing persistence semantics.
-- The complete controlled flow and `/v2` production bootstrap smoke pass; the final regression ladder and exact-head remote gate remain pending.
+- The complete controlled flow, `/v2` production bootstrap smoke, and final local regression ladder pass; only the exact-head remote gate remains pending.
+- Final local regression is complete: all 14 requested Chromium/native-PDF scripts passed, including W3.I/H/G/F/D/C and the canonical W2 matrix.
+- Full Vitest completed with 241 files, 2,594 passed, and 1 skipped; lint completed with zero errors and 268 unchanged baseline warnings.
+- Vite build advisories (dynamic/static import overlap and large chunks) are pre-existing, non-causal, and no dependency or bundling architecture was changed in W3.I.
+- Exact-head GitHub CI, Vercel/Netlify status inspection, and the final main-drift check are intentionally performed after this story snapshot is committed and published.
 
 ## Explicit scope guard
 
