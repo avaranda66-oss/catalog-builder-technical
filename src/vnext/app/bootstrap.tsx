@@ -85,6 +85,26 @@ function openFailureCode(code: string): CatalogLibraryFailureCode {
   return code as CatalogLibraryFailureCode;
 }
 
+export function attachPersistenceOnlineRetry(
+  runtime: VNextPersistenceRuntime,
+  target: Window = window
+): () => void {
+  let retry: Promise<unknown> | undefined;
+  const onOnline = () => {
+    const snapshot = runtime.workspace.getSnapshot();
+    if (
+      retry
+      || !snapshot.dirty
+      || (snapshot.save.phase !== 'unavailable' && snapshot.save.phase !== 'ambiguous')
+    ) return;
+    retry = runtime.retryRemoteSave().finally(() => {
+      retry = undefined;
+    });
+  };
+  target.addEventListener('online', onOnline);
+  return () => target.removeEventListener('online', onOnline);
+}
+
 export async function mountVNextApp(root: HTMLElement): Promise<void> {
   const applicationDependencies: ApplicationExecutionDependencies = {
     createId: createBrowserId,
@@ -183,6 +203,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     authLineage: lineage(),
     authorityScopeId: authorityScopeId(identity()),
     recoveryRepository,
+    autosave: {},
     assetUrls: resolveKnownW2CDemoAssetUrls(initialSession.getSnapshot().document),
     resolveAssetUrls,
   });
@@ -198,6 +219,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   };
 
   let authorityInvalidated = false;
+  let detachOnlineRetry: (() => void) | undefined;
   if (supabase) {
     supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
       const previousIdentity = authLineage.identity;
@@ -206,6 +228,8 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       runtime.updateAuthContext(lineage(), authorityScopeId(nextIdentity));
       if (nextIdentity === previousIdentity) return;
       authorityInvalidated = true;
+      detachOnlineRetry?.();
+      void runtime.dispose();
       root.replaceChildren();
       window.location.reload();
     });
@@ -238,6 +262,12 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     event.preventDefault();
     event.returnValue = '';
   });
+
+  detachOnlineRetry = attachPersistenceOnlineRetry(runtime);
+  window.addEventListener('pagehide', () => {
+    detachOnlineRetry?.();
+    void runtime.dispose();
+  }, { once: true });
 
   window.addEventListener('popstate', () => {
     const targetCatalogId = new URLSearchParams(window.location.search).get('catalog');

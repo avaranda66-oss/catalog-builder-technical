@@ -2,12 +2,12 @@ import {
   CatalogCloneService,
   createCatalogDocument,
   createDocumentSession,
-  parseCanonicalDocument,
   type ApplicationExecutionDependencies,
 } from '../application';
+import type { CatalogDocument } from '../domain';
 import {
+  PreparedCatalogCreateCoordinator,
   VNextPersistenceRuntime,
-  canonicalDocumentEquivalence,
   parsePersistenceEnvelope,
   type CatalogListItem,
   type CatalogOriginMetadata,
@@ -69,20 +69,6 @@ interface CatalogLibraryAuthority {
   readonly authorityScopeId: string;
 }
 
-interface PendingCreateAttempt {
-  readonly authority: CatalogLibraryAuthority;
-  readonly documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
-  readonly mutationId: string;
-  readonly origin?: CatalogOriginMetadata;
-}
-
-function sameCreateOrigin(left: CatalogOriginMetadata | undefined, right: CatalogOriginMetadata | undefined): boolean {
-  if (!left || !right) return left === right;
-  return left.originKind === right.originKind
-    && left.originId === right.originId
-    && left.originRevision === right.originRevision;
-}
-
 function failure<T>(code: CatalogLibraryFailureCode, message?: string): CatalogLibraryResult<T> {
   return { ok: false, error: { code, ...(message ? { message } : {}) } };
 }
@@ -136,11 +122,17 @@ export function projectCatalogLibraryItems(
 }
 
 export class CatalogLibraryService {
-  private pendingCreate?: PendingCreateAttempt;
   private readonly cloneService: CatalogCloneService;
+  private readonly createCoordinator: PreparedCatalogCreateCoordinator;
 
   constructor(private readonly options: CatalogLibraryServiceOptions) {
     this.cloneService = new CatalogCloneService(options.createId);
+    this.createCoordinator = new PreparedCatalogCreateCoordinator({
+      repository: options.repository,
+      createMutationId: options.createMutationId,
+      authLineage: options.authLineage,
+      authorityScopeId: options.authorityScopeId,
+    });
   }
 
   private captureAuthority(): CatalogLibraryAuthority {
@@ -159,129 +151,12 @@ export class CatalogLibraryService {
     return failure('STALE_RESULT', 'The active account changed while the Library operation was running');
   }
 
-  private sameAuthority(left: CatalogLibraryAuthority, right: CatalogLibraryAuthority): boolean {
-    return left.authLineage === right.authLineage && left.authorityScopeId === right.authorityScopeId;
-  }
-
   getCreateState(): CatalogLibraryCreateState {
-    if (!this.pendingCreate) return 'idle';
-    if (!this.authorityIsCurrent(this.pendingCreate.authority)) {
-      this.pendingCreate = undefined;
-      return 'idle';
-    }
-    return 'pending-verification';
+    return this.createCoordinator.getState();
   }
 
   listStarters(): readonly CatalogStarterSummary[] {
     return this.options.starterRegistry?.list() ?? [];
-  }
-
-  private createRequest(pending: PendingCreateAttempt) {
-    return {
-      mutationId: pending.mutationId,
-      documentSnapshot: pending.documentSnapshot,
-      ...(pending.origin ? { origin: pending.origin } : {}),
-    };
-  }
-
-  private async replayPendingCreate(
-    pending: PendingCreateAttempt
-  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
-    if (!this.authorityIsCurrent(pending.authority)) {
-      this.pendingCreate = undefined;
-      return this.staleAuthority();
-    }
-    const replay = await this.options.repository.createCatalog(this.createRequest(pending));
-    if (!this.authorityIsCurrent(pending.authority)) {
-      this.pendingCreate = undefined;
-      return this.staleAuthority();
-    }
-    if (!replay.ok) {
-      return failure(replay.error.code, replay.error.message);
-    }
-    const verified = this.verifiedCreateAcknowledgement(
-      replay.value,
-      pending.documentSnapshot.id,
-      pending.mutationId,
-      pending.documentSnapshot,
-      pending.origin
-    );
-    if (verified.ok) this.pendingCreate = undefined;
-    return verified;
-  }
-
-  private async reconcilePendingCreate(
-    pending: PendingCreateAttempt
-  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
-    if (!this.authorityIsCurrent(pending.authority)) {
-      this.pendingCreate = undefined;
-      return this.staleAuthority();
-    }
-    const verification = await this.options.repository.getCatalog(pending.documentSnapshot.id);
-    if (!this.authorityIsCurrent(pending.authority)) {
-      this.pendingCreate = undefined;
-      return this.staleAuthority();
-    }
-    if (!verification.ok) {
-      if (verification.error.code === 'NOT_FOUND') {
-        return this.replayPendingCreate(pending);
-      }
-      if (
-        verification.error.code === 'OFFLINE'
-        || verification.error.code === 'REMOTE_FAILURE'
-        || verification.error.code === 'AMBIGUOUS_COMMIT_OUTCOME'
-      ) {
-        return failure('AMBIGUOUS_COMMIT_OUTCOME', verification.error.message);
-      }
-      return failure(verification.error.code, verification.error.message);
-    }
-    const verified = this.verifiedCreateAcknowledgement(
-      verification.value,
-      pending.documentSnapshot.id,
-      pending.mutationId,
-      pending.documentSnapshot,
-      pending.origin
-    );
-    if (verified.ok) this.pendingCreate = undefined;
-    return verified;
-  }
-
-  private verifiedCreateAcknowledgement(
-    value: CatalogPersistenceEnvelope,
-    catalogId: string,
-    mutationId: string,
-    expectedDocument: CatalogPersistenceEnvelope['documentSnapshot'],
-    expectedOrigin: CatalogOriginMetadata | undefined
-  ): CatalogLibraryResult<CatalogPersistenceEnvelope> {
-    let envelope: CatalogPersistenceEnvelope;
-    try {
-      envelope = parsePersistenceEnvelope(value);
-    } catch (error) {
-      return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
-    }
-    if (
-      envelope.catalogId !== catalogId
-      || envelope.documentSnapshot.id !== catalogId
-      || envelope.lastMutationId !== mutationId
-      || envelope.remoteRevision !== 1
-      || envelope.archivedAt !== null
-      || canonicalDocumentEquivalence(envelope.documentSnapshot) !== canonicalDocumentEquivalence(expectedDocument)
-      || !sameCreateOrigin(envelope.origin, expectedOrigin)
-    ) {
-      return failure('REMOTE_DIVERGENCE', 'Create acknowledgement does not prove the requested catalog mutation');
-    }
-    return { ok: true, value: envelope };
-  }
-
-  private async continuePendingCreate(
-    authority: CatalogLibraryAuthority
-  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope> | undefined> {
-    if (!this.pendingCreate) return undefined;
-    if (this.sameAuthority(this.pendingCreate.authority, authority)) {
-      return this.reconcilePendingCreate(this.pendingCreate);
-    }
-    this.pendingCreate = undefined;
-    return undefined;
   }
 
   private async createPreparedDocument(
@@ -289,41 +164,17 @@ export class CatalogLibraryService {
     input: CatalogPersistenceEnvelope['documentSnapshot'],
     origin?: CatalogCloneOriginMetadata
   ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
-    let documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
-    try {
-      documentSnapshot = parseCanonicalDocument(input);
-    } catch (error) {
-      return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
-    }
     if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
-    const pending: PendingCreateAttempt = {
-      authority,
-      documentSnapshot,
-      mutationId: this.options.createMutationId(),
-      ...(origin ? { origin } : {}),
-    };
-    this.pendingCreate = pending;
-    const result = await this.options.repository.createCatalog(this.createRequest(pending));
-    if (!this.authorityIsCurrent(authority)) {
-      this.pendingCreate = undefined;
-      return this.staleAuthority();
-    }
-    if (!result.ok) {
-      if (result.error.code !== 'AMBIGUOUS_COMMIT_OUTCOME') {
-        this.pendingCreate = undefined;
-        return failure(result.error.code, result.error.message);
-      }
-      return this.reconcilePendingCreate(pending);
-    }
-    const verified = this.verifiedCreateAcknowledgement(
-      result.value,
-      documentSnapshot.id,
-      pending.mutationId,
-      documentSnapshot,
-      pending.origin
-    );
-    if (verified.ok) this.pendingCreate = undefined;
-    return verified;
+    return this.createCoordinator.create(input, origin);
+  }
+
+  private async continuePendingCreate(
+    authority: CatalogLibraryAuthority
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope> | undefined> {
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    const continued = await this.createCoordinator.continuePending();
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    return continued;
   }
 
   async list(query: CatalogLibraryQuery = {}): Promise<CatalogLibraryResult<readonly CatalogListItem[]>> {
@@ -401,6 +252,29 @@ export class CatalogLibraryService {
       originRevision: starter.revision,
     };
     return this.createPreparedDocument(authority, documentSnapshot, origin);
+  }
+
+  async saveAsCopy(
+    sourceDocument: CatalogDocument,
+    sourceRemoteRevision: number
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+    const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    if (continued) return continued;
+    let documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
+    try {
+      documentSnapshot = this.cloneService.clone(sourceDocument, {
+        title: `Cópia de ${sourceDocument.title}`,
+      });
+    } catch (error) {
+      return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
+    }
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    return this.createPreparedDocument(authority, documentSnapshot, {
+      originKind: CATALOG_CLONE_ORIGIN_KIND.duplicate,
+      originId: sourceDocument.id,
+      originRevision: sourceRemoteRevision,
+    });
   }
 
   async rename(catalogId: string, rawTitle: string): Promise<CatalogLibraryResult<CatalogListItem>> {

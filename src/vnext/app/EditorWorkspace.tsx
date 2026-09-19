@@ -125,6 +125,9 @@ export interface EditorWorkspacePersistenceProps {
   readonly assetBridge?: AssetPersistenceBridge;
 }
 
+const subscribeToNothing = (_listener: () => void): (() => void) => () => undefined;
+const idleConflictResolutionState = () => 'idle' as const;
+
 export function EditorWorkspace({
   session,
   persistence,
@@ -135,6 +138,13 @@ export function EditorWorkspace({
   onRequestLibrary?: () => void;
 }) {
   const snapshot = useDocumentSession(session);
+  const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
+  const conflictResolutionState = React.useSyncExternalStore(
+    conflictResolutionCoordinator?.subscribe ?? subscribeToNothing,
+    conflictResolutionCoordinator?.getState ?? idleConflictResolutionState,
+    conflictResolutionCoordinator?.getState ?? idleConflictResolutionState
+  );
+  const conflictResolutionBusy = conflictResolutionState !== 'idle';
   const { document, canUndo, canRedo } = snapshot;
   const [editorState, setEditorState] = React.useState<EditorSelectionState>({
     activePageId: document.pages[0].id,
@@ -976,7 +986,7 @@ export function EditorWorkspace({
               type="button"
               data-editor-action="save"
               data-persistence-save-action=""
-              onClick={() => { void persistence.runtime.saveCoordinator.save(); }}
+              onClick={() => { void persistence.runtime.manualSave(); }}
               disabled={!persistence.save.canSave || persistence.save.phase === 'saving'}
               aria-label={persistence.save.label}
             >
@@ -1268,6 +1278,43 @@ export function EditorWorkspace({
               ? persistence.save.message ?? persistence.save.label
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
+          {persistence?.save.phase === 'conflict' && (
+            <div data-persistence-conflict-actions="">
+              <p>Este catálogo mudou em outro lugar. Seu trabalho continua preservado nesta sessão.</p>
+              <button
+                type="button"
+                className="vnext-inspector-action"
+                disabled={conflictResolutionBusy}
+                onClick={() => {
+                  void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
+                    if (!result.ok) {
+                      setStatusMessage(result.error.message ?? 'Não foi possível abrir a versão mais recente.');
+                    }
+                  });
+                }}
+              >
+                {conflictResolutionState === 'resolving-open-latest'
+                  ? 'Abrindo versão mais recente…'
+                  : 'Abrir versão mais recente'}
+              </button>
+              <button
+                type="button"
+                className="vnext-inspector-action"
+                disabled={conflictResolutionBusy}
+                onClick={() => {
+                  void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
+                    if (!result.ok) {
+                      setStatusMessage(result.error.message ?? 'Não foi possível salvar seu trabalho como cópia.');
+                    }
+                  });
+                }}
+              >
+                {conflictResolutionState === 'resolving-save-as-copy'
+                  ? 'Salvando cópia…'
+                  : 'Salvar meu trabalho como cópia'}
+              </button>
+            </div>
+          )}
           {persistence?.localProtection === 'unavailable' && (
             <p className="vnext-live-status" role="alert">
               {persistence.localProtectionMessage ?? 'Proteção local indisponível.'}

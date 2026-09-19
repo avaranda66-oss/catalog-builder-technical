@@ -254,6 +254,24 @@ describe('VNext architecture boundary',()=>{
     expect(violations,violations.join('\n')).toEqual([]);
   });
 
+  it('keeps W3.H autosave scheduling below React while SaveCoordinator remains the single remote save authority',()=>{
+    const editor=readFileSync(resolve(vnextRoot,'app/EditorWorkspace.tsx'),'utf8');
+    const autosave=readFileSync(resolve(vnextRoot,'persistence/autosave-coordinator.ts'),'utf8');
+    const runtime=readFileSync(resolve(vnextRoot,'persistence/runtime.ts'),'utf8');
+    const bootstrap=readFileSync(resolve(vnextRoot,'app/bootstrap.tsx'),'utf8');
+
+    expect(editor).toContain('persistence.runtime.manualSave()');
+    expect(editor).not.toMatch(/saveCoordinator\.save\s*\(|saveCAS\s*\(/);
+    expect(autosave).toContain("import type { ManualSaveResult, SaveCoordinator } from './save-coordinator'");
+    expect(autosave).toMatch(/this\.options\.saveCoordinator\.save\s*\(\)/);
+    expect(autosave).not.toMatch(/\bCatalogRepository\b|\.saveCAS\s*\(/);
+    expect(runtime).toContain('readonly autosave?: false | {');
+    expect(runtime).toContain('return this.autosaveCoordinator?.flush() ?? this.saveCoordinator.save()');
+    expect(bootstrap).toMatch(/autosave:\s*\{\}/);
+    expect(bootstrap).toContain('attachPersistenceOnlineRetry(runtime)');
+    expect(bootstrap).toContain("window.addEventListener('pagehide'");
+  });
+
   it('invalidates an exact-open production route before an async reopen can survive an account switch',()=>{
     const file=resolve(vnextRoot,'app/bootstrap.tsx');
     const text=readFileSync(file,'utf8');

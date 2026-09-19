@@ -35,6 +35,13 @@ export type {
   VNextPersistenceRpcResponse,
 } from './supabase-repository';
 export { canonicalDocumentEquivalence } from './equivalence';
+export { PreparedCatalogCreateCoordinator } from './create-coordinator';
+export type {
+  PreparedCatalogCreateCoordinatorOptions,
+  PreparedCreateFailureCode,
+  PreparedCreateResult,
+  PreparedCreateState,
+} from './create-coordinator';
 export { CanonicalReopenCoordinator } from './reopen-coordinator';
 export type {
   CanonicalReopenCoordinatorOptions,
@@ -46,6 +53,15 @@ export type {
   SaveCoordinatorOptions,
   SaveFailureCode,
 } from './save-coordinator';
+export { AutosaveCoordinator } from './autosave-coordinator';
+export type { AutosaveClock, AutosaveCoordinatorOptions } from './autosave-coordinator';
+export { ConflictResolutionCoordinator } from './conflict-resolution-coordinator';
+export type {
+  ConflictResolutionCoordinatorOptions,
+  ConflictResolutionFailureCode,
+  ConflictResolutionResult,
+  ConflictResolutionState,
+} from './conflict-resolution-coordinator';
 export { VNextPersistenceRuntime } from './runtime';
 export type { VNextPersistenceRuntimeOptions } from './runtime';
 export {
