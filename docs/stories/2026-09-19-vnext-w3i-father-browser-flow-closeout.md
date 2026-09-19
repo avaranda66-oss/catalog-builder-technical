@@ -163,6 +163,9 @@ The integrated proof must assert and log enough state to audit the production bo
 - [x] Run focused W3.I proof/tests once stable.
 - [x] Run one final complete local validation ladder and canonical regression proof matrix.
 - [x] Update validation results, acceptance checklist, and complete File List.
+- [x] Map internal Save projection labels to Portuguese only at the Father-facing React presentation boundary.
+- [x] Open the protected Recovery inspection through visible UI and directly prove the recovered A4 preview at 320, 360, 390, and desktop widths.
+- [x] Check forbidden persistence jargon separately on Library, Editor, Recovery, and Conflict surfaces.
 - [ ] Commit and push a small coherent candidate; create exactly one PR; do not merge.
 - [ ] Wait for exact-head GitHub Quality Gate `COMPLETED / SUCCESS`.
 
@@ -170,37 +173,47 @@ The integrated proof must assert and log enough state to audit the production bo
 
 Focused candidate validation before the final full ladder:
 
-- Integrated controlled Father Chromium flow: **PASS**.
-- Real production `/v2` bootstrap smoke: **PASS**.
-- Recovery, conflict, and Library actions at 320, 360, and 390 px with no page-level horizontal overflow: **PASS**.
+- Integrated controlled Father Chromium flow: **PASS** after the Principal amendment.
+- Father-visible Save state: **PASS** — `Salvando…` is visible while the controlled Save is held, `Salvo` is absent before acknowledgement, and `Salvo` appears only after the authoritative acknowledgement.
+- Father-language persistence-jargon checks: **PASS** independently on Library, Editor, Recovery, and Conflict.
+- Recovery inspection action: **PASS** — `Ver alterações recuperadas` is clicked through visible UI, `[data-protected-recovery-inspection]` mounts, and the recovered `[data-editorial-root]` A4 preview is visible.
+- Recovery preview containment: **PASS** at 320, 360, and 390 px — document/body have no horizontal overflow, the panel and protected inspection fit, the A4 is uniformly scaled without clipping, and all Recovery actions remain reachable with at least 44 px height.
+- Desktop Recovery-preview sanity: **PASS** at 1280 px — preview remains fitted and visible, actions remain usable, and the normal Editor A4 path is unchanged.
+- Real production `/v2` bootstrap smoke inside the W3.I proof: **PASS**.
 - Browser console errors: `[]`; page errors: `[]`.
-- `npm run typecheck`: **PASS**.
-- Focused fixture ESLint and proof syntax check: **PASS**.
-- `git diff --check`: **PASS**.
+- The first strengthened proof correctly failed against the prior `overflow: hidden` preview at 320 px; the narrow Recovery CSS correction now participates in layout at a fitted scale instead of clipping the A4.
 
 Final local ladder:
 
-- Focused W3.I integrated Chromium proof: **PASS** (1 proof; W3I-01..10 and three mobile widths).
+- `git diff --check`: **PASS**.
 - `npm run lint`: **PASS**, 0 errors and the unchanged 268-warning repository baseline.
 - `npm run typecheck`: **PASS**.
 - `npm test`: **PASS**, 241 test files; 2,594 passed and 1 skipped (2,595 total).
-- `npm run build`: **PASS**; only existing Vite dynamic-import/chunk-size advisories were emitted.
-- `git diff --check`: **PASS**.
+- `npm run build`: **PASS**; only the existing Vite dynamic-import/chunk-size advisories were emitted.
+- Focused W3.C Father-visible presentation regression: **PASS**, 16/16 tests.
 - W3.I integrated Chromium proof and production `/v2` bootstrap smoke: **PASS**.
 - W3.H and W3.G Chromium proofs: **PASS**.
-- W3.F, both W3.D physical/IndexedDB, and W3.C Chromium proofs: **PASS**.
-- Canonical W2 Chromium/native-PDF matrix (7 proofs): **PASS**.
-- Complete browser/PDF regression ladder: **PASS**, 14 proof scripts.
-- Exact-head GitHub Quality Gate: pending branch publication and PR creation; the final executor report will identify the exact run.
+- W3.F, W3.D physical, W3.D IndexedDB adapter, and W3.C Chromium proofs: **PASS**.
+- Canonical W2 Chromium/native-PDF matrix: **PASS**, seven proof scripts.
+- Complete local browser/PDF regression ladder: **PASS**, exactly 14 proof scripts.
+- The required GitHub Quality Gate remains exactly 10 proof scripts as declared in `.github/workflows/quality-gates.yml`; the four additional local W3.C/W3.D/W3.F regressions are not attributed to CI.
+- Exact amendment head/tree and its Quality Gate run are delivery metadata and must be recorded after publication; prior run `35468669590` applies only to audited head `5f4e17360f3d5de7439fbd5c9e74934376b3ff00` and is not amendment evidence.
 
 ## File List
 
 - `.github/workflows/quality-gates.yml`
 - `docs/stories/2026-09-19-vnext-w3i-father-browser-flow-closeout.md`
+- `src/vnext/app/EditorWorkspace.tsx`
+- `src/vnext/app/RecoveryCenter.tsx`
+- `src/vnext/app/save-presentation.ts`
 - `src/vnext/app/styles.css`
 - `tests/vnext/proof/fixtures/w3i-father-browser.html`
 - `tests/vnext/proof/fixtures/w3i-father-browser.tsx`
+- `tests/vnext/proof/w3c-save-reopen-proof.mjs`
+- `tests/vnext/proof/w3d-physical-recovery-proof.mjs`
+- `tests/vnext/proof/w3h-autosave-concurrency-proof.mjs`
 - `tests/vnext/proof/w3i-father-browser-flow-proof.mjs`
+- `tests/vnext/application/w3c-editor-persistence.test.tsx`
 
 ## Story draft checklist result
 
@@ -221,6 +234,7 @@ Final assessment: **READY FOR REMOTE QUALITY GATE**. The controlled W3.I Father 
 | 2026-09-19 | 0.1.0 | W3.I closeout story created from the Principal execution contract after exact live provenance verification; implementation started. | @sm / @dev |
 | 2026-09-19 | 0.2.0 | Integrated Father proof completed; deterministic Starter asset fixture added; narrow mobile Recovery/conflict containment defects corrected and proved at 320/360/390 px. | @dev / @qa |
 | 2026-09-19 | 0.3.0 | Final local ladder completed: 241 test files, 2,594 passing tests, 14 proof scripts, zero lint errors, typecheck/build/diff-check green; ready for exact-head remote gate. | @dev / @qa |
+| 2026-09-19 | 0.4.0 | Principal same-PR amendment: Portuguese Save presentation mapping, direct protected Recovery/A4 preview proof at 320/360/390 and desktop, per-surface jargon checks, and correction of prior evidence overstatements. | @dev / @qa |
 
 ## Dev Agent Record
 
@@ -243,6 +257,11 @@ GPT-5 Codex
 - Full Vitest completed with 241 files, 2,594 passed, and 1 skipped; lint completed with zero errors and 268 unchanged baseline warnings.
 - Vite build advisories (dynamic/static import overlap and large chunks) are pre-existing, non-causal, and no dependency or bundling architecture was changed in W3.I.
 - Exact-head GitHub CI, Vercel/Netlify status inspection, and the final main-drift check are intentionally performed after this story snapshot is committed and published.
+- Principal correction: the audited Father-facing Save labels were still rendered in English even though the internal persistence projection was sound. A single typed/pure React presentation mapping now renders Portuguese while `SaveCoordinator`, `AutosaveCoordinator`, Save phases, CAS, revision, mutation identity, repository contracts, and workspace state remain unchanged.
+- Principal correction: the earlier mobile evidence proved the Recovery decision surface but did not click `Ver alterações recuperadas`; it therefore did not mount the protected editorial preview. The integrated proof now clicks that action, requires the protected inspection and A4 root, and records direct fit/visibility/action geometry at 320, 360, 390, and 1280 px.
+- The Recovery preview no longer relies on a fixed 260 px clipping window with `overflow: hidden`; its scaled A4 participates in layout, with a narrower fitted scale on mobile and unchanged normal Editor A4 behavior.
+- Validation accounting is exact: the complete local proof ladder has 14 scripts; required GitHub CI has 10 scripts. The four extra local W3.C/W3.D/W3.F regressions are local evidence only.
+- Controlled-versus-production evidence remains exact: `/v2` proves the real production bootstrap and canonical seams; the complete Father journey remains controlled React/Chromium integration with deterministic external timing and no real-Supabase end-to-end claim.
 
 ## Explicit scope guard
 

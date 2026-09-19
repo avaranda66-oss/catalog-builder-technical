@@ -17,7 +17,7 @@ import type { AuthoringRecoveryOverlay } from '../recovery';
 import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
 import {
   type AuthoringBarrierResult,
-  SaveProjection,
+  type SaveProjection,
   VNextPersistenceRuntime,
 } from '../persistence';
 import {
@@ -32,6 +32,7 @@ import {
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
+import { fatherSaveLabel } from './save-presentation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -988,10 +989,10 @@ export function EditorWorkspace({
               data-persistence-save-action=""
               onClick={() => { void persistence.runtime.manualSave(); }}
               disabled={!persistence.save.canSave || persistence.save.phase === 'saving'}
-              aria-label={persistence.save.label}
+              aria-label={fatherSaveLabel(persistence.save.label)}
             >
               <SaveIcon size={17} aria-hidden="true" />
-              <span>{persistence.save.label}</span>
+              <span>{fatherSaveLabel(persistence.save.label)}</span>
             </button>
           )}
           <button type="button" data-editor-action="undo" data-text-edit-cancel-on-activate="" onClick={undo} disabled={!canUndo} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
@@ -1025,7 +1026,7 @@ export function EditorWorkspace({
                   {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)
                 </span>
               )}
-              <span className="vnext-memory-status" data-save-state="">{persistence ? persistence.save.label : 'Rascunho nesta aba'}</span>
+              <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>
             </div>
           </div>
           <div className="vnext-authoring-toolbar" aria-label="Adicionar e organizar objetos">
@@ -1275,7 +1276,7 @@ export function EditorWorkspace({
           <h3>Salvamento</h3>
           <p>
             {persistence
-              ? persistence.save.message ?? persistence.save.label
+              ? persistence.save.message ?? fatherSaveLabel(persistence.save.label)
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
           {persistence?.save.phase === 'conflict' && (

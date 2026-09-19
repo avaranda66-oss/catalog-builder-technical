@@ -26,7 +26,7 @@ const fixtureBase = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w3i-fat
 const fixtureUrl = `${fixtureBase}?db=${encodeURIComponent(databaseName)}`;
 const resetUrl = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w3d-indexeddb.html`;
 const productionUrl = `http://127.0.0.1:${port}/v2`;
-const forbiddenFatherTerms = /\b(?:CAS|expectedRevision|mutationId|IndexedDB|repository|row version|JSON|database)\b/i;
+const forbiddenFatherTerms = /\b(?:CAS|expectedRevision|revision ID|mutationId|IndexedDB|storage key|repository|row version|JSON|database)\b/i;
 const pngBytes = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64'
@@ -35,6 +35,7 @@ const pngBytes = Buffer.from(
 let browser;
 const consoleErrors = [];
 const pageErrors = [];
+const fatherLanguageSurfaces = new Set();
 
 function observe(page, label) {
   page.on('console', (message) => {
@@ -108,9 +109,15 @@ async function waitSaved(page, expectedText) {
   }, expectedText);
 }
 
-async function assertNoFatherJargon(page) {
-  const visibleText = await page.locator('body').innerText();
-  assert.equal(forbiddenFatherTerms.test(visibleText), false, `Father UI exposed technical jargon: ${visibleText}`);
+async function assertNoFatherJargon(page, surface, selector) {
+  const root = selector ? page.locator(selector) : page.locator('body');
+  const visibleText = await root.innerText();
+  assert.equal(
+    forbiddenFatherTerms.test(visibleText),
+    false,
+    `${surface} exposed technical persistence jargon: ${visibleText}`
+  );
+  fatherLanguageSurfaces.add(surface);
 }
 
 async function assertNoHorizontalOverflow(page, width, requiredButtonNames = []) {
@@ -154,6 +161,94 @@ async function assertNoHorizontalOverflow(page, width, requiredButtonNames = [])
   return overflow;
 }
 
+async function assertRecoveryPreviewAtViewport(page, width, minimumButtonHeight) {
+  await page.setViewportSize({ width, height: 900 });
+  const dialog = page.getByRole('dialog', { name: 'Recuperação local' });
+  const panel = dialog.locator('.vnext-recovery-panel');
+  const inspection = dialog.locator('[data-protected-recovery-inspection]');
+  const preview = inspection.locator('.vnext-recovery-document-preview');
+  const editorial = preview.locator('[data-editorial-root]');
+  await editorial.waitFor();
+  assert.equal(await preview.isVisible(), true, `Recovery preview must be visible at ${width}px`);
+  assert.equal(await editorial.isVisible(), true, `Recovered A4 content must be visible at ${width}px`);
+
+  const geometry = await page.evaluate(() => {
+    const rect = (element) => {
+      const value = element.getBoundingClientRect();
+      return {
+        left: value.left,
+        top: value.top,
+        right: value.right,
+        bottom: value.bottom,
+        width: value.width,
+        height: value.height,
+      };
+    };
+    const panelElement = document.querySelector('.vnext-recovery-panel');
+    const inspectionElement = document.querySelector('[data-protected-recovery-inspection]');
+    const previewElement = inspectionElement?.querySelector('.vnext-recovery-document-preview');
+    const editorialElement = previewElement?.querySelector('[data-editorial-root]');
+    if (!panelElement || !inspectionElement || !previewElement || !editorialElement) {
+      throw new Error('Recovery preview geometry target is missing');
+    }
+    const editorialRect = rect(editorialElement);
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth,
+      panel: rect(panelElement),
+      inspection: {
+        ...rect(inspectionElement),
+        clientWidth: inspectionElement.clientWidth,
+        scrollWidth: inspectionElement.scrollWidth,
+      },
+      preview: {
+        ...rect(previewElement),
+        clientWidth: previewElement.clientWidth,
+        scrollWidth: previewElement.scrollWidth,
+      },
+      editorial: {
+        ...editorialRect,
+        offsetWidth: editorialElement.offsetWidth,
+        offsetHeight: editorialElement.offsetHeight,
+        scaleX: editorialRect.width / editorialElement.offsetWidth,
+        scaleY: editorialRect.height / editorialElement.offsetHeight,
+      },
+    };
+  });
+
+  assert(geometry.documentWidth <= width, `Recovery document overflow at ${width}px: ${JSON.stringify(geometry)}`);
+  assert(geometry.bodyWidth <= width, `Recovery body overflow at ${width}px: ${JSON.stringify(geometry)}`);
+  assert(geometry.panel.left >= -1 && geometry.panel.right <= width + 1, `Recovery panel must fit ${width}px`);
+  assert(geometry.inspection.scrollWidth <= geometry.inspection.clientWidth + 1, `Protected inspection must not clip horizontally at ${width}px`);
+  assert(geometry.preview.scrollWidth <= geometry.preview.clientWidth + 1, `Recovery preview must not hide horizontal content at ${width}px`);
+  assert(geometry.editorial.scaleX > 0 && geometry.editorial.scaleX < 1, `Recovered A4 preview must be scaled at ${width}px`);
+  assert(Math.abs(geometry.editorial.scaleX - geometry.editorial.scaleY) < 0.01, `Recovered A4 preview scale must be uniform at ${width}px`);
+  assert(geometry.editorial.left >= geometry.preview.left - 1, `Recovered preview left edge is clipped at ${width}px`);
+  assert(geometry.editorial.right <= geometry.preview.right + 1, `Recovered preview right edge is clipped at ${width}px`);
+  assert(geometry.editorial.top >= geometry.preview.top - 1, `Recovered preview top edge is clipped at ${width}px`);
+  assert(geometry.editorial.bottom <= geometry.preview.bottom + 1, `Recovered preview bottom edge is clipped at ${width}px`);
+
+  const actions = [
+    'Recuperar minhas alterações',
+    'Ver alterações recuperadas',
+    'Descartar recuperação local',
+  ];
+  const buttonGeometry = {};
+  for (const name of actions) {
+    const button = dialog.getByRole('button', { name, exact: true });
+    await button.scrollIntoViewIfNeeded();
+    const box = await button.boundingBox();
+    assert(box, `${name} must have usable geometry at ${width}px`);
+    assert(box.width >= 44, `${name} must remain wide enough at ${width}px`);
+    assert(box.height >= minimumButtonHeight, `${name} must remain tall enough at ${width}px`);
+    assert(box.x >= -1 && box.x + box.width <= width + 1, `${name} must remain horizontally reachable at ${width}px`);
+    assert(box.y >= -1 && box.y + box.height <= 901, `${name} must remain vertically reachable at ${width}px`);
+    buttonGeometry[name] = box;
+  }
+  return { width, geometry, buttonGeometry };
+}
+
 function intersection(left, right) {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value));
@@ -183,7 +278,7 @@ try {
   observe(father, 'father');
   await father.goto(fixtureUrl, { waitUntil: 'networkidle' });
   await waitForLibrary(father);
-  await assertNoFatherJargon(father);
+  await assertNoFatherJargon(father, 'Library');
 
   // W3I-01: Father enters the real Library component and creates from a registered Starter.
   await father.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
@@ -198,6 +293,8 @@ try {
   assert.equal(created.runtime.canUndo, false);
   assert.equal(created.runtime.canRedo, false);
   assert.equal(created.runtime.saveLabel, 'Saved');
+  assert.equal((await father.locator('[data-save-state]').textContent())?.trim(), 'Salvo');
+  await assertNoFatherJargon(father, 'Editor', '[data-vnext-shell]');
   const sourceCatalogId = created.runtime.catalogId;
   const sourceOpenSessionId = created.runtime.openSessionId;
   const starterCatalog = await catalog(father, sourceCatalogId);
@@ -226,10 +323,13 @@ try {
   });
   const saving = await state(father);
   assert.equal(saving.runtime?.saveLabel, 'Saving…');
+  assert.equal((await father.locator('[data-save-state]').textContent())?.trim(), 'Salvando…');
+  assert.equal(await father.getByRole('button', { name: 'Salvo', exact: true }).count(), 0);
   assert.equal(saving.saveDispatchCount, 1);
   await father.evaluate(() => window.__W3I_PROOF__.releaseHeldSave());
   await waitSaved(father, 'Texto do Pai salvo automaticamente');
   const autosaved = await state(father);
+  assert.equal((await father.locator('[data-save-state]').textContent())?.trim(), 'Salvo');
   assert.equal(autosaved.runtime?.canUndo, true);
   assert.equal(autosaved.runtime?.remoteRevision, 2);
 
@@ -335,10 +435,21 @@ try {
   assert.equal(storedRecovery[0].canonicalText, 'Cópia independente do Pai');
   assert.equal(storedRecovery[0].draft, 'Rascunho recuperado do Pai');
   await father.reload({ waitUntil: 'networkidle' });
-  await father.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  const recoveryDialog = father.getByRole('dialog', { name: 'Recuperação local' });
+  await recoveryDialog.waitFor();
+  const inspectRecovery = recoveryDialog.getByRole('button', { name: 'Ver alterações recuperadas', exact: true });
+  assert.equal(await inspectRecovery.isVisible(), true);
+  await inspectRecovery.click();
+  const protectedInspection = recoveryDialog.locator('[data-protected-recovery-inspection]');
+  await protectedInspection.waitFor();
+  assert.equal(await protectedInspection.count(), 1);
+  assert.equal(await protectedInspection.locator('[data-editorial-root]').count(), 1);
+  await assertNoFatherJargon(father, 'Recovery', '[role="dialog"][aria-label="Recuperação local"]');
+  const recoveryPreviewMobile = [];
   for (const width of [320, 360, 390]) {
-    await assertNoHorizontalOverflow(father, width, ['Recuperar minhas alterações']);
+    recoveryPreviewMobile.push(await assertRecoveryPreviewAtViewport(father, width, 44));
   }
+  const recoveryPreviewDesktop = await assertRecoveryPreviewAtViewport(father, 1280, 36);
   await father.getByRole('button', { name: 'Recuperar minhas alterações', exact: true }).click();
   await father.locator('[data-text-edit-textarea]').waitFor();
   const recovered = await state(father);
@@ -374,6 +485,8 @@ try {
   assert.equal(conflictOpenLatest.runtime?.text, 'Trabalho local preservado do Pai B');
   const conflictActions = pageB.locator('[data-persistence-conflict-actions]');
   assert.equal(await conflictActions.getByRole('button').count(), 2);
+  assert.equal((await pageB.locator('[data-save-state]').textContent())?.trim(), 'Conflito');
+  await assertNoFatherJargon(pageB, 'Conflict', '[data-vnext-shell]');
   for (const width of [320, 360, 390]) {
     await assertNoHorizontalOverflow(pageB, width, [
       'Abrir versão mais recente',
@@ -486,7 +599,7 @@ try {
     assert.equal(await pageB.getByRole('button', { name: /Ficha técnica essencial/ }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
-  await assertNoFatherJargon(pageB);
+  await assertNoFatherJargon(pageB, 'Library');
 
   const saveCountBeforeDispose = staleAfterArchive.saveDispatchCount;
   const disposal = await stalePage.evaluate(() => window.__W3I_PROOF__.dispose());
@@ -546,7 +659,16 @@ try {
         duplicateAtCreate,
         ambiguousCreateDispatches: afterDuplicate.createDispatchCount - createDispatchesBeforeDuplicate,
       },
-      W3I06: { recoveryBeforeCrash, storedRecovery, recovered, foreignScopeRecords: [] },
+      W3I06: {
+        recoveryBeforeCrash,
+        storedRecovery,
+        recovered,
+        foreignScopeRecords: [],
+        protectedInspectionMounted: true,
+        recoveredPreviewMounted: true,
+        recoveryPreviewMobile,
+        recoveryPreviewDesktop,
+      },
       W3I07: { openedA, openedB, conflictOpenLatest, openedLatest, protectedConflictRecovery },
       W3I08: { copyConflict, copyOpened, conflictCopy, sourceBeforeCopy, sourceAfterCopy },
       W3I09: { conflictCopyId, renamedReopen, staleBeforeArchive, staleAfterArchive, archivedAfterStaleSave },
@@ -558,12 +680,14 @@ try {
           || finalStateB.saveMutationIds.length !== new Set(finalStateB.saveMutationIds).size,
         duplicateCreateMutationIds: finalStateA.createMutationIds.length !== new Set(finalStateA.createMutationIds).size
           || finalStateB.createMutationIds.length !== new Set(finalStateB.createMutationIds).size,
+        fatherLanguageSurfaces: [...fatherLanguageSurfaces].sort(),
       },
     },
     mobileSanity: {
       widths: [320, 360, 390],
       horizontalOverflow: false,
       libraryEditorConflictRecoveryActionsReachable: true,
+      recoveryPreviewMountedVisibleAndFitted: true,
     },
     evidenceBoundary: {
       productionLayer: 'Real /v2 bootstrap and canonical production wiring smoke.',
@@ -575,6 +699,12 @@ try {
   };
   assert.equal(evidence.controlledFatherFlow.W3I10.duplicateSaveMutationIds, false);
   assert.equal(evidence.controlledFatherFlow.W3I10.duplicateCreateMutationIds, false);
+  assert.deepEqual(evidence.controlledFatherFlow.W3I10.fatherLanguageSurfaces, [
+    'Conflict',
+    'Editor',
+    'Library',
+    'Recovery',
+  ]);
   await writeFile(resolve(output, 'evidence.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   const evidenceSummary = {
     chromiumVersion: evidence.chromiumVersion,
@@ -612,10 +742,14 @@ try {
     assetRef: canonicalAssetRef,
     assetRuntimeUrlLeakedIntoDocument: false,
     recovery: {
-      choice: 'Recuperar trabalho',
+      choice: 'Ver alterações recuperadas, then Recuperar minhas alterações',
       beforeOpenSessionId: recoveryBeforeCrash.runtime.openSessionId,
       afterOpenSessionId: recovered.runtime.openSessionId,
       recoveredCanonicalText: recovered.runtime.text,
+      protectedInspectionMounted: true,
+      previewMountedVisibleAndFitted: true,
+      mobileWidths: recoveryPreviewMobile.map((entry) => entry.width),
+      desktopWidth: recoveryPreviewDesktop.width,
     },
     conflicts: {
       openLatestInstalledAuthoritativeText: openedLatest.runtime.text,

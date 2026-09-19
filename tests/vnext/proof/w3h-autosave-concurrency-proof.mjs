@@ -89,8 +89,8 @@ try {
   assert.notEqual(openedA.openSessionId, openedB.openSessionId);
   assert.equal(openedA.autosaveEnabled, true);
   assert.equal(openedB.autosaveEnabled, true);
-  assert.equal((await saveState(pageA).textContent())?.trim(), 'Saved');
-  assert.equal((await saveState(pageB).textContent())?.trim(), 'Saved');
+  assert.equal((await saveState(pageA).textContent())?.trim(), 'Salvo');
+  assert.equal((await saveState(pageB).textContent())?.trim(), 'Salvo');
 
   // Active Father text-edit must survive beyond debounce without dispatching remote Save.
   await editAndCommitForAutosave(pageA, 'A canonical dirty');
@@ -114,7 +114,7 @@ try {
     const current = window.__W3H_PROOF__.state();
     return current.savePhase === 'saving' && current.heldText === 'A autosave one';
   });
-  assert.equal((await saveState(pageA).textContent())?.trim(), 'Saving…');
+  assert.equal((await saveState(pageA).textContent())?.trim(), 'Salvando…');
   const firstSaving = await state(pageA);
   assert.equal(firstSaving.saveDispatchCount, 1);
   await pageA.evaluate(() => window.__W3H_PROOF__.releaseHeldSave());

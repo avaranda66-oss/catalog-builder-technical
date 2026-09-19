@@ -243,17 +243,17 @@ describe('W3.C Father-visible Save integration', () => {
 
     const textarea = beginTextEdit(container);
     fireEvent.change(textarea, { target: { value: 'Texto visível salvo' } });
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Unsaved changes');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
 
     fireEvent.click(button(container, 'save'));
     expect(saveCAS).toHaveBeenCalledTimes(1);
     expect(authoredText(request.documentSnapshot)).toBe('Texto visível salvo');
     expect(authoredText(session.getSnapshot().document)).toBe('Texto visível salvo');
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
-    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saving…'));
+    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvando…'));
 
     pending.resolve({ ok: true, value: envelope(request.documentSnapshot, 2, request.mutationId) });
-    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved'));
+    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvo'));
     expect(runtime.workspace.getSnapshot().dirty).toBe(false);
 
     fireEvent.click(button(container, 'undo'));
@@ -272,7 +272,7 @@ describe('W3.C Father-visible Save integration', () => {
 
     expect(saveCAS).not.toHaveBeenCalled();
     expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('まだ入力中');
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Unsaved changes');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
     expect(container.textContent).toContain('Conclua a composição de texto antes de salvar.');
   });
 
@@ -304,7 +304,7 @@ describe('W3.C Father-visible Save integration', () => {
     expect(resolved.save).toMatchObject({ phase: 'idle', label: 'Saved', dirty: false });
     expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
     expect(resolved.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvo');
   });
 
   it('clears only the authoring block when cancelling a draft over an already dirty canonical edit', () => {
@@ -391,7 +391,7 @@ describe('W3.C Father-visible Save integration', () => {
 
     expect(saveCAS).not.toHaveBeenCalled();
     expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe(invalidDraft);
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Unsaved changes');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
   });
 
   it('L17b blocks a stale draft after canonical Text changes and preserves the draft', () => {
@@ -428,7 +428,7 @@ describe('W3.C Father-visible Save integration', () => {
 
     fireEvent.change(textarea, { target: { value: 'Discard this draft' } });
     expect(runtime.workspace.getSnapshot().dirty).toBe(true);
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Unsaved changes');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
 
     const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
     expect(pageButtons).toHaveLength(2);
@@ -439,7 +439,7 @@ describe('W3.C Father-visible Save integration', () => {
     expect(runtime.workspace.getSnapshot().dirty).toBe(false);
     expect(runtime.workspace.getSnapshot().save.label).toBe('Saved');
     expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvo');
   });
 });
 
@@ -500,7 +500,7 @@ describe('W3.D typed authoring recovery overlays', () => {
 
     fireEvent.click(button(container, 'save'));
 
-    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Saved'));
+    await waitFor(() => expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvo'));
     expect(saveCAS).toHaveBeenCalledTimes(1);
     expect(runtime.workspace.getSnapshot()).toMatchObject({
       dirty: false,

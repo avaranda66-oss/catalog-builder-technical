@@ -129,10 +129,11 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-recovery-card + .vnext-recovery-card { margin-top: 12px; }
 .vnext-recovery-card h3 { margin: 0 0 6px; }
 .vnext-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vnext-recovery-actions button { min-height: 36px; }
 .vnext-recovery-inspection { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #eef2f7; color: #172033; }
 .vnext-recovery-inspection textarea { width: 100%; min-height: 72px; margin-top: 6px; }
-.vnext-recovery-document-preview { position: relative; min-width: 0; height: 260px; overflow: hidden; margin: 10px 0; }
-.vnext-recovery-document-preview > [data-editorial-root] { position: absolute; inset: 0 auto auto 0; width: 210mm; transform: scale(.28); transform-origin: top left; }
+.vnext-recovery-document-preview { min-width: 0; margin: 10px 0; }
+.vnext-recovery-document-preview > [data-editorial-root] { width: max-content; zoom: .28; }
 
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; clip-path: inset(50%) !important; }
 .vnext-library-shell, .vnext-library-shell * { box-sizing: border-box; }
@@ -229,6 +230,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-recovery-card { padding: 12px; }
   .vnext-recovery-actions { flex-direction: column; }
   .vnext-recovery-actions button { width: 100%; min-height: 44px; }
+  .vnext-recovery-document-preview > [data-editorial-root] { zoom: .26; }
   .vnext-library-header { min-height: 70px; gap: 12px; padding: 10px 14px; }
   .vnext-library-header .vnext-brand { min-width: 0; }
   .vnext-library-header .vnext-brand-mark { width: 34px; height: 34px; flex: none; }
