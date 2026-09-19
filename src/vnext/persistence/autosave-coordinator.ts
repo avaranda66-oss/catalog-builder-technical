@@ -97,6 +97,7 @@ export class AutosaveCoordinator {
     return snapshot.binding.kind === 'PERSISTED'
       && snapshot.dirty
       && snapshot.save.phase === 'idle'
+      && !this.options.workspace.getAuthoringBarrier().hasPendingDraft()
       && this.suspendedSessionToken !== this.sessionToken()
       && !this.disposed;
   }

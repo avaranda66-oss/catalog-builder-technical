@@ -38,9 +38,19 @@ async function openTextEditor(page) {
   await textarea(page).waitFor();
 }
 
-async function fillForAutosave(page, value) {
+async function fillDraft(page, value) {
   await openTextEditor(page);
   await textarea(page).fill(value);
+}
+
+async function commitDraft(page) {
+  await page.locator('[data-editor-action="commit-text"]').click();
+  await textarea(page).waitFor({ state: 'detached' });
+}
+
+async function editAndCommitForAutosave(page, value) {
+  await fillDraft(page, value);
+  await commitDraft(page);
 }
 
 async function waitSaved(page, expectedText) {
@@ -82,9 +92,24 @@ try {
   assert.equal((await saveState(pageA).textContent())?.trim(), 'Saved');
   assert.equal((await saveState(pageB).textContent())?.trim(), 'Saved');
 
-  // Controlled Father-flow: edit without Save, hold the repository response so Saving… is visible.
+  // Active Father text-edit must survive beyond debounce without dispatching remote Save.
+  await editAndCommitForAutosave(pageA, 'A canonical dirty');
+  await fillDraft(pageA, 'A autosave one');
+  const activeDraftBeforeDebounce = await state(pageA);
+  assert.equal(activeDraftBeforeDebounce.dirty, true);
+  assert.equal(activeDraftBeforeDebounce.text, 'A canonical dirty');
+  assert.equal(activeDraftBeforeDebounce.saveDispatchCount, 0);
+  await pageA.waitForTimeout(450);
+  const activeDraftAfterDebounce = await state(pageA);
+  assert.equal(await textarea(pageA).inputValue(), 'A autosave one');
+  assert.equal(activeDraftAfterDebounce.text, 'A canonical dirty');
+  assert.equal(activeDraftAfterDebounce.authoritativeSource.text, 'Persisted N');
+  assert.equal(activeDraftAfterDebounce.dirty, true);
+  assert.equal(activeDraftAfterDebounce.saveDispatchCount, 0);
+
+  // Father explicitly finishes the draft; only now autosave may dispatch.
   await pageA.evaluate(() => window.__W3H_PROOF__.holdNextSave());
-  await fillForAutosave(pageA, 'A autosave one');
+  await commitDraft(pageA);
   await pageA.waitForFunction(() => {
     const current = window.__W3H_PROOF__.state();
     return current.savePhase === 'saving' && current.heldText === 'A autosave one';
@@ -99,14 +124,12 @@ try {
 
   // L1/S1/L2: S1 is held, L2 is authored, then the older ACK lands.
   await pageA.evaluate(() => window.__W3H_PROOF__.holdNextSave());
-  await fillForAutosave(pageA, 'A S1');
+  await editAndCommitForAutosave(pageA, 'A S1');
   await pageA.waitForFunction(() => {
     const current = window.__W3H_PROOF__.state();
     return current.savePhase === 'saving' && current.heldText === 'A S1';
   });
-  await textarea(pageA).waitFor({ state: 'detached' });
-  await fillForAutosave(pageA, 'A S2 newer');
-  assert.equal(await textarea(pageA).inputValue(), 'A S2 newer');
+  await editAndCommitForAutosave(pageA, 'A S2 newer');
   await pageA.evaluate(() => window.__W3H_PROOF__.releaseHeldSave());
   await pageA.waitForFunction(() => {
     const current = window.__W3H_PROOF__.state();
@@ -115,7 +138,7 @@ try {
   const afterOlderAck = await state(pageA);
   assert.equal(afterOlderAck.authoritativeSource.text, 'A S1');
   assert.equal(afterOlderAck.authoritativeSource.remoteRevision, 3);
-  assert.equal(await textarea(pageA).inputValue(), 'A S2 newer');
+  assert.equal(afterOlderAck.text, 'A S2 newer');
   assert.notEqual(afterOlderAck.saveLabel, 'Saved');
   await waitSaved(pageA, 'A S2 newer');
   const afterFollowUp = await state(pageA);
@@ -123,7 +146,7 @@ try {
   assert.equal(afterFollowUp.saveDispatchCount, 3);
 
   // Tab B still owns the independent revision-N binding. Its autosave now loses strict CAS.
-  await fillForAutosave(pageB, 'B stale local');
+  await editAndCommitForAutosave(pageB, 'B stale local');
   await pageB.waitForFunction(() => window.__W3H_PROOF__.state().savePhase === 'conflict');
   const conflictB = await state(pageB);
   assert.equal(conflictB.binding.remoteRevision, 1);
@@ -156,12 +179,12 @@ try {
   assert.equal(openedLatest.localSequence, 0);
 
   // Advance A once more, then conflict B again from its now-current revision 4.
-  await fillForAutosave(pageA, 'A authoritative final');
+  await editAndCommitForAutosave(pageA, 'A authoritative final');
   await waitSaved(pageA, 'A authoritative final');
   const authoritativeFinal = await state(pageA);
   assert.equal(authoritativeFinal.authoritativeSource.remoteRevision, 5);
 
-  await fillForAutosave(pageB, 'B copy work');
+  await editAndCommitForAutosave(pageB, 'B copy work');
   await pageB.waitForFunction(() => window.__W3H_PROOF__.state().savePhase === 'conflict');
   const copyConflict = await state(pageB);
   assert.equal(copyConflict.binding.remoteRevision, 4);
@@ -172,9 +195,25 @@ try {
   );
   assert(sourceBeforeCopy);
 
-  // Father choice 2: Save my work as copy creates a fresh catalog and leaves source untouched.
+  // Father choice 2: while Save-as-copy is in flight, both conflict choices are disabled.
   const conflictActionsAgain = pageB.locator('[data-persistence-conflict-actions]');
+  await pageB.evaluate(() => window.__W3H_PROOF__.holdNextCopyCreate());
   await conflictActionsAgain.getByRole('button', { name: 'Salvar meu trabalho como cópia', exact: true }).click();
+  await pageB.waitForFunction(() => {
+    const current = window.__W3H_PROOF__.state();
+    return current.conflictResolutionState === 'resolving-save-as-copy'
+      && current.createDispatchCount === 1;
+  });
+  const conflictResolutionBusy = await state(pageB);
+  const busyButtons = conflictActionsAgain.getByRole('button');
+  assert.equal(await busyButtons.count(), 2);
+  assert.equal(await busyButtons.nth(0).isDisabled(), true);
+  assert.equal(await busyButtons.nth(1).isDisabled(), true);
+  await conflictActionsAgain.getByRole('button', { name: 'Salvando cópia…', exact: true }).waitFor();
+  await conflictActionsAgain.getByRole('button', { name: 'Abrir versão mais recente', exact: true }).waitFor();
+  await pageB.waitForTimeout(100);
+  assert.equal((await state(pageB)).createDispatchCount, 1);
+  await pageB.evaluate(() => window.__W3H_PROOF__.releaseHeldCreate());
   await pageB.waitForFunction(() => {
     const current = window.__W3H_PROOF__.state();
     return current.catalogId !== window.__W3H_PROOF__.SOURCE_ID
@@ -225,18 +264,23 @@ try {
       openedB,
       firstSaving,
       firstSaved,
+      activeDraftBeforeDebounce,
+      activeDraftAfterDebounce,
       afterOlderAck,
       afterFollowUp,
       conflictB,
       openedLatest,
       authoritativeFinal,
       copyConflict,
+      conflictResolutionBusy,
       copyOpened,
       copyAuthoritative,
       sourceBeforeCopy,
       sourceAfterCopy,
       strictCasConflictGeneratedByRepository: true,
       noAutomaticRetryAfterConflict: true,
+      activeTextEditNotInterruptedByAutosave: true,
+      conflictChoicesMutuallyExclusiveWhileResolving: true,
     },
     productionBootstrapSmoke: {
       route: '/v2?catalog=<controlled-id>',

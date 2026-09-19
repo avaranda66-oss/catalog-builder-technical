@@ -168,6 +168,15 @@ export class CatalogLibraryService {
     return this.createCoordinator.create(input, origin);
   }
 
+  private async continuePendingCreate(
+    authority: CatalogLibraryAuthority
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope> | undefined> {
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    const continued = await this.createCoordinator.continuePending();
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    return continued;
+  }
+
   async list(query: CatalogLibraryQuery = {}): Promise<CatalogLibraryResult<readonly CatalogListItem[]>> {
     const authority = this.captureAuthority();
     const view = query.view ?? 'active';
@@ -179,6 +188,8 @@ export class CatalogLibraryService {
 
   async createBlank(title = 'Novo catálogo'): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    if (continued) return continued;
     let documentSnapshot;
     try {
       documentSnapshot = createCatalogDocument(this.options.createId, title.trim() || 'Novo catálogo');
@@ -190,6 +201,8 @@ export class CatalogLibraryService {
 
   async duplicate(catalogId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    if (continued) return continued;
     const read = await this.options.repository.getCatalog(catalogId);
     if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
     if (!read.ok) return failure(read.error.code, read.error.message);
@@ -222,6 +235,8 @@ export class CatalogLibraryService {
 
   async createFromStarter(starterId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    if (continued) return continued;
     const starter = this.options.starterRegistry?.get(starterId);
     if (!starter) return failure('STARTER_NOT_FOUND', 'The selected Starter does not exist');
 
@@ -244,6 +259,8 @@ export class CatalogLibraryService {
     sourceRemoteRevision: number
   ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    if (continued) return continued;
     let documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
     try {
       documentSnapshot = this.cloneService.clone(sourceDocument, {

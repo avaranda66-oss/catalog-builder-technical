@@ -8,6 +8,7 @@ import type { PersistenceWorkspace } from './workspace';
 
 export type ConflictResolutionFailureCode =
   | 'NOT_IN_CONFLICT'
+  | 'RESOLUTION_IN_PROGRESS'
   | 'STALE_RESULT'
   | 'LOCAL_PROTECTION_UNAVAILABLE'
   | 'REMOTE_DIVERGENCE'
@@ -28,6 +29,18 @@ export type ConflictResolutionResult =
       readonly ok: false;
       readonly error: { readonly code: ConflictResolutionFailureCode; readonly message?: string };
     };
+
+export type ConflictResolutionState =
+  | 'idle'
+  | 'resolving-open-latest'
+  | 'resolving-save-as-copy';
+
+type ConflictResolutionKind = 'open-latest' | 'save-as-copy';
+
+interface ActiveResolution {
+  readonly kind: ConflictResolutionKind;
+  readonly promise: Promise<ConflictResolutionResult>;
+}
 
 interface ConflictGuard {
   readonly session: DocumentSession;
@@ -57,7 +70,49 @@ function failure(
 }
 
 export class ConflictResolutionCoordinator {
+  private readonly listeners = new Set<() => void>();
+  private activeResolution: ActiveResolution | undefined;
+
   constructor(private readonly options: ConflictResolutionCoordinatorOptions) {}
+
+  readonly subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  readonly getState = (): ConflictResolutionState => {
+    if (this.activeResolution?.kind === 'open-latest') return 'resolving-open-latest';
+    if (this.activeResolution?.kind === 'save-as-copy') return 'resolving-save-as-copy';
+    return 'idle';
+  };
+
+  private publish(): void {
+    for (const listener of this.listeners) listener();
+  }
+
+  private runExclusive(
+    kind: ConflictResolutionKind,
+    operation: () => Promise<ConflictResolutionResult>
+  ): Promise<ConflictResolutionResult> {
+    if (this.activeResolution) {
+      if (this.activeResolution.kind === kind) return this.activeResolution.promise;
+      return Promise.resolve(failure(
+        'RESOLUTION_IN_PROGRESS',
+        'Outra escolha de conflito já está sendo concluída.'
+      ));
+    }
+
+    const execution = operation();
+    this.activeResolution = { kind, promise: execution };
+    this.publish();
+    const clear = () => {
+      if (this.activeResolution?.promise !== execution) return;
+      this.activeResolution = undefined;
+      this.publish();
+    };
+    void execution.then(clear, clear);
+    return execution;
+  }
 
   private capture(): ConflictGuard | undefined {
     const snapshot = this.options.workspace.getSnapshot();
@@ -113,7 +168,7 @@ export class ConflictResolutionCoordinator {
     return undefined;
   }
 
-  async openLatest(): Promise<ConflictResolutionResult> {
+  private async openLatestOnce(): Promise<ConflictResolutionResult> {
     const guard = this.capture();
     if (!guard) return failure('NOT_IN_CONFLICT');
     const protectionFailure = await this.protectLocal(guard);
@@ -130,12 +185,32 @@ export class ConflictResolutionCoordinator {
     return { ok: true, catalogId: guard.catalogId, kind: 'latest' };
   }
 
-  async saveAsCopy(): Promise<ConflictResolutionResult> {
+  openLatest(): Promise<ConflictResolutionResult> {
+    return this.runExclusive('open-latest', () => this.openLatestOnce());
+  }
+
+  private async saveAsCopyOnce(): Promise<ConflictResolutionResult> {
     const guard = this.capture();
     if (!guard) return failure('NOT_IN_CONFLICT');
     const protectionFailure = await this.protectLocal(guard);
     if (protectionFailure) return protectionFailure;
     if (!this.isCurrent(guard)) return failure('STALE_RESULT');
+
+    const continued = await this.options.createCoordinator.continuePending();
+    if (continued) {
+      if (!continued.ok) {
+        return failure(continued.error.code as ConflictResolutionFailureCode, continued.error.message);
+      }
+      if (!this.isCurrent(guard)) return failure('STALE_RESULT');
+      const openedPending = await this.options.reopenCoordinator.open(
+        continued.value.catalogId,
+        { allowDiscardUnsaved: true }
+      );
+      if (!openedPending.ok) {
+        return failure(openedPending.error.code as ConflictResolutionFailureCode, openedPending.error.message);
+      }
+      return { ok: true, catalogId: continued.value.catalogId, kind: 'copy' };
+    }
 
     let clone: CatalogDocument;
     try {
@@ -163,5 +238,9 @@ export class ConflictResolutionCoordinator {
       return failure(opened.error.code as ConflictResolutionFailureCode, opened.error.message);
     }
     return { ok: true, catalogId: created.value.catalogId, kind: 'copy' };
+  }
+
+  saveAsCopy(): Promise<ConflictResolutionResult> {
+    return this.runExclusive('save-as-copy', () => this.saveAsCopyOnce());
   }
 }

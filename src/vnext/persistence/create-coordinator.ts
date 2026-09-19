@@ -165,7 +165,7 @@ export class PreparedCatalogCreateCoordinator {
     return verified;
   }
 
-  private async continuePending(authority: CreateAuthority): Promise<PreparedCreateResult | undefined> {
+  private async continuePendingForAuthority(authority: CreateAuthority): Promise<PreparedCreateResult | undefined> {
     if (!this.pendingCreate) return undefined;
     if (this.sameAuthority(this.pendingCreate.authority, authority)) {
       return this.reconcile(this.pendingCreate);
@@ -174,12 +174,16 @@ export class PreparedCatalogCreateCoordinator {
     return undefined;
   }
 
+  async continuePending(): Promise<PreparedCreateResult | undefined> {
+    return this.continuePendingForAuthority(this.captureAuthority());
+  }
+
   async create(
     input: CatalogDocument,
     origin?: CatalogOriginMetadata
   ): Promise<PreparedCreateResult> {
     const authority = this.captureAuthority();
-    const continued = await this.continuePending(authority);
+    const continued = await this.continuePendingForAuthority(authority);
     if (continued) return continued;
 
     let documentSnapshot: CatalogDocument;

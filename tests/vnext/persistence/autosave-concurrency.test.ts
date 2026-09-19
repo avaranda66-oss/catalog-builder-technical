@@ -194,32 +194,35 @@ describe('W3.H deterministic autosave coordinator', () => {
     expect(repository.current(document.id).remoteRevision).toBe(1);
   });
 
-  it('AUTOSAVE-08 blocks on AuthoringBarrier without retry storm and resumes after the barrier becomes safe', async () => {
+  it('AUTOSAVE-08 defers before prepareForSave while a draft is pending, without retry storm, then resumes', async () => {
     const document = documentFixture();
     const repository = new StrictCasCatalogRepository(document);
     const clock = new ManualAutosaveClock();
     const active = runtimeFixture(repository, document, 700, { autosaveClock: clock });
     let blocked = true;
+    const prepareForSave = vi.fn(() => blocked
+      ? { ok: false as const, reason: 'COMPOSITION_ACTIVE' as const, message: 'Finish composition' }
+      : { ok: true as const });
     const binding = active.runtime.workspace.getSnapshot().binding;
     active.runtime.registerAuthoringBarrier(binding.openSessionId, {
       hasPendingDraft: () => blocked,
-      prepareForSave: () => blocked
-        ? { ok: false, reason: 'COMPOSITION_ACTIVE', message: 'Finish composition' }
-        : { ok: true },
+      prepareForSave,
     });
 
     rename(active, 'Barrier edit');
     clock.advanceBy(25);
     await settleAsyncWork();
     expect(repository.saveCAS).toHaveBeenCalledTimes(0);
+    expect(prepareForSave).not.toHaveBeenCalled();
     expect(active.runtime.workspace.getSnapshot()).toMatchObject({
       dirty: true,
-      save: { phase: 'blocked', label: 'Unsaved changes' },
+      save: { phase: 'idle', label: 'Unsaved changes' },
     });
     expect(clock.pendingCount()).toBe(0);
     clock.advanceBy(1000);
     await settleAsyncWork();
     expect(repository.saveCAS).toHaveBeenCalledTimes(0);
+    expect(prepareForSave).not.toHaveBeenCalled();
 
     blocked = false;
     active.runtime.workspace.notifyDraftStateChanged();
@@ -227,6 +230,7 @@ describe('W3.H deterministic autosave coordinator', () => {
     clock.advanceBy(25);
     await settleAsyncWork();
     expect(repository.saveCAS).toHaveBeenCalledTimes(1);
+    expect(prepareForSave).toHaveBeenCalledTimes(1);
     expect(active.runtime.workspace.getSnapshot().save.label).toBe('Saved');
   });
 

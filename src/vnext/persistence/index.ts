@@ -60,6 +60,7 @@ export type {
   ConflictResolutionCoordinatorOptions,
   ConflictResolutionFailureCode,
   ConflictResolutionResult,
+  ConflictResolutionState,
 } from './conflict-resolution-coordinator';
 export { VNextPersistenceRuntime } from './runtime';
 export type { VNextPersistenceRuntimeOptions } from './runtime';

@@ -125,6 +125,9 @@ export interface EditorWorkspacePersistenceProps {
   readonly assetBridge?: AssetPersistenceBridge;
 }
 
+const subscribeToNothing = (_listener: () => void): (() => void) => () => undefined;
+const idleConflictResolutionState = () => 'idle' as const;
+
 export function EditorWorkspace({
   session,
   persistence,
@@ -135,6 +138,13 @@ export function EditorWorkspace({
   onRequestLibrary?: () => void;
 }) {
   const snapshot = useDocumentSession(session);
+  const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
+  const conflictResolutionState = React.useSyncExternalStore(
+    conflictResolutionCoordinator?.subscribe ?? subscribeToNothing,
+    conflictResolutionCoordinator?.getState ?? idleConflictResolutionState,
+    conflictResolutionCoordinator?.getState ?? idleConflictResolutionState
+  );
+  const conflictResolutionBusy = conflictResolutionState !== 'idle';
   const { document, canUndo, canRedo } = snapshot;
   const [editorState, setEditorState] = React.useState<EditorSelectionState>({
     activePageId: document.pages[0].id,
@@ -1274,6 +1284,7 @@ export function EditorWorkspace({
               <button
                 type="button"
                 className="vnext-inspector-action"
+                disabled={conflictResolutionBusy}
                 onClick={() => {
                   void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
                     if (!result.ok) {
@@ -1282,11 +1293,14 @@ export function EditorWorkspace({
                   });
                 }}
               >
-                Abrir versão mais recente
+                {conflictResolutionState === 'resolving-open-latest'
+                  ? 'Abrindo versão mais recente…'
+                  : 'Abrir versão mais recente'}
               </button>
               <button
                 type="button"
                 className="vnext-inspector-action"
+                disabled={conflictResolutionBusy}
                 onClick={() => {
                   void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
                     if (!result.ok) {
@@ -1295,7 +1309,9 @@ export function EditorWorkspace({
                   });
                 }}
               >
-                Salvar meu trabalho como cópia
+                {conflictResolutionState === 'resolving-save-as-copy'
+                  ? 'Salvando cópia…'
+                  : 'Salvar meu trabalho como cópia'}
               </button>
             </div>
           )}

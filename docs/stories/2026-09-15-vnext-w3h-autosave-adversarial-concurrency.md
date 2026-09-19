@@ -66,6 +66,9 @@ Como o Pai (usuário não técnico), quero que minhas alterações sejam salvas 
 - [x] Add `tests/vnext/proof/w3h-autosave-concurrency-proof.mjs` and wire it into required Quality Gates.
 - [x] Run focused tests, lint, typecheck, full tests, build, W3.H Chromium proof, and canonical proof regressions.
 - [x] Commit, push, and open exactly one PR (#37). Exact-head CI is the final promotion evidence; do not merge.
+- [x] Principal narrow amendment: automatic autosave respects active authoring drafts while Manual Save retains explicit `prepareForSave()` semantics.
+- [x] Principal narrow amendment: conflict resolution is single-flight for Open latest / Save-as-copy, including cross-action races and same-action joins.
+- [x] Principal narrow amendment: pending create reconciliation precedes Blank, Duplicate, Starter, and conflict-copy preparation/identity allocation.
 
 ## File list
 
@@ -84,9 +87,11 @@ Como o Pai (usuário não técnico), quero que minhas alterações sejam salvas 
 - `tests/vnext/application/w3h-online-retry.test.ts`
 - `tests/vnext/persistence/archive-race-w3h.test.ts`
 - `tests/vnext/persistence/autosave-concurrency.test.ts`
+- `tests/vnext/persistence/autosave-authoring-draft.test.tsx`
 - `tests/vnext/persistence/conflict-resolution.test.ts`
 - `tests/vnext/persistence/create-coordinator-w3h.test.ts`
 - `tests/vnext/persistence/w3h-fixtures.ts`
+- `tests/vnext/library/pending-create-preparation.test.ts`
 - `tests/vnext/proof/architecture-boundary.test.ts`
 - `tests/vnext/proof/fixtures/w3h-autosave-browser.html`
 - `tests/vnext/proof/fixtures/w3h-autosave-browser.tsx`

@@ -4,7 +4,9 @@ import type { CatalogPersistenceEnvelope, PersistenceResult, SaveCatalogCasReque
 import {
   ManualAutosaveClock,
   StrictCasCatalogRepository,
+  deferred,
   documentFixture,
+  idSequence,
   runtimeFixture,
   settleAsyncWork,
   uuid,
@@ -20,6 +22,7 @@ async function makeConflict(options: {
   readonly resolveAssetUrls?: (
     document: ReturnType<typeof documentFixture>
   ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
+  readonly tabBCreateId?: () => string;
 } = {}) {
   const document = documentFixture(uuid(100), 'Original', options.withAsset ?? false);
   const repository = new StrictCasCatalogRepository(document);
@@ -31,6 +34,7 @@ async function makeConflict(options: {
     autosaveClock: clockB,
     ...(recoveryRepository ? { recoveryRepository } : {}),
     ...(options.resolveAssetUrls ? { resolveAssetUrls: options.resolveAssetUrls } : {}),
+    ...(options.tabBCreateId ? { createId: options.tabBCreateId } : {}),
   });
   rename(tabA, 'A1 authoritative');
   expect(await tabA.runtime.manualSave()).toMatchObject({ ok: true });
@@ -164,6 +168,164 @@ describe('W3.H Father conflict resolution', () => {
     expect(active.session.getSnapshot()).toMatchObject({ canUndo: false, canRedo: false, localSequence: 0 });
     expect(active.dirty).toBe(false);
     expect(state.repository.current(state.document.id)).toEqual(originalBeforeCopy);
+  });
+
+  it('RACE-OPEN-VS-COPY keeps Save-as-copy authoritative while its create is in flight', async () => {
+    const state = await makeConflict();
+    const createGate = deferred<void>();
+    state.repository.createOverride = async (request) => {
+      await createGate.promise;
+      return state.repository.commitCreate(request);
+    };
+
+    const copy = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
+    await settleAsyncWork(4);
+    expect(state.tabB.runtime.conflictResolutionCoordinator.getState()).toBe('resolving-save-as-copy');
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+
+    await expect(state.tabB.runtime.conflictResolutionCoordinator.openLatest()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'RESOLUTION_IN_PROGRESS' },
+    });
+    expect(state.repository.getCatalog).not.toHaveBeenCalled();
+    expect(state.tabB.runtime.workspace.getSnapshot().save.phase).toBe('conflict');
+    expect(state.tabB.runtime.workspace.getSnapshot().session.getSnapshot().document.title)
+      .toBe('B1 local');
+
+    createGate.resolve();
+    const result = await copy;
+    expect(result).toMatchObject({ ok: true, kind: 'copy' });
+    expect(state.repository.catalogCount()).toBe(2);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+    expect(state.tabB.runtime.conflictResolutionCoordinator.getState()).toBe('idle');
+  });
+
+  it('RACE-COPY-VS-OPEN keeps Open-latest authoritative while its fetch is in flight', async () => {
+    const state = await makeConflict();
+    const fetchGate = deferred<void>();
+    state.repository.getOverride = async (catalogId) => {
+      await fetchGate.promise;
+      return state.repository.getCatalog(catalogId);
+    };
+
+    const open = state.tabB.runtime.conflictResolutionCoordinator.openLatest();
+    await settleAsyncWork(4);
+    expect(state.tabB.runtime.conflictResolutionCoordinator.getState()).toBe('resolving-open-latest');
+    expect(state.repository.getCatalog).toHaveBeenCalledTimes(1);
+
+    await expect(state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'RESOLUTION_IN_PROGRESS' },
+    });
+    expect(state.repository.createCatalog).not.toHaveBeenCalled();
+    expect(state.tabB.runtime.workspace.getSnapshot().save.phase).toBe('conflict');
+    expect(state.tabB.runtime.workspace.getSnapshot().session.getSnapshot().document.title)
+      .toBe('B1 local');
+
+    fetchGate.resolve();
+    await expect(open).resolves.toMatchObject({ ok: true, kind: 'latest' });
+    expect(state.repository.getCatalog).toHaveBeenCalledTimes(2);
+    expect(state.repository.createCatalog).not.toHaveBeenCalled();
+    expect(state.tabB.runtime.conflictResolutionCoordinator.getState()).toBe('idle');
+  });
+
+  it('DOUBLE COPY joins one create flight and produces exactly one copy identity/mutation', async () => {
+    const state = await makeConflict();
+    const createGate = deferred<void>();
+    state.repository.createOverride = async (request) => {
+      await createGate.promise;
+      return state.repository.commitCreate(request);
+    };
+
+    const first = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
+    const second = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
+    expect(second).toBe(first);
+    await settleAsyncWork(4);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+    const prepared = state.repository.createCatalog.mock.calls[0]?.[0];
+    expect(prepared?.documentSnapshot.id).toBeTruthy();
+    expect(prepared?.mutationId).toBeTruthy();
+
+    createGate.resolve();
+    const [left, right] = await Promise.all([first, second]);
+    expect(left).toEqual(right);
+    expect(left).toMatchObject({ ok: true, kind: 'copy' });
+    expect(state.repository.catalogCount()).toBe(2);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('DOUBLE OPEN joins one authoritative reopen flight', async () => {
+    const state = await makeConflict();
+    const fetchGate = deferred<void>();
+    state.repository.getOverride = async (catalogId) => {
+      await fetchGate.promise;
+      return state.repository.getCatalog(catalogId);
+    };
+
+    const first = state.tabB.runtime.conflictResolutionCoordinator.openLatest();
+    const second = state.tabB.runtime.conflictResolutionCoordinator.openLatest();
+    expect(second).toBe(first);
+    await settleAsyncWork(4);
+    expect(state.repository.getCatalog).toHaveBeenCalledTimes(1);
+
+    fetchGate.resolve();
+    const [left, right] = await Promise.all([first, second]);
+    expect(left).toEqual(right);
+    expect(left).toMatchObject({ ok: true, kind: 'latest' });
+    expect(state.repository.getCatalog).toHaveBeenCalledTimes(2);
+    expect(state.repository.createCatalog).not.toHaveBeenCalled();
+  });
+
+  it('PENDING-PREP-04 reconciles exact C2/M2 before allocating any C3 clone identities', async () => {
+    const createId = vi.fn(idSequence(92000));
+    const state = await makeConflict({ tabBCreateId: createId });
+    state.repository.createOverride = async () => ({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+    state.repository.getOverride = async () => ({
+      ok: false,
+      error: { code: 'REMOTE_FAILURE' },
+    });
+
+    await expect(state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+    const pendingRequest = state.repository.createCatalog.mock.calls[0]?.[0];
+    expect(pendingRequest).toBeDefined();
+    const allocationsAfterC2 = createId.mock.calls.length;
+    expect(allocationsAfterC2).toBeGreaterThan(0);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+    expect(state.tabB.runtime.workspace.getSnapshot().save.phase).toBe('conflict');
+    expect(state.tabB.runtime.workspace.getSnapshot().session.getSnapshot().document.title)
+      .toBe('B1 local');
+
+    state.repository.getOverride = async () => ({
+      ok: false,
+      error: { code: 'REMOTE_FAILURE' },
+    });
+    await expect(state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+    expect(createId).toHaveBeenCalledTimes(allocationsAfterC2);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+    expect(state.tabB.runtime.workspace.getSnapshot().save.phase).toBe('conflict');
+    expect(state.tabB.runtime.workspace.getSnapshot().session.getSnapshot().document.title)
+      .toBe('B1 local');
+
+    const committed = state.repository.commitCreate(pendingRequest!);
+    expect(committed.ok).toBe(true);
+    const resolved = await state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
+    expect(resolved).toMatchObject({
+      ok: true,
+      kind: 'copy',
+      catalogId: pendingRequest!.documentSnapshot.id,
+    });
+    expect(createId).toHaveBeenCalledTimes(allocationsAfterC2);
+    expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
+    expect(state.repository.catalogCount()).toBe(2);
   });
 
   it('keeps B local authored state when an in-flight stale request later resolves to real CAS conflict', async () => {

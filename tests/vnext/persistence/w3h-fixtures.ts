@@ -135,6 +135,10 @@ export class StrictCasCatalogRepository implements CatalogRepository {
       this.createOverride = undefined;
       return override(request);
     }
+    return this.commitCreate(request);
+  });
+
+  commitCreate(request: CreateCatalogRequest): PersistenceResult<CatalogPersistenceEnvelope> {
     if (this.catalogs.has(request.documentSnapshot.id)) {
       return { ok: false, error: { code: 'CONFLICT' } };
     }
@@ -151,7 +155,7 @@ export class StrictCasCatalogRepository implements CatalogRepository {
       return { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } };
     }
     return { ok: true, value: created };
-  });
+  }
 
   readonly saveCAS = vi.fn(async (request: SaveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
     const override = this.saveOverride;
@@ -288,6 +292,9 @@ export interface RuntimeFixtureOptions {
   readonly recoveryRepository?: RecoveryRepository;
   readonly authLineage?: string;
   readonly authorityScopeId?: string;
+  readonly createId?: () => string;
+  readonly createMutationId?: () => string;
+  readonly createOpenSessionId?: () => string;
   readonly resolveAssetUrls?: (
     document: CatalogDocument
   ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
@@ -300,15 +307,15 @@ export function runtimeFixture(
   options: RuntimeFixtureOptions = {}
 ) {
   const applicationDependencies: ApplicationExecutionDependencies = {
-    createId: idSequence(seed + 10000),
+    createId: options.createId ?? idSequence(seed + 10000),
   };
   const session = createDocumentSession(document, applicationDependencies);
   const runtime = new VNextPersistenceRuntime({
     session,
     repository,
     applicationDependencies,
-    createMutationId: idSequence(seed + 20000),
-    createOpenSessionId: idSequence(seed + 30000),
+    createMutationId: options.createMutationId ?? idSequence(seed + 20000),
+    createOpenSessionId: options.createOpenSessionId ?? idSequence(seed + 30000),
     authLineage: options.authLineage ?? 'user-a:0',
     authorityScopeId: options.authorityScopeId ?? 'scope:user-a',
     binding: repository.current(document.id),

@@ -145,10 +145,18 @@ interface HeldSave {
   readonly resolve: (result: PersistenceResult<CatalogPersistenceEnvelope>) => void;
 }
 
+interface HeldCreate {
+  readonly request: CreateCatalogRequest;
+  readonly resolve: (result: PersistenceResult<CatalogPersistenceEnvelope>) => void;
+}
+
 class SharedStrictCasRepository implements CatalogRepository {
   private holdNext = false;
   private held: HeldSave | undefined;
+  private holdNextCreate = false;
+  private heldCreate: HeldCreate | undefined;
   saveDispatchCount = 0;
+  createDispatchCount = 0;
 
   listCatalogs = async (query: CatalogListQuery = {}): Promise<PersistenceResult<readonly CatalogListItem[]>> => {
     const items = all()
@@ -163,11 +171,22 @@ class SharedStrictCasRepository implements CatalogRepository {
   };
 
   createCatalog = async (request: CreateCatalogRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
+    this.createDispatchCount += 1;
+    if (this.holdNextCreate) {
+      this.holdNextCreate = false;
+      return new Promise((resolve) => {
+        this.heldCreate = { request, resolve };
+      });
+    }
+    return this.commitCreate(request);
+  };
+
+  private commitCreate(request: CreateCatalogRequest): PersistenceResult<CatalogPersistenceEnvelope> {
     if (read(request.documentSnapshot.id)) return { ok: false, error: { code: 'CONFLICT' } };
     const created = envelope(request.documentSnapshot, 1, request.mutationId, request.origin);
     write(created);
     return { ok: true, value: created };
-  };
+  }
 
   saveCAS = async (request: SaveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>> => {
     this.saveDispatchCount += 1;
@@ -211,6 +230,18 @@ class SharedStrictCasRepository implements CatalogRepository {
     held.resolve(this.commitSave(held.request));
   }
 
+  holdNextCopyCreate(): void {
+    if (this.heldCreate) throw new Error('A create is already held');
+    this.holdNextCreate = true;
+  }
+
+  releaseHeldCreate(): void {
+    const held = this.heldCreate;
+    if (!held) throw new Error('No held create to release');
+    this.heldCreate = undefined;
+    held.resolve(this.commitCreate(held.request));
+  }
+
   private commitSave(request: SaveCatalogCasRequest): PersistenceResult<CatalogPersistenceEnvelope> {
     const current = read(request.catalogId);
     if (!current) return { ok: false, error: { code: 'NOT_FOUND' } };
@@ -248,7 +279,7 @@ const runtime = new VNextPersistenceRuntime({
   authLineage: 'proof-user:0',
   authorityScopeId: 'proof:shared-strict-cas',
   binding: authoritativeAtOpen,
-  autosave: { debounceMs: 80 },
+  autosave: { debounceMs: 300 },
 });
 
 function activeState() {
@@ -270,6 +301,8 @@ function activeState() {
     binding,
     autosaveEnabled: Boolean(runtime.autosaveCoordinator),
     saveDispatchCount: repository.saveDispatchCount,
+    createDispatchCount: repository.createDispatchCount,
+    conflictResolutionState: runtime.conflictResolutionCoordinator.getState(),
     heldText: heldRequest ? documentText(heldRequest.documentSnapshot) : null,
     authoritativeSource: authoritative ? {
       catalogId: authoritative.catalogId,
@@ -288,6 +321,8 @@ declare global {
       state(): ReturnType<typeof activeState>;
       holdNextSave(): void;
       releaseHeldSave(): void;
+      holdNextCopyCreate(): void;
+      releaseHeldCreate(): void;
       authoritative(catalogId: string): {
         readonly catalogId: string;
         readonly remoteRevision: number;
@@ -303,6 +338,8 @@ window.__W3H_PROOF__ = {
   state: activeState,
   holdNextSave: () => repository.holdNextSave(),
   releaseHeldSave: () => repository.releaseHeldSave(),
+  holdNextCopyCreate: () => repository.holdNextCopyCreate(),
+  releaseHeldCreate: () => repository.releaseHeldCreate(),
   authoritative: (catalogId) => {
     const value = read(catalogId);
     return value ? {
