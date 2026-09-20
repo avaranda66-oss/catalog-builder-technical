@@ -31,7 +31,7 @@ Current roadmap state:
 - **W6 — NOT STARTED**
 - **W7 — NOT STARTED**
 
-The next gate is the docs/governance-only durable W3 closeout PR from `docs/vnext-w3-canonical-closeout`. That PR must synchronize this file, `PRINCIPAL-HANDOFF.md`, and `PRINCIPAL-AUDITOR-HANDOFF.md`, pass its exact-head required Quality Gate, receive Principal audit, and remain unmerged until the user gives explicit authorization. No W4 implementation begins before that gate becomes canonical.
+The durable W3 closeout is **COMPLETE / CANONICAL**. W4 is the next implementation wave, but it is **NOT STARTED** and is not implicitly authorized. Before any W4 implementation, the Principal must reconstruct GitHub live, perform the W4 preflight, freeze the W4 scope/contract, and provide a separate implementation prompt. The canonical SHA, tree, and Quality Gate provenance of this durable closeout must be reconstructed from GitHub live; this document does not predict them.
 
 Always reconstruct GitHub live before acting. GitHub commits, PR state, checks, and repository evidence outrank historical story status lines or agent reports.
 
@@ -46,7 +46,7 @@ All rows below were reconstructed from live merged PRs, canonical commits, repos
 | W3.B | Supabase strict-CAS persistence, mutation replay, and immutable history | #31 | `a0bee489deff7af78e056463cf763f3ba4844105` | `8c87e59a32f3761d9d6d21a023e132e3b08a6f09` | `34723686552` SUCCESS | COMPLETE / CANONICAL |
 | W3.C | Manual Save and canonical exact reopen | #32 | `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` | `d08158a1c2f3e0e10c6812008e1356322815d81f` | `34730115210` SUCCESS | COMPLETE / CANONICAL |
 | W3.D | Revision-aware local crash Recovery | #33 | `e37cdf3105626ce83763964f8d2a56a1fda1e01b` | `c7bf0865b9f51dd4ea624a196f08dec496aeed67` | `34844237602` SUCCESS | COMPLETE / CANONICAL |
-| W3.E | Catalog Library, Blank creation, Rename, and Archive | #34 | `cd4d20fbdfd89b6385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS | COMPLETE / CANONICAL |
+| W3.E | Catalog Library, Blank creation, Rename, and Archive | #34 | `cd4d20fbdfd89d1896385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS | COMPLETE / CANONICAL |
 | W3.F | Registered Starter and Duplicate with complete identity closure | #35 | `266331618c5677e1079865f8d57e2d479a9601f1` | `a6f3df2125e697d2e5ebf855db194afcaf99d5a0` | `35020085786` SUCCESS | COMPLETE / CANONICAL |
 | W3.G | Immutable AssetRef persistence bridge | #36 | `a44a710836ed8cbaba48dccd541614304e10cb8a` | `1bc573e061bb2a732751c8650ba86fc0d5c92835` | `35034657054` SUCCESS | COMPLETE / CANONICAL |
 | W3.H | Debounced autosave and adversarial concurrency/conflict lifecycle | #37 | `ac2b45bd5fe6971c0f1885b88884102d01114b98` | `18dc40ce8856483d011a7f0d266f02c4a39ff347` | `35453791083` SUCCESS | COMPLETE / CANONICAL |
@@ -191,7 +191,7 @@ Advisories are separate from canonical acceptance:
 
 ## HISTORICAL STATUS AND RECONSTRUCTION
 
-Older stories and handoff snapshots truthfully preserve the state at the time they were written. Phrases such as `W3.B IMPLEMENTED / UNDER REVIEW`, `W3.C NOT STARTED`, `W3.I HAS NOT STARTED`, or pre-merge W3.I status are historical only. They are not current-state authority.
+Status/delivery lines in historical W3 stories and status/delivery preface text in the W3 persistence contract are point-in-time historical evidence. They do not override GitHub live or the current durable handoffs. The frozen architecture and contract content itself remains authoritative unless a later canonical contract supersedes it.
 
 Recommended reconstruction order:
 

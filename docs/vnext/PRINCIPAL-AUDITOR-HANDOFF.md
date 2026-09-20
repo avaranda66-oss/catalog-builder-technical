@@ -34,7 +34,7 @@ Wave state:
 - W6 — NOT STARTED
 - W7 — NOT STARTED
 
-No next implementation wave starts before the durable W3 closeout docs PR is canonical. The current gate is the single docs/governance-only PR from `docs/vnext-w3-canonical-closeout`; it must pass exact-head CI, be audited on that exact head/tree, and must not merge without explicit user authorization.
+The durable W3 closeout is **COMPLETE / CANONICAL**. No next implementation wave starts without its own canonical predecessor and Principal gate. The next durable gate is **W4 PRINCIPAL PREFLIGHT**; W4 is not started or implicitly authorized.
 
 ## 2. W3 CANONICAL LEDGER
 
@@ -45,13 +45,13 @@ No next implementation wave starts before the durable W3 closeout docs PR is can
 | W3.B | Supabase strict CAS + immutable history | #31 | `a0bee489deff7af78e056463cf763f3ba4844105` | `8c87e59a32f3761d9d6d21a023e132e3b08a6f09` | `34723686552` SUCCESS |
 | W3.C | Manual Save + canonical reopen | #32 | `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` | `d08158a1c2f3e0e10c6812008e1356322815d81f` | `34730115210` SUCCESS |
 | W3.D | Local revision-aware Recovery | #33 | `e37cdf3105626ce83763964f8d2a56a1fda1e01b` | `c7bf0865b9f51dd4ea624a196f08dec496aeed67` | `34844237602` SUCCESS |
-| W3.E | Catalog Library | #34 | `cd4d20fbdfd89b6385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS |
+| W3.E | Catalog Library | #34 | `cd4d20fbdfd89d1896385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS |
 | W3.F | Starter / Duplicate identity closure | #35 | `266331618c5677e1079865f8d57e2d479a9601f1` | `a6f3df2125e697d2e5ebf855db194afcaf99d5a0` | `35020085786` SUCCESS |
 | W3.G | Asset Persistence Bridge | #36 | `a44a710836ed8cbaba48dccd541614304e10cb8a` | `1bc573e061bb2a732751c8650ba86fc0d5c92835` | `35034657054` SUCCESS |
 | W3.H | Autosave / adversarial concurrency | #37 | `ac2b45bd5fe6971c0f1885b88884102d01114b98` | `18dc40ce8856483d011a7f0d266f02c4a39ff347` | `35453791083` SUCCESS |
 | W3.I | Father Browser Flow / W3 closeout | #38 | `00b78e6d582a2868e4b0447cb3dee2bf53732299` | `e198bc8c576a54537ad0b031743b53091ed0ed60` | `35516528303` SUCCESS |
 
-Every row is **COMPLETE / CANONICAL**. Historical story statuses written before each merge are not current-state authority.
+Every row is **COMPLETE / CANONICAL**. Status/delivery lines in historical W3 stories and status/delivery preface text in the W3 persistence contract are point-in-time historical evidence. They do not override GitHub live or the current durable handoffs. The frozen architecture and contract content itself remains authoritative unless a later canonical contract supersedes it.
 
 ## 3. W3.I EXACT CLOSEOUT
 
@@ -138,7 +138,7 @@ W4 direction may include spreadsheet-like row/column/range selection; add/remove
 
 W4 is advanced Table **authoring UX**, not a second table engine. No Additel engine, Fluke engine, vendor-specific table engine, parallel table domain, or second renderer. Complex technical catalog tables remain configurations/compositions of the one canonical generic Table Engine.
 
-This docs closeout does not design or authorize W4 implementation.
+The durable W3 closeout does not design or authorize W4 implementation.
 
 ## 9. GOVERNANCE AND NEXT GATE
 
@@ -146,7 +146,7 @@ The user is the exclusive merge authority. One explicit authorization applies to
 
 The Principal must proactively reconstruct live state, decide the gate, name the next actor, provide the complete execution prompt, define required return evidence, and define the following gate.
 
-Next exact action: finish the single docs/governance-only durable closeout PR from `docs/vnext-w3-canonical-closeout`, require exact-head Quality Gate **COMPLETED / SUCCESS**, audit its exact head/tree and three-file allowlist, and do not merge without explicit user authorization. Only after that PR becomes canonical is W4 the next implementation wave.
+Next durable gate: **W4 PRINCIPAL PREFLIGHT**. Before any W4 implementation, the Principal must reconstruct GitHub live, perform the W4 preflight, freeze the W4 scope/contract, and provide a separate implementation prompt. W4 remains **NOT STARTED** until that gate explicitly authorizes it.
 
 ## 10. ADVISORIES
 

@@ -14,7 +14,7 @@ GitHub live is authority. Before directing work, reconstruct the current `main` 
 
 The user is the exclusive merge authority. Never merge without explicit user authorization. An authorization is valid for one named PR, is consumed once, and cannot be reused. If an accepted head changes, prior audit/acceptance and exact-head CI do not automatically transfer to the new head.
 
-No next implementation wave begins before the previous canonical gate and its durable handoff are complete unless the Principal explicitly documents a justified exception. For the present state, the only open gate is the docs/governance-only W3 durable closeout PR. W4 has not started.
+No next implementation wave begins before the previous canonical gate and its durable handoff are complete unless the Principal explicitly documents a justified exception. The durable W3 closeout is **COMPLETE / CANONICAL**. W4 is next, has not started, and requires its own live reconstruction, Principal preflight, frozen scope/contract, and separate implementation prompt.
 
 ### Proactive continuity requirement
 
@@ -58,7 +58,7 @@ Top-level state:
 - W6 — NOT STARTED
 - W7 — NOT STARTED
 
-The next gate is the single docs/governance-only PR from `docs/vnext-w3-canonical-closeout`. It must change only the three durable reconstruction documents, pass exact-head required CI, receive Principal audit, and remain unmerged without explicit user authorization.
+The next durable gate is **W4 PRINCIPAL PREFLIGHT**, not W4 implementation. Before authorizing implementation, the Principal must reconstruct GitHub live, perform the W4 preflight, freeze the W4 scope/contract, and issue a separate implementation prompt.
 
 ## FATHER NORTH STAR
 
@@ -150,7 +150,7 @@ No second document model, save path, clone path, recovery model, repository auth
 | W3.B | Supabase strict CAS + immutable history | #31 | `a0bee489deff7af78e056463cf763f3ba4844105` | `8c87e59a32f3761d9d6d21a023e132e3b08a6f09` | `34723686552` SUCCESS | COMPLETE / CANONICAL |
 | W3.C | Manual Save + canonical reopen | #32 | `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` | `d08158a1c2f3e0e10c6812008e1356322815d81f` | `34730115210` SUCCESS | COMPLETE / CANONICAL |
 | W3.D | Local revision-aware Recovery | #33 | `e37cdf3105626ce83763964f8d2a56a1fda1e01b` | `c7bf0865b9f51dd4ea624a196f08dec496aeed67` | `34844237602` SUCCESS | COMPLETE / CANONICAL |
-| W3.E | Catalog Library | #34 | `cd4d20fbdfd89b6385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS | COMPLETE / CANONICAL |
+| W3.E | Catalog Library | #34 | `cd4d20fbdfd89d1896385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS | COMPLETE / CANONICAL |
 | W3.F | Starter / Duplicate identity closure | #35 | `266331618c5677e1079865f8d57e2d479a9601f1` | `a6f3df2125e697d2e5ebf855db194afcaf99d5a0` | `35020085786` SUCCESS | COMPLETE / CANONICAL |
 | W3.G | Asset Persistence Bridge | #36 | `a44a710836ed8cbaba48dccd541614304e10cb8a` | `1bc573e061bb2a732751c8650ba86fc0d5c92835` | `35034657054` SUCCESS | COMPLETE / CANONICAL |
 | W3.H | Autosave / adversarial concurrency | #37 | `ac2b45bd5fe6971c0f1885b88884102d01114b98` | `18dc40ce8856483d011a7f0d266f02c4a39ff347` | `35453791083` SUCCESS | COMPLETE / CANONICAL |
@@ -206,7 +206,7 @@ PR #38: `test(vnext): prove W3 Father browser flow closeout` — **MERGED / CLOS
 
 The accepted review tree and promoted canonical tree are identical. The one-use merge authorization for PR #38 has been consumed and cannot be reused.
 
-The W3.I story's pre-publication status is historical; GitHub live and this closeout carry the current canonical state.
+Status/delivery lines in historical W3 stories and status/delivery preface text in the W3 persistence contract are point-in-time historical evidence. They do not override GitHub live or the current durable handoffs. The frozen architecture and contract content itself remains authoritative unless a later canonical contract supersedes it.
 
 ## W3.I EVIDENCE BOUNDARY
 
@@ -317,18 +317,16 @@ These are advisories, separate from W3 canonical acceptance:
 - Netlify: historical external failure pattern; not a required branch-protection context; no W3.I causal change demonstrated.
 - dependency audit baseline at W3.I closeout: **2 critical, 1 high, 4 moderate**.
 - no package manifest or lockfile changed in the W3.I amendment/closeout.
-- do not launch dependency modernization inside this docs closeout.
+- the durable W3 closeout did not authorize dependency modernization.
 
-## NEXT EXACT ACTION
+## NEXT DURABLE GATE
 
-Complete the durable W3 docs/governance PR from `docs/vnext-w3-canonical-closeout`:
+**W4 PRINCIPAL PREFLIGHT** is next. W4 implementation is not automatically authorized. Before issuing any W4 implementation prompt, the Principal must:
 
-1. keep the delta limited to `PROJECT-STATE.md`, `PRINCIPAL-HANDOFF.md`, and `PRINCIPAL-AUDITOR-HANDOFF.md`;
-2. require exact-head GitHub Quality Gate **COMPLETED / SUCCESS**;
-3. Principal-audit the exact PR head/tree and docs-only scope;
-4. do not merge without explicit user authorization.
-
-After that PR becomes canonical, W4 is the next implementation wave. W4 has not started.
+1. reconstruct GitHub live;
+2. perform the W4 preflight;
+3. freeze the W4 scope/contract;
+4. provide a separate implementation prompt with its required evidence and gate.
 
 ## RECONSTRUCTION ORDER
 
