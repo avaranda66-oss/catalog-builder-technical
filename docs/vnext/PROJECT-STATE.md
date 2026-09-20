@@ -1,497 +1,205 @@
 # Catalog Builder VNext — Project State
 
-STATUS: W2 COMPLETE / CANONICAL; W3.0 CONTRACT CANONICAL; W3.A CANONICAL; W3.B IMPLEMENTED / UNDER REVIEW / NOT CANONICAL; W3.C NOT STARTED; GITHUB IS AUTHORITY FOR LIVE STATE
+STATUS: **W3 COMPLETE / CANONICAL; W4 NOT STARTED; GITHUB LIVE IS AUTHORITY**
 
-DATE: 2026-09-11
+DATE: 2026-09-20
 
-PURPOSE: provide the current VNext facts and next action so the project can be reconstructed from GitHub without chat memory.
+PURPOSE: give a fresh agent the current canonical facts, authority boundaries, roadmap, and next gate without relying on chat memory.
 
-## PRODUCT
-
-**Catalog Builder VNext / PRESYS** is a professional technical-catalog authoring system for non-technical PRESYS users. The primary acceptance persona is the user's father: a professional office user who must be able to create, edit, save, reopen, translate, publish, and share a catalog without developer help.
-
-VNext must be simpler internally than Legacy while becoming more capable, editable, professional, and easy to use.
-
-## VERIFIED W2 CANONICAL MERGE AND W2.G REVIEW PROVENANCE
+## CURRENT CANONICAL STATE
 
 Repository: `avaranda66-oss/catalog-builder-technical`.
 
-PR #27 completed the durable W2 closeout/handoff synchronization and is merged at canonical `main` SHA `6321155d0b88e52758cfb7138070c036845c359b`, tree `29b5964878914828778c2125cd177b81b068af17`, direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`. Post-closeout Quality Gate run `34649885701` completed **SUCCESS** on that canonical SHA.
-
-PR #22 / W2.E was independently verified squash-merged into canonical `main` at SHA `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80`, tree `470c34f567b2353d17c04330e2bb1cada50983a8`, with direct parent `c220ed1d047d862d8bac30bb8c20702889793fac`.
-
-PR #23 then merged W2.E closeout documentation into `main` at SHA `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. That post-closeout `main` is the actual W2.F implementation base.
-
-PR #24 / W2.F was independently audited and Principal accepted, then explicitly authorized for merge. The audited review head was `69353fc31a5121580c17cdf797d10d9f9b799779`, tree `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
-
-GitHub squash-merged PR #24 at `2026-09-11T17:10:50Z` as canonical `main` SHA `7793aaa21bfed41d57da861424efdd84a686170d`, tree `13e6bb3a956ca0087e8fbb882486925bcb2872fe`, direct parent `162531024107e1376912363c877f23bdc3389426`, commit `feat(vnext): implement W2.F group (#24)`. The squash changed the commit SHA while preserving the exact audited tree.
-
-Independent audit classification: **A — READY TO MERGE AS WRITTEN**. Principal classification: **A — W2.F PRINCIPAL ACCEPTED / READY TO MERGE AS WRITTEN**. The explicit authorization for PR #24 was consumed once by that merge and is not reusable.
-
-PR #25 synchronized the W2.F canonical closeout and established the exact W2.G implementation base at canonical `main` SHA/tree `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
-
-PR #26 / W2.G was implemented on `feat/vnext-w2g-direct-text-editing`. The independent initial audit classified the implementation **B — SOUND, SMALL AMENDMENT REQUIRED** for proof completeness / required-CI execution evidence. The Principal amendment completed the committed seven-symbol PDF proof for `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈` and wired the browser/PDF regression proof matrix into the existing required GitHub Quality Gate. The amendment produced final audited review head/tree `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Independent amendment re-audit: **A — READY TO MERGE AS WRITTEN**. Principal final classification: **A — W2.G PRINCIPAL ACCEPTED / READY TO MERGE AS WRITTEN**.
-
-GitHub branch protection on `main` is enabled for everyone with the exact required status context `Lint, typecheck, tests, build`. On the audited PR #26 head, required GitHub Actions run `34640316296` / check `103399249787` completed **SUCCESS**. That required job executes lint, typecheck, tests, build, the W2.G real-`/v2` Chromium/PDF proof, W2.C/W2.D/W2.E/W2.F browser regressions, Group export, and canonical export/PDF regression proofs. Browser/PDF proof execution is therefore part of the required Quality Gate.
-
-The W2.G PDF proof includes extraction evidence for all seven technical symbols `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`. The Netlify deploy-preview status on the audited review head remained a historical/external red status; it was not a required branch-protection context and no W2.G causality was demonstrated. Vercel reported success on the audited head.
-
-After explicit user authorization for PR #26, GitHub squash-merged it at `2026-09-11T20:10:03Z` as canonical `main` SHA `3810b4c70b9415f43c7cb0360d6525b5a1823c22`, tree `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`, direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`, commit `feat(vnext): implement W2.G direct text editing (#26)`. The squash commit has one parent and preserves the exact audited review tree. The PR #26 authorization was consumed once by that merge and is not reusable.
-
-Post-merge on canonical `main`, required check `Lint, typecheck, tests, build` ran again as GitHub Actions run `34642762581` / check `103406214491` and completed **SUCCESS** at `2026-09-11T20:13:56Z`.
-
-W2.E historical promotion vehicle: **PR #22**, branch `feat/vnext-w2e-page-template-insertion`.
-
-The initial W2.E implementation commit on the promotion branch is `a1074269c95cb48374aedf0285ee279fb1cb3c75`, tree `a8beb1ca9d26575b9e5b012fe40dd0ffc0e7779b`, with direct parent `c220ed1d047d862d8bac30bb8c20702889793fac`.
-
-PR #12: **MERGED**.
-
-PR #13 — FOUNDATION-PROOF-01: **MERGED**.
-
-PR #14 — W0 Foundation Promotion + W0.1 Production Boundary Hardening: **MERGED**.
-
-PR #15 — handoff sync: **MERGED / COMPLETE**.
-
-PR #16 — W1: **MERGED / COMPLETE**.
-
-PR #17 — W2.0 contract: **MERGED / COMPLETE**.
-
-PR #18 — W2.A: **MERGED / COMPLETE**.
-
-PR #19 — W2.B: **MERGED / COMPLETE**.
-
-PR #20 — W2.C: **MERGED / COMPLETE**.
-
-PR #21 — W2.D: **MERGED** at canonical `main` SHA/tree `c220ed1d047d862d8bac30bb8c20702889793fac` / `9c018983f2636f318c9092605ca660d33f1bd6f7`.
-
-PR #22 — W2.E: **MERGED / COMPLETE** at canonical `main` SHA/tree `b8dd75103c5d0cdd73b22d5997281b5efa0a4b80` / `470c34f567b2353d17c04330e2bb1cada50983a8`.
-
-PR #23 — W2.E closeout documentation: **MERGED** at `main` SHA/tree `162531024107e1376912363c877f23bdc3389426` / `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`.
-
-PR #24 — W2.F Group: **MERGED / COMPLETE / CANONICAL**, historical branch `feat/vnext-w2f-group`, base `main`. Initial pushed implementation head/tree: `f11acb8ab86dbfd27f6af79dc4410fd13b6c2085` / `baac8b47904b36118b06cfb050c9862bffc24cc1`; audited review head/tree: `69353fc31a5121580c17cdf797d10d9f9b799779` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`; canonical squash SHA/tree: `7793aaa21bfed41d57da861424efdd84a686170d` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
-
-PR #25 — W2.F canonical closeout documentation: **MERGED / COMPLETE** at canonical `main` SHA/tree `2d24935b507a240b11165d2e9357f1975cf389ba` / `eba8c26b52a2e714a45da39bc2831bde6c7c8aa0`.
-
-PR #26 — W2.G Minimum Direct Text Editing: **MERGED / COMPLETE / CANONICAL** at canonical squash SHA/tree `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`; audited review head/tree `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
-
-PR #27 — W2 durable closeout / Principal handoff synchronization: **MERGED / COMPLETE / CANONICAL** at `main` SHA/tree `6321155d0b88e52758cfb7138070c036845c359b` / `29b5964878914828778c2125cd177b81b068af17`; direct parent `3810b4c70b9415f43c7cb0360d6525b5a1823c22`; post-closeout Quality Gate run `34649885701` **SUCCESS**.
-
-Always verify GitHub live state before acting. Git history and repository evidence outrank agent reports.
-
-## CURRENT PHASE
-
-Post-W2.0 canonical engineering base: **ESTABLISHED**.
-
-Handoff synchronization: **COMPLETE** via merged PR #15.
-
-W0 — Foundation Promotion: **MERGED / COMPLETE**.
-
-W0.1 — Production Boundary Hardening: **MERGED / COMPLETE**.
-
-W1 — Application Actions + Minimal VNext Shell: **MERGED / COMPLETE**.
-
-W2.0 — A4 Authoring Contract: **PRINCIPAL ACCEPTED / MERGED VIA PR #17**.
-
-W2.A — Primitive Domain + Publication-Safe Rendering: **COMPLETE**.
-
-W2.B — Object Application Actions: **COMPLETE**.
-
-W2.C — Editor Selection + Direct Move/Resize: **COMPLETE**.
-
-W2.D — Snapping + Guides + Authoring Diagnostics: **COMPLETE**.
-
-W2.E — Page Template Insertion Seam: **COMPLETE**.
-
-W2.F — Group: **COMPLETE / CANONICAL**.
-
-W2.G — Minimum Direct Text Editing: **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL — PR #26**.
-
-W2 overall is **COMPLETE / CANONICAL**. Independent W3 repository research is **COMPLETE** with Principal verdict **A — W3 RESEARCH ACCEPTED**. W3.0 contract freeze is **CANONICAL** via merged PR #28. W3.A is **CANONICAL** through merged PR #29 at `main` SHA/tree `4199108c2e4e0cd2d09a3ec02e2700528a373ff3` / `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`; post-merge Quality Gate run `34706862089` completed **SUCCESS**. W3.B is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** on `feat/vnext-w3b-supabase-cas-history`. W3.C is **NOT STARTED**.
-
-Foundation: **production-owned and strongly validated**.
-
-Product: **still under construction**.
-
-Do not encode conversational progress percentages as project truth.
-
-PR #15 is merged and the post-W0 handoff sync is **COMPLETE**. PR #16 / W1, PR #17 / W2.0, PR #18 / W2.A, PR #19 / W2.B, PR #20 / W2.C, PR #21 / W2.D, PR #22 / W2.E, PR #23 / W2.E closeout, PR #24 / W2.F, PR #25 / W2.F closeout, and PR #26 / W2.G are merged. PR #26 established canonical W2 completion at SHA/tree `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`.
-
-W2.F's Group contract is frozen in `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` and is canonical through merged PR #24. Its canonical state includes direct Group ownership, leaf-only children, Group-local coordinates, tight persisted envelopes, visual-contiguous grouping, move-only Group geometry, closure-aware structural actions, canonical traversal, Group-aware rendering/measurement/diagnostics/templates, and minimum ephemeral multi-selection. W2.G completes the W2 authoring wave with direct Text editing through the canonical Application Action / RichText path, technical-symbol insertion, deterministic identity-preserving reconciliation, publication-safe editor chrome, and existing overflow diagnostics without silent geometry mutation.
-
-## CANONICAL PRODUCTION OWNERSHIP
-
-Production VNext foundation owner: `src/vnext/`.
-
-It currently owns the proven foundation layers for:
-
-- domain;
-- table;
-- rendering;
-- publication preflight.
-
-`src/labs/presys-editorial-proof/` is now only a fixture, browser harness, and PDF proof harness. It is **not** foundational engine authority.
-
-Do not recreate a second production engine from the lab.
-
-## W0 FOUNDATION CONTRACT
-
-W0 promoted the Principal-approved FOUNDATION-PROOF-01 engine without reopening its architecture. Preserve these established invariants:
-
-- finite physical A4 pages and authored object frames;
-- authored geometry in integer U;
-- browser/render measurement in integer Q;
-- exact monotone `minimumUForProjectedQ`;
-- cumulative projected row boundaries;
-- global deterministic rowspan constraint solving;
-- only `AUTO` / `MIN` rows grow; `FIXED` rows never grow;
-- blocking rendered fit is Q/Q;
-- the final postcondition blocks residual overflow;
-- one canonical Table Engine;
-- stable IDs and typed `CellContent`;
-- spans and explicit merge ownership;
-- CSS Grid editorial rendering;
-- deterministic resource readiness;
-- structured preflight diagnostics;
-- one canonical editorial render tree;
-- Chromium textual/vector PDF proof.
-
-Do not restate or reinvent the mathematical history during feature work. See `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md` and `docs/vnext/presys-mvp-r0/evidence/proof-result.md`.
-
-## W0.1 PRODUCTION BOUNDARIES
-
-Two production-boundary corrections were required before PR #14 merged.
-
-First, production `DocumentRenderer` renders canonical document content only. It has no renderer-authored footer/page-copy side channel. Proof footer/page numbering remains lab-only decoration.
-
-Second, public APIs are layered:
-
-- `src/vnext/index.ts` — pure domain/table only;
-- `src/vnext/rendering` — React/browser/rendering/measurement/resources;
-- `src/vnext/publication` — publication/preflight.
-
-Renderer CSS is scoped under `[data-editorial-root]`. Generic production renderer CSS does not own global `@page` policy. `tests/vnext/proof/architecture-boundary.test.ts` protects these boundaries.
-
-## CANONICAL PRODUCT ARCHITECTURE
+Canonical `main` verified at the start of this durable closeout:
+
+- SHA: `00b78e6d582a2868e4b0447cb3dee2bf53732299`
+- tree: `e198bc8c576a54537ad0b031743b53091ed0ed60`
+- direct parent: `ac2b45bd5fe6971c0f1885b88884102d01114b98`
+- commit: `test(vnext): prove W3 Father browser flow closeout (#38)`
+- merge timestamp: `2026-09-20T14:27:11Z`
+- post-merge Quality Gate: run `35516528303`, event `push`, branch `main`, exact head `00b78e6d582a2868e4b0447cb3dee2bf53732299`, **COMPLETED / SUCCESS**
+
+Current roadmap state:
+
+- **W0 — COMPLETE / CANONICAL**
+- **W0.1 — COMPLETE / CANONICAL**
+- **W1 — COMPLETE / CANONICAL**
+- **W2 — COMPLETE / CANONICAL**
+- **W3 — COMPLETE / CANONICAL**
+- **W4 — NOT STARTED**
+- **W5 — NOT STARTED**
+- **W6 — NOT STARTED**
+- **W7 — NOT STARTED**
+
+The durable W3 closeout is **COMPLETE / CANONICAL**. W4 is the next implementation wave, but it is **NOT STARTED** and is not implicitly authorized. Before any W4 implementation, the Principal must reconstruct GitHub live, perform the W4 preflight, freeze the W4 scope/contract, and provide a separate implementation prompt. The canonical SHA, tree, and Quality Gate provenance of this durable closeout must be reconstructed from GitHub live; this document does not predict them.
+
+Always reconstruct GitHub live before acting. GitHub commits, PR state, checks, and repository evidence outrank historical story status lines or agent reports.
+
+## W3 CANONICAL LEDGER
+
+All rows below were reconstructed from live merged PRs, canonical commits, repository stories, and exact-head `push` Quality Gate runs.
+
+| Wave | Canonical purpose | PR | Canonical merge SHA | Canonical tree | Post-merge Quality Gate | Status |
+| --- | --- | ---: | --- | --- | ---: | --- |
+| W3.0 | Freeze the Save / Reopen / Catalog Library persistence contract | #28 | `b34156c597dcd47a5ab6d154f73ffa7a323d4664` | `0df4eedfcf649a10423a4a3153233ff6c424020f` | `34668097170` SUCCESS | COMPLETE / CANONICAL |
+| W3.A | Pure persistence contracts and exact canonical round-trip | #29 | `4199108c2e4e0cd2d09a3ec02e2700528a373ff3` | `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35` | `34706862089` SUCCESS | COMPLETE / CANONICAL |
+| W3.B | Supabase strict-CAS persistence, mutation replay, and immutable history | #31 | `a0bee489deff7af78e056463cf763f3ba4844105` | `8c87e59a32f3761d9d6d21a023e132e3b08a6f09` | `34723686552` SUCCESS | COMPLETE / CANONICAL |
+| W3.C | Manual Save and canonical exact reopen | #32 | `296eed6cf66c529ea5ee53c1a1a65bee4878a7b7` | `d08158a1c2f3e0e10c6812008e1356322815d81f` | `34730115210` SUCCESS | COMPLETE / CANONICAL |
+| W3.D | Revision-aware local crash Recovery | #33 | `e37cdf3105626ce83763964f8d2a56a1fda1e01b` | `c7bf0865b9f51dd4ea624a196f08dec496aeed67` | `34844237602` SUCCESS | COMPLETE / CANONICAL |
+| W3.E | Catalog Library, Blank creation, Rename, and Archive | #34 | `cd4d20fbdfd89d1896385317a46052f0239c9ac4` | `fa95ce03a7c4726e0e4bd7c9af6dedcb08610f8d` | `34875954678` SUCCESS | COMPLETE / CANONICAL |
+| W3.F | Registered Starter and Duplicate with complete identity closure | #35 | `266331618c5677e1079865f8d57e2d479a9601f1` | `a6f3df2125e697d2e5ebf855db194afcaf99d5a0` | `35020085786` SUCCESS | COMPLETE / CANONICAL |
+| W3.G | Immutable AssetRef persistence bridge | #36 | `a44a710836ed8cbaba48dccd541614304e10cb8a` | `1bc573e061bb2a732751c8650ba86fc0d5c92835` | `35034657054` SUCCESS | COMPLETE / CANONICAL |
+| W3.H | Debounced autosave and adversarial concurrency/conflict lifecycle | #37 | `ac2b45bd5fe6971c0f1885b88884102d01114b98` | `18dc40ce8856483d011a7f0d266f02c4a39ff347` | `35453791083` SUCCESS | COMPLETE / CANONICAL |
+| W3.I | Father Browser Flow and W3 closeout | #38 | `00b78e6d582a2868e4b0447cb3dee2bf53732299` | `e198bc8c576a54537ad0b031743b53091ed0ed60` | `35516528303` SUCCESS | COMPLETE / CANONICAL |
+
+The W3.B real-database rehearsal is separate evidence: PR #31 check `VNext W3.B real DB CAS/history proof`, run `34720465558`, completed **SUCCESS** on accepted PR head `b2f61305fca125fbc760e588d5b98bf9a9d8f2ae`.
+
+## W3.I CANONICAL CLOSEOUT
+
+PR #38, `test(vnext): prove W3 Father browser flow closeout`, is **MERGED / CLOSED**.
+
+- accepted source head: `48ac1c11d09f4d1c73ad055dc9c2462b679f4d4c`
+- accepted source tree: `e198bc8c576a54537ad0b031743b53091ed0ed60`
+- canonical squash merge: `00b78e6d582a2868e4b0447cb3dee2bf53732299`
+- canonical tree: `e198bc8c576a54537ad0b031743b53091ed0ed60`
+- canonical parent: `ac2b45bd5fe6971c0f1885b88884102d01114b98`
+- merge timestamp: `2026-09-20T14:27:11Z`
+- post-merge Quality Gate: `35516528303`, **COMPLETED / SUCCESS**
+
+The accepted review tree and promoted canonical tree are identical. The one-use merge authorization for PR #38 was consumed by that merge and cannot be reused.
+
+The W3.I story is a historical delivery snapshot written before publication. Its pre-merge status lines do not override the live canonical state above.
+
+## WHAT W3 NOW GIVES THE PRODUCT
+
+W3 canonically provides:
+
+- whole-document persistence of one validated `CatalogDocument` snapshot;
+- snapshot validation as the persistence authority, without a second normalized document model;
+- strict optimistic concurrency / compare-and-swap;
+- server-owned monotonic remote revision;
+- mutation identity, replay safety, and ambiguous-write reconciliation;
+- exact Manual Save and exact canonical reopen behavior;
+- reopen with a new `openSessionId` and empty Undo/Redo history;
+- revision-aware local Recovery that protects work without claiming remote Saved authority;
+- Catalog Library with active/archived views;
+- Blank creation;
+- registered Starter creation;
+- Duplicate with complete authored-identity closure and independent persistence lineage;
+- immutable `AssetRef` persistence while asset bytes and runtime URLs remain outside the canonical document;
+- debounced autosave through the same Save authority as Manual Save;
+- an active-authoring-draft barrier that prevents remote save while a draft remains uncommitted;
+- offline / retry lifecycle without false Saved state;
+- deterministic two-session stale-write conflict behavior;
+- `Abrir versão mais recente` / Open latest;
+- `Salvar meu trabalho como cópia` / Save my work as copy;
+- single-flight conflict resolution;
+- Rename through canonical document title mutation;
+- Archive with strict CAS and stale autosave fail-closed behavior;
+- a Father-facing integrated browser-flow proof;
+- Portuguese Father presentation labels for Save state while internal `SaveProjection` semantics remain unchanged;
+- Recovery and conflict surfaces proved responsive at 320, 360, and 390 px, plus desktop sanity;
+- protected Recovery preview actually mounted and proved through visible UI.
+
+No persistence decision depends on translated labels.
+
+## FROZEN W3 AUTHORITY BOUNDARIES
+
+- `CatalogDocument` is the sole canonical authored-document model.
+- Persistence stores one validated canonical snapshot plus thin persistence/lifecycle metadata. It is not a second normalized document model.
+- `SupabaseCatalogRepository` is the production remote adapter.
+- `SaveCoordinator` is the sole normal Save / strict-CAS authority.
+- `AutosaveCoordinator` only schedules or flushes the same `SaveCoordinator`.
+- `CanonicalReopenCoordinator` is the reopen authority.
+- `PreparedCatalogCreateCoordinator` is the Create / pending-reconciliation authority.
+- `ConflictResolutionCoordinator` is the conflict-resolution single-flight authority.
+- `CatalogCloneService` is the complete authored-identity cloning authority.
+- W3.D Recovery is local protection only and never remote Saved authority.
+- `AssetPersistenceBridge` keeps asset bytes and runtime URLs outside `CatalogDocument`; the document contains immutable canonical `AssetRef`s.
+- Strict CAS, server-owned revision, mutation identity, stale-result rejection, authority/open-session lineage, and archive fail-closed behavior remain canonical.
+- Controlled fixtures and deterministic adapters are evidence tools, never product authorities.
+
+## W3.I EVIDENCE BOUNDARY
+
+Layer 1 is a **real production `/v2` bootstrap smoke**. It proves that VNext bootstrap is selected, Legacy bootstrap is not selected, and canonical W3 production seams are wired. It does not prove the complete Father journey against real Supabase.
+
+Layer 2 is a **controlled Father browser integration**. It uses real React/UI interactions and canonical product coordinators/services with deterministic external repository timing, controlled strict CAS, IndexedDB Recovery, and deterministic asset dependencies.
+
+The integrated flow covers:
+
+```text
+Library
+→ Starter/create
+→ visible authoring
+→ active draft barrier
+→ autosave
+→ durable asset
+→ exact reopen
+→ Duplicate independence
+→ local Recovery
+→ strict-CAS conflict
+→ Open latest
+→ second conflict
+→ Save as copy
+→ Rename
+→ Archive
+→ stale-autosave protection
+```
+
+W3.I does **not** claim a full real-production Supabase Father E2E or real cloud multi-tab Father execution. The W3.B real-database rehearsal remains the separate production-database proof.
+
+## FROZEN A4 / EDITOR ARCHITECTURE
 
 Canonical hierarchy:
 
 ```text
-Catalog
-→ Pages
-→ Objects
-→ Properties
+Catalog → Pages → Objects → Properties
 ```
 
-The user owns position, size, composition, and page placement. The system owns snapping, guides, safe-margin warnings, overflow diagnostics, and publication validation.
+Preserve:
 
-The system must never silently move objects between pages, create continuation pages, resize authored frames, or restructure the document.
+- finite physical A4 pages;
+- authored geometry in integer U and rendered/browser measurement in integer Q;
+- one canonical render tree;
+- one canonical Table Engine;
+- stable IDs, typed content, explicit span ownership, deterministic measurement, and structured diagnostics;
+- canonical primitives: Text, Image, Table, Shape, Line, Icon, Group;
+- typed Application Actions as the mutation seam for human UI and future AI;
+- user ownership of authored geometry, placement, and composition;
+- no silent page creation, cross-page reflow, frame resizing, object relocation, or authored topology mutation.
 
-## CANONICAL PRIMITIVES
-
-Father V1 requires the generic primitive set:
-
-- Text;
-- Image;
-- Table;
-- Shape;
-- Line;
-- Icon;
-- Group.
-
-The 24-page reference audit did not justify vendor- or document-specific engines. Complex pages are compositions of these primitives plus the one canonical Table Engine, presets, components, and templates.
-
-## TABLE ENGINE
-
-There is **one canonical Table Engine**.
-
-Do not create Additel, Fluke, accessories, ordering, electrical, compatibility, or other specialized table/rendering engines.
-
-Father-V1 table UX must include advanced structural editing and explicitly support:
-
-- spreadsheet-like range/row/column selection;
-- add/delete rows and columns;
-- group headers and section rows;
-- merge/unmerge;
-- table title, captions, notes, footnotes, and legends;
-- TSV/spreadsheet clipboard paste;
-- marker-cell bulk toggle for compatibility matrices;
-- table presets;
-- explicit **Fit Height to Content / Ajustar altura**.
-
-Fit Height is an Application Action/user command that may mutate the authored frame only when explicitly invoked. Measurement or rendering must never silently resize the frame.
-
-## UX LAB EVIDENCE
-
-Experimental branch: `lab/vnext-editor-ux-astra`.
-
-Status: **EXPERIMENTAL — NOT PRODUCTION — DO NOT MERGE BLINDLY**.
-
-The lab was initiated by Astra and continued by Gemini after Astra quota exhaustion. It must not contribute its mock domain/table state, approximate layout logic, or ephemeral React state to production.
-
-High-confidence interaction findings:
-
-- direct manipulation should be primary;
-- common actions should be contextual;
-- Inspector should own deeper and low-frequency properties;
-- table selection should feel spreadsheet-like;
-- interaction chrome must remain visually separate from document content;
-- table content overflow must not visually leak uncontrolled outside its authored frame;
-- explicit Fit Height is preferable to silent frame mutation;
-- Undo/Redo must be visible and predictable;
-- cover/page templates should yield normal editable canonical objects;
-- safe margins should behave as hybrid guidance: subtle in repose, stronger during movement, warning rather than hard constraint.
-
-Do **not** freeze from the lab alone: exact toolbar layout, Inspector width, color/opacity, icon count, button labels, or panel placement.
-
-## UX FACT VS USER-TEST HYPOTHESIS
-
-### HIGH-CONFIDENCE PRODUCT RULES
-
-- direct manipulation;
-- contextual common actions;
-- deeper Inspector;
-- finite A4;
-- explicit overflow corrections;
-- templates resolve to editable canonical objects;
-- visible/predictable Undo/Redo;
-- spreadsheet-like table selection;
-- no silent authored geometry mutation.
-
-### USER-TEST HYPOTHESES
-
-- exact Tool Rail icon count;
-- exact contextual toolbar composition;
-- exact Inspector width;
-- exact safe-guide visual treatment;
-- `Blocos` vs `Componentes` wording;
-- exact Pages/Layers defaults;
-- exact zoom;
-- exact keyboard workflow;
-- exact color-palette presentation.
-
-Lab preferences are evidence for testing, not frozen architecture.
-
-## 24-PAGE REFERENCE AUDIT
-
-External reproducibility audit visually inspected 24 pages:
-
-- Additel 875 — 8 pages;
-- Additel 761A — 6 pages;
-- Fluke 9140 / 9142 / 9143 / 9144 material — 6 pages;
-- Isotech Europa / Venus / Calisto — 4 pages.
-
-The audit studied editorial capability only. Do not copy competitor branding, visual identity, product claims, or specifications.
-
-Core conclusion: **THE VNEXT ARCHITECTURAL DIRECTION REMAINS SOUND.**
-
-The references exposed product-capability gaps rather than a contradiction in the foundation. The smallest coherent primitive set remains approximately Text, Image, Table, Shape, Line, Icon, Group. Complex diagrams may be imported as SVG or high-resolution raster assets.
-
-## FATHER-V1 REQUIREMENTS CONFIRMED BY PRODUCT EVIDENCE
-
-The following are explicit Father-V1 requirements:
-
-- standalone Image primitive;
-- Shape primitive;
-- Line primitive;
-- Group capability;
-- direct rich-text editing;
-- discoverable technical-symbol insertion for common engineering symbols such as `±`, `°C`, `Ω`, `µ`, `≤`, `≥`, `≈`, without treating that sample as exhaustive;
-- TSV/spreadsheet clipboard paste into tables;
-- marker-cell bulk toggle;
-- explicit Fit Height to Content / Ajustar altura command;
-- table presets;
-- minimum page templates before the first father pilot;
-- minimum catalog starter before the first father pilot;
-- minimum reusable Components / `Blocos` capability before or by the first father pilot;
-- highly discoverable Replace Image;
-- complete semantic translation coverage;
-- professional Chromium PDF publication.
-
-## THE EASY BUTTON LAYER
-
-Internal architecture can remain powerful while common professional outputs stay fast through:
-
-- table presets;
-- page templates;
-- catalog starters;
-- reusable components / `Blocos`;
-- contextual commands.
-
-`Preset != Engine`.
-
-`Template != New Renderer`.
-
-`Component != Special Block Engine`.
-
-Every preset, template, starter, or component must resolve into normal canonical editable primitives.
-
-**MINIMUM EASY-BUTTON LAYER BEFORE FATHER PILOT.**
+`src/vnext/` is production authority. `src/labs/presys-editorial-proof/` and controlled proof fixtures are harnesses only and must not become a second engine.
 
 ## ROADMAP
 
-No exact dates or detailed W6/W7 implementation boundary are frozen.
+- **W4 NEXT / NOT STARTED — Advanced Table Editor.** Direction may include spreadsheet-like row/column/range selection; add/remove rows and columns; merge/unmerge; grouped headers; section rows; titles/notes/footers/legends; TSV/spreadsheet paste; technical matrices; presets; marker-cell ergonomics; and explicit **Fit Height / Ajustar altura**.
+- **W5 — Complete Translation VNext.** NOT STARTED.
+- **W6 — Publication + Easy Button + First Father Pilot.** NOT STARTED.
+- **W7 — evidence-driven maturation.** NOT STARTED.
 
-- **W0 — Foundation Promotion + W0.1 Boundary Hardening:** merged / complete.
-- **W1 — Application Actions + Minimal VNext Shell:** typed mutation actions, Undo/Redo foundations, isolated `/v2` shell. **MERGED / COMPLETE — PR #16**.
-- **W2 — A4 Authoring + Primitives + Direct Manipulation:** W2.A primitive/domain + publication-safe rendering (including Text-height resolution and Image focal point); W2.B typed Object Application Actions; W2.C ephemeral selection/direct manipulation plus minimum visible basic authoring and mm-facing geometry; W2.D pure snapping/guides/authoring diagnostics; W2.E page-template materialization; W2.F real canonical Group; W2.G minimum direct Text editing. **COMPLETE / CANONICAL — PR #26 closes W2.**
-- **W3 — Save/Reopen/Catalog Library:** independent research complete; W3.0 contract canonical through PR #28; W3.A persistence contracts + exact canonical round-trip canonical through PR #29; W3.B Supabase CAS/history implemented and under review; W3.C not started. Frozen contract: `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`.
-- **W4 — Advanced Table Editor:** structural table editing plus TSV paste, marker bulk toggle, explicit Fit Height, and table presets.
-- **W5 — Complete Translation:** complete semantic translation coverage and layout review.
-- **W6 — Publication Integration + Minimum Easy-Button Layer + First Father Pilot:** professional publication plus minimum usable page templates, catalog starter, starter reusable components, then the first father pilot.
-- **W7 — Evidence-driven maturation:** expand templates/components, Asset Library, sharing, polish, and father-test corrections.
+W4 must extend the **one canonical Table Engine**. No Additel engine, Fluke engine, vendor-specific table engine, second renderer, or parallel table model is authorized. Complex technical tables are configurations/compositions of the generic engine. This closeout does not authorize W4 implementation.
 
-W7 remains the maturation/expansion wave. The minimum template/component/starter layer must exist before the W6 father pilot.
+## CURRENT ADVISORIES
 
-## TRANSLATION INVARIANT
+Advisories are separate from canonical acceptance:
 
-Complete semantic translation is a **Father-V1 requirement**.
+- Vercel on accepted PR #38 head: **SUCCESS**.
+- Netlify: historical external failure pattern; not a required branch-protection context; no W3.I causal change demonstrated.
+- dependency audit baseline at W3.I closeout: **2 critical, 1 high, 4 moderate**.
+- PR #38 amendment/closeout changed no package manifest or lockfile.
+- dependency modernization is not part of this docs closeout.
 
-Every editable editorial text surface must have stable semantic identity and explicit policy (`translate`, `protect`, or `system`). Coverage includes:
+## HISTORICAL STATUS AND RECONSTRUCTION
 
-- text objects;
-- table TITLE;
-- captions;
-- group headers;
-- column headers;
-- row headers;
-- section rows;
-- rich-text cells;
-- notes;
-- footnotes;
-- legends;
-- cover copy;
-- headers/footers;
-- components/templates.
+Status/delivery lines in historical W3 stories and status/delivery preface text in the W3 persistence contract are point-in-time historical evidence. They do not override GitHub live or the current durable handoffs. The frozen architecture and contract content itself remains authoritative unless a later canonical contract supersedes it.
 
-Technical tokens remain protected semantically. Source changes make affected localized leaves stale; existing translations are never silently overwritten.
+Recommended reconstruction order:
 
-Translation-driven growth must surface a diagnostic plus an explicit corrective action. It must not silently mutate topology or authored geometry. No unsupported average expansion percentage is an architectural assumption.
-
-## APPLICATION ACTIONS AND FUTURE AI
-
-Frozen direction:
-
-```text
-Human UI ─┐
-          ├─> Typed Application Actions -> Canonical Document
-Future AI ┘
-```
-
-W1 established the action boundary. Future AI should eventually invoke the same ordinary actions a user invokes: add page, insert object, move, resize, edit text, insert/populate table, merge, apply preset, and similar validated commands.
-
-AI must not manipulate the DOM directly and must not replace arbitrary document JSON.
-
-Autonomous AI authoring is future work; do not implement it in W1 merely because the seam is defined now.
-
-## FATHER V1 VS FUTURE
-
-### FATHER V1
-
-- professional editing;
-- canonical advanced tables;
-- minimum templates/starters/components;
-- save/reopen, autosave, and recovery;
-- complete translation;
-- professional PDF publication;
-- basic sharing;
-- diagnostics and preflight.
-
-### FUTURE
-
-- live PIM binding;
-- Presence/Realtime;
-- CRDT;
-- autonomous AI authoring;
-- complex workflow/approval;
-- advanced offset-print features if later justified.
-
-Father V1 has **no PIM dependency** and **no realtime dependency**.
-
-## DO NOT OVERBUILD
-
-The reference audit does not justify Father-V1 implementation of:
-
-- Bezier/Pen vector editing;
-- full Illustrator-like path editing;
-- automatic cross-page reflow;
-- InDesign-style scripting/master hierarchy;
-- arbitrary HTML/CSS inside cells;
-- complex CRDT/realtime;
-- full PIM/ERP sync.
-
-## FIRST FATHER PILOT ACCEPTANCE PATH
-
-Run the first real father pilot once the user can complete an end-to-end workflow approximately like:
-
-```text
-New catalog from starter/template
-→ add / duplicate / reorder page
-→ edit title/text directly
-→ insert / replace product image
-→ insert / edit technical table
-→ add rows / columns
-→ create group header / section row
-→ add title / note / footnote
-→ move / resize
-→ receive safe-margin feedback
-→ Undo / Redo
-→ save
-→ close / reopen
-→ translate to Spanish
-→ review warnings
-→ generate professional PDF
-```
-
-Do not wait for every W7 polish item before testing with the father.
-
-## LEGACY SALVAGE AND FAILURES NOT TO REINTRODUCE
-
-High-value salvage remains translation machinery, table invariants/pure operations, Auth/Supabase infrastructure where later validated, CAS/versioning concepts, asset/media concepts, fonts/icons, PRESYS fixtures/goldens, and publication/preflight lessons.
-
-Do not port as VNext authority: giant Legacy stores, Legacy A4 vertical flow, Smart Flow authored topology, Legacy specialized table renderers/adapters, raster publication, or Presence/Realtime as a V1 prerequisite.
-
-## HISTORICAL DOCUMENTS
-
-Older R0 and W0 story documents intentionally preserve the state that existed when those records were written. They may mention open PRs or pre-promotion status as historical facts. Current status authority is this file plus GitHub.
-
-## KNOWN UNRELATED ISSUE
-
-`src/labs/product-workspace-ux/components/ConflictReviewModal.tsx:21:57` has a pre-existing conditional `useState` / rules-of-hooks issue surfaced by `lint:labs`.
-
-Governance rule: do **not** fix this as part of unrelated VNext waves unless a task explicitly targets it. Keep unrelated lab lint debt out of VNext scope.
-
-## POST-W2 CANONICAL STATE / NEXT PRINCIPAL ACTION
-
-PRs #15 through #27 are merged for the promoted/canonical state through the durable W2 closeout. W2 is complete/canonical.
-
-Historical W2.F review base: `162531024107e1376912363c877f23bdc3389426`, tree `c3df17b54c3aca8673f52f13efcbabdfca8e0a0a`. Audited review head/tree: `69353fc31a5121580c17cdf797d10d9f9b799779` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`. Canonical squash SHA/tree: `7793aaa21bfed41d57da861424efdd84a686170d` / `13e6bb3a956ca0087e8fbb882486925bcb2872fe`.
-
-W2.F — Group is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL**.
-
-W2.G — minimum direct Text editing is **IMPLEMENTED / INDEPENDENTLY AUDITED / PRINCIPAL ACCEPTED / MERGED / CANONICAL**. Accepted review head/tree: `f827d660b9f63548830b15477f843727dd9a70e2` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`. Canonical squash SHA/tree: `3810b4c70b9415f43c7cb0360d6525b5a1823c22` / `c4f4b8e25aa2be6b358afd042e7010a7b37ce43a`; direct parent `2d24935b507a240b11165d2e9357f1975cf389ba`. Audited review tree equals canonical merge tree. Post-merge required Quality Gate run `34642762581` completed **SUCCESS**. W2 overall is **COMPLETE / CANONICAL**.
-
-Independent W3 repository research is **COMPLETE** and the Principal research verdict is **A — W3 RESEARCH ACCEPTED**. W3.0 is **CANONICAL** through merged PR #28. W3.A is **CANONICAL** through merged PR #29 at `4199108c2e4e0cd2d09a3ec02e2700528a373ff3`, tree `1fa5b5f0d6a53149c38c95c5f3282de79fa5ff35`; Quality Gate run `34706862089` is **SUCCESS**. Its pure persistence seam remains `src/vnext/persistence/`: complete validated `CatalogDocument` snapshot, thin envelope/projections, external remote revision, exact lowercase UUID persistence compatibility, infrastructure-neutral repository contract, mutation identity, and semantic error contracts.
-
-W3.B is **IMPLEMENTED / UNDER REVIEW / NOT CANONICAL** on `feat/vnext-w3b-supabase-cas-history`. It adds explicit VNext Supabase current/history authority, strict server-side CAS, catalog-scoped mutation replay, immutable revision history, auth/RLS/grants, conservative ambiguous-commit transport handling, and real PostgreSQL/Supabase rehearsal infrastructure without W3.C application orchestration.
-
-Next exact gate: publish the W3.B review branch/PR, require both the repository Quality Gate and the dedicated W3.B real-database rehearsal on the exact pushed head, then Principal audits that exact head/tree and evidence. **W3.C remains NOT STARTED. Do not merge W3.B without explicit user authorization.**
-
-## RECONSTRUCTION READING ORDER
-
-1. `docs/vnext/PRINCIPAL-AUDITOR-HANDOFF.md` — first executive reconstruction document and operating handoff.
-2. `docs/vnext/PROJECT-STATE.md` — current facts, scope, roadmap, and next action.
-3. `docs/vnext/PRINCIPAL-HANDOFF.md` — detailed durable architectural/product governance for a fresh Principal.
-4. `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md` — product/UX design with evidence vs hypothesis boundaries.
-5. `docs/vnext/presys-mvp-r0/README.md` — foundation package index; historical status inside that package is subordinate to this current-state file.
-6. `docs/vnext/presys-mvp-r0/R0.1.4-rendered-extent-row-projection-amendment.md` — exact mathematical amendment.
-7. `docs/vnext/presys-mvp-r0/evidence/proof-result.md` — empirical browser/PDF proof.
-8. `docs/stories/2026-09-09-vnext-w0-foundation-promotion.md` — historical W0 execution record.
-9. `docs/stories/2026-09-10-vnext-w1-application-actions-shell.md` — historical W1 execution record.
-10. `docs/vnext/W2-A4-AUTHORING-CONTRACT.md` — executable W2 authoring contract under Principal audit.
-11. `docs/stories/2026-09-10-vnext-w2-0-authoring-contract.md` — W2.0 documentation/review story.
-12. `docs/stories/2026-09-10-vnext-w2a-primitives-rendering.md` — W2.A implementation record.
-13. `docs/stories/2026-09-10-vnext-w2b-object-actions.md` — W2.B implementation record and PR #19 provenance.
-14. `docs/stories/2026-09-10-vnext-w2c-direct-manipulation.md` — W2.C implementation/evidence record for PR #20.
-15. `docs/stories/2026-09-11-vnext-w2d-snapping-diagnostics.md` — W2.D implementation/evidence record for PR #21.
-16. `docs/stories/2026-09-11-vnext-w2e-page-template-insertion.md` — W2.E implementation/evidence record for merged PR #22.
-17. `docs/stories/2026-09-11-vnext-w2g-direct-text-editing.md` — W2.G implementation, audit, amendment, and canonical closeout record for merged PR #26.
+1. `docs/vnext/PRINCIPAL-AUDITOR-HANDOFF.md`
+2. this file
+3. `docs/vnext/PRINCIPAL-HANDOFF.md`
+4. `docs/vnext/W3-SAVE-REOPEN-CATALOG-LIBRARY-CONTRACT.md`
+5. W3 stories from `2026-09-11-vnext-w3-0-persistence-contract.md` through `2026-09-19-vnext-w3i-father-browser-flow-closeout.md`
+6. `docs/vnext/W2-A4-AUTHORING-CONTRACT.md`
+7. `docs/vnext/product/EDITOR-UX-FUTURE-AI-BLUEPRINT.md`
+8. the R0 proof package and current `src/vnext/` / proof ownership boundaries
