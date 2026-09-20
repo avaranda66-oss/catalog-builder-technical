@@ -121,17 +121,19 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-image-repair-indicator .repair-title { font-size: 10px; font-weight: 700; color: #991b1b; margin-top: 2px; }
 .vnext-image-repair-indicator .repair-hint { font-size: 9px; color: #7f1d1d; margin-top: 1px; }
 
-.vnext-recovery-center { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgb(15 23 42 / .58); }
-.vnext-recovery-panel { width: min(760px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: auto; padding: 24px; border: 1px solid #cbd5e1; border-radius: 16px; background: #fff; box-shadow: 0 24px 80px rgb(15 23 42 / .25); }
+.vnext-recovery-center, .vnext-recovery-center * { box-sizing: border-box; }
+.vnext-recovery-center { position: fixed; inset: 0; z-index: 1000; display: grid; min-width: 0; place-items: center; padding: 24px; background: rgb(15 23 42 / .58); }
+.vnext-recovery-panel { width: min(760px, 100%); min-width: 0; max-width: 100%; max-height: min(760px, calc(100vh - 48px)); overflow: auto; padding: 24px; border: 1px solid #cbd5e1; border-radius: 16px; background: #fff; box-shadow: 0 24px 80px rgb(15 23 42 / .25); }
 .vnext-recovery-panel > h2 { margin: 4px 0 16px; }
-.vnext-recovery-card { padding: 16px; border: 1px solid #dbe4ee; border-radius: 12px; background: #f8fafc; }
+.vnext-recovery-card { min-width: 0; overflow-wrap: anywhere; padding: 16px; border: 1px solid #dbe4ee; border-radius: 12px; background: #f8fafc; }
 .vnext-recovery-card + .vnext-recovery-card { margin-top: 12px; }
 .vnext-recovery-card h3 { margin: 0 0 6px; }
 .vnext-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vnext-recovery-actions button { min-height: 36px; }
 .vnext-recovery-inspection { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #eef2f7; color: #172033; }
 .vnext-recovery-inspection textarea { width: 100%; min-height: 72px; margin-top: 6px; }
-.vnext-recovery-document-preview { height: 260px; overflow: hidden; margin: 10px 0; }
-.vnext-recovery-document-preview > [data-editorial-root] { width: 210mm; transform: scale(.28); transform-origin: top left; }
+.vnext-recovery-document-preview { min-width: 0; margin: 10px 0; }
+.vnext-recovery-document-preview > [data-editorial-root] { width: max-content; zoom: .28; }
 
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; clip-path: inset(50%) !important; }
 .vnext-library-shell, .vnext-library-shell * { box-sizing: border-box; }
@@ -203,6 +205,32 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-open-failure p { margin: 0 auto 22px; color: #66758a; line-height: 1.6; }
 
 @media (max-width: 700px) {
+  .vnext-shell { width: 100%; min-width: 0; overflow: auto; }
+  .vnext-topbar { min-height: 0; align-items: stretch; flex-direction: column; gap: 10px; padding: 12px; }
+  .vnext-topbar .vnext-brand { min-width: 0; }
+  .vnext-title-row { min-width: 0; }
+  .vnext-title-row h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vnext-actions { width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .vnext-actions button { min-height: 44px; flex: 0 0 auto; }
+  .vnext-workspace { display: flex; min-height: auto; flex: none; flex-direction: column; }
+  .vnext-pages { min-height: auto; flex: none; border-right: 0; border-bottom: 1px solid #d7dee8; padding: 12px; }
+  .vnext-page-list { flex: none; flex-direction: row; overflow-x: auto; }
+  .vnext-page-list button { width: auto; min-height: 44px; flex: 0 0 auto; }
+  .vnext-add-page { min-height: 44px; }
+  .vnext-canvas-area { min-height: auto; flex: none; padding: 12px; }
+  .vnext-canvas-meta { gap: 8px; }
+  .vnext-canvas-meta, .vnext-authoring-toolbar { width: 100%; }
+  .vnext-tool-group button { min-height: 44px; }
+  .vnext-document-preview { min-height: 410px; padding: 4px 0 24px; }
+  .vnext-page-stage { zoom: .35; }
+  .vnext-info { display: block; min-height: auto; flex: none; border-top: 1px solid #d7dee8; border-left: 0; padding: 18px 14px 28px; }
+  .vnext-inspector-action { min-height: 44px; }
+  .vnext-recovery-center { padding: 12px; }
+  .vnext-recovery-panel { max-height: calc(100vh - 24px); padding: 16px; border-radius: 12px; }
+  .vnext-recovery-card { padding: 12px; }
+  .vnext-recovery-actions { flex-direction: column; }
+  .vnext-recovery-actions button { width: 100%; min-height: 44px; }
+  .vnext-recovery-document-preview > [data-editorial-root] { zoom: .26; }
   .vnext-library-header { min-height: 70px; gap: 12px; padding: 10px 14px; }
   .vnext-library-header .vnext-brand { min-width: 0; }
   .vnext-library-header .vnext-brand-mark { width: 34px; height: 34px; flex: none; }

@@ -2,6 +2,7 @@ import React from 'react';
 import type { VNextPersistenceRuntime } from '../persistence';
 import type { RecoveryStartupCandidate } from '../recovery';
 import { compilePlans, DocumentRenderer } from '../rendering';
+import { fatherSaveLabel } from './save-presentation';
 
 export type RecoveryGatePhase = 'PENDING' | 'DECISION' | 'FAILED' | 'RELEASED';
 
@@ -259,7 +260,7 @@ export function RecoveryCenter({
             <article key={candidate.id} className="vnext-recovery-card">
               <h3>{candidateTitle(candidate)}</h3>
               <p>{decisionMessage(candidate)}</p>
-              {pending && <p data-save-state="">{runtime.workspace.getSnapshot().save.label}</p>}
+              {pending && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
               <div className="vnext-recovery-actions">
                 {canRecover && <button type="button" onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
                 {pending && <button type="button" onClick={() => void reconcile(candidate)}>Verificar gravação pendente</button>}

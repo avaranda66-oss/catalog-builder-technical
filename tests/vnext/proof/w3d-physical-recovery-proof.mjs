@@ -206,7 +206,7 @@ async function runD() {
   let run = await launchProfile(committedProfile);
   let page = await pageFor(run, 'committed');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  assert.equal(await page.locator('[data-save-state]').textContent(), 'Could not verify save');
+  assert.equal(await page.locator('[data-save-state]').textContent(), 'Não foi possível confirmar o salvamento');
   await page.getByRole('button', { name: 'Verificar gravação pendente' }).click();
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor({ state: 'detached' });
   const committedAfterRestart = await api(page, 'snapshot');

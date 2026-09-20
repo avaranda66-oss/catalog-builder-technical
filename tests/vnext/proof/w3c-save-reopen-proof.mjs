@@ -63,7 +63,7 @@ try {
     { waitUntil: 'networkidle' }
   );
   await page.locator('[data-vnext-shell]').waitFor();
-  assert.equal((await saveState(page).textContent())?.trim(), 'Saved');
+  assert.equal((await saveState(page).textContent())?.trim(), 'Salvo');
 
   const initial = await proofState(page);
   assert.equal(initial.catalogId, '11111111-1111-4111-8111-111111111111');
@@ -74,7 +74,7 @@ try {
   // Valid visible Text draft crosses the authoring barrier before snapshot capture.
   await openTextEditor(page);
   await textarea(page).fill('A save one');
-  assert.equal((await saveState(page).textContent())?.trim(), 'Unsaved changes');
+  assert.equal((await saveState(page).textContent())?.trim(), 'Alterações não salvas');
   await saveButton(page).click();
   await textarea(page).waitFor({ state: 'detached' });
   await page.waitForFunction(() => window.__W3C_PROOF__.state().pendingSaves === 1);
@@ -100,7 +100,7 @@ try {
   // Save the newer draft and prove Saved only after the authoritative ACK.
   await saveButton(page).click();
   await page.waitForFunction(() => window.__W3C_PROOF__.state().pendingSaves === 1);
-  assert.equal((await saveState(page).textContent())?.trim(), 'Saving…');
+  assert.equal((await saveState(page).textContent())?.trim(), 'Salvando…');
   const secondFlight = await proofState(page);
   assert.equal(secondFlight.pendingText, 'A local two');
   await acknowledgeNext(page);
