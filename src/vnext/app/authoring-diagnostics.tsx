@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogDocument, Diagnostic } from '../domain';
 import type { AssetRuntimeState } from '../asset';
-import { captureSnapshot, compilePlans, DocumentRenderer, measureTables } from '../rendering';
+import { captureSnapshot, compilePlans, DocumentRenderer, measureTables, type LayoutSnapshot, type TablePlan } from '../rendering';
 import { authoredFrameDiagnostics, layoutReport } from '../publication';
 
 export const W2D_DIAGNOSTIC_CODES = new Set([
@@ -130,6 +130,12 @@ export interface EditorDiagnosticsProbeProps {
   document: CatalogDocument;
   assetUrls: ReadonlyMap<string, string>;
   onDiagnostics(source: CatalogDocument, diagnostics: readonly Diagnostic[]): void;
+  onMeasuredLayout?(
+    source: CatalogDocument,
+    plans: ReadonlyMap<string, TablePlan>,
+    snapshot: LayoutSnapshot | undefined,
+    diagnostics: readonly Diagnostic[]
+  ): void;
 }
 
 function probeRendererCss(): string {
@@ -147,7 +153,15 @@ function probeRendererCss(): string {
   return rules.join('\n');
 }
 
-export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics }: EditorDiagnosticsProbeProps) {
+async function waitForProbeResources(root: HTMLElement): Promise<void> {
+  if (window.document.fonts?.ready) await window.document.fonts.ready;
+  await Promise.all([...root.querySelectorAll<HTMLImageElement>('img')].map(async (image) => {
+    if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) return;
+    await image.decode().catch(() => undefined);
+  }));
+}
+
+export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics, onMeasuredLayout }: EditorDiagnosticsProbeProps) {
   const compiled = React.useMemo(() => compilePlans(document), [document]);
   const [, forceRender] = React.useReducer((value: number) => value + 1, 0);
   const hostRef = React.useRef<HTMLDivElement>(null);
@@ -171,10 +185,10 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics }: E
     let frame = 0;
     const run = async () => {
       try {
-        if (window.document.fonts?.ready) await window.document.fonts.ready;
-        if (cancelled) return;
         const root = probeRootRef.current?.querySelector<HTMLElement>('[data-editorial-root]');
         if (!root) return;
+        await waitForProbeResources(root);
+        if (cancelled) return;
         measureTables(document, compiled.plans, root);
         forceRender();
         frame = window.requestAnimationFrame(async () => {
@@ -182,13 +196,22 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics }: E
           try {
             const snapshot = await captureSnapshot(document, compiled.plans, root);
             if (cancelled) return;
-            onDiagnostics(document, mergeDiagnostics(compiled.diagnostics, layoutReport(document, compiled.plans, snapshot, root)));
+            const diagnostics = mergeDiagnostics(compiled.diagnostics, layoutReport(document, compiled.plans, snapshot, root));
+            onDiagnostics(document, diagnostics);
+            onMeasuredLayout?.(document, new Map(compiled.plans), snapshot, diagnostics);
           } catch {
-            if (!cancelled) onDiagnostics(document, immediateAuthoringDiagnostics(document));
+            if (!cancelled) {
+              const diagnostics = immediateAuthoringDiagnostics(document);
+              onDiagnostics(document, diagnostics);
+              onMeasuredLayout?.(document, new Map(compiled.plans), undefined, diagnostics);
+            }
           }
         });
       } catch {
-        if (!cancelled) onDiagnostics(document, immediateAuthoringDiagnostics(document));
+        if (!cancelled) {
+          const diagnostics = immediateAuthoringDiagnostics(document);
+          onDiagnostics(document, diagnostics);
+        }
       }
     };
     void run();
@@ -196,7 +219,7 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics }: E
       cancelled = true;
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [compiled, document, onDiagnostics, shadowRoot]);
+  }, [compiled, document, onDiagnostics, onMeasuredLayout, shadowRoot]);
 
   return (
     <div ref={hostRef} className="vnext-diagnostics-probe" data-editor-diagnostics-probe="" aria-hidden="true">

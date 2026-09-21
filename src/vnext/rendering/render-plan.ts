@@ -11,7 +11,7 @@ export interface TablePlan {
   tableId:string;objectId:string;pageId:string;
   frameU:number;widthsU:number[];frameQ:number;trackQ:number[];
   styles:Map<string,ResolvedStyle>;annotationStyle:ResolvedStyle;
-  heightsU?:number[];rowQ?:number[];edges:PaintEdge[];suppressed:string[];
+  heightsU?:number[];rowQ?:number[];gridOffsetYQ?:number;edges:PaintEdge[];suppressed:string[];
   diagnostics:Diagnostic[];
 }
 export function compilePlans(doc:CatalogDocument):{plans:Map<string,TablePlan>;diagnostics:Diagnostic[]} {

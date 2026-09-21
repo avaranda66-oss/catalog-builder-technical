@@ -172,7 +172,7 @@ Preserve:
 
 ## ROADMAP
 
-- **W4 NEXT / NOT STARTED — Advanced Table Editor.** Direction may include spreadsheet-like row/column/range selection; add/remove rows and columns; merge/unmerge; grouped headers; section rows; titles/notes/footers/legends; TSV/spreadsheet paste; technical matrices; presets; marker-cell ergonomics; and explicit **Fit Height / Ajustar altura**.
+- **W4.A IMPLEMENTED / UNDER REVIEW — NOT CANONICAL.** The isolated Table selection + single-axis insert/remove slice is implemented on `codex/w4a-table-selection-axis`; see `W4A-IMPLEMENTATION-HANDOFF.md`. W4.B+ remains NOT STARTED and unauthorized. W4.A requires independent Gemini audit and Principal gate before canonical promotion.
 - **W5 — Complete Translation VNext.** NOT STARTED.
 - **W6 — Publication + Easy Button + First Father Pilot.** NOT STARTED.
 - **W7 — evidence-driven maturation.** NOT STARTED.

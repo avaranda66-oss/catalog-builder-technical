@@ -10,9 +10,21 @@ import {
   type EditorialObject,
   type Page,
   type RichText,
+  type TableModel,
+  type TableObject,
   type TextObject,
 } from '../domain';
-import { compilePlans, DocumentRenderer } from '../rendering';
+import { compilePlans, DocumentRenderer, type LayoutSnapshot, type TablePlan } from '../rendering';
+import {
+  explicitTableAxisIds,
+  navigateTableSelection,
+  reconcileTableSelection,
+  selectionAfterAxisInsert,
+  selectionAfterAxisRemove,
+  tableCellSelection,
+  tableSelectionIdentity,
+  type TableSelection,
+} from '../editor/table-selection';
 import type { AuthoringRecoveryOverlay } from '../recovery';
 import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
 import {
@@ -33,8 +45,9 @@ import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type Inser
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { fatherSaveLabel } from './save-presentation';
+import { TableGridOverlay } from './table-grid-overlay';
 
-type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' };
+type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
 type TextEditSession = {
   objectId: string;
@@ -156,6 +169,11 @@ export function EditorWorkspace({
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
+  const [tableSelection, setTableSelection] = React.useState<TableSelection | null>(null);
+  const tableSelectionRef = React.useRef<TableSelection | null>(null);
+  const tableHistoryContextRef = React.useRef<{ table: TableModel; selection: TableSelection } | null>(null);
+  tableSelectionRef.current = tableSelection;
+  const sessionRef = React.useRef(session);
   const textEditRef = React.useRef<TextEditSession | null>(null);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -174,6 +192,17 @@ export function EditorWorkspace({
     source: CatalogDocument;
     diagnostics: readonly Diagnostic[];
   } | null>(null);
+  const lastTablePointerDownRef = React.useRef<{
+    objectId: string;
+    timeStamp: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const [measuredLayout, setMeasuredLayout] = React.useState<{
+    source: CatalogDocument;
+    plans: ReadonlyMap<string, TablePlan>;
+    snapshot?: LayoutSnapshot;
+  } | null>(null);
   const controllerRef = React.useRef<EditorInteractionController | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = new EditorInteractionController({
@@ -190,11 +219,13 @@ export function EditorWorkspace({
   const selectedPageIndex = document.pages.findIndex((page) => page.id === selectedPage.id);
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
+  const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
   const previewDocument = React.useMemo(() => ({ ...document, pages: [selectedPage] }), [document, selectedPage]);
-  const { plans } = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
+  const compiledPreview = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
+  const plans = measuredLayout?.source === document ? measuredLayout.plans : compiledPreview.plans;
   const pageWidthU = mmToU(selectedPage.widthMm);
   const pageHeightU = mmToU(selectedPage.heightMm);
   const safeAreaU = React.useMemo(() => safeAreaFrameU(selectedPage), [selectedPage]);
@@ -220,6 +251,14 @@ export function EditorWorkspace({
     if (!isCurrentDiagnosticSource(session.getSnapshot().document, source)) return;
     setMeasuredDiagnostics({ source, diagnostics });
   }, [session]);
+  const receiveMeasuredLayout = React.useCallback((
+    source: CatalogDocument,
+    nextPlans: ReadonlyMap<string, TablePlan>,
+    layoutSnapshot?: LayoutSnapshot
+  ) => {
+    if (session.getSnapshot().document !== source) return;
+    setMeasuredLayout({ source, plans: nextPlans, snapshot: layoutSnapshot });
+  }, [session]);
   const [inspectorDraft, setInspectorDraft] = React.useState<InspectorDraft>({ x: '', y: '', width: '', height: '' });
   const inspectorDraftRef = React.useRef(inspectorDraft);
   inspectorDraftRef.current = inspectorDraft;
@@ -244,6 +283,59 @@ export function EditorWorkspace({
       setEditorState((current) => ({ ...current, selectedObjectIds: validIds }));
     }
   }, [controller, document, editorState.activePageId, editorState.selectedObjectIds]);
+
+  React.useEffect(() => {
+    if (sessionRef.current === session) return;
+    sessionRef.current = session;
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
+    setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
+  }, [session]);
+
+  React.useEffect(() => {
+    if (editorState.mode !== 'table-grid') return;
+    const reconciled = reconcileTableSelection(document, tableSelectionRef.current);
+    if (reconciled) {
+      if (reconciled !== tableSelectionRef.current) setTableSelection(reconciled);
+      const page = document.pages.find((entry) => entry.id === reconciled.identity.pageId);
+      const object = page?.objects.find((entry) => entry.id === reconciled.identity.objectId);
+      if (object?.type === 'table') tableHistoryContextRef.current = { table: object.table, selection: reconciled };
+      return;
+    }
+    const previous = tableHistoryContextRef.current;
+    const stale = tableSelectionRef.current;
+    const page = stale ? document.pages.find((entry) => entry.id === stale.identity.pageId) : undefined;
+    const object = stale ? page?.objects.find((entry) => entry.id === stale.identity.objectId) : undefined;
+    if (stale && previous && object?.type === 'table' && object.table.id === stale.identity.tableId) {
+      let next: TableSelection | undefined;
+      if (stale.kind === 'rows') {
+        const index = Math.max(0, previous.table.rows.findIndex((row) => row.id === stale.focusRowId));
+        next = selectionAfterAxisRemove(stale.identity, 'row', index, object.table);
+      } else if (stale.kind === 'columns') {
+        const index = Math.max(0, previous.table.columns.findIndex((column) => column.id === stale.focusColumnId));
+        next = selectionAfterAxisRemove(stale.identity, 'column', index, object.table);
+      } else if (stale.kind === 'cell' || stale.kind === 'range') {
+        const rowIndex = Math.max(0, previous.table.rows.findIndex((row) => row.id === stale.focus.rowId));
+        const columnIndex = Math.max(0, previous.table.columns.findIndex((column) => column.id === stale.focus.columnId));
+        next = tableCellSelection(stale.identity, {
+          rowId: object.table.rows[Math.min(rowIndex, object.table.rows.length - 1)].id,
+          columnId: object.table.columns[Math.min(columnIndex, object.table.columns.length - 1)].id,
+        });
+      }
+      if (next) {
+        tableSelectionRef.current = next;
+        tableHistoryContextRef.current = { table: object.table, selection: next };
+        setTableSelection(next);
+        return;
+      }
+    }
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    setStatusMessage('A edição da tabela foi encerrada porque o alvo não está mais disponível.');
+  }, [document, editorState.mode]);
 
   React.useEffect(() => {
     if (!textEdit) return;
@@ -296,11 +388,17 @@ export function EditorWorkspace({
       setTextEdit(null);
       persistence?.runtime.workspace.notifyDraftStateChanged();
     }
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
     setStatusMessage(null);
   };
 
   const selectObject = (objectId: string) => {
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
     setEditorState((current) => ({ ...current, selectedObjectIds: [objectId], mode: 'select' }));
   };
 
@@ -527,6 +625,131 @@ export function EditorWorkspace({
     setStatusMessage(null);
     persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
+  };
+
+  const startTableGrid = (object: EditorialObject): boolean => {
+    if (object.type !== 'table') return false;
+    if (object.locked) {
+      setStatusMessage('Tabela bloqueada não pode ser editada.');
+      return false;
+    }
+    const plan = plans.get(object.table.id);
+    if (!plan?.rowQ || plan.gridOffsetYQ === undefined) {
+      setStatusMessage('Aguarde a medição da tabela para editar a grade.');
+      return false;
+    }
+    controller.cancel('superseded');
+    cancelTextEdit('');
+    const identity = tableSelectionIdentity(selectedPage.id, object.id, object.table.id);
+    const first = { rowId: object.table.rows[0].id, columnId: object.table.columns[0].id };
+    const next = tableCellSelection(identity, first);
+    tableSelectionRef.current = next;
+    tableHistoryContextRef.current = { table: object.table, selection: next };
+    setTableSelection(next);
+    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'table-grid' });
+    setStatusMessage('Modo de grade da tabela.');
+    return true;
+  };
+
+  const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
+    setEditorState((current) => ({ ...current, mode: 'select' }));
+    if (message) setStatusMessage(message);
+  };
+
+  const tableActionMessage = (code: string): string => {
+    if (code === 'TABLE_LAST_AXIS') return 'A última linha ou coluna não pode ser removida.';
+    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover o eixo.';
+    if (code === 'MERGE_HEADER_BOUNDARY') return 'A inserção criaria uma célula mesclada entre cabeçalho e corpo.';
+    if (code === 'TARGET_STALE') return 'A tabela mudou. A ação foi descartada sem alterar o documento.';
+    if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
+    return 'Não foi possível alterar a estrutura da tabela.';
+  };
+
+  const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after') => {
+    const object = selectedTableObject;
+    const selection = tableSelectionRef.current;
+    if (!object || !selection || editorState.mode !== 'table-grid') return;
+    const axisIds = explicitTableAxisIds(object.table, selection, axis);
+    if (axisIds.length !== 1) {
+      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para usar esta ação.`);
+      return;
+    }
+    const referenceAxisId = axisIds[0];
+    const referenceRow = axis === 'row' ? object.table.rows.find((row) => row.id === referenceAxisId) : undefined;
+    const result = session.execute(axis === 'row' ? {
+      type: 'table.axis.insert',
+      pageId: selectedPage.id,
+      objectId: object.id,
+      tableId: object.table.id,
+      axis,
+      referenceAxisId,
+      position,
+      properties: { role: referenceRow?.role === 'header' ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } },
+      expectedTable: object.table,
+    } : {
+      type: 'table.axis.insert',
+      pageId: selectedPage.id,
+      objectId: object.id,
+      tableId: object.table.id,
+      axis,
+      referenceAxisId,
+      position,
+      properties: { width: { mode: 'flex', weight: 1 }, minMm: 1 },
+      expectedTable: object.table,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableActionMessage(result.error.code));
+      return;
+    }
+    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
+      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
+    const axes = axis === 'row' ? nextObject?.table.rows : nextObject?.table.columns;
+    const insertedId = axes?.find((candidate) => result.metadata.createdIds.includes(candidate.id))?.id;
+    if (insertedId) {
+      const nextSelection = selectionAfterAxisInsert(selection.identity, axis, insertedId);
+      tableSelectionRef.current = nextSelection;
+      tableHistoryContextRef.current = { table: nextObject!.table, selection: nextSelection };
+      setTableSelection(nextSelection);
+    }
+    setStatusMessage(axis === 'row' ? 'Linha inserida.' : 'Coluna inserida.');
+  };
+
+  const runTableAxisRemove = (axis: 'row' | 'column') => {
+    const object = selectedTableObject;
+    const selection = tableSelectionRef.current;
+    if (!object || !selection || editorState.mode !== 'table-grid') return;
+    const axisIds = explicitTableAxisIds(object.table, selection, axis);
+    if (axisIds.length !== 1) {
+      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para remover.`);
+      return;
+    }
+    const axisId = axisIds[0];
+    const removedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === axisId);
+    const result = session.execute({
+      type: 'table.axis.remove',
+      pageId: selectedPage.id,
+      objectId: object.id,
+      tableId: object.table.id,
+      axis,
+      axisId,
+      expectedTable: object.table,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableActionMessage(result.error.code));
+      return;
+    }
+    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
+      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
+    if (nextObject) {
+      const nextSelection = selectionAfterAxisRemove(selection.identity, axis, removedIndex, nextObject.table);
+      tableSelectionRef.current = nextSelection;
+      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
+      setTableSelection(nextSelection);
+    }
+    setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
   };
 
   const finishTextEditBeforeCommand = (): boolean => !textEditRef.current || commitTextEdit();
@@ -756,6 +979,10 @@ export function EditorWorkspace({
     event.preventDefault();
     event.stopPropagation();
     if (textEditRef.current) return;
+    if (editorState.mode === 'table-grid') {
+      if (selectedTableObject?.id === object.id) return;
+      leaveTableGrid('');
+    }
     if (kind.type === 'move' && object.type === 'text') {
       const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
       const previous = lastTextPointerDownRef.current;
@@ -778,6 +1005,31 @@ export function EditorWorkspace({
       if (isSecondActivation) {
         controller.cancel('superseded');
         startTextEdit(object);
+        return;
+      }
+    }
+    if (kind.type === 'move' && object.type === 'table') {
+      const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
+      const previous = lastTablePointerDownRef.current;
+      const isSecondActivation = selected && (
+        event.detail >= 2
+        || Boolean(
+          previous
+          && previous.objectId === object.id
+          && event.timeStamp - previous.timeStamp >= 0
+          && event.timeStamp - previous.timeStamp <= 500
+          && Math.hypot(event.clientX - previous.clientX, event.clientY - previous.clientY) <= 8
+        )
+      );
+      lastTablePointerDownRef.current = {
+        objectId: object.id,
+        timeStamp: event.timeStamp,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      if (isSecondActivation) {
+        controller.cancel('superseded');
+        startTableGrid(object);
         return;
       }
     }
@@ -862,6 +1114,19 @@ export function EditorWorkspace({
   };
 
   const cancelOnRootKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const isNativeInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      || target.getAttribute(['content', 'editable'].join('')) === 'true';
+    if (!isNativeInput && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) redo(); else undo();
+      return;
+    }
+    if (!isNativeInput && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
+      return;
+    }
     if (textEditRef.current) {
       if (compositionRef.current) return;
       if (event.key === 'Escape') {
@@ -878,13 +1143,42 @@ export function EditorWorkspace({
       }
       return;
     }
+    if (editorState.mode === 'table-grid' && selectedTableObject && tableSelectionRef.current) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        leaveTableGrid();
+        return;
+      }
+      if (event.key === 'Tab' || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault();
+        const navigation = navigateTableSelection(
+          selectedTableObject.table,
+          tableSelectionRef.current,
+          event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Tab',
+          { extend: event.shiftKey && event.key !== 'Tab', backwards: event.shiftKey && event.key === 'Tab' }
+        );
+        if (navigation.exited) {
+          leaveTableGrid('Fim da grade; manipulação do objeto restaurada.');
+        } else {
+          tableSelectionRef.current = navigation.selection;
+          tableHistoryContextRef.current = { table: selectedTableObject.table, selection: navigation.selection };
+          setTableSelection(navigation.selection);
+        }
+        return;
+      }
+    }
     if (event.key === 'Enter' && selectedObject?.type === 'text') {
-      const target = event.target as HTMLElement;
       if (!['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target.tagName)) {
         event.preventDefault();
         startTextEdit(selectedObject);
         return;
       }
+    }
+    if (event.key === 'Enter' && selectedObject?.type === 'table' && !isNativeInput) {
+      event.preventDefault();
+      startTableGrid(selectedObject);
+      return;
     }
     if (event.key === 'Escape' && controller.cancel('escape')) {
       event.preventDefault();
@@ -950,6 +1244,19 @@ export function EditorWorkspace({
     setInspectorDraft(next);
     persistence?.runtime.workspace.notifyDraftStateChanged();
   };
+
+  const selectedRowAxisIds = selectedTableObject && tableSelection
+    ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'row')
+    : [];
+  const selectedColumnAxisIds = selectedTableObject && tableSelection
+    ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'column')
+    : [];
+  const rowAxisReason = selectedRowAxisIds.length === 1
+    ? undefined
+    : 'Selecione uma única linha pelo seletor lateral.';
+  const columnAxisReason = selectedColumnAxisIds.length === 1
+    ? undefined
+    : 'Selecione uma única coluna pelo seletor superior.';
 
   return (
     <div
@@ -1076,14 +1383,43 @@ export function EditorWorkspace({
               >
                 Editar texto
               </button>
+              <button
+                type="button"
+                data-editor-action="edit-table"
+                disabled={selectedObject?.type !== 'table' || selectedObject.locked}
+                onClick={() => selectedObject && startTableGrid(selectedObject)}
+              >
+                Editar tabela
+              </button>
             </div>
           </div>
+
+          {editorState.mode === 'table-grid' && selectedTableObject && (
+            <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
+              <strong>Grade da tabela</strong>
+              <div className="vnext-tool-group" aria-label="Ações de linha">
+                <button type="button" data-editor-action="insert-row-before" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
+                <button type="button" data-editor-action="insert-row-after" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
+                <button type="button" data-editor-action="remove-row" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
+              </div>
+              <div className="vnext-tool-group" aria-label="Ações de coluna">
+                <button type="button" data-editor-action="insert-column-before" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
+                <button type="button" data-editor-action="insert-column-after" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
+                <button type="button" data-editor-action="remove-column" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
+              </div>
+              <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
+            </div>
+          )}
 
           <div className="vnext-document-preview" aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
             <div className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
               <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
-                if (event.target === event.currentTarget) { controller.cancel('superseded'); setEditorState((current) => ({ ...current, selectedObjectIds: [] })); }
+                if (event.target === event.currentTarget) {
+                  controller.cancel('superseded');
+                  if (editorState.mode === 'table-grid') leaveTableGrid('');
+                  setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
+                }
               }}>
                 {textEdit && editingObject && (
                   <div
@@ -1155,7 +1491,7 @@ export function EditorWorkspace({
                     <div
                       key={object.id}
                       tabIndex={-1}
-                      className={'vnext-object-hit-target' + (selected ? ' is-selected' : '') + (preview?.objectId === object.id ? ' is-previewing' : '')}
+                      className={'vnext-object-hit-target' + (selected ? ' is-selected' : '') + (preview?.objectId === object.id ? ' is-previewing' : '') + (selected && editorState.mode === 'table-grid' && object.type === 'table' ? ' is-table-grid' : '')}
                       data-editor-object-id={object.id}
                       data-selected={selected ? 'true' : 'false'}
                       data-editor-preview={preview?.objectId === object.id ? 'true' : undefined}
@@ -1163,6 +1499,7 @@ export function EditorWorkspace({
                       onPointerDown={(event) => beginGesture(event, object, { type: 'move' })}
                       onDoubleClick={() => {
                         if (object.type === 'text') startTextEdit(object);
+                        if (object.type === 'table' && editorState.mode !== 'table-grid') startTableGrid(object);
                       }}
                       onPointerMove={moveGesture}
                       onPointerUp={finishGesture}
@@ -1202,7 +1539,28 @@ export function EditorWorkspace({
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
-                          {object.type !== 'group' && editorState.mode !== 'text-edit' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
+                          {object.type === 'table'
+                            && editorState.mode === 'table-grid'
+                            && tableSelection
+                            && plans.get(object.table.id)?.rowQ
+                            && plans.get(object.table.id)?.gridOffsetYQ !== undefined
+                            && (
+                              <TableGridOverlay
+                                table={object.table}
+                                plan={plans.get(object.table.id)!}
+                                identity={tableSelection.identity}
+                                selection={tableSelection}
+                                localSequence={snapshot.localSequence}
+                                onSelectionChange={(next) => {
+                                  if (session.getSnapshot().localSequence !== snapshot.localSequence) return;
+                                  tableSelectionRef.current = next;
+                                  tableHistoryContextRef.current = { table: object.table, selection: next };
+                                  setTableSelection(next);
+                                }}
+                                onStaleGesture={() => setStatusMessage('Gesto descartado porque o documento mudou.')}
+                              />
+                            )}
+                          {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
                             <button
                               key={handle}
                               type="button"
@@ -1324,7 +1682,12 @@ export function EditorWorkspace({
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
       </div>
-      <EditorDiagnosticsProbe document={document} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} onDiagnostics={receiveMeasuredDiagnostics} />
+      <EditorDiagnosticsProbe
+        document={document}
+        assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS}
+        onDiagnostics={receiveMeasuredDiagnostics}
+        onMeasuredLayout={receiveMeasuredLayout}
+      />
     </div>
   );
 }

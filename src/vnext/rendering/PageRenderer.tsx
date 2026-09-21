@@ -5,7 +5,7 @@ import { PrimitiveRenderer } from './PrimitiveRenderer';
 
 export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Page;document:CatalogDocument;pageNumber:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>}) {
   const px=(mm:number)=>qCss(uToQ(mmToU(mm)));
-  const leaf=(object:LeafEditorialObject,left=px(object.frame.xMm),top=px(object.frame.yMm))=><div key={object.id} data-object-id={object.id} className="editorial-object"
+  const leaf=(object:LeafEditorialObject,left=px(object.frame.xMm),top=px(object.frame.yMm))=><div key={object.id} data-object-id={object.id} data-object-type={object.type} className="editorial-object"
     style={{left,top,width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex}}>
     <PrimitiveRenderer object={object} document={document} plans={plans} assetUrls={assetUrls}/>
   </div>;

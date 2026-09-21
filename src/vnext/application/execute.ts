@@ -1,8 +1,11 @@
-import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type TableModel, type TableObject } from '../domain';
+import { VNextError } from '../domain/diagnostics';
 import { add } from '../domain/physical';
-import { validateTable } from '../table';
+import { deleteAxis, insertAxis, orderedAnchors, validateTable } from '../table';
 import {
   ApplicationActionSchema,
+  InsertedTableColumnPropertiesSchema,
+  InsertedTableRowPropertiesSchema,
   type ApplicationAction,
   type ApplicationActionFailure,
   type ApplicationActionResult,
@@ -215,6 +218,80 @@ function assetRefEquals(left: AssetRef, right: AssetRef): boolean {
     left.name === right.name &&
     left.alt === right.alt
   );
+}
+
+function tableEquals(left: TableModel, right: TableModel): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function tableTarget(
+  document: CatalogDocument,
+  action: { pageId: string; objectId: string; tableId: string; expectedTable: TableModel }
+): { ok: true; object: TableObject; pageIndex: number; objectIndex: number } | ApplicationActionFailure {
+  if (!document.pages.some((page) => page.id === action.pageId)) return failure('PAGE_NOT_FOUND', action.pageId);
+  const location = findObjectLocation(document, action.objectId);
+  if (!location || location.page.id !== action.pageId) {
+    return failure('OBJECT_NOT_FOUND', `Table object ${action.objectId} was not found on page ${action.pageId}`);
+  }
+  if (location.parentGroup) {
+    return failure('ACTION_INVALID', `Table ${action.objectId} is inside closed Group ${location.parentGroup.id}; ungroup before editing`);
+  }
+  if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+  if (location.object.type !== 'table') return failure('OBJECT_TYPE_MISMATCH', `${action.objectId} is not a Table object`);
+  if (location.object.table.id !== action.tableId) {
+    return failure('TABLE_IDENTITY_MISMATCH', `Expected table ${action.tableId}, found ${location.object.table.id}`);
+  }
+  if (!tableEquals(location.object.table, action.expectedTable)) {
+    return failure('TARGET_STALE', `Table ${action.tableId} changed after the command was prepared`);
+  }
+  return {
+    ok: true,
+    object: location.object,
+    pageIndex: location.pageIndex,
+    objectIndex: location.objectIndex,
+  };
+}
+
+function replaceTableObject(
+  document: CatalogDocument,
+  target: { object: TableObject; pageIndex: number; objectIndex: number },
+  table: TableModel
+): CatalogDocument {
+  const page = document.pages[target.pageIndex];
+  return pageWithObjects(
+    document,
+    target.pageIndex,
+    page.objects.map((object, index) => index === target.objectIndex ? { ...target.object, table } : object)
+  );
+}
+
+function tableOperationFailure(error: unknown, axisId: string): ApplicationActionFailure {
+  if (!(error instanceof VNextError)) return documentFailure(error);
+  switch (error.code) {
+    case 'AXIS_NOT_FOUND':
+      return failure('TABLE_AXIS_NOT_FOUND', `Axis ${axisId} no longer exists`);
+    case 'TABLE_LAST_AXIS':
+      return failure('TABLE_LAST_AXIS', 'A table must keep at least one row and one column');
+    case 'MERGE_INTERSECTION':
+      return failure('MERGE_INTERSECTION', `Axis ${axisId} intersects a merged span; unmerge explicitly before removing it`);
+    case 'MERGE_HEADER_BOUNDARY':
+      return failure('MERGE_HEADER_BOUNDARY', 'The inserted row would make a span cross the header/body boundary');
+    default:
+      return documentFailure(error);
+  }
+}
+
+function rowInsertionCrossesHeaderBoundary(table: TableModel, at: number, role: 'header' | 'body'): boolean {
+  for (const anchor of orderedAnchors(table)) {
+    const span = anchor.span?.rows ?? 1;
+    if (span === 1) continue;
+    const start = table.rows.findIndex((row) => row.id === anchor.rowId);
+    if (at > start && at < start + span) {
+      const anchorIsHeader = table.rows[start].role === 'header';
+      if ((role === 'header') !== anchorIsHeader) return true;
+    }
+  }
+  return false;
 }
 
 export function executeApplicationAction(
@@ -697,6 +774,69 @@ export function executeApplicationAction(
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );
+        break;
+      }
+      case 'table.axis.insert': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const items = action.axis === 'row' ? table.rows : table.columns;
+        const referenceIndex = items.findIndex((item) => item.id === action.referenceAxisId);
+        if (referenceIndex < 0) return failure('TABLE_AXIS_NOT_FOUND', `Reference axis ${action.referenceAxisId} no longer exists`);
+        const at = referenceIndex + (action.position === 'after' ? 1 : 0);
+        if (action.axis === 'row') {
+          const properties = InsertedTableRowPropertiesSchema.parse(action.properties);
+          if (rowInsertionCrossesHeaderBoundary(table, at, properties.role)) {
+            return failure('MERGE_HEADER_BOUNDARY', 'The inserted row would make a span cross the header/body boundary');
+          }
+        } else {
+          InsertedTableColumnPropertiesSchema.parse(action.properties);
+        }
+
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        const axisId = allocator.next();
+        const cells: Cell[] = (action.axis === 'row' ? table.columns : table.rows).map((item) => ({
+          id: allocator.next(),
+          rowId: action.axis === 'row' ? axisId : item.id,
+          columnId: action.axis === 'column' ? axisId : item.id,
+          content: { type: 'empty' },
+        }));
+        let nextTable: TableModel;
+        try {
+          const axisItem = action.axis === 'row'
+            ? { id: axisId, ...InsertedTableRowPropertiesSchema.parse(action.properties) }
+            : { id: axisId, ...InsertedTableColumnPropertiesSchema.parse(action.properties) };
+          nextTable = insertAxis(table, action.axis, at, axisItem, cells);
+        } catch (error) {
+          return tableOperationFailure(error, action.referenceAxisId);
+        }
+        const changedAnchorIds = nextTable.cells
+          .filter((cell) => table.cells.find((before) => before.id === cell.id && before.span !== cell.span))
+          .map((cell) => cell.id);
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, action.referenceAxisId, ...changedAnchorIds];
+        createdIds = [axisId, ...cells.map((cell) => cell.id)];
+        break;
+      }
+      case 'table.axis.remove': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const items = action.axis === 'row' ? table.rows : table.columns;
+        if (!items.some((item) => item.id === action.axisId)) {
+          return failure('TABLE_AXIS_NOT_FOUND', `Axis ${action.axisId} no longer exists`);
+        }
+        const removedCellIds = table.cells
+          .filter((cell) => (action.axis === 'row' ? cell.rowId : cell.columnId) === action.axisId)
+          .map((cell) => cell.id);
+        let nextTable: TableModel;
+        try {
+          nextTable = deleteAxis(table, action.axis, action.axisId);
+        } catch (error) {
+          return tableOperationFailure(error, action.axisId);
+        }
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, action.axisId, ...removedCellIds];
         break;
       }
     }

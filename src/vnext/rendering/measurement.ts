@@ -67,7 +67,11 @@ export function measureTables(doc:CatalogDocument,plans:Map<string,TablePlan>,ro
     const resolved=resolveRows(table.rows,measured.constraints);
     const projected=projectRows(resolved.heightsU);
     const paint=buildPaint(table,plan.trackQ,projected.rowQ,plan.styles);
-    plan.heightsU=resolved.heightsU;plan.rowQ=projected.rowQ;plan.edges=paint.edges;plan.suppressed=paint.suppressed;
+    const grid=findElement(root,'data-table-id',table.id);
+    const intrinsic=findElement(root,'data-table-intrinsic',table.id);
+    plan.heightsU=resolved.heightsU;plan.rowQ=projected.rowQ;
+    plan.gridOffsetYQ=pxToQ(grid.getBoundingClientRect().top-intrinsic.getBoundingClientRect().top);
+    plan.edges=paint.edges;plan.suppressed=paint.suppressed;
     plan.diagnostics=[...resolved.diagnostics,...paint.diagnostics].map(d=>({...d,pageId:page.id,objectId:object.id,tableId:table.id}));
   }
 }
@@ -76,7 +80,7 @@ type Identity={pageId:string};
 export type PhysicalLayoutFact=
  | ({kind:'page';authoredWidthU:number;authoredHeightU:number;widthQ:number;heightQ:number}&Identity)
  | ({kind:'object';objectId:string;authoredXU:number;authoredYU:number;authoredWidthU:number;authoredHeightU:number;textFlowSignature?:string}&Bounds&Identity)
- | ({kind:'table';objectId:string;tableId:string;frameWidthU:number;columnWidthsU:number[];frameQ:number;trackQ:number[];renderedIntrinsicHeightQ:number}&Identity)
+ | ({kind:'table';objectId:string;tableId:string;frameWidthU:number;columnWidthsU:number[];frameQ:number;trackQ:number[];gridOffsetYQ?:number;renderedIntrinsicHeightQ:number}&Identity)
  | ({kind:'row';tableId:string;rowId:string;resolvedHeightU:number;yQ:number;heightQ:number}&Identity)
  | ({kind:'cell';tableId:string;cellId:string;intrinsicContentWidthQ:number;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
  | ({kind:'annotation';tableId:string;annotationId:string;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
@@ -131,7 +135,8 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
       const rowQ=computed.gridTemplateRows.split(' ').map(value=>pxToQ(parseFloat(value)));
       const frameQ=pxToQ(gridRect.width);
       const intrinsic=findElement(node,'data-table-intrinsic',table.id);
-      facts.push({kind:'table',...location,tableId:table.id,frameWidthU:plan.frameU,columnWidthsU:[...plan.widthsU],frameQ,trackQ,renderedIntrinsicHeightQ:pxToQ(intrinsic.getBoundingClientRect().height)});
+      facts.push({kind:'table',...location,tableId:table.id,frameWidthU:plan.frameU,columnWidthsU:[...plan.widthsU],frameQ,trackQ,
+        gridOffsetYQ:plan.gridOffsetYQ??pxToQ(gridRect.top-intrinsic.getBoundingClientRect().top),renderedIntrinsicHeightQ:pxToQ(intrinsic.getBoundingClientRect().height)});
       check(frameQ,plan.frameQ,'table frame',{...location,tableId:table.id});
       if(trackQ.length!==plan.trackQ.length||rowQ.length!==plan.rowQ.length)throw new VNextError('RENDER_GEOMETRY_MISMATCH','Computed track count differs');
       trackQ.forEach((q,i)=>check(q,plan.trackQ[i],'column '+i,{...location,tableId:table.id}));
