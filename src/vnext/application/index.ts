@@ -11,6 +11,8 @@ export {
   ImageObjectInsertSpecSchema,
   InsertObjectActionSchema,
   InsertPageTemplateActionSchema,
+  InsertedTableColumnPropertiesSchema,
+  InsertedTableRowPropertiesSchema,
   LineObjectInsertSpecSchema,
   MoveObjectActionSchema,
   ObjectInsertSpecSchema,
@@ -22,6 +24,8 @@ export {
   SetTextContentActionSchema,
   ShapeObjectInsertSpecSchema,
   TableObjectInsertSpecSchema,
+  TableAxisInsertActionSchema,
+  TableAxisRemoveActionSchema,
   TextObjectInsertSpecSchema,
   UngroupActionSchema,
 } from './contracts';

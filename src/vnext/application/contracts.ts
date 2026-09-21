@@ -192,7 +192,56 @@ export const UngroupActionSchema = z.object({
   groupId: applicationId,
 }).strict();
 
-export const ApplicationActionSchema = z.discriminatedUnion('type', [
+export const InsertedTableRowPropertiesSchema = z.object({
+  role: z.enum(['header', 'body']),
+  heightPolicy: z.object({ mode: z.literal('AUTO') }).strict(),
+}).strict();
+
+export const InsertedTableColumnPropertiesSchema = z.object({
+  width: z.object({
+    mode: z.literal('flex'),
+    weight: safeInteger.positive(),
+  }).strict(),
+  minMm: z.number().finite().positive(),
+}).strict();
+
+export const TableAxisInsertActionSchema = z.object({
+  type: z.literal('table.axis.insert'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  axis: z.enum(['row', 'column']),
+  referenceAxisId: applicationId,
+  position: z.enum(['before', 'after']),
+  properties: z.union([
+    InsertedTableRowPropertiesSchema,
+    InsertedTableColumnPropertiesSchema,
+  ]),
+  expectedTable: TableModelSchema,
+}).strict().superRefine((action, context) => {
+  const valid = action.axis === 'row'
+    ? InsertedTableRowPropertiesSchema.safeParse(action.properties).success
+    : InsertedTableColumnPropertiesSchema.safeParse(action.properties).success;
+  if (!valid) {
+    context.addIssue({
+      code: 'custom',
+      path: ['properties'],
+      message: `Properties do not match ${action.axis} insertion`,
+    });
+  }
+});
+
+export const TableAxisRemoveActionSchema = z.object({
+  type: z.literal('table.axis.remove'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  axis: z.enum(['row', 'column']),
+  axisId: applicationId,
+  expectedTable: TableModelSchema,
+}).strict();
+
+export const ApplicationActionSchema = z.union([
   RenameDocumentActionSchema,
   AddPageActionSchema,
   InsertPageTemplateActionSchema,
@@ -210,6 +259,8 @@ export const ApplicationActionSchema = z.discriminatedUnion('type', [
   SetTextContentActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
+  TableAxisInsertActionSchema,
+  TableAxisRemoveActionSchema,
 ]);
 
 export type ApplicationAction = z.infer<typeof ApplicationActionSchema>;
@@ -229,6 +280,12 @@ export type ApplicationErrorCode =
   | 'INVALID_Z_ORDER_TARGET'
   | 'OBJECT_TYPE_MISMATCH'
   | 'ASSET_NOT_FOUND'
+  | 'TABLE_IDENTITY_MISMATCH'
+  | 'TABLE_AXIS_NOT_FOUND'
+  | 'TABLE_LAST_AXIS'
+  | 'MERGE_INTERSECTION'
+  | 'MERGE_HEADER_BOUNDARY'
+  | 'TARGET_STALE'
   | 'DUPLICATE_ID'
   | 'ID_GENERATION_FAILED'
   | 'DOCUMENT_INVALID';
