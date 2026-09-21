@@ -337,6 +337,7 @@ try {
   const imageObjectId = (await state(father)).runtime?.imageObjectId;
   assert(imageObjectId);
   await father.locator(`[data-editor-object-id="${imageObjectId}"]`).click();
+  await father.locator('[data-editor-action="upload-image"]').click();
   await father.locator('[data-editor-action="upload-image-input"]').setInputFiles({
     name: 'father-proof.png',
     mimeType: 'image/png',

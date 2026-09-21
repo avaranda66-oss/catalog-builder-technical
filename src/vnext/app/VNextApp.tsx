@@ -91,7 +91,7 @@ function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSess
   }
   const session = suppliedSession ?? sessionRef.current;
   if (!session) throw new Error('VNext document session unavailable');
-  return <EditorWorkspace session={session} />;
+  return <EditorWorkspace session={session} demoAssets />;
 }
 
 export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary }: VNextAppProps = {}) {

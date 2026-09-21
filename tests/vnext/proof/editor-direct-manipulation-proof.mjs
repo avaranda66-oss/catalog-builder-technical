@@ -36,7 +36,7 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('request', (request) => requests.push(request.url()));
 
-  await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w2-editor-browser.html`, { waitUntil: 'networkidle' });
+  await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w2-editor-browser.html?demo=1`, { waitUntil: 'networkidle' });
   await page.locator('[data-vnext-shell]').waitFor();
   assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load in VNext editor proof');
 

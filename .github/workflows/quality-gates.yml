@@ -49,6 +49,7 @@ jobs:
         run: |
           node tests/vnext/proof/editor-text-proof.mjs
           node tests/vnext/proof/editor-direct-manipulation-proof.mjs
+          node tests/vnext/proof/editor-asset-insert-proof.mjs
           node tests/vnext/proof/editor-snapping-diagnostics-proof.mjs
           node tests/vnext/proof/editor-template-insertion-proof.mjs
           node tests/vnext/proof/editor-group-proof.mjs
