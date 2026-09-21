@@ -80,6 +80,7 @@ export const ImageObjectInsertSpecSchema = z.object({
   ...insertBase,
   type: z.literal('image'),
   assetId: applicationId,
+  asset: AssetRefSchema.optional(),
   fit: z.enum(['contain', 'cover']),
   focalPoint: ImageFocalPointSchema.optional(),
 }).strict();

@@ -41,6 +41,7 @@ import {
   runtimeAssetDiagnostics,
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
+import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
@@ -146,8 +147,10 @@ export function EditorWorkspace({
   session,
   persistence,
   onRequestLibrary,
+  demoAssets = false,
 }: {
   session: DocumentSession;
+  demoAssets?: boolean;
   persistence?: EditorWorkspacePersistenceProps;
   onRequestLibrary?: () => void;
 }) {
@@ -177,6 +180,14 @@ export function EditorWorkspace({
   const textEditRef = React.useRef<TextEditSession | null>(null);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const pendingAssetIntentRef = React.useRef<ImageUploadIntent | null>(null);
+  const uploadBusyRef = React.useRef(false);
+  const liveUploadContextRef = React.useRef({ session, persistence, mounted: true });
+  liveUploadContextRef.current = { session, persistence, mounted: true };
+  React.useEffect(() => {
+    liveUploadContextRef.current.mounted = true;
+    return () => { liveUploadContextRef.current.mounted = false; };
+  }, []);
   const compositionRef = React.useRef(false);
   const lastTextPointerDownRef = React.useRef<{
     objectId: string;
@@ -381,6 +392,7 @@ export function EditorWorkspace({
   }, [controller]);
 
   const setActivePage = (pageId: string) => {
+    activePageIdRef.current = pageId;
     controller.cancel('active-page-change');
     if (textEditRef.current) {
       textEditRef.current = null;
@@ -805,6 +817,10 @@ export function EditorWorkspace({
     controller.cancel('superseded');
     const currentPage = session.getSnapshot().document.pages.find((page) => page.id === editorState.activePageId);
     if (!currentPage) return;
+    if (tool === 'image' && (persistence || !demoAssets)) {
+      requestImageUpload({ type: 'insert', pageId: currentPage.id });
+      return;
+    }
     const result = session.execute({ type: 'object.insert', pageId: currentPage.id, object: createInsertSpec(tool, currentPage) });
     if (!result.ok) { setStatusMessage('Não foi possível inserir o objeto.'); return; }
     const objectId = result.metadata.createdIds[0];
@@ -870,8 +886,24 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Ordem do objeto atualizada.' : 'Não foi possível alterar a ordem.');
   };
 
+  const requestImageUpload = (target: { type: 'insert'; pageId: string } | { type: 'replace'; objectId: string }) => {
+    if (uploadBusyRef.current) return;
+    if (!persistence?.assetBridge) {
+      setStatusMessage('Envio de imagens indisponível neste ambiente.');
+      return;
+    }
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    pendingAssetIntentRef.current = { ...target, session, lineage: imageUploadLineage(persistence.runtime) };
+    fileInputRef.current?.click();
+  };
+
   const replaceSelectedImage = () => {
     if (!selectedObject || selectedObject.type !== 'image') return;
+    if (persistence || !demoAssets) {
+      requestImageUpload({ type: 'replace', objectId: selectedObject.id });
+      return;
+    }
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'image.replace', objectId: selectedObject.id, assetId: alternateDemoAssetId(selectedObject.assetId) });
@@ -880,88 +912,26 @@ export function EditorWorkspace({
 
   const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !selectedObject || selectedObject.type !== 'image') return;
     event.target.value = '';
-    if (!finishTextEditBeforeCommand()) return;
-    controller.cancel('superseded');
-
-    if (!persistence?.assetBridge) {
-      const result = session.execute({
-        type: 'image.replace',
-        objectId: selectedObject.id,
-        assetId: alternateDemoAssetId(selectedObject.assetId),
-      });
-      setStatusMessage(result.ok ? 'Imagem substituída (modo demo).' : 'Não foi possível substituir a imagem.');
-      return;
-    }
-
+    const intent = pendingAssetIntentRef.current;
+    pendingAssetIntentRef.current = null;
+    if (!file || !intent || uploadBusyRef.current || !persistence?.assetBridge) return;
+    uploadBusyRef.current = true;
     setStatusMessage('Enviando imagem…');
+    const isCurrent = () => liveUploadContextRef.current.mounted
+      && liveUploadContextRef.current.session === intent.session
+      && liveUploadContextRef.current.persistence?.runtime === persistence.runtime;
     try {
-      const buffer = await file.arrayBuffer();
-      const snapshotBefore = persistence.runtime.workspace.getSnapshot();
-      const initialLineage = {
-        authLineage: snapshotBefore.binding.authLineage,
-        authorityScopeId: snapshotBefore.activeAuthorityScopeId,
-        openSessionId: snapshotBefore.binding.openSessionId,
-        catalogId: snapshotBefore.binding.kind === 'PERSISTED' ? snapshotBefore.binding.catalogId : undefined,
-      };
-
-      const uploadResult = await persistence.assetBridge.upload({
-        bytes: buffer,
-        filename: file.name,
-        mimeHint: file.type,
-        context: initialLineage,
+      const result = await uploadWorkspaceImage({
+        intent, file, runtime: persistence.runtime, bridge: persistence.assetBridge,
+        getActivePageId: () => activePageIdRef.current,
+        isCurrent,
       });
-
-      if (!uploadResult.ok) {
-        setStatusMessage(`Falha no upload: ${uploadResult.error.message}`);
-        return;
-      }
-
-      // Recheck active lineage immediately before applying image.replace (Point 10)
-      const snapshotAfter = persistence.runtime.workspace.getSnapshot();
-      const isStale =
-        snapshotAfter.binding.openSessionId !== initialLineage.openSessionId ||
-        snapshotAfter.binding.authLineage !== initialLineage.authLineage ||
-        snapshotAfter.activeAuthorityScopeId !== initialLineage.authorityScopeId ||
-        (snapshotAfter.binding.kind === 'PERSISTED' && snapshotAfter.binding.catalogId !== initialLineage.catalogId);
-
-      if (isStale) {
-        setStatusMessage('Operação descartada: a sessão ou autoridade foi alterada durante o upload.');
-        return;
-      }
-
-      const actionResult = session.execute({
-        type: 'image.replace',
-        objectId: selectedObject.id,
-        assetId: uploadResult.asset.id,
-        asset: uploadResult.asset,
-      });
-
-      if (!actionResult.ok) {
-        setStatusMessage('Falha ao vincular imagem ao documento.');
-        return;
-      }
-
-      // Preserve typed asset runtime state (Points 12, 14)
-      persistence.runtime.workspace.setAssetRuntimeState(
-        uploadResult.asset.id,
-        uploadResult.runtimeState
-      );
-
-      if (uploadResult.runtimeState.status === 'resolved') {
-        persistence.runtime.workspace.setAssetUrl(
-          uploadResult.asset.id,
-          uploadResult.runtimeState.url
-        );
-        setStatusMessage('Imagem enviada e vinculada com sucesso.');
-      } else if (uploadResult.runtimeState.status === 'integrity-failed') {
-        setStatusMessage('Imagem vinculada, mas falhou na verificação de integridade. Você pode substituir ou tentar novamente.');
-      } else {
-        setStatusMessage('Imagem vinculada, mas a pré-visualização está indisponível. Você pode substituir ou tentar novamente.');
-      }
-    } catch (error) {
-      setStatusMessage(`Erro no envio da imagem: ${error instanceof Error ? error.message : String(error)}`);
+      if (!isCurrent()) return;
+      if (result.objectId && intent.type === 'insert') selectObject(result.objectId);
+      setStatusMessage(result.message);
+    } finally {
+      uploadBusyRef.current = false;
     }
   };
 
@@ -1365,7 +1335,7 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
               <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
               <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image'} onClick={replaceSelectedImage}>Substituir imagem</button>
-              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image'} onClick={() => fileInputRef.current?.click()}>Upload imagem</button>
+              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image'} onClick={() => selectedObject && requestImageUpload({ type: 'replace', objectId: selectedObject.id })}>Upload imagem</button>
               <input
                 type="file"
                 ref={fileInputRef}

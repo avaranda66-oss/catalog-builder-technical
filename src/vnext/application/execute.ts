@@ -504,10 +504,23 @@ export function executeApplicationAction(
         const pageIndex = document.pages.findIndex((page) => page.id === action.pageId);
         if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
 
+        let addedAssetId: string | undefined;
         const frame = materializeFrameU(action.object.frameU);
         if (action.object.type === 'image') {
           const assetId = action.object.assetId;
-          if (!document.assets.some((asset) => asset.id === assetId)) {
+          const suppliedAsset = action.object.asset;
+          if (suppliedAsset) {
+            if (suppliedAsset.id !== assetId) return failure('ACTION_INVALID', 'Image asset identity mismatch');
+            const existing = candidate.assets.find((asset) => asset.id === assetId);
+            if (existing && !assetRefEquals(existing, suppliedAsset)) {
+              return failure('ACTION_INVALID', `Asset ID ${assetId} already exists with divergent metadata`);
+            }
+            if (!existing) {
+              candidate = { ...candidate, assets: [...candidate.assets, suppliedAsset] };
+              addedAssetId = assetId;
+            }
+          }
+          if (!candidate.assets.some((asset) => asset.id === assetId)) {
             return failure('ASSET_NOT_FOUND', assetId);
           }
         }
@@ -526,13 +539,14 @@ export function executeApplicationAction(
         }
 
         const object = instantiateObjectWithFreshIds(
-          document,
+          candidate,
           insertSpecSeed(action.object, frame),
           dependencies.createId
         );
-        candidate = pageWithObjects(document, pageIndex, [...document.pages[pageIndex].objects, object]);
+        candidate = pageWithObjects(candidate, pageIndex, [...candidate.pages[pageIndex].objects, object]);
         affectedIds = [action.pageId];
         createdIds = canonicalObjectIdentityIds(object);
+        if (addedAssetId) createdIds.push(addedAssetId);
         break;
       }
       case 'object.delete': {

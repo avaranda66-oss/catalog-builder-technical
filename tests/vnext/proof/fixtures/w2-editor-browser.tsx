@@ -58,6 +58,8 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing VNext editor proof root');
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <VNextApp runtime={runtime} />
+    {new URLSearchParams(window.location.search).get('demo') === '1'
+      ? <VNextApp session={session} />
+      : <VNextApp runtime={runtime} />}
   </React.StrictMode>
 );

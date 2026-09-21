@@ -94,6 +94,7 @@ try {
   ]);
 
   const fileInput = page.locator('[data-editor-action="upload-image-input"]');
+  await uploadButton.click();
   await fileInput.setInputFiles({
     name: 'replacement-product.png',
     mimeType: 'image/png',
@@ -101,7 +102,7 @@ try {
   });
 
   // Wait for upload and document replacement to complete
-  await page.getByText('Imagem enviada e vinculada com sucesso.').waitFor();
+  await page.getByText('Imagem substituída.').waitFor();
 
   // Proof 3: durable AssetRef is registered
   const docAfterUpload = await page.evaluate(() => window.__W3G_ASSET_PROOF__.getDocument());
