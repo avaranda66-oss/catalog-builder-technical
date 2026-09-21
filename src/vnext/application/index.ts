@@ -26,6 +26,11 @@ export {
   TableObjectInsertSpecSchema,
   TableAxisInsertActionSchema,
   TableAxisRemoveActionSchema,
+  TableCellContentInputSchema,
+  TableCellSetContentActionSchema,
+  CellPropertyPatchSchema,
+  TableCellPropertyTargetSchema,
+  TableCellSetPropertiesActionSchema,
   TextObjectInsertSpecSchema,
   UngroupActionSchema,
 } from './contracts';
@@ -42,6 +47,9 @@ export type {
   FrameU,
   IdGenerator,
   ObjectInsertSpec,
+  TableCellContentInput,
+  CellPropertyPatch,
+  TableCellPropertyTarget,
 } from './contracts';
 export {
   ApplicationDocumentError,

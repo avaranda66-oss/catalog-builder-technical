@@ -3,6 +3,9 @@ import type { CatalogDocument } from '../domain';
 import {
   AssetRefSchema,
   BorderSchema,
+  CellContentPresentationSchema,
+  CellContentSchema,
+  CellStyleSchema,
   ImageFocalPointSchema,
   RichTextSchema,
   TableModelSchema,
@@ -242,6 +245,68 @@ export const TableAxisRemoveActionSchema = z.object({
   expectedTable: TableModelSchema,
 }).strict();
 
+export const TableCellContentInputSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('empty') }).strict(),
+  z.object({ type: z.literal('richText'), plainText: editablePlainText }).strict(),
+  z.object({ type: z.literal('technicalCode'), value: z.string() }).strict(),
+  z.object({
+    type: z.literal('measurement'),
+    valueText: z.string(),
+    unit: z.string(),
+    qualifier: z.enum(['approx', 'min', 'max']).optional(),
+  }).strict(),
+]);
+
+export const TableCellSetContentActionSchema = z.object({
+  type: z.literal('table.cell.setContent'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  cellId: applicationId,
+  expectedContent: CellContentSchema,
+  content: TableCellContentInputSchema,
+  allowTypeChange: z.literal(true).optional(),
+}).strict();
+
+const nullableColor = color.nullable();
+const nullablePaddingEdge = z.number().finite().nonnegative().nullable();
+export const CellPropertyPatchSchema = z.object({
+  textAlign: z.enum(['left', 'center', 'right']).nullable().optional(),
+  fontWeight: z.union([z.literal(400), z.literal(700)]).nullable().optional(),
+  color: nullableColor.optional(),
+  background: nullableColor.optional(),
+  paddingMm: z.union([
+    z.null(),
+    z.object({
+      top: nullablePaddingEdge.optional(),
+      right: nullablePaddingEdge.optional(),
+      bottom: nullablePaddingEdge.optional(),
+      left: nullablePaddingEdge.optional(),
+    }).strict(),
+  ]).optional(),
+  wrapPolicy: z.enum(['wrap', 'nowrap']).nullable().optional(),
+}).strict();
+
+export const TableCellPropertyTargetSchema = z.object({
+  cellId: applicationId,
+  expectedStyle: CellStyleSchema.optional(),
+  expectedContentPresentation: CellContentPresentationSchema.optional(),
+}).strict();
+
+export const TableCellSetPropertiesActionSchema = z.object({
+  type: z.literal('table.cell.setProperties'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  targets: z.array(TableCellPropertyTargetSchema).min(1),
+  patch: CellPropertyPatchSchema,
+}).strict().superRefine((action, context) => {
+  const ids = action.targets.map((target) => target.cellId);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Property target cellIds must be unique' });
+  }
+});
+
 export const ApplicationActionSchema = z.union([
   RenameDocumentActionSchema,
   AddPageActionSchema,
@@ -262,12 +327,17 @@ export const ApplicationActionSchema = z.union([
   UngroupActionSchema,
   TableAxisInsertActionSchema,
   TableAxisRemoveActionSchema,
+  TableCellSetContentActionSchema,
+  TableCellSetPropertiesActionSchema,
 ]);
 
 export type ApplicationAction = z.infer<typeof ApplicationActionSchema>;
 export type ApplicationActionType = ApplicationAction['type'];
 export type FrameU = z.infer<typeof FrameUSchema>;
 export type ObjectInsertSpec = z.infer<typeof ObjectInsertSpecSchema>;
+export type TableCellContentInput = z.infer<typeof TableCellContentInputSchema>;
+export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
+export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
 
 export type ApplicationErrorCode =
   | 'ACTION_INVALID'

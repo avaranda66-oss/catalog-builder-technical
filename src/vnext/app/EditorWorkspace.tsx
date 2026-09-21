@@ -1,11 +1,12 @@
 import React from 'react';
 import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, type ApplicationAction, type DocumentSession, type FrameU } from '../application';
+import { projectEditableRichText, type ApplicationAction, type CellPropertyPatch, type DocumentSession, type FrameU } from '../application';
 import {
   mmToU,
   qCss,
   uToQ,
   type CatalogDocument,
+  type Cell,
   type Diagnostic,
   type EditorialObject,
   type Page,
@@ -19,12 +20,25 @@ import {
   explicitTableAxisIds,
   navigateTableSelection,
   reconcileTableSelection,
+  selectedTableAnchorIds,
   selectionAfterAxisInsert,
   selectionAfterAxisRemove,
   tableCellSelection,
   tableSelectionIdentity,
   type TableSelection,
 } from '../editor/table-selection';
+import {
+  changeTableCellDraftType,
+  clearTableCellDraft,
+  confirmTableCellDraftTypeChange,
+  createTableCellDraft,
+  setTableCellDraftComposition,
+  tableCellDraftRecoveryFields,
+  updateTableCellDraft,
+  validateTableCellDraft,
+  type EditableCellType,
+  type TableCellDraft,
+} from '../editor/table-cell-draft';
 import type { AuthoringRecoveryOverlay } from '../recovery';
 import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
 import {
@@ -48,7 +62,7 @@ import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { fatherSaveLabel } from './save-presentation';
 import { TableGridOverlay } from './table-grid-overlay';
 
-type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' };
+type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
 type TextEditSession = {
   objectId: string;
@@ -174,6 +188,10 @@ export function EditorWorkspace({
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const [tableSelection, setTableSelection] = React.useState<TableSelection | null>(null);
   const tableSelectionRef = React.useRef<TableSelection | null>(null);
+  const [cellDraft, setCellDraft] = React.useState<TableCellDraft | null>(null);
+  const cellDraftRef = React.useRef<TableCellDraft | null>(null);
+  cellDraftRef.current = cellDraft;
+  const cellEditorFieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null>(null);
   const tableHistoryContextRef = React.useRef<{ table: TableModel; selection: TableSelection } | null>(null);
   tableSelectionRef.current = tableSelection;
   const sessionRef = React.useRef(session);
@@ -300,6 +318,8 @@ export function EditorWorkspace({
     sessionRef.current = session;
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
+    cellDraftRef.current = null;
+    setCellDraft(null);
     setTableSelection(null);
     setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
   }, [session]);
@@ -391,7 +411,45 @@ export function EditorWorkspace({
     return () => window.removeEventListener('blur', cancelOnWindowBlur);
   }, [controller]);
 
+  const finishCellDraftForContextChange = (): boolean => {
+    const draft = cellDraftRef.current;
+    if (!draft) return true;
+    if (!draft.dirty) {
+      cellDraftRef.current = null;
+      setCellDraft(null);
+      persistence?.runtime.workspace.notifyDraftStateChanged();
+      return true;
+    }
+    if (draft.composing) {
+      setStatusMessage('Conclua a composição da célula antes de mudar de contexto.');
+      return false;
+    }
+    const validation = validateTableCellDraft(draft);
+    if (!validation.ok) {
+      setStatusMessage(validation.message);
+      return false;
+    }
+    const result = session.execute({
+      type: 'table.cell.setContent',
+      ...draft.identity,
+      expectedContent: draft.originalContent,
+      content: validation.input,
+      ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
+    });
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'TARGET_STALE'
+        ? 'A célula mudou. O rascunho foi preservado para revisão.'
+        : 'Não foi possível concluir o rascunho da célula.');
+      return false;
+    }
+    cellDraftRef.current = null;
+    setCellDraft(null);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+    return true;
+  };
+
   const setActivePage = (pageId: string) => {
+    if (!finishCellDraftForContextChange()) return;
     activePageIdRef.current = pageId;
     controller.cancel('active-page-change');
     if (textEditRef.current) {
@@ -408,6 +466,7 @@ export function EditorWorkspace({
   };
 
   const selectObject = (objectId: string) => {
+    if (!finishCellDraftForContextChange()) return;
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
     setTableSelection(null);
@@ -500,6 +559,22 @@ export function EditorWorkspace({
   const prepareTextDraftForSaveRef = React.useRef(prepareTextDraftForSave);
   prepareTextDraftForSaveRef.current = prepareTextDraftForSave;
   const captureRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
+    const cell = cellDraftRef.current;
+    if (cell?.dirty) {
+      const recoveryDraft = tableCellDraftRecoveryFields(cell);
+      return {
+        kind: 'TABLE_CELL_DRAFT_V1',
+        ...cell.identity,
+        expectedContent: cell.originalContent,
+        activeType: cell.activeType as EditableCellType,
+        draft: {
+          richText: recoveryDraft.richText,
+          technicalCode: recoveryDraft.technicalCode,
+          measurement: recoveryDraft.measurement,
+        },
+        compositionWasActive: cell.composing,
+      };
+    }
     const edit = textEditRef.current;
     if (edit) {
       return {
@@ -537,6 +612,39 @@ export function EditorWorkspace({
   const captureRecoveryOverlayRef = React.useRef(captureRecoveryOverlay);
   captureRecoveryOverlayRef.current = captureRecoveryOverlay;
   const prepareAuthoringForSave = (): AuthoringBarrierResult => {
+    const cell = cellDraftRef.current;
+    if (cell?.dirty) {
+      if (cell.composing) {
+        return { ok: false, reason: 'COMPOSITION_ACTIVE', message: 'Conclua a composição da célula antes de salvar.' };
+      }
+      const validation = validateTableCellDraft(cell);
+      if (!validation.ok) {
+        setStatusMessage(validation.message);
+        return { ok: false, reason: 'INVALID_DRAFT', message: 'O rascunho da célula foi preservado porque ainda é inválido.' };
+      }
+      const result = session.execute({
+        type: 'table.cell.setContent',
+        ...cell.identity,
+        expectedContent: cell.originalContent,
+        content: validation.input,
+        ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
+      });
+      if (!result.ok) {
+        const stale = result.error.code === 'TARGET_STALE';
+        setStatusMessage(stale
+          ? 'A célula mudou enquanto o rascunho estava aberto. Revise antes de salvar.'
+          : 'O rascunho da célula não pôde ser aplicado com segurança.');
+        return {
+          ok: false,
+          reason: stale ? 'STALE_DRAFT' : result.error.code === 'ACTION_INVALID' ? 'INVALID_DRAFT' : 'COMMIT_FAILED',
+          message: stale ? 'O rascunho da célula ficou desatualizado e foi preservado.' : 'O rascunho da célula foi preservado.',
+        };
+      }
+      cellDraftRef.current = null;
+      setCellDraft(null);
+      setEditorState((current) => ({ ...current, mode: 'table-grid' }));
+      persistence?.runtime.workspace.notifyDraftStateChanged();
+    }
     const textResult = prepareTextDraftForSaveRef.current();
     if (!textResult.ok) return textResult;
     if (captureRecoveryOverlayRef.current()?.kind === 'INSPECTOR_FRAME_DRAFT_V1') {
@@ -557,7 +665,7 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      hasPendingDraft: () => Boolean(captureRecoveryOverlayRef.current()),
+      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
@@ -572,7 +680,39 @@ export function EditorWorkspace({
     );
     const object = page?.objects.find((entry) => entry.id === recoveredOverlay.objectId);
     let restored = false;
-    if (
+    if (recoveredOverlay.kind === 'TABLE_CELL_DRAFT_V1' && object?.type === 'table'
+      && object.table.id === recoveredOverlay.tableId) {
+      const targetCell = object.table.cells.find((cell) => cell.id === recoveredOverlay.cellId && !cell.coveredBy);
+      if (targetCell && JSON.stringify(targetCell.content) === JSON.stringify(recoveredOverlay.expectedContent)) {
+        const selection = tableCellSelection(
+          tableSelectionIdentity(recoveredOverlay.pageId, recoveredOverlay.objectId, recoveredOverlay.tableId),
+          { rowId: targetCell.rowId, columnId: targetCell.columnId }
+        );
+        const baseDraft = createTableCellDraft({
+          pageId: recoveredOverlay.pageId,
+          objectId: recoveredOverlay.objectId,
+          tableId: recoveredOverlay.tableId,
+          cellId: recoveredOverlay.cellId,
+        }, recoveredOverlay.expectedContent);
+        const nextDraft: TableCellDraft = {
+          ...baseDraft,
+          activeType: recoveredOverlay.activeType,
+          richText: recoveredOverlay.draft.richText,
+          technicalCode: recoveredOverlay.draft.technicalCode,
+          measurement: recoveredOverlay.draft.measurement,
+          dirty: true,
+          composing: false,
+          requiresTypeChangeConfirmation: false,
+        };
+        cellDraftRef.current = nextDraft;
+        setCellDraft(nextDraft);
+        tableSelectionRef.current = selection;
+        tableHistoryContextRef.current = { table: object.table, selection };
+        setTableSelection(selection);
+        setEditorState({ activePageId: recoveredOverlay.pageId, selectedObjectIds: [recoveredOverlay.objectId], mode: 'cell-edit' });
+        restored = true;
+      }
+    } else if (
       recoveredOverlay.kind === 'TEXT_DRAFT_V1'
       && object?.type === 'text'
       && JSON.stringify(object.text) === JSON.stringify(recoveredOverlay.expectedText)
@@ -661,6 +801,121 @@ export function EditorWorkspace({
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'table-grid' });
     setStatusMessage('Modo de grade da tabela.');
     return true;
+  };
+
+  const notifyCellDraftChanged = (next: TableCellDraft | null) => {
+    cellDraftRef.current = next;
+    setCellDraft(next);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+  };
+
+  const selectedCellFrom = (object: TableObject, selection: TableSelection): Cell | undefined => {
+    const ids = selectedTableAnchorIds(object.table, selection);
+    return ids.length === 1 ? object.table.cells.find((cell) => cell.id === ids[0]) : undefined;
+  };
+
+  const startCellEdit = (point?: { rowId: string; columnId: string }): boolean => {
+    const object = selectedTableObject;
+    if (!object || object.locked) {
+      setStatusMessage('Tabela bloqueada não pode ser editada.');
+      return false;
+    }
+    const identity = tableSelectionIdentity(selectedPage.id, object.id, object.table.id);
+    const selection = point ? tableCellSelection(identity, point) : tableSelectionRef.current;
+    if (!selection) return false;
+    const cell = selectedCellFrom(object, selection);
+    if (!cell) {
+      setStatusMessage('Selecione uma única célula para editar o conteúdo.');
+      return false;
+    }
+    tableSelectionRef.current = selection;
+    tableHistoryContextRef.current = { table: object.table, selection };
+    setTableSelection(selection);
+    const draft = createTableCellDraft({
+      pageId: selectedPage.id,
+      objectId: object.id,
+      tableId: object.table.id,
+      cellId: cell.id,
+    }, cell.content);
+    notifyCellDraftChanged(draft);
+    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'cell-edit' });
+    setStatusMessage(cell.content.type === 'marker' || cell.content.type === 'image'
+      ? 'Este conteúdo é somente leitura neste modo.'
+      : null);
+    queueMicrotask(() => cellEditorFieldRef.current?.focus());
+    return true;
+  };
+
+  const cancelCellEdit = (message = 'Edição da célula cancelada.'): boolean => {
+    if (!cellDraftRef.current) return false;
+    notifyCellDraftChanged(null);
+    setEditorState((current) => ({ ...current, mode: 'table-grid' }));
+    if (message) setStatusMessage(message);
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+    return true;
+  };
+
+  const applyCellDraft = (draft: TableCellDraft) => {
+    const validation = validateTableCellDraft(draft);
+    if (!validation.ok) return { ok: false as const, validation };
+    const result = session.execute({
+      type: 'table.cell.setContent',
+      ...draft.identity,
+      expectedContent: draft.originalContent,
+      content: validation.input,
+      ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
+    });
+    return result.ok ? { ok: true as const, result } : { ok: false as const, result };
+  };
+
+  const commitCellEdit = (): boolean => {
+    const draft = cellDraftRef.current;
+    if (!draft) return true;
+    if (draft.composing) {
+      setStatusMessage('Conclua a composição de texto antes de confirmar.');
+      return false;
+    }
+    const applied = applyCellDraft(draft);
+    if (!applied.ok) {
+      if ('validation' in applied && applied.validation) setStatusMessage(applied.validation.message);
+      else setStatusMessage(applied.result.error.code === 'TARGET_STALE'
+        ? 'A célula mudou enquanto este rascunho estava aberto. Revise antes de concluir.'
+        : 'O rascunho não pôde ser aplicado com segurança.');
+      return false;
+    }
+    notifyCellDraftChanged(null);
+    setEditorState((current) => ({ ...current, mode: 'table-grid' }));
+    setStatusMessage(applied.result.metadata.changed ? 'Conteúdo da célula atualizado.' : 'Conteúdo da célula sem alterações.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+    return true;
+  };
+
+  const runCellPropertyPatch = (patch: CellPropertyPatch) => {
+    const object = selectedTableObject;
+    const selection = tableSelectionRef.current;
+    if (!object || !selection) return;
+    const targetIds = selectedTableAnchorIds(object.table, selection);
+    const targets = targetIds.map((cellId) => {
+      const cell = object.table.cells.find((entry) => entry.id === cellId)!;
+      return {
+        cellId,
+        ...(cell.style === undefined ? {} : { expectedStyle: cell.style }),
+        ...(cell.contentPresentation === undefined ? {} : { expectedContentPresentation: cell.contentPresentation }),
+      };
+    });
+    const result = session.execute({
+      type: 'table.cell.setProperties',
+      pageId: selectedPage.id,
+      objectId: object.id,
+      tableId: object.table.id,
+      targets,
+      patch,
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Propriedades da célula atualizadas.' : 'Propriedades sem alterações.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'As propriedades mudaram; a aplicação foi cancelada sem alterações parciais.'
+        : 'Não foi possível aplicar as propriedades da célula.');
   };
 
   const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
@@ -764,7 +1019,7 @@ export function EditorWorkspace({
     setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
   };
 
-  const finishTextEditBeforeCommand = (): boolean => !textEditRef.current || commitTextEdit();
+  const finishTextEditBeforeCommand = (): boolean => finishCellDraftForContextChange() && (!textEditRef.current || commitTextEdit());
 
   const toggleObjectSelection = (objectId: string) => {
     setEditorState((current) => {
@@ -799,6 +1054,12 @@ export function EditorWorkspace({
   };
 
   const undo = () => {
+    if (cellDraftRef.current) {
+      cancelCellEdit('');
+      controller.cancel('history');
+      setStatusMessage('Edição da célula cancelada antes de desfazer o documento.');
+      return;
+    }
     cancelTextEdit('');
     controller.cancel('history');
     const result = session.undo();
@@ -806,6 +1067,12 @@ export function EditorWorkspace({
   };
 
   const redo = () => {
+    if (cellDraftRef.current) {
+      cancelCellEdit('');
+      controller.cancel('history');
+      setStatusMessage('Edição da célula cancelada antes de refazer o documento.');
+      return;
+    }
     cancelTextEdit('');
     controller.cancel('history');
     const result = session.redo();
@@ -1087,6 +1354,20 @@ export function EditorWorkspace({
     const target = event.target as HTMLElement;
     const isNativeInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
       || target.getAttribute(['content', 'editable'].join('')) === 'true';
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && cellDraftRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelCellEdit('');
+      setStatusMessage('Edição da célula cancelada antes de desfazer o documento.');
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y' && cellDraftRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelCellEdit('');
+      setStatusMessage('Edição da célula cancelada antes de refazer o documento.');
+      return;
+    }
     if (!isNativeInput && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       if (event.shiftKey) redo(); else undo();
@@ -1095,6 +1376,23 @@ export function EditorWorkspace({
     if (!isNativeInput && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
       event.preventDefault();
       redo();
+      return;
+    }
+    if (cellDraftRef.current) {
+      const draft = cellDraftRef.current;
+      if (draft.composing) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelCellEdit();
+        return;
+      }
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        event.stopPropagation();
+        commitCellEdit();
+        return;
+      }
       return;
     }
     if (textEditRef.current) {
@@ -1113,7 +1411,18 @@ export function EditorWorkspace({
       }
       return;
     }
-    if (editorState.mode === 'table-grid' && selectedTableObject && tableSelectionRef.current) {
+    if (
+      editorState.mode === 'table-grid'
+      && selectedTableObject
+      && tableSelectionRef.current
+      && target.closest('[data-table-grid-overlay]')
+    ) {
+      if (event.key === 'Enter' || event.key === 'F2') {
+        event.preventDefault();
+        event.stopPropagation();
+        startCellEdit();
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -1165,8 +1474,18 @@ export function EditorWorkspace({
   };
 
   const handleTextEditPointerDownCapture = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!textEditRef.current) return;
     const target = event.target as HTMLElement;
+    if (cellDraftRef.current) {
+      if (target.closest('[data-cell-edit-session]') || target.closest('[data-table-grid-overlay]') || target.closest('[data-table-cell-inspector]')) return;
+      if (target.closest('[data-persistence-save-action]')) return;
+      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      if (!finishCellDraftForContextChange()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+    if (!textEditRef.current) return;
     if (target.closest('[data-text-edit-session]')) return;
     if (target.closest('[data-persistence-save-action]')) return;
     if (target.closest('[data-text-edit-cancel-on-activate]')) {
@@ -1213,6 +1532,53 @@ export function EditorWorkspace({
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
     persistence?.runtime.workspace.notifyDraftStateChanged();
+  };
+
+  const selectedAnchorCells = selectedTableObject && tableSelection
+    ? selectedTableAnchorIds(selectedTableObject.table, tableSelection)
+      .map((cellId) => selectedTableObject.table.cells.find((cell) => cell.id === cellId))
+      .filter((cell): cell is Cell => Boolean(cell))
+    : [];
+  function commonCellStyleValue<K extends keyof NonNullable<Cell['style']>>(
+    key: K
+  ): NonNullable<Cell['style']>[K] | undefined {
+    if (selectedAnchorCells.length === 0) return undefined;
+    const first = selectedAnchorCells[0].style?.[key];
+    return selectedAnchorCells.every((cell) => JSON.stringify(cell.style?.[key]) === JSON.stringify(first))
+      ? first
+      : undefined;
+  }
+  const commonWrapPolicy = selectedAnchorCells.length > 0
+    && selectedAnchorCells.every((cell) => cell.contentPresentation?.wrapPolicy === selectedAnchorCells[0].contentPresentation?.wrapPolicy)
+    ? selectedAnchorCells[0].contentPresentation?.wrapPolicy
+    : undefined;
+  const propertySelectionKey = selectedAnchorCells
+    .map((cell) => [cell.id, JSON.stringify(cell.style), JSON.stringify(cell.contentPresentation)].join(':'))
+    .join('|');
+
+  const commitCellColor = (key: 'color' | 'background', raw: string) => {
+    if (raw === '') {
+      runCellPropertyPatch({ [key]: null } as CellPropertyPatch);
+      return;
+    }
+    if (!/^#[0-9a-fA-F]{6}$/.test(raw)) {
+      setStatusMessage('Informe uma cor hexadecimal válida, como #1A2B3C.');
+      return;
+    }
+    runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
+  };
+
+  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', raw: string) => {
+    if (raw.trim() === '') {
+      runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
+      return;
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) {
+      setStatusMessage('Informe um padding válido em milímetros, igual ou maior que zero.');
+      return;
+    }
+    runCellPropertyPatch({ paddingMm: { [edge]: value } } as CellPropertyPatch);
   };
 
   const selectedRowAxisIds = selectedTableObject && tableSelection
@@ -1461,7 +1827,7 @@ export function EditorWorkspace({
                     <div
                       key={object.id}
                       tabIndex={-1}
-                      className={'vnext-object-hit-target' + (selected ? ' is-selected' : '') + (preview?.objectId === object.id ? ' is-previewing' : '') + (selected && editorState.mode === 'table-grid' && object.type === 'table' ? ' is-table-grid' : '')}
+                      className={'vnext-object-hit-target' + (selected ? ' is-selected' : '') + (preview?.objectId === object.id ? ' is-previewing' : '') + (selected && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && object.type === 'table' ? ' is-table-grid' : '')}
                       data-editor-object-id={object.id}
                       data-selected={selected ? 'true' : 'false'}
                       data-editor-preview={preview?.objectId === object.id ? 'true' : undefined}
@@ -1469,7 +1835,7 @@ export function EditorWorkspace({
                       onPointerDown={(event) => beginGesture(event, object, { type: 'move' })}
                       onDoubleClick={() => {
                         if (object.type === 'text') startTextEdit(object);
-                        if (object.type === 'table' && editorState.mode !== 'table-grid') startTableGrid(object);
+                        if (object.type === 'table' && editorState.mode === 'select') startTableGrid(object);
                       }}
                       onPointerMove={moveGesture}
                       onPointerUp={finishGesture}
@@ -1510,7 +1876,7 @@ export function EditorWorkspace({
                           <div className="vnext-selection-outline" aria-hidden="true" />
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
                           {object.type === 'table'
-                            && editorState.mode === 'table-grid'
+                            && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
                             && tableSelection
                             && plans.get(object.table.id)?.rowQ
                             && plans.get(object.table.id)?.gridOffsetYQ !== undefined
@@ -1522,11 +1888,16 @@ export function EditorWorkspace({
                                 selection={tableSelection}
                                 localSequence={snapshot.localSequence}
                                 onSelectionChange={(next) => {
+                                  if (editorState.mode === 'cell-edit') return;
                                   if (session.getSnapshot().localSequence !== snapshot.localSequence) return;
                                   tableSelectionRef.current = next;
                                   tableHistoryContextRef.current = { table: object.table, selection: next };
                                   setTableSelection(next);
                                 }}
+                                onActivateCell={(point) => {
+                                  if (editorState.mode === 'table-grid') startCellEdit(point);
+                                }}
+                                editingCellId={cellDraft?.identity.cellId}
                                 onStaleGesture={() => setStatusMessage('Gesto descartado porque o documento mudou.')}
                               />
                             )}
@@ -1577,6 +1948,221 @@ export function EditorWorkspace({
                 ))}
               </div>
               {selectedObject.type === 'image' && <button type="button" className="vnext-inspector-action" onClick={replaceSelectedImage}>Substituir imagem</button>}
+              {selectedObject.type === 'table' && tableSelection && (
+                <>
+                  <div className="vnext-divider" />
+                  <section className="vnext-cell-inspector" data-table-cell-inspector="">
+                    <h3>Células da tabela</h3>
+                    <p>{selectedAnchorCells.length} célula(s) selecionada(s).</p>
+                    {!cellDraft && (
+                      <button type="button" className="vnext-inspector-action" data-editor-action="edit-cell-content"
+                        disabled={selectedAnchorCells.length !== 1} onClick={() => startCellEdit()}>
+                        Editar conteúdo
+                      </button>
+                    )}
+                    {cellDraft && (
+                      <div data-cell-edit-session="">
+                        <label>
+                          <span>Tipo de conteúdo</span>
+                          <select
+                            data-cell-content-type=""
+                            value={cellDraft.activeType}
+                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
+                            onChange={(event) => {
+                              const next = changeTableCellDraftType(cellDraft, event.target.value as EditableCellType);
+                              notifyCellDraftChanged(next);
+                            }}
+                          >
+                            <option value="empty">Vazio</option>
+                            <option value="richText">Texto</option>
+                            <option value="technicalCode">Código técnico</option>
+                            <option value="measurement">Medição</option>
+                            {cellDraft.originalContent.type === 'marker' && <option value="marker">Marcador</option>}
+                            {cellDraft.originalContent.type === 'image' && <option value="image">Imagem</option>}
+                          </select>
+                        </label>
+                        {cellDraft.requiresTypeChangeConfirmation && (
+                          <div role="alert" data-cell-type-confirmation="">
+                            <p>Trocar o tipo substituirá o conteúdo atual desta célula.</p>
+                            <button type="button" onClick={() => notifyCellDraftChanged(confirmTableCellDraftTypeChange(cellDraft))}>
+                              Confirmar substituição
+                            </button>
+                            <button type="button" onClick={() => notifyCellDraftChanged(createTableCellDraft(cellDraft.identity, cellDraft.originalContent))}>
+                              Manter conteúdo atual
+                            </button>
+                          </div>
+                        )}
+                        {cellDraft.activeType === 'richText' && (
+                          <label>
+                            <span>Texto</span>
+                            <textarea
+                              ref={(node) => { cellEditorFieldRef.current = node; }}
+                              data-cell-rich-text=""
+                              value={cellDraft.richText}
+                              disabled={projectEditableRichText(cellDraft.originalContent.type === 'richText'
+                                ? cellDraft.originalContent.value
+                                : { paragraphs: [] }) === null}
+                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
+                                richText: event.target.value.replace(/\r\n?/g, '\n'),
+                              }))}
+                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
+                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
+                            />
+                          </label>
+                        )}
+                        {cellDraft.activeType === 'technicalCode' && (
+                          <label>
+                            <span>Código</span>
+                            <input
+                              ref={(node) => { cellEditorFieldRef.current = node; }}
+                              data-cell-technical-code=""
+                              type="text"
+                              value={cellDraft.technicalCode}
+                              style={{ fontFamily: 'monospace' }}
+                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, { technicalCode: event.target.value }))}
+                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
+                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' && !cellDraftRef.current?.composing) {
+                                  event.preventDefault();
+                                  commitCellEdit();
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                        {cellDraft.activeType === 'measurement' && (
+                          <div className="vnext-cell-measurement" data-cell-measurement="">
+                            <label>
+                              <span>Valor</span>
+                              <input
+                                ref={(node) => { cellEditorFieldRef.current = node; }}
+                                data-cell-measurement-value=""
+                                type="text"
+                                value={cellDraft.measurement.valueText}
+                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
+                                  measurement: { valueText: event.target.value },
+                                }))}
+                                onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
+                                onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
+                              />
+                            </label>
+                            <label>
+                              <span>Unidade</span>
+                              <input
+                                data-cell-measurement-unit=""
+                                type="text"
+                                value={cellDraft.measurement.unit}
+                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
+                                  measurement: { unit: event.target.value },
+                                }))}
+                              />
+                            </label>
+                            <label>
+                              <span>Qualificador</span>
+                              <select
+                                data-cell-measurement-qualifier=""
+                                value={cellDraft.measurement.qualifier}
+                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
+                                  measurement: { qualifier: event.target.value as TableCellDraft['measurement']['qualifier'] },
+                                }))}
+                              >
+                                <option value="">Nenhum</option>
+                                <option value="approx">Aproximadamente</option>
+                                <option value="min">Mínimo</option>
+                                <option value="max">Máximo</option>
+                              </select>
+                            </label>
+                          </div>
+                        )}
+                        {cellDraft.activeType === 'empty' && <p data-cell-empty-content="">A célula ficará vazia.</p>}
+                        {cellDraft.activeType === 'marker' && <p data-cell-readonly-content="">Marcador existente. A edição de marcadores será disponibilizada em uma etapa posterior.</p>}
+                        {cellDraft.activeType === 'image' && <p data-cell-readonly-content="">Imagem existente. A edição de imagem da célula não faz parte desta etapa.</p>}
+                        {cellDraft.originalContent.type !== 'marker' && cellDraft.originalContent.type !== 'image' && (
+                          <button type="button" data-editor-action="clear-cell-content"
+                            onClick={() => notifyCellDraftChanged(clearTableCellDraft(cellDraft))}>
+                            Limpar conteúdo
+                          </button>
+                        )}
+                        <div className="vnext-cell-edit-actions">
+                          <button type="button" data-editor-action="cancel-cell-content" onClick={() => cancelCellEdit()}>Cancelar</button>
+                          <button type="button" data-editor-action="commit-cell-content"
+                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
+                            onClick={() => commitCellEdit()}>
+                            Concluir
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="vnext-divider" />
+                    <h3>Propriedades da seleção</h3>
+                    <label>
+                      <span>Alinhamento</span>
+                      <select data-cell-property="textAlign" value={String(commonCellStyleValue('textAlign') ?? '')}
+                        onChange={(event) => runCellPropertyPatch({
+                          textAlign: event.target.value === '' ? null : event.target.value as 'left' | 'center' | 'right',
+                        })}>
+                        <option value="">Herdado</option><option value="left">Esquerda</option>
+                        <option value="center">Centro</option><option value="right">Direita</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Peso</span>
+                      <select data-cell-property="fontWeight" value={String(commonCellStyleValue('fontWeight') ?? '')}
+                        onChange={(event) => runCellPropertyPatch({
+                          fontWeight: event.target.value === '' ? null : Number(event.target.value) as 400 | 700,
+                        })}>
+                        <option value="">Herdado</option><option value="400">Normal</option><option value="700">Negrito</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Quebra</span>
+                      <select data-cell-property="wrapPolicy" value={commonWrapPolicy ?? ''}
+                        onChange={(event) => runCellPropertyPatch({
+                          wrapPolicy: event.target.value === '' ? null : event.target.value as 'wrap' | 'nowrap',
+                        })}>
+                        <option value="">Automático · Herdado</option><option value="wrap">Quebrar</option>
+                        <option value="nowrap">Não quebrar</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Cor do texto</span>
+                      <input key={propertySelectionKey + ':color'} data-cell-property="color" type="text"
+                        defaultValue={String(commonCellStyleValue('color') ?? '')} placeholder="Herdado"
+                        onBlur={(event) => commitCellColor('color', event.target.value)} />
+                    </label>
+                    <label>
+                      <span>Fundo</span>
+                      <input key={propertySelectionKey + ':background'} data-cell-property="background" type="text"
+                        defaultValue={String(commonCellStyleValue('background') ?? '')} placeholder="Herdado"
+                        onBlur={(event) => commitCellColor('background', event.target.value)} />
+                    </label>
+                    <fieldset>
+                      <legend>Padding (mm)</legend>
+                      {(['top', 'right', 'bottom', 'left'] as const).map((edge) => (
+                        <label key={edge}>
+                          <span>{{ top: 'Superior', right: 'Direita', bottom: 'Inferior', left: 'Esquerda' }[edge]}</span>
+                          <input
+                            key={propertySelectionKey + ':padding:' + edge}
+                            data-cell-padding={edge}
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={String(commonCellStyleValue('paddingMm')?.[edge] ?? '')}
+                            placeholder="Herdado"
+                            onBlur={(event) => commitCellPadding(edge, event.target.value)}
+                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                          />
+                        </label>
+                      ))}
+                      <button type="button" data-editor-action="reset-cell-padding"
+                        onClick={() => runCellPropertyPatch({ paddingMm: null })}>
+                        Redefinir todo padding
+                      </button>
+                    </fieldset>
+                  </section>
+                </>
+              )}
               <div className="vnext-divider" />
               <div className="vnext-diagnostics-section" data-editor-diagnostics="">
                 <h3>Diagnósticos</h3>

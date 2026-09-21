@@ -68,6 +68,13 @@ function ValidRecoveryInspection({ candidate }: { readonly candidate: RecoverySt
       {record.authoringRecoveryOverlay?.kind === 'INSPECTOR_FRAME_DRAFT_V1' && (
         <p>Rascunho do Inspector: {JSON.stringify(record.authoringRecoveryOverlay.draft)}</p>
       )}
+      {record.authoringRecoveryOverlay?.kind === 'TABLE_CELL_DRAFT_V1' && (
+        <div data-recovery-table-cell-draft="">
+          <strong>Rascunho de célula ainda não confirmado</strong>
+          <p>Tipo: {record.authoringRecoveryOverlay.activeType}</p>
+          <pre>{JSON.stringify(record.authoringRecoveryOverlay.draft, null, 2)}</pre>
+        </div>
+      )}
     </div>
   );
 }

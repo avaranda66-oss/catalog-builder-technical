@@ -62,6 +62,48 @@ describe('W3.D strict RecoveryRecord', () => {
     })).rejects.toMatchObject({ code: 'DIGEST_MISMATCH' });
   });
 
+  it('roundtrips additive TABLE_CELL_DRAFT_V1 without changing recovery format authority', async () => {
+    const record = await recoveryRecord({
+      authoringRecoveryOverlay: {
+        kind: 'TABLE_CELL_DRAFT_V1',
+        pageId: 'page-1',
+        objectId: 'table-object',
+        tableId: 'table',
+        cellId: 'cell0-0',
+        expectedContent: { type: 'measurement', valueText: '0.010', unit: 'V' },
+        activeType: 'measurement',
+        draft: {
+          richText: '',
+          technicalCode: '',
+          measurement: { valueText: '1,2', unit: 'V', qualifier: '' },
+        },
+        compositionWasActive: true,
+      },
+    });
+    const parsed = parseRecoveryRecord(JSON.parse(JSON.stringify(record)));
+    expect(parsed.recordFormatVersion).toBe(1);
+    expect(parsed.authoringRecoveryOverlay).toEqual(record.authoringRecoveryOverlay);
+  });
+
+  it('keeps existing TEXT_DRAFT_V1 and INSPECTOR_FRAME_DRAFT_V1 parsing intact', async () => {
+    const text = await recoveryRecord({
+      authoringRecoveryOverlay: {
+        kind: 'TEXT_DRAFT_V1', pageId: 'p', objectId: 'o',
+        expectedText: { paragraphs: [{ id: 'p1', inlines: [] }] },
+        draft: 'texto', compositionWasActive: false,
+      },
+    });
+    expect(parseRecoveryRecord(JSON.parse(JSON.stringify(text))).authoringRecoveryOverlay?.kind).toBe('TEXT_DRAFT_V1');
+    const inspector = await recoveryRecord({
+      authoringRecoveryOverlay: {
+        kind: 'INSPECTOR_FRAME_DRAFT_V1', pageId: 'p', objectId: 'o',
+        expectedFrame: { xMm: 1, yMm: 2, widthMm: 3, heightMm: 4 },
+        draft: { x: '1', y: '2', width: '3', height: '4' },
+      },
+    });
+    expect(parseRecoveryRecord(JSON.parse(JSON.stringify(inspector))).authoringRecoveryOverlay?.kind).toBe('INSPECTOR_FRAME_DRAFT_V1');
+  });
+
   it('keeps tab and authority-scope records independent and discards only an exact generation', async () => {
     const repository = new InMemoryRecoveryRepository();
     const a1 = await recoveryRecord();

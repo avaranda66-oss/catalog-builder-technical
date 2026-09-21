@@ -58,3 +58,5 @@ jobs:
           node tests/vnext/proof/w3g-asset-persistence-proof.mjs
           node tests/vnext/proof/w3h-autosave-concurrency-proof.mjs
           node tests/vnext/proof/w3i-father-browser-flow-proof.mjs
+          node tests/vnext/proof/editor-table-axis-proof.mjs
+          node tests/vnext/proof/editor-table-cell-proof.mjs

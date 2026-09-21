@@ -32,6 +32,8 @@ export interface TableGridOverlayProps {
   localSequence: number;
   onSelectionChange(selection: TableSelection): void;
   onStaleGesture(): void;
+  onActivateCell?(point: TableSelectionPoint): void;
+  editingCellId?: string;
 }
 
 function cumulative(values: readonly number[]): number[] {
@@ -48,6 +50,8 @@ export function TableGridOverlay({
   localSequence,
   onSelectionChange,
   onStaleGesture,
+  onActivateCell,
+  editingCellId,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -167,6 +171,7 @@ export function TableGridOverlay({
       className="vnext-table-grid-overlay"
       data-table-grid-overlay=""
       data-table-id={table.id}
+      data-local-sequence={localSequence}
       role="grid"
       aria-label="Grade da tabela"
       tabIndex={0}
@@ -226,6 +231,12 @@ export function TableGridOverlay({
             className="vnext-table-cell-target"
             data-table-cell={`${rowIndex}:${columnIndex}`}
             aria-label={`Linha ${rowIndex + 1}, coluna ${columnIndex + 1}`}
+            data-cell-editing={(() => {
+              const canonical = canonicalTablePoint(table, point);
+              if (!canonical || !editingCellId) return undefined;
+              const anchor = table.cells.find((cell) => cell.rowId === canonical.rowId && cell.columnId === canonical.columnId);
+              return anchor?.id === editingCellId ? 'true' : undefined;
+            })()}
             style={{
               left: qCss(x[columnIndex]),
               top: qCss(gridOffsetYQ + y[rowIndex]),
@@ -237,6 +248,13 @@ export function TableGridOverlay({
             onPointerUp={(event) => finishCellDrag(event, point)}
             onPointerCancel={cancelCellDrag}
             onLostPointerCapture={cancelCellDrag}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              const canonical = canonicalTablePoint(table, point);
+              if (!canonical) return;
+              onSelectionChange(tableRangeSelection(identity, canonical, canonical));
+              onActivateCell?.(canonical);
+            }}
           />
         );
       }))}

@@ -206,6 +206,23 @@ export function normalizeTableSelection(table: TableModel, selection: TableSelec
   };
 }
 
+export function selectedTableAnchorIds(table: TableModel, selection: TableSelection): readonly string[] {
+  const normalized = normalizeTableSelection(table, selection);
+  if (!normalized) return [];
+  const byId = new Map(table.cells.map((cell) => [cell.id, cell]));
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const slotId of normalized.displayCellIds) {
+    const slot = byId.get(slotId);
+    if (!slot) continue;
+    const anchorId = slot.coveredBy ?? slot.id;
+    if (seen.has(anchorId)) continue;
+    seen.add(anchorId);
+    result.push(anchorId);
+  }
+  return result;
+}
+
 export function explicitTableAxisIds(
   table: TableModel,
   selection: TableSelection,
