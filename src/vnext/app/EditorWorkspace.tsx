@@ -28,6 +28,12 @@ import {
   type TableSelection,
 } from '../editor/table-selection';
 import {
+  mergeEligibility,
+  selectionAfterMerge,
+  selectionAfterUnmerge,
+  unmergeEligibility,
+} from '../editor/table-merge-authoring';
+import {
   changeTableCellDraftType,
   clearTableCellDraft,
   confirmTableCellDraftTypeChange,
@@ -929,7 +935,9 @@ export function EditorWorkspace({
   const tableActionMessage = (code: string): string => {
     if (code === 'TABLE_LAST_AXIS') return 'A última linha ou coluna não pode ser removida.';
     if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover o eixo.';
-    if (code === 'MERGE_HEADER_BOUNDARY') return 'A inserção criaria uma célula mesclada entre cabeçalho e corpo.';
+    if (code === 'MERGE_HEADER_BOUNDARY') return 'Não é possível mesclar cabeçalho e corpo.';
+    if (code === 'MERGE_OVERLAP') return 'Desmescle as células existentes antes de criar uma nova mesclagem.';
+    if (code === 'MERGE_WOULD_DISCARD_CONTENT') return 'Não é possível mesclar porque outra célula contém conteúdo ou anotação.';
     if (code === 'TARGET_STALE') return 'A tabela mudou. A ação foi descartada sem alterar o documento.';
     if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
     return 'Não foi possível alterar a estrutura da tabela.';
@@ -1017,6 +1025,104 @@ export function EditorWorkspace({
       setTableSelection(nextSelection);
     }
     setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
+  };
+
+  const currentSelectedTableForStructure = (): { object: TableObject; selection: TableSelection } | undefined => {
+    const selection = tableSelectionRef.current;
+    if (!selection) return undefined;
+    const live = session.getSnapshot().document;
+    const page = live.pages.find((entry) => entry.id === selection.identity.pageId);
+    const object = page?.objects.find((entry): entry is TableObject =>
+      entry.id === selection.identity.objectId && entry.type === 'table' && entry.table.id === selection.identity.tableId
+    );
+    return object ? { object, selection } : undefined;
+  };
+
+  const runTableMerge = () => {
+    if (!finishCellDraftForContextChange()) return;
+    const live = currentSelectedTableForStructure();
+    if (!live) return;
+    const eligibility = mergeEligibility(live.object.table, live.selection);
+    if (!eligibility.enabled || !eligibility.prepared) {
+      setStatusMessage(eligibility.reason ?? 'Não foi possível mesclar a seleção.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.cells.merge',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      ...eligibility.prepared,
+      expectedTable: live.object.table,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableActionMessage(result.error.code));
+      return;
+    }
+    const nextObject = result.document.pages.find((page) => page.id === live.selection.identity.pageId)?.objects
+      .find((candidate): candidate is TableObject => candidate.id === live.object.id && candidate.type === 'table');
+    if (nextObject) {
+      const nextSelection = selectionAfterMerge(live.selection.identity, nextObject.table, eligibility.prepared.anchorCellId);
+      tableSelectionRef.current = nextSelection;
+      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
+      setTableSelection(nextSelection);
+    }
+    setEditorState((current) => ({ ...current, mode: 'table-grid' }));
+    setStatusMessage(result.metadata.changed ? 'Células mescladas.' : 'A seleção já representa uma única célula.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+
+  const runTableUnmerge = () => {
+    if (!finishCellDraftForContextChange()) return;
+    const live = currentSelectedTableForStructure();
+    if (!live) return;
+    const eligibility = unmergeEligibility(live.object.table, live.selection);
+    if (!eligibility.enabled || !eligibility.anchorCellId) {
+      setStatusMessage(eligibility.reason ?? 'Selecione uma célula mesclada.');
+      return;
+    }
+    const anchor = live.object.table.cells.find((cell) => cell.id === eligibility.anchorCellId)!;
+    const rowIndex = live.object.table.rows.findIndex((row) => row.id === anchor.rowId);
+    const columnIndex = live.object.table.columns.findIndex((column) => column.id === anchor.columnId);
+    const rows = anchor.span?.rows ?? 1;
+    const columns = anchor.span?.columns ?? 1;
+    const result = session.execute({
+      type: 'table.cell.unmerge',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      anchorCellId: eligibility.anchorCellId,
+      expectedTable: live.object.table,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableActionMessage(result.error.code));
+      return;
+    }
+    const nextObject = result.document.pages.find((page) => page.id === live.selection.identity.pageId)?.objects
+      .find((candidate): candidate is TableObject => candidate.id === live.object.id && candidate.type === 'table');
+    if (nextObject) {
+      let nextSelection: TableSelection;
+      try {
+        nextSelection = selectionAfterUnmerge(
+          live.selection.identity,
+          nextObject.table,
+          rowIndex,
+          columnIndex,
+          rows,
+          columns,
+          eligibility.anchorCellId
+        );
+      } catch {
+        const nextAnchor = nextObject.table.cells.find((cell) => cell.id === eligibility.anchorCellId)!;
+        nextSelection = tableCellSelection(live.selection.identity, { rowId: nextAnchor.rowId, columnId: nextAnchor.columnId });
+      }
+      tableSelectionRef.current = nextSelection;
+      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
+      setTableSelection(nextSelection);
+    }
+    setEditorState((current) => ({ ...current, mode: 'table-grid' }));
+    setStatusMessage(result.metadata.changed ? 'Células desmescladas.' : 'A célula já estava desmesclada.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
   };
 
   const finishTextEditBeforeCommand = (): boolean => finishCellDraftForContextChange() && (!textEditRef.current || commitTextEdit());
@@ -1593,6 +1699,12 @@ export function EditorWorkspace({
   const columnAxisReason = selectedColumnAxisIds.length === 1
     ? undefined
     : 'Selecione uma única coluna pelo seletor superior.';
+  const currentMergeEligibility = selectedTableObject && tableSelection
+    ? mergeEligibility(selectedTableObject.table, tableSelection)
+    : { enabled: false, reason: 'Selecione duas ou mais células adjacentes.' };
+  const currentUnmergeEligibility = selectedTableObject && tableSelection
+    ? unmergeEligibility(selectedTableObject.table, tableSelection)
+    : { enabled: false, reason: 'Selecione uma célula mesclada.' };
 
   return (
     <div
@@ -1730,18 +1842,34 @@ export function EditorWorkspace({
             </div>
           </div>
 
-          {editorState.mode === 'table-grid' && selectedTableObject && (
+          {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>Grade da tabela</strong>
               <div className="vnext-tool-group" aria-label="Ações de linha">
-                <button type="button" data-editor-action="insert-row-before" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
-                <button type="button" data-editor-action="insert-row-after" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
-                <button type="button" data-editor-action="remove-row" disabled={Boolean(rowAxisReason)} title={rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
+                <button type="button" data-editor-action="insert-row-before" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
+                <button type="button" data-editor-action="insert-row-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
+                <button type="button" data-editor-action="remove-row" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
               </div>
               <div className="vnext-tool-group" aria-label="Ações de coluna">
-                <button type="button" data-editor-action="insert-column-before" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
-                <button type="button" data-editor-action="insert-column-after" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
-                <button type="button" data-editor-action="remove-column" disabled={Boolean(columnAxisReason)} title={columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
+                <button type="button" data-editor-action="insert-column-before" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
+                <button type="button" data-editor-action="insert-column-after" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
+                <button type="button" data-editor-action="remove-column" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
+              </div>
+              <div className="vnext-tool-group" aria-label="Mesclagem de células">
+                <button
+                  type="button"
+                  data-editor-action="merge-cells"
+                  disabled={!currentMergeEligibility.enabled}
+                  title={currentMergeEligibility.reason}
+                  onClick={runTableMerge}
+                >Mesclar células</button>
+                <button
+                  type="button"
+                  data-editor-action="unmerge-cell"
+                  disabled={!currentUnmergeEligibility.enabled}
+                  title={currentUnmergeEligibility.reason}
+                  onClick={runTableUnmerge}
+                >Desmesclar células</button>
               </div>
               <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
             </div>

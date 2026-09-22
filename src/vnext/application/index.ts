@@ -26,6 +26,8 @@ export {
   TableObjectInsertSpecSchema,
   TableAxisInsertActionSchema,
   TableAxisRemoveActionSchema,
+  TableCellsMergeActionSchema,
+  TableCellUnmergeActionSchema,
   TableCellContentInputSchema,
   TableCellSetContentActionSchema,
   CellPropertyPatchSchema,
