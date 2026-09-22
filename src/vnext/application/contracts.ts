@@ -245,6 +245,26 @@ export const TableAxisRemoveActionSchema = z.object({
   expectedTable: TableModelSchema,
 }).strict();
 
+export const TableCellsMergeActionSchema = z.object({
+  type: z.literal('table.cells.merge'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  anchorCellId: applicationId,
+  rows: safeInteger.positive(),
+  columns: safeInteger.positive(),
+  expectedTable: TableModelSchema,
+}).strict();
+
+export const TableCellUnmergeActionSchema = z.object({
+  type: z.literal('table.cell.unmerge'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  anchorCellId: applicationId,
+  expectedTable: TableModelSchema,
+}).strict();
+
 export const TableCellContentInputSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('empty') }).strict(),
   z.object({ type: z.literal('richText'), plainText: editablePlainText }).strict(),
@@ -327,6 +347,8 @@ export const ApplicationActionSchema = z.union([
   UngroupActionSchema,
   TableAxisInsertActionSchema,
   TableAxisRemoveActionSchema,
+  TableCellsMergeActionSchema,
+  TableCellUnmergeActionSchema,
   TableCellSetContentActionSchema,
   TableCellSetPropertiesActionSchema,
 ]);
@@ -356,6 +378,8 @@ export type ApplicationErrorCode =
   | 'TABLE_LAST_AXIS'
   | 'MERGE_INTERSECTION'
   | 'MERGE_HEADER_BOUNDARY'
+  | 'MERGE_OVERLAP'
+  | 'MERGE_WOULD_DISCARD_CONTENT'
   | 'TARGET_STALE'
   | 'DUPLICATE_ID'
   | 'ID_GENERATION_FAILED'

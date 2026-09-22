@@ -2,7 +2,7 @@ import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type Asset
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { add } from '../domain/physical';
-import { deleteAxis, insertAxis, orderedAnchors, validateTable } from '../table';
+import { deleteAxis, insertAxis, mergeCells, orderedAnchors, unmergeCell, validateTable } from '../table';
 import {
   ApplicationActionSchema,
   InsertedTableColumnPropertiesSchema,
@@ -347,6 +347,26 @@ function tableOperationFailure(error: unknown, axisId: string): ApplicationActio
       return failure('MERGE_INTERSECTION', `Axis ${axisId} intersects a merged span; unmerge explicitly before removing it`);
     case 'MERGE_HEADER_BOUNDARY':
       return failure('MERGE_HEADER_BOUNDARY', 'The inserted row would make a span cross the header/body boundary');
+    default:
+      return documentFailure(error);
+  }
+}
+
+
+function tableMergeFailure(error: unknown, anchorCellId: string): ApplicationActionFailure {
+  if (!(error instanceof VNextError)) return documentFailure(error);
+  switch (error.code) {
+    case 'MERGE_INTERSECTION':
+    case 'MERGE_OVERLAP':
+      return failure('MERGE_OVERLAP', `Merge topology around ${anchorCellId} must be explicitly unmerged first`);
+    case 'MERGE_WOULD_DISCARD_CONTENT':
+      return failure('MERGE_WOULD_DISCARD_CONTENT', error.message);
+    case 'MERGE_HEADER_BOUNDARY':
+      return failure('MERGE_HEADER_BOUNDARY', 'Header and non-header rows cannot be merged together');
+    case 'INVALID_SPAN':
+    case 'SPAN_OUT_OF_BOUNDS':
+    case 'CELL_NOT_FOUND':
+      return failure('ACTION_INVALID', error.message);
     default:
       return documentFailure(error);
   }
@@ -954,6 +974,51 @@ export function executeApplicationAction(
         affectedIds = [action.objectId, action.tableId, ...action.targets.map((entry) => entry.cellId)];
         if (!changed) break;
         candidate = replaceTableObject(document, target, { ...table, cells: nextCells });
+        break;
+      }
+
+      case 'table.cells.merge': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const beforeById = new Map(table.cells.map((cell) => [cell.id, cell]));
+        let nextTable: TableModel;
+        try {
+          nextTable = mergeCells(table, action.anchorCellId, action.rows, action.columns);
+        } catch (error) {
+          return tableMergeFailure(error, action.anchorCellId);
+        }
+        changed = nextTable !== table;
+        createdIds = [];
+        affectedIds = changed
+          ? [action.objectId, action.tableId, ...nextTable.cells
+            .filter((cell) => !exactEquals(beforeById.get(cell.id), cell))
+            .map((cell) => cell.id)]
+          : [action.objectId, action.tableId, action.anchorCellId];
+        if (!changed) break;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+      case 'table.cell.unmerge': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const beforeById = new Map(table.cells.map((cell) => [cell.id, cell]));
+        let nextTable: TableModel;
+        try {
+          nextTable = unmergeCell(table, action.anchorCellId);
+        } catch (error) {
+          return tableMergeFailure(error, action.anchorCellId);
+        }
+        changed = nextTable !== table;
+        createdIds = [];
+        affectedIds = changed
+          ? [action.objectId, action.tableId, ...nextTable.cells
+            .filter((cell) => !exactEquals(beforeById.get(cell.id), cell))
+            .map((cell) => cell.id)]
+          : [action.objectId, action.tableId, action.anchorCellId];
+        if (!changed) break;
+        candidate = replaceTableObject(document, target, nextTable);
         break;
       }
       case 'table.axis.insert': {

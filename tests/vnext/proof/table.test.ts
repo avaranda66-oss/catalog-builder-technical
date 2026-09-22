@@ -32,6 +32,27 @@ describe('table topology, immutable operations and references',()=>{
     expect(()=>mergeCells(emptyTable(),'cell2-2',2,2)).toThrow('SPAN_OUT_OF_BOUNDS');
     expect(()=>mergeCells(emptyTable(),'cell0-0',1.5,2)).toThrow('INVALID_SPAN');
   });
+  it('proves W4.C merge variants, no-ops, data-loss types and latent-state roundtrip',()=>{
+    const one=emptyTable(); expect(mergeCells(one,'cell0-0',1,1)).toBe(one); expect(unmergeCell(one,'cell0-0')).toBe(one);
+    expect(mergeCells(emptyTable(),'cell0-0',1,2).cells[0].span).toEqual({rows:1,columns:2});
+    expect(mergeCells(emptyTable(),'cell0-0',2,1).cells[0].span).toEqual({rows:2,columns:1});
+    const styled=emptyTable();
+    styled.cells[0].content={type:'image',assetId:'asset'}; styled.cells[0].contentPresentation={image:{fit:'contain',targetWidthMm:3,targetHeightMm:4},wrapPolicy:'nowrap'};
+    styled.cells[1].style={background:'#ABCDEF',paddingMm:{top:1,right:2,bottom:3,left:4},textAlign:'right',fontWeight:700,color:'#112233'};
+    styled.cells[1].contentPresentation={wrapPolicy:'wrap'};
+    const assets=[{id:'asset',version:'1',sha256:'a'.repeat(64),mime:'image/png' as const,widthPx:5,heightPx:5,name:'a',alt:'a'}];
+    expect(validateTable(styled,assets)).toEqual([]);
+    const merged=mergeCells(styled,'cell0-0',1,2); expect(merged.cells[0].content).toEqual(styled.cells[0].content); expect(merged.cells[1].style).toEqual(styled.cells[1].style); expect(merged.cells[1].contentPresentation).toEqual(styled.cells[1].contentPresentation); expect(unmergeCell(merged,'cell0-0')).toEqual(styled);
+    const contentCases=[
+      {type:'richText' as const,value:plainRichText('rt','x')},
+      {type:'technicalCode' as const,value:'X'},
+      {type:'measurement' as const,valueText:'1.0',unit:'V'},
+    ];
+    for(const content of contentCases){const table=emptyTable();table.cells[1].content=content;expect(()=>mergeCells(table,'cell0-0',1,2)).toThrow('MERGE_WOULD_DISCARD_CONTENT');}
+    const marker=emptyTable();marker.legend=[{id:'legend',markerCode:'*',text:plainRichText('lg','L')}];marker.cells[1].content={type:'marker',legendEntryId:'legend'};expect(()=>mergeCells(marker,'cell0-0',1,2)).toThrow('MERGE_WOULD_DISCARD_CONTENT');
+    const image=emptyTable();image.cells[1].content={type:'image',assetId:'asset'};image.cells[1].contentPresentation={image:{fit:'contain',targetWidthMm:2,targetHeightMm:2}};expect(()=>mergeCells(image,'cell0-0',1,2)).toThrow('MERGE_WOULD_DISCARD_CONTENT');
+    const annotated=emptyTable();annotated.annotations=[{id:'note',kind:'note',text:plainRichText('note','N')}];annotated.cells[1].annotationIds=['note'];expect(()=>mergeCells(annotated,'cell0-0',1,2)).toThrow('MERGE_WOULD_DISCARD_CONTENT');
+  });
   it('rejects orphan, cycle, outside-span and overlapping coverage',()=>{
     for(const ref of ['missing','cell0-1']) {
       const table=emptyTable();table.cells[1].coveredBy=ref;
