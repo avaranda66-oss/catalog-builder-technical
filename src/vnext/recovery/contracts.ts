@@ -2,10 +2,11 @@ import { z } from 'zod';
 import {
   FrameSchema,
   type CatalogDocument,
+  type CellContent,
   type Frame,
   type RichText,
 } from '@/vnext/domain';
-import { RichTextSchema } from '@/vnext/domain/editorial-model';
+import { CellContentSchema, RichTextSchema } from '@/vnext/domain/editorial-model';
 import { parseCanonicalSnapshot } from '@/vnext/persistence/snapshot';
 
 export const CURRENT_RECOVERY_RECORD_FORMAT_VERSION = 1 as const;
@@ -51,9 +52,30 @@ const InspectorRecoveryOverlaySchema = z.object({
   }).strict(),
 }).strict();
 
+const TableCellRecoveryOverlaySchema = z.object({
+  kind: z.literal('TABLE_CELL_DRAFT_V1'),
+  pageId: clean,
+  objectId: clean,
+  tableId: clean,
+  cellId: clean,
+  expectedContent: CellContentSchema,
+  activeType: z.enum(['empty', 'richText', 'technicalCode', 'measurement']),
+  draft: z.object({
+    richText: z.string(),
+    technicalCode: z.string(),
+    measurement: z.object({
+      valueText: z.string(),
+      unit: z.string(),
+      qualifier: z.enum(['', 'approx', 'min', 'max']),
+    }).strict(),
+  }).strict(),
+  compositionWasActive: z.boolean(),
+}).strict();
+
 export const AuthoringRecoveryOverlaySchema = z.discriminatedUnion('kind', [
   TextRecoveryOverlaySchema,
   InspectorRecoveryOverlaySchema,
+  TableCellRecoveryOverlaySchema,
 ]);
 
 export type TextRecoveryOverlay = {
@@ -73,7 +95,27 @@ export type InspectorRecoveryOverlay = {
   readonly draft: Readonly<{ x: string; y: string; width: string; height: string }>;
 };
 
-export type AuthoringRecoveryOverlay = TextRecoveryOverlay | InspectorRecoveryOverlay;
+export type TableCellRecoveryOverlay = {
+  readonly kind: 'TABLE_CELL_DRAFT_V1';
+  readonly pageId: string;
+  readonly objectId: string;
+  readonly tableId: string;
+  readonly cellId: string;
+  readonly expectedContent: CellContent;
+  readonly activeType: 'empty' | 'richText' | 'technicalCode' | 'measurement';
+  readonly draft: Readonly<{
+    richText: string;
+    technicalCode: string;
+    measurement: Readonly<{
+      valueText: string;
+      unit: string;
+      qualifier: '' | 'approx' | 'min' | 'max';
+    }>;
+  }>;
+  readonly compositionWasActive: boolean;
+};
+
+export type AuthoringRecoveryOverlay = TextRecoveryOverlay | InspectorRecoveryOverlay | TableCellRecoveryOverlay;
 
 const PendingRemoteMutationWireSchema = z.object({
   mutationId: canonicalUuid,

@@ -1,4 +1,5 @@
-import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type TableModel, type TableObject } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type TableModel, type TableObject } from '../domain';
+import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { add } from '../domain/physical';
 import { deleteAxis, insertAxis, orderedAnchors, validateTable } from '../table';
@@ -13,6 +14,7 @@ import {
   type FrameU,
   type IdGenerator,
   type ObjectInsertSpec,
+  type CellPropertyPatch,
 } from './contracts';
 import {
   ApplicationDocumentError,
@@ -250,6 +252,75 @@ function tableTarget(
     pageIndex: location.pageIndex,
     objectIndex: location.objectIndex,
   };
+}
+
+function tableCellTarget(
+  document: CatalogDocument,
+  action: { pageId: string; objectId: string; tableId: string }
+): { ok: true; object: TableObject; pageIndex: number; objectIndex: number } | ApplicationActionFailure {
+  if (!document.pages.some((page) => page.id === action.pageId)) return failure('PAGE_NOT_FOUND', action.pageId);
+  const location = findObjectLocation(document, action.objectId);
+  if (!location || location.page.id !== action.pageId) {
+    return failure('OBJECT_NOT_FOUND', `Table object ${action.objectId} was not found on page ${action.pageId}`);
+  }
+  if (location.parentGroup) {
+    return failure('ACTION_INVALID', `Table ${action.objectId} is inside closed Group ${location.parentGroup.id}; ungroup before editing`);
+  }
+  if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+  if (location.object.type !== 'table') return failure('OBJECT_TYPE_MISMATCH', `${action.objectId} is not a Table object`);
+  if (location.object.table.id !== action.tableId) {
+    return failure('TABLE_IDENTITY_MISMATCH', `Expected table ${action.tableId}, found ${location.object.table.id}`);
+  }
+  return { ok: true, object: location.object, pageIndex: location.pageIndex, objectIndex: location.objectIndex };
+}
+
+function exactEquals(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function own(object: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function applyCellPropertyPatch(
+  cell: Cell,
+  patch: CellPropertyPatch
+): Cell {
+  const style: CellStyle = { ...(cell.style ?? {}) };
+  for (const key of ['textAlign', 'fontWeight', 'color', 'background'] as const) {
+    if (!own(patch, key)) continue;
+    const value = patch[key];
+    if (value === null) delete style[key];
+    else if (value !== undefined) (style as Record<string, unknown>)[key] = value;
+  }
+  if (own(patch, 'paddingMm')) {
+    if (patch.paddingMm === null) {
+      delete style.paddingMm;
+    } else if (patch.paddingMm !== undefined) {
+      const padding = { ...(style.paddingMm ?? {}) };
+      for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
+        if (!own(patch.paddingMm, edge)) continue;
+        const value = patch.paddingMm[edge];
+        if (value === null) delete padding[edge];
+        else if (value !== undefined) padding[edge] = value;
+      }
+      if (Object.keys(padding).length === 0) delete style.paddingMm;
+      else style.paddingMm = padding;
+    }
+  }
+
+  const presentation: CellContentPresentation = { ...(cell.contentPresentation ?? {}) };
+  if (own(patch, 'wrapPolicy')) {
+    if (patch.wrapPolicy === null) delete presentation.wrapPolicy;
+    else if (patch.wrapPolicy !== undefined) presentation.wrapPolicy = patch.wrapPolicy;
+  }
+
+  const next: Cell = { ...cell };
+  if (Object.keys(style).length === 0) delete next.style;
+  else next.style = style;
+  if (Object.keys(presentation).length === 0) delete next.contentPresentation;
+  else next.contentPresentation = presentation;
+  return next;
 }
 
 function replaceTableObject(
@@ -788,6 +859,101 @@ export function executeApplicationAction(
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );
+        break;
+      }
+      case 'table.cell.setContent': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const cell = table.cells.find((entry) => entry.id === action.cellId);
+        if (!cell) return failure('ACTION_INVALID', `Cell ${action.cellId} no longer exists`);
+        if (cell.coveredBy) return failure('ACTION_INVALID', `Cell ${action.cellId} is covered by anchor ${cell.coveredBy}`);
+        if (!exactEquals(cell.content, action.expectedContent)) {
+          return failure('TARGET_STALE', `Cell ${action.cellId} content changed after the command was prepared`);
+        }
+        if (cell.content.type === 'marker' || cell.content.type === 'image') {
+          return failure('ACTION_INVALID', `Cell ${action.cellId} content type ${cell.content.type} is read-only in W4.B`);
+        }
+        if (cell.content.type !== action.content.type && action.allowTypeChange !== true) {
+          return failure('ACTION_INVALID', `Changing cell content type requires explicit destructive intent`);
+        }
+
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        let nextContent: CellContent;
+        if (action.content.type === 'richText') {
+          if (cell.content.type === 'richText' && projectEditableRichText(cell.content.value) === null) {
+            return failure('ACTION_INVALID', `Cell ${action.cellId} RichText is outside the W2.G direct-editable subset`);
+          }
+          const current = cell.content.type === 'richText' ? cell.content.value : { paragraphs: [] };
+          const reconciled = reconcileEditableRichText(current, action.content.plainText, allocator);
+          if (!reconciled) {
+            return failure('ACTION_INVALID', `Cell ${action.cellId} RichText is outside the W2.G direct-editable subset`);
+          }
+          nextContent = { type: 'richText', value: reconciled.richText };
+          createdIds = [...reconciled.createdIds];
+        } else if (action.content.type === 'empty') {
+          nextContent = { type: 'empty' };
+        } else if (action.content.type === 'technicalCode') {
+          nextContent = { type: 'technicalCode', value: action.content.value };
+        } else {
+          nextContent = {
+            type: 'measurement',
+            valueText: action.content.valueText,
+            unit: action.content.unit,
+            ...(action.content.qualifier === undefined ? {} : { qualifier: action.content.qualifier }),
+          };
+        }
+
+        const parsedContent = CellContentSchema.safeParse(nextContent);
+        if (!parsedContent.success) {
+          return {
+            ok: false,
+            error: {
+              code: 'ACTION_INVALID',
+              details: `Invalid cell content for ${action.cellId}`,
+              issues: parsedContent.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+            },
+          };
+        }
+        changed = !exactEquals(cell.content, parsedContent.data);
+        affectedIds = [action.objectId, action.tableId, action.cellId];
+        if (!changed) {
+          createdIds = [];
+          break;
+        }
+        const nextTable: TableModel = {
+          ...table,
+          cells: table.cells.map((entry) => entry.id === cell.id ? { ...entry, content: parsedContent.data } : entry),
+        };
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+      case 'table.cell.setProperties': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const selected = action.targets.map((snapshot) => ({
+          snapshot,
+          cell: table.cells.find((entry) => entry.id === snapshot.cellId),
+        }));
+        const missing = selected.find((entry) => !entry.cell);
+        if (missing) return failure('ACTION_INVALID', `Cell ${missing.snapshot.cellId} no longer exists`);
+        const covered = selected.find((entry) => entry.cell!.coveredBy);
+        if (covered) return failure('ACTION_INVALID', `Cell ${covered.snapshot.cellId} is covered and cannot be styled directly`);
+        const stale = selected.find(({ snapshot, cell }) =>
+          !exactEquals(cell!.style, snapshot.expectedStyle)
+          || !exactEquals(cell!.contentPresentation, snapshot.expectedContentPresentation)
+        );
+        if (stale) {
+          return failure('TARGET_STALE', `Cell ${stale.snapshot.cellId} properties changed after the command was prepared`);
+        }
+
+        const byId = new Map(selected.map(({ snapshot, cell }) => [snapshot.cellId, applyCellPropertyPatch(cell!, action.patch)]));
+        const nextCells = table.cells.map((cell) => byId.get(cell.id) ?? cell);
+        changed = selected.some(({ cell }) => !exactEquals(cell, byId.get(cell!.id)));
+        affectedIds = [action.objectId, action.tableId, ...action.targets.map((entry) => entry.cellId)];
+        if (!changed) break;
+        candidate = replaceTableObject(document, target, { ...table, cells: nextCells });
         break;
       }
       case 'table.axis.insert': {
