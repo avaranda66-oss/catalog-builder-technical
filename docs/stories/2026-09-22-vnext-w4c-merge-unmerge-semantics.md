@@ -101,7 +101,7 @@ Claim boundary: this is controlled repository persistence, not a production Supa
 
 ## Publication / semantic output / PDF
 
-The dedicated W4.C browser proof sends the authored document through canonical publication and native Chromium PDF/PDF.js. Publication is `READY`, editor chrome is absent, the merged owner has correct semantic colspan and the covered cell is not duplicated. Unmerge restores separate semantic cells before remerge/persistence cycles.
+The dedicated W4.C browser proof sends the authored document through canonical publication and native Chromium PDF/PDF.js. The post-unmerge Save/reopen state is published before remerge and is `READY` with zero ERROR diagnostics and zero editor chrome; the former merged owner has no merge colspan/rowspan and the formerly covered cell is present again as its own semantic cell. The proof then remerges the same range: merged publication is `READY`, the owner has the correct semantic colspan, the covered cell is not duplicated, and the native PDF/PDF.js assertions remain green.
 
 ## Dedicated proof and focused tests
 
@@ -113,7 +113,7 @@ Focused W4.C/domain slice passes 19/19 tests across:
 - `tests/vnext/application/table-merge-actions.test.ts`
 - `tests/vnext/editor/table-merge-authoring.test.ts`
 
-The visible Chromium W4.C proof passes locally on Chromium 151.0.7922.34 with zero console errors, page errors, failed resources and request failures. Mobile functional checks pass at 320×900, 360×900 and 390×900 with no global horizontal overflow.
+The visible Chromium W4.C proof passes locally on Chromium 151.0.7922.34 with zero console errors, page errors, failed resources and request failures. Mobile functional checks at 320×900, 360×900 and 390×900 execute merge and unmerge through real `EditorWorkspace` controls, restore the formerly covered cell to independent topology, keep Undo/Redo reachable, and preserve zero global horizontal overflow.
 
 ## Deferred / scope audit
 
@@ -167,12 +167,15 @@ Final headed/local W4.C proof:
 - visibleLocalRun: true.
 - controlled persistence: true.
 - production Supabase E2E claim: false.
-- publication: READY, zero error diagnostics.
+- post-unmerge publication: READY, zero ERROR diagnostics, zero editor chrome.
+- post-unmerge semantic owner `w4c-cell-1-0`: ordinary individual cell with no merge colspan/rowspan; content `DRAFT-W4C` present once.
+- post-unmerge former covered cell `w4c-cell-1-1`: present again as an independent semantic cell.
+- merged publication: READY, zero error diagnostics.
 - semantic merged anchor: correct `aria-colspan=2`.
 - covered semantic cell: absent as duplicate.
-- native PDF: 6551 bytes, approximately 209.889 mm × 297.011 mm.
+- native PDF: 6680 bytes, approximately 209.889 mm × 297.011 mm.
 - vector path operations: 56.
-- mobile 320×900 / 360×900 / 390×900: merge controls reachable, Undo/Redo reachable, zero global horizontal overflow.
+- mobile 320×900 / 360×900 / 390×900: merge reachable, unmerge reachable and functional, Undo/Redo reachable, zero global horizontal overflow.
 - console errors: 0.
 - page errors: 0.
 - failed resources: 0.
@@ -224,4 +227,12 @@ W4.C intentionally does not add border authoring, cell image upload/authoring, a
 
 ## Exact-head provenance / CI
 
-To be filled after the one coherent W4.C commit is pushed and the exact-head Quality Gate completes. Story remains **UNDER REVIEW** and is not canonicalized by this implementation wave.
+PR #43 is the W4.C review vehicle on branch `feat/vnext-w4c-merge-semantics`, based on canonical main `19c852ca318ff45f31adacc7ffa29c14fc5d52ed`. This story remains **UNDER REVIEW** until Principal promotion. The exact current PR head and exact-head Quality Gate are GitHub-live authority and are reported in the final implementation/amendment report rather than hardcoded here.
+
+Independent audit amendment evidence requested and completed:
+
+1. mobile functional unmerge proof at 320 / 360 / 390;
+2. semantic publication proof after unmerge;
+3. stale provenance wording cleanup.
+
+Local amendment evidence: PASS. All three mobile widths execute merge + unmerge functionally with zero global overflow; post-unmerge publication is READY with zero ERROR diagnostics and independent semantic cells restored; merged publication/PDF remains PASS. No product source changed.
