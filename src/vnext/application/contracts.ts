@@ -8,6 +8,7 @@ import {
   CellStyleSchema,
   ImageFocalPointSchema,
   RichTextSchema,
+  TableLegendEntrySchema,
   TableModelSchema,
   TextStyleSchema,
 } from '../domain/editorial-model';
@@ -23,6 +24,13 @@ const editablePlainText = z.string().refine(
   (value) => ![...value].some((character) => {
     const code = character.charCodeAt(0);
     return (code < 32 && code !== 10) || code === 127;
+  }),
+  'Unsupported ASCII control character'
+);
+const bulkEditablePlainText = z.string().refine(
+  (value) => ![...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return (code < 32 && code !== 9 && code !== 10) || code === 127;
   }),
   'Unsupported ASCII control character'
 );
@@ -288,6 +296,126 @@ export const TableCellSetContentActionSchema = z.object({
   allowTypeChange: z.literal(true).optional(),
 }).strict();
 
+const cleanMarkerCode = z.string().min(1).refine(
+  (value) => ![...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127),
+  'Control character'
+);
+
+export const TableBulkMarkerReferenceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('existing'), legendEntryId: applicationId }).strict(),
+  z.object({ kind: z.literal('created'), clientKey: applicationId }).strict(),
+]);
+
+export const TableBulkCellContentInputSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('empty') }).strict(),
+  z.object({ type: z.literal('richTextPlain'), plainText: bulkEditablePlainText }).strict(),
+  z.object({ type: z.literal('richTextCopy'), value: RichTextSchema }).strict(),
+  z.object({ type: z.literal('technicalCode'), value: z.string() }).strict(),
+  z.object({
+    type: z.literal('measurement'),
+    valueText: z.string(),
+    unit: z.string(),
+    qualifier: z.enum(['approx', 'min', 'max']).optional(),
+  }).strict(),
+  z.object({ type: z.literal('marker'), legend: TableBulkMarkerReferenceSchema }).strict(),
+]);
+
+export const TableBulkContentTargetSchema = z.object({
+  cellId: applicationId,
+  expectedContent: CellContentSchema,
+  content: TableBulkCellContentInputSchema,
+}).strict();
+
+export const TableLegendCreateInputSchema = z.object({
+  clientKey: applicationId,
+  markerCode: cleanMarkerCode,
+  text: RichTextSchema,
+}).strict();
+
+export const TableCellsSetContentsActionSchema = z.object({
+  type: z.literal('table.cells.setContents'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  geometry: z.object({
+    rowIds: z.array(applicationId).min(1),
+    columnIds: z.array(applicationId).min(1),
+  }).strict(),
+  targets: z.array(TableBulkContentTargetSchema).min(1),
+  legendCreates: z.array(TableLegendCreateInputSchema).optional(),
+  expectedLegend: z.array(TableLegendEntrySchema).optional(),
+}).strict().superRefine((action, context) => {
+  const rowIds = action.geometry.rowIds;
+  const columnIds = action.geometry.columnIds;
+  if (new Set(rowIds).size !== rowIds.length || new Set(columnIds).size !== columnIds.length) {
+    context.addIssue({ code: 'custom', path: ['geometry'], message: 'Geometry IDs must be unique' });
+  }
+  if (action.targets.length !== rowIds.length * columnIds.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Targets must match geometry area' });
+  }
+  const targetIds = action.targets.map((target) => target.cellId);
+  if (new Set(targetIds).size !== targetIds.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Target cellIds must be unique' });
+  }
+  const creates = action.legendCreates ?? [];
+  const createKeys = creates.map((entry) => entry.clientKey);
+  if (new Set(createKeys).size !== createKeys.length) {
+    context.addIssue({ code: 'custom', path: ['legendCreates'], message: 'Legend client keys must be unique' });
+  }
+  const createdRefs = action.targets.flatMap((target) =>
+    target.content.type === 'marker' && target.content.legend.kind === 'created'
+      ? [target.content.legend.clientKey]
+      : []
+  );
+  for (const clientKey of createdRefs) {
+    if (!createKeys.includes(clientKey)) {
+      context.addIssue({ code: 'custom', path: ['targets'], message: `Missing Legend create for ${clientKey}` });
+    }
+  }
+  if (creates.some((entry) => !createdRefs.includes(entry.clientKey))) {
+    context.addIssue({ code: 'custom', path: ['legendCreates'], message: 'Every Legend create must be referenced' });
+  }
+  if (creates.length > 0 && action.expectedLegend === undefined) {
+    context.addIssue({ code: 'custom', path: ['expectedLegend'], message: 'Legend CAS is required when creating Legends' });
+  }
+});
+
+export const TableLegendCreateActionSchema = z.object({
+  type: z.literal('table.legend.create'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  markerCode: cleanMarkerCode,
+  plainText: editablePlainText,
+  expectedLegend: z.array(TableLegendEntrySchema),
+}).strict();
+
+export const TableLegendUpdateActionSchema = z.object({
+  type: z.literal('table.legend.update'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  legendEntryId: applicationId,
+  expectedLegend: TableLegendEntrySchema,
+  patch: z.object({
+    markerCode: cleanMarkerCode.optional(),
+    plainText: editablePlainText.optional(),
+  }).strict(),
+}).strict().superRefine((action, context) => {
+  if (action.patch.markerCode === undefined && action.patch.plainText === undefined) {
+    context.addIssue({ code: 'custom', path: ['patch'], message: 'Legend update patch must not be empty' });
+  }
+});
+
+export const TableLegendRemoveActionSchema = z.object({
+  type: z.literal('table.legend.remove'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  legendEntryId: applicationId,
+  expectedLegend: TableLegendEntrySchema,
+}).strict();
+
 const nullableColor = color.nullable();
 const nullablePaddingEdge = z.number().finite().nonnegative().nullable();
 export const CellPropertyPatchSchema = z.object({
@@ -350,6 +478,10 @@ export const ApplicationActionSchema = z.union([
   TableCellsMergeActionSchema,
   TableCellUnmergeActionSchema,
   TableCellSetContentActionSchema,
+  TableCellsSetContentsActionSchema,
+  TableLegendCreateActionSchema,
+  TableLegendUpdateActionSchema,
+  TableLegendRemoveActionSchema,
   TableCellSetPropertiesActionSchema,
 ]);
 
@@ -358,6 +490,9 @@ export type ApplicationActionType = ApplicationAction['type'];
 export type FrameU = z.infer<typeof FrameUSchema>;
 export type ObjectInsertSpec = z.infer<typeof ObjectInsertSpecSchema>;
 export type TableCellContentInput = z.infer<typeof TableCellContentInputSchema>;
+export type TableBulkCellContentInput = z.infer<typeof TableBulkCellContentInputSchema>;
+export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema>;
+export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
 
@@ -380,6 +515,12 @@ export type ApplicationErrorCode =
   | 'MERGE_HEADER_BOUNDARY'
   | 'MERGE_OVERLAP'
   | 'MERGE_WOULD_DISCARD_CONTENT'
+  | 'TABLE_PASTE_GEOMETRY_INVALID'
+  | 'TABLE_PASTE_MERGE_INTERSECTION'
+  | 'TABLE_CELL_CONTENT_UNSUPPORTED'
+  | 'LEGEND_NOT_FOUND'
+  | 'LEGEND_IN_USE'
+  | 'LEGEND_MARKER_CODE_CONFLICT'
   | 'TARGET_STALE'
   | 'DUPLICATE_ID'
   | 'ID_GENERATION_FAILED'

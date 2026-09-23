@@ -61,3 +61,4 @@ jobs:
           node tests/vnext/proof/editor-table-axis-proof.mjs
           node tests/vnext/proof/editor-table-cell-proof.mjs
           node tests/vnext/proof/editor-table-merge-proof.mjs
+          node tests/vnext/proof/editor-table-bulk-proof.mjs

@@ -33,6 +33,8 @@ export interface TableGridOverlayProps {
   onSelectionChange(selection: TableSelection): void;
   onStaleGesture(): void;
   onActivateCell?(point: TableSelectionPoint): void;
+  onCopyClipboard?(event: React.ClipboardEvent<HTMLDivElement>): void;
+  onPasteClipboard?(event: React.ClipboardEvent<HTMLDivElement>): void;
   editingCellId?: string;
 }
 
@@ -51,6 +53,8 @@ export function TableGridOverlay({
   onSelectionChange,
   onStaleGesture,
   onActivateCell,
+  onCopyClipboard,
+  onPasteClipboard,
   editingCellId,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -82,7 +86,8 @@ export function TableGridOverlay({
     const anchor = extend && (selection.kind === 'cell' || selection.kind === 'range')
       ? selection.anchor
       : canonical;
-    onSelectionChange(tableRangeSelection(identity, anchor, canonical));
+    const focus = extend ? point : canonical;
+    onSelectionChange(tableRangeSelection(identity, anchor, focus));
   };
 
   const pointAtClient = (clientX: number, clientY: number): TableSelectionPoint | undefined => {
@@ -120,7 +125,7 @@ export function TableGridOverlay({
     if (!touch) {
       event.preventDefault();
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      onSelectionChange(tableRangeSelection(identity, anchor, canonical));
+      onSelectionChange(tableRangeSelection(identity, anchor, event.shiftKey ? point : canonical));
     }
   };
 
@@ -135,8 +140,8 @@ export function TableGridOverlay({
     }
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
     if (drag.touch) return;
-    const canonical = canonicalTablePoint(table, pointAtClient(event.clientX, event.clientY) ?? point);
-    if (canonical) onSelectionChange(tableRangeSelection(identity, drag.anchor, canonical));
+    const focus = pointAtClient(event.clientX, event.clientY) ?? point;
+    if (canonicalTablePoint(table, focus)) onSelectionChange(tableRangeSelection(identity, drag.anchor, focus));
   };
 
   const finishCellDrag = (event: React.PointerEvent<HTMLButtonElement>, point: TableSelectionPoint) => {
@@ -175,6 +180,8 @@ export function TableGridOverlay({
       role="grid"
       aria-label="Grade da tabela"
       tabIndex={0}
+      onCopy={onCopyClipboard}
+      onPaste={onPasteClipboard}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="vnext-table-selection-highlight" data-table-selection-highlight="" style={highlightStyle} aria-hidden="true" />
