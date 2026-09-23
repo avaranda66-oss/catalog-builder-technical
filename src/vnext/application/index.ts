@@ -31,6 +31,7 @@ export {
   TableCellContentInputSchema,
   TableCellSetContentActionSchema,
   TableBulkMarkerReferenceSchema,
+  TableBulkExpectedTopologySchema,
   TableBulkCellContentInputSchema,
   TableBulkContentTargetSchema,
   TableLegendCreateInputSchema,
@@ -59,6 +60,7 @@ export type {
   ObjectInsertSpec,
   TableCellContentInput,
   TableBulkCellContentInput,
+  TableBulkExpectedTopology,
   TableBulkContentTarget,
   TableLegendCreateInput,
   CellPropertyPatch,
@@ -84,9 +86,12 @@ export type {
   GroupObjectInstantiationSeed,
 } from './document';
 export {
+  plainRichTextSemanticallyEquals,
   projectEditableRichText,
   reconcileEditableRichText,
   richTextEquals,
+  richTextSemanticFingerprint,
+  richTextSemanticallyEquals,
 } from './text-editing';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';

@@ -49,9 +49,15 @@ function tableOf(document: CatalogDocument): TableModel {
 }
 
 function target(table: TableModel, cellId: string, content: TableBulkCellContentInput) {
+  const cell = table.cells.find((entry) => entry.id === cellId)!;
+  const rows = cell.span?.rows ?? 1;
+  const columns = cell.span?.columns ?? 1;
   return {
     cellId,
-    expectedContent: table.cells.find((cell) => cell.id === cellId)!.content,
+    expectedTopology: rows > 1 || columns > 1
+      ? { kind: 'mergedOwner' as const, rows, columns }
+      : { kind: 'ordinary' as const },
+    expectedContent: cell.content,
     content,
   };
 }
@@ -68,6 +74,18 @@ function bulkAction(table: TableModel, overrides: Record<string, unknown> = {}) 
       target(table, 'cell0-1', { type: 'measurement', valueText: '0.010', unit: 'V', qualifier: 'min' }),
     ],
     ...overrides,
+  };
+}
+
+function singleBulkAction(table: TableModel, cellId: string, content: TableBulkCellContentInput) {
+  const cell = table.cells.find((entry) => entry.id === cellId)!;
+  return {
+    type: 'table.cells.setContents' as const,
+    pageId: 'base-2',
+    objectId: 'table-object',
+    tableId: table.id,
+    geometry: { rowIds: [cell.rowId], columnIds: [cell.columnId] },
+    targets: [target(table, cellId, content)],
   };
 }
 
@@ -225,6 +243,127 @@ describe('W4.D table.cells.setContents', () => {
     expect(next.cells[1].coveredBy).toBe('cell0-0');
   });
 
+  it('rejects stale prepared topology while preserving stable ordinary/merged targets and unrelated mutations', () => {
+    const ordinary = emptyTable();
+    ordinary.cells[0].content = { type: 'technicalCode', value: 'BASE' };
+    const ordinaryAction = singleBulkAction(ordinary, 'cell0-0', { type: 'technicalCode', value: 'NEW' });
+
+    const mergedLive = structuredClone(ordinary);
+    mergedLive.cells[0].span = { rows: 1, columns: 2 };
+    mergedLive.cells[1].coveredBy = mergedLive.cells[0].id;
+    const ordinaryToMerged = executeApplicationAction(documentWith(mergedLive), ordinaryAction, { createId: ids() });
+    expect(ordinaryToMerged).toEqual(expect.objectContaining({
+      ok: false, error: expect.objectContaining({ code: 'TARGET_STALE' }),
+    }));
+    expect(tableOf(documentWith(mergedLive))).toEqual(mergedLive);
+
+    const mergedPrepared = structuredClone(mergedLive);
+    const mergedAction = singleBulkAction(mergedPrepared, 'cell0-0', { type: 'technicalCode', value: 'MERGED' });
+    const unmergedLive = structuredClone(mergedPrepared);
+    delete unmergedLive.cells[0].span;
+    delete unmergedLive.cells[1].coveredBy;
+    const mergedToOrdinary = executeApplicationAction(documentWith(unmergedLive), mergedAction, { createId: ids() });
+    expect(mergedToOrdinary).toEqual(expect.objectContaining({
+      ok: false, error: expect.objectContaining({ code: 'TARGET_STALE' }),
+    }));
+
+    const spanChanged = structuredClone(mergedPrepared);
+    delete spanChanged.cells[1].coveredBy;
+    spanChanged.cells[0].span = { rows: 2, columns: 1 };
+    spanChanged.cells[3].coveredBy = spanChanged.cells[0].id;
+    const changedSpan = executeApplicationAction(documentWith(spanChanged), mergedAction, { createId: ids() });
+    expect(changedSpan).toEqual(expect.objectContaining({
+      ok: false, error: expect.objectContaining({ code: 'TARGET_STALE' }),
+    }));
+
+    const stableMerged = executeApplicationAction(documentWith(mergedPrepared), mergedAction, { createId: ids() });
+    expect(stableMerged.ok).toBe(true);
+    if (stableMerged.ok) expect(tableOf(stableMerged.document).cells[0].span).toEqual({ rows: 1, columns: 2 });
+
+    const unrelated = structuredClone(ordinary);
+    unrelated.cells[4].content = { type: 'technicalCode', value: 'UNRELATED' };
+    unrelated.cells[0].style = { background: '#FFFFFF' };
+    const stableOrdinary = executeApplicationAction(documentWith(unrelated), ordinaryAction, { createId: ids() });
+    expect(stableOrdinary.ok).toBe(true);
+  });
+
+  it('treats semantic RichText and primitive equality as true no-op with zero metadata/history', () => {
+    const table = emptyTable();
+    table.cells[0].content = { type: 'richText', value: plainRichText('existing-tab', 'A\tB') };
+    table.cells[1].content = { type: 'technicalCode', value: 'TC-1' };
+    table.cells[2].content = { type: 'measurement', valueText: '0.010', unit: 'V', qualifier: 'min' };
+    table.legend = [{ id: 'legend-1', markerCode: '*', text: plainRichText('legend', 'Legend') }];
+    table.cells[3].content = { type: 'marker', legendEntryId: 'legend-1' };
+
+    const cases = [
+      singleBulkAction(table, 'cell0-0', { type: 'richTextCopy', value: plainRichText('foreign', 'A\tB') }),
+      singleBulkAction(table, 'cell0-0', { type: 'richTextPlain', plainText: 'A\tB' }),
+      singleBulkAction(table, 'cell0-1', { type: 'technicalCode', value: 'TC-1' }),
+      singleBulkAction(table, 'cell0-2', { type: 'measurement', valueText: '0.010', unit: 'V', qualifier: 'min' }),
+      singleBulkAction(table, 'cell1-0', { type: 'marker', legend: { kind: 'existing', legendEntryId: 'legend-1' } }),
+    ];
+    for (const action of cases) {
+      const initial = documentWith(table);
+      const session = createDocumentSession(initial, { createId: ids('noop') });
+      const result = session.execute(action);
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.metadata).toMatchObject({ changed: false, createdIds: [], affectedIds: [] });
+      expect(session.getSnapshot().localSequence).toBe(0);
+      expect(session.getSnapshot().canUndo).toBe(false);
+      expect(session.getSnapshot().document).toEqual(initial);
+    }
+  });
+
+  it('allocates only changed RichText targets in a mixed broadcast and preserves unchanged canonical IDs', () => {
+    const table = emptyTable();
+    table.cells[0].content = { type: 'richText', value: plainRichText('keep', 'A\tB') };
+    table.cells[1].content = { type: 'richText', value: plainRichText('change', 'Old') };
+    const copiedSame = plainRichText('foreign-same', 'A\tB');
+    const action = {
+      ...bulkAction(table),
+      geometry: { rowIds: ['r0'], columnIds: ['c0', 'c1'] },
+      targets: [
+        target(table, 'cell0-0', { type: 'richTextCopy', value: copiedSame }),
+        target(table, 'cell0-1', { type: 'richTextPlain', plainText: 'New' }),
+      ],
+    };
+    const initial = documentWith(table);
+    const session = createDocumentSession(initial, { createId: ids('mix') });
+    const result = session.execute(action);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const next = tableOf(result.document);
+    expect(next.cells[0].content).toEqual(table.cells[0].content);
+    expect(next.cells[1].content.type).toBe('richText');
+    expect(result.metadata.changed).toBe(true);
+    expect(result.metadata.affectedIds).toEqual(['table-object', table.id, 'cell0-1']);
+    expect(result.metadata.createdIds).toEqual(['mix-1', 'mix-2']);
+    expect(session.getSnapshot().localSequence).toBe(1);
+    expect(session.getSnapshot().canUndo).toBe(true);
+  });
+
+  it('does not collapse formatted/list RichText into a plain semantic no-op', () => {
+    const table = emptyTable();
+    table.cells[0].content = {
+      type: 'richText',
+      value: { paragraphs: [{
+        id: 'p',
+        inlines: [{ kind: 'text', id: 't', text: 'A', marks: ['bold'] }],
+      }] },
+    };
+    const result = executeApplicationAction(
+      documentWith(table),
+      singleBulkAction(table, 'cell0-0', { type: 'richTextPlain', plainText: 'A' }),
+      { createId: ids('plain') }
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.metadata.changed).toBe(true);
+      expect(result.metadata.createdIds).toEqual(['plain-1', 'plain-2']);
+    }
+  });
+
   it('creates a Legend and assigns many Markers atomically with fresh IDs and one history entry', () => {
     const table = emptyTable();
     const action = {
@@ -303,6 +442,69 @@ describe('W4.D Legend lifecycle actions', () => {
     expect(next.legend).toHaveLength(1);
     expect(projectEditableRichText(next.legend[0].text)).toBe('Opcional');
     expect(next.cells[8].content).toEqual(live.cells[8].content);
+  });
+
+  it('creates and updates TAB-containing Legend text while preserving shared Marker references', () => {
+    const table = emptyTable();
+    const created = executeApplicationAction(documentWith(table), {
+      type: 'table.legend.create',
+      pageId: 'base-2', objectId: 'table-object', tableId: table.id,
+      markerCode: 'T', plainText: 'A\tB', expectedLegend: [],
+    }, { createId: ids('tab-legend') });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const createdTable = tableOf(created.document);
+    expect(projectEditableRichText(createdTable.legend[0].text)).toBe('A\tB');
+
+    const assigned = structuredClone(createdTable);
+    assigned.cells[0].content = { type: 'marker', legendEntryId: assigned.legend[0].id };
+    assigned.cells[1].content = { type: 'marker', legendEntryId: assigned.legend[0].id };
+    const updated = executeApplicationAction(documentWith(assigned), {
+      type: 'table.legend.update',
+      pageId: 'base-2', objectId: 'table-object', tableId: assigned.id,
+      legendEntryId: assigned.legend[0].id,
+      expectedLegend: assigned.legend[0],
+      patch: { plainText: 'A\tB!' },
+    }, { createId: ids('tab-update') });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    const next = tableOf(updated.document);
+    expect(projectEditableRichText(next.legend[0].text)).toBe('A\tB!');
+    expect(next.cells[0].content).toEqual({ type: 'marker', legendEntryId: next.legend[0].id });
+    expect(next.cells[1].content).toEqual({ type: 'marker', legendEntryId: next.legend[0].id });
+
+    const viaBulk = emptyTable();
+    const bulkCreated = executeApplicationAction(documentWith(viaBulk), {
+      type: 'table.cells.setContents',
+      pageId: 'base-2', objectId: 'table-object', tableId: viaBulk.id,
+      geometry: { rowIds: ['r0'], columnIds: ['c0'] },
+      expectedLegend: [],
+      legendCreates: [{
+        clientKey: 'tab-create',
+        markerCode: '‡',
+        text: plainRichText('transfer-tab', 'X\tY'),
+      }],
+      targets: [target(viaBulk, 'cell0-0', {
+        type: 'marker', legend: { kind: 'created', clientKey: 'tab-create' },
+      })],
+    }, { createId: ids('bulk-tab') });
+    expect(bulkCreated.ok).toBe(true);
+    if (!bulkCreated.ok) return;
+    const bulkTable = tableOf(bulkCreated.document);
+    const bulkLegend = bulkTable.legend[0];
+    const bulkUpdated = executeApplicationAction(bulkCreated.document, {
+      type: 'table.legend.update',
+      pageId: 'base-2', objectId: 'table-object', tableId: bulkTable.id,
+      legendEntryId: bulkLegend.id,
+      expectedLegend: bulkLegend,
+      patch: { plainText: 'X\tY!' },
+    }, { createId: ids('bulk-tab-update') });
+    expect(bulkUpdated.ok).toBe(true);
+    if (bulkUpdated.ok) {
+      const finalTable = tableOf(bulkUpdated.document);
+      expect(projectEditableRichText(finalTable.legend[0].text)).toBe('X\tY!');
+      expect(finalTable.cells[0].content).toEqual({ type: 'marker', legendEntryId: finalTable.legend[0].id });
+    }
   });
 
   it('updates shared code/text safely, rejects advanced RichText flattening and duplicate markerCode', () => {

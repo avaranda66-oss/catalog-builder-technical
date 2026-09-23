@@ -20,14 +20,7 @@ const cleanTitle = z.string().min(1).refine(
   (value) => ![...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127),
   'Control character'
 );
-const editablePlainText = z.string().refine(
-  (value) => ![...value].some((character) => {
-    const code = character.charCodeAt(0);
-    return (code < 32 && code !== 10) || code === 127;
-  }),
-  'Unsupported ASCII control character'
-);
-const bulkEditablePlainText = z.string().refine(
+const richTextEditablePlainText = z.string().refine(
   (value) => ![...value].some((character) => {
     const code = character.charCodeAt(0);
     return (code < 32 && code !== 9 && code !== 10) || code === 127;
@@ -190,7 +183,7 @@ export const SetTextContentActionSchema = z.object({
   type: z.literal('text.setContent'),
   objectId: applicationId,
   expectedText: RichTextSchema,
-  plainText: editablePlainText,
+  plainText: richTextEditablePlainText,
 }).strict();
 
 export const CreateGroupActionSchema = z.object({
@@ -275,7 +268,7 @@ export const TableCellUnmergeActionSchema = z.object({
 
 export const TableCellContentInputSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('empty') }).strict(),
-  z.object({ type: z.literal('richText'), plainText: editablePlainText }).strict(),
+  z.object({ type: z.literal('richText'), plainText: richTextEditablePlainText }).strict(),
   z.object({ type: z.literal('technicalCode'), value: z.string() }).strict(),
   z.object({
     type: z.literal('measurement'),
@@ -306,9 +299,18 @@ export const TableBulkMarkerReferenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('created'), clientKey: applicationId }).strict(),
 ]);
 
+export const TableBulkExpectedTopologySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('ordinary') }).strict(),
+  z.object({
+    kind: z.literal('mergedOwner'),
+    rows: safeInteger.positive(),
+    columns: safeInteger.positive(),
+  }).strict(),
+]);
+
 export const TableBulkCellContentInputSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('empty') }).strict(),
-  z.object({ type: z.literal('richTextPlain'), plainText: bulkEditablePlainText }).strict(),
+  z.object({ type: z.literal('richTextPlain'), plainText: richTextEditablePlainText }).strict(),
   z.object({ type: z.literal('richTextCopy'), value: RichTextSchema }).strict(),
   z.object({ type: z.literal('technicalCode'), value: z.string() }).strict(),
   z.object({
@@ -322,6 +324,7 @@ export const TableBulkCellContentInputSchema = z.discriminatedUnion('type', [
 
 export const TableBulkContentTargetSchema = z.object({
   cellId: applicationId,
+  expectedTopology: TableBulkExpectedTopologySchema,
   expectedContent: CellContentSchema,
   content: TableBulkCellContentInputSchema,
 }).strict();
@@ -386,7 +389,7 @@ export const TableLegendCreateActionSchema = z.object({
   objectId: applicationId,
   tableId: applicationId,
   markerCode: cleanMarkerCode,
-  plainText: editablePlainText,
+  plainText: richTextEditablePlainText,
   expectedLegend: z.array(TableLegendEntrySchema),
 }).strict();
 
@@ -399,7 +402,7 @@ export const TableLegendUpdateActionSchema = z.object({
   expectedLegend: TableLegendEntrySchema,
   patch: z.object({
     markerCode: cleanMarkerCode.optional(),
-    plainText: editablePlainText.optional(),
+    plainText: richTextEditablePlainText.optional(),
   }).strict(),
 }).strict().superRefine((action, context) => {
   if (action.patch.markerCode === undefined && action.patch.plainText === undefined) {
@@ -491,6 +494,7 @@ export type FrameU = z.infer<typeof FrameUSchema>;
 export type ObjectInsertSpec = z.infer<typeof ObjectInsertSpecSchema>;
 export type TableCellContentInput = z.infer<typeof TableCellContentInputSchema>;
 export type TableBulkCellContentInput = z.infer<typeof TableBulkCellContentInputSchema>;
+export type TableBulkExpectedTopology = z.infer<typeof TableBulkExpectedTopologySchema>;
 export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema>;
 export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;

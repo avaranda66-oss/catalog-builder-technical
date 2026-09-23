@@ -53,6 +53,27 @@ async function selectRange(page, r1, c1, r2, c2) {
   await page.locator(`[data-table-cell="${r2}:${c2}"]`).click({ modifiers: ['Shift'] });
   await settle(page);
 }
+async function extendRangeVisible(page, r1, c1, r2, c2, interaction = 'click') {
+  const activate = async (locator) => interaction === 'tap' ? locator.tap() : locator.click();
+  await activate(page.locator(`[data-table-cell="${r1}:${c1}"]`));
+  await settle(page);
+  const extend = page.locator('[data-editor-action="extend-table-selection"]');
+  await activate(extend);
+  assert.equal(await extend.getAttribute('aria-pressed'), 'true');
+  assert((await page.getByRole('status').innerText()).includes('Toque na célula final'));
+  await activate(page.locator(`[data-table-cell="${r2}:${c2}"]`));
+  await settle(page);
+  assert.notEqual(await extend.getAttribute('aria-pressed'), 'true');
+}
+async function enterTableTouch(page, objectId) {
+  if (await grid(page).count()) {
+    await page.locator('[data-editor-action="leave-table-grid"]').tap();
+    await grid(page).waitFor({ state: 'detached' });
+  }
+  await page.locator(`[data-editor-object-id="${objectId}"]`).tap();
+  await page.locator('[data-editor-action="edit-table"]').tap();
+  await grid(page).waitFor({ timeout: 15000 });
+}
 async function copyEvent(page) {
   return page.evaluate((mime) => {
     const target = document.querySelector('[data-table-grid-overlay]');
@@ -291,8 +312,8 @@ try {
   assert.equal(mergeBlockedAfter.localSequence, mergeBlockedBefore.localSequence);
   assert((await page.getByRole('status').innerText()).includes('mescladas'));
 
-  // An explicit range covering exactly one merged span is still a multi-slot selection.
-  await selectRange(page, 2, 0, 2, 1);
+  // The visible one-shot range affordance preserves a raw covered-slot endpoint.
+  await extendRangeVisible(page, 2, 0, 2, 1);
   const exactMergedRangeBefore = await state(page);
   await pasteEvent(page, { plain: 'RANGE-MERGE' });
   const exactMergedRangeAfter = await state(page);
@@ -416,9 +437,31 @@ try {
   const createAssignRedone = await state(page);
   assert.deepEqual(createAssignRedone.tableB, createAssigned.tableB);
 
+  // F1: quoted external TAB RichText remains editable through the real W4.B Cell Editing UI.
+  await selectCell(page, 3, 0);
+  await pasteEvent(page, { plain: '"A\tB"' });
+  const tabImported = await state(page);
+  assert.equal(richText(cell(tabImported.tableB, 'b-cell-3-0').content), 'A\tB');
+  await page.locator('[data-editor-action="edit-cell-content"]').click();
+  const tabEditor = page.locator('[data-cell-rich-text]');
+  await tabEditor.waitFor();
+  assert.equal(await tabEditor.inputValue(), 'A\tB');
+  await tabEditor.fill('A\tB!');
+  const tabEditBeforeCommit = await state(page);
+  await page.locator('[data-editor-action="commit-cell-content"]').click();
+  await settle(page);
+  const tabEdited = await state(page);
+  assert.equal(tabEdited.localSequence, tabEditBeforeCommit.localSequence + 1);
+  assert.equal(richText(cell(tabEdited.tableB, 'b-cell-3-0').content), 'A\tB!');
+  await page.locator('[data-editor-action="undo"]').click();
+  assert.equal(richText(cell((await state(page)).tableB, 'b-cell-3-0').content), 'A\tB');
+  await page.locator('[data-editor-action="redo"]').click();
+  const tabRedone = await state(page);
+  assert.equal(richText(cell(tabRedone.tableB, 'b-cell-3-0').content), 'A\tB!');
+
   // Save/reopen exact canonical state and IDs.
-  assert.equal(createAssignRedone.dirty, true);
-  const savedShape = structuredClone({ tableA: createAssignRedone.tableA, tableB: createAssignRedone.tableB });
+  assert.equal(tabRedone.dirty, true);
+  const savedShape = structuredClone({ tableA: tabRedone.tableA, tableB: tabRedone.tableB });
   await page.locator('[data-editor-action="save"]').click();
   await page.waitForFunction(() => {
     const s = window.__W4D_PROOF__.state();
@@ -432,70 +475,111 @@ try {
   assert.deepEqual(reopened.tableA, savedShape.tableA);
   assert.deepEqual(reopened.tableB, savedShape.tableB);
 
-  // Mobile functional proof at all frozen widths.
+  // F4: same-app TAB RichText pasted onto semantically identical content is a true no-op.
+  await enterTable(page, initial.document.pages[0].objects[1].id);
+  await selectCell(page, 3, 0);
+  const noOpCopy = await copyEvent(page);
+  const noOpBefore = await state(page);
+  const noOpIdsBefore = richIds(cell(noOpBefore.tableB, 'b-cell-3-0').content);
+  await pasteEvent(page, { typed: noOpCopy.typed, plain: noOpCopy.plain });
+  const noOpAfter = await state(page);
+  assert.equal(noOpAfter.localSequence, noOpBefore.localSequence);
+  assert.equal(noOpAfter.dirty, false);
+  assert.equal(noOpAfter.canUndo, noOpBefore.canUndo);
+  assert.deepEqual(richIds(cell(noOpAfter.tableB, 'b-cell-3-0').content), noOpIdsBefore);
+  assert.deepEqual(noOpAfter.document, noOpBefore.document);
+
+  // Mobile touch-only proof: no Shift/hardware keyboard for rectangular Cell range.
   const mobile = [];
   for (const width of [320, 360, 390]) {
-    const mp = await context.newPage();
+    const mobileContext = await browser.newContext({
+      viewport: { width, height: 900 },
+      deviceScaleFactor: 1,
+      hasTouch: true,
+      isMobile: true,
+      permissions: ['clipboard-read', 'clipboard-write'],
+    });
+    const mp = await mobileContext.newPage();
     watch(mp);
-    await mp.setViewportSize({ width, height: 900 });
     await mp.goto(editorUrl, { waitUntil: 'domcontentloaded' });
     await mp.locator('[data-vnext-shell]').waitFor();
     const ms = await state(mp);
-    await enterTable(mp, ms.document.pages[0].objects[1].id);
-    await selectRange(mp, 0, 0, 0, 1);
-    for (const action of ['copy-table-cells','paste-table-cells','clear-table-cells','marker-panel','legend-panel']) {
+    await enterTableTouch(mp, ms.document.pages[0].objects[1].id);
+    await extendRangeVisible(mp, 0, 0, 0, 1, 'tap');
+
+    for (const action of ['extend-table-selection','paste-table-cells','clear-table-cells','marker-panel','legend-panel']) {
       const button = mp.locator(`[data-editor-action="${action}"]`);
       await button.scrollIntoViewIfNeeded();
       assert(await button.isVisible(), `${action} must be visible at ${width}px`);
     }
-    const mobileCopyBefore = await state(mp);
-    await mp.locator('[data-editor-action="copy-table-cells"]').click();
-    await settle(mp);
-    const copyStatus = await mp.getByRole('status').innerText();
-    const mobileCopyAfter = await state(mp);
-    assert.deepEqual(mobileCopyAfter.document, mobileCopyBefore.document);
-    assert.equal(mobileCopyAfter.localSequence, mobileCopyBefore.localSequence);
-    assert(
-      copyStatus.includes('TSV copiado')
-      || copyStatus.includes('não está disponível')
-      || copyStatus.includes('não permitiu copiar'),
-      `Visible Copy must report success or a truthful browser restriction at ${width}px: ${copyStatus}`
-    );
-    await mp.locator('[data-editor-action="paste-table-cells"]').click();
+
+    await mp.locator('[data-editor-action="paste-table-cells"]').tap();
     const area = mp.locator('[data-table-paste-textarea]');
     await area.scrollIntoViewIfNeeded();
     assert(await area.isVisible());
     await area.fill('MOBILE-A\tMOBILE-B');
-    await mp.locator('[data-editor-action="apply-native-table-paste"]').click();
+    await mp.locator('[data-editor-action="apply-native-table-paste"]').tap();
     await settle(mp);
     let mstate = await state(mp);
     assert.equal(richText(cell(mstate.tableB, 'b-cell-0-0').content), 'MOBILE-A');
     assert.equal(richText(cell(mstate.tableB, 'b-cell-0-1').content), 'MOBILE-B');
-    await mp.locator('[data-editor-action="clear-table-cells"]').click();
+
+    await mp.locator('[data-editor-action="clear-table-cells"]').tap();
     await settle(mp);
     mstate = await state(mp);
     assert.equal(cell(mstate.tableB, 'b-cell-0-0').content.type, 'empty');
-    await mp.locator('[data-editor-action="marker-panel"]').click();
-    await mp.locator('[data-marker-legend-panel]').scrollIntoViewIfNeeded();
-    assert(await mp.locator('[data-marker-legend-panel]').isVisible());
-    await mp.locator('[data-new-marker-code]').fill(`M${width}`);
-    await mp.locator('[data-new-marker-text]').fill('Marcador mobile');
-    await mp.locator('[data-editor-action="create-and-assign-marker"]').click();
+    assert.equal(cell(mstate.tableB, 'b-cell-0-1').content.type, 'empty');
+
+    await mp.locator('[data-editor-action="marker-panel"]').tap();
+    const panel = mp.locator('[data-marker-legend-panel]');
+    await panel.scrollIntoViewIfNeeded();
+    assert(await panel.isVisible());
+    await mp.locator('[data-marker-picker]').selectOption('w4d-dest-hash');
+    await mp.locator('[data-editor-action="apply-existing-marker"]').tap();
     await settle(mp);
     mstate = await state(mp);
-    assert.equal(cell(mstate.tableB, 'b-cell-0-0').content.type, 'marker');
+    assert.equal(cell(mstate.tableB, 'b-cell-0-0').content.legendEntryId, 'w4d-dest-hash');
+    assert.equal(cell(mstate.tableB, 'b-cell-0-1').content.legendEntryId, 'w4d-dest-hash');
+
+    const hashRow = mp.locator('[data-legend-entry-id="w4d-dest-hash"]');
+    const removeReferenced = hashRow.locator('[data-editor-action="remove-legend"]');
+    assert.equal(await removeReferenced.isDisabled(), true);
+    await hashRow.locator('[data-legend-text="w4d-dest-hash"]').fill(`Requerido mobile ${width}`);
+    await hashRow.locator('[data-editor-action="update-legend"]').tap();
+    await settle(mp);
+    mstate = await state(mp);
+    const updatedHash = mstate.tableB.legend.find((entry) => entry.id === 'w4d-dest-hash');
+    assert(updatedHash);
+    assert.equal(
+      updatedHash.text.paragraphs.map((paragraph) => paragraph.inlines.map((inline) =>
+        inline.kind === 'text' ? inline.text : '\n'
+      ).join('')).join('\n'),
+      `Requerido mobile ${width}`
+    );
+
     const undo = mp.locator('[data-editor-action="undo"]');
     const redo = mp.locator('[data-editor-action="redo"]');
     await undo.scrollIntoViewIfNeeded();
     assert(await undo.isVisible());
-    await undo.click();
+    await undo.tap();
     await redo.scrollIntoViewIfNeeded();
     assert(await redo.isVisible());
-    await redo.click();
+    await redo.tap();
+
+    await mp.locator('[data-editor-action="detach-marker"]').tap();
+    await settle(mp);
+    mstate = await state(mp);
+    assert.equal(cell(mstate.tableB, 'b-cell-0-0').content.type, 'empty');
+    assert.equal(cell(mstate.tableB, 'b-cell-0-1').content.type, 'empty');
+    assert.equal(await removeReferenced.isDisabled(), false);
+    await removeReferenced.tap();
+    await settle(mp);
+    assert.equal((await state(mp)).tableB.legend.some((entry) => entry.id === 'w4d-dest-hash'), false);
+
     const save = mp.locator('[data-editor-action="save"]');
     await save.scrollIntoViewIfNeeded();
     assert(await save.isVisible());
-    await save.click();
+    await save.tap();
     await mp.waitForFunction(() => !window.__W4D_PROOF__.state().dirty);
     const overflow = await mp.evaluate(() => ({
       viewport: innerWidth,
@@ -504,8 +588,23 @@ try {
     }));
     assert(overflow.documentWidth <= overflow.viewport);
     assert(overflow.bodyWidth <= overflow.viewport);
-    mobile.push({ width, ...overflow, copy: true, pasteFallback: true, clear: true, marker: true, legend: true, save: true, undo: true, redo: true });
-    await mp.close();
+    mobile.push({
+      width,
+      ...overflow,
+      rangeInput: 'touch-one-shot',
+      shiftModifier: false,
+      hardwareKeyboard: false,
+      paste: true,
+      clear: true,
+      marker: true,
+      legendUpdate: true,
+      referencedDeleteBlocked: true,
+      detachThenDelete: true,
+      save: true,
+      undo: true,
+      redo: true,
+    });
+    await mobileContext.close();
   }
 
   // Canonical publication and native Chromium PDF + PDF.js semantic extraction.
@@ -518,6 +617,7 @@ try {
   }));
   assert.equal(publicationFacts.editorChrome, 0);
   assert(publicationFacts.text.includes('Alpha bulk'));
+  assert(publicationFacts.text.includes('A\tB!'));
   assert(publicationFacts.text.includes('†'));
   assert(publicationFacts.text.includes('Sob consulta'));
   const beforePdf = await publicationPage.evaluate(() => window.proof.beforeExport());
@@ -538,6 +638,7 @@ try {
   assert(pdf.bytes > 0);
   assert(Math.abs(pdf.widthMm - 210) < 0.2 && Math.abs(pdf.heightMm - 297) < 0.2);
   assert(pdf.text.includes('Alpha bulk'));
+  assert(pdf.text.includes('A B!'));
   assert(pdf.text.includes('†'));
   assert(pdf.text.includes('Sob consulta'));
   assert(pdf.vectorPathCount > 0);
@@ -588,6 +689,12 @@ try {
       createAssignAtomic: true,
     },
     persistence: { saveReopenExact: true, idsPreserved: true },
+    tabRichText: {
+      externalQuotedTsv: true,
+      w4bEditRoundtrip: true,
+      browserLiteralTab: publicationFacts.text.includes('A\tB!'),
+      pdfNormalizedText: 'A B!',
+    },
     mobile,
     publication: { status: report.status, diagnostics: report.diagnostics, ...publicationFacts },
     pdf,

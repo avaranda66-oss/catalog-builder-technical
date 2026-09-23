@@ -61,6 +61,17 @@ function hasSpan(cell: Cell): boolean {
   return (cell.span?.rows ?? 1) > 1 || (cell.span?.columns ?? 1) > 1;
 }
 
+function expectedTopology(cell: Cell): TableBulkContentTarget['expectedTopology'] {
+  if (hasSpan(cell)) {
+    return {
+      kind: 'mergedOwner',
+      rows: cell.span?.rows ?? 1,
+      columns: cell.span?.columns ?? 1,
+    };
+  }
+  return { kind: 'ordinary' };
+}
+
 function destinationGeometry(
   table: TableModel,
   selection: TableSelection,
@@ -180,6 +191,7 @@ function prepareFromSource(
   const destination = destinationCells(table, geometry);
   const targets = destination.cells.map((cell, index) => ({
     cellId: cell.id,
+    expectedTopology: expectedTopology(cell),
     expectedContent: cell.content,
     content: source.contentAt(sourceIndexFor(source, index)),
   }));

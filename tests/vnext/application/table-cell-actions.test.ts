@@ -108,6 +108,28 @@ describe('W4.B table.cell.setContent', () => {
     expect(result.metadata.createdIds).toEqual(['fresh-1', 'fresh-2']);
   });
 
+  it('round-trips canonical TAB through W4.B RichText editing and exact Undo/Redo', () => {
+    const table = emptyTable();
+    table.cells[0].content = { type: 'richText', value: plainRichText('tab-cell', 'A\tB') };
+    const initial = documentWith(table);
+    const session = createDocumentSession(initial, { createId: ids('tab-cell') });
+    const result = session.execute(setContent(table, 'cell0-0', {
+      type: 'richText',
+      plainText: 'A\tB!',
+    }));
+    expect(result.ok).toBe(true);
+    expect(session.getSnapshot().localSequence).toBe(1);
+    const content = tableOf(session.getSnapshot().document).cells[0].content;
+    expect(content.type).toBe('richText');
+    if (content.type !== 'richText') return;
+    expect(projectEditableRichText(content.value)).toBe('A\tB!');
+    const after = session.getSnapshot().document;
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(initial);
+    expect(session.redo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(after);
+  });
+
   it('fails closed for unsupported same-type RichText and leaves marker/image content read-only', () => {
     const rich = emptyTable();
     rich.cells[0].content = {

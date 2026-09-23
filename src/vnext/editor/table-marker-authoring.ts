@@ -1,3 +1,4 @@
+import { richTextSemanticFingerprint } from '../application/text-editing';
 import type { RichText, TableLegendEntry, TableModel } from '../domain/editorial-model';
 import type { TableClipboardPayload } from './table-clipboard';
 
@@ -33,18 +34,6 @@ export class TableMarkerAuthoringError extends Error {
     super(message);
     this.name = 'TableMarkerAuthoringError';
   }
-}
-function inlineSemantic(inline: RichText['paragraphs'][number]['inlines'][number]): unknown {
-  return inline.kind === 'text'
-    ? { kind: inline.kind, text: inline.text, marks: inline.marks }
-    : { kind: inline.kind };
-}
-
-export function richTextSemanticFingerprint(richText: RichText): string {
-  return JSON.stringify(richText.paragraphs.map((paragraph) => ({
-    ...(paragraph.list ? { list: paragraph.list } : {}),
-    inlines: paragraph.inlines.map(inlineSemantic),
-  })));
 }
 
 export function legendSemanticallyEquals(

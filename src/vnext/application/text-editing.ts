@@ -32,6 +32,32 @@ export function richTextEquals(left: RichText, right: RichText): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export function richTextSemanticFingerprint(richText: RichText): string {
+  return JSON.stringify(richText.paragraphs.map((paragraph) => ({
+    ...(paragraph.list ? { list: paragraph.list } : {}),
+    inlines: paragraph.inlines.map((inline) => inline.kind === 'text'
+      ? { kind: inline.kind, text: inline.text, marks: inline.marks }
+      : { kind: inline.kind }),
+  })));
+}
+
+export function richTextSemanticallyEquals(left: RichText, right: RichText): boolean {
+  return richTextSemanticFingerprint(left) === richTextSemanticFingerprint(right);
+}
+
+export function plainRichTextSemanticallyEquals(richText: RichText, plainText: string): boolean {
+  const lines = plainText.split('\n');
+  if (richText.paragraphs.length !== lines.length) return false;
+  return richText.paragraphs.every((paragraph, index) => {
+    if (paragraph.list) return false;
+    const line = lines[index];
+    if (line.length === 0) return paragraph.inlines.length === 0;
+    if (paragraph.inlines.length !== 1) return false;
+    const inline = paragraph.inlines[0];
+    return inline.kind === 'text' && inline.text === line && inline.marks.length === 0;
+  });
+}
+
 function lcsMatches(before: readonly string[], after: readonly string[]): Array<readonly [number, number]> {
   const lengths = Array.from({ length: before.length + 1 }, () => Array(after.length + 1).fill(0));
   for (let beforeIndex = before.length - 1; beforeIndex >= 0; beforeIndex -= 1) {

@@ -17,6 +17,7 @@ import {
   type ObjectInsertSpec,
   type CellPropertyPatch,
   type TableBulkCellContentInput,
+  type TableBulkExpectedTopology,
 } from './contracts';
 import {
   ApplicationDocumentError,
@@ -34,9 +35,12 @@ import {
   type ObjectInstantiationSeed,
 } from './document';
 import {
+  plainRichTextSemanticallyEquals,
   projectEditableRichText,
   reconcileEditableRichText,
   richTextEquals,
+  richTextSemanticFingerprint,
+  richTextSemanticallyEquals,
 } from './text-editing';
 import {
   PageTemplateDefinitionError,
@@ -326,15 +330,6 @@ function cloneRichTextWithFreshIds(
   };
 }
 
-function richTextSemanticFingerprint(richText: RichText): string {
-  return JSON.stringify(richText.paragraphs.map((paragraph) => ({
-    ...(paragraph.list ? { list: paragraph.list } : {}),
-    inlines: paragraph.inlines.map((inline) => inline.kind === 'text'
-      ? { kind: inline.kind, text: inline.text, marks: inline.marks }
-      : { kind: inline.kind }),
-  })));
-}
-
 function legendMeaningEquals(
   legend: TableModel['legend'][number],
   markerCode: string,
@@ -359,6 +354,42 @@ function validateBulkPrimitiveInput(content: TableBulkCellContentInput): Applica
     if (!parsed.success) return failure('ACTION_INVALID', 'Invalid Measurement in bulk content');
   }
   return undefined;
+}
+
+function currentBulkTopology(cell: Cell): TableBulkExpectedTopology | undefined {
+  if (cell.coveredBy) return undefined;
+  const rows = cell.span?.rows ?? 1;
+  const columns = cell.span?.columns ?? 1;
+  return rows > 1 || columns > 1
+    ? { kind: 'mergedOwner', rows, columns }
+    : { kind: 'ordinary' };
+}
+
+function bulkContentSemanticallyEquals(
+  current: CellContent,
+  incoming: TableBulkCellContentInput
+): boolean {
+  switch (incoming.type) {
+    case 'empty':
+      return current.type === 'empty';
+    case 'richTextPlain':
+      return current.type === 'richText'
+        && plainRichTextSemanticallyEquals(current.value, incoming.plainText);
+    case 'richTextCopy':
+      return current.type === 'richText'
+        && richTextSemanticallyEquals(current.value, incoming.value);
+    case 'technicalCode':
+      return current.type === 'technicalCode' && current.value === incoming.value;
+    case 'measurement':
+      return current.type === 'measurement'
+        && current.valueText === incoming.valueText
+        && current.unit === incoming.unit
+        && current.qualifier === incoming.qualifier;
+    case 'marker':
+      return incoming.legend.kind === 'existing'
+        && current.type === 'marker'
+        && current.legendEntryId === incoming.legend.legendEntryId;
+  }
 }
 
 function materializeBulkContent(
@@ -1023,7 +1054,11 @@ export function executeApplicationAction(
           if (!cell || cell.id !== snapshot.cellId) {
             return failure('TABLE_PASTE_GEOMETRY_INVALID', `Cell ${snapshot.cellId} moved outside prepared geometry`);
           }
-          if (cell.coveredBy || (!scalarGeometry && ((cell.span?.rows ?? 1) > 1 || (cell.span?.columns ?? 1) > 1))) {
+          const currentTopology = currentBulkTopology(cell);
+          if (!currentTopology || !exactEquals(currentTopology, snapshot.expectedTopology)) {
+            return failure('TARGET_STALE', `Cell ${cell.id} topology changed after the command was prepared`);
+          }
+          if (!scalarGeometry && currentTopology.kind === 'mergedOwner') {
             return failure('TABLE_PASTE_MERGE_INTERSECTION', 'Bulk content cannot cross merged Table topology');
           }
           if (cell.content.type === 'image') {
@@ -1066,6 +1101,16 @@ export function executeApplicationAction(
           }
         }
 
+        const changedTargets = action.targets.filter((snapshot, index) =>
+          !bulkContentSemanticallyEquals(geometryCells[index].content, snapshot.content)
+        );
+        if (changedTargets.length === 0 && legendCreates.length === 0) {
+          changed = false;
+          createdIds = [];
+          affectedIds = [];
+          break;
+        }
+
         const allocator = createCanonicalIdAllocator(document, dependencies.createId);
         const createdLegendIds = new Map<string, string>();
         const appendedLegends = legendCreates.map((create) => {
@@ -1079,18 +1124,13 @@ export function executeApplicationAction(
           };
         });
         const contentByCellId = new Map<string, CellContent>();
-        for (const snapshot of action.targets) {
+        for (const snapshot of changedTargets) {
           contentByCellId.set(
             snapshot.cellId,
             materializeBulkContent(snapshot.content, allocator, createdIds, createdLegendIds)
           );
         }
-        const changedCellIds = action.targets
-          .filter((snapshot) => !exactEquals(
-            table.cells.find((cell) => cell.id === snapshot.cellId)!.content,
-            contentByCellId.get(snapshot.cellId)
-          ))
-          .map((snapshot) => snapshot.cellId);
+        const changedCellIds = changedTargets.map((snapshot) => snapshot.cellId);
         changed = changedCellIds.length > 0 || appendedLegends.length > 0;
         affectedIds = [
           action.objectId,
@@ -1098,10 +1138,6 @@ export function executeApplicationAction(
           ...changedCellIds,
           ...appendedLegends.map((entry) => entry.id),
         ];
-        if (!changed) {
-          createdIds = [];
-          break;
-        }
         const nextTable: TableModel = {
           ...table,
           cells: table.cells.map((cell) => {

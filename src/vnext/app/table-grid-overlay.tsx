@@ -35,6 +35,8 @@ export interface TableGridOverlayProps {
   onActivateCell?(point: TableSelectionPoint): void;
   onCopyClipboard?(event: React.ClipboardEvent<HTMLDivElement>): void;
   onPasteClipboard?(event: React.ClipboardEvent<HTMLDivElement>): void;
+  rangeExtensionArmed?: boolean;
+  onRangeExtensionComplete?(): void;
   editingCellId?: string;
 }
 
@@ -55,6 +57,8 @@ export function TableGridOverlay({
   onActivateCell,
   onCopyClipboard,
   onPasteClipboard,
+  rangeExtensionArmed = false,
+  onRangeExtensionComplete,
   editingCellId,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -83,6 +87,11 @@ export function TableGridOverlay({
   const selectCell = (point: TableSelectionPoint, extend: boolean) => {
     const canonical = canonicalTablePoint(table, point);
     if (!canonical) return;
+    if (rangeExtensionArmed && (selection.kind === 'cell' || selection.kind === 'range')) {
+      onSelectionChange(tableRangeSelection(identity, selection.anchor, point));
+      onRangeExtensionComplete?.();
+      return;
+    }
     const anchor = extend && (selection.kind === 'cell' || selection.kind === 'range')
       ? selection.anchor
       : canonical;
@@ -125,7 +134,12 @@ export function TableGridOverlay({
     if (!touch) {
       event.preventDefault();
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      onSelectionChange(tableRangeSelection(identity, anchor, event.shiftKey ? point : canonical));
+      if (rangeExtensionArmed) {
+        dragRef.current = null;
+        selectCell(point, true);
+      } else {
+        onSelectionChange(tableRangeSelection(identity, anchor, event.shiftKey ? point : canonical));
+      }
     }
   };
 

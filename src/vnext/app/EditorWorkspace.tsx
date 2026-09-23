@@ -267,6 +267,7 @@ export function EditorWorkspace({
   const [newMarkerText, setNewMarkerText] = React.useState('');
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const [tableSelection, setTableSelection] = React.useState<TableSelection | null>(null);
+  const [tableRangeExtensionArmed, setTableRangeExtensionArmed] = React.useState(false);
   const tableSelectionRef = React.useRef<TableSelection | null>(null);
   const [cellDraft, setCellDraft] = React.useState<TableCellDraft | null>(null);
   const cellDraftRef = React.useRef<TableCellDraft | null>(null);
@@ -329,6 +330,9 @@ export function EditorWorkspace({
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
   const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
+  React.useEffect(() => {
+    setTableRangeExtensionArmed(false);
+  }, [document.id, editorState.activePageId, editorState.mode, selectedTableObject?.id, selectedTableObject?.table.id]);
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
@@ -400,6 +404,7 @@ export function EditorWorkspace({
     tableHistoryContextRef.current = null;
     cellDraftRef.current = null;
     setCellDraft(null);
+    setTableRangeExtensionArmed(false);
     setTableSelection(null);
     setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
   }, [session]);
@@ -414,6 +419,7 @@ export function EditorWorkspace({
       if (object?.type === 'table') tableHistoryContextRef.current = { table: object.table, selection: reconciled };
       return;
     }
+    setTableRangeExtensionArmed(false);
     const previous = tableHistoryContextRef.current;
     const stale = tableSelectionRef.current;
     const page = stale ? document.pages.find((entry) => entry.id === stale.identity.pageId) : undefined;
@@ -875,6 +881,7 @@ export function EditorWorkspace({
     const identity = tableSelectionIdentity(selectedPage.id, object.id, object.table.id);
     const first = { rowId: object.table.rows[0].id, columnId: object.table.columns[0].id };
     const next = tableCellSelection(identity, first);
+    setTableRangeExtensionArmed(false);
     tableSelectionRef.current = next;
     tableHistoryContextRef.current = { table: object.table, selection: next };
     setTableSelection(next);
@@ -999,6 +1006,7 @@ export function EditorWorkspace({
   };
 
   const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
+    setTableRangeExtensionArmed(false);
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
     setTableSelection(null);
@@ -1110,6 +1118,21 @@ export function EditorWorkspace({
       entry.id === selection.identity.objectId && entry.type === 'table' && entry.table.id === selection.identity.tableId
     );
     return object ? { object, selection } : undefined;
+  };
+
+  const toggleTableRangeExtension = () => {
+    const selection = tableSelectionRef.current;
+    if (editorState.mode !== 'table-grid' || !selection || (selection.kind !== 'cell' && selection.kind !== 'range')) {
+      setStatusMessage('Selecione uma célula para iniciar a extensão da seleção.');
+      return;
+    }
+    setTableRangeExtensionArmed((armed) => {
+      const next = !armed;
+      setStatusMessage(next
+        ? 'Estender seleção ativado. Toque na célula final da área.'
+        : 'Extensão de seleção cancelada.');
+      return next;
+    });
   };
 
   const tableBulkActionMessage = (code: string): string => {
@@ -2224,6 +2247,14 @@ export function EditorWorkspace({
                 >Desmesclar células</button>
               </div>
               <div className="vnext-tool-group" aria-label="Conteúdo em lote">
+                <button
+                  type="button"
+                  data-editor-action="extend-table-selection"
+                  aria-pressed={tableRangeExtensionArmed}
+                  className={tableRangeExtensionArmed ? 'is-active' : undefined}
+                  disabled={editorState.mode !== 'table-grid' || !tableSelection || (tableSelection.kind !== 'cell' && tableSelection.kind !== 'range')}
+                  onClick={toggleTableRangeExtension}
+                >Estender seleção</button>
                 <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
                 <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
                 <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
@@ -2404,8 +2435,17 @@ export function EditorWorkspace({
                                 }}
                                 onCopyClipboard={handleTableCopyClipboard}
                                 onPasteClipboard={handleTablePasteClipboard}
+                                rangeExtensionArmed={tableRangeExtensionArmed}
+                                onRangeExtensionComplete={() => {
+                                  setTableRangeExtensionArmed(false);
+                                  setStatusMessage('Seleção estendida.');
+                                  queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+                                }}
                                 editingCellId={cellDraft?.identity.cellId}
-                                onStaleGesture={() => setStatusMessage('Gesto descartado porque o documento mudou.')}
+                                onStaleGesture={() => {
+                                  setTableRangeExtensionArmed(false);
+                                  setStatusMessage('Gesto descartado porque o documento mudou.');
+                                }}
                               />
                             )}
                           {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
