@@ -135,7 +135,9 @@ The Father-facing control is a real button labeled **Ajustar altura** with expli
 
 Diagnostics expose **Erro/Aviso**, publication consequence, actionable buttons, and deterministic focus/navigation behavior.
 
-The dedicated Chromium proof covers 320, 360, and 390 px touch viewports, including Fit Height, diagnostics show/hide, Undo, Redo, Save, and zero global horizontal overflow.
+The dedicated Chromium proof covers 320, 360, and 390 px touch viewports, including Fit Height, diagnostics show/hide, Undo, Redo, Save, touch-only `Localizar`, canonical Table/Grid focus, canonical Cell anchor highlighting, and zero global horizontal overflow.
+
+A targeted post-audit F1 amendment also surfaces canonical diagnostics from a direct child Table inside a closed Group through the selected parent Group. The projected diagnostic preserves the child object/Table/Cell identity, disables Fit Height bypass, exposes `Localizar`, selects/focuses only the parent Group, remains in object/select mode, and shows the Father guidance **“Desagrupe para editar esta tabela.”** No Group drill-down or canonical mutation is introduced.
 
 ## Focused automated tests
 
@@ -152,9 +154,11 @@ New focused tests cover:
 - locked and closed-Group boundaries;
 - current/stale/no-plan/no-fact/unstable measurement preparation;
 - page/safe-area advisory behavior;
-- Father-facing diagnostic projection and actionability.
+- Father-facing diagnostic projection and actionability;
+- closed-Group child diagnostic projection through canonical object-tree identity;
+- grouped-child Fit suppression, parent Group context and ungroup guidance.
 
-Focused result before full regression: **3 files / 16 tests / 16 PASS**.
+Targeted post-audit focused result: **3 files / 20 tests / 20 PASS**.
 
 ## Dedicated Chromium / PDF proof
 
@@ -182,8 +186,11 @@ It proves:
 18. Save/reopen preserves exact fitted height and resets session history;
 19. the valid fitted catalog publishes READY;
 20. native A4 PDF + PDF.js content/vector forensics pass;
-21. mobile 320/360/390 remains operable without hover/keyboard;
-22. zero console errors, page errors, failed resources, or unexpected request failures.
+21. closed-Group child `TABLE_CONTENT_OVERFLOW` is surfaced from the selected Group without Fit bypass, Group mutation or Table Grid drill-down;
+22. grouped-child `Localizar` selects/focuses the parent Group and shows the ungroup guidance;
+23. mobile 320/360/390 remains operable without hover/keyboard;
+24. mobile 320/360/390 taps a real `Localizar` action, opens/focuses the directly editable Table Grid and matches the canonical Cell anchor without document/history mutation;
+25. zero console errors, page errors, failed resources, or unexpected request failures.
 
 The proof was executed successfully **three consecutive times** after removing an irrelevant remote-image dependency from the page-bound proof fixture. Product image readiness semantics were not weakened.
 
@@ -230,7 +237,9 @@ One clean chained execution completed with exit code 0 across the canonical W2/W
 - W4.D Bulk/TSV/Clipboard/Markers;
 - W4.E Fit Height + Layout Diagnostics.
 
-The dedicated W4.E proof was first validated locally/manual. During Principal post-implementation review, the existing exact-head Quality Gate was found not to execute that proof. A narrow CI/evidence amendment therefore adds `node tests/vnext/proof/editor-table-fit-height-proof.mjs` to the existing `VNext Chromium and PDF proofs` stage while preserving every prior proof command and leaving W4.E product code unchanged. W4.E remains **UNDER REVIEW**; final exact-head authority is the new PR-head Quality Gate produced by that amendment.
+The dedicated W4.E proof was first validated locally/manual. During Principal post-implementation review, the existing exact-head Quality Gate was found not to execute that proof. A narrow CI/evidence amendment added `node tests/vnext/proof/editor-table-fit-height-proof.mjs` to the existing `VNext Chromium and PDF proofs` stage while preserving every prior proof command and leaving W4.E product code unchanged.
+
+The final independent audit then required two narrow follow-ups: closed-Group child diagnostic surfacing/navigation and explicit touch/mobile `Localizar` evidence. This targeted amendment resolves grouped-child diagnostics through the canonical object tree, keeps closed Group children non-editable, suppresses Fit bypass, and extends the existing Chromium proof with real touch `Localizar` assertions at 320/360/390. W4.E remains **UNDER REVIEW** until the new exact-head Quality Gate and targeted independent re-audit.
 
 ## Explicitly out of scope
 

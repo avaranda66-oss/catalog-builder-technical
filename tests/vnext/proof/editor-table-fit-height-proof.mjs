@@ -138,6 +138,9 @@ try {
   const primaryId = await page.evaluate(() => window.__W4E_PROOF__.primaryId);
   const diagnosticId = await page.evaluate(() => window.__W4E_PROOF__.diagnosticId);
   const pageBoundId = await page.evaluate(() => window.__W4E_PROOF__.pageBoundId);
+  const groupedId = await page.evaluate(() => window.__W4E_PROOF__.groupedId);
+  const groupId = await page.evaluate(() => window.__W4E_PROOF__.groupId);
+  const groupChildObjectId = await page.evaluate(() => window.__W4E_PROOF__.groupChildObjectId);
   const fitObjectId = await page.evaluate(() => window.__W4E_PROOF__.fitObjectId);
   const internalObjectId = await page.evaluate(() => window.__W4E_PROOF__.internalObjectId);
   const pageBoundObjectId = await page.evaluate(() => window.__W4E_PROOF__.pageBoundObjectId);
@@ -289,6 +292,49 @@ try {
 
   await diagnosticPage.close();
 
+  // Closed Group child diagnostics surface through the parent Group without Fit or drill-down.
+  const groupedPage = await context.newPage();
+  watch(groupedPage);
+  await groupedPage.goto(editorUrl + '?catalog=grouped', { waitUntil: 'domcontentloaded' });
+  await groupedPage.locator('[data-vnext-shell]').waitFor();
+  const groupedBefore = await state(groupedPage);
+  assert.equal(groupedBefore.catalogId, groupedId);
+  assert(groupedBefore.grouped);
+  await groupedPage.locator(`[data-editor-object-id="${groupId}"]`).click();
+  const groupedOverflow = groupedPage.locator(
+    '[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"][data-diagnostic-grouped-child="true"]'
+  ).first();
+  await groupedOverflow.waitFor({ timeout: 30000 });
+  assert.equal(await groupedOverflow.getAttribute('data-diagnostic-object-id'), groupChildObjectId);
+  assert.equal(await groupedOverflow.getAttribute('data-diagnostic-parent-group-id'), groupId);
+  assert.equal(await groupedOverflow.getAttribute('data-diagnostic-top-level-object-id'), groupId);
+  assert.equal(await groupedOverflow.getAttribute('data-diagnostic-table-id'), groupedBefore.grouped.table.id);
+  assert((await groupedOverflow.innerText()).includes('Conteúdo excede a altura da tabela'));
+  assert((await groupedOverflow.innerText()).includes('Desagrupe para editar esta tabela.'));
+  assert.equal(await groupedOverflow.locator('[data-diagnostic-action="fit-height"]').count(), 0);
+  const groupedLocate = groupedOverflow.locator('[data-diagnostic-action="locate"]');
+  await groupedLocate.waitFor();
+  await groupedLocate.click();
+  await settle(groupedPage);
+  const groupedAfter = await state(groupedPage);
+  assert.deepEqual(groupedAfter.document, groupedBefore.document);
+  assert.equal(groupedAfter.localSequence, groupedBefore.localSequence);
+  assert.equal(groupedAfter.dirty, groupedBefore.dirty);
+  assert.equal(groupedAfter.canUndo, groupedBefore.canUndo);
+  assert.equal(await grid(groupedPage).count(), 0);
+  assert.equal(await groupedPage.locator('[data-vnext-shell]').getAttribute('data-editor-mode'), 'select');
+  assert.equal(
+    await groupedPage.locator(`[data-editor-object-id="${groupId}"]`).getAttribute('data-selected'),
+    'true'
+  );
+  assert.equal(await groupedPage.locator(`[data-editor-object-id="${groupChildObjectId}"]`).count(), 0);
+  assert.equal(
+    await groupedPage.evaluate((id) => document.activeElement?.getAttribute('data-editor-object-id') === id, groupId),
+    true
+  );
+  assert((await groupedPage.locator('[role="status"]').last().innerText()).includes('Desagrupe para editar esta tabela.'));
+  await groupedPage.close();
+
   // Page-bound Fit gets its own stable document: no clamp/reposition/page creation, then publication is blocked truthfully.
   const pageBoundPage = await context.newPage();
   watch(pageBoundPage);
@@ -401,7 +447,73 @@ try {
     }));
     assert(overflow.documentWidth <= overflow.viewport);
     assert(overflow.bodyWidth <= overflow.viewport);
-    mobile.push({ width, ...overflow, fit: true, diagnosticsToggle: true, undo: true, redo: true, save: true });
+
+    // F2: real touch/tap Localizar on a directly editable Table diagnostic at every required width.
+    const locatePage = await mobileContext.newPage();
+    watch(locatePage);
+    await locatePage.goto(editorUrl + '?catalog=diagnostic', { waitUntil: 'domcontentloaded' });
+    await locatePage.locator('[data-vnext-shell]').waitFor();
+    await locatePage.locator(`[data-editor-object-id="${internalObjectId}"]`).tap();
+    const mobileRowError = locatePage.locator('[data-diagnostic-code="ROW_CONTENT_OVERFLOW"]').first();
+    await mobileRowError.waitFor({ timeout: 30000 });
+    const mobileLocate = mobileRowError.locator('[data-diagnostic-action="locate"]');
+    await mobileLocate.scrollIntoViewIfNeeded();
+    const locateBefore = await state(locatePage);
+    const diagnosticCellId = await mobileRowError.getAttribute('data-diagnostic-cell-id');
+    assert(diagnosticCellId);
+    const targetCell = locateBefore.internal.table.cells.find((cell) => cell.id === diagnosticCellId);
+    assert(targetCell);
+    const rowIndex = locateBefore.internal.table.rows.findIndex((row) => row.id === targetCell.rowId);
+    const columnIndex = locateBefore.internal.table.columns.findIndex((column) => column.id === targetCell.columnId);
+    assert(rowIndex >= 0 && columnIndex >= 0);
+    await mobileLocate.tap();
+    const mobileGrid = grid(locatePage);
+    await mobileGrid.waitFor({ timeout: 15000 });
+    assert.equal(await mobileGrid.getAttribute('data-table-id'), locateBefore.internal.table.id);
+    assert.equal(
+      await locatePage.locator(`[data-editor-object-id="${internalObjectId}"]`).getAttribute('data-selected'),
+      'true'
+    );
+    assert.equal(
+      await locatePage.evaluate(() => document.activeElement?.hasAttribute('data-table-grid-overlay')),
+      true
+    );
+    const cellBox = await locatePage.locator(`[data-table-cell="${rowIndex}:${columnIndex}"]`).boundingBox();
+    const highlightBox = await locatePage.locator('[data-table-selection-highlight]').boundingBox();
+    assert(cellBox && highlightBox);
+    assert(Math.abs(cellBox.x - highlightBox.x) <= 1);
+    assert(Math.abs(cellBox.y - highlightBox.y) <= 1);
+    assert(Math.abs(cellBox.width - highlightBox.width) <= 1);
+    assert(Math.abs(cellBox.height - highlightBox.height) <= 1);
+    const locateAfter = await state(locatePage);
+    assert.deepEqual(locateAfter.document, locateBefore.document);
+    assert.equal(locateAfter.localSequence, locateBefore.localSequence);
+    assert.equal(locateAfter.canUndo, locateBefore.canUndo);
+    assert.equal(locateAfter.dirty, locateBefore.dirty);
+    const locateOverflow = await locatePage.evaluate(() => ({
+      viewport: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth,
+    }));
+    assert(locateOverflow.documentWidth <= locateOverflow.viewport);
+    assert(locateOverflow.bodyWidth <= locateOverflow.viewport);
+    await locatePage.close();
+
+    mobile.push({
+      width,
+      ...overflow,
+      fit: true,
+      diagnosticsToggle: true,
+      undo: true,
+      redo: true,
+      save: true,
+      locate: true,
+      locateTableId: locateBefore.internal.table.id,
+      locateSelectionCorrect: true,
+      locateGridFocused: true,
+      locateAnchorMatched: true,
+      locateHistoryUnchanged: true,
+    });
     await mobileContext.close();
   }
   assert.deepEqual(consoleErrors, [], JSON.stringify({ consoleErrors, pageErrors, failedResources, requestFailures }));
@@ -431,6 +543,16 @@ try {
     w4dIntegration: { pasteDoesNotAutoFit: true, overflowReturns: true, explicitRefit: true },
     staleCas: { manualFrameChangeRejected: true, code: 'TARGET_STALE' },
     internalOverflow: { fixedRowNoFakeFit: true, horizontalCellNoFakeFit: true, locate: true },
+    closedGroup: {
+      childDiagnosticSurfaced: true,
+      childObjectId: groupChildObjectId,
+      parentGroupId: groupId,
+      noFitBypass: true,
+      locateSelectsGroup: true,
+      remainsSelectMode: true,
+      noTableGridDrillDown: true,
+      zeroDocumentMutation: true,
+    },
     pageBounds: { actionSucceeds: true, noClamp: true, noMove: true, noPageCreation: true, publicationBlocked: true },
     safeArea: { warning: true },
     persistence: { saveReopenExactHeight: true, reopenedHistoryReset: true },

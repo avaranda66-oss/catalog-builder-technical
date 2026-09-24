@@ -7,7 +7,7 @@ import {
   type ApplicationExecutionDependencies,
 } from '@/vnext/application';
 import { VNextApp } from '@/vnext/app/VNextApp';
-import type { CatalogDocument } from '@/vnext/domain';
+import { findObjectInTree, type CatalogDocument } from '@/vnext/domain';
 import {
   VNextPersistenceRuntime,
   type CatalogPersistenceEnvelope,
@@ -17,12 +17,16 @@ import {
 } from '@/vnext/persistence';
 import {
   createW4EDiagnosticDocument,
+  createW4EGroupedDocument,
   createW4EPageBoundDocument,
   createW4EPrimaryDocument,
   W4E_CATALOG_ID,
   W4E_DIAGNOSTIC_CATALOG_ID,
+  W4E_GROUP_CATALOG_ID,
   W4E_PAGE_BOUND_CATALOG_ID,
   W4E_FIT_OBJECT_ID,
+  W4E_GROUP_CHILD_OBJECT_ID,
+  W4E_GROUP_ID,
   W4E_INTERNAL_OBJECT_ID,
   W4E_PAGE_BOUND_OBJECT_ID,
 } from './w4e-table-document';
@@ -72,10 +76,12 @@ function envelope(document: CatalogDocument, revision: number, mutationId: strin
 const primary = createW4EPrimaryDocument();
 const diagnostic = createW4EDiagnosticDocument();
 const pageBound = createW4EPageBoundDocument();
+const grouped = createW4EGroupedDocument();
 const repository = new ProofRepository([
   envelope(primary, 1, INITIAL_MUTATION_ID),
   envelope(diagnostic, 1, INITIAL_MUTATION_ID),
   envelope(pageBound, 1, INITIAL_MUTATION_ID),
+  envelope(grouped, 1, INITIAL_MUTATION_ID),
 ]);
 const dependencies: ApplicationExecutionDependencies = { createId: () => crypto.randomUUID() };
 const requestedCatalog = new URLSearchParams(window.location.search).get('catalog');
@@ -83,7 +89,9 @@ const initial = requestedCatalog === 'diagnostic'
   ? diagnostic
   : requestedCatalog === 'pagebound'
     ? pageBound
-    : primary;
+    : requestedCatalog === 'grouped'
+      ? grouped
+      : primary;
 const session = createDocumentSession(initial, dependencies);
 const runtime = new VNextPersistenceRuntime({
   session,
@@ -97,8 +105,7 @@ const runtime = new VNextPersistenceRuntime({
 });
 
 function tableSnapshot(document: CatalogDocument, objectId: string) {
-  const object = document.pages.flatMap((page) => page.objects)
-    .find((candidate) => candidate.id === objectId && candidate.type === 'table');
+  const object = findObjectInTree(document, objectId)?.object;
   if (!object || object.type !== 'table') return null;
   return {
     id: object.table.id,
@@ -117,6 +124,7 @@ declare global {
         fit: ReturnType<typeof tableSnapshot>;
         internal: ReturnType<typeof tableSnapshot>;
         pageBound: ReturnType<typeof tableSnapshot>;
+        grouped: ReturnType<typeof tableSnapshot>;
         canUndo: boolean;
         canRedo: boolean;
         dirty: boolean;
@@ -128,6 +136,9 @@ declare global {
       readonly primaryId: string;
       readonly diagnosticId: string;
       readonly pageBoundId: string;
+      readonly groupedId: string;
+      readonly groupId: string;
+      readonly groupChildObjectId: string;
       readonly fitObjectId: string;
       readonly internalObjectId: string;
       readonly pageBoundObjectId: string;
@@ -139,6 +150,9 @@ window.__W4E_PROOF__ = {
   primaryId: W4E_CATALOG_ID,
   diagnosticId: W4E_DIAGNOSTIC_CATALOG_ID,
   pageBoundId: W4E_PAGE_BOUND_CATALOG_ID,
+  groupedId: W4E_GROUP_CATALOG_ID,
+  groupId: W4E_GROUP_ID,
+  groupChildObjectId: W4E_GROUP_CHILD_OBJECT_ID,
   fitObjectId: W4E_FIT_OBJECT_ID,
   internalObjectId: W4E_INTERNAL_OBJECT_ID,
   pageBoundObjectId: W4E_PAGE_BOUND_OBJECT_ID,
@@ -152,6 +166,7 @@ window.__W4E_PROOF__ = {
       fit: tableSnapshot(current.document, W4E_FIT_OBJECT_ID),
       internal: tableSnapshot(current.document, W4E_INTERNAL_OBJECT_ID),
       pageBound: tableSnapshot(current.document, W4E_PAGE_BOUND_OBJECT_ID),
+      grouped: tableSnapshot(current.document, W4E_GROUP_CHILD_OBJECT_ID),
       canUndo: current.canUndo,
       canRedo: current.canRedo,
       dirty: workspace.dirty,

@@ -2148,9 +2148,25 @@ export function EditorWorkspace({
       return;
     }
     const page = document.pages.find((candidate) => candidate.id === entry.pageId);
-    const object = page?.objects.find((candidate) => candidate.id === entry.objectId);
-    if (!page || !object) return;
+    if (!page) return;
     activePageIdRef.current = page.id;
+
+    if (entry.containerGroupId) {
+      const group = page.objects.find((candidate) => candidate.id === entry.topLevelObjectId);
+      if (!group || group.type !== 'group' || group.id !== entry.containerGroupId) return;
+      tableSelectionRef.current = null;
+      tableHistoryContextRef.current = null;
+      setTableSelection(null);
+      setEditorState({ activePageId: page.id, selectedObjectIds: [group.id], mode: 'select' });
+      setStatusMessage(entry.guidance ?? 'Desagrupe para editar esta tabela.');
+      queueMicrotask(() => globalThis.document.querySelector<HTMLElement>(
+        `[data-editor-object-id="${CSS.escape(group.id)}"]`
+      )?.focus());
+      return;
+    }
+
+    const object = page.objects.find((candidate) => candidate.id === entry.objectId);
+    if (!object) return;
     if (object.type === 'table' && (entry.cellId || entry.rowId)) {
       let targetCell = entry.cellId
         ? object.table.cells.find((cell) => cell.id === entry.cellId)
@@ -2925,12 +2941,25 @@ export function EditorWorkspace({
                         data-diagnostic-code={diagnostic.sourceCodes[0]}
                         data-diagnostic-codes={diagnostic.sourceCodes.join(',')}
                         data-diagnostic-severity={diagnostic.severity}
+                        data-diagnostic-object-id={diagnostic.objectId}
+                        data-diagnostic-table-id={diagnostic.tableId}
+                        data-diagnostic-row-id={diagnostic.rowId}
+                        data-diagnostic-cell-id={diagnostic.cellId}
+                        data-diagnostic-annotation-id={diagnostic.annotationId}
+                        data-diagnostic-parent-group-id={diagnostic.containerGroupId}
+                        data-diagnostic-top-level-object-id={diagnostic.topLevelObjectId}
+                        data-diagnostic-grouped-child={diagnostic.groupedChild ? 'true' : undefined}
                       >
                         <div>
                           <strong>{diagnostic.severity === 'ERROR' ? 'Erro' : 'Aviso'}</strong>
                           <span>{diagnostic.publicationBlocked ? 'Bloqueia publicação' : 'Revisão recomendada'}</span>
                         </div>
                         <p>{diagnostic.message}</p>
+                        {diagnostic.guidance && (
+                          <p className="vnext-diagnostic-guidance" data-diagnostic-guidance="">
+                            {diagnostic.guidance}
+                          </p>
+                        )}
                         {(diagnostic.rowId || diagnostic.cellId) && (
                           <small>
                             {diagnostic.rowId ? `Linha ${diagnostic.rowId}` : ''}

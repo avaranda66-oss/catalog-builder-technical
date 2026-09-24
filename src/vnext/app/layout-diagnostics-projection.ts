@@ -1,4 +1,10 @@
-import type { CatalogDocument, Diagnostic, Severity, TableObject } from '../domain';
+import {
+  findObjectInTree,
+  type CatalogDocument,
+  type Diagnostic,
+  type Severity,
+  type TableObject,
+} from '../domain';
 
 export type LayoutDiagnosticAction = 'FIT_HEIGHT' | 'LOCATE' | 'NONE';
 
@@ -15,7 +21,13 @@ export interface ProjectedLayoutDiagnostic {
   annotationId?: string;
   action: LayoutDiagnosticAction;
   publicationBlocked: boolean;
+  topLevelObjectId?: string;
+  containerGroupId?: string;
+  groupedChild: boolean;
+  guidance?: string;
 }
+
+const GROUPED_CHILD_GUIDANCE = 'Desagrupe para editar esta tabela.';
 
 const fatherMessage = (diagnostic: Diagnostic): string => {
   switch (diagnostic.code) {
@@ -28,7 +40,8 @@ const fatherMessage = (diagnostic: Diagnostic): string => {
     case 'CELL_CONTENT_BOX_NONPOSITIVE':
       return 'A célula não possui espaço útil suficiente para o conteúdo';
     case 'TABLE_WIDTH_INFEASIBLE':
-      return 'A largura atual não comporta as restrições das colunas';    case 'OBJECT_OUTSIDE_PAGE':
+      return 'A largura atual não comporta as restrições das colunas';
+    case 'OBJECT_OUTSIDE_PAGE':
       return 'Parte da tabela está fora da página';
     case 'SAFE_AREA_VIOLATION':
       return 'A tabela cruza a área segura';
@@ -51,11 +64,13 @@ function tableForDiagnostic(
   document: CatalogDocument,
   diagnostic: Diagnostic
 ): TableObject | undefined {
-  if (!diagnostic.pageId || !diagnostic.objectId) return undefined;
-  const object = document.pages.find((page) => page.id === diagnostic.pageId)
-    ?.objects.find((entry) => entry.id === diagnostic.objectId);
+  if (!diagnostic.objectId) return undefined;
+  const object = findObjectInTree(document, diagnostic.objectId)?.object;
   return object?.type === 'table' ? object : undefined;
-}function actionFor(diagnostic: Diagnostic): LayoutDiagnosticAction {
+}
+
+function actionFor(diagnostic: Diagnostic, groupedChild: boolean): LayoutDiagnosticAction {
+  if (groupedChild) return 'LOCATE';
   if (diagnostic.code === 'TABLE_CONTENT_OVERFLOW') return 'FIT_HEIGHT';
   if (
     diagnostic.objectId
@@ -80,7 +95,8 @@ function resolvedRowId(
 function semanticKey(
   diagnostic: Diagnostic,
   rowId: string | undefined,
-  message: string
+  message: string,
+  parentGroupId: string | undefined
 ): string {
   return [
     diagnostic.severity,
@@ -91,8 +107,11 @@ function semanticKey(
     rowId ?? '',
     diagnostic.cellId ?? '',
     diagnostic.annotationId ?? '',
+    parentGroupId ?? '',
   ].join('|');
-}export function projectLayoutDiagnostics(
+}
+
+export function projectLayoutDiagnostics(
   document: CatalogDocument,
   diagnostics: readonly Diagnostic[],
   pageId: string,
@@ -100,10 +119,16 @@ function semanticKey(
 ): ProjectedLayoutDiagnostic[] {
   const grouped = new Map<string, ProjectedLayoutDiagnostic>();
   for (const diagnostic of diagnostics) {
-    if (diagnostic.pageId !== pageId || diagnostic.objectId !== objectId) continue;
+    if (diagnostic.pageId !== pageId) continue;
+    const target = diagnostic.objectId ? findObjectInTree(document, diagnostic.objectId) : undefined;
+    const groupedChild = Boolean(target?.parentGroup?.id === objectId);
+    const directTarget = diagnostic.objectId === objectId;
+    if (!directTarget && !groupedChild) continue;
+
     const rowId = resolvedRowId(document, diagnostic);
     const message = fatherMessage(diagnostic);
-    const key = semanticKey(diagnostic, rowId, message);
+    const parentGroupId = target?.parentGroup?.id;
+    const key = semanticKey(diagnostic, rowId, message, parentGroupId);
     const existing = grouped.get(key);
     if (existing) {
       if (!existing.sourceCodes.includes(diagnostic.code)) {
@@ -114,6 +139,7 @@ function semanticKey(
       }
       continue;
     }
+
     grouped.set(key, {
       key,
       sourceCodes: [diagnostic.code],
@@ -125,10 +151,15 @@ function semanticKey(
       rowId,
       cellId: diagnostic.cellId,
       annotationId: diagnostic.annotationId,
-      action: actionFor(diagnostic),
+      action: actionFor(diagnostic, groupedChild),
       publicationBlocked: diagnostic.severity === 'ERROR',
+      topLevelObjectId: parentGroupId ?? diagnostic.objectId,
+      containerGroupId: parentGroupId,
+      groupedChild,
+      guidance: groupedChild ? GROUPED_CHILD_GUIDANCE : undefined,
     });
   }
+
   return [...grouped.values()].sort((left, right) =>
     left.severity === right.severity
       ? left.key.localeCompare(right.key)

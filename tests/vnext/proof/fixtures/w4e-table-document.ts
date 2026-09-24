@@ -1,18 +1,23 @@
-import { plainRichText, type CatalogDocument, type RichText, type TableModel, type TableObject } from '@/vnext/domain';
+import { plainRichText, type CatalogDocument, type GroupObject, type RichText, type TableModel, type TableObject } from '@/vnext/domain';
 import { createW4DTableDocument, W4D_OBJECT_A_ID, W4D_OBJECT_B_ID } from './w4d-table-document';
 
 export const W4E_CATALOG_ID = 'eeeeeeee-1111-4111-8111-eeeeeeeeeeee';
 export const W4E_DIAGNOSTIC_CATALOG_ID = 'eeeeeeee-2222-4222-8222-eeeeeeeeeeee';
 export const W4E_PAGE_BOUND_CATALOG_ID = 'eeeeeeee-3333-4333-8333-eeeeeeeeeeee';
+export const W4E_GROUP_CATALOG_ID = 'eeeeeeee-4444-4444-8444-eeeeeeeeeeee';
 export const W4E_PAGE_ID = 'w4e-page';
 export const W4E_DIAGNOSTIC_PAGE_ID = 'w4e-diagnostic-page';
 export const W4E_PAGE_BOUND_PAGE_ID = 'w4e-page-bound-page';
+export const W4E_GROUP_PAGE_ID = 'w4e-group-page';
 export const W4E_FIT_OBJECT_ID = 'w4e-fit-table-object';
 export const W4E_FIT_TABLE_ID = 'w4e-fit-table';
 export const W4E_INTERNAL_OBJECT_ID = 'w4e-internal-table-object';
 export const W4E_INTERNAL_TABLE_ID = 'w4e-internal-table';
 export const W4E_PAGE_BOUND_OBJECT_ID = 'w4e-page-bound-table-object';
 export const W4E_PAGE_BOUND_TABLE_ID = 'w4e-page-bound-table';
+export const W4E_GROUP_ID = 'w4e-closed-group';
+export const W4E_GROUP_CHILD_OBJECT_ID = 'w4e-grouped-table-object';
+export const W4E_GROUP_CHILD_TABLE_ID = 'w4e-grouped-table';
 
 function sourceTable(objectId = W4D_OBJECT_B_ID): TableObject {
   const source = createW4DTableDocument().pages[0].objects
@@ -95,6 +100,34 @@ function pageBoundTable(): TableObject {
   };
 }
 
+function groupedOverflowGroup(): GroupObject {
+  const source = sourceTable();
+  const child: TableObject = {
+    ...source,
+    id: W4E_GROUP_CHILD_OBJECT_ID,
+    frame: { xMm: 0, yMm: 0, widthMm: 88, heightMm: 8 },
+    zIndex: 0,
+    table: withTableId(source.table, W4E_GROUP_CHILD_TABLE_ID),
+  };
+  return {
+    id: W4E_GROUP_ID,
+    type: 'group',
+    frame: { xMm: 18, yMm: 28, widthMm: 88, heightMm: 12 },
+    zIndex: 0,
+    objects: [
+      child,
+      {
+        id: 'w4e-group-shape',
+        type: 'shape',
+        frame: { xMm: 0, yMm: 8, widthMm: 4, heightMm: 4 },
+        zIndex: 1,
+        shape: 'rectangle',
+        style: {},
+      },
+    ],
+  };
+}
+
 function baseDocument(id: string, title: string): CatalogDocument {
   const base = createW4DTableDocument(id, title);
   const pageId = id === W4E_CATALOG_ID
@@ -130,4 +163,19 @@ export function createW4EDiagnosticDocument(): CatalogDocument {
 
 export function createW4EPageBoundDocument(): CatalogDocument {
   return baseDocument(W4E_PAGE_BOUND_CATALOG_ID, 'Catálogo W4.E Limite de Página');
+}
+
+export function createW4EGroupedDocument(): CatalogDocument {
+  const base = createW4DTableDocument(W4E_GROUP_CATALOG_ID, 'Catálogo W4.E Grupo Fechado');
+  return {
+    ...base,
+    id: W4E_GROUP_CATALOG_ID,
+    title: 'Catálogo W4.E Grupo Fechado',
+    pages: [{
+      ...base.pages[0],
+      id: W4E_GROUP_PAGE_ID,
+      safeArea: { topMm: 10, rightMm: 10, bottomMm: 10, leftMm: 10 },
+      objects: [groupedOverflowGroup()],
+    }],
+  };
 }
