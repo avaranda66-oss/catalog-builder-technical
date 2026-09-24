@@ -6,6 +6,7 @@ import {
   CellContentPresentationSchema,
   CellContentSchema,
   CellStyleSchema,
+  DocumentStyleSchema,
   ImageFocalPointSchema,
   RichTextSchema,
   TableLegendEntrySchema,
@@ -159,6 +160,23 @@ export const ResizeObjectActionSchema = z.object({
   yU: safeInteger,
   widthU: safeInteger.min(1),
   heightU: safeInteger.min(1),
+}).strict();
+
+export const TableFitHeightTypographySchema = DocumentStyleSchema.pick({
+  fonts: true,
+  defaultText: true,
+});
+
+export const TableFitHeightActionSchema = z.object({
+  type: z.literal('table.fitHeight'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedFrame: FrameUSchema,
+  expectedTable: TableModelSchema,
+  expectedTypography: TableFitHeightTypographySchema,
+  measuredIntrinsicHeightQ: safeInteger.positive(),
+  preparedHeightU: safeInteger.positive(),
 }).strict();
 
 export const ReorderObjectActionSchema = z.object({
@@ -470,6 +488,7 @@ export const ApplicationActionSchema = z.union([
   DuplicateObjectActionSchema,
   MoveObjectActionSchema,
   ResizeObjectActionSchema,
+  TableFitHeightActionSchema,
   ReorderObjectActionSchema,
   ReplaceImageActionSchema,
   RegisterAssetActionSchema,
@@ -497,6 +516,7 @@ export type TableBulkCellContentInput = z.infer<typeof TableBulkCellContentInput
 export type TableBulkExpectedTopology = z.infer<typeof TableBulkExpectedTopologySchema>;
 export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema>;
 export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
+export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
 

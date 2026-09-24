@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogDocument, Diagnostic } from '../domain';
 import type { AssetRuntimeState } from '../asset';
-import { captureSnapshot, compilePlans, DocumentRenderer, measureTables, type LayoutSnapshot, type TablePlan } from '../rendering';
+import { captureSnapshot, compareSnapshots, compilePlans, DocumentRenderer, measureTables, type LayoutSnapshot, type TablePlan } from '../rendering';
 import { authoredFrameDiagnostics, layoutReport } from '../publication';
 
 export const W2D_DIAGNOSTIC_CODES = new Set([
@@ -11,6 +11,12 @@ export const W2D_DIAGNOSTIC_CODES = new Set([
   'TEXT_OBJECT_OVERFLOW',
   'TABLE_CONTENT_OVERFLOW',
   'TABLE_WIDTH_INFEASIBLE',
+  'ROW_CONTENT_OVERFLOW',
+  'CELL_CONTENT_OVERFLOW',
+  'CELL_CONTENT_BOX_NONPOSITIVE',
+  'RENDER_GEOMETRY_MISMATCH',
+  'LAYOUT_UNSTABLE',
+  'BORDER_CONTENT_CLEARANCE',
   'ASSET_UNAVAILABLE',
   'ASSET_INTEGRITY_FAILED',
 ]);
@@ -115,6 +121,17 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
       return 'O conteúdo da tabela ultrapassa a altura criada. Redimensione o quadro ou ajuste o conteúdo manualmente.';
     case 'TABLE_WIDTH_INFEASIBLE':
       return 'A largura criada não comporta as restrições das colunas. A tabela continua com a largura escolhida até você corrigir.';
+    case 'ROW_CONTENT_OVERFLOW':
+      return 'Linha fixa não comporta o conteúdo.';
+    case 'CELL_CONTENT_OVERFLOW':
+      return 'Conteúdo excede a largura da célula.';
+    case 'CELL_CONTENT_BOX_NONPOSITIVE':
+      return 'A célula não possui espaço útil suficiente para o conteúdo.';
+    case 'RENDER_GEOMETRY_MISMATCH':
+    case 'LAYOUT_UNSTABLE':
+      return 'A medição da tabela ainda não está estável.';
+    case 'BORDER_CONTENT_CLEARANCE':
+      return 'A borda está muito próxima do conteúdo da célula.';
     case 'ASSET_UNAVAILABLE':
       return 'A imagem remota está temporariamente indisponível ou offline.';
     case 'ASSET_INTEGRITY_FAILED':
@@ -191,26 +208,34 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics, onM
         if (cancelled) return;
         measureTables(document, compiled.plans, root);
         forceRender();
-        frame = window.requestAnimationFrame(async () => {
-          if (cancelled) return;
-          try {
-            const snapshot = await captureSnapshot(document, compiled.plans, root);
-            if (cancelled) return;
-            const diagnostics = mergeDiagnostics(compiled.diagnostics, layoutReport(document, compiled.plans, snapshot, root));
-            onDiagnostics(document, diagnostics);
-            onMeasuredLayout?.(document, new Map(compiled.plans), snapshot, diagnostics);
-          } catch {
-            if (!cancelled) {
-              const diagnostics = immediateAuthoringDiagnostics(document);
-              onDiagnostics(document, diagnostics);
-              onMeasuredLayout?.(document, new Map(compiled.plans), undefined, diagnostics);
-            }
-          }
+        await new Promise<void>((resolve) => {
+          frame = window.requestAnimationFrame(() => resolve());
         });
+        if (cancelled) return;
+        const firstSnapshot = await captureSnapshot(document, compiled.plans, root);
+        await new Promise<void>((resolve) => {
+          frame = window.requestAnimationFrame(() => resolve());
+        });
+        if (cancelled) return;
+        const snapshot = await captureSnapshot(document, compiled.plans, root);
+        const stabilityDiagnostics = compareSnapshots(firstSnapshot, snapshot);
+        const diagnostics = mergeDiagnostics(
+          compiled.diagnostics,
+          layoutReport(document, compiled.plans, snapshot, root),
+          stabilityDiagnostics
+        );
+        onDiagnostics(document, diagnostics);
+        onMeasuredLayout?.(
+          document,
+          new Map(compiled.plans),
+          stabilityDiagnostics.length === 0 ? snapshot : undefined,
+          diagnostics
+        );
       } catch {
         if (!cancelled) {
           const diagnostics = immediateAuthoringDiagnostics(document);
           onDiagnostics(document, diagnostics);
+          onMeasuredLayout?.(document, new Map(compiled.plans), undefined, diagnostics);
         }
       }
     };

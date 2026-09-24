@@ -21,6 +21,8 @@ export {
   ReorderPageActionSchema,
   ReplaceImageActionSchema,
   ResizeObjectActionSchema,
+  TableFitHeightActionSchema,
+  TableFitHeightTypographySchema,
   SetTextContentActionSchema,
   ShapeObjectInsertSpecSchema,
   TableObjectInsertSpecSchema,
@@ -63,6 +65,7 @@ export type {
   TableBulkExpectedTopology,
   TableBulkContentTarget,
   TableLegendCreateInput,
+  TableFitHeightTypography,
   CellPropertyPatch,
   TableCellPropertyTarget,
 } from './contracts';
