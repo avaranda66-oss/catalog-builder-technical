@@ -49,6 +49,7 @@ import {
   TableClipboardError,
 } from '../editor/table-clipboard';
 import { legendUsageCount } from '../editor/table-marker-authoring';
+import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
 import { parseTsv, TableTsvError } from '../editor/table-tsv';
 import {
   changeTableCellDraftType,
@@ -71,7 +72,6 @@ import {
   VNextPersistenceRuntime,
 } from '../persistence';
 import {
-  diagnosticMessage,
   EditorDiagnosticsProbe,
   immediateAuthoringDiagnostics,
   isCurrentDiagnosticSource,
@@ -84,6 +84,7 @@ import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type Inser
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { fatherSaveLabel } from './save-presentation';
+import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
@@ -259,6 +260,7 @@ export function EditorWorkspace({
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(true);
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
   const [markerPanelOpen, setMarkerPanelOpen] = React.useState(false);
@@ -312,6 +314,7 @@ export function EditorWorkspace({
     source: CatalogDocument;
     plans: ReadonlyMap<string, TablePlan>;
     snapshot?: LayoutSnapshot;
+    diagnostics: readonly Diagnostic[];
   } | null>(null);
   const controllerRef = React.useRef<EditorInteractionController | null>(null);
   if (!controllerRef.current) {
@@ -351,10 +354,28 @@ export function EditorWorkspace({
     ).filter((diagnostic) => W2D_DIAGNOSTIC_CODES.has(diagnostic.code)),
     [document, immediateDiagnostics, measuredDiagnostics, persistence?.assetRuntimeStates]
   );
-  const selectedDiagnostics = React.useMemo(
-    () => canonicalDiagnostics.filter((diagnostic) => diagnostic.pageId === selectedPage.id && diagnostic.objectId === selectedObjectId),
-    [canonicalDiagnostics, selectedObjectId, selectedPage.id]
+  const projectedSelectedDiagnostics = React.useMemo(
+    () => selectedObjectId
+      ? projectLayoutDiagnostics(document, canonicalDiagnostics, selectedPage.id, selectedObjectId)
+      : [],
+    [canonicalDiagnostics, document, selectedObjectId, selectedPage.id]
   );
+  const fitHeightPreparation = React.useMemo(() => {
+    if (!selectedTableObject) return null;
+    if (cellDraft) {
+      return {
+        ok: false as const,
+        reason: 'CELL_EDIT',
+        message: 'Conclua ou cancele a edição da célula para ajustar a altura.',
+      };
+    }
+    return prepareTableFitHeight(
+      document,
+      selectedPage.id,
+      selectedTableObject.id,
+      measuredLayout?.source === document ? measuredLayout : null
+    );
+  }, [cellDraft, document, measuredLayout, selectedPage.id, selectedTableObject]);
   const pageDiagnostics = React.useMemo(
     () => canonicalDiagnostics.filter((diagnostic) => diagnostic.pageId === selectedPage.id),
     [canonicalDiagnostics, selectedPage.id]
@@ -367,10 +388,11 @@ export function EditorWorkspace({
   const receiveMeasuredLayout = React.useCallback((
     source: CatalogDocument,
     nextPlans: ReadonlyMap<string, TablePlan>,
-    layoutSnapshot?: LayoutSnapshot
+    layoutSnapshot: LayoutSnapshot | undefined,
+    diagnostics: readonly Diagnostic[]
   ) => {
     if (session.getSnapshot().document !== source) return;
-    setMeasuredLayout({ source, plans: nextPlans, snapshot: layoutSnapshot });
+    setMeasuredLayout({ source, plans: nextPlans, snapshot: layoutSnapshot, diagnostics });
   }, [session]);
   const [inspectorDraft, setInspectorDraft] = React.useState<InspectorDraft>({ x: '', y: '', width: '', height: '' });
   const inspectorDraftRef = React.useRef(inspectorDraft);
@@ -2081,6 +2103,81 @@ export function EditorWorkspace({
     ? unmergeEligibility(selectedTableObject.table, tableSelection)
     : { enabled: false, reason: 'Selecione uma célula mesclada.' };
 
+  const runFitHeight = () => {
+    if (!fitHeightPreparation) return;
+    if (!fitHeightPreparation.ok) {
+      setStatusMessage(fitHeightPreparation.message);
+      return;
+    }
+    const prepared = fitHeightPreparation.prepared;
+    const result = session.execute({
+      type: 'table.fitHeight',
+      pageId: prepared.pageId,
+      objectId: prepared.objectId,
+      tableId: prepared.tableId,
+      expectedFrame: prepared.expectedFrame,
+      expectedTable: prepared.expectedTable,
+      expectedTypography: prepared.expectedTypography,
+      measuredIntrinsicHeightQ: prepared.measuredIntrinsicHeightQ,
+      preparedHeightU: prepared.preparedHeightU,
+    });
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'TARGET_STALE'
+        ? 'A tabela mudou depois da medição. Aguarde a nova medição e tente novamente.'
+        : result.error.code === 'OBJECT_LOCKED'
+          ? 'Tabela bloqueada não pode ter a altura ajustada.'
+          : 'Não foi possível ajustar a altura da tabela com segurança.');
+      return;
+    }
+    if (!result.metadata.changed) {
+      setStatusMessage('A tabela já está ajustada à altura do conteúdo.');
+      return;
+    }
+    setStatusMessage(prepared.tallerThanPage
+      ? 'Altura ajustada. A tabela é mais alta que uma página A4 e ainda exige revisão da composição.'
+      : prepared.wouldExceedPage
+        ? 'Altura ajustada. Parte da tabela ficou fora da página; revise a composição.'
+        : prepared.wouldViolateSafeArea
+          ? 'Altura ajustada. A tabela cruza a área segura; revise a composição.'
+          : 'Altura da tabela ajustada ao conteúdo.');
+  };
+
+  const locateLayoutDiagnostic = (entry: ProjectedLayoutDiagnostic) => {
+    if (cellDraftRef.current) {
+      setStatusMessage('Conclua ou cancele a edição da célula antes de navegar pelos diagnósticos.');
+      return;
+    }
+    const page = document.pages.find((candidate) => candidate.id === entry.pageId);
+    const object = page?.objects.find((candidate) => candidate.id === entry.objectId);
+    if (!page || !object) return;
+    activePageIdRef.current = page.id;
+    if (object.type === 'table' && (entry.cellId || entry.rowId)) {
+      let targetCell = entry.cellId
+        ? object.table.cells.find((cell) => cell.id === entry.cellId)
+        : object.table.cells.find((cell) => cell.rowId === entry.rowId && !cell.coveredBy);
+      if (targetCell?.coveredBy) {
+        targetCell = object.table.cells.find((cell) => cell.id === targetCell?.coveredBy);
+      }
+      if (targetCell) {
+        const identity = tableSelectionIdentity(page.id, object.id, object.table.id);
+        const next = tableCellSelection(identity, {
+          rowId: targetCell.rowId,
+          columnId: targetCell.columnId,
+        });
+        tableSelectionRef.current = next;
+        tableHistoryContextRef.current = { table: object.table, selection: next };
+        setTableSelection(next);
+        setEditorState({ activePageId: page.id, selectedObjectIds: [object.id], mode: 'table-grid' });
+        queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+        return;
+      }
+    }
+    setEditorState({ activePageId: page.id, selectedObjectIds: [object.id], mode: 'select' });
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>(
+      `[data-editor-object-id="${CSS.escape(object.id)}"]`
+    )?.focus());
+  };
+
   return (
     <div
       className="vnext-shell"
@@ -2495,6 +2592,44 @@ export function EditorWorkspace({
                 ))}
               </div>
               {selectedObject.type === 'image' && <button type="button" className="vnext-inspector-action" onClick={replaceSelectedImage}>Substituir imagem</button>}
+              {selectedObject.type === 'table' && (
+                <>
+                  <div className="vnext-divider" />
+                  <section
+                    className="vnext-fit-height-section"
+                    data-table-fit-height=""
+                    data-fit-height-measured-q={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.measuredIntrinsicHeightQ : undefined}
+                    data-fit-height-prepared-u={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.preparedHeightU : undefined}
+                  >
+                    <h3>Altura da tabela</h3>
+                    {fitHeightPreparation?.ok && (
+                      <p data-fit-height-measurement="">
+                        Altura necessária: {(fitHeightPreparation.prepared.preparedHeightU / 10_000).toFixed(2)} mm
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="vnext-inspector-action"
+                      data-editor-action="fit-table-height"
+                      disabled={!fitHeightPreparation?.ok}
+                      aria-describedby={!fitHeightPreparation?.ok ? `fit-height-reason-${selectedObject.id}` : undefined}
+                      onClick={runFitHeight}
+                    >
+                      Ajustar altura
+                    </button>
+                    {!fitHeightPreparation?.ok && (
+                      <p id={`fit-height-reason-${selectedObject.id}`} data-fit-height-disabled-reason="">
+                        {fitHeightPreparation?.message ?? 'Medindo tabela…'}
+                      </p>
+                    )}
+                    {fitHeightPreparation?.ok && fitHeightPreparation.prepared.tallerThanPage && (
+                      <p className="vnext-fit-height-advisory" data-fit-height-page-advisory="">
+                        A tabela é mais alta que uma página A4. Ajustar altura iguala o quadro ao conteúdo, mas não resolve a publicação em uma única página.
+                      </p>
+                    )}
+                  </section>
+                </>
+              )}
               {selectedObject.type === 'table' && tableSelection && (
                 <>
                   <div className="vnext-divider" />
@@ -2768,24 +2903,57 @@ export function EditorWorkspace({
               )}
               <div className="vnext-divider" />
               <div className="vnext-diagnostics-section" data-editor-diagnostics="">
-                <h3>Diagnósticos</h3>
-                {selectedDiagnostics.length === 0 ? (
+                <div className="vnext-diagnostics-heading">
+                  <h3>{selectedObject.type === 'table' ? 'Problemas da tabela' : 'Diagnósticos'}</h3>
+                  <button
+                    type="button"
+                    data-editor-action="toggle-diagnostics"
+                    aria-expanded={diagnosticsOpen}
+                    onClick={() => setDiagnosticsOpen((open) => !open)}
+                  >
+                    {diagnosticsOpen ? 'Fechar' : 'Mostrar'}
+                  </button>
+                </div>
+                {diagnosticsOpen && (projectedSelectedDiagnostics.length === 0 ? (
                   <p>Nenhum aviso ou erro para este objeto.</p>
                 ) : (
                   <ul>
-                    {selectedDiagnostics.map((diagnostic) => (
+                    {projectedSelectedDiagnostics.map((diagnostic) => (
                       <li
-                        key={[diagnostic.code, diagnostic.severity, diagnostic.details].join(':')}
+                        key={diagnostic.key}
                         className={'is-' + diagnostic.severity.toLowerCase()}
-                        data-diagnostic-code={diagnostic.code}
+                        data-diagnostic-code={diagnostic.sourceCodes[0]}
+                        data-diagnostic-codes={diagnostic.sourceCodes.join(',')}
                         data-diagnostic-severity={diagnostic.severity}
                       >
-                        <div><strong>{diagnostic.severity === 'ERROR' ? 'Erro' : 'Aviso'}</strong><code>{diagnostic.code}</code></div>
-                        <p>{diagnosticMessage(diagnostic)}</p>
+                        <div>
+                          <strong>{diagnostic.severity === 'ERROR' ? 'Erro' : 'Aviso'}</strong>
+                          <span>{diagnostic.publicationBlocked ? 'Bloqueia publicação' : 'Revisão recomendada'}</span>
+                        </div>
+                        <p>{diagnostic.message}</p>
+                        {(diagnostic.rowId || diagnostic.cellId) && (
+                          <small>
+                            {diagnostic.rowId ? `Linha ${diagnostic.rowId}` : ''}
+                            {diagnostic.rowId && diagnostic.cellId ? ' · ' : ''}
+                            {diagnostic.cellId ? `Célula ${diagnostic.cellId}` : ''}
+                          </small>
+                        )}
+                        <div className="vnext-diagnostic-actions">
+                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (
+                            <button type="button" data-diagnostic-action="fit-height" onClick={runFitHeight}>
+                              Ajustar altura
+                            </button>
+                          )}
+                          {diagnostic.action === 'LOCATE' && (
+                            <button type="button" data-diagnostic-action="locate" onClick={() => locateLayoutDiagnostic(diagnostic)}>
+                              Localizar
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
-                )}
+                ))}
               </div>
             </>
           ) : <p>Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.</p>}

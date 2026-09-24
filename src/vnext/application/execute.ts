@@ -1,7 +1,7 @@
 import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject } from '../domain';
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
-import { add } from '../domain/physical';
+import { add, minimumUForProjectedQ } from '../domain/physical';
 import { deleteAxis, insertAxis, mergeCells, orderedAnchors, unmergeCell, validateTable } from '../table';
 import { cellIndex, getCellKey } from '../table/table-model';
 import {
@@ -872,6 +872,51 @@ export function executeApplicationAction(
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );
+        break;
+      }
+      case 'table.fitHeight': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const currentFrame = projectFrameU(target.object.frame);
+        if (!exactEquals(currentFrame, action.expectedFrame)) {
+          return failure('TARGET_STALE', `Table frame ${action.objectId} changed after Fit Height was prepared`);
+        }
+        const currentTypography = {
+          fonts: document.style.fonts,
+          defaultText: document.style.defaultText,
+        };
+        if (!exactEquals(currentTypography, action.expectedTypography)) {
+          return failure('TARGET_STALE', 'Layout-relevant document typography changed after Fit Height was prepared');
+        }
+        let canonicalPreparedHeightU: number;
+        try {
+          canonicalPreparedHeightU = minimumUForProjectedQ(action.measuredIntrinsicHeightQ);
+        } catch (error) {
+          return failure('ACTION_INVALID', `Invalid Fit Height measurement: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (canonicalPreparedHeightU !== action.preparedHeightU) {
+          return failure('ACTION_INVALID', 'Prepared Fit Height does not match the canonical Q to U projection');
+        }
+        changed = currentFrame.heightU !== action.preparedHeightU;
+        if (!changed) {
+          affectedIds = [];
+          createdIds = [];
+          break;
+        }
+        const next: TableObject = {
+          ...target.object,
+          frame: {
+            ...target.object.frame,
+            heightMm: materializeU(action.preparedHeightU, 'preparedHeightU', true),
+          },
+        };
+        candidate = pageWithObjects(
+          document,
+          target.pageIndex,
+          document.pages[target.pageIndex].objects.map((object, index) => index === target.objectIndex ? next : object)
+        );
+        affectedIds = [action.objectId];
+        createdIds = [];
         break;
       }
       case 'object.reorder': {
