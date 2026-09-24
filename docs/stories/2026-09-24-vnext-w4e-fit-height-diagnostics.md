@@ -230,7 +230,7 @@ One clean chained execution completed with exit code 0 across the canonical W2/W
 - W4.D Bulk/TSV/Clipboard/Markers;
 - W4.E Fit Height + Layout Diagnostics.
 
-No canonical workflow file was changed. The W4.E proof is additional local/PR evidence rather than a workflow expansion because W4.E authorization explicitly forbids workflow changes.
+The dedicated W4.E proof was first validated locally/manual. During Principal post-implementation review, the existing exact-head Quality Gate was found not to execute that proof. A narrow CI/evidence amendment therefore adds `node tests/vnext/proof/editor-table-fit-height-proof.mjs` to the existing `VNext Chromium and PDF proofs` stage while preserving every prior proof command and leaving W4.E product code unchanged. W4.E remains **UNDER REVIEW**; final exact-head authority is the new PR-head Quality Gate produced by that amendment.
 
 ## Explicitly out of scope
 
