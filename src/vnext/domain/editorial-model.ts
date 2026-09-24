@@ -9,6 +9,10 @@ const nonnegative=finite.nonnegative();
 const integer=z.number().int().safe();
 const color=z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const clean=z.string().min(1).refine(s=>![...s].some(c=>c.charCodeAt(0)<32||c.charCodeAt(0)===127),'Control character');
+const richTextText=z.string().min(1).refine(s=>![...s].some(c=>{
+  const code=c.charCodeAt(0);
+  return code!==9&&(code<32||code===127);
+}),'Control character');
 const positiveMm=positive.superRefine((n,ctx)=>{
   try{if(mmToU(n)<=0)ctx.addIssue({code:'custom',message:'PHYSICAL_LENGTH_NONPOSITIVE'});}
   catch(error){ctx.addIssue({code:'custom',message:error instanceof VNextError?error.code:'PHYSICAL_LENGTH_INVALID'});}
@@ -16,7 +20,7 @@ const positiveMm=positive.superRefine((n,ctx)=>{
 const marks=['bold','italic','subscript','superscript'] as const;
 export const RichTextSchema=z.object({paragraphs:z.array(z.object({
   id,inlines:z.array(z.discriminatedUnion('kind',[
-    z.object({kind:z.literal('text'),id,text:clean,marks:z.array(z.enum(marks)).superRefine((values,ctx)=>{
+    z.object({kind:z.literal('text'),id,text:richTextText,marks:z.array(z.enum(marks)).superRefine((values,ctx)=>{
       if(new Set(values).size!==values.length || values.some((m,i)=>i>0 && marks.indexOf(m)<marks.indexOf(values[i-1])) || values.includes('subscript') && values.includes('superscript'))
         ctx.addIssue({code:'custom',message:'INVALID_TEXT_MARKS'});
     })}).strict(),

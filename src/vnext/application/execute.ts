@@ -1,8 +1,9 @@
-import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type TableModel, type TableObject } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject } from '../domain';
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { add } from '../domain/physical';
 import { deleteAxis, insertAxis, mergeCells, orderedAnchors, unmergeCell, validateTable } from '../table';
+import { cellIndex, getCellKey } from '../table/table-model';
 import {
   ApplicationActionSchema,
   InsertedTableColumnPropertiesSchema,
@@ -15,6 +16,8 @@ import {
   type IdGenerator,
   type ObjectInsertSpec,
   type CellPropertyPatch,
+  type TableBulkCellContentInput,
+  type TableBulkExpectedTopology,
 } from './contracts';
 import {
   ApplicationDocumentError,
@@ -32,9 +35,12 @@ import {
   type ObjectInstantiationSeed,
 } from './document';
 import {
+  plainRichTextSemanticallyEquals,
   projectEditableRichText,
   reconcileEditableRichText,
   richTextEquals,
+  richTextSemanticFingerprint,
+  richTextSemanticallyEquals,
 } from './text-editing';
 import {
   PageTemplateDefinitionError,
@@ -276,6 +282,146 @@ function tableCellTarget(
 
 function exactEquals(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function contiguousIds(current: readonly string[], expected: readonly string[]): boolean {
+  if (expected.length === 0) return false;
+  const start = current.indexOf(expected[0]);
+  if (start < 0 || start + expected.length > current.length) return false;
+  return expected.every((id, index) => current[start + index] === id);
+}
+
+function freshPlainRichText(
+  plainText: string,
+  allocator: ReturnType<typeof createCanonicalIdAllocator>,
+  createdIds: string[]
+): RichText {
+  const allocate = (): string => {
+    const id = allocator.next();
+    createdIds.push(id);
+    return id;
+  };
+  return {
+    paragraphs: plainText.split('\n').map((line) => ({
+      id: allocate(),
+      inlines: line.length > 0
+        ? [{ kind: 'text' as const, id: allocate(), text: line, marks: [] }]
+        : [],
+    })),
+  };
+}
+
+function cloneRichTextWithFreshIds(
+  source: RichText,
+  allocator: ReturnType<typeof createCanonicalIdAllocator>,
+  createdIds: string[]
+): RichText {
+  const allocate = (): string => {
+    const id = allocator.next();
+    createdIds.push(id);
+    return id;
+  };
+  return {
+    paragraphs: source.paragraphs.map((paragraph) => ({
+      id: allocate(),
+      inlines: paragraph.inlines.map((inline) => ({ ...inline, id: allocate() })),
+      ...(paragraph.list ? { list: paragraph.list } : {}),
+    })),
+  };
+}
+
+function legendMeaningEquals(
+  legend: TableModel['legend'][number],
+  markerCode: string,
+  text: RichText
+): boolean {
+  return legend.markerCode === markerCode
+    && richTextSemanticFingerprint(legend.text) === richTextSemanticFingerprint(text);
+}
+
+function validateBulkPrimitiveInput(content: TableBulkCellContentInput): ApplicationActionFailure | undefined {
+  if (content.type === 'technicalCode') {
+    const parsed = CellContentSchema.safeParse({ type: 'technicalCode', value: content.value });
+    if (!parsed.success) return failure('ACTION_INVALID', 'Invalid Technical Code in bulk content');
+  }
+  if (content.type === 'measurement') {
+    const parsed = CellContentSchema.safeParse({
+      type: 'measurement',
+      valueText: content.valueText,
+      unit: content.unit,
+      ...(content.qualifier ? { qualifier: content.qualifier } : {}),
+    });
+    if (!parsed.success) return failure('ACTION_INVALID', 'Invalid Measurement in bulk content');
+  }
+  return undefined;
+}
+
+function currentBulkTopology(cell: Cell): TableBulkExpectedTopology | undefined {
+  if (cell.coveredBy) return undefined;
+  const rows = cell.span?.rows ?? 1;
+  const columns = cell.span?.columns ?? 1;
+  return rows > 1 || columns > 1
+    ? { kind: 'mergedOwner', rows, columns }
+    : { kind: 'ordinary' };
+}
+
+function bulkContentSemanticallyEquals(
+  current: CellContent,
+  incoming: TableBulkCellContentInput
+): boolean {
+  switch (incoming.type) {
+    case 'empty':
+      return current.type === 'empty';
+    case 'richTextPlain':
+      return current.type === 'richText'
+        && plainRichTextSemanticallyEquals(current.value, incoming.plainText);
+    case 'richTextCopy':
+      return current.type === 'richText'
+        && richTextSemanticallyEquals(current.value, incoming.value);
+    case 'technicalCode':
+      return current.type === 'technicalCode' && current.value === incoming.value;
+    case 'measurement':
+      return current.type === 'measurement'
+        && current.valueText === incoming.valueText
+        && current.unit === incoming.unit
+        && current.qualifier === incoming.qualifier;
+    case 'marker':
+      return incoming.legend.kind === 'existing'
+        && current.type === 'marker'
+        && current.legendEntryId === incoming.legend.legendEntryId;
+  }
+}
+
+function materializeBulkContent(
+  content: TableBulkCellContentInput,
+  allocator: ReturnType<typeof createCanonicalIdAllocator>,
+  createdIds: string[],
+  createdLegendIds: ReadonlyMap<string, string>
+): CellContent {
+  switch (content.type) {
+    case 'empty':
+      return { type: 'empty' };
+    case 'richTextPlain':
+      return { type: 'richText', value: freshPlainRichText(content.plainText, allocator, createdIds) };
+    case 'richTextCopy':
+      return { type: 'richText', value: cloneRichTextWithFreshIds(content.value, allocator, createdIds) };
+    case 'technicalCode':
+      return { type: 'technicalCode', value: content.value };
+    case 'measurement':
+      return {
+        type: 'measurement',
+        valueText: content.valueText,
+        unit: content.unit,
+        ...(content.qualifier ? { qualifier: content.qualifier } : {}),
+      };
+    case 'marker': {
+      const legendEntryId = content.legend.kind === 'existing'
+        ? content.legend.legendEntryId
+        : createdLegendIds.get(content.legend.clientKey);
+      if (!legendEntryId) throw new ApplicationDocumentError('DOCUMENT_INVALID', 'Marker Legend allocation is missing');
+      return { type: 'marker', legendEntryId };
+    }
+  }
 }
 
 function own(object: object, key: PropertyKey): boolean {
@@ -879,6 +1025,215 @@ export function executeApplicationAction(
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );
+        break;
+      }
+      case 'table.cells.setContents': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const rowIds = action.geometry.rowIds;
+        const columnIds = action.geometry.columnIds;
+        if (!contiguousIds(table.rows.map((row) => row.id), rowIds)
+            || !contiguousIds(table.columns.map((column) => column.id), columnIds)) {
+          return failure('TABLE_PASTE_GEOMETRY_INVALID', 'Destination geometry changed after the command was prepared');
+        }
+
+        const slots = cellIndex(table);
+        const geometryCells: Cell[] = [];
+        for (const rowId of rowIds) {
+          for (const columnId of columnIds) {
+            const cell = slots.get(getCellKey(rowId, columnId));
+            if (!cell) return failure('TABLE_PASTE_GEOMETRY_INVALID', 'Destination grid is incomplete');
+            geometryCells.push(cell);
+          }
+        }
+        const scalarGeometry = rowIds.length === 1 && columnIds.length === 1;
+        for (let index = 0; index < action.targets.length; index += 1) {
+          const snapshot = action.targets[index];
+          const cell = geometryCells[index];
+          if (!cell || cell.id !== snapshot.cellId) {
+            return failure('TABLE_PASTE_GEOMETRY_INVALID', `Cell ${snapshot.cellId} moved outside prepared geometry`);
+          }
+          const currentTopology = currentBulkTopology(cell);
+          if (!currentTopology || !exactEquals(currentTopology, snapshot.expectedTopology)) {
+            return failure('TARGET_STALE', `Cell ${cell.id} topology changed after the command was prepared`);
+          }
+          if (!scalarGeometry && currentTopology.kind === 'mergedOwner') {
+            return failure('TABLE_PASTE_MERGE_INTERSECTION', 'Bulk content cannot cross merged Table topology');
+          }
+          if (cell.content.type === 'image') {
+            return failure('TABLE_CELL_CONTENT_UNSUPPORTED', `Image cell ${cell.id} is outside W4.D bulk authoring`);
+          }
+          if (!exactEquals(cell.content, snapshot.expectedContent)) {
+            return failure('TARGET_STALE', `Cell ${cell.id} content changed after the command was prepared`);
+          }
+          const invalid = validateBulkPrimitiveInput(snapshot.content);
+          if (invalid) return invalid;
+        }
+
+        if (action.expectedLegend !== undefined && !exactEquals(table.legend, action.expectedLegend)) {
+          return failure('TARGET_STALE', 'Table Legend changed after Marker reconciliation was prepared');
+        }
+
+        const legendCreates = action.legendCreates ?? [];
+        const createCodes = new Set<string>();
+        for (const create of legendCreates) {
+          if (createCodes.has(create.markerCode)) {
+            return failure('LEGEND_MARKER_CODE_CONFLICT', `Legend code ${create.markerCode} is duplicated in this action`);
+          }
+          createCodes.add(create.markerCode);
+          const sameCode = table.legend.filter((entry) => entry.markerCode === create.markerCode);
+          if (sameCode.length > 0) {
+            const equivalent = sameCode.length === 1 && legendMeaningEquals(sameCode[0], create.markerCode, create.text);
+            return failure(
+              'LEGEND_MARKER_CODE_CONFLICT',
+              equivalent
+                ? `Legend code ${create.markerCode} already exists and must be reused`
+                : `Legend code ${create.markerCode} has conflicting or ambiguous meaning`
+            );
+          }
+        }
+        for (const snapshot of action.targets) {
+          if (snapshot.content.type !== 'marker' || snapshot.content.legend.kind !== 'existing') continue;
+          const legendEntryId = snapshot.content.legend.legendEntryId;
+          if (!table.legend.some((entry) => entry.id === legendEntryId)) {
+            return failure('LEGEND_NOT_FOUND', legendEntryId);
+          }
+        }
+
+        const changedTargets = action.targets.filter((snapshot, index) =>
+          !bulkContentSemanticallyEquals(geometryCells[index].content, snapshot.content)
+        );
+        if (changedTargets.length === 0 && legendCreates.length === 0) {
+          changed = false;
+          createdIds = [];
+          affectedIds = [];
+          break;
+        }
+
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        const createdLegendIds = new Map<string, string>();
+        const appendedLegends = legendCreates.map((create) => {
+          const id = allocator.next();
+          createdIds.push(id);
+          createdLegendIds.set(create.clientKey, id);
+          return {
+            id,
+            markerCode: create.markerCode,
+            text: cloneRichTextWithFreshIds(create.text, allocator, createdIds),
+          };
+        });
+        const contentByCellId = new Map<string, CellContent>();
+        for (const snapshot of changedTargets) {
+          contentByCellId.set(
+            snapshot.cellId,
+            materializeBulkContent(snapshot.content, allocator, createdIds, createdLegendIds)
+          );
+        }
+        const changedCellIds = changedTargets.map((snapshot) => snapshot.cellId);
+        changed = changedCellIds.length > 0 || appendedLegends.length > 0;
+        affectedIds = [
+          action.objectId,
+          action.tableId,
+          ...changedCellIds,
+          ...appendedLegends.map((entry) => entry.id),
+        ];
+        const nextTable: TableModel = {
+          ...table,
+          cells: table.cells.map((cell) => {
+            const content = contentByCellId.get(cell.id);
+            return content ? { ...cell, content } : cell;
+          }),
+          legend: appendedLegends.length > 0 ? [...table.legend, ...appendedLegends] : table.legend,
+        };
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+      case 'table.legend.create': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        if (!exactEquals(table.legend, action.expectedLegend)) {
+          return failure('TARGET_STALE', 'Table Legend changed after Legend creation was prepared');
+        }
+        const sameCode = table.legend.filter((entry) => entry.markerCode === action.markerCode);
+        if (sameCode.length > 0) {
+          return failure('LEGEND_MARKER_CODE_CONFLICT', `Legend code ${action.markerCode} already exists`);
+        }
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        const legendId = allocator.next();
+        createdIds.push(legendId);
+        const legend = {
+          id: legendId,
+          markerCode: action.markerCode,
+          text: freshPlainRichText(action.plainText, allocator, createdIds),
+        };
+        candidate = replaceTableObject(document, target, { ...table, legend: [...table.legend, legend] });
+        affectedIds = [action.objectId, action.tableId, legendId];
+        changed = true;
+        break;
+      }
+      case 'table.legend.update': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const current = table.legend.find((entry) => entry.id === action.legendEntryId);
+        if (!current) return failure('LEGEND_NOT_FOUND', action.legendEntryId);
+        if (!exactEquals(current, action.expectedLegend)) {
+          return failure('TARGET_STALE', `Legend ${action.legendEntryId} changed after the command was prepared`);
+        }
+        const nextMarkerCode = action.patch.markerCode ?? current.markerCode;
+        const duplicateCode = table.legend.find((entry) => entry.id !== current.id && entry.markerCode === nextMarkerCode);
+        if (duplicateCode) {
+          return failure('LEGEND_MARKER_CODE_CONFLICT', `Legend code ${nextMarkerCode} is already used by another entry`);
+        }
+        let nextText = current.text;
+        if (action.patch.plainText !== undefined) {
+          if (projectEditableRichText(current.text) === null) {
+            return failure('ACTION_INVALID', `Legend ${current.id} RichText is outside the safe simple-edit subset`);
+          }
+          const reconciled = reconcileEditableRichText(
+            current.text,
+            action.patch.plainText,
+            createCanonicalIdAllocator(document, dependencies.createId)
+          );
+          if (!reconciled) return failure('ACTION_INVALID', `Legend ${current.id} cannot be edited losslessly`);
+          nextText = reconciled.richText;
+          createdIds = [...reconciled.createdIds];
+        }
+        const nextLegend = { ...current, markerCode: nextMarkerCode, text: nextText };
+        changed = !exactEquals(current, nextLegend);
+        affectedIds = [action.objectId, action.tableId, current.id];
+        if (!changed) {
+          createdIds = [];
+          break;
+        }
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          legend: table.legend.map((entry) => entry.id === current.id ? nextLegend : entry),
+        });
+        break;
+      }
+      case 'table.legend.remove': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const current = table.legend.find((entry) => entry.id === action.legendEntryId);
+        if (!current) return failure('LEGEND_NOT_FOUND', action.legendEntryId);
+        if (!exactEquals(current, action.expectedLegend)) {
+          return failure('TARGET_STALE', `Legend ${action.legendEntryId} changed after the command was prepared`);
+        }
+        const usage = table.cells.filter((cell) =>
+          cell.content.type === 'marker' && cell.content.legendEntryId === current.id
+        ).length;
+        if (usage > 0) return failure('LEGEND_IN_USE', `Legend ${current.id} is used by ${usage} cell(s)`);
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          legend: table.legend.filter((entry) => entry.id !== current.id),
+        });
+        affectedIds = [action.objectId, action.tableId, current.id];
+        createdIds = [];
+        changed = true;
         break;
       }
       case 'table.cell.setContent': {

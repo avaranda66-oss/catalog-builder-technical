@@ -112,6 +112,19 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-info p { margin: 0; color: #68778b; font-size: 12px; line-height: 1.55; }
 .vnext-divider { height: 1px; background: #e1e6ed; margin: 20px 0; }
 .vnext-live-status { border-left: 3px solid #0072ce; background: #f2f7fc; color: #33445a !important; margin-top: 18px !important; padding: 8px 10px; }
+.vnext-table-paste-fallback { display: grid; width: min(100%, 760px); gap: 8px; margin: 0 auto 12px; border: 1px solid #b9cce3; border-radius: 8px; background: #fff; padding: 10px; }
+.vnext-table-paste-fallback label, .vnext-marker-legend-panel label, .vnext-marker-create label { display: grid; gap: 5px; color: #536176; font-size: 11px; font-weight: 700; }
+.vnext-table-paste-fallback textarea { width: 100%; min-height: 88px; resize: vertical; border: 1px solid #bdc9d6; border-radius: 6px; font: inherit; font-size: 12px; padding: 8px; }
+.vnext-marker-legend-panel { display: grid; gap: 10px; }
+.vnext-marker-legend-panel select, .vnext-marker-legend-panel input, .vnext-marker-legend-panel textarea { width: 100%; min-width: 0; border: 1px solid #bdc9d6; border-radius: 6px; background: #fff; color: #24364d; font: inherit; font-size: 12px; padding: 7px 8px; }
+.vnext-marker-legend-panel textarea { min-height: 62px; resize: vertical; }
+.vnext-marker-create { display: grid; gap: 9px; margin: 0; border: 1px solid #d8e0ea; border-radius: 7px; padding: 10px; }
+.vnext-marker-create legend { color: #33445a; font-size: 11px; font-weight: 700; padding: 0 5px; }
+.vnext-legend-list { display: grid; gap: 9px; }
+.vnext-legend-entry-editor { display: grid; gap: 8px; border: 1px solid #d8e0ea; border-radius: 7px; background: #f8fafc; padding: 9px; }
+.vnext-legend-entry-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vnext-legend-entry-heading > span { color: #728095; font-size: 10px; font-weight: 700; }
+.vnext-legend-entry-heading > button { min-height: 32px; }
 .vnext-diagnostics-probe { position: fixed; left: -100000px; top: 0; z-index: -1; width: max-content; opacity: 0; pointer-events: none; }
 @media (max-width: 1100px) { .vnext-workspace { grid-template-columns: 180px minmax(500px,1fr); } .vnext-info { display: none; } .vnext-page-stage { zoom: .58; } }
 

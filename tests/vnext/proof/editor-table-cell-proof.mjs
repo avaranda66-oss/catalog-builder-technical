@@ -30,8 +30,17 @@ const grid = (page) => page.locator('[data-table-grid-overlay]');
 
 async function selectTableAndEnter(page) {
   await page.locator('[data-editor-object-id="w4b-table-object"]').click();
-  await page.locator('[data-editor-action="edit-table"]').click();
-  await grid(page).waitFor({ timeout: 15000 });
+  const editTable = page.locator('[data-editor-action="edit-table"]');
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await editTable.click();
+    try {
+      await grid(page).waitFor({ timeout: 500 });
+      return;
+    } catch {
+      await settleReactFrame(page);
+    }
+  }
+  throw new Error('Table Grid did not become ready after measured-layout retries');
 }
 
 async function settleReactFrame(page) {

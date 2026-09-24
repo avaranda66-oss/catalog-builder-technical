@@ -30,6 +30,15 @@ export {
   TableCellUnmergeActionSchema,
   TableCellContentInputSchema,
   TableCellSetContentActionSchema,
+  TableBulkMarkerReferenceSchema,
+  TableBulkExpectedTopologySchema,
+  TableBulkCellContentInputSchema,
+  TableBulkContentTargetSchema,
+  TableLegendCreateInputSchema,
+  TableCellsSetContentsActionSchema,
+  TableLegendCreateActionSchema,
+  TableLegendUpdateActionSchema,
+  TableLegendRemoveActionSchema,
   CellPropertyPatchSchema,
   TableCellPropertyTargetSchema,
   TableCellSetPropertiesActionSchema,
@@ -50,6 +59,10 @@ export type {
   IdGenerator,
   ObjectInsertSpec,
   TableCellContentInput,
+  TableBulkCellContentInput,
+  TableBulkExpectedTopology,
+  TableBulkContentTarget,
+  TableLegendCreateInput,
   CellPropertyPatch,
   TableCellPropertyTarget,
 } from './contracts';
@@ -73,9 +86,12 @@ export type {
   GroupObjectInstantiationSeed,
 } from './document';
 export {
+  plainRichTextSemanticallyEquals,
   projectEditableRichText,
   reconcileEditableRichText,
   richTextEquals,
+  richTextSemanticFingerprint,
+  richTextSemanticallyEquals,
 } from './text-editing';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';

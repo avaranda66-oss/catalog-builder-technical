@@ -100,7 +100,7 @@ function complexMultiInline(): RichText {
 }
 
 describe('W2.G text.setContent', () => {
-  it('runtime-validates the strict action, Unicode/LF, empty text, and rejects controls/CR/unknown fields', () => {
+  it('runtime-validates the strict action, Unicode/TAB/LF, empty text, and rejects unsupported controls/CR/unknown fields', () => {
     const expectedText = plainRichText('x', 'A');
     expect(ApplicationActionSchema.safeParse({
       type: 'text.setContent',
@@ -119,13 +119,15 @@ describe('W2.G text.setContent', () => {
       objectId: 'text-object',
       expectedText,
       plainText: 'A\tB',
-    }).success).toBe(false);
-    expect(ApplicationActionSchema.safeParse({
-      type: 'text.setContent',
-      objectId: 'text-object',
-      expectedText,
-      plainText: 'A\r\nB',
-    }).success).toBe(false);
+    }).success).toBe(true);
+    for (const plainText of ['A\u0000B', 'A\u000bB', 'A\u000cB', 'A\rB', 'A\u001fB', 'A\u007fB']) {
+      expect(ApplicationActionSchema.safeParse({
+        type: 'text.setContent',
+        objectId: 'text-object',
+        expectedText,
+        plainText,
+      }).success).toBe(false);
+    }
     expect(ApplicationActionSchema.safeParse({
       type: 'text.setContent',
       objectId: 'text-object',
@@ -133,6 +135,26 @@ describe('W2.G text.setContent', () => {
       plainText: 'A',
       extra: true,
     }).success).toBe(false);
+  });
+
+  it('round-trips canonical TAB through W2.G simple editing and exact Undo/Redo', () => {
+    const initial = textDocument(plainRichText('tab-source', 'A\tB'));
+    const session = createDocumentSession(initial, { createId: ids('tab') });
+    const before = textObject(session.getSnapshot().document);
+    const result = session.execute({
+      type: 'text.setContent',
+      objectId: before.id,
+      expectedText: before.text,
+      plainText: 'A\tB!',
+    });
+    expect(result.ok).toBe(true);
+    expect(session.getSnapshot().localSequence).toBe(1);
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('A\tB!');
+    const after = session.getSnapshot().document;
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(initial);
+    expect(session.redo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(after);
   });
 
   it('projects only the explicit lossless textarea subset', () => {

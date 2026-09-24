@@ -34,6 +34,23 @@ import {
   unmergeEligibility,
 } from '../editor/table-merge-authoring';
 import {
+  prepareBulkClear,
+  prepareExistingMarkerAssignment,
+  prepareExternalTsvPaste,
+  prepareNewMarkerAssignment,
+  prepareTypedTablePaste,
+  TableBulkAuthoringError,
+  type PreparedTableBulkMutation,
+} from '../editor/table-bulk-authoring';
+import {
+  parseTypedTableClipboard,
+  prepareTableClipboard,
+  TABLE_CLIPBOARD_MIME,
+  TableClipboardError,
+} from '../editor/table-clipboard';
+import { legendUsageCount } from '../editor/table-marker-authoring';
+import { parseTsv, TableTsvError } from '../editor/table-tsv';
+import {
   changeTableCellDraftType,
   clearTableCellDraft,
   confirmTableCellDraftTypeChange,
@@ -45,6 +62,7 @@ import {
   type EditableCellType,
   type TableCellDraft,
 } from '../editor/table-cell-draft';
+import type { TableLegendEntry } from '../domain/editorial-model';
 import type { AuthoringRecoveryOverlay } from '../recovery';
 import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
 import {
@@ -160,6 +178,56 @@ export interface EditorWorkspacePersistenceProps {
   readonly assetBridge?: AssetPersistenceBridge;
 }
 
+function LegendEditorRow({
+  entry,
+  usageCount,
+  onUpdate,
+  onRemove,
+}: {
+  entry: TableLegendEntry;
+  usageCount: number;
+  onUpdate(markerCode: string, plainText?: string): void;
+  onRemove(): void;
+}) {
+  const editableText = projectEditableRichText(entry.text);
+  const [markerCode, setMarkerCode] = React.useState(entry.markerCode);
+  const [plainText, setPlainText] = React.useState(editableText ?? '');
+  React.useEffect(() => {
+    setMarkerCode(entry.markerCode);
+    setPlainText(projectEditableRichText(entry.text) ?? '');
+  }, [entry]);
+  return (
+    <div className="vnext-legend-entry-editor" data-legend-entry-id={entry.id}>
+      <div className="vnext-legend-entry-heading">
+        <strong>{entry.markerCode}</strong>
+        <span>{usageCount} uso(s)</span>
+      </div>
+      <label>
+        <span>Código do marcador</span>
+        <input data-legend-marker-code={entry.id} value={markerCode} onChange={(event) => setMarkerCode(event.target.value)} />
+      </label>
+      <label>
+        <span>Descrição</span>
+        <textarea
+          data-legend-text={entry.id}
+          value={plainText}
+          disabled={editableText === null}
+          onChange={(event) => setPlainText(event.target.value.replace(/\r\n?/g, '\n'))}
+        />
+      </label>
+      {editableText === null && <p>Texto avançado preservado; edição simples bloqueada.</p>}
+      <div className="vnext-cell-edit-actions">
+        <button type="button" data-editor-action="update-legend" onClick={() => onUpdate(markerCode, editableText === null ? undefined : plainText)}>
+          Atualizar legenda
+        </button>
+        <button type="button" data-editor-action="remove-legend" disabled={usageCount > 0} title={usageCount > 0 ? `Usado por ${usageCount} célula(s).` : undefined} onClick={onRemove}>
+          Excluir legenda
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const subscribeToNothing = (_listener: () => void): (() => void) => () => undefined;
 const idleConflictResolutionState = () => 'idle' as const;
 
@@ -191,8 +259,15 @@ export function EditorWorkspace({
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
+  const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
+  const [markerPanelOpen, setMarkerPanelOpen] = React.useState(false);
+  const [markerLegendChoice, setMarkerLegendChoice] = React.useState('');
+  const [newMarkerCode, setNewMarkerCode] = React.useState('');
+  const [newMarkerText, setNewMarkerText] = React.useState('');
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const [tableSelection, setTableSelection] = React.useState<TableSelection | null>(null);
+  const [tableRangeExtensionArmed, setTableRangeExtensionArmed] = React.useState(false);
   const tableSelectionRef = React.useRef<TableSelection | null>(null);
   const [cellDraft, setCellDraft] = React.useState<TableCellDraft | null>(null);
   const cellDraftRef = React.useRef<TableCellDraft | null>(null);
@@ -255,6 +330,9 @@ export function EditorWorkspace({
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
   const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
+  React.useEffect(() => {
+    setTableRangeExtensionArmed(false);
+  }, [document.id, editorState.activePageId, editorState.mode, selectedTableObject?.id, selectedTableObject?.table.id]);
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
@@ -326,6 +404,7 @@ export function EditorWorkspace({
     tableHistoryContextRef.current = null;
     cellDraftRef.current = null;
     setCellDraft(null);
+    setTableRangeExtensionArmed(false);
     setTableSelection(null);
     setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
   }, [session]);
@@ -340,6 +419,7 @@ export function EditorWorkspace({
       if (object?.type === 'table') tableHistoryContextRef.current = { table: object.table, selection: reconciled };
       return;
     }
+    setTableRangeExtensionArmed(false);
     const previous = tableHistoryContextRef.current;
     const stale = tableSelectionRef.current;
     const page = stale ? document.pages.find((entry) => entry.id === stale.identity.pageId) : undefined;
@@ -801,6 +881,7 @@ export function EditorWorkspace({
     const identity = tableSelectionIdentity(selectedPage.id, object.id, object.table.id);
     const first = { rowId: object.table.rows[0].id, columnId: object.table.columns[0].id };
     const next = tableCellSelection(identity, first);
+    setTableRangeExtensionArmed(false);
     tableSelectionRef.current = next;
     tableHistoryContextRef.current = { table: object.table, selection: next };
     setTableSelection(next);
@@ -925,6 +1006,7 @@ export function EditorWorkspace({
   };
 
   const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
+    setTableRangeExtensionArmed(false);
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
     setTableSelection(null);
@@ -1036,6 +1118,293 @@ export function EditorWorkspace({
       entry.id === selection.identity.objectId && entry.type === 'table' && entry.table.id === selection.identity.tableId
     );
     return object ? { object, selection } : undefined;
+  };
+
+  const toggleTableRangeExtension = () => {
+    const selection = tableSelectionRef.current;
+    if (editorState.mode !== 'table-grid' || !selection || (selection.kind !== 'cell' && selection.kind !== 'range')) {
+      setStatusMessage('Selecione uma célula para iniciar a extensão da seleção.');
+      return;
+    }
+    setTableRangeExtensionArmed((armed) => {
+      const next = !armed;
+      setStatusMessage(next
+        ? 'Estender seleção ativado. Toque na célula final da área.'
+        : 'Extensão de seleção cancelada.');
+      return next;
+    });
+  };
+
+  const tableBulkActionMessage = (code: string): string => {
+    if (code === 'TABLE_PASTE_GEOMETRY_INVALID') return 'A área de destino mudou ou não corresponde ao conteúdo copiado.';
+    if (code === 'TABLE_PASTE_MERGE_INTERSECTION') return 'Não foi possível aplicar: a seleção cruza células mescladas.';
+    if (code === 'TABLE_CELL_CONTENT_UNSUPPORTED') return 'A seleção contém imagem, que não participa da edição em lote desta etapa.';
+    if (code === 'LEGEND_NOT_FOUND') return 'A legenda escolhida não existe mais.';
+    if (code === 'LEGEND_IN_USE') return 'Não é possível excluir esta legenda enquanto houver células usando o marcador.';
+    if (code === 'LEGEND_MARKER_CODE_CONFLICT') return 'Já existe um marcador com este código e outro significado.';
+    if (code === 'TARGET_STALE') return 'A tabela mudou. A operação foi cancelada sem alterações parciais.';
+    if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
+    return 'Não foi possível concluir a operação em lote.';
+  };
+
+  const executePreparedTableBulk = (
+    prepared: PreparedTableBulkMutation,
+    successMessage: string
+  ): boolean => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return false;
+    const result = session.execute({
+      type: 'table.cells.setContents',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      geometry: prepared.geometry,
+      targets: prepared.targets,
+      ...(prepared.legendCreates ? { legendCreates: prepared.legendCreates } : {}),
+      ...(prepared.expectedLegend ? { expectedLegend: prepared.expectedLegend } : {}),
+    });
+    if (!result.ok) {
+      setStatusMessage(tableBulkActionMessage(result.error.code));
+      return false;
+    }
+    const nextObject = result.document.pages
+      .find((page) => page.id === live.selection.identity.pageId)?.objects
+      .find((candidate): candidate is TableObject =>
+        candidate.id === live.object.id && candidate.type === 'table'
+      );
+    if (nextObject) {
+      tableSelectionRef.current = prepared.selectionAfter;
+      tableHistoryContextRef.current = { table: nextObject.table, selection: prepared.selectionAfter };
+      setTableSelection(prepared.selectionAfter);
+    }
+    setStatusMessage(result.metadata.changed ? successMessage : 'Conteúdo sem alterações.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+    return true;
+  };
+
+  const prepareCurrentClipboard = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live) throw new TableClipboardError('COPY_SELECTION_INVALID', 'A seleção da tabela não está disponível');
+    return prepareTableClipboard(
+      live.object.table,
+      live.selection,
+      session.getSnapshot().document.assets
+    );
+  };
+
+  const handleTableCopyClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (editorState.mode !== 'table-grid') return;
+    try {
+      const clipboard = prepareCurrentClipboard();
+      event.clipboardData.setData('text/plain', clipboard.tsv);
+      event.clipboardData.setData(TABLE_CLIPBOARD_MIME, clipboard.typedText);
+      event.preventDefault();
+      setStatusMessage('Conteúdo da tabela copiado.');
+    } catch (error) {
+      event.preventDefault();
+      setStatusMessage(error instanceof TableClipboardError && error.code === 'COPY_MERGE_INTERSECTION'
+        ? 'Não foi possível copiar: a seleção cruza células mescladas.'
+        : 'Não foi possível copiar a seleção da tabela.');
+    }
+  };
+
+  const runPreparedPaste = (typedText: string, plainText: string): boolean => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return false;
+    try {
+      const prepared = typedText
+        ? prepareTypedTablePaste(live.object.table, live.selection, parseTypedTableClipboard(typedText))
+        : prepareExternalTsvPaste(live.object.table, live.selection, parseTsv(plainText));
+      const count = prepared.targets.length;
+      return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
+    } catch (error) {
+      if (error instanceof TableBulkAuthoringError) setStatusMessage(tableBulkActionMessage(error.code));
+      else if (error instanceof TableTsvError) setStatusMessage('O texto colado não forma uma tabela TSV válida.');
+      else if (error instanceof TableClipboardError) setStatusMessage('O conteúdo interno copiado não é válido para esta tabela.');
+      else setStatusMessage('Não foi possível interpretar o conteúdo colado.');
+      return false;
+    }
+  };
+
+  const handleTablePasteClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (editorState.mode !== 'table-grid') return;
+    event.preventDefault();
+    const types = Array.from(event.clipboardData.types);
+    const typedText = types.includes(TABLE_CLIPBOARD_MIME)
+      ? event.clipboardData.getData(TABLE_CLIPBOARD_MIME)
+      : '';
+    const plainText = event.clipboardData.getData('text/plain');
+    runPreparedPaste(typedText, plainText);
+  };
+
+  const runVisibleTableCopy = async () => {
+    if (editorState.mode !== 'table-grid') return;
+    try {
+      const clipboard = prepareCurrentClipboard();
+      if (!globalThis.navigator?.clipboard?.writeText) {
+        setStatusMessage('A cópia pelo botão não está disponível neste navegador. Use Ctrl/Cmd+C na grade.');
+        return;
+      }
+      await globalThis.navigator.clipboard.writeText(clipboard.tsv);
+      setStatusMessage('Conteúdo TSV copiado. Ctrl/Cmd+C na grade também preserva os tipos internos.');
+    } catch (error) {
+      setStatusMessage(error instanceof TableClipboardError && error.code === 'COPY_MERGE_INTERSECTION'
+        ? 'Não foi possível copiar: a seleção cruza células mescladas.'
+        : 'O navegador não permitiu copiar a seleção.');
+    }
+  };
+
+  const runTableBulkClear = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    try {
+      const prepared = prepareBulkClear(live.object.table, live.selection);
+      executePreparedTableBulk(prepared, `Conteúdo limpo em ${prepared.targets.length} célula(s).`);
+    } catch (error) {
+      setStatusMessage(error instanceof TableBulkAuthoringError
+        ? tableBulkActionMessage(error.code)
+        : 'Não foi possível limpar a seleção.');
+    }
+  };
+
+  const runExistingMarkerAssignment = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid' || !markerLegendChoice) return;
+    try {
+      const prepared = prepareExistingMarkerAssignment(
+        live.object.table,
+        live.selection,
+        markerLegendChoice
+      );
+      executePreparedTableBulk(prepared, `Marcador aplicado a ${prepared.targets.length} célula(s).`);
+    } catch (error) {
+      setStatusMessage(error instanceof TableBulkAuthoringError
+        ? tableBulkActionMessage(error.code)
+        : 'Não foi possível aplicar o marcador.');
+    }
+  };
+
+  const runNewMarkerAssignment = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    if (!newMarkerCode || !newMarkerText) {
+      setStatusMessage('Informe o código e a descrição do novo marcador.');
+      return;
+    }
+    try {
+      const prepared = prepareNewMarkerAssignment(
+        live.object.table,
+        live.selection,
+        newMarkerCode,
+        newMarkerText
+      );
+      const applied = executePreparedTableBulk(
+        prepared,
+        `Novo marcador criado e aplicado a ${prepared.targets.length} célula(s).`
+      );
+      if (applied) {
+        setNewMarkerCode('');
+        setNewMarkerText('');
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof TableBulkAuthoringError
+        ? tableBulkActionMessage(error.code)
+        : 'Não foi possível criar e aplicar o marcador.');
+    }
+  };
+
+  const runLegendCreateOnly = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    if (!newMarkerCode || !newMarkerText) {
+      setStatusMessage('Informe o código e a descrição da legenda.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.legend.create',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      markerCode: newMarkerCode,
+      plainText: newMarkerText,
+      expectedLegend: live.object.table.legend,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableBulkActionMessage(result.error.code));
+      return;
+    }
+    const createdLegend = result.metadata.createdIds
+      .map((id) => result.document.pages
+        .find((page) => page.id === live.selection.identity.pageId)?.objects
+        .find((candidate): candidate is TableObject => candidate.id === live.object.id && candidate.type === 'table')
+        ?.table.legend.find((entry) => entry.id === id))
+      .find(Boolean);
+    if (createdLegend) setMarkerLegendChoice(createdLegend.id);
+    setNewMarkerCode('');
+    setNewMarkerText('');
+    setStatusMessage('Legenda criada.');
+  };
+
+  const runLegendUpdate = (entry: TableLegendEntry, markerCode: string, plainText?: string) => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const result = session.execute({
+      type: 'table.legend.update',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      legendEntryId: entry.id,
+      expectedLegend: entry,
+      patch: {
+        markerCode,
+        ...(plainText === undefined ? {} : { plainText }),
+      },
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Legenda atualizada.' : 'Legenda sem alterações.')
+      : tableBulkActionMessage(result.error.code));
+  };
+
+  const runLegendRemove = (entry: TableLegendEntry) => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const result = session.execute({
+      type: 'table.legend.remove',
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      legendEntryId: entry.id,
+      expectedLegend: entry,
+    });
+    if (!result.ok) {
+      setStatusMessage(tableBulkActionMessage(result.error.code));
+      return;
+    }
+    if (markerLegendChoice === entry.id) setMarkerLegendChoice('');
+    setStatusMessage('Legenda excluída.');
+  };
+
+  const runMarkerDetach = () => {
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const targetIds = selectedTableAnchorIds(live.object.table, live.selection);
+    const selected = targetIds.map((id) => live.object.table.cells.find((cell) => cell.id === id)!);
+    if (selected.length === 0 || selected.some((cell) => cell.content.type !== 'marker')) {
+      setStatusMessage('Selecione somente células com marcador para remover o marcador.');
+      return;
+    }
+    runTableBulkClear();
+  };
+
+  const applyNativePasteFallback = () => {
+    if (!tablePasteFallbackText) {
+      setStatusMessage('Cole o conteúdo no campo antes de aplicar.');
+      return;
+    }
+    if (runPreparedPaste('', tablePasteFallbackText)) {
+      setTablePasteFallbackText('');
+      setTablePasteFallbackOpen(false);
+    }
   };
 
   const runTableMerge = () => {
@@ -1523,6 +1892,12 @@ export function EditorWorkspace({
       && tableSelectionRef.current
       && target.closest('[data-table-grid-overlay]')
     ) {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        runTableBulkClear();
+        return;
+      }
       if (event.key === 'Enter' || event.key === 'F2') {
         event.preventDefault();
         event.stopPropagation();
@@ -1871,7 +2246,40 @@ export function EditorWorkspace({
                   onClick={runTableUnmerge}
                 >Desmesclar células</button>
               </div>
+              <div className="vnext-tool-group" aria-label="Conteúdo em lote">
+                <button
+                  type="button"
+                  data-editor-action="extend-table-selection"
+                  aria-pressed={tableRangeExtensionArmed}
+                  className={tableRangeExtensionArmed ? 'is-active' : undefined}
+                  disabled={editorState.mode !== 'table-grid' || !tableSelection || (tableSelection.kind !== 'cell' && tableSelection.kind !== 'range')}
+                  onClick={toggleTableRangeExtension}
+                >Estender seleção</button>
+                <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
+                <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
+                <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
+                <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Marcador</button>
+                <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
+              </div>
               <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
+            </div>
+          )}
+
+          {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && (
+            <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
+              <label>
+                <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
+                <textarea
+                  data-table-paste-textarea=""
+                  value={tablePasteFallbackText}
+                  onChange={(event) => setTablePasteFallbackText(event.target.value)}
+                  placeholder={'Ex.: Produto\\tFaixa\\nTA-25N\\t-25 °C a 140 °C'}
+                />
+              </label>
+              <div className="vnext-cell-edit-actions">
+                <button type="button" data-editor-action="apply-native-table-paste" onClick={applyNativePasteFallback}>Aplicar conteúdo colado</button>
+                <button type="button" data-editor-action="cancel-native-table-paste" onClick={() => { setTablePasteFallbackOpen(false); setTablePasteFallbackText(''); }}>Cancelar</button>
+              </div>
             </div>
           )}
 
@@ -2025,8 +2433,19 @@ export function EditorWorkspace({
                                 onActivateCell={(point) => {
                                   if (editorState.mode === 'table-grid') startCellEdit(point);
                                 }}
+                                onCopyClipboard={handleTableCopyClipboard}
+                                onPasteClipboard={handleTablePasteClipboard}
+                                rangeExtensionArmed={tableRangeExtensionArmed}
+                                onRangeExtensionComplete={() => {
+                                  setTableRangeExtensionArmed(false);
+                                  setStatusMessage('Seleção estendida.');
+                                  queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+                                }}
                                 editingCellId={cellDraft?.identity.cellId}
-                                onStaleGesture={() => setStatusMessage('Gesto descartado porque o documento mudou.')}
+                                onStaleGesture={() => {
+                                  setTableRangeExtensionArmed(false);
+                                  setStatusMessage('Gesto descartado porque o documento mudou.');
+                                }}
                               />
                             )}
                           {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
@@ -2221,6 +2640,62 @@ export function EditorWorkspace({
                           </button>
                         </div>
                       </div>
+                    )}
+
+                    {markerPanelOpen && selectedTableObject && (
+                      <>
+                        <div className="vnext-divider" />
+                        <section className="vnext-marker-legend-panel" data-marker-legend-panel="">
+                          <div className="vnext-legend-entry-heading">
+                            <h3>Marcadores e legenda</h3>
+                            <button type="button" data-editor-action="close-marker-panel" onClick={() => setMarkerPanelOpen(false)}>Fechar</button>
+                          </div>
+                          <p>O marcador referencia uma entrada da legenda desta tabela.</p>
+                          <label>
+                            <span>Marcador existente</span>
+                            <select data-marker-picker="" value={markerLegendChoice} onChange={(event) => setMarkerLegendChoice(event.target.value)}>
+                              <option value="">Selecione um marcador</option>
+                              {selectedTableObject.table.legend.map((entry) => {
+                                const text = projectEditableRichText(entry.text) ?? 'Descrição avançada';
+                                const usage = legendUsageCount(selectedTableObject.table, entry.id);
+                                return <option key={entry.id} value={entry.id}>{entry.markerCode} — {text} ({usage} uso(s))</option>;
+                              })}
+                            </select>
+                          </label>
+                          <div className="vnext-cell-edit-actions">
+                            <button type="button" data-editor-action="apply-existing-marker" disabled={!markerLegendChoice || editorState.mode !== 'table-grid'} onClick={runExistingMarkerAssignment}>Aplicar marcador</button>
+                            <button type="button" data-editor-action="detach-marker" disabled={editorState.mode !== 'table-grid' || selectedAnchorCells.length === 0 || selectedAnchorCells.some((cell) => cell.content.type !== 'marker')} onClick={runMarkerDetach}>Remover marcador da célula</button>
+                          </div>
+                          <fieldset className="vnext-marker-create">
+                            <legend>Novo marcador</legend>
+                            <label>
+                              <span>Código</span>
+                              <input data-new-marker-code="" value={newMarkerCode} onChange={(event) => setNewMarkerCode(event.target.value)} placeholder="Ex.: *, †, A, 1" />
+                            </label>
+                            <label>
+                              <span>Descrição</span>
+                              <textarea data-new-marker-text="" value={newMarkerText} onChange={(event) => setNewMarkerText(event.target.value.replace(/\r\n?/g, '\n'))} placeholder="Descrição técnica da legenda" />
+                            </label>
+                            <div className="vnext-cell-edit-actions">
+                              <button type="button" data-editor-action="create-and-assign-marker" disabled={editorState.mode !== 'table-grid'} onClick={runNewMarkerAssignment}>Criar e aplicar</button>
+                              <button type="button" data-editor-action="create-legend" disabled={editorState.mode !== 'table-grid'} onClick={runLegendCreateOnly}>Criar legenda</button>
+                            </div>
+                          </fieldset>
+                          <div className="vnext-legend-list" data-legend-list="">
+                            {selectedTableObject.table.legend.length === 0 ? (
+                              <p>Nenhuma legenda criada.</p>
+                            ) : selectedTableObject.table.legend.map((entry) => (
+                              <LegendEditorRow
+                                key={entry.id}
+                                entry={entry}
+                                usageCount={legendUsageCount(selectedTableObject.table, entry.id)}
+                                onUpdate={(markerCode, plainText) => runLegendUpdate(entry, markerCode, plainText)}
+                                onRemove={() => runLegendRemove(entry)}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      </>
                     )}
 
                     <div className="vnext-divider" />
