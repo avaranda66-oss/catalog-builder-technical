@@ -2,7 +2,8 @@ import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type Asset
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { add, minimumUForProjectedQ } from '../domain/physical';
-import { deleteAxis, insertAxis, mergeCells, orderedAnchors, unmergeCell, validateTable } from '../table';
+import { deleteAxis, insertAxis, mergeCells, orderedAnchors, reorderAxis, unmergeCell, validateTable } from '../table';
+import { resolveColumns } from '../table/table-layout';
 import { cellIndex, getCellKey } from '../table/table-model';
 import {
   ApplicationActionSchema,
@@ -18,6 +19,8 @@ import {
   type CellPropertyPatch,
   type TableBulkCellContentInput,
   type TableBulkExpectedTopology,
+  type TableColumnWidthU,
+  type TableRowHeightPolicyU,
 } from './contracts';
 import {
   ApplicationDocumentError,
@@ -282,6 +285,51 @@ function tableCellTarget(
 
 function exactEquals(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function projectRowHeightPolicyU(
+  policy: TableModel['rows'][number]['heightPolicy']
+): TableRowHeightPolicyU {
+  if (policy.mode === 'AUTO') return { mode: 'AUTO' };
+  if (policy.mode === 'MIN_MM') return { mode: 'MIN_MM', minU: mmToU(policy.minMm) };
+  return { mode: 'FIXED_MM', heightU: mmToU(policy.heightMm) };
+}
+
+function materializeRowHeightPolicyU(
+  policy: TableRowHeightPolicyU
+): TableModel['rows'][number]['heightPolicy'] {
+  if (policy.mode === 'AUTO') return { mode: 'AUTO' };
+  if (policy.mode === 'MIN_MM') {
+    return { mode: 'MIN_MM', minMm: materializeU(policy.minU, 'row minU', true) };
+  }
+  return { mode: 'FIXED_MM', heightMm: materializeU(policy.heightU, 'row heightU', true) };
+}
+
+function projectColumnWidthU(width: TableModel['columns'][number]['width']): TableColumnWidthU {
+  return width.mode === 'fixed'
+    ? { mode: 'fixed', widthU: mmToU(width.mm) }
+    : { mode: 'flex', weight: width.weight };
+}
+
+function materializeColumnWidthU(width: TableColumnWidthU): TableModel['columns'][number]['width'] {
+  return width.mode === 'fixed'
+    ? { mode: 'fixed', mm: materializeU(width.widthU, 'column widthU', true) }
+    : { mode: 'flex', weight: width.weight };
+}
+
+function projectColumnPropertiesU(column: TableModel['columns'][number]) {
+  return {
+    width: projectColumnWidthU(column.width),
+    minU: mmToU(column.minMm),
+    ...(column.maxMm === undefined ? {} : { maxU: mmToU(column.maxMm) }),
+  };
+}
+
+function columnConstraintFailure(code: string, details: string): ApplicationActionFailure {
+  if (code === 'TABLE_WIDTH_INFEASIBLE') return failure('TABLE_WIDTH_INFEASIBLE', details);
+  if (code === 'COLUMN_LIMIT_INVALID') return failure('COLUMN_LIMIT_INVALID', details);
+  if (code === 'COLUMN_WEIGHT_INVALID') return failure('COLUMN_WEIGHT_INVALID', details);
+  return failure('ACTION_INVALID', details || code);
 }
 
 function contiguousIds(current: readonly string[], expected: readonly string[]): boolean {
@@ -1377,6 +1425,148 @@ export function executeApplicationAction(
         break;
       }
 
+      case 'table.rows.setProperties': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const selected = action.targets.map((snapshot) => ({
+          snapshot,
+          row: table.rows.find((row) => row.id === snapshot.rowId),
+        }));
+        const missing = selected.find(({ row }) => !row);
+        if (missing) return failure('TABLE_AXIS_NOT_FOUND', `Row ${missing.snapshot.rowId} no longer exists`);
+        const stale = selected.find(({ snapshot, row }) => !exactEquals(snapshot.expected, {
+          role: row!.role,
+          heightPolicy: projectRowHeightPolicyU(row!.heightPolicy),
+        }));
+        if (stale) {
+          return failure('TARGET_STALE', `Row ${stale.snapshot.rowId} properties changed after the command was prepared`);
+        }
+
+        const nextById = new Map(action.targets.map((snapshot) => {
+          const current = table.rows.find((row) => row.id === snapshot.rowId)!;
+          const next = {
+            ...current,
+            role: snapshot.next.role ?? current.role,
+            heightPolicy: snapshot.next.heightPolicy === undefined
+              ? current.heightPolicy
+              : materializeRowHeightPolicyU(snapshot.next.heightPolicy),
+          };
+          return [snapshot.rowId, next] as const;
+        }));
+        const nextRows = table.rows.map((row) => nextById.get(row.id) ?? row);
+        const changedRowIds = action.targets
+          .filter(({ rowId }) => !exactEquals(table.rows.find((row) => row.id === rowId), nextById.get(rowId)))
+          .map(({ rowId }) => rowId);
+        changed = changedRowIds.length > 0;
+        createdIds = [];
+        if (!changed) {
+          affectedIds = [];
+          break;
+        }
+
+        const nextTable: TableModel = { ...table, rows: nextRows };
+        const diagnostics = validateTable(nextTable, document.assets);
+        const mergeBoundary = diagnostics.find((diagnostic) => diagnostic.code === 'MERGE_HEADER_BOUNDARY');
+        if (mergeBoundary) return failure('MERGE_HEADER_BOUNDARY', mergeBoundary.details);
+        if (diagnostics.length > 0) {
+          return failure('DOCUMENT_INVALID', `${diagnostics[0].code}: ${diagnostics[0].details}`);
+        }
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, ...changedRowIds];
+        break;
+      }
+      case 'table.columns.setProperties': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentFrameWidthU = frameToCanonicalU(target.object.frame).widthU;
+        if (currentFrameWidthU !== action.expectedFrameWidthU) {
+          return failure('TARGET_STALE', 'Table frame width changed after the column command was prepared');
+        }
+        const currentOrder = table.columns.map((column) => column.id);
+        if (!exactEquals(currentOrder, action.expectedColumnOrder)) {
+          return failure('TARGET_STALE', 'Column order changed after the column command was prepared');
+        }
+
+        const selected = action.targets.map((snapshot) => ({
+          snapshot,
+          column: table.columns.find((column) => column.id === snapshot.columnId),
+        }));
+        const missing = selected.find(({ column }) => !column);
+        if (missing) return failure('TABLE_AXIS_NOT_FOUND', `Column ${missing.snapshot.columnId} no longer exists`);
+        const stale = selected.find(({ snapshot, column }) =>
+          !exactEquals(snapshot.expected, projectColumnPropertiesU(column!))
+        );
+        if (stale) {
+          return failure('TARGET_STALE', `Column ${stale.snapshot.columnId} dimensions changed after the command was prepared`);
+        }
+
+        const nextById = new Map(action.targets.map((snapshot) => {
+          const current = table.columns.find((column) => column.id === snapshot.columnId)!;
+          const expected = projectColumnPropertiesU(current);
+          const nextWidth = snapshot.next.width ?? expected.width;
+          const nextMinU = snapshot.next.minU ?? expected.minU;
+          const hasMaxPatch = Object.prototype.hasOwnProperty.call(snapshot.next, 'maxU');
+          const nextMaxU = hasMaxPatch ? snapshot.next.maxU : expected.maxU;
+          const { maxMm: _maxMm, ...withoutMax } = current;
+          const next = {
+            ...withoutMax,
+            width: materializeColumnWidthU(nextWidth),
+            minMm: materializeU(nextMinU, 'column minU', true),
+            ...(nextMaxU == null ? {} : { maxMm: materializeU(nextMaxU, 'column maxU', true) }),
+          };
+          return [snapshot.columnId, next] as const;
+        }));
+        const nextColumns = table.columns.map((column) => nextById.get(column.id) ?? column);
+        const solved = resolveColumns(nextColumns, target.object.frame.widthMm);
+        if (!solved.ok) return columnConstraintFailure(solved.code, solved.details);
+
+        const changedColumnIds = action.targets
+          .filter(({ columnId }) => !exactEquals(table.columns.find((column) => column.id === columnId), nextById.get(columnId)))
+          .map(({ columnId }) => columnId);
+        changed = changedColumnIds.length > 0;
+        createdIds = [];
+        if (!changed) {
+          affectedIds = [];
+          break;
+        }
+
+        const nextTable: TableModel = { ...table, columns: nextColumns };
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, ...changedColumnIds];
+        break;
+      }
+      case 'table.axis.reorder': {
+        const target = tableTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentOrder = (action.axis === 'row' ? table.rows : table.columns).map((item) => item.id);
+        if (!exactEquals(currentOrder, action.expectedOrder)) {
+          return failure('TARGET_STALE', `${action.axis} order changed after the reorder command was prepared`);
+        }
+        changed = !exactEquals(action.expectedOrder, action.nextOrder);
+        createdIds = [];
+        if (!changed) {
+          affectedIds = [];
+          break;
+        }
+
+        let nextTable: TableModel;
+        try {
+          nextTable = reorderAxis(table, action.axis, [...action.nextOrder]);
+        } catch (error) {
+          if (error instanceof VNextError && error.code === 'AXIS_ORDER_INVALID') {
+            return failure('AXIS_ORDER_INVALID', error.message);
+          }
+          return tableOperationFailure(error, action.expectedOrder[0]);
+        }
+        const nextOrder = (action.axis === 'row' ? nextTable.rows : nextTable.columns).map((item) => item.id);
+        const changedAxisIds = action.expectedOrder.filter((id, index) => nextOrder[index] !== id);
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, ...changedAxisIds];
+        break;
+      }
       case 'table.cells.merge': {
         const target = tableTarget(document, action);
         if (!target.ok) return target;

@@ -44,6 +44,14 @@ export {
   CellPropertyPatchSchema,
   TableCellPropertyTargetSchema,
   TableCellSetPropertiesActionSchema,
+  TableRowRoleSchema,
+  TableRowHeightPolicyUSchema,
+  TableRowPropertyTargetSchema,
+  TableRowsSetPropertiesActionSchema,
+  TableColumnWidthUSchema,
+  TableColumnPropertyTargetSchema,
+  TableColumnsSetPropertiesActionSchema,
+  TableAxisReorderActionSchema,
   TextObjectInsertSpecSchema,
   UngroupActionSchema,
 } from './contracts';
@@ -68,6 +76,10 @@ export type {
   TableFitHeightTypography,
   CellPropertyPatch,
   TableCellPropertyTarget,
+  TableRowHeightPolicyU,
+  TableRowPropertyTarget,
+  TableColumnWidthU,
+  TableColumnPropertyTarget,
 } from './contracts';
 export {
   ApplicationDocumentError,

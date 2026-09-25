@@ -1,5 +1,5 @@
 import React from 'react';
-import { qCss, type TableModel } from '../domain';
+import { pxToQ, qCss, type TableModel } from '../domain';
 import type { TablePlan } from '../rendering';
 import {
   canonicalTablePoint,
@@ -24,6 +24,15 @@ interface DragState {
   moved: boolean;
 }
 
+interface DimensionDragState {
+  pointerId: number;
+  sourceSequence: number;
+  axis: 'row' | 'column';
+  index: number;
+  startClient: number;
+  deltaQ: number;
+}
+
 export interface TableGridOverlayProps {
   table: TableModel;
   plan: TablePlan;
@@ -38,6 +47,9 @@ export interface TableGridOverlayProps {
   rangeExtensionArmed?: boolean;
   onRangeExtensionComplete?(): void;
   editingCellId?: string;
+  dimensionEditingEnabled?: boolean;
+  onRowBoundaryCommit?(rowIndex: number, deltaQ: number): void;
+  onColumnBoundaryCommit?(leftColumnIndex: number, deltaQ: number): void;
 }
 
 function cumulative(values: readonly number[]): number[] {
@@ -60,9 +72,14 @@ export function TableGridOverlay({
   rangeExtensionArmed = false,
   onRangeExtensionComplete,
   editingCellId,
+  dimensionEditingEnabled = true,
+  onRowBoundaryCommit,
+  onColumnBoundaryCommit,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<DragState | null>(null);
+  const dimensionDragRef = React.useRef<DimensionDragState | null>(null);
+  const [dimensionPreview, setDimensionPreview] = React.useState<DimensionDragState | null>(null);
   const rows = plan.rowQ ?? [];
   const columns = plan.trackQ;
   const x = cumulative(columns);
@@ -76,10 +93,17 @@ export function TableGridOverlay({
 
   React.useEffect(() => {
     const drag = dragRef.current;
-    if (!drag || drag.sourceSequence === localSequence) return;
-    dragRef.current = null;
-    onSelectionChange(drag.before);
-    onStaleGesture();
+    if (drag && drag.sourceSequence !== localSequence) {
+      dragRef.current = null;
+      onSelectionChange(drag.before);
+      onStaleGesture();
+    }
+    const dimensionDrag = dimensionDragRef.current;
+    if (dimensionDrag && dimensionDrag.sourceSequence !== localSequence) {
+      dimensionDragRef.current = null;
+      setDimensionPreview(null);
+      onStaleGesture();
+    }
   }, [localSequence, onSelectionChange, onStaleGesture]);
 
   if (rows.length !== table.rows.length || columns.length !== table.columns.length || !normalized) return null;
@@ -177,6 +201,63 @@ export function TableGridOverlay({
     onSelectionChange(drag.before);
   };
 
+  const beginDimensionDrag = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    axis: 'row' | 'column',
+    index: number
+  ) => {
+    if (!dimensionEditingEnabled || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const state: DimensionDragState = {
+      pointerId: event.pointerId,
+      sourceSequence: localSequence,
+      axis,
+      index,
+      startClient: axis === 'column' ? event.clientX : event.clientY,
+      deltaQ: 0,
+    };
+    dimensionDragRef.current = state;
+    setDimensionPreview(state);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const moveDimensionDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const current = dimensionDragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (current.sourceSequence !== localSequence) {
+      dimensionDragRef.current = null;
+      setDimensionPreview(null);
+      onStaleGesture();
+      return;
+    }
+    const client = current.axis === 'column' ? event.clientX : event.clientY;
+    const deltaQ = pxToQ(client - current.startClient);
+    const next = { ...current, deltaQ };
+    dimensionDragRef.current = next;
+    setDimensionPreview(next);
+  };
+
+  const finishDimensionDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const current = dimensionDragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    dimensionDragRef.current = null;
+    setDimensionPreview(null);
+    if (current.sourceSequence !== localSequence) {
+      onStaleGesture();
+      return;
+    }
+    if (current.deltaQ === 0) return;
+    if (current.axis === 'column') onColumnBoundaryCommit?.(current.index, current.deltaQ);
+    else onRowBoundaryCommit?.(current.index, current.deltaQ);
+  };
+
+  const cancelDimensionDrag = () => {
+    if (!dimensionDragRef.current) return;
+    dimensionDragRef.current = null;
+    setDimensionPreview(null);
+  };
+
   const highlightStyle: React.CSSProperties = {
     left: qCss(x[normalized.columnStart]),
     top: qCss(gridOffsetYQ + y[normalized.rowStart]),
@@ -199,6 +280,25 @@ export function TableGridOverlay({
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="vnext-table-selection-highlight" data-table-selection-highlight="" style={highlightStyle} aria-hidden="true" />
+      {dimensionPreview && (
+        <div
+          className={'vnext-table-dimension-preview is-' + dimensionPreview.axis}
+          data-table-dimension-preview={dimensionPreview.axis}
+          data-table-dimension-delta-q={dimensionPreview.deltaQ}
+          style={dimensionPreview.axis === 'column'
+            ? {
+                left: qCss(x[dimensionPreview.index + 1] + dimensionPreview.deltaQ),
+                top: qCss(gridOffsetYQ),
+                height: qCss(y[y.length - 1]),
+              }
+            : {
+                left: 0,
+                top: qCss(gridOffsetYQ + y[dimensionPreview.index + 1] + dimensionPreview.deltaQ),
+                width: qCss(x[x.length - 1]),
+              }}
+          aria-hidden="true"
+        />
+      )}
       <button
         type="button"
         className="vnext-table-whole-selector"
@@ -218,8 +318,12 @@ export function TableGridOverlay({
           aria-label={`Selecionar coluna ${columnIndex + 1}`}
           style={{ left: qCss(x[columnIndex]), top: qCss(gridOffsetYQ), width: qCss(columns[columnIndex]) }}
           onClick={(event) => {
-            const anchor = event.shiftKey && selection.kind === 'columns' ? selection.anchorColumnId : column.id;
+            const extending = rangeExtensionArmed && selection.kind === 'columns';
+            const anchor = (event.shiftKey || extending) && selection.kind === 'columns'
+              ? selection.anchorColumnId
+              : column.id;
             onSelectionChange(tableColumnSelection(identity, anchor, column.id));
+            if (extending) onRangeExtensionComplete?.();
           }}
         >
           {columnIndex + 1}
@@ -234,12 +338,54 @@ export function TableGridOverlay({
           aria-label={`Selecionar linha ${rowIndex + 1}`}
           style={{ top: qCss(gridOffsetYQ + y[rowIndex]), height: qCss(rows[rowIndex]) }}
           onClick={(event) => {
-            const anchor = event.shiftKey && selection.kind === 'rows' ? selection.anchorRowId : row.id;
+            const extending = rangeExtensionArmed && selection.kind === 'rows';
+            const anchor = (event.shiftKey || extending) && selection.kind === 'rows'
+              ? selection.anchorRowId
+              : row.id;
             onSelectionChange(tableRowSelection(identity, anchor, row.id));
+            if (extending) onRangeExtensionComplete?.();
           }}
         >
           {rowIndex + 1}
         </button>
+      ))}
+      {dimensionEditingEnabled && table.columns.slice(0, -1).map((column, columnIndex) => (
+        <button
+          key={'column-boundary:' + column.id}
+          type="button"
+          className="vnext-table-column-resize-handle"
+          data-table-column-boundary={columnIndex}
+          aria-label={`Ajustar largura entre coluna ${columnIndex + 1} e ${columnIndex + 2}`}
+          style={{
+            left: qCss(x[columnIndex + 1]),
+            top: qCss(gridOffsetYQ),
+            height: qCss(y[y.length - 1]),
+          }}
+          onPointerDown={(event) => beginDimensionDrag(event, 'column', columnIndex)}
+          onPointerMove={moveDimensionDrag}
+          onPointerUp={finishDimensionDrag}
+          onPointerCancel={cancelDimensionDrag}
+          onLostPointerCapture={cancelDimensionDrag}
+        />
+      ))}
+      {dimensionEditingEnabled && table.rows.slice(0, -1).map((row, rowIndex) => (
+        <button
+          key={'row-boundary:' + row.id}
+          type="button"
+          className="vnext-table-row-resize-handle"
+          data-table-row-boundary={rowIndex}
+          aria-label={`Ajustar altura entre linha ${rowIndex + 1} e ${rowIndex + 2}`}
+          style={{
+            left: 0,
+            top: qCss(gridOffsetYQ + y[rowIndex + 1]),
+            width: qCss(x[x.length - 1]),
+          }}
+          onPointerDown={(event) => beginDimensionDrag(event, 'row', rowIndex)}
+          onPointerMove={moveDimensionDrag}
+          onPointerUp={finishDimensionDrag}
+          onPointerCancel={cancelDimensionDrag}
+          onLostPointerCapture={cancelDimensionDrag}
+        />
       ))}
       {table.rows.flatMap((row, rowIndex) => table.columns.map((column, columnIndex) => {
         const point = { rowId: row.id, columnId: column.id };
