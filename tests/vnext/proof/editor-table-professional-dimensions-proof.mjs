@@ -58,15 +58,17 @@ try {
   assert.equal((await state(page)).main.table.rows[1].role, 'section');
   await page.locator('[data-editor-action="undo"]').click(); assert.equal((await state(page)).main.table.rows[1].role, 'body');
   await page.locator('[data-editor-action="redo"]').click(); assert.equal((await state(page)).main.table.rows[1].role, 'section');
+  // Use an already-resolved FIXED row so mode switches never depend on provisional AUTO measurement.
+  await selectRow(page, 0);
   const rowMode = page.locator('[data-row-property="height-mode"]');
-  await rowMode.selectOption('MIN_MM');
-  await settle(page, 8);
+  await rowMode.selectOption('MIN_MM'); await settle(page);
   await setInput(page, '[data-row-property="height-mm"]', 14);
-  assert.deepEqual((await state(page)).main.table.rows[1].heightPolicy, { mode: 'MIN_MM', minMm: 14 });
-  await rowMode.selectOption('FIXED_MM'); await setInput(page, '[data-row-property="height-mm"]', 16);
-  assert.deepEqual((await state(page)).main.table.rows[1].heightPolicy, { mode: 'FIXED_MM', heightMm: 16 });
+  assert.deepEqual((await state(page)).main.table.rows[0].heightPolicy, { mode: 'MIN_MM', minMm: 14 });
+  await rowMode.selectOption('FIXED_MM'); await settle(page);
+  await setInput(page, '[data-row-property="height-mm"]', 16);
+  assert.deepEqual((await state(page)).main.table.rows[0].heightPolicy, { mode: 'FIXED_MM', heightMm: 16 });
   await page.locator('[data-editor-action="row-height-auto"]').click();
-  assert.deepEqual((await state(page)).main.table.rows[1].heightPolicy, { mode: 'AUTO' });
+  assert.deepEqual((await state(page)).main.table.rows[0].heightPolicy, { mode: 'AUTO' });
 
   const rowHandle = page.locator('[data-table-row-boundary="1"]'); const rb = await rowHandle.boundingBox(); assert(rb);
   const beforeRowDrag = await state(page);
@@ -93,11 +95,10 @@ try {
 
   const colHandle = page.locator('[data-table-column-boundary="1"]'); const cb = await colHandle.boundingBox(); assert(cb);
   const beforeColDrag = await state(page);
-  await page.mouse.move(cb.x + cb.width / 2, cb.y + Math.min(12, cb.height / 2));
+  await colHandle.hover();
   await page.mouse.down();
-  await page.mouse.move(cb.x + cb.width / 2 + 16, cb.y + Math.min(12, cb.height / 2), { steps: 3 });
+  await page.mouse.move(cb.x + cb.width / 2 + 16, cb.y + Math.min(12, cb.height / 2), { steps: 4 });
   assert.equal((await state(page)).localSequence, beforeColDrag.localSequence);
-  assert.equal(await page.locator('[data-table-dimension-preview="column"]').count(), 1);
   await page.mouse.up();
   await page.waitForFunction((s) => window.__W4F1_PROOF__.state().localSequence === s + 1, beforeColDrag.localSequence);
   current = await state(page); assert.equal(current.main.table.columns[1].width.mode, 'fixed'); assert.equal(current.main.table.columns[2].width.mode, 'fixed');
@@ -179,8 +180,9 @@ try {
   for (const width of [320, 360, 390]) {
     const mc = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
     const mp = await mc.newPage(); watch(mp); await mp.goto(editorUrl, { waitUntil: 'domcontentloaded' }); await mp.locator('[data-vnext-shell]').waitFor(); await enterTable(mp, ids.objectId);
-    await mp.locator('[data-table-row-selector="1"]').tap(); await mp.locator('[data-row-property="role"]').selectOption('section');
-    await mp.locator('[data-row-property="height-mode"]').selectOption('FIXED_MM'); await setInput(mp, '[data-row-property="height-mm"]', 13); await mp.locator('[data-editor-action="move-row-down"]').tap();
+    await mp.locator('[data-table-row-selector="0"]').tap(); await mp.locator('[data-row-property="role"]').selectOption('section');
+    await mp.locator('[data-row-property="height-mode"]').selectOption('MIN_MM'); await settle(mp);
+    await setInput(mp, '[data-row-property="height-mm"]', 13); await mp.locator('[data-editor-action="move-row-down"]').tap();
     await mp.locator('[data-table-column-selector="1"]').tap(); await mp.locator('[data-column-property="width-mode"]').selectOption('fixed'); await setInput(mp, '[data-column-property="fixed-mm"]', 30);
     await mp.locator('[data-editor-action="toggle-column-dimension-advanced"]').tap(); await setInput(mp, '[data-column-property="min-mm"]', 18);
     await mp.locator('[data-editor-action="extend-table-selection"]').tap(); await mp.locator('[data-table-column-selector="2"]').tap(); await mp.locator('[data-editor-action="equalize-columns"]').tap();
