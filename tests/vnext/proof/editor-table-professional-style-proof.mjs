@@ -28,7 +28,9 @@ const errors = { consoleErrors: [], pageErrors: [], failedResources: [], request
 
 function watch(page) {
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.consoleErrors.push(message.text());
+    if (message.type() === 'error') {
+      errors.consoleErrors.push({ text: message.text(), location: message.location() });
+    }
   });
   page.on('pageerror', (error) => errors.pageErrors.push(error.message));
   page.on('response', (response) => {
@@ -87,17 +89,29 @@ async function scopeText(page) {
 }
 
 async function setStyleInput(page, property, value) {
+  const before = (await state(page)).localSequence;
   const input = page.locator(`[data-style-property="${property}"]`);
   await input.fill(String(value));
   await input.blur();
-  await settle(page, 4);
+  await page.waitForFunction(
+    (sequence) => window.__W4F2_PROOF__.state().localSequence > sequence,
+    before,
+    { timeout: 10000 }
+  );
+  await settle(page, 2);
 }
 
 async function setCustomColor(page, property, value) {
+  const before = (await state(page)).localSequence;
   const input = page.locator(`[data-style-property="${property}"]`);
   await input.fill(value);
   await input.blur();
-  await settle(page, 4);
+  await page.waitForFunction(
+    (sequence) => window.__W4F2_PROOF__.state().localSequence > sequence,
+    before,
+    { timeout: 10000 }
+  );
+  await settle(page, 2);
 }
 
 async function ensureAdvanced(page) {
