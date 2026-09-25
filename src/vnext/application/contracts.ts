@@ -476,6 +476,97 @@ export const TableCellSetPropertiesActionSchema = z.object({
   }
 });
 
+export const TableRowRoleSchema = z.enum(['header', 'body', 'section']);
+export const TableRowHeightPolicyUSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('AUTO') }).strict(),
+  z.object({ mode: z.literal('MIN_MM'), minU: safeInteger.positive() }).strict(),
+  z.object({ mode: z.literal('FIXED_MM'), heightU: safeInteger.positive() }).strict(),
+]);
+export const TableRowPropertyTargetSchema = z.object({
+  rowId: applicationId,
+  expected: z.object({
+    role: TableRowRoleSchema,
+    heightPolicy: TableRowHeightPolicyUSchema,
+  }).strict(),
+  next: z.object({
+    role: TableRowRoleSchema.optional(),
+    heightPolicy: TableRowHeightPolicyUSchema.optional(),
+  }).strict().refine((value) => value.role !== undefined || value.heightPolicy !== undefined, 'Row next state must change at least one property'),
+}).strict();
+export const TableRowsSetPropertiesActionSchema = z.object({
+  type: z.literal('table.rows.setProperties'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  targets: z.array(TableRowPropertyTargetSchema).min(1),
+}).strict().superRefine((action, context) => {
+  const ids = action.targets.map((target) => target.rowId);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Row target IDs must be unique' });
+  }
+});
+
+export const TableColumnWidthUSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('fixed'), widthU: safeInteger.positive() }).strict(),
+  z.object({ mode: z.literal('flex'), weight: safeInteger.positive() }).strict(),
+]);
+export const TableColumnPropertyTargetSchema = z.object({
+  columnId: applicationId,
+  expected: z.object({
+    width: TableColumnWidthUSchema,
+    minU: safeInteger.positive(),
+    maxU: safeInteger.positive().optional(),
+  }).strict(),
+  next: z.object({
+    width: TableColumnWidthUSchema.optional(),
+    minU: safeInteger.positive().optional(),
+    maxU: safeInteger.positive().nullable().optional(),
+  }).strict().refine(
+    (value) => value.width !== undefined || value.minU !== undefined || value.maxU !== undefined,
+    'Column next state must change at least one property'
+  ),
+}).strict();
+export const TableColumnsSetPropertiesActionSchema = z.object({
+  type: z.literal('table.columns.setProperties'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedFrameWidthU: safeInteger.positive(),
+  expectedColumnOrder: z.array(applicationId).min(1),
+  targets: z.array(TableColumnPropertyTargetSchema).min(1),
+}).strict().superRefine((action, context) => {
+  const targetIds = action.targets.map((target) => target.columnId);
+  if (new Set(targetIds).size !== targetIds.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Column target IDs must be unique' });
+  }
+  if (new Set(action.expectedColumnOrder).size !== action.expectedColumnOrder.length) {
+    context.addIssue({ code: 'custom', path: ['expectedColumnOrder'], message: 'Expected column order must contain unique IDs' });
+  }
+});
+
+export const TableAxisReorderActionSchema = z.object({
+  type: z.literal('table.axis.reorder'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  axis: z.enum(['row', 'column']),
+  expectedOrder: z.array(applicationId).min(1),
+  nextOrder: z.array(applicationId).min(1),
+  expectedTable: TableModelSchema,
+}).strict().superRefine((action, context) => {
+  const expected = action.expectedOrder;
+  const next = action.nextOrder;
+  if (new Set(expected).size !== expected.length) {
+    context.addIssue({ code: 'custom', path: ['expectedOrder'], message: 'Expected axis order must contain unique IDs' });
+  }
+  if (new Set(next).size !== next.length) {
+    context.addIssue({ code: 'custom', path: ['nextOrder'], message: 'Next axis order must contain unique IDs' });
+  }
+  if (expected.length !== next.length || expected.some((id) => !next.includes(id))) {
+    context.addIssue({ code: 'custom', path: ['nextOrder'], message: 'Next axis order must contain the same IDs as expected order' });
+  }
+});
+
 export const ApplicationActionSchema = z.union([
   RenameDocumentActionSchema,
   AddPageActionSchema,
@@ -505,6 +596,9 @@ export const ApplicationActionSchema = z.union([
   TableLegendUpdateActionSchema,
   TableLegendRemoveActionSchema,
   TableCellSetPropertiesActionSchema,
+  TableRowsSetPropertiesActionSchema,
+  TableColumnsSetPropertiesActionSchema,
+  TableAxisReorderActionSchema,
 ]);
 
 export type ApplicationAction = z.infer<typeof ApplicationActionSchema>;
@@ -519,6 +613,10 @@ export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
+export type TableRowHeightPolicyU = z.infer<typeof TableRowHeightPolicyUSchema>;
+export type TableRowPropertyTarget = z.infer<typeof TableRowPropertyTargetSchema>;
+export type TableColumnWidthU = z.infer<typeof TableColumnWidthUSchema>;
+export type TableColumnPropertyTarget = z.infer<typeof TableColumnPropertyTargetSchema>;
 
 export type ApplicationErrorCode =
   | 'ACTION_INVALID'
@@ -535,6 +633,10 @@ export type ApplicationErrorCode =
   | 'TABLE_IDENTITY_MISMATCH'
   | 'TABLE_AXIS_NOT_FOUND'
   | 'TABLE_LAST_AXIS'
+  | 'TABLE_WIDTH_INFEASIBLE'
+  | 'COLUMN_LIMIT_INVALID'
+  | 'COLUMN_WEIGHT_INVALID'
+  | 'AXIS_ORDER_INVALID'
   | 'MERGE_INTERSECTION'
   | 'MERGE_HEADER_BOUNDARY'
   | 'MERGE_OVERLAP'

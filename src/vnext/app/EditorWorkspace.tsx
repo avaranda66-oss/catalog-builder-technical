@@ -50,6 +50,17 @@ import {
 } from '../editor/table-clipboard';
 import { legendUsageCount } from '../editor/table-marker-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
+import {
+  prepareAxisReorder,
+  prepareColumnBoundaryDrag,
+  prepareColumnsSetProperties,
+  prepareEqualizeColumns,
+  prepareRowBoundaryDrag,
+  prepareRowsSetProperties,
+  projectColumnDimensions,
+  projectRowDimensions,
+  TableDimensionAuthoringError,
+} from '../editor/table-dimension-authoring';
 import { parseTsv, TableTsvError } from '../editor/table-tsv';
 import {
   changeTableCellDraftType,
@@ -264,6 +275,8 @@ export function EditorWorkspace({
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
   const [markerPanelOpen, setMarkerPanelOpen] = React.useState(false);
+  const [columnDimensionsAdvancedOpen, setColumnDimensionsAdvancedOpen] = React.useState(false);
+  const [pendingRowHeightMode, setPendingRowHeightMode] = React.useState<{ selectionKey: string; mode: 'MIN_MM' | 'FIXED_MM' } | null>(null);
   const [markerLegendChoice, setMarkerLegendChoice] = React.useState('');
   const [newMarkerCode, setNewMarkerCode] = React.useState('');
   const [newMarkerText, setNewMarkerText] = React.useState('');
@@ -1144,14 +1157,14 @@ export function EditorWorkspace({
 
   const toggleTableRangeExtension = () => {
     const selection = tableSelectionRef.current;
-    if (editorState.mode !== 'table-grid' || !selection || (selection.kind !== 'cell' && selection.kind !== 'range')) {
-      setStatusMessage('Selecione uma célula para iniciar a extensão da seleção.');
+    if (editorState.mode !== 'table-grid' || !selection || selection.kind === 'table') {
+      setStatusMessage('Selecione uma célula, linha ou coluna para iniciar a extensão da seleção.');
       return;
     }
     setTableRangeExtensionArmed((armed) => {
       const next = !armed;
       setStatusMessage(next
-        ? 'Estender seleção ativado. Toque na célula final da área.'
+        ? 'Estender seleção ativado. Toque na célula, linha ou coluna final.'
         : 'Extensão de seleção cancelada.');
       return next;
     });
@@ -2090,12 +2103,234 @@ export function EditorWorkspace({
   const selectedColumnAxisIds = selectedTableObject && tableSelection
     ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'column')
     : [];
+  const selectedRowDimensionKey = selectedRowAxisIds.join('\u0000');
   const rowAxisReason = selectedRowAxisIds.length === 1
     ? undefined
     : 'Selecione uma única linha pelo seletor lateral.';
   const columnAxisReason = selectedColumnAxisIds.length === 1
     ? undefined
     : 'Selecione uma única coluna pelo seletor superior.';
+  const rowDimensionProjection = (() => {
+    if (!selectedTableObject || !tableSelection || tableSelection.kind !== 'rows') return undefined;
+    try { return projectRowDimensions(selectedTableObject.table, tableSelection); } catch { return undefined; }
+  })();
+  const columnDimensionProjection = (() => {
+    if (!selectedTableObject || !tableSelection || tableSelection.kind !== 'columns') return undefined;
+    try { return projectColumnDimensions(selectedTableObject.table, tableSelection); } catch { return undefined; }
+  })();
+  const effectiveRowHeightMode = pendingRowHeightMode?.selectionKey === selectedRowDimensionKey
+    ? pendingRowHeightMode.mode
+    : rowDimensionProjection?.heightMode;
+  const tableDimensionMessage = (code: string): string => {
+    if (code === 'TARGET_STALE') return 'A dimensão mudou enquanto a ação era preparada. Nada foi alterado.';
+    if (code === 'TABLE_WIDTH_INFEASIBLE' || code === 'COLUMN_LIMIT_INVALID') return 'As larguras e limites atuais não cabem na largura da tabela.';
+    if (code === 'COLUMN_WEIGHT_INVALID') return 'O peso flexível deve ser um inteiro positivo.';
+    if (code === 'MERGE_INTERSECTION') return 'Esta movimentação cruza uma célula mesclada. Desmescle explicitamente antes de reordenar.';
+    if (code === 'MERGE_HEADER_BOUNDARY') return 'Esta alteração faria uma célula mesclada cruzar cabeçalho e corpo.';
+    if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
+    if (code === 'AXIS_ORDER_INVALID') return 'A nova ordem de linhas ou colunas é inválida.';
+    return 'Não foi possível aplicar a dimensão da tabela com segurança.';
+  };
+  const executeTableDimensionAction = (action: ApplicationAction, successMessage: string): boolean => {
+    if (cellDraftRef.current || editorState.mode !== 'table-grid') {
+      setStatusMessage('Conclua ou cancele a edição da célula para alterar a estrutura da tabela.');
+      return false;
+    }
+    const live = currentSelectedTableForStructure();
+    if (!live) return false;
+    const result = session.execute(action);
+    if (!result.ok) {
+      setStatusMessage(tableDimensionMessage(result.error.code));
+      return false;
+    }
+    const reconciled = reconcileTableSelection(result.document, live.selection);
+    if (reconciled) {
+      tableSelectionRef.current = reconciled;
+      const page = result.document.pages.find((entry) => entry.id === reconciled.identity.pageId);
+      const object = page?.objects.find((entry): entry is TableObject =>
+        entry.id === reconciled.identity.objectId && entry.type === 'table'
+      );
+      if (object) tableHistoryContextRef.current = { table: object.table, selection: reconciled };
+      setTableSelection(reconciled);
+    }
+    setStatusMessage(result.metadata.changed ? successMessage : 'Sem alterações.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+    return result.metadata.changed;
+  };
+  const dimensionIdentity = () => {
+    const live = currentSelectedTableForStructure();
+    return live ? {
+      pageId: live.selection.identity.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+    } : undefined;
+  };
+  const runRowProperties = (next: Parameters<typeof prepareRowsSetProperties>[3], message: string) => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    try {
+      executeTableDimensionAction(prepareRowsSetProperties(identity, live.object.table, live.selection, next), message);
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível preparar a alteração da linha.');
+    }
+  };
+  const measuredRowHeightU = (rowId: string): number | undefined => {
+    if (!selectedTableObject) return undefined;
+    const plan = plans.get(selectedTableObject.table.id);
+    const index = selectedTableObject.table.rows.findIndex((row) => row.id === rowId);
+    return index >= 0 ? plan?.heightsU?.[index] : undefined;
+  };
+  const runRowHeightMode = (mode: 'AUTO' | 'MIN_MM' | 'FIXED_MM') => {
+    if (mode === 'AUTO') {
+      setPendingRowHeightMode(null);
+      runRowProperties({ heightPolicy: { mode: 'AUTO' } }, 'Altura automática aplicada.');
+      return;
+    }
+    const firstRowId = selectedRowAxisIds[0];
+    const projected = typeof rowDimensionProjection?.valueU === 'number' ? rowDimensionProjection.valueU : undefined;
+    const valueU = projected ?? (firstRowId ? measuredRowHeightU(firstRowId) : undefined);
+    if (!valueU) {
+      setPendingRowHeightMode({ selectionKey: selectedRowDimensionKey, mode });
+      setStatusMessage('Informe a altura numericamente para aplicar este modo.');
+      return;
+    }
+    setPendingRowHeightMode(null);
+    runRowProperties(
+      { heightPolicy: mode === 'MIN_MM' ? { mode, minU: valueU } : { mode, heightU: valueU } },
+      mode === 'MIN_MM' ? 'Altura mínima aplicada.' : 'Altura exata aplicada.'
+    );
+  };
+  const runRowHeightValue = (raw: string) => {
+    const value = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0 || !rowDimensionProjection || effectiveRowHeightMode === 'mixed') {
+      setStatusMessage('Informe uma altura positiva em milímetros.');
+      return;
+    }
+    const valueU = mmToU(value);
+    if (effectiveRowHeightMode === 'MIN_MM') {
+      setPendingRowHeightMode(null);
+      runRowProperties({ heightPolicy: { mode: 'MIN_MM', minU: valueU } }, 'Altura mínima atualizada.');
+    }
+    if (effectiveRowHeightMode === 'FIXED_MM') {
+      setPendingRowHeightMode(null);
+      runRowProperties({ heightPolicy: { mode: 'FIXED_MM', heightU: valueU } }, 'Altura exata atualizada.');
+    }
+  };
+  const runColumnProperties = (next: Parameters<typeof prepareColumnsSetProperties>[4], message: string) => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    try {
+      executeTableDimensionAction(
+        prepareColumnsSetProperties(identity, live.object.table, frameToU(live.object.frame).widthU, live.selection, next),
+        message
+      );
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível preparar a alteração da coluna.');
+    }
+  };
+  const runColumnMode = (mode: 'fixed' | 'flex') => {
+    const live = currentSelectedTableForStructure();
+    if (!live || live.selection.kind !== 'columns') return;
+    if (mode === 'flex') {
+      const weight = typeof columnDimensionProjection?.flexWeight === 'number' ? columnDimensionProjection.flexWeight : 1;
+      runColumnProperties({ width: { mode: 'flex', weight } }, 'Largura flexível aplicada.');
+      return;
+    }
+    const first = selectedColumnAxisIds[0];
+    const index = live.object.table.columns.findIndex((column) => column.id === first);
+    const widthU = typeof columnDimensionProjection?.fixedWidthU === 'number'
+      ? columnDimensionProjection.fixedWidthU
+      : plans.get(live.object.table.id)?.widthsU[index];
+    if (!widthU) {
+      setStatusMessage('Aguarde a medição da tabela para converter a coluna em largura fixa.');
+      return;
+    }
+    runColumnProperties({ width: { mode: 'fixed', widthU } }, 'Largura fixa aplicada.');
+  };
+  const runColumnNumber = (field: 'fixed' | 'weight' | 'min' | 'max', raw: string) => {
+    const normalized = raw.trim().replace(',', '.');
+    if (field === 'max' && normalized === '') {
+      runColumnProperties({ maxU: null }, 'Limite máximo removido.');
+      return;
+    }
+    const value = Number(normalized);
+    if (!Number.isFinite(value) || value <= 0) {
+      setStatusMessage('Informe um valor positivo.');
+      return;
+    }
+    if (field === 'weight') {
+      if (!Number.isSafeInteger(value)) { setStatusMessage('O peso flexível deve ser um inteiro positivo.'); return; }
+      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Peso flexível atualizado.');
+      return;
+    }
+    const valueU = mmToU(value);
+    if (field === 'fixed') runColumnProperties({ width: { mode: 'fixed', widthU: valueU } }, 'Largura fixa atualizada.');
+    if (field === 'min') runColumnProperties({ minU: valueU }, 'Largura mínima atualizada.');
+    if (field === 'max') runColumnProperties({ maxU: valueU }, 'Largura máxima atualizada.');
+  };
+  const runEqualizeColumns = () => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    try {
+      const action = prepareEqualizeColumns(
+        identity, live.object.table, frameToU(live.object.frame).widthU, live.object.frame.widthMm, live.selection
+      );
+      executeTableDimensionAction(action, 'Larguras das colunas igualadas.');
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível igualar as colunas.');
+    }
+  };
+  const runAxisReorder = (axis: 'row' | 'column', direction: -1 | 1) => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    try {
+      executeTableDimensionAction(
+        prepareAxisReorder(identity, live.object.table, live.selection, axis, direction),
+        axis === 'row' ? 'Linha movida.' : 'Coluna movida.'
+      );
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível reordenar o eixo.');
+    }
+  };
+  const runColumnBoundaryDrag = (leftColumnIndex: number, deltaU: number) => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    try {
+      executeTableDimensionAction(
+        prepareColumnBoundaryDrag(
+          identity, live.object.table, frameToU(live.object.frame).widthU, live.object.frame.widthMm,
+          leftColumnIndex, deltaU
+        ),
+        'Larguras adjacentes atualizadas.'
+      );
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível ajustar o limite da coluna.');
+    }
+  };
+  const runRowBoundaryDrag = (rowIndex: number, deltaU: number) => {
+    const live = currentSelectedTableForStructure();
+    const identity = dimensionIdentity();
+    if (!live || !identity) return;
+    const row = live.object.table.rows[rowIndex];
+    const resolvedHeightU = plans.get(live.object.table.id)?.heightsU?.[rowIndex];
+    if (!row || !resolvedHeightU) {
+      setStatusMessage('A altura medida da linha ainda não está disponível.');
+      return;
+    }
+    try {
+      executeTableDimensionAction(
+        prepareRowBoundaryDrag(identity, live.object.table, row.id, resolvedHeightU, deltaU),
+        'Altura exata da linha atualizada.'
+      );
+    } catch (error) {
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível ajustar a altura da linha.');
+    }
+  };
   const currentMergeEligibility = selectedTableObject && tableSelection
     ? mergeEligibility(selectedTableObject.table, tableSelection)
     : { enabled: false, reason: 'Selecione duas ou mais células adjacentes.' };
@@ -2365,7 +2600,7 @@ export function EditorWorkspace({
                   data-editor-action="extend-table-selection"
                   aria-pressed={tableRangeExtensionArmed}
                   className={tableRangeExtensionArmed ? 'is-active' : undefined}
-                  disabled={editorState.mode !== 'table-grid' || !tableSelection || (tableSelection.kind !== 'cell' && tableSelection.kind !== 'range')}
+                  disabled={editorState.mode !== 'table-grid' || !tableSelection || tableSelection.kind === 'table'}
                   onClick={toggleTableRangeExtension}
                 >Estender seleção</button>
                 <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
@@ -2555,6 +2790,11 @@ export function EditorWorkspace({
                                   queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
                                 }}
                                 editingCellId={cellDraft?.identity.cellId}
+                                dimensionEditingEnabled={editorState.mode === 'table-grid'}
+                                pageWidthU={pageWidthU}
+                                pageHeightU={pageHeightU}
+                                onRowBoundaryCommit={runRowBoundaryDrag}
+                                onColumnBoundaryCommit={runColumnBoundaryDrag}
                                 onStaleGesture={() => {
                                   setTableRangeExtensionArmed(false);
                                   setStatusMessage('Gesto descartado porque o documento mudou.');
@@ -2643,6 +2883,193 @@ export function EditorWorkspace({
                         A tabela é mais alta que uma página A4. Ajustar altura iguala o quadro ao conteúdo, mas não resolve a publicação em uma única página.
                       </p>
                     )}
+                  </section>
+                </>
+              )}
+              {selectedObject.type === 'table' && tableSelection && rowDimensionProjection && (
+                <>
+                  <div className="vnext-divider" />
+                  <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
+                    <h3>{rowDimensionProjection.rowIds.length === 1 ? 'Linha' : `${rowDimensionProjection.rowIds.length} linhas`}</h3>
+                    {editorState.mode === 'cell-edit' && (
+                      <p id={`table-row-dimension-disabled-${selectedObject.id}`}>
+                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
+                      </p>
+                    )}
+                    <label>
+                      <span>Tipo da linha</span>
+                      <select
+                        data-row-property="role"
+                        value={rowDimensionProjection.role}
+                        disabled={editorState.mode !== 'table-grid'}
+                        aria-describedby={editorState.mode !== 'table-grid' ? `table-row-dimension-disabled-${selectedObject.id}` : undefined}
+                        onChange={(event) => runRowProperties(
+                          { role: event.target.value as 'header' | 'body' | 'section' },
+                          'Tipo da linha atualizado.'
+                        )}
+                      >
+                        {rowDimensionProjection.role === 'mixed' && <option value="mixed" disabled>Misto</option>}
+                        <option value="header">Cabeçalho</option>
+                        <option value="body">Corpo</option>
+                        <option value="section">Seção</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Altura</span>
+                      <select
+                        data-row-property="height-mode"
+                        value={effectiveRowHeightMode ?? rowDimensionProjection.heightMode}
+                        disabled={editorState.mode !== 'table-grid'}
+                        onChange={(event) => runRowHeightMode(event.target.value as 'AUTO' | 'MIN_MM' | 'FIXED_MM')}
+                      >
+                        {rowDimensionProjection.heightMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
+                        <option value="AUTO">Automática</option>
+                        <option value="MIN_MM">Mínima</option>
+                        <option value="FIXED_MM">Exata</option>
+                      </select>
+                    </label>
+                    {(effectiveRowHeightMode === 'MIN_MM' || effectiveRowHeightMode === 'FIXED_MM') && (
+                      <label>
+                        <span>Valor</span>
+                        <div className="vnext-dimension-value">
+                          <input
+                            key={rowDimensionProjection.rowIds.join(':') + ':' + String(rowDimensionProjection.valueU)}
+                            data-row-property="height-mm"
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={typeof rowDimensionProjection.valueU === 'number' ? String(rowDimensionProjection.valueU / 10_000) : ''}
+                            placeholder={rowDimensionProjection.valueU === 'mixed' ? 'Misto' : undefined}
+                            disabled={editorState.mode !== 'table-grid'}
+                            onBlur={(event) => runRowHeightValue(event.target.value)}
+                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                          />
+                          <span>mm</span>
+                        </div>
+                      </label>
+                    )}
+                    <div className="vnext-dimension-actions">
+                      <button type="button" data-editor-action="row-height-auto"
+                        disabled={editorState.mode !== 'table-grid'} onClick={() => runRowHeightMode('AUTO')}>
+                        Voltar para automática
+                      </button>
+                      <button type="button" data-editor-action="move-row-up"
+                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows[0]?.id === selectedRowAxisIds[0]}
+                        onClick={() => runAxisReorder('row', -1)}>Mover para cima</button>
+                      <button type="button" data-editor-action="move-row-down"
+                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows.at(-1)?.id === selectedRowAxisIds[0]}
+                        onClick={() => runAxisReorder('row', 1)}>Mover para baixo</button>
+                    </div>
+                  </section>
+                </>
+              )}
+              {selectedObject.type === 'table' && tableSelection && columnDimensionProjection && (
+                <>
+                  <div className="vnext-divider" />
+                  <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
+                    <h3>{columnDimensionProjection.columnIds.length === 1 ? 'Coluna' : `${columnDimensionProjection.columnIds.length} colunas`}</h3>
+                    {editorState.mode === 'cell-edit' && (
+                      <p id={`table-column-dimension-disabled-${selectedObject.id}`}>
+                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
+                      </p>
+                    )}
+                    <label>
+                      <span>Largura</span>
+                      <select
+                        data-column-property="width-mode"
+                        value={columnDimensionProjection.widthMode}
+                        disabled={editorState.mode !== 'table-grid'}
+                        onChange={(event) => runColumnMode(event.target.value as 'fixed' | 'flex')}
+                      >
+                        {columnDimensionProjection.widthMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
+                        <option value="flex">Flexível</option>
+                        <option value="fixed">Fixa</option>
+                      </select>
+                    </label>
+                    {columnDimensionProjection.widthMode === 'fixed' && (
+                      <label>
+                        <span>Largura fixa</span>
+                        <div className="vnext-dimension-value">
+                          <input
+                            key={columnDimensionProjection.columnIds.join(':') + ':' + String(columnDimensionProjection.fixedWidthU)}
+                            data-column-property="fixed-mm"
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={typeof columnDimensionProjection.fixedWidthU === 'number' ? String(columnDimensionProjection.fixedWidthU / 10_000) : ''}
+                            placeholder={columnDimensionProjection.fixedWidthU === 'mixed' ? 'Misto' : undefined}
+                            disabled={editorState.mode !== 'table-grid'}
+                            onBlur={(event) => runColumnNumber('fixed', event.target.value)}
+                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                          />
+                          <span>mm</span>
+                        </div>
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      className="vnext-inspector-action"
+                      data-editor-action="toggle-column-dimension-advanced"
+                      aria-expanded={columnDimensionsAdvancedOpen}
+                      onClick={() => setColumnDimensionsAdvancedOpen((open) => !open)}
+                    >
+                      {columnDimensionsAdvancedOpen ? 'Ocultar avançado' : 'Avançado'}
+                    </button>
+                    {columnDimensionsAdvancedOpen && (
+                      <div className="vnext-dimension-advanced" data-column-dimension-advanced="">
+                        {columnDimensionProjection.widthMode === 'flex' && (
+                          <label>
+                            <span>Peso flexível</span>
+                            <input
+                              key={columnDimensionProjection.columnIds.join(':') + ':weight:' + String(columnDimensionProjection.flexWeight)}
+                              data-column-property="weight"
+                              type="number"
+                              min="1"
+                              step="1"
+                              defaultValue={typeof columnDimensionProjection.flexWeight === 'number' ? columnDimensionProjection.flexWeight : ''}
+                              placeholder={columnDimensionProjection.flexWeight === 'mixed' ? 'Misto' : undefined}
+                              disabled={editorState.mode !== 'table-grid'}
+                              onBlur={(event) => runColumnNumber('weight', event.target.value)}
+                            />
+                          </label>
+                        )}
+                        <label>
+                          <span>Mínimo (mm)</span>
+                          <input
+                            key={columnDimensionProjection.columnIds.join(':') + ':min:' + String(columnDimensionProjection.minU)}
+                            data-column-property="min-mm"
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={typeof columnDimensionProjection.minU === 'number' ? String(columnDimensionProjection.minU / 10_000) : ''}
+                            placeholder={columnDimensionProjection.minU === 'mixed' ? 'Misto' : undefined}
+                            disabled={editorState.mode !== 'table-grid'}
+                            onBlur={(event) => runColumnNumber('min', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Máximo (mm)</span>
+                          <input
+                            key={columnDimensionProjection.columnIds.join(':') + ':max:' + String(columnDimensionProjection.maxU)}
+                            data-column-property="max-mm"
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={typeof columnDimensionProjection.maxU === 'number' ? String(columnDimensionProjection.maxU / 10_000) : ''}
+                            placeholder={columnDimensionProjection.maxU === 'mixed' ? 'Misto' : 'Sem limite'}
+                            disabled={editorState.mode !== 'table-grid'}
+                            onBlur={(event) => runColumnNumber('max', event.target.value)}
+                          />
+                        </label>
+                      </div>
+                    )}
+                    <div className="vnext-dimension-actions">
+                      <button type="button" data-editor-action="equalize-columns"
+                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length < 2}
+                        onClick={runEqualizeColumns}>Igualar larguras</button>
+                      <button type="button" data-editor-action="move-column-left"
+                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns[0]?.id === selectedColumnAxisIds[0]}
+                        onClick={() => runAxisReorder('column', -1)}>Mover para esquerda</button>
+                      <button type="button" data-editor-action="move-column-right"
+                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns.at(-1)?.id === selectedColumnAxisIds[0]}
+                        onClick={() => runAxisReorder('column', 1)}>Mover para direita</button>
+                    </div>
                   </section>
                 </>
               )}

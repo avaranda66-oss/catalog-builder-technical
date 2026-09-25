@@ -67,6 +67,14 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-table-grid-overlay:focus-visible { box-shadow: 0 0 0 2px #0072ce; }
 .vnext-table-selection-highlight { position: absolute; z-index: 1; border: 2px solid #0072ce; background: rgb(0 114 206 / .14); pointer-events: none; }
 .vnext-table-cell-target { position: absolute; z-index: 2; margin: 0; border: 0; background: transparent; cursor: cell; padding: 0; touch-action: pan-x pan-y; }
+.vnext-table-column-resize-handle, .vnext-table-row-resize-handle { position: absolute; z-index: 7; margin: 0; border: 0; background: transparent; padding: 0; touch-action: none; }
+.vnext-table-column-resize-handle { width: 10px; cursor: col-resize; transform: translateX(-5px); }
+.vnext-table-row-resize-handle { height: 10px; cursor: row-resize; transform: translateY(-5px); }
+.vnext-table-column-resize-handle:hover::after, .vnext-table-column-resize-handle:focus-visible::after { content: ''; position: absolute; inset: 0 4px; background: #0072ce; }
+.vnext-table-row-resize-handle:hover::after, .vnext-table-row-resize-handle:focus-visible::after { content: ''; position: absolute; inset: 4px 0; background: #0072ce; }
+.vnext-table-dimension-preview { position: absolute; z-index: 8; pointer-events: none; background: #0072ce; }
+.vnext-table-dimension-preview.is-column { width: 2px; transform: translateX(-1px); }
+.vnext-table-dimension-preview.is-row { height: 2px; transform: translateY(-1px); }
 .vnext-table-row-selector, .vnext-table-column-selector, .vnext-table-whole-selector { position: absolute; z-index: 5; display: grid; min-width: 26px; min-height: 26px; place-items: center; border: 1px solid #8fa8c2; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; padding: 0; touch-action: manipulation; }
 .vnext-table-row-selector { right: 100%; transform: translateX(-3px); }
 .vnext-table-column-selector { transform: translateY(calc(-100% - 3px)); }
@@ -114,6 +122,17 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-fit-height-section h3, .vnext-fit-height-section p { margin:0; }
 .vnext-fit-height-section p { color:#68778b; font-size:11px; line-height:1.45; overflow-wrap:anywhere; }
 .vnext-fit-height-advisory { border-left:3px solid #c6921d; background:#fff9e9; padding:7px 8px; }
+.vnext-table-dimension-inspector { display:grid; gap:10px; }
+.vnext-table-dimension-inspector h3, .vnext-table-dimension-inspector p { margin:0; }
+.vnext-table-dimension-inspector > label, .vnext-dimension-advanced label { display:grid; gap:5px; color:#536176; font-size:11px; font-weight:700; }
+.vnext-table-dimension-inspector select, .vnext-table-dimension-inspector input { width:100%; min-width:0; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#24364d; font:inherit; font-size:12px; padding:7px 8px; }
+.vnext-dimension-value { display:flex; align-items:center; overflow:hidden; border:1px solid #bdc9d6; border-radius:6px; background:#fff; }
+.vnext-dimension-value input { border:0; border-radius:0; outline:0; }
+.vnext-dimension-value > span { color:#728095; font-size:10px; padding-right:8px; }
+.vnext-dimension-advanced { display:grid; gap:9px; border-left:2px solid #d8e0ea; padding-left:10px; }
+.vnext-dimension-actions { display:grid; grid-template-columns:1fr; gap:6px; }
+.vnext-dimension-actions button { min-height:34px; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#31445b; cursor:pointer; font:inherit; font-size:10px; font-weight:700; padding:0 8px; }
+.vnext-dimension-actions button:disabled { cursor:not-allowed; opacity:.5; }
 .vnext-info { border-left: 1px solid #d7dee8; padding: 22px 20px; }
 .vnext-info-kicker { color: #0067b9; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .vnext-info h2 { margin: 8px 0 10px; color: #1d2b3d; font-size: 16px; line-height: 1.35; }

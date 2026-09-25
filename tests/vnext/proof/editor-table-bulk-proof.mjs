@@ -60,7 +60,8 @@ async function extendRangeVisible(page, r1, c1, r2, c2, interaction = 'click') {
   const extend = page.locator('[data-editor-action="extend-table-selection"]');
   await activate(extend);
   assert.equal(await extend.getAttribute('aria-pressed'), 'true');
-  assert((await page.getByRole('status').innerText()).includes('Toque na célula final'));
+  await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent?.includes('Toque na célula, linha ou coluna final.'), undefined, { timeout: 5000 });
+  assert((await page.getByRole('status').innerText()).includes('Toque na célula, linha ou coluna final.'));
   await activate(page.locator(`[data-table-cell="${r2}:${c2}"]`));
   await settle(page);
   assert.notEqual(await extend.getAttribute('aria-pressed'), 'true');
