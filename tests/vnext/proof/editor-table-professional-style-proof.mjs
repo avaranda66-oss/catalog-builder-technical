@@ -281,7 +281,7 @@ try {
   await page.locator('[data-style-role-scope]').selectOption('');
 
   // Typography through the real Cell scope. The second declared family was proven in the isolated resource context above.
-  await selectCell(page, 1, 1);
+  await selectCell(page, 1, 2);
   await setStyleInput(page, 'fontSizePt', 8.25);
   await page.locator('[data-style-property="fontWeight"]').selectOption('400');
   await page.locator('[data-style-property="textAlign"]').selectOption('center');
@@ -292,7 +292,7 @@ try {
   await setStyleInput(page, 'lineHeight', 1.35);
 
   current = await state(page);
-  const bodyCell = current.main.table.cells[5];
+  const bodyCell = current.main.table.cells[6];
   assert.deepEqual(
     {
       fontSizePt: bodyCell.style.fontSizePt,
@@ -345,7 +345,7 @@ try {
   assert.deepEqual((await state(page)).main.frame, beforeVerticalFrame);
 
   // Padding: quick recipe -> unlink one side -> reset that side to inherited.
-  await selectCell(page, 1, 1);
+  await selectCell(page, 1, 2);
   await page.locator('[data-style-padding-preset="spacious"]').click();
   await ensureAdvanced(page);
   const linkButton = page.locator('[data-style-padding-link]');
@@ -354,24 +354,24 @@ try {
   await leftPadding.fill('3.5');
   await leftPadding.blur();
   await settle(page);
-  assert.deepEqual((await state(page)).main.table.cells[5].style.paddingMm, {
+  assert.deepEqual((await state(page)).main.table.cells[6].style.paddingMm, {
     top: 2, right: 2, bottom: 2, left: 3.5,
   });
   await page.locator('[data-style-padding-reset="left"]').click();
   await settle(page);
-  assert.equal((await state(page)).main.table.cells[5].style.paddingMm.left, undefined);
+  assert.equal((await state(page)).main.table.cells[6].style.paddingMm.left, undefined);
 
   // Border quick recipes on a canonical 2x2 Cell range.
-  await selectCell(page, 1, 1);
+  await selectCell(page, 1, 2);
   await page.locator('[data-editor-action="extend-table-selection"]').click();
-  await page.locator('[data-table-cell="2:2"]').click();
+  await page.locator('[data-table-cell="2:3"]').click();
   await settle(page);
   await page.locator('[data-style-border-preset="all"]').click();
   await settle(page);
   await page.locator('[data-style-border-preset="outer"]').click();
   await settle(page);
   current = await state(page);
-  const borderIds = [5, 6, 9, 10].map((index) => current.main.table.cells[index].id);
+  const borderIds = [6, 7, 10, 11].map((index) => current.main.table.cells[index].id);
   const borderById = new Map(current.main.table.cells.map((cell) => [cell.id, cell.style?.borders]));
   assert.equal(borderById.get(borderIds[0]).top.pattern, 'solid');
   assert.equal(borderById.get(borderIds[0]).left.pattern, 'solid');
@@ -381,10 +381,10 @@ try {
   assert.equal(borderById.get(borderIds[3]).bottom.pattern, 'solid');
 
   // Advanced side authoring remains ordinary canonical border data.
-  await selectCell(page, 1, 1);
+  await selectCell(page, 1, 2);
   await setBorderSide(page, 'top', { pattern: 'solid', thicknessPt: 1.25, color: '#112233' });
   current = await state(page);
-  assert.deepEqual(current.main.table.cells[5].style.borders.top, {
+  assert.deepEqual(current.main.table.cells[6].style.borders.top, {
     pattern: 'solid', thicknessPt: 1.25, color: '#112233',
   });
 
@@ -397,7 +397,7 @@ try {
   await topPadding.blur();
   await setBorderSide(page, 'top', { pattern: 'solid', thicknessPt: 5, color: '#003366' });
   await settle(page, 8);
-  assert.equal((await state(page)).main.table.cells[5].style.paddingMm.top, 0);
+  assert.equal((await state(page)).main.table.cells[6].style.paddingMm.top, 0);
 
   // All four presets are deterministic one-action materializations with no hidden linkage.
   await selectTable(page);
@@ -422,7 +422,9 @@ try {
   await page.locator('[data-editor-action="redo"]').click();
   assert.deepEqual((await state(page)).main.table.style, beforeUndoPreset.main.table.style);
   await setCustomColor(page, 'background', '#EEEEEE');
+  await setStyleInput(page, 'fontSizePt', 8);
   assert.equal((await state(page)).main.table.style.base.background, '#EEEEEE');
+  assert.equal((await state(page)).main.table.style.base.fontSizePt, 8);
   assert(!JSON.stringify((await state(page)).main.table).includes('presetId'));
 
   // W4.E remains explicit: vertical-only Body padding increases intrinsic height without changing width or the authored frame.
@@ -479,7 +481,7 @@ try {
   assert.equal(await publicationPage.locator('[data-table-selection-highlight]').count(), 0);
   assert((await publicationPage.locator('[data-paint-edge]').count()) > 0);
 
-  const publishedCellId = afterFit.main.table.cells[5].id;
+  const publishedCellId = afterFit.main.table.cells[6].id;
   const publishedCell = publicationPage.locator(`[data-cell-id="${publishedCellId}"]`);
   await publishedCell.waitFor();
   const publishedStyle = await publishedCell.evaluate((cell) => {
