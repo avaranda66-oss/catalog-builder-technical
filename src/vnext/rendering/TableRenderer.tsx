@@ -27,7 +27,8 @@ export function TableRenderer({table,plan,assets,assetUrls}:{table:TableModel;pl
           const image=cell.contentPresentation?.image;
           return <div key={cell.id} data-cell-id={cell.id} role={row.role==='header'?'columnheader':'cell'}
             aria-rowindex={r+1} aria-colindex={c+1} aria-rowspan={cell.span?.rows} aria-colspan={cell.span?.columns}
-            className="editorial-cell" style={{...typography(style),background:style.background,
+            className="editorial-cell" style={{...typography(style),background:style.background,display:'flex',flexDirection:'column',
+              justifyContent:style.verticalAlign==='middle'?'center':style.verticalAlign==='bottom'?'flex-end':'flex-start',
               gridRow:`${r+1} / span ${cell.span?.rows??1}`,gridColumn:`${c+1} / span ${cell.span?.columns??1}`,
               padding:`${qCss(style.paddingQ.top)} ${qCss(style.paddingQ.right)} ${qCss(style.paddingQ.bottom)} ${qCss(style.paddingQ.left)}`}}>
             <div data-flow-root="">

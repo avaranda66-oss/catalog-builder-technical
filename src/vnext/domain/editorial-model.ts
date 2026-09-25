@@ -56,6 +56,7 @@ export const CellStyleSchema=z.object({
   fontFamily:clean.optional(),fontSizePt:positive.optional(),lineHeight:positive.optional(),
   fontWeight:z.union([z.literal(400),z.literal(700)]).optional(),
   color:color.optional(),background:color.optional(),textAlign:z.enum(['left','center','right']).optional(),
+  verticalAlign:z.enum(['top','middle','bottom']).optional(),
   paddingMm:z.object({top:nonnegative.optional(),right:nonnegative.optional(),bottom:nonnegative.optional(),left:nonnegative.optional()}).strict().optional(),
   borders:EdgesSchema.optional(),
 }).strict();

@@ -178,6 +178,20 @@ async function waitForProbeResources(root: HTMLElement): Promise<void> {
   }));
 }
 
+function paintEdgeDomMatches(root: HTMLElement, plans: ReadonlyMap<string, TablePlan>): boolean {
+  for (const plan of plans.values()) {
+    const grid = root.querySelector<HTMLElement>('[data-table-id="' + CSS.escape(plan.tableId) + '"]');
+    if (!grid) return false;
+    const expected = plan.edges.map((edge) => edge.id).sort();
+    const actual = [...grid.querySelectorAll('[data-paint-edge]')]
+      .map((node) => node.getAttribute('data-paint-edge'))
+      .filter((value): value is string => value !== null)
+      .sort();
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) return false;
+  }
+  return true;
+}
+
 export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics, onMeasuredLayout }: EditorDiagnosticsProbeProps) {
   const compiled = React.useMemo(() => compilePlans(document), [document]);
   const [, forceRender] = React.useReducer((value: number) => value + 1, 0);
@@ -200,6 +214,9 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics, onM
     if (!shadowRoot) return;
     let cancelled = false;
     let frame = 0;
+    const nextFrame = () => new Promise<void>((resolve) => {
+      frame = window.requestAnimationFrame(() => resolve());
+    });
     const run = async () => {
       try {
         const root = probeRootRef.current?.querySelector<HTMLElement>('[data-editorial-root]');
@@ -208,14 +225,15 @@ export function EditorDiagnosticsProbe({ document, assetUrls, onDiagnostics, onM
         if (cancelled) return;
         measureTables(document, compiled.plans, root);
         forceRender();
-        await new Promise<void>((resolve) => {
-          frame = window.requestAnimationFrame(() => resolve());
-        });
-        if (cancelled) return;
+
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          await nextFrame();
+          if (cancelled) return;
+          if (paintEdgeDomMatches(root, compiled.plans)) break;
+        }
+
         const firstSnapshot = await captureSnapshot(document, compiled.plans, root);
-        await new Promise<void>((resolve) => {
-          frame = window.requestAnimationFrame(() => resolve());
-        });
+        await nextFrame();
         if (cancelled) return;
         const snapshot = await captureSnapshot(document, compiled.plans, root);
         const stabilityDiagnostics = compareSnapshots(firstSnapshot, snapshot);

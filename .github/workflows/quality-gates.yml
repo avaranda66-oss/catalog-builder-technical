@@ -64,3 +64,4 @@ jobs:
           node tests/vnext/proof/editor-table-bulk-proof.mjs
           node tests/vnext/proof/editor-table-fit-height-proof.mjs
           node tests/vnext/proof/editor-table-professional-dimensions-proof.mjs
+          node tests/vnext/proof/editor-table-professional-style-proof.mjs

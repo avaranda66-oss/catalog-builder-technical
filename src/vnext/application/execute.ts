@@ -1,5 +1,6 @@
 import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject } from '../domain';
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
+import { resolveCellStyle } from '../domain/style-resolution';
 import { VNextError } from '../domain/diagnostics';
 import { add, minimumUForProjectedQ } from '../domain/physical';
 import { deleteAxis, insertAxis, mergeCells, orderedAnchors, reorderAxis, unmergeCell, validateTable } from '../table';
@@ -16,6 +17,7 @@ import {
   type FrameU,
   type IdGenerator,
   type ObjectInsertSpec,
+  type CellStylePatch,
   type CellPropertyPatch,
   type TableBulkCellContentInput,
   type TableBulkExpectedTopology,
@@ -50,6 +52,7 @@ import {
   parsePageTemplateDefinition,
   type PageTemplateRegistry,
 } from './template-registry';
+import { materializeTablePreset, tablePresetPresentationSnapshot } from './table-preset-registry';
 
 export interface ApplicationExecutionDependencies {
   createId: IdGenerator;
@@ -476,17 +479,27 @@ function own(object: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(object, key);
 }
 
-function applyCellPropertyPatch(
-  cell: Cell,
-  patch: CellPropertyPatch
-): Cell {
-  const style: CellStyle = { ...(cell.style ?? {}) };
-  for (const key of ['textAlign', 'fontWeight', 'color', 'background'] as const) {
+function applyCellStylePatch(
+  current: CellStyle | undefined,
+  patch: CellStylePatch
+): CellStyle | undefined {
+  const style: CellStyle = { ...(current ?? {}) };
+  for (const key of [
+    'fontFamily',
+    'fontSizePt',
+    'lineHeight',
+    'fontWeight',
+    'color',
+    'background',
+    'textAlign',
+    'verticalAlign',
+  ] as const) {
     if (!own(patch, key)) continue;
     const value = patch[key];
     if (value === null) delete style[key];
     else if (value !== undefined) (style as Record<string, unknown>)[key] = value;
   }
+
   if (own(patch, 'paddingMm')) {
     if (patch.paddingMm === null) {
       delete style.paddingMm;
@@ -503,6 +516,31 @@ function applyCellPropertyPatch(
     }
   }
 
+  if (own(patch, 'borders')) {
+    if (patch.borders === null) {
+      delete style.borders;
+    } else if (patch.borders !== undefined) {
+      const borders = { ...(style.borders ?? {}) };
+      for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
+        if (!own(patch.borders, edge)) continue;
+        const value = patch.borders[edge];
+        if (value === null) delete borders[edge];
+        else if (value !== undefined) borders[edge] = value;
+      }
+      if (Object.keys(borders).length === 0) delete style.borders;
+      else style.borders = borders;
+    }
+  }
+
+  return Object.keys(style).length === 0 ? undefined : style;
+}
+
+function applyCellPropertyPatch(
+  cell: Cell,
+  patch: CellPropertyPatch
+): Cell {
+  const style = applyCellStylePatch(cell.style, patch);
+
   const presentation: CellContentPresentation = { ...(cell.contentPresentation ?? {}) };
   if (own(patch, 'wrapPolicy')) {
     if (patch.wrapPolicy === null) delete presentation.wrapPolicy;
@@ -510,11 +548,33 @@ function applyCellPropertyPatch(
   }
 
   const next: Cell = { ...cell };
-  if (Object.keys(style).length === 0) delete next.style;
+  if (style === undefined) delete next.style;
   else next.style = style;
   if (Object.keys(presentation).length === 0) delete next.contentPresentation;
   else next.contentPresentation = presentation;
   return next;
+}
+
+function validateTableStyleFonts(document: CatalogDocument, table: TableModel): ApplicationActionFailure | undefined {
+  try {
+    for (const cell of orderedAnchors(table)) {
+      const style = resolveCellStyle(document.style, table, cell);
+      const declared = document.style.fonts.some((font) =>
+        font.family === style.fontFamily
+        && font.weight === style.fontWeight
+        && font.style === 'normal'
+      );
+      if (!declared) {
+        return failure(
+          'ACTION_INVALID',
+          `Font face ${style.fontFamily} / ${style.fontWeight} / normal is not declared in DocumentStyle.fonts`
+        );
+      }
+    }
+  } catch (error) {
+    return failure('ACTION_INVALID', error instanceof Error ? error.message : String(error));
+  }
+  return undefined;
 }
 
 function replaceTableObject(
@@ -1408,20 +1468,188 @@ export function executeApplicationAction(
         if (missing) return failure('ACTION_INVALID', `Cell ${missing.snapshot.cellId} no longer exists`);
         const covered = selected.find((entry) => entry.cell!.coveredBy);
         if (covered) return failure('ACTION_INVALID', `Cell ${covered.snapshot.cellId} is covered and cannot be styled directly`);
+        const sharedPatch = action.patch ?? {};
+        const checksPresentation = own(sharedPatch, 'wrapPolicy');
         const stale = selected.find(({ snapshot, cell }) =>
           !exactEquals(cell!.style, snapshot.expectedStyle)
-          || !exactEquals(cell!.contentPresentation, snapshot.expectedContentPresentation)
+          || (checksPresentation && !exactEquals(cell!.contentPresentation, snapshot.expectedContentPresentation))
         );
         if (stale) {
           return failure('TARGET_STALE', `Cell ${stale.snapshot.cellId} properties changed after the command was prepared`);
         }
 
-        const byId = new Map(selected.map(({ snapshot, cell }) => [snapshot.cellId, applyCellPropertyPatch(cell!, action.patch)]));
+        const byId = new Map(selected.map(({ snapshot, cell }) => {
+          let next = applyCellPropertyPatch(cell!, sharedPatch);
+          if (snapshot.patch !== undefined) {
+            const style = applyCellStylePatch(next.style, snapshot.patch);
+            next = { ...next };
+            if (style === undefined) delete next.style;
+            else next.style = style;
+          }
+          return [snapshot.cellId, next] as const;
+        }));
         const nextCells = table.cells.map((cell) => byId.get(cell.id) ?? cell);
-        changed = selected.some(({ cell }) => !exactEquals(cell, byId.get(cell!.id)));
-        affectedIds = [action.objectId, action.tableId, ...action.targets.map((entry) => entry.cellId)];
+        const changedCellIds = selected
+          .filter(({ cell }) => !exactEquals(cell, byId.get(cell!.id)))
+          .map(({ cell }) => cell!.id);
+        changed = changedCellIds.length > 0;
+        affectedIds = changed ? [action.objectId, action.tableId, ...changedCellIds] : [];
+        createdIds = [];
         if (!changed) break;
-        candidate = replaceTableObject(document, target, { ...table, cells: nextCells });
+        const nextTable = { ...table, cells: nextCells };
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+
+      case 'table.style.setBase': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        if (!exactEquals(table.style.base, action.expectedBase)) {
+          return failure('TARGET_STALE', `Table ${action.tableId} base style changed after the command was prepared`);
+        }
+        if (action.annotationGapMm !== undefined
+          && !exactEquals(table.style.annotationGapMm, action.expectedAnnotationGapMm)) {
+          return failure('TARGET_STALE', `Table ${action.tableId} annotation gap changed after the command was prepared`);
+        }
+
+        const nextBase = action.patch === undefined
+          ? table.style.base
+          : (applyCellStylePatch(table.style.base, action.patch) ?? {});
+        const nextStyle = {
+          ...table.style,
+          base: nextBase,
+          ...(action.annotationGapMm === undefined ? {} : { annotationGapMm: action.annotationGapMm }),
+        };
+        const nextTable = { ...table, style: nextStyle };
+        changed = !exactEquals(table.style, nextStyle);
+        affectedIds = changed ? [action.objectId, action.tableId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+
+      case 'table.style.setRowRole': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const current = table.style.rowRoles[action.role];
+        if (!exactEquals(current, action.expectedStyle)) {
+          return failure('TARGET_STALE', `Table ${action.tableId} ${action.role} style changed after the command was prepared`);
+        }
+        const nextRoleStyle = applyCellStylePatch(current, action.patch);
+        const rowRoles = { ...table.style.rowRoles };
+        if (nextRoleStyle === undefined) delete rowRoles[action.role];
+        else rowRoles[action.role] = nextRoleStyle;
+        const nextTable = { ...table, style: { ...table.style, rowRoles } };
+        changed = !exactEquals(current, nextRoleStyle);
+        affectedIds = changed ? [action.objectId, action.tableId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+
+      case 'table.rows.setStyle': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const selected = action.targets.map((snapshot) => ({
+          snapshot,
+          row: table.rows.find((row) => row.id === snapshot.id),
+        }));
+        const missing = selected.find(({ row }) => !row);
+        if (missing) return failure('TABLE_AXIS_NOT_FOUND', `Row ${missing.snapshot.id} no longer exists`);
+        const stale = selected.find(({ snapshot, row }) => !exactEquals(row!.style, snapshot.expectedStyle));
+        if (stale) return failure('TARGET_STALE', `Row ${stale.snapshot.id} style changed after the command was prepared`);
+
+        const nextById = new Map(selected.map(({ snapshot, row }) => [
+          snapshot.id,
+          applyCellStylePatch(row!.style, action.patch),
+        ] as const));
+        const nextRows = table.rows.map((row) => {
+          if (!nextById.has(row.id)) return row;
+          const nextStyle = nextById.get(row.id);
+          const next = { ...row };
+          if (nextStyle === undefined) delete next.style;
+          else next.style = nextStyle;
+          return next;
+        });
+        const changedIds = selected
+          .filter(({ row }) => !exactEquals(row!.style, nextById.get(row!.id)))
+          .map(({ row }) => row!.id);
+        changed = changedIds.length > 0;
+        affectedIds = changed ? [action.objectId, action.tableId, ...changedIds] : [];
+        createdIds = [];
+        if (!changed) break;
+        const nextTable = { ...table, rows: nextRows };
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+
+      case 'table.columns.setStyle': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const selected = action.targets.map((snapshot) => ({
+          snapshot,
+          column: table.columns.find((column) => column.id === snapshot.id),
+        }));
+        const missing = selected.find(({ column }) => !column);
+        if (missing) return failure('TABLE_AXIS_NOT_FOUND', `Column ${missing.snapshot.id} no longer exists`);
+        const stale = selected.find(({ snapshot, column }) => !exactEquals(column!.style, snapshot.expectedStyle));
+        if (stale) return failure('TARGET_STALE', `Column ${stale.snapshot.id} style changed after the command was prepared`);
+
+        const nextById = new Map(selected.map(({ snapshot, column }) => [
+          snapshot.id,
+          applyCellStylePatch(column!.style, action.patch),
+        ] as const));
+        const nextColumns = table.columns.map((column) => {
+          if (!nextById.has(column.id)) return column;
+          const nextStyle = nextById.get(column.id);
+          const next = { ...column };
+          if (nextStyle === undefined) delete next.style;
+          else next.style = nextStyle;
+          return next;
+        });
+        const changedIds = selected
+          .filter(({ column }) => !exactEquals(column!.style, nextById.get(column!.id)))
+          .map(({ column }) => column!.id);
+        changed = changedIds.length > 0;
+        affectedIds = changed ? [action.objectId, action.tableId, ...changedIds] : [];
+        createdIds = [];
+        if (!changed) break;
+        const nextTable = { ...table, columns: nextColumns };
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
+        break;
+      }
+
+      case 'table.preset.apply': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        if (!exactEquals(tablePresetPresentationSnapshot(table), action.expectedPresentation)) {
+          return failure('TARGET_STALE', `Table ${action.tableId} presentation changed after the preset was prepared`);
+        }
+        const nextTable = materializeTablePreset(table, document.style, action.presetId);
+        changed = !exactEquals(table, nextTable);
+        affectedIds = changed ? [action.objectId, action.tableId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const fontFailure = validateTableStyleFonts(document, nextTable);
+        if (fontFailure) return fontFailure;
+        candidate = replaceTableObject(document, target, nextTable);
         break;
       }
 

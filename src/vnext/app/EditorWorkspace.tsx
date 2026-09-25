@@ -1,6 +1,6 @@
 import React from 'react';
 import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, type ApplicationAction, type CellPropertyPatch, type DocumentSession, type FrameU } from '../application';
+import { projectEditableRichText, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type TablePresetId } from '../application';
 import {
   mmToU,
   qCss,
@@ -63,6 +63,16 @@ import {
 } from '../editor/table-dimension-authoring';
 import { parseTsv, TableTsvError } from '../editor/table-tsv';
 import {
+  defaultStyleScopeFromSelection,
+  prepareAnnotationGapAction,
+  prepareCellBorderPresetAction,
+  prepareStyleAction,
+  prepareTablePresetAction,
+  simpleBorderQuickPatch,
+  type BorderQuickPreset,
+  type TableStyleScope,
+} from '../editor/table-style-authoring';
+import {
   changeTableCellDraftType,
   clearTableCellDraft,
   confirmTableCellDraftTypeChange,
@@ -97,6 +107,7 @@ import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
+import { TableStyleInspector } from './TableStyleInspector';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -276,6 +287,9 @@ export function EditorWorkspace({
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
   const [markerPanelOpen, setMarkerPanelOpen] = React.useState(false);
   const [columnDimensionsAdvancedOpen, setColumnDimensionsAdvancedOpen] = React.useState(false);
+  const [tableStyleAdvancedOpen, setTableStyleAdvancedOpen] = React.useState(false);
+  const [tableStyleRoleScope, setTableStyleRoleScope] = React.useState<'header' | 'body' | 'section' | null>(null);
+  const [tableStylePaddingLinked, setTableStylePaddingLinked] = React.useState(true);
   const [pendingRowHeightMode, setPendingRowHeightMode] = React.useState<{ selectionKey: string; mode: 'MIN_MM' | 'FIXED_MM' } | null>(null);
   const [markerLegendChoice, setMarkerLegendChoice] = React.useState('');
   const [newMarkerCode, setNewMarkerCode] = React.useState('');
@@ -349,6 +363,11 @@ export function EditorWorkspace({
   React.useEffect(() => {
     setTableRangeExtensionArmed(false);
   }, [document.id, editorState.activePageId, editorState.mode, selectedTableObject?.id, selectedTableObject?.table.id]);
+  React.useEffect(() => {
+    setTableStyleRoleScope(null);
+    setTableStyleAdvancedOpen(false);
+    setTableStylePaddingLinked(true);
+  }, [document.id, editorState.activePageId, selectedTableObject?.id]);
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
@@ -2097,6 +2116,122 @@ export function EditorWorkspace({
     runCellPropertyPatch({ paddingMm: { [edge]: value } } as CellPropertyPatch);
   };
 
+  const tableStyleScope: TableStyleScope | undefined = selectedTableObject
+    ? tableStyleRoleScope
+      ? { kind: 'role', role: tableStyleRoleScope }
+      : tableSelection
+        ? defaultStyleScopeFromSelection(selectedTableObject.table, tableSelection)
+        : { kind: 'table' }
+    : undefined;
+  const tableStyleDisabled = Boolean(cellDraft || selectedTableObject?.locked);
+  const tableStyleDisabledReasonId = selectedTableObject ? `table-style-disabled-${selectedTableObject.id}` : undefined;
+
+  const currentSelectedTableForPresentation = (): {
+    document: CatalogDocument;
+    pageId: string;
+    object: TableObject;
+    scope: TableStyleScope;
+  } | undefined => {
+    if (!selectedObjectId) return undefined;
+    const liveDocument = session.getSnapshot().document;
+    const page = liveDocument.pages.find((entry) => entry.id === editorState.activePageId);
+    const object = page?.objects.find((entry): entry is TableObject =>
+      entry.id === selectedObjectId && entry.type === 'table'
+    );
+    if (!object) return undefined;
+    const selection = tableSelectionRef.current;
+    const scope = tableStyleRoleScope
+      ? { kind: 'role' as const, role: tableStyleRoleScope }
+      : selection
+        && selection.identity.pageId === page!.id
+        && selection.identity.objectId === object.id
+        && selection.identity.tableId === object.table.id
+        ? defaultStyleScopeFromSelection(object.table, selection)
+        : { kind: 'table' as const };
+    return { document: liveDocument, pageId: page!.id, object, scope };
+  };
+
+  const tableStyleActionMessage = (code: string): string => {
+    if (code === 'TARGET_STALE') return 'A apresentação mudou enquanto a ação era preparada. Nada foi alterado.';
+    if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
+    if (code === 'ACTION_INVALID') return 'A apresentação solicitada não é válida para os recursos atuais do documento.';
+    return 'Não foi possível alterar a apresentação da tabela com segurança.';
+  };
+
+  const executeTableStyleAction = (action: ApplicationAction, successMessage: string): boolean => {
+    if (cellDraftRef.current || editorState.mode === 'cell-edit') {
+      setStatusMessage('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+      return false;
+    }
+    const result = session.execute(action);
+    if (!result.ok) {
+      setStatusMessage(tableStyleActionMessage(result.error.code));
+      return false;
+    }
+    setStatusMessage(result.metadata.changed ? successMessage : 'Sem alterações.');
+    return result.metadata.changed;
+  };
+
+  const runTableStylePatch = (patch: CellStylePatch) => {
+    const live = currentSelectedTableForPresentation();
+    if (!live) return;
+    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
+    try {
+      executeTableStyleAction(
+        prepareStyleAction(identity, live.object.table, live.scope, patch),
+        'Apresentação atualizada.'
+      );
+    } catch {
+      setStatusMessage('Não foi possível preparar a alteração de apresentação.');
+    }
+  };
+
+  const runTableBorderPreset = (preset: BorderQuickPreset) => {
+    const live = currentSelectedTableForPresentation();
+    if (!live) return;
+    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
+    const color = live.document.style.palette[0] ?? '#172033';
+    try {
+      if (live.scope.kind === 'cells') {
+        executeTableStyleAction(
+          prepareCellBorderPresetAction(identity, live.object.table, live.scope.cellIds, preset, color),
+          'Bordas atualizadas.'
+        );
+        return;
+      }
+      if (preset === 'outer' || preset === 'inner') {
+        setStatusMessage('Selecione células para aplicar bordas Externas ou Internas.');
+        return;
+      }
+      executeTableStyleAction(
+        prepareStyleAction(identity, live.object.table, live.scope, simpleBorderQuickPatch(preset, color)),
+        'Bordas atualizadas.'
+      );
+    } catch {
+      setStatusMessage('Não foi possível preparar esta configuração de borda.');
+    }
+  };
+
+  const runTablePreset = (presetId: TablePresetId) => {
+    const live = currentSelectedTableForPresentation();
+    if (!live) return;
+    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
+    executeTableStyleAction(
+      prepareTablePresetAction(identity, live.object.table, presetId),
+      'Estilo de tabela aplicado.'
+    );
+  };
+
+  const runAnnotationGap = (annotationGapMm: number) => {
+    const live = currentSelectedTableForPresentation();
+    if (!live || live.scope.kind !== 'table') return;
+    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
+    executeTableStyleAction(
+      prepareAnnotationGapAction(identity, live.object.table, annotationGapMm),
+      'Espaçamento de notas/legenda atualizado.'
+    );
+  };
+
   const selectedRowAxisIds = selectedTableObject && tableSelection
     ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'row')
     : [];
@@ -2884,6 +3019,28 @@ export function EditorWorkspace({
                       </p>
                     )}
                   </section>
+                </>
+              )}
+              {selectedObject.type === 'table' && tableStyleScope && (
+                <>
+                  <div className="vnext-divider" />
+                  <TableStyleInspector
+                    table={selectedObject.table}
+                    documentStyle={document.style}
+                    scope={tableStyleScope}
+                    roleScope={tableStyleRoleScope}
+                    disabled={tableStyleDisabled}
+                    disabledReasonId={tableStyleDisabledReasonId}
+                    advancedOpen={tableStyleAdvancedOpen}
+                    paddingLinked={tableStylePaddingLinked}
+                    onRoleScopeChange={setTableStyleRoleScope}
+                    onAdvancedOpenChange={setTableStyleAdvancedOpen}
+                    onPaddingLinkedChange={setTableStylePaddingLinked}
+                    onPatch={runTableStylePatch}
+                    onBorderPreset={runTableBorderPreset}
+                    onPreset={runTablePreset}
+                    onAnnotationGap={runAnnotationGap}
+                  />
                 </>
               )}
               {selectedObject.type === 'table' && tableSelection && rowDimensionProjection && (
