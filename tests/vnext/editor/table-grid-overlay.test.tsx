@@ -2,6 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compilePlans } from '@/vnext/rendering';
+import { mmToU } from '@/vnext/domain';
 import { TableGridOverlay } from '@/vnext/app/table-grid-overlay';
 import { tableCellSelection, tableSelectionIdentity, type TableSelection } from '@/vnext/editor/table-selection';
 import { createW4ATableDocument, W4A_OBJECT_ID, W4A_PAGE_ID, W4A_TABLE_ID } from '../proof/fixtures/w4a-table-document';
@@ -43,6 +44,8 @@ function setup(sequence = 0) {
       identity={identity}
       selection={selection}
       localSequence={localSequence}
+      pageWidthU={mmToU(document.pages[0].widthMm)}
+      pageHeightU={mmToU(document.pages[0].heightMm)}
       onSelectionChange={(next) => { changes.push(next); setSelection(next); }}
       onStaleGesture={stale}
     />;

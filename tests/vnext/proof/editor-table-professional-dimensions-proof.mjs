@@ -40,6 +40,104 @@ async function publish(context, document) {
   return { page, report };
 }
 
+const PAGE_WIDTH_MM = 210;
+const PAGE_HEIGHT_MM = 297;
+const POINTER_TOLERANCE_PX = 1.5;
+const DIMENSION_TOLERANCE_MM = 0.08;
+
+async function dragBoundaryWithPhysicalEvidence(page, axis, index, deltaPx) {
+  const boundary = page.locator(`[data-table-${axis}-boundary="${index}"]`);
+  const selector = page.locator(`[data-table-${axis}-selector="${index}"]`);
+  const adjacentSelector = axis === 'column'
+    ? page.locator(`[data-table-column-selector="${index + 1}"]`)
+    : null;
+  const pageBox = await page.locator('[data-editorial-root] [data-page-id]').boundingBox();
+  const boundaryBox = await boundary.boundingBox();
+  const selectorBox = await selector.boundingBox();
+  const adjacentBox = adjacentSelector ? await adjacentSelector.boundingBox() : null;
+  assert(pageBox && boundaryBox && selectorBox);
+  if (axis === 'column') assert(adjacentBox);
+
+  const startX = boundaryBox.x + boundaryBox.width / 2;
+  const startY = boundaryBox.y + boundaryBox.height / 2;
+  const targetX = axis === 'column' ? startX + deltaPx : startX;
+  const targetY = axis === 'row' ? startY + deltaPx : startY;
+  const before = await state(page);
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 4 });
+  const preview = page.locator(`[data-table-dimension-preview="${axis}"]`);
+  await preview.waitFor();
+  const previewBox = await preview.boundingBox();
+  assert(previewBox);
+  const previewCoordinate = axis === 'column'
+    ? previewBox.x + previewBox.width / 2
+    : previewBox.y + previewBox.height / 2;
+  const pointerCoordinate = axis === 'column' ? targetX : targetY;
+  const previewErrorPx = Math.abs(previewCoordinate - pointerCoordinate);
+  assert(previewErrorPx <= POINTER_TOLERANCE_PX, `${axis} preview missed pointer by ${previewErrorPx}px`);
+  assert.equal((await state(page)).localSequence, before.localSequence);
+
+  await page.mouse.up();
+  await page.waitForFunction((sequence) => window.__W4F1_PROOF__.state().localSequence === sequence + 1, before.localSequence);
+  await settle(page, 5);
+
+  const after = await state(page);
+  const committedBoundaryBox = await boundary.boundingBox();
+  assert(committedBoundaryBox);
+  const committedCoordinate = axis === 'column'
+    ? committedBoundaryBox.x + committedBoundaryBox.width / 2
+    : committedBoundaryBox.y + committedBoundaryBox.height / 2;
+  const commitErrorPx = Math.abs(committedCoordinate - pointerCoordinate);
+  assert(commitErrorPx <= POINTER_TOLERANCE_PX, `${axis} committed boundary missed pointer by ${commitErrorPx}px`);
+
+  const pageExtentMm = axis === 'column' ? PAGE_WIDTH_MM : PAGE_HEIGHT_MM;
+  const renderedPageExtentPx = axis === 'column' ? pageBox.width : pageBox.height;
+  const startDimensionPx = axis === 'column' ? selectorBox.width : selectorBox.height;
+  const startDimensionMm = startDimensionPx * pageExtentMm / renderedPageExtentPx;
+  const expectedDeltaMm = deltaPx * pageExtentMm / renderedPageExtentPx;
+  const expectedDimensionMm = startDimensionMm + expectedDeltaMm;
+
+  let committedDimensionMm;
+  let combinedBeforeMm;
+  let combinedAfterMm;
+  if (axis === 'column') {
+    const left = after.main.table.columns[index].width;
+    const right = after.main.table.columns[index + 1].width;
+    assert.equal(left.mode, 'fixed');
+    assert.equal(right.mode, 'fixed');
+    committedDimensionMm = left.mm;
+    combinedBeforeMm = (selectorBox.width + adjacentBox.width) * pageExtentMm / renderedPageExtentPx;
+    combinedAfterMm = left.mm + right.mm;
+    assert(Math.abs(combinedAfterMm - combinedBeforeMm) <= DIMENSION_TOLERANCE_MM);
+  } else {
+    const policy = after.main.table.rows[index].heightPolicy;
+    assert.equal(policy.mode, 'FIXED_MM');
+    committedDimensionMm = policy.heightMm;
+  }
+  const dimensionErrorMm = Math.abs(committedDimensionMm - expectedDimensionMm);
+  assert(
+    dimensionErrorMm <= DIMENSION_TOLERANCE_MM,
+    `${axis} canonical dimension differed from viewport-calibrated expectation by ${dimensionErrorMm}mm`
+  );
+
+  return {
+    axis,
+    index,
+    pointerDeltaPx: deltaPx,
+    renderedPageExtentPx,
+    startDimensionMm,
+    expectedDeltaMm,
+    committedDimensionMm,
+    previewErrorPx,
+    commitErrorPx,
+    dimensionErrorMm,
+    combinedBeforeMm,
+    combinedAfterMm,
+  };
+}
+
 let browser;
 try {
   await server.listen();
@@ -70,15 +168,7 @@ try {
   await page.locator('[data-editor-action="row-height-auto"]').click();
   assert.deepEqual((await state(page)).main.table.rows[0].heightPolicy, { mode: 'AUTO' });
 
-  const rowHandle = page.locator('[data-table-row-boundary="1"]'); const rb = await rowHandle.boundingBox(); assert(rb);
-  const beforeRowDrag = await state(page);
-  await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2 + 14, { steps: 3 });
-  assert.equal((await state(page)).localSequence, beforeRowDrag.localSequence);
-  assert.equal(await page.locator('[data-table-dimension-preview="row"]').count(), 1);
-  await page.mouse.up();
-  await page.waitForFunction((s) => window.__W4F1_PROOF__.state().localSequence === s + 1, beforeRowDrag.localSequence);
+  const rowDragDefault = await dragBoundaryWithPhysicalEvidence(page, 'row', 1, 14);
   assert.equal((await state(page)).main.table.rows[1].heightPolicy.mode, 'FIXED_MM');
   assert.deepEqual((await state(page)).main.frame, initialFrame);
   await page.locator('[data-editor-action="undo"]').click(); await page.locator('[data-editor-action="redo"]').click();
@@ -93,14 +183,7 @@ try {
   await widthMode.selectOption('flex'); await setInput(page, '[data-column-property="weight"]', 3);
   assert.deepEqual((await state(page)).main.table.columns[1].width, { mode: 'flex', weight: 3 });
 
-  const colHandle = page.locator('[data-table-column-boundary="1"]'); const cb = await colHandle.boundingBox(); assert(cb);
-  const beforeColDrag = await state(page);
-  await colHandle.hover();
-  await page.mouse.down();
-  await page.mouse.move(cb.x + cb.width / 2 + 16, cb.y + Math.min(12, cb.height / 2), { steps: 4 });
-  assert.equal((await state(page)).localSequence, beforeColDrag.localSequence);
-  await page.mouse.up();
-  await page.waitForFunction((s) => window.__W4F1_PROOF__.state().localSequence === s + 1, beforeColDrag.localSequence);
+  const columnDragDefault = await dragBoundaryWithPhysicalEvidence(page, 'column', 1, 16);
   current = await state(page); assert.equal(current.main.table.columns[1].width.mode, 'fixed'); assert.equal(current.main.table.columns[2].width.mode, 'fixed');
   assert.deepEqual(current.main.frame, initialFrame);
 
@@ -176,6 +259,22 @@ try {
   assert(Math.abs((pp.view[2] - pp.view[0]) * 25.4 / 72 - 210) < 0.2); assert(Math.abs((pp.view[3] - pp.view[1]) * 25.4 / 72 - 297) < 0.2); assert(pdfText.includes('Parâmetro'));
   await pdf.destroy(); await publicationPage.close();
 
+  // Prove the same physical calibration at a second desktop breakpoint with a different rendered page scale.
+  const secondDesktopContext = await browser.newContext({ viewport: { width: 1000, height: 1000 }, deviceScaleFactor: 1 });
+  const secondDesktopPage = await secondDesktopContext.newPage();
+  watch(secondDesktopPage);
+  await secondDesktopPage.goto(editorUrl, { waitUntil: 'domcontentloaded' });
+  await secondDesktopPage.locator('[data-vnext-shell]').waitFor();
+  const secondIds = await secondDesktopPage.evaluate(() => ({ objectId: window.__W4F1_PROOF__.mainObjectId }));
+  const secondInitial = await state(secondDesktopPage);
+  await enterTable(secondDesktopPage, secondIds.objectId);
+  const rowDragSecondScale = await dragBoundaryWithPhysicalEvidence(secondDesktopPage, 'row', 1, 11);
+  const columnDragSecondScale = await dragBoundaryWithPhysicalEvidence(secondDesktopPage, 'column', 1, 13);
+  assert.deepEqual((await state(secondDesktopPage)).main.frame, secondInitial.main.frame);
+  assert(Math.abs(rowDragDefault.renderedPageExtentPx - rowDragSecondScale.renderedPageExtentPx) > 10);
+  assert(Math.abs(columnDragDefault.renderedPageExtentPx - columnDragSecondScale.renderedPageExtentPx) > 10);
+  await secondDesktopContext.close();
+
   const mobile = [];
   for (const width of [320, 360, 390]) {
     const mc = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
@@ -196,7 +295,24 @@ try {
   }
 
   assert.deepEqual(errors.consoleErrors, [], JSON.stringify(errors)); assert.deepEqual(errors.pageErrors, []); assert.deepEqual(errors.failedResources, []); assert.deepEqual(errors.requestFailures, []);
-  const evidence = { status: 'PASS', chromiumVersion: browser.version(), row: { roles: true, autoMinFixed: true, boundaryDrag: true }, column: { fixedFlex: true, minMaxWeight: true, boundaryDrag: true, equalize: true }, reorder: { row: true, column: true, stableIds: true }, draftBarrier: true, persistence: { saveReopenExact: true }, publication: { status: report.status, nativePdfA4: true }, mobile, ...errors };
+  const evidence = {
+    status: 'PASS',
+    chromiumVersion: browser.version(),
+    row: { roles: true, autoMinFixed: true, boundaryDrag: true },
+    column: { fixedFlex: true, minMaxWeight: true, boundaryDrag: true, equalize: true },
+    dragPhysicalFidelity: {
+      defaultDesktop: { row: rowDragDefault, column: columnDragDefault },
+      secondDesktopScale: { row: rowDragSecondScale, column: columnDragSecondScale },
+      pointerTolerancePx: POINTER_TOLERANCE_PX,
+      dimensionToleranceMm: DIMENSION_TOLERANCE_MM,
+    },
+    reorder: { row: true, column: true, stableIds: true },
+    draftBarrier: true,
+    persistence: { saveReopenExact: true },
+    publication: { status: report.status, nativePdfA4: true },
+    mobile,
+    ...errors,
+  };
   await writeFile(resolve(output, 'evidence.json'), JSON.stringify(evidence, null, 2) + '\n', 'utf8');
   console.log('W4.F.1 Professional Table Dimensions Chromium proof: PASS'); console.log(JSON.stringify(evidence, null, 2));
   await context.close();

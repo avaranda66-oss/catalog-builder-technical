@@ -1,5 +1,6 @@
 import React from 'react';
-import { pxToQ, qCss, type TableModel } from '../domain';
+import { pxToQ, qCss, uToQ, type TableModel } from '../domain';
+import { pointerAxisDeltaU } from './editor-interaction';
 import type { TablePlan } from '../rendering';
 import {
   canonicalTablePoint,
@@ -30,6 +31,9 @@ interface DimensionDragState {
   axis: 'row' | 'column';
   index: number;
   startClient: number;
+  pageExtentU: number;
+  renderedPageExtentQ: number;
+  deltaU: number;
   deltaQ: number;
 }
 
@@ -48,8 +52,10 @@ export interface TableGridOverlayProps {
   onRangeExtensionComplete?(): void;
   editingCellId?: string;
   dimensionEditingEnabled?: boolean;
-  onRowBoundaryCommit?(rowIndex: number, deltaQ: number): void;
-  onColumnBoundaryCommit?(leftColumnIndex: number, deltaQ: number): void;
+  pageWidthU: number;
+  pageHeightU: number;
+  onRowBoundaryCommit?(rowIndex: number, deltaU: number): void;
+  onColumnBoundaryCommit?(leftColumnIndex: number, deltaU: number): void;
 }
 
 function cumulative(values: readonly number[]): number[] {
@@ -73,6 +79,8 @@ export function TableGridOverlay({
   onRangeExtensionComplete,
   editingCellId,
   dimensionEditingEnabled = true,
+  pageWidthU,
+  pageHeightU,
   onRowBoundaryCommit,
   onColumnBoundaryCommit,
 }: TableGridOverlayProps) {
@@ -209,12 +217,22 @@ export function TableGridOverlay({
     if (!dimensionEditingEnabled || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;
+    const canonicalPage = stage?.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]');
+    const pageRect = canonicalPage?.getBoundingClientRect();
+    if (!pageRect) return;
+    const pageExtentU = axis === 'column' ? pageWidthU : pageHeightU;
+    const renderedPageExtentQ = pxToQ(axis === 'column' ? pageRect.width : pageRect.height);
+    if (pageExtentU <= 0 || renderedPageExtentQ <= 0) return;
     const state: DimensionDragState = {
       pointerId: event.pointerId,
       sourceSequence: localSequence,
       axis,
       index,
       startClient: axis === 'column' ? event.clientX : event.clientY,
+      pageExtentU,
+      renderedPageExtentQ,
+      deltaU: 0,
       deltaQ: 0,
     };
     dimensionDragRef.current = state;
@@ -232,8 +250,13 @@ export function TableGridOverlay({
       return;
     }
     const client = current.axis === 'column' ? event.clientX : event.clientY;
-    const deltaQ = pxToQ(client - current.startClient);
-    const next = { ...current, deltaQ };
+    const deltaU = pointerAxisDeltaU(
+      client - current.startClient,
+      current.pageExtentU,
+      current.renderedPageExtentQ
+    );
+    const deltaQ = uToQ(deltaU);
+    const next = { ...current, deltaU, deltaQ };
     dimensionDragRef.current = next;
     setDimensionPreview(next);
   };
@@ -247,9 +270,9 @@ export function TableGridOverlay({
       onStaleGesture();
       return;
     }
-    if (current.deltaQ === 0) return;
-    if (current.axis === 'column') onColumnBoundaryCommit?.(current.index, current.deltaQ);
-    else onRowBoundaryCommit?.(current.index, current.deltaQ);
+    if (current.deltaU === 0) return;
+    if (current.axis === 'column') onColumnBoundaryCommit?.(current.index, current.deltaU);
+    else onRowBoundaryCommit?.(current.index, current.deltaU);
   };
 
   const cancelDimensionDrag = () => {

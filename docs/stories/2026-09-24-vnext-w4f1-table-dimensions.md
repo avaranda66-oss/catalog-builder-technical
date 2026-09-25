@@ -60,6 +60,20 @@ Internal column-boundary drag resolves current canonical widths, previews epheme
 
 Equalize preserves the selected combined integer-U width exactly, uses stable-order remainder allocation, writes fixed widths, and fails closed when min/max constraints prevent equality.
 
+## Principal drag-calibration amendment
+
+Independent Principal review found that the original Row/Column boundary drag incorrectly treated viewport/client pixels as canonical renderer pixels while the page stage is responsively scaled.
+
+The amendment reuses the existing direct-manipulation calibration from `editor-interaction.ts`: viewport pointer displacement is calibrated from the canonical Page extent in integer U and the actual rendered Page extent measured at gesture start. The browser geometry is ephemeral interaction input only; it is never persisted or treated as CatalogDocument authority.
+
+The flow is now:
+
+`client delta px → calibrated canonical delta U → uToQ(deltaU) preview → existing W4.F.1 Row/Column preparation → existing typed action`.
+
+No CSS zoom constant is hardcoded. No Application Action contract, CAS strategy, Table Engine solver, renderer, persistence contract or authored physical representation changed.
+
+Focused calibration coverage exercises effective rendered scales corresponding to approximately 1.00, 0.62, 0.58 and 0.35. The dedicated Chromium proof now verifies externally observable pointer/preview/committed-boundary fidelity at two distinct desktop rendered scales, plus canonical authored Row/Column dimensions and exact adjacent-column total preservation.
+
 ## Reorder / merged topology
 
 Axis reorder preserves semantic Row/Column IDs and Cell identity. It delegates to canonical `reorderAxis()`; merged topology that cannot be reordered fails closed with no implicit unmerge. Selection remains anchored by stable semantic ID after successful reorder.

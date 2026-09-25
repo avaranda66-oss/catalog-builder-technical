@@ -4,11 +4,12 @@ import {
   type ApplicationActionResult,
   type ApplicationExecutionContext,
 } from '@/vnext/application';
-import { mmToU, type CatalogDocument, type Frame } from '@/vnext/domain';
+import { mmToU, pxToQ, uToQ, type CatalogDocument, type Frame } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import {
   EditorInteractionController,
   frameToU,
+  pointerAxisDeltaU,
   previewFrameFromDelta,
   type GestureKind,
 } from '@/vnext/app/editor-interaction';
@@ -81,6 +82,28 @@ function controllerHarness(document = fixtureDocument()) {
     set activePageId(value: string) { activePageId = value; },
   };
 }
+
+describe('shared physical pointer calibration', () => {
+  const pageExtentU = mmToU(210);
+  const canonicalPageQ = uToQ(pageExtentU);
+  const cases = [
+    { scale: 1, expectedDeltaU: 63_500 },
+    { scale: 0.62, expectedDeltaU: 102_420 },
+    { scale: 0.58, expectedDeltaU: 109_483 },
+    { scale: 0.35, expectedDeltaU: 181_428 },
+  ] as const;
+
+  for (const { scale, expectedDeltaU } of cases) {
+    it(`calibrates a 24px viewport delta at rendered scale ${scale}`, () => {
+      const renderedPageExtentQ = pxToQ((canonicalPageQ / 64) * scale);
+      const deltaU = pointerAxisDeltaU(24, pageExtentU, renderedPageExtentQ);
+      expect(deltaU).toBe(expectedDeltaU);
+      const renderedRoundtripPx = (uToQ(deltaU) / 64) * scale;
+      expect(Math.abs(renderedRoundtripPx - 24)).toBeLessThanOrEqual(0.01);
+      expect(pointerAxisDeltaU(-24, pageExtentU, renderedPageExtentQ)).toBe(-expectedDeltaU);
+    });
+  }
+});
 
 describe('W2.C editor interaction controller', () => {
   it('performs 125 preview updates with zero canonical writes and commits one move on pointerup', () => {

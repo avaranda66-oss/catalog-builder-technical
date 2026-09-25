@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mmToU } from '@/vnext/domain';
+import { mmToU, pxToQ, uToQ } from '@/vnext/domain';
+import { pointerAxisDeltaU } from '@/vnext/app/editor-interaction';
 import {
   prepareAxisReorder,
   prepareColumnBoundaryDrag,
@@ -114,6 +115,21 @@ describe('W4.F.1 table dimension authoring helpers', () => {
     expect(widths[1]).toBe(mmToU(35));
   });
 
+  it('applies a scale-calibrated viewport delta to adjacent column authoring without losing combined U width', () => {
+    const table = emptyTable();
+    const pageWidthU = mmToU(210);
+    const renderedPageWidthQ = pxToQ((uToQ(pageWidthU) / 64) * 0.62);
+    const calibratedDeltaU = pointerAxisDeltaU(24, pageWidthU, renderedPageWidthQ);
+    const action = prepareColumnBoundaryDrag(identity, table, mmToU(120), 120, 0, calibratedDeltaU);
+    const widths = action.targets.map((target) => target.next.width).map((width) => {
+      if (!width || width.mode !== 'fixed') throw new Error('fixed expected');
+      return width.widthU;
+    });
+    expect(widths[0]).toBe(mmToU(40) + calibratedDeltaU);
+    expect(widths[1]).toBe(mmToU(40) - calibratedDeltaU);
+    expect(widths[0] + widths[1]).toBe(mmToU(80));
+  });
+
   it('clamps column drag to canonical min/max feasibility without invalid intermediate state', () => {
     const table = emptyTable();
     table.columns[0] = { ...table.columns[0], width: { mode: 'fixed', mm: 40 }, minMm: 30, maxMm: 45 };
@@ -132,6 +148,18 @@ describe('W4.F.1 table dimension authoring helpers', () => {
       rowId: 'r1',
       next: { heightPolicy: { mode: 'FIXED_MM', heightU: 75_000 } },
     })]);
+  });
+
+  it('applies a scale-calibrated viewport delta to row drag as explicit FIXED_MM U', () => {
+    const table = emptyTable();
+    const pageHeightU = mmToU(297);
+    const renderedPageHeightQ = pxToQ((uToQ(pageHeightU) / 64) * 0.58);
+    const calibratedDeltaU = pointerAxisDeltaU(17, pageHeightU, renderedPageHeightQ);
+    const action = prepareRowBoundaryDrag(identity, table, 'r1', 60_000, calibratedDeltaU);
+    expect(action.targets[0].next.heightPolicy).toEqual({
+      mode: 'FIXED_MM',
+      heightU: 60_000 + calibratedDeltaU,
+    });
   });
 
   it('prepares stable one-step reorder and disables boundary/multi-axis intent', () => {

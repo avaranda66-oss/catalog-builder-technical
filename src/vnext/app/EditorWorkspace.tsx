@@ -4,7 +4,6 @@ import { projectEditableRichText, type ApplicationAction, type CellPropertyPatch
 import {
   mmToU,
   qCss,
-  qToU,
   uToQ,
   type CatalogDocument,
   type Cell,
@@ -2297,7 +2296,7 @@ export function EditorWorkspace({
       setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível reordenar o eixo.');
     }
   };
-  const runColumnBoundaryDrag = (leftColumnIndex: number, deltaQ: number) => {
+  const runColumnBoundaryDrag = (leftColumnIndex: number, deltaU: number) => {
     const live = currentSelectedTableForStructure();
     const identity = dimensionIdentity();
     if (!live || !identity) return;
@@ -2305,7 +2304,7 @@ export function EditorWorkspace({
       executeTableDimensionAction(
         prepareColumnBoundaryDrag(
           identity, live.object.table, frameToU(live.object.frame).widthU, live.object.frame.widthMm,
-          leftColumnIndex, qToU(deltaQ)
+          leftColumnIndex, deltaU
         ),
         'Larguras adjacentes atualizadas.'
       );
@@ -2313,7 +2312,7 @@ export function EditorWorkspace({
       setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível ajustar o limite da coluna.');
     }
   };
-  const runRowBoundaryDrag = (rowIndex: number, deltaQ: number) => {
+  const runRowBoundaryDrag = (rowIndex: number, deltaU: number) => {
     const live = currentSelectedTableForStructure();
     const identity = dimensionIdentity();
     if (!live || !identity) return;
@@ -2325,7 +2324,7 @@ export function EditorWorkspace({
     }
     try {
       executeTableDimensionAction(
-        prepareRowBoundaryDrag(identity, live.object.table, row.id, resolvedHeightU, qToU(deltaQ)),
+        prepareRowBoundaryDrag(identity, live.object.table, row.id, resolvedHeightU, deltaU),
         'Altura exata da linha atualizada.'
       );
     } catch (error) {
@@ -2792,6 +2791,8 @@ export function EditorWorkspace({
                                 }}
                                 editingCellId={cellDraft?.identity.cellId}
                                 dimensionEditingEnabled={editorState.mode === 'table-grid'}
+                                pageWidthU={pageWidthU}
+                                pageHeightU={pageHeightU}
                                 onRowBoundaryCommit={runRowBoundaryDrag}
                                 onColumnBoundaryCommit={runColumnBoundaryDrag}
                                 onStaleGesture={() => {

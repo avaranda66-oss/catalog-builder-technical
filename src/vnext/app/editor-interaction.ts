@@ -116,7 +116,7 @@ export function sameFrameU(left: FrameU, right: FrameU): boolean {
     && left.heightU === right.heightU;
 }
 
-function pointerAxisDeltaU(clientDeltaPx: number, pageExtentU: number, renderedPageExtentQ: number): number {
+export function pointerAxisDeltaU(clientDeltaPx: number, pageExtentU: number, renderedPageExtentQ: number): number {
   const pointerDeltaQ = pxToQ(clientDeltaPx);
   return roundRatio(mul(pointerDeltaQ, pageExtentU), renderedPageExtentQ);
 }
