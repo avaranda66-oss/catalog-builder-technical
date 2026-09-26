@@ -121,6 +121,15 @@ const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw',
 const technicalSymbols = ['±', '°C', 'Ω', 'µ', '≤', '≥', '≈'] as const;
 const SNAP_RADIUS_PX = 8;
 
+export function tableStyleDisabledGuidance(hasCellDraft: boolean, isLocked: boolean): string | undefined {
+  if (hasCellDraft && isLocked) {
+    return 'Conclua ou cancele a edição da célula e desbloqueie a tabela para alterar a apresentação.';
+  }
+  if (hasCellDraft) return 'Conclua ou cancele a edição da célula para alterar a apresentação da tabela.';
+  if (isLocked) return 'Tabela bloqueada. Desbloqueie a tabela para alterar a apresentação.';
+  return undefined;
+}
+
 function createGestureTransactionId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
   return globalThis.crypto.randomUUID();
@@ -2123,8 +2132,11 @@ export function EditorWorkspace({
         ? defaultStyleScopeFromSelection(selectedTableObject.table, tableSelection)
         : { kind: 'table' }
     : undefined;
-  const tableStyleDisabled = Boolean(cellDraft || selectedTableObject?.locked);
-  const tableStyleDisabledReasonId = selectedTableObject ? `table-style-disabled-${selectedTableObject.id}` : undefined;
+  const tableStyleDisabledReason = tableStyleDisabledGuidance(Boolean(cellDraft), Boolean(selectedTableObject?.locked));
+  const tableStyleDisabled = tableStyleDisabledReason !== undefined;
+  const tableStyleDisabledReasonId = tableStyleDisabled && selectedTableObject
+    ? `table-style-disabled-${selectedTableObject.id}`
+    : undefined;
 
   const currentSelectedTableForPresentation = (): {
     document: CatalogDocument;
@@ -3031,6 +3043,7 @@ export function EditorWorkspace({
                     roleScope={tableStyleRoleScope}
                     disabled={tableStyleDisabled}
                     disabledReasonId={tableStyleDisabledReasonId}
+                    disabledReason={tableStyleDisabledReason}
                     advancedOpen={tableStyleAdvancedOpen}
                     paddingLinked={tableStylePaddingLinked}
                     onRoleScopeChange={setTableStyleRoleScope}

@@ -53,6 +53,7 @@ export function TableStyleInspector({
   roleScope,
   disabled,
   disabledReasonId,
+  disabledReason,
   advancedOpen,
   paddingLinked,
   onRoleScopeChange,
@@ -69,6 +70,7 @@ export function TableStyleInspector({
   roleScope: 'header' | 'body' | 'section' | null;
   disabled: boolean;
   disabledReasonId?: string;
+  disabledReason?: string;
   advancedOpen: boolean;
   paddingLinked: boolean;
   onRoleScopeChange(role: 'header' | 'body' | 'section' | null): void;
@@ -84,7 +86,7 @@ export function TableStyleInspector({
   const localPadding = projectLocalStyleField(table, scope, 'paddingMm').local;
   const localBorders = projectLocalStyleField(table, scope, 'borders').local;
   const borderCellOnly = scope.kind !== 'cells';
-  const describedBy = disabled ? disabledReasonId : undefined;
+  const describedBy = disabled && disabledReason ? disabledReasonId : undefined;
 
   const scalar = (field: ScalarField) => {
     const projection = projectResolvedStyleField(documentStyle, table, scope, field);
@@ -189,9 +191,9 @@ export function TableStyleInspector({
         </div>
       </div>
 
-      {disabled && disabledReasonId && (
+      {disabled && disabledReasonId && disabledReason && (
         <p id={disabledReasonId} className="vnext-style-disabled-reason">
-          Conclua ou cancele a edição da célula para alterar a apresentação da tabela.
+          {disabledReason}
         </p>
       )}
 

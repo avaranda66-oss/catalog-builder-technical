@@ -4,8 +4,11 @@ import { createDocumentSession, createStaticPageTemplateRegistry, projectEditabl
 import { mmToU, plainRichText, type CatalogDocument, type RichText } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { isCurrentDiagnosticSource } from '@/vnext/app/authoring-diagnostics';
+import { tableStyleDisabledGuidance } from '@/vnext/app/EditorWorkspace';
+import { TableStyleInspector } from '@/vnext/app/TableStyleInspector';
 import { VNextApp } from '@/vnext/app/VNextApp';
 import { W2E_PAGE_TEMPLATE } from '@/vnext/app/page-template-fixtures';
+import { createW4BTableDocument } from '../proof/fixtures/w4b-table-document';
 
 afterEach(cleanup);
 
@@ -742,5 +745,72 @@ describe('W2.D visible snapping and diagnostics', () => {
     };
     expect(isCurrentDiagnosticSource(first, first)).toBe(true);
     expect(isCurrentDiagnosticSource(second, first)).toBe(false);
+  });
+});
+
+function renderTableStyleGuidance(hasCellDraft: boolean, isLocked: boolean) {
+  const document = createW4BTableDocument();
+  const object = document.pages[0].objects[0];
+  if (!object || object.type !== 'table') throw new Error('Missing table fixture');
+  const disabledReason = tableStyleDisabledGuidance(hasCellDraft, isLocked);
+  const disabled = disabledReason !== undefined;
+  const disabledReasonId = disabled ? 'table-style-disabled-test' : undefined;
+  const view = render(<TableStyleInspector
+    table={object.table}
+    documentStyle={document.style}
+    scope={{ kind: 'table' }}
+    roleScope={null}
+    disabled={disabled}
+    disabledReasonId={disabledReasonId}
+    disabledReason={disabledReason}
+    advancedOpen={false}
+    paddingLinked={true}
+    onRoleScopeChange={() => undefined}
+    onAdvancedOpenChange={() => undefined}
+    onPaddingLinkedChange={() => undefined}
+    onPatch={() => undefined}
+    onBorderPreset={() => undefined}
+    onPreset={() => undefined}
+    onAnnotationGap={() => undefined}
+  />);
+  const control = view.container.querySelector<HTMLSelectElement>('[data-style-property="fontFamily"]');
+  if (!control) throw new Error('Missing representative style control');
+  return { ...view, control, disabledReasonId };
+}
+
+describe('W4.F.2 F1 disabled Table style guidance', () => {
+  it('keeps Cell-draft guidance truthful and connected through aria-describedby', () => {
+    const view = renderTableStyleGuidance(true, false);
+    expect(view.control).toBeDisabled();
+    expect(view.control).toHaveAttribute('aria-describedby', view.disabledReasonId);
+    expect(view.container.querySelector('.vnext-style-disabled-reason')).toHaveTextContent(
+      'Conclua ou cancele a edição da célula para alterar a apresentação da tabela.'
+    );
+  });
+
+  it('explains a locked Table without draft-only wording', () => {
+    const view = renderTableStyleGuidance(false, true);
+    expect(view.control).toBeDisabled();
+    expect(view.control).toHaveAttribute('aria-describedby', view.disabledReasonId);
+    expect(view.container.querySelector('.vnext-style-disabled-reason')).toHaveTextContent(
+      'Tabela bloqueada. Desbloqueie a tabela para alterar a apresentação.'
+    );
+    expect(view.container.textContent).not.toContain('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+  });
+
+  it('keeps an editable Table enabled with no stale reason or aria reference', () => {
+    const view = renderTableStyleGuidance(false, false);
+    expect(view.control).not.toBeDisabled();
+    expect(view.control).not.toHaveAttribute('aria-describedby');
+    expect(view.container.querySelector('.vnext-style-disabled-reason')).toBeNull();
+  });
+
+  it('reports both causes when Cell draft and Table lock coexist', () => {
+    const view = renderTableStyleGuidance(true, true);
+    expect(view.control).toBeDisabled();
+    expect(view.control).toHaveAttribute('aria-describedby', view.disabledReasonId);
+    expect(view.container.querySelector('.vnext-style-disabled-reason')).toHaveTextContent(
+      'Conclua ou cancele a edição da célula e desbloqueie a tabela para alterar a apresentação.'
+    );
   });
 });
