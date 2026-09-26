@@ -1302,6 +1302,342 @@ export function executeApplicationAction(
         candidate = replaceTableObject(document, target, nextTable);
         break;
       }
+      case 'table.title.set': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentTitle = table.title;
+        if (action.expectedTitle === null) {
+          if (currentTitle !== undefined) return failure('TARGET_STALE', 'Table title changed after the command was prepared');
+        } else if (currentTitle === undefined || !exactEquals(currentTitle, action.expectedTitle)) {
+          return failure('TARGET_STALE', 'Table title changed after the command was prepared');
+        }
+
+        if (action.plainText === null) {
+          changed = currentTitle !== undefined;
+          affectedIds = changed ? [action.objectId, action.tableId] : [];
+          createdIds = [];
+          if (!changed) break;
+          const nextTable = { ...table };
+          delete nextTable.title;
+          candidate = replaceTableObject(document, target, nextTable);
+          break;
+        }
+
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        let nextTitle: RichText;
+        if (currentTitle === undefined) {
+          const ids: string[] = [];
+          nextTitle = freshPlainRichText(action.plainText, allocator, ids);
+          createdIds = ids;
+        } else {
+          if (projectEditableRichText(currentTitle) === null) {
+            return failure('ACTION_INVALID', 'Table title RichText is outside the safe simple-edit subset');
+          }
+          const reconciled = reconcileEditableRichText(currentTitle, action.plainText, allocator);
+          if (!reconciled) return failure('ACTION_INVALID', 'Table title cannot be edited losslessly');
+          nextTitle = reconciled.richText;
+          createdIds = [...reconciled.createdIds];
+        }
+        changed = !currentTitle || !exactEquals(currentTitle, nextTitle);
+        affectedIds = changed ? [action.objectId, action.tableId] : [];
+        if (!changed) {
+          createdIds = [];
+          break;
+        }
+        candidate = replaceTableObject(document, target, { ...table, title: nextTitle });
+        break;
+      }
+
+      case 'table.annotation.create': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentOrder = table.annotations.map((annotation) => annotation.id);
+        if (!exactEquals(currentOrder, action.expectedAnnotationOrder)) {
+          return failure('TARGET_STALE', 'Table annotation membership/order changed after creation was prepared');
+        }
+        let targetCell: Cell | undefined;
+        let currentRefs: readonly string[] | undefined;
+        if (action.target.kind === 'TABLE') {
+          currentRefs = table.annotationIds ?? [];
+        } else {
+          const targetCellId = action.target.cellId;
+          targetCell = table.cells.find((cell) => cell.id === targetCellId);
+          currentRefs = !targetCell || targetCell.coveredBy ? undefined : (targetCell.annotationIds ?? []);
+        }
+        if (currentRefs === undefined) return failure('ACTION_INVALID', 'Annotation target Cell is missing or covered');
+        if (!exactEquals(currentRefs, action.target.expectedAnnotationIds)) {
+          return failure('TARGET_STALE', 'Annotation target references changed after creation was prepared');
+        }
+        if (action.kind === 'caption' && action.target.kind === 'CELL') {
+          return failure('ANNOTATION_SCOPE_INVALID', 'Caption can only reference the whole Table');
+        }
+
+        const allocator = createCanonicalIdAllocator(document, dependencies.createId);
+        const annotationId = allocator.next();
+        createdIds.push(annotationId);
+        const text = freshPlainRichText(action.plainText, allocator, createdIds);
+        const annotation = { id: annotationId, kind: action.kind, text };
+        const nextTable: TableModel = {
+          ...table,
+          annotations: [...table.annotations, annotation],
+          ...(action.target.kind === 'TABLE'
+            ? { annotationIds: [...currentRefs, annotationId] }
+            : {
+                cells: table.cells.map((cell) => cell.id === targetCell!.id
+                  ? { ...cell, annotationIds: [...currentRefs, annotationId] }
+                  : cell),
+              }),
+        };
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, annotationId, ...(targetCell ? [targetCell.id] : [])];
+        changed = true;
+        break;
+      }
+
+      case 'table.annotation.update': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const current = table.annotations.find((annotation) => annotation.id === action.annotationId);
+        if (!current) return failure('ANNOTATION_NOT_FOUND', action.annotationId);
+        if (!exactEquals(current, action.expectedAnnotation)) {
+          return failure('TARGET_STALE', `Annotation ${action.annotationId} changed after the command was prepared`);
+        }
+        if (projectEditableRichText(current.text) === null) {
+          return failure('ACTION_INVALID', `Annotation ${current.id} RichText is outside the safe simple-edit subset`);
+        }
+        const reconciled = reconcileEditableRichText(
+          current.text,
+          action.plainText,
+          createCanonicalIdAllocator(document, dependencies.createId)
+        );
+        if (!reconciled) return failure('ACTION_INVALID', `Annotation ${current.id} cannot be edited losslessly`);
+        changed = !exactEquals(current.text, reconciled.richText);
+        affectedIds = changed ? [action.objectId, action.tableId, current.id] : [];
+        createdIds = changed ? [...reconciled.createdIds] : [];
+        if (!changed) break;
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          annotations: table.annotations.map((annotation) => annotation.id === current.id
+            ? { ...annotation, text: reconciled.richText }
+            : annotation),
+        });
+        break;
+      }
+
+      case 'table.annotation.attach':
+      case 'table.annotation.detach': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const annotation = table.annotations.find((entry) => entry.id === action.annotationId);
+        if (!annotation) return failure('ANNOTATION_NOT_FOUND', action.annotationId);
+        if (annotation.kind === 'caption' && action.target.kind === 'CELL') {
+          return failure('ANNOTATION_SCOPE_INVALID', 'Caption can only reference the whole Table');
+        }
+        const targetCellId = action.target.kind === 'CELL' ? action.target.cellId : undefined;
+        const cell = targetCellId
+          ? table.cells.find((entry) => entry.id === targetCellId)
+          : undefined;
+        if (action.target.kind === 'CELL' && (!cell || cell.coveredBy)) {
+          return failure('ACTION_INVALID', 'Annotation target Cell is missing or covered');
+        }
+        const currentRefs = action.target.kind === 'TABLE'
+          ? (table.annotationIds ?? [])
+          : (cell!.annotationIds ?? []);
+        if (!exactEquals(currentRefs, action.target.expectedAnnotationIds)) {
+          return failure('TARGET_STALE', 'Annotation target references changed after the command was prepared');
+        }
+        const attaching = action.type === 'table.annotation.attach';
+        const already = currentRefs.includes(annotation.id);
+        if ((attaching && already) || (!attaching && !already)) {
+          changed = false;
+          affectedIds = [];
+          createdIds = [];
+          break;
+        }
+        const nextRefs = attaching
+          ? [...currentRefs, annotation.id]
+          : currentRefs.filter((id) => id !== annotation.id);
+        const nextTable: TableModel = action.target.kind === 'TABLE'
+          ? (() => {
+              const next = { ...table };
+              if (nextRefs.length === 0) delete next.annotationIds;
+              else next.annotationIds = nextRefs;
+              return next;
+            })()
+          : {
+              ...table,
+              cells: table.cells.map((entry) => {
+                if (entry.id !== cell!.id) return entry;
+                const next = { ...entry };
+                if (nextRefs.length === 0) delete next.annotationIds;
+                else next.annotationIds = nextRefs;
+                return next;
+              }),
+            };
+        candidate = replaceTableObject(document, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, annotation.id, ...(cell ? [cell.id] : [])];
+        createdIds = [];
+        changed = true;
+        break;
+      }
+
+      case 'table.annotation.remove': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const current = table.annotations.find((annotation) => annotation.id === action.annotationId);
+        if (!current) return failure('ANNOTATION_NOT_FOUND', action.annotationId);
+        if (!exactEquals(current, action.expectedAnnotation)) {
+          return failure('TARGET_STALE', `Annotation ${action.annotationId} changed after the command was prepared`);
+        }
+        const referencedByTable = (table.annotationIds ?? []).includes(current.id);
+        const referencedByCell = table.cells.some((cell) => (cell.annotationIds ?? []).includes(current.id));
+        if (referencedByTable || referencedByCell) {
+          return failure('ANNOTATION_IN_USE', `Annotation ${current.id} must be detached before removal`);
+        }
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          annotations: table.annotations.filter((annotation) => annotation.id !== current.id),
+        });
+        affectedIds = [action.objectId, action.tableId, current.id];
+        createdIds = [];
+        changed = true;
+        break;
+      }
+
+      case 'table.annotation.reorder': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentOrder = table.annotations.map((annotation) => annotation.id);
+        if (!exactEquals(currentOrder, action.expectedOrder)) {
+          return failure('TARGET_STALE', 'Annotation membership/order changed after reorder was prepared');
+        }
+        changed = !exactEquals(currentOrder, action.nextOrder);
+        affectedIds = changed ? [action.objectId, action.tableId, ...action.nextOrder] : [];
+        createdIds = [];
+        if (!changed) break;
+        const byId = new Map(table.annotations.map((annotation) => [annotation.id, annotation]));
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          annotations: action.nextOrder.map((id) => byId.get(id)!),
+        });
+        break;
+      }
+
+      case 'table.legend.reorder': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const currentOrder = table.legend.map((entry) => entry.id);
+        if (!exactEquals(currentOrder, action.expectedOrder)) {
+          return failure('TARGET_STALE', 'Legend membership/order changed after reorder was prepared');
+        }
+        changed = !exactEquals(currentOrder, action.nextOrder);
+        affectedIds = changed ? [action.objectId, action.tableId, ...action.nextOrder] : [];
+        createdIds = [];
+        if (!changed) break;
+        const byId = new Map(table.legend.map((entry) => [entry.id, entry]));
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          legend: action.nextOrder.map((id) => byId.get(id)!),
+        });
+        break;
+      }
+
+      case 'table.cell.setImage': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const cell = table.cells.find((entry) => entry.id === action.cellId);
+        if (!cell) return failure('ACTION_INVALID', `Cell ${action.cellId} no longer exists`);
+        if (cell.coveredBy) return failure('ACTION_INVALID', `Cell ${action.cellId} is covered by anchor ${cell.coveredBy}`);
+        if (!exactEquals(cell.content, action.expectedContent)
+            || !exactEquals(cell.contentPresentation, action.expectedContentPresentation)) {
+          return failure('TARGET_STALE', `Cell ${action.cellId} content/presentation changed after the image command was prepared`);
+        }
+
+        let assetAdded = false;
+        if (action.asset !== undefined) {
+          if (action.asset.id !== action.assetId) {
+            return failure('ACTION_INVALID', `Action assetId ${action.assetId} does not match asset payload id ${action.asset.id}`);
+          }
+          const parsedAsset = AssetRefSchema.safeParse(action.asset);
+          if (!parsedAsset.success) return failure('ACTION_INVALID', parsedAsset.error.message);
+          const existing = document.assets.find((asset) => asset.id === action.assetId);
+          if (existing && !assetRefEquals(existing, action.asset)) {
+            return failure('ACTION_INVALID', `Asset ID ${action.assetId} already exists with divergent metadata`);
+          }
+          if (!existing) assetAdded = true;
+        } else if (!document.assets.some((asset) => asset.id === action.assetId)) {
+          return failure('ASSET_NOT_FOUND', action.assetId);
+        }
+
+        const nextContent: CellContent = { type: 'image', assetId: action.assetId };
+        const nextPresentation: CellContentPresentation = {
+          ...(cell.contentPresentation ?? {}),
+          image: {
+            fit: action.fit,
+            targetWidthMm: materializeU(action.targetWidthU, 'image targetWidthU', true),
+            targetHeightMm: materializeU(action.targetHeightU, 'image targetHeightU', true),
+          },
+        };
+        const cellChanged = !exactEquals(cell.content, nextContent)
+          || !exactEquals(cell.contentPresentation, nextPresentation);
+        changed = assetAdded || cellChanged;
+        if (!changed) {
+          affectedIds = [];
+          createdIds = [];
+          break;
+        }
+        const nextTable: TableModel = {
+          ...table,
+          cells: table.cells.map((entry) => entry.id === cell.id
+            ? { ...entry, content: nextContent, contentPresentation: nextPresentation }
+            : entry),
+        };
+        const withAsset = assetAdded ? { ...document, assets: [...document.assets, action.asset!] } : document;
+        candidate = replaceTableObject(withAsset, target, nextTable);
+        affectedIds = [action.objectId, action.tableId, action.cellId, ...(assetAdded ? [action.assetId] : [])];
+        createdIds = assetAdded ? [action.assetId] : [];
+        break;
+      }
+
+      case 'table.cell.clearImage': {
+        const target = tableCellTarget(document, action);
+        if (!target.ok) return target;
+        const table = target.object.table;
+        const cell = table.cells.find((entry) => entry.id === action.cellId);
+        if (!cell) return failure('ACTION_INVALID', `Cell ${action.cellId} no longer exists`);
+        if (cell.coveredBy) return failure('ACTION_INVALID', `Cell ${action.cellId} is covered by anchor ${cell.coveredBy}`);
+        if (!exactEquals(cell.content, action.expectedContent)
+            || !exactEquals(cell.contentPresentation, action.expectedContentPresentation)) {
+          return failure('TARGET_STALE', `Cell ${action.cellId} content/presentation changed after the image clear was prepared`);
+        }
+        if (cell.content.type !== 'image') {
+          return failure('ACTION_INVALID', `Cell ${action.cellId} is not an Image Cell`);
+        }
+        const nextCell = { ...cell, content: { type: 'empty' as const } };
+        if (cell.contentPresentation) {
+          const presentation = { ...cell.contentPresentation };
+          delete presentation.image;
+          if (Object.keys(presentation).length === 0) delete nextCell.contentPresentation;
+          else nextCell.contentPresentation = presentation;
+        }
+        candidate = replaceTableObject(document, target, {
+          ...table,
+          cells: table.cells.map((entry) => entry.id === cell.id ? nextCell : entry),
+        });
+        affectedIds = [action.objectId, action.tableId, action.cellId];
+        createdIds = [];
+        changed = true;
+        break;
+      }
+
       case 'table.legend.create': {
         const target = tableCellTarget(document, action);
         if (!target.ok) return target;

@@ -15,6 +15,9 @@ export function TableRenderer({table,plan,assets,assetUrls}:{table:TableModel;pl
   </div>;
   const anchors=orderedAnchors(table);
   return <div data-table-intrinsic={table.id} className="table-intrinsic">
+    {table.title&&<div data-table-title={table.id} className="editorial-table-title" style={{...typography(plan.annotationStyle),marginBottom:gap}}>
+      <div data-flow-root=""><RichTextRenderer rich={table.title}/></div>
+    </div>}
     {annotations.filter(a=>a.kind==='caption').map(renderAnnotation)}
     <div data-table-id={table.id} role="table" aria-label={table.id} aria-rowcount={table.rows.length} aria-colcount={table.columns.length}
       className="editorial-grid" style={{width:qCss(plan.frameQ),gridTemplateColumns:plan.trackQ.map(qCss).join(' '),

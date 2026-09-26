@@ -49,6 +49,15 @@ import {
   TableClipboardError,
 } from '../editor/table-clipboard';
 import { legendUsageCount } from '../editor/table-marker-authoring';
+import {
+  annotationTargetForCell,
+  annotationTargetForTable,
+  annotationUsageCount,
+  DEFAULT_IMAGE_CELL_HEIGHT_U,
+  DEFAULT_IMAGE_CELL_WIDTH_U,
+  moveId,
+  nextLegendUsageCellId,
+} from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
 import {
   prepareAxisReorder,
@@ -84,7 +93,7 @@ import {
   type EditableCellType,
   type TableCellDraft,
 } from '../editor/table-cell-draft';
-import type { TableLegendEntry } from '../domain/editorial-model';
+import type { TableAnnotation, TableLegendEntry } from '../domain/editorial-model';
 import type { AuthoringRecoveryOverlay } from '../recovery';
 import type { AssetPersistenceBridge, AssetRuntimeState } from '../asset';
 import {
@@ -127,6 +136,15 @@ export function tableStyleDisabledGuidance(hasCellDraft: boolean, isLocked: bool
   }
   if (hasCellDraft) return 'Conclua ou cancele a edição da célula para alterar a apresentação da tabela.';
   if (isLocked) return 'Tabela bloqueada. Desbloqueie a tabela para alterar a apresentação.';
+  return undefined;
+}
+
+export function tableSemanticDisabledGuidance(hasCellDraft: boolean, isLocked: boolean): string | undefined {
+  if (hasCellDraft && isLocked) {
+    return 'Conclua ou cancele a edição da célula e desbloqueie a tabela para alterar título, notas, legenda ou imagem.';
+  }
+  if (hasCellDraft) return 'Conclua ou cancele a edição da célula antes de alterar título, notas, legenda ou imagem.';
+  if (isLocked) return 'Tabela bloqueada. Desbloqueie a tabela para alterar título, notas, legenda ou imagem.';
   return undefined;
 }
 
@@ -213,13 +231,25 @@ export interface EditorWorkspacePersistenceProps {
 function LegendEditorRow({
   entry,
   usageCount,
+  canMoveUp,
+  canMoveDown,
+  mutationDisabled,
   onUpdate,
   onRemove,
+  onMoveUp,
+  onMoveDown,
+  onLocate,
 }: {
   entry: TableLegendEntry;
   usageCount: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  mutationDisabled: boolean;
   onUpdate(markerCode: string, plainText?: string): void;
   onRemove(): void;
+  onMoveUp(): void;
+  onMoveDown(): void;
+  onLocate(): void;
 }) {
   const editableText = projectEditableRichText(entry.text);
   const [markerCode, setMarkerCode] = React.useState(entry.markerCode);
@@ -249,10 +279,15 @@ function LegendEditorRow({
       </label>
       {editableText === null && <p>Texto avançado preservado; edição simples bloqueada.</p>}
       <div className="vnext-cell-edit-actions">
-        <button type="button" data-editor-action="update-legend" onClick={() => onUpdate(markerCode, editableText === null ? undefined : plainText)}>
+        <button type="button" data-editor-action="update-legend" disabled={mutationDisabled} onClick={() => onUpdate(markerCode, editableText === null ? undefined : plainText)}>
           Atualizar legenda
         </button>
-        <button type="button" data-editor-action="remove-legend" disabled={usageCount > 0} title={usageCount > 0 ? `Usado por ${usageCount} célula(s).` : undefined} onClick={onRemove}>
+        <button type="button" data-editor-action="move-legend-up" disabled={mutationDisabled || !canMoveUp} onClick={onMoveUp}>Mover para cima</button>
+        <button type="button" data-editor-action="move-legend-down" disabled={mutationDisabled || !canMoveDown} onClick={onMoveDown}>Mover para baixo</button>
+        <button type="button" data-editor-action="locate-legend-usage" disabled={usageCount === 0} onClick={onLocate}>
+          Localizar usos
+        </button>
+        <button type="button" data-editor-action="remove-legend" disabled={mutationDisabled || usageCount > 0} title={usageCount > 0 ? `Usado por ${usageCount} célula(s).` : undefined} onClick={onRemove}>
           Excluir legenda
         </button>
       </div>
@@ -303,6 +338,14 @@ export function EditorWorkspace({
   const [markerLegendChoice, setMarkerLegendChoice] = React.useState('');
   const [newMarkerCode, setNewMarkerCode] = React.useState('');
   const [newMarkerText, setNewMarkerText] = React.useState('');
+  const [tableTitleDraft, setTableTitleDraft] = React.useState('');
+  const [newAnnotationKind, setNewAnnotationKind] = React.useState<'caption' | 'note' | 'footnote'>('note');
+  const [newAnnotationText, setNewAnnotationText] = React.useState('');
+  const [newAnnotationTarget, setNewAnnotationTarget] = React.useState<'TABLE' | 'CELL'>('TABLE');
+  const [imageCellAssetChoice, setImageCellAssetChoice] = React.useState('');
+  const [imageCellFit, setImageCellFit] = React.useState<'contain' | 'cover'>('contain');
+  const [imageCellWidthMm, setImageCellWidthMm] = React.useState(String(DEFAULT_IMAGE_CELL_WIDTH_U / 10_000));
+  const [imageCellHeightMm, setImageCellHeightMm] = React.useState(String(DEFAULT_IMAGE_CELL_HEIGHT_U / 10_000));
   const [textEdit, setTextEdit] = React.useState<TextEditSession | null>(null);
   const [tableSelection, setTableSelection] = React.useState<TableSelection | null>(null);
   const [tableRangeExtensionArmed, setTableRangeExtensionArmed] = React.useState(false);
@@ -377,6 +420,10 @@ export function EditorWorkspace({
     setTableStyleAdvancedOpen(false);
     setTableStylePaddingLinked(true);
   }, [document.id, editorState.activePageId, selectedTableObject?.id]);
+  React.useEffect(() => {
+    const title = selectedTableObject?.table.title;
+    setTableTitleDraft(title ? (projectEditableRichText(title) ?? '') : '');
+  }, [document.id, editorState.activePageId, selectedTableObject?.id, selectedTableObject?.table.title]);
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
@@ -1447,6 +1494,339 @@ export function EditorWorkspace({
     setStatusMessage('Legenda excluída.');
   };
 
+  const semanticMutationTable = (): { pageId: string; object: TableObject } | undefined => {
+    if (cellDraftRef.current) {
+      setStatusMessage('Conclua ou cancele a edição da célula antes de alterar título, notas, legenda ou imagem.');
+      return undefined;
+    }
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === activePageIdRef.current);
+    const object = page?.objects.find(
+      (entry): entry is TableObject => entry.id === selectedTableObject?.id && entry.type === 'table'
+    );
+    if (!page || !object) return undefined;
+    if (object.locked) {
+      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar superfícies semânticas.');
+      return undefined;
+    }
+    return { pageId: page.id, object };
+  };
+
+  const semanticAnchorCell = (table: TableModel): Cell | undefined => {
+    const selection = tableSelectionRef.current;
+    if (!selection) return undefined;
+    const ids = selectedTableAnchorIds(table, selection);
+    return ids.length === 1 ? table.cells.find((cell) => cell.id === ids[0] && !cell.coveredBy) : undefined;
+  };
+
+  const runTableTitleSet = (plainText: string | null) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const current = live.object.table.title;
+    const result = session.execute({
+      type: 'table.title.set',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      expectedTitle: current ?? null,
+      plainText,
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? (plainText === null ? 'Título da tabela removido.' : 'Título da tabela atualizado.') : 'Título da tabela sem alterações.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'O título mudou. Revise o valor atual antes de tentar novamente.'
+        : 'Não foi possível atualizar o título da tabela.');
+  };
+
+  const annotationTargetForCurrentSelection = (
+    table: TableModel,
+    scope: 'TABLE' | 'CELL'
+  ) => {
+    if (scope === 'TABLE') return annotationTargetForTable(table);
+    const cell = semanticAnchorCell(table);
+    return cell ? annotationTargetForCell(table, cell.id) : undefined;
+  };
+
+  const runAnnotationCreate = () => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const text = newAnnotationText.replace(/\r\n?/g, '\n');
+    if (!text.trim()) {
+      setStatusMessage('Informe o texto da anotação.');
+      return;
+    }
+    const scope = newAnnotationKind === 'caption' ? 'TABLE' : newAnnotationTarget;
+    const target = annotationTargetForCurrentSelection(live.object.table, scope);
+    if (!target) {
+      setStatusMessage('Selecione uma única célula para aplicar esta nota à célula.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.annotation.create',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      kind: newAnnotationKind,
+      plainText: text,
+      expectedAnnotationOrder: live.object.table.annotations.map((entry) => entry.id),
+      target: { ...target, expectedAnnotationIds: [...target.expectedAnnotationIds] },
+    });
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'TARGET_STALE'
+        ? 'Notas/referências mudaram. Revise antes de criar.'
+        : 'Não foi possível criar a anotação.');
+      return;
+    }
+    setNewAnnotationText('');
+    setStatusMessage('Anotação criada e aplicada em uma única ação.');
+  };
+
+  const runAnnotationUpdate = (annotation: TableAnnotation, plainText: string) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const current = live.object.table.annotations.find((entry) => entry.id === annotation.id);
+    if (!current) {
+      setStatusMessage('A anotação não existe mais.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.annotation.update',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      annotationId: current.id,
+      expectedAnnotation: current,
+      plainText: plainText.replace(/\r\n?/g, '\n'),
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Anotação atualizada.' : 'Anotação sem alterações.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A anotação mudou. Revise antes de editar.'
+        : 'Não foi possível editar esta anotação.');
+  };
+
+  const runAnnotationReference = (
+    annotation: TableAnnotation,
+    scope: 'TABLE' | 'CELL',
+    mode: 'attach' | 'detach'
+  ) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const current = live.object.table.annotations.find((entry) => entry.id === annotation.id);
+    if (!current) {
+      setStatusMessage('A anotação não existe mais.');
+      return;
+    }
+    const target = annotationTargetForCurrentSelection(live.object.table, scope);
+    if (!target) {
+      setStatusMessage('Selecione uma única célula âncora para alterar a referência.');
+      return;
+    }
+    const result = session.execute({
+      type: mode === 'attach' ? 'table.annotation.attach' : 'table.annotation.detach',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      annotationId: current.id,
+      target: { ...target, expectedAnnotationIds: [...target.expectedAnnotationIds] },
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed
+          ? (mode === 'attach' ? 'Referência aplicada.' : 'Referência removida.')
+          : 'Referência sem alterações.')
+      : result.error.code === 'ANNOTATION_SCOPE_INVALID'
+        ? 'Legenda/caption só pode ser aplicada à tabela.'
+        : result.error.code === 'TARGET_STALE'
+          ? 'As referências mudaram. Revise antes de tentar novamente.'
+          : 'Não foi possível alterar a referência.');
+  };
+
+  const runAnnotationRemove = (annotation: TableAnnotation) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const current = live.object.table.annotations.find((entry) => entry.id === annotation.id);
+    if (!current) return;
+    const result = session.execute({
+      type: 'table.annotation.remove',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      annotationId: current.id,
+      expectedAnnotation: current,
+    });
+    setStatusMessage(result.ok
+      ? 'Anotação excluída.'
+      : result.error.code === 'ANNOTATION_IN_USE'
+        ? 'Remova todas as referências desta anotação antes de excluí-la.'
+        : result.error.code === 'TARGET_STALE'
+          ? 'A anotação mudou. Revise antes de excluir.'
+          : 'Não foi possível excluir a anotação.');
+  };
+
+  const runAnnotationReorder = (annotationId: string, direction: 'up' | 'down') => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const expectedOrder = live.object.table.annotations.map((entry) => entry.id);
+    const nextOrder = moveId(expectedOrder, annotationId, direction);
+    const result = session.execute({
+      type: 'table.annotation.reorder',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      expectedOrder,
+      nextOrder: [...nextOrder],
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Ordem das anotações atualizada.' : 'A anotação já está no limite da lista.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A ordem das anotações mudou. Revise antes de mover.'
+        : 'Não foi possível reordenar as anotações.');
+  };
+
+  const runLegendReorder = (legendEntryId: string, direction: 'up' | 'down') => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const expectedOrder = live.object.table.legend.map((entry) => entry.id);
+    const nextOrder = moveId(expectedOrder, legendEntryId, direction);
+    const result = session.execute({
+      type: 'table.legend.reorder',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      expectedOrder,
+      nextOrder: [...nextOrder],
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Ordem da legenda atualizada.' : 'A entrada já está no limite da lista.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A ordem da legenda mudou. Revise antes de mover.'
+        : 'Não foi possível reordenar a legenda.');
+  };
+
+  const locateLegendUsage = (legendEntryId: string) => {
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === activePageIdRef.current);
+    const object = page?.objects.find(
+      (entry): entry is TableObject => entry.id === selectedTableObject?.id && entry.type === 'table'
+    );
+    if (!page || !object) return;
+    const currentCell = semanticAnchorCell(object.table);
+    const cellId = nextLegendUsageCellId(object.table, legendEntryId, currentCell?.id);
+    if (!cellId) {
+      setStatusMessage('Esta entrada da legenda ainda não possui usos.');
+      return;
+    }
+    const cell = object.table.cells.find((entry) => entry.id === cellId);
+    if (!cell) return;
+    const identity = tableSelectionIdentity(page.id, object.id, object.table.id);
+    const selection = tableCellSelection(identity, { rowId: cell.rowId, columnId: cell.columnId });
+    tableSelectionRef.current = selection;
+    tableHistoryContextRef.current = { table: object.table, selection };
+    setTableSelection(selection);
+    setEditorState({ activePageId: page.id, selectedObjectIds: [object.id], mode: 'table-grid' });
+    setStatusMessage('Uso da legenda localizado.');
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+
+  const imageDimensionsU = (): { widthU: number; heightU: number } | undefined => {
+    const width = Number(imageCellWidthMm);
+    const height = Number(imageCellHeightMm);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      setStatusMessage('Informe largura e altura positivas em milímetros.');
+      return undefined;
+    }
+    try {
+      const widthU = mmToU(width);
+      const heightU = mmToU(height);
+      if (widthU < 1 || heightU < 1) throw new Error('non-positive');
+      return { widthU, heightU };
+    } catch {
+      setStatusMessage('As dimensões da imagem não podem ser representadas no contrato físico.');
+      return undefined;
+    }
+  };
+
+  const runImageCellSet = () => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const cell = semanticAnchorCell(live.object.table);
+    if (!cell) {
+      setStatusMessage('Selecione uma única célula âncora para inserir a imagem.');
+      return;
+    }
+    const dimensions = imageDimensionsU();
+    if (!dimensions) return;
+    const assetId = imageCellAssetChoice || (cell.content.type === 'image' ? cell.content.assetId : '');
+    if (!assetId) {
+      setStatusMessage('Escolha uma imagem do catálogo.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.cell.setImage',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      cellId: cell.id,
+      expectedContent: cell.content,
+      expectedContentPresentation: cell.contentPresentation,
+      assetId,
+      fit: imageCellFit,
+      targetWidthU: dimensions.widthU,
+      targetHeightU: dimensions.heightU,
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Imagem da célula atualizada.' : 'Imagem da célula sem alterações.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A célula mudou. Revise antes de alterar a imagem.'
+        : 'Não foi possível atualizar a imagem da célula.');
+  };
+
+  const runImageCellClear = () => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const cell = semanticAnchorCell(live.object.table);
+    if (!cell || cell.content.type !== 'image') {
+      setStatusMessage('Selecione uma única célula que contenha imagem.');
+      return;
+    }
+    const result = session.execute({
+      type: 'table.cell.clearImage',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      cellId: cell.id,
+      expectedContent: cell.content,
+      expectedContentPresentation: cell.contentPresentation,
+    });
+    setStatusMessage(result.ok
+      ? 'Imagem removida da célula. O asset permanece no catálogo.'
+      : result.error.code === 'TARGET_STALE'
+        ? 'A célula mudou. Revise antes de remover a imagem.'
+        : 'Não foi possível remover a imagem da célula.');
+  };
+
+  const runImageCellUpload = () => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const cell = semanticAnchorCell(live.object.table);
+    if (!cell) {
+      setStatusMessage('Selecione uma única célula âncora para fazer upload.');
+      return;
+    }
+    const dimensions = imageDimensionsU();
+    if (!dimensions) return;
+    requestImageUpload({
+      type: 'table-cell',
+      pageId: live.pageId,
+      objectId: live.object.id,
+      tableId: live.object.table.id,
+      cellId: cell.id,
+      expectedContent: cell.content,
+      expectedContentPresentation: cell.contentPresentation,
+      fit: imageCellFit,
+      targetWidthU: dimensions.widthU,
+      targetHeightU: dimensions.heightU,
+    });
+  };
+
   const runMarkerDetach = () => {
     const live = currentSelectedTableForStructure();
     if (!live || editorState.mode !== 'table-grid') return;
@@ -1691,10 +2071,29 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Ordem do objeto atualizada.' : 'Não foi possível alterar a ordem.');
   };
 
-  const requestImageUpload = (target: { type: 'insert'; pageId: string } | { type: 'replace'; objectId: string }) => {
+  const requestImageUpload = (target:
+    | { type: 'insert'; pageId: string }
+    | { type: 'replace'; objectId: string }
+    | {
+        type: 'table-cell';
+        pageId: string;
+        objectId: string;
+        tableId: string;
+        cellId: string;
+        expectedContent: Cell['content'];
+        expectedContentPresentation?: Cell['contentPresentation'];
+        fit: 'contain' | 'cover';
+        targetWidthU: number;
+        targetHeightU: number;
+      }
+  ) => {
     if (uploadBusyRef.current) return;
     if (!persistence?.assetBridge) {
       setStatusMessage('Envio de imagens indisponível neste ambiente.');
+      return;
+    }
+    if (target.type === 'table-cell' && cellDraftRef.current) {
+      setStatusMessage('Conclua ou cancele a edição da célula antes de alterar sua imagem.');
       return;
     }
     if (!finishTextEditBeforeCommand()) return;
@@ -2083,6 +2482,22 @@ export function EditorWorkspace({
       .map((cellId) => selectedTableObject.table.cells.find((cell) => cell.id === cellId))
       .filter((cell): cell is Cell => Boolean(cell))
     : [];
+  const selectedSemanticCell = selectedAnchorCells.length === 1 && !selectedAnchorCells[0].coveredBy
+    ? selectedAnchorCells[0]
+    : undefined;
+  React.useEffect(() => {
+    const image = selectedSemanticCell?.content.type === 'image'
+      ? selectedSemanticCell.contentPresentation?.image
+      : undefined;
+    setImageCellAssetChoice(selectedSemanticCell?.content.type === 'image' ? selectedSemanticCell.content.assetId : '');
+    setImageCellFit(image?.fit ?? 'contain');
+    setImageCellWidthMm(String(image?.targetWidthMm ?? DEFAULT_IMAGE_CELL_WIDTH_U / 10_000));
+    setImageCellHeightMm(String(image?.targetHeightMm ?? DEFAULT_IMAGE_CELL_HEIGHT_U / 10_000));
+  }, [
+    selectedSemanticCell?.id,
+    selectedSemanticCell?.content,
+    selectedSemanticCell?.contentPresentation?.image,
+  ]);
   function commonCellStyleValue<K extends keyof NonNullable<Cell['style']>>(
     key: K
   ): NonNullable<Cell['style']>[K] | undefined {
@@ -2136,6 +2551,11 @@ export function EditorWorkspace({
   const tableStyleDisabled = tableStyleDisabledReason !== undefined;
   const tableStyleDisabledReasonId = tableStyleDisabled && selectedTableObject
     ? `table-style-disabled-${selectedTableObject.id}`
+    : undefined;
+  const tableSemanticDisabledReason = tableSemanticDisabledGuidance(Boolean(cellDraft), Boolean(selectedTableObject?.locked));
+  const tableSemanticDisabled = tableSemanticDisabledReason !== undefined;
+  const tableSemanticDisabledReasonId = tableSemanticDisabled && selectedTableObject
+    ? `table-semantic-disabled-${selectedTableObject.id}`
     : undefined;
 
   const currentSelectedTableForPresentation = (): {
@@ -2753,7 +3173,7 @@ export function EditorWorkspace({
                 <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
                 <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
                 <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
-                <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Marcador</button>
+                <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
                 <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
               </div>
               <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
@@ -2997,6 +3417,63 @@ export function EditorWorkspace({
               {selectedObject.type === 'image' && <button type="button" className="vnext-inspector-action" onClick={replaceSelectedImage}>Substituir imagem</button>}
               {selectedObject.type === 'table' && (
                 <>
+                  <div className="vnext-divider" />
+                  <section className="vnext-table-semantic-title" data-table-semantic-title="">
+                    <h3>Título da tabela</h3>
+                    {selectedObject.table.title && projectEditableRichText(selectedObject.table.title) === null ? (
+                      <p data-table-title-readonly="">
+                        Este título possui RichText avançado e foi preservado sem achatamento. A edição avançada pertence à etapa profissional de RichText.
+                      </p>
+                    ) : (
+                      <label>
+                        <span>Título</span>
+                        <textarea
+                          data-table-title-input=""
+                          value={tableTitleDraft}
+                          disabled={tableSemanticDisabled}
+                          aria-describedby={tableSemanticDisabledReasonId}
+                          onChange={(event) => setTableTitleDraft(event.target.value.replace(/\r\n?/g, '\n'))}
+                        />
+                      </label>
+                    )}
+                    {tableSemanticDisabledReason && tableSemanticDisabledReasonId && (
+                      <p id={tableSemanticDisabledReasonId} data-table-semantic-disabled-reason="">
+                        {tableSemanticDisabledReason}
+                      </p>
+                    )}
+                    <div className="vnext-cell-edit-actions">
+                      <button
+                        type="button"
+                        data-editor-action="set-table-title"
+                        disabled={tableSemanticDisabled || (selectedObject.table.title !== undefined && projectEditableRichText(selectedObject.table.title) === null)}
+                        aria-describedby={tableSemanticDisabledReasonId}
+                        onClick={() => runTableTitleSet(tableTitleDraft)}
+                      >
+                        Salvar título
+                      </button>
+                      <button
+                        type="button"
+                        data-editor-action="clear-table-title"
+                        disabled={tableSemanticDisabled || !selectedObject.table.title}
+                        aria-describedby={tableSemanticDisabledReasonId}
+                        onClick={() => runTableTitleSet(null)}
+                      >
+                        Remover título
+                      </button>
+                      <button
+                        type="button"
+                        data-editor-action="open-table-semantics"
+                        disabled={Boolean(cellDraft)}
+                        aria-describedby={cellDraft ? tableSemanticDisabledReasonId : undefined}
+                        onClick={() => {
+                          if (editorState.mode === 'select') startTableGrid(selectedObject);
+                          setMarkerPanelOpen(true);
+                        }}
+                      >
+                        Notas e legenda
+                      </button>
+                    </div>
+                  </section>
                   <div className="vnext-divider" />
                   <section
                     className="vnext-fit-height-section"
@@ -3390,14 +3867,225 @@ export function EditorWorkspace({
                       </div>
                     )}
 
+                    <div className="vnext-divider" />
+                    <section className="vnext-image-cell-panel" data-image-cell-authoring="">
+                      <h3>Imagem da célula</h3>
+                      {!selectedSemanticCell ? (
+                        <p>Selecione exatamente uma célula para inserir ou editar uma imagem.</p>
+                      ) : (
+                        <>
+                          <label>
+                            <span>Imagem do catálogo</span>
+                            <select
+                              data-image-cell-asset=""
+                              value={imageCellAssetChoice}
+                              disabled={tableSemanticDisabled}
+                              aria-describedby={tableSemanticDisabledReasonId}
+                              onChange={(event) => setImageCellAssetChoice(event.target.value)}
+                            >
+                              <option value="">Escolha uma imagem</option>
+                              {document.assets.map((asset) => (
+                                <option key={asset.id} value={asset.id}>{asset.name} — {asset.alt}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Ajuste</span>
+                            <select
+                              data-image-cell-fit=""
+                              value={imageCellFit}
+                              disabled={tableSemanticDisabled}
+                              aria-describedby={tableSemanticDisabledReasonId}
+                              onChange={(event) => setImageCellFit(event.target.value as 'contain' | 'cover')}
+                            >
+                              <option value="contain">Conter</option>
+                              <option value="cover">Preencher</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>Largura</span>
+                            <div>
+                              <input
+                                data-image-cell-width=""
+                                type="text"
+                                inputMode="decimal"
+                                value={imageCellWidthMm}
+                                disabled={tableSemanticDisabled}
+                                aria-describedby={tableSemanticDisabledReasonId}
+                                onChange={(event) => setImageCellWidthMm(event.target.value)}
+                              />
+                              <span>mm</span>
+                            </div>
+                          </label>
+                          <label>
+                            <span>Altura</span>
+                            <div>
+                              <input
+                                data-image-cell-height=""
+                                type="text"
+                                inputMode="decimal"
+                                value={imageCellHeightMm}
+                                disabled={tableSemanticDisabled}
+                                aria-describedby={tableSemanticDisabledReasonId}
+                                onChange={(event) => setImageCellHeightMm(event.target.value)}
+                              />
+                              <span>mm</span>
+                            </div>
+                          </label>
+                          <div className="vnext-cell-edit-actions">
+                            <button
+                              type="button"
+                              data-editor-action="set-cell-image"
+                              disabled={tableSemanticDisabled || !imageCellAssetChoice}
+                              aria-describedby={tableSemanticDisabledReasonId}
+                              onClick={runImageCellSet}
+                            >
+                              {selectedSemanticCell.content.type === 'image' ? 'Substituir imagem' : 'Inserir imagem'}
+                            </button>
+                            <button
+                              type="button"
+                              data-editor-action="upload-cell-image"
+                              disabled={tableSemanticDisabled || !persistence?.assetBridge}
+                              aria-describedby={tableSemanticDisabledReasonId}
+                              onClick={runImageCellUpload}
+                            >
+                              Upload
+                            </button>
+                            <button
+                              type="button"
+                              data-editor-action="clear-cell-image"
+                              disabled={tableSemanticDisabled || selectedSemanticCell.content.type !== 'image'}
+                              aria-describedby={tableSemanticDisabledReasonId}
+                              onClick={runImageCellClear}
+                            >
+                              Remover imagem
+                            </button>
+                          </div>
+                          {tableSemanticDisabledReason && <p>{tableSemanticDisabledReason}</p>}
+                        </>
+                      )}
+                    </section>
+
                     {markerPanelOpen && selectedTableObject && (
                       <>
                         <div className="vnext-divider" />
                         <section className="vnext-marker-legend-panel" data-marker-legend-panel="">
                           <div className="vnext-legend-entry-heading">
-                            <h3>Marcadores e legenda</h3>
+                            <h3>Notas, marcadores e legenda</h3>
                             <button type="button" data-editor-action="close-marker-panel" onClick={() => setMarkerPanelOpen(false)}>Fechar</button>
                           </div>
+                          <p>Notas, legendas e marcadores usam as superfícies semânticas canônicas desta tabela.</p>
+                          <fieldset className="vnext-marker-create" data-annotation-create="">
+                            <legend>Adicionar anotação</legend>
+                            <label>
+                              <span>Tipo</span>
+                              <select
+                                data-annotation-kind=""
+                                value={newAnnotationKind}
+                                disabled={tableSemanticDisabled}
+                                aria-describedby={tableSemanticDisabledReasonId}
+                                onChange={(event) => {
+                                  const kind = event.target.value as 'caption' | 'note' | 'footnote';
+                                  setNewAnnotationKind(kind);
+                                  if (kind === 'caption') setNewAnnotationTarget('TABLE');
+                                }}
+                              >
+                                <option value="caption">Legenda da tabela</option>
+                                <option value="note">Nota</option>
+                                <option value="footnote">Nota de rodapé</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Aplicar a</span>
+                              <select
+                                data-annotation-target=""
+                                value={newAnnotationKind === 'caption' ? 'TABLE' : newAnnotationTarget}
+                                disabled={tableSemanticDisabled || newAnnotationKind === 'caption'}
+                                aria-describedby={tableSemanticDisabledReasonId}
+                                onChange={(event) => setNewAnnotationTarget(event.target.value as 'TABLE' | 'CELL')}
+                              >
+                                <option value="TABLE">Tabela</option>
+                                <option value="CELL" disabled={!selectedSemanticCell}>Célula selecionada</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Texto</span>
+                              <textarea
+                                data-new-annotation-text=""
+                                value={newAnnotationText}
+                                disabled={tableSemanticDisabled}
+                                aria-describedby={tableSemanticDisabledReasonId}
+                                onChange={(event) => setNewAnnotationText(event.target.value.replace(/\r\n?/g, '\n'))}
+                                placeholder="Texto técnico da anotação"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              data-editor-action="create-annotation"
+                              disabled={Boolean(cellDraft) || !newAnnotationText.trim() || (newAnnotationTarget === 'CELL' && newAnnotationKind !== 'caption' && !selectedSemanticCell)}
+                              onClick={runAnnotationCreate}
+                            >
+                              Criar e aplicar
+                            </button>
+                          </fieldset>
+                          <div className="vnext-legend-list" data-annotation-list="">
+                            {selectedTableObject.table.annotations.length === 0 ? (
+                              <p>Nenhuma anotação criada.</p>
+                            ) : selectedTableObject.table.annotations.map((annotation, annotationIndex) => {
+                              const editable = projectEditableRichText(annotation.text);
+                              const tableAttached = (selectedTableObject.table.annotationIds ?? []).includes(annotation.id);
+                              const cellAttached = Boolean(selectedSemanticCell?.annotationIds?.includes(annotation.id));
+                              const usageCount = annotationUsageCount(selectedTableObject.table, annotation.id);
+                              return (
+                                <div key={annotation.id} className="vnext-legend-entry-editor" data-annotation-entry-id={annotation.id}>
+                                  <div className="vnext-legend-entry-heading">
+                                    <strong>{annotation.kind === 'caption' ? 'Legenda' : annotation.kind === 'note' ? 'Nota' : 'Nota de rodapé'}</strong>
+                                    <span>{usageCount} referência(s)</span>
+                                  </div>
+                                  <label>
+                                    <span>Texto</span>
+                                    <textarea
+                                      key={annotation.id + ':' + JSON.stringify(annotation.text)}
+                                      data-annotation-text={annotation.id}
+                                      defaultValue={editable ?? ''}
+                                      disabled={editable === null || Boolean(cellDraft)}
+                                      onBlur={(event) => {
+                                        if (editable !== null && event.target.value !== editable) runAnnotationUpdate(annotation, event.target.value);
+                                      }}
+                                    />
+                                  </label>
+                                  {editable === null && (
+                                    <p>RichText avançado preservado; edição simples indisponível nesta etapa.</p>
+                                  )}
+                                  <div className="vnext-cell-edit-actions">
+                                    <button type="button" data-editor-action="annotation-table-reference"
+                                      disabled={Boolean(cellDraft)}
+                                      onClick={() => runAnnotationReference(annotation, 'TABLE', tableAttached ? 'detach' : 'attach')}>
+                                      {tableAttached ? 'Remover da tabela' : 'Aplicar à tabela'}
+                                    </button>
+                                    {annotation.kind !== 'caption' && (
+                                      <button type="button" data-editor-action="annotation-cell-reference"
+                                        disabled={Boolean(cellDraft) || !selectedSemanticCell}
+                                        onClick={() => runAnnotationReference(annotation, 'CELL', cellAttached ? 'detach' : 'attach')}>
+                                        {cellAttached ? 'Remover da célula' : 'Aplicar à célula'}
+                                      </button>
+                                    )}
+                                    <button type="button" data-editor-action="move-annotation-up"
+                                      disabled={Boolean(cellDraft) || annotationIndex === 0}
+                                      onClick={() => runAnnotationReorder(annotation.id, 'up')}>Mover para cima</button>
+                                    <button type="button" data-editor-action="move-annotation-down"
+                                      disabled={Boolean(cellDraft) || annotationIndex === selectedTableObject.table.annotations.length - 1}
+                                      onClick={() => runAnnotationReorder(annotation.id, 'down')}>Mover para baixo</button>
+                                    <button type="button" data-editor-action="remove-annotation"
+                                      disabled={Boolean(cellDraft) || usageCount > 0}
+                                      title={usageCount > 0 ? 'Remova as referências antes de excluir.' : undefined}
+                                      onClick={() => runAnnotationRemove(annotation)}>Excluir</button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="vnext-divider" />
                           <p>O marcador referencia uma entrada da legenda desta tabela.</p>
                           <label>
                             <span>Marcador existente</span>
@@ -3432,13 +4120,19 @@ export function EditorWorkspace({
                           <div className="vnext-legend-list" data-legend-list="">
                             {selectedTableObject.table.legend.length === 0 ? (
                               <p>Nenhuma legenda criada.</p>
-                            ) : selectedTableObject.table.legend.map((entry) => (
+                            ) : selectedTableObject.table.legend.map((entry, legendIndex) => (
                               <LegendEditorRow
                                 key={entry.id}
                                 entry={entry}
                                 usageCount={legendUsageCount(selectedTableObject.table, entry.id)}
+                                canMoveUp={!cellDraft && legendIndex > 0}
+                                canMoveDown={!cellDraft && legendIndex < selectedTableObject.table.legend.length - 1}
+                                mutationDisabled={Boolean(cellDraft)}
                                 onUpdate={(markerCode, plainText) => runLegendUpdate(entry, markerCode, plainText)}
                                 onRemove={() => runLegendRemove(entry)}
+                                onMoveUp={() => runLegendReorder(entry.id, 'up')}
+                                onMoveDown={() => runLegendReorder(entry.id, 'down')}
+                                onLocate={() => locateLegendUsage(entry.id)}
                               />
                             ))}
                           </div>

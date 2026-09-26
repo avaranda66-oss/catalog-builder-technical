@@ -84,6 +84,7 @@ export type PhysicalLayoutFact=
  | ({kind:'row';tableId:string;rowId:string;resolvedHeightU:number;yQ:number;heightQ:number}&Identity)
  | ({kind:'cell';tableId:string;cellId:string;intrinsicContentWidthQ:number;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
  | ({kind:'annotation';tableId:string;annotationId:string;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
+ | ({kind:'tableTitle';tableId:string;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
  | ({kind:'paintEdge';tableId:string;edgeId:string;thicknessQ:number}&Bounds&Identity)
  | ({kind:'image';tableId:string;cellId:string;assetId:string;naturalWidthQ:number;naturalHeightQ:number}&Identity);
 export interface LayoutSnapshot {facts:PhysicalLayoutFact[];geometryDiagnostics:Diagnostic[]}
@@ -95,6 +96,7 @@ export function factKey(fact:PhysicalLayoutFact):string {
     case 'row':return JSON.stringify([fact.kind,fact.pageId,fact.tableId,fact.rowId]);
     case 'cell':case 'image':return JSON.stringify([fact.kind,fact.pageId,fact.tableId,fact.cellId]);
     case 'annotation':return JSON.stringify([fact.kind,fact.pageId,fact.tableId,fact.annotationId]);
+    case 'tableTitle':return JSON.stringify([fact.kind,fact.pageId,fact.tableId]);
     case 'paintEdge':return JSON.stringify([fact.kind,fact.pageId,fact.tableId,fact.edgeId]);
   }
 }
@@ -159,6 +161,11 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
           const img=flow.querySelector('img')!;
           facts.push({kind:'image',pageId:page.id,tableId:table.id,cellId:cell.id,assetId:cell.content.assetId,naturalWidthQ:pxToQ(img.naturalWidth),naturalHeightQ:pxToQ(img.naturalHeight)});
         }
+      }
+      if(table.title) {
+        const titleNode=findElement(intrinsic,'data-table-title',table.id),titleFlow=titleNode.querySelector<HTMLElement>('[data-flow-root]')!,titleMetrics=intrinsicMetrics(titleFlow,table.title);
+        facts.push({kind:'tableTitle',pageId:page.id,tableId:table.id,...bounds(titleNode,intrinsic.getBoundingClientRect()),
+          intrinsicContentHeightQ:titleMetrics.heightQ,textFlowSignature:await sha256(JSON.stringify(titleMetrics.records))});
       }
       const annotationTexts=[...referencedAnnotations(table).map(a=>({id:a.id,rich:annotationDisplayText(a,table)})),...table.legend.map(l=>({id:l.id,rich:legendDisplayText(l)}))];
       for(const annotation of annotationTexts) {
