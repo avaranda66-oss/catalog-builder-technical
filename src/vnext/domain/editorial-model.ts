@@ -99,7 +99,7 @@ export type TableAnnotation=z.infer<typeof TableAnnotationSchema>;
 export const TableLegendEntrySchema=z.object({id,markerCode:clean,text:RichTextSchema}).strict();
 export type TableLegendEntry=z.infer<typeof TableLegendEntrySchema>;
 export const TableModelSchema=z.object({
-  id,columns:z.array(ColumnSchema).min(1),rows:z.array(RowSchema).min(1),cells:z.array(CellSchema).min(1),
+  id,title:RichTextSchema.optional(),columns:z.array(ColumnSchema).min(1),rows:z.array(RowSchema).min(1),cells:z.array(CellSchema).min(1),
   style:TableStyleSchema,annotationIds:z.array(id).optional(),annotations:z.array(TableAnnotationSchema),legend:z.array(TableLegendEntrySchema),
 }).strict();
 export type TableModel=z.infer<typeof TableModelSchema>;

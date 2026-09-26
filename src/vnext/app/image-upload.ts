@@ -1,4 +1,5 @@
 import type { DocumentSession } from '../application';
+import type { CellContent, CellContentPresentation } from '../domain/editorial-model';
 import type { AssetLineageContext, AssetPersistenceBridge } from '../asset';
 import type { VNextPersistenceRuntime } from '../persistence';
 import { createInsertSpec } from './editor-defaults';
@@ -6,7 +7,22 @@ import { createInsertSpec } from './editor-defaults';
 export type ImageUploadIntent = {
   readonly session: DocumentSession;
   readonly lineage: AssetLineageContext;
-} & ({ readonly type: 'insert'; readonly pageId: string } | { readonly type: 'replace'; readonly objectId: string });
+} & (
+  | { readonly type: 'insert'; readonly pageId: string }
+  | { readonly type: 'replace'; readonly objectId: string }
+  | {
+      readonly type: 'table-cell';
+      readonly pageId: string;
+      readonly objectId: string;
+      readonly tableId: string;
+      readonly cellId: string;
+      readonly expectedContent: CellContent;
+      readonly expectedContentPresentation?: CellContentPresentation;
+      readonly fit: 'contain' | 'cover';
+      readonly targetWidthU: number;
+      readonly targetHeightU: number;
+    }
+);
 
 export function imageUploadLineage(runtime: VNextPersistenceRuntime): AssetLineageContext {
   const snapshot = runtime.workspace.getSnapshot();
@@ -48,7 +64,7 @@ export async function uploadWorkspaceImage(input: {
       && lineage.authorityScopeId === intent.lineage.authorityScopeId
       && lineage.openSessionId === intent.lineage.openSessionId
       && lineage.catalogId === intent.lineage.catalogId
-      && (intent.type !== 'insert' || (input.getActivePageId() === intent.pageId
+      && ((intent.type === 'replace') || (input.getActivePageId() === intent.pageId
         && intent.session.getSnapshot().document.pages.some((page) => page.id === intent.pageId)));
   };
   const stale = { message: imageUploadErrorMessage('STALE_RESULT') };
@@ -67,11 +83,26 @@ export async function uploadWorkspaceImage(input: {
       ? intent.session.execute({ type: 'object.insert', pageId: intent.pageId, object: { ...spec, assetId: upload.asset.id, asset: upload.asset } })
       : intent.type === 'replace'
         ? intent.session.execute({ type: 'image.replace', objectId: intent.objectId, assetId: upload.asset.id, asset: upload.asset })
-        : undefined;
+        : intent.type === 'table-cell'
+          ? intent.session.execute({
+              type: 'table.cell.setImage',
+              pageId: intent.pageId,
+              objectId: intent.objectId,
+              tableId: intent.tableId,
+              cellId: intent.cellId,
+              expectedContent: intent.expectedContent,
+              expectedContentPresentation: intent.expectedContentPresentation,
+              assetId: upload.asset.id,
+              asset: upload.asset,
+              fit: intent.fit,
+              targetWidthU: intent.targetWidthU,
+              targetHeightU: intent.targetHeightU,
+            })
+          : undefined;
     if (!result?.ok) return { message: 'Não foi possível vincular a imagem ao documento. Tente novamente.' };
     runtime.workspace.setAssetRuntimeState(upload.asset.id, upload.runtimeState);
     if (upload.runtimeState.status === 'resolved') runtime.workspace.setAssetUrl(upload.asset.id, upload.runtimeState.url);
-    const verb = intent.type === 'insert' ? 'adicionada' : 'substituída';
+    const verb = intent.type === 'insert' ? 'adicionada' : intent.type === 'replace' ? 'substituída' : 'vinculada à célula';
     return {
       objectId: intent.type === 'insert' ? result.metadata.createdIds[0] : intent.objectId,
       message: upload.runtimeState.status === 'resolved'

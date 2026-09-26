@@ -9,6 +9,7 @@ import {
   DocumentStyleSchema,
   ImageFocalPointSchema,
   RichTextSchema,
+  TableAnnotationSchema,
   TableLegendEntrySchema,
   TableModelSchema,
   TextStyleSchema,
@@ -437,6 +438,134 @@ export const TableLegendRemoveActionSchema = z.object({
   expectedLegend: TableLegendEntrySchema,
 }).strict();
 
+export const TableTitleSetActionSchema = z.object({
+  type: z.literal('table.title.set'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedTitle: RichTextSchema.nullable(),
+  plainText: richTextEditablePlainText.nullable(),
+}).strict();
+
+export const TableAnnotationTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('TABLE'), expectedAnnotationIds: z.array(applicationId) }).strict(),
+  z.object({
+    kind: z.literal('CELL'),
+    cellId: applicationId,
+    expectedAnnotationIds: z.array(applicationId),
+  }).strict(),
+]);
+
+export const TableAnnotationCreateActionSchema = z.object({
+  type: z.literal('table.annotation.create'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  kind: z.enum(['caption', 'note', 'footnote']),
+  plainText: richTextEditablePlainText,
+  expectedAnnotationOrder: z.array(applicationId),
+  target: TableAnnotationTargetSchema,
+}).strict();
+
+export const TableAnnotationUpdateActionSchema = z.object({
+  type: z.literal('table.annotation.update'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  annotationId: applicationId,
+  expectedAnnotation: TableAnnotationSchema,
+  plainText: richTextEditablePlainText,
+}).strict();
+
+export const TableAnnotationAttachActionSchema = z.object({
+  type: z.literal('table.annotation.attach'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  annotationId: applicationId,
+  target: TableAnnotationTargetSchema,
+}).strict();
+
+export const TableAnnotationDetachActionSchema = z.object({
+  type: z.literal('table.annotation.detach'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  annotationId: applicationId,
+  target: TableAnnotationTargetSchema,
+}).strict();
+
+export const TableAnnotationRemoveActionSchema = z.object({
+  type: z.literal('table.annotation.remove'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  annotationId: applicationId,
+  expectedAnnotation: TableAnnotationSchema,
+}).strict();
+
+function sameIdPermutation(
+  expected: readonly string[],
+  next: readonly string[],
+  context: z.RefinementCtx,
+  path: string
+): void {
+  if (new Set(expected).size !== expected.length || new Set(next).size !== next.length) {
+    context.addIssue({ code: 'custom', path: [path], message: 'Order IDs must be unique' });
+    return;
+  }
+  if (expected.length !== next.length || expected.some((id) => !next.includes(id))) {
+    context.addIssue({ code: 'custom', path: [path], message: 'Next order must contain exactly the expected IDs' });
+  }
+}
+
+export const TableAnnotationReorderActionSchema = z.object({
+  type: z.literal('table.annotation.reorder'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedOrder: z.array(applicationId),
+  nextOrder: z.array(applicationId),
+}).strict().superRefine((action, context) => sameIdPermutation(
+  action.expectedOrder, action.nextOrder, context, 'nextOrder'
+));
+
+export const TableLegendReorderActionSchema = z.object({
+  type: z.literal('table.legend.reorder'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedOrder: z.array(applicationId),
+  nextOrder: z.array(applicationId),
+}).strict().superRefine((action, context) => sameIdPermutation(
+  action.expectedOrder, action.nextOrder, context, 'nextOrder'
+));
+
+export const TableCellSetImageActionSchema = z.object({
+  type: z.literal('table.cell.setImage'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  cellId: applicationId,
+  expectedContent: CellContentSchema,
+  expectedContentPresentation: CellContentPresentationSchema.optional(),
+  assetId: applicationId,
+  asset: AssetRefSchema.optional(),
+  fit: z.enum(['contain', 'cover']),
+  targetWidthU: safeInteger.positive(),
+  targetHeightU: safeInteger.positive(),
+}).strict();
+
+export const TableCellClearImageActionSchema = z.object({
+  type: z.literal('table.cell.clearImage'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  cellId: applicationId,
+  expectedContent: CellContentSchema,
+  expectedContentPresentation: CellContentPresentationSchema.optional(),
+}).strict();
+
 const nullableColor = color.nullable();
 const nullablePaddingEdge = z.number().finite().nonnegative().nullable();
 const nullableBorderEdge = BorderSchema.nullable();
@@ -715,6 +844,16 @@ export const ApplicationActionSchema = z.union([
   TableLegendCreateActionSchema,
   TableLegendUpdateActionSchema,
   TableLegendRemoveActionSchema,
+  TableTitleSetActionSchema,
+  TableAnnotationCreateActionSchema,
+  TableAnnotationUpdateActionSchema,
+  TableAnnotationAttachActionSchema,
+  TableAnnotationDetachActionSchema,
+  TableAnnotationRemoveActionSchema,
+  TableAnnotationReorderActionSchema,
+  TableLegendReorderActionSchema,
+  TableCellSetImageActionSchema,
+  TableCellClearImageActionSchema,
   TableCellSetPropertiesActionSchema,
   TableStyleSetBaseActionSchema,
   TableStyleSetRowRoleActionSchema,
@@ -735,6 +874,7 @@ export type TableBulkCellContentInput = z.infer<typeof TableBulkCellContentInput
 export type TableBulkExpectedTopology = z.infer<typeof TableBulkExpectedTopologySchema>;
 export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema>;
 export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
+export type TableAnnotationTarget = z.infer<typeof TableAnnotationTargetSchema>;
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
 export type CellStylePatch = z.infer<typeof CellStylePatchSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
@@ -776,6 +916,9 @@ export type ApplicationErrorCode =
   | 'LEGEND_NOT_FOUND'
   | 'LEGEND_IN_USE'
   | 'LEGEND_MARKER_CODE_CONFLICT'
+  | 'ANNOTATION_NOT_FOUND'
+  | 'ANNOTATION_IN_USE'
+  | 'ANNOTATION_SCOPE_INVALID'
   | 'TARGET_STALE'
   | 'DUPLICATE_ID'
   | 'ID_GENERATION_FAILED'

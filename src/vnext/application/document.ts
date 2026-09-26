@@ -83,6 +83,7 @@ export function authoredStructuralIdentityIds(document: CatalogDocument): string
         ...object.table.annotations.map((annotation) => annotation.id),
         ...object.table.legend.map((entry) => entry.id)
       );
+      if (object.table.title) ids.push(...richTextIdentityIds(object.table.title));
       for (const cell of object.table.cells) {
         if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
       }
@@ -106,6 +107,7 @@ function reservationIdentityIds(document: CatalogDocument): string[] {
         continue;
       }
       if (object.type !== 'table') continue;
+      if (object.table.title) ids.push(...richTextIdentityIds(object.table.title));
       for (const cell of object.table.cells) {
         if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
       }
@@ -235,6 +237,7 @@ function instantiationSeedIdentityIds(seed: ObjectInstantiationSeed): string[] {
     ...seed.table.annotations.map((annotation) => annotation.id),
     ...seed.table.legend.map((entry) => entry.id),
   ];
+  if (seed.table.title) ids.push(...richTextIdentityIds(seed.table.title));
   for (const cell of seed.table.cells) {
     if (cell.content.type === 'richText') ids.push(...richTextIdentityIds(cell.content.value));
   }
@@ -292,6 +295,7 @@ function instantiateTableWithFreshIds(table: TableModel, allocator: IdAllocator)
   return {
     ...table,
     id: mapped(table.id),
+    ...(table.title === undefined ? {} : { title: instantiateRichTextWithFreshIds(table.title, allocator) }),
     columns: table.columns.map((column) => ({ ...column, id: mapped(column.id) })),
     rows: table.rows.map((row) => ({ ...row, id: mapped(row.id) })),
     cells: table.cells.map((cell) => ({
