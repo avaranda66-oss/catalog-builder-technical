@@ -3680,6 +3680,9 @@ export function EditorWorkspace({
                             }}
                             onPointerUp={() => commitImageFocalGesture()}
                             onPointerCancel={cancelImageFocalGesture}
+                            onLostPointerCapture={(event) => {
+                              if (imageFocalGestureRef.current?.pointerId === event.pointerId) cancelImageFocalGesture();
+                            }}
                             onKeyDown={(event) => {
                               if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
                                 beginImageFocalGesture();
