@@ -735,6 +735,7 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
     const staleAction = {
       type: 'image.replace' as const,
       objectId: 'non-existent-object',
+      expectedImage: { assetId: 'old-asset', fit: 'contain' as const, focalPoint: { x: 0.5, y: 0.5 } },
       assetId: 'a0000000-0000-4000-a000-000000000001',
     };
 
@@ -796,6 +797,7 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
     const result = session.execute({
       type: 'image.replace',
       objectId: 'img-1',
+      expectedImage: { assetId: 'old-asset', fit: 'contain', focalPoint: { x: 0.5, y: 0.5 } },
       assetId: asset.id,
       asset,
     });
@@ -818,10 +820,18 @@ describe('W3.G — Asset Persistence Bridge Tests', () => {
       alt: 'mismatch',
     };
 
-    const session = createDocumentSession(minimalTestDocument(), { createId: () => 'id' });
+    const oldAsset: AssetRef = {
+      ...asset,
+      id: 'old-asset',
+      sha256: '1'.repeat(64),
+      name: 'old',
+      alt: 'old',
+    };
+    const session = createDocumentSession(minimalTestDocument([oldAsset]), { createId: () => 'id' });
     const result = session.execute({
       type: 'image.replace',
-      objectId: 'any-id',
+      objectId: 'img-1',
+      expectedImage: { assetId: 'old-asset', fit: 'contain', focalPoint: { x: 0.5, y: 0.5 } },
       assetId: 'a9999999-9999-4999-a999-999999999999', // Mismatched!
       asset,
     });

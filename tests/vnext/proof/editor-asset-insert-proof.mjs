@@ -91,7 +91,7 @@ try {
   await page.waitForFunction(() => window.__ASSET_INSERT_PROOF__.state().document.assets.length === 3);
   assert.equal((await state(page)).uploadCount, 3);
   const inspectorChooser = page.waitForEvent('filechooser');
-  await page.locator('.vnext-inspector-action').filter({ hasText: 'Substituir imagem' }).click();
+  await page.locator('[data-editor-action="upload-image-inspector"]').filter({ hasText: 'Enviar nova imagem…' }).click();
   await (await inspectorChooser).setFiles(file);
   await page.waitForFunction(() => window.__ASSET_INSERT_PROOF__.state().document.assets.length === 4);
   assert.equal((await state(page)).uploadCount, 4);
