@@ -133,7 +133,38 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-dimension-actions { display:grid; grid-template-columns:1fr; gap:6px; }
 .vnext-dimension-actions button { min-height:34px; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#31445b; cursor:pointer; font:inherit; font-size:10px; font-weight:700; padding:0 8px; }
 .vnext-dimension-actions button:disabled { cursor:not-allowed; opacity:.5; }
-.vnext-info { border-left: 1px solid #d7dee8; padding: 22px 20px; }
+.vnext-table-style-inspector { display:grid; min-width:0; gap:12px; }
+.vnext-style-heading h3, .vnext-style-heading p { margin:0; }
+.vnext-style-heading p { margin-top:3px; color:#68778b; font-size:10px; font-weight:700; text-transform:uppercase; }
+.vnext-style-disabled-reason { margin:0; border-left:3px solid #c6921d; background:#fff9e9; color:#67501d; font-size:11px; line-height:1.45; padding:7px 8px; }
+.vnext-style-role-mode, .vnext-style-primary > label, .vnext-style-color-field, .vnext-style-advanced > label { display:grid; min-width:0; gap:5px; color:#536176; font-size:11px; font-weight:700; }
+.vnext-table-style-inspector select, .vnext-table-style-inspector input { width:100%; min-width:0; box-sizing:border-box; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#24364d; font:inherit; font-size:12px; padding:7px 8px; }
+.vnext-table-style-inspector button { min-height:32px; min-width:0; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#31445b; cursor:pointer; font:inherit; font-size:10px; font-weight:700; padding:6px 8px; }
+.vnext-table-style-inspector button:hover:not(:disabled) { background:#f6f8fb; border-color:#95a6b8; }
+.vnext-table-style-inspector button:disabled { cursor:not-allowed; opacity:.5; }
+.vnext-style-primary { display:grid; gap:10px; }
+.vnext-style-primary label > small, .vnext-style-color-field > span small, .vnext-style-advanced label > span small { color:#7a8899; font-weight:600; }
+.vnext-style-primary label > button, .vnext-style-color-field > button, .vnext-style-side-grid label > button { justify-self:start; min-height:28px; }
+.vnext-style-number { display:flex; align-items:center; overflow:hidden; border:1px solid #bdc9d6; border-radius:6px; background:#fff; }
+.vnext-style-number input { border:0; border-radius:0; outline:0; }
+.vnext-style-number > span { color:#728095; font-size:10px; padding-right:8px; }
+.vnext-style-palette { display:flex; flex-wrap:wrap; gap:6px; }
+.vnext-style-palette button { width:30px; min-width:30px; height:30px; min-height:30px; border-radius:999px; box-shadow:inset 0 0 0 1px rgb(15 23 42 / .16); padding:0; }
+.vnext-style-quick-section, .vnext-style-presets, .vnext-style-advanced { display:grid; min-width:0; gap:8px; }
+.vnext-style-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.vnext-style-preset-grid { display:grid; grid-template-columns:1fr; gap:7px; }
+.vnext-style-preset-grid button { display:grid; gap:3px; text-align:left; }
+.vnext-style-preset-grid button strong { color:#24364d; font-size:11px; }
+.vnext-style-preset-grid button span { color:#68778b; font-size:10px; font-weight:500; line-height:1.35; }
+.vnext-style-advanced { border-left:2px solid #d8e0ea; padding-left:10px; }
+.vnext-style-subheading { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px; }
+.vnext-style-side-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.vnext-style-side-grid label { display:grid; min-width:0; gap:4px; color:#536176; font-size:10px; font-weight:700; }
+.vnext-style-border-advanced { display:grid; min-width:0; gap:8px; }
+.vnext-style-border-advanced fieldset { display:grid; min-width:0; gap:7px; margin:0; border:1px solid #d8e0ea; border-radius:7px; padding:9px; }
+.vnext-style-border-advanced legend { color:#33445a; font-size:10px; font-weight:700; padding:0 4px; }
+.vnext-style-border-advanced label { display:grid; min-width:0; gap:4px; color:#536176; font-size:10px; font-weight:700; }
+.vnext-info { overflow-x: hidden; overflow-y: auto; border-left: 1px solid #d7dee8; padding: 22px 20px; }
 .vnext-info-kicker { color: #0067b9; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .vnext-info h2 { margin: 8px 0 10px; color: #1d2b3d; font-size: 16px; line-height: 1.35; }
 .vnext-info h3 { margin: 0 0 7px; color: #33445a; font-size: 12px; }
@@ -281,8 +312,12 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-table-axis-toolbar { align-items: stretch; flex-direction: column; }
   .vnext-table-axis-toolbar .vnext-tool-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .vnext-table-axis-toolbar button { min-height: 44px; }
-  .vnext-info { display: block; min-height: auto; flex: none; border-top: 1px solid #d7dee8; border-left: 0; padding: 18px 14px 28px; }
+  .vnext-info { display: block; min-height: auto; flex: none; overflow: visible; border-top: 1px solid #d7dee8; border-left: 0; padding: 18px 14px 28px; }
   .vnext-inspector-action { min-height: 44px; }
+  .vnext-table-style-inspector button { min-height: 44px; }
+  .vnext-style-palette button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .vnext-style-side-grid { grid-template-columns: 1fr; }
+  .vnext-style-subheading { align-items: stretch; flex-direction: column; }
   .vnext-recovery-center { padding: 12px; }
   .vnext-recovery-panel { max-height: calc(100vh - 24px); padding: 16px; border-radius: 12px; }
   .vnext-recovery-card { padding: 12px; }

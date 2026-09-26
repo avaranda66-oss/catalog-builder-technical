@@ -439,11 +439,16 @@ export const TableLegendRemoveActionSchema = z.object({
 
 const nullableColor = color.nullable();
 const nullablePaddingEdge = z.number().finite().nonnegative().nullable();
-export const CellPropertyPatchSchema = z.object({
-  textAlign: z.enum(['left', 'center', 'right']).nullable().optional(),
+const nullableBorderEdge = BorderSchema.nullable();
+const cellStylePatchShape = {
+  fontFamily: cleanTitle.nullable().optional(),
+  fontSizePt: z.number().finite().positive().nullable().optional(),
+  lineHeight: z.number().finite().positive().nullable().optional(),
   fontWeight: z.union([z.literal(400), z.literal(700)]).nullable().optional(),
   color: nullableColor.optional(),
   background: nullableColor.optional(),
+  textAlign: z.enum(['left', 'center', 'right']).nullable().optional(),
+  verticalAlign: z.enum(['top', 'middle', 'bottom']).nullable().optional(),
   paddingMm: z.union([
     z.null(),
     z.object({
@@ -453,6 +458,21 @@ export const CellPropertyPatchSchema = z.object({
       left: nullablePaddingEdge.optional(),
     }).strict(),
   ]).optional(),
+  borders: z.union([
+    z.null(),
+    z.object({
+      top: nullableBorderEdge.optional(),
+      right: nullableBorderEdge.optional(),
+      bottom: nullableBorderEdge.optional(),
+      left: nullableBorderEdge.optional(),
+    }).strict(),
+  ]).optional(),
+} as const;
+
+export const CellStylePatchSchema = z.object(cellStylePatchShape).strict();
+
+export const CellPropertyPatchSchema = z.object({
+  ...cellStylePatchShape,
   wrapPolicy: z.enum(['wrap', 'nowrap']).nullable().optional(),
 }).strict();
 
@@ -460,6 +480,7 @@ export const TableCellPropertyTargetSchema = z.object({
   cellId: applicationId,
   expectedStyle: CellStyleSchema.optional(),
   expectedContentPresentation: CellContentPresentationSchema.optional(),
+  patch: CellStylePatchSchema.optional(),
 }).strict();
 
 export const TableCellSetPropertiesActionSchema = z.object({
@@ -468,15 +489,114 @@ export const TableCellSetPropertiesActionSchema = z.object({
   objectId: applicationId,
   tableId: applicationId,
   targets: z.array(TableCellPropertyTargetSchema).min(1),
-  patch: CellPropertyPatchSchema,
+  patch: CellPropertyPatchSchema.optional(),
 }).strict().superRefine((action, context) => {
   const ids = action.targets.map((target) => target.cellId);
   if (new Set(ids).size !== ids.length) {
     context.addIssue({ code: 'custom', path: ['targets'], message: 'Property target cellIds must be unique' });
   }
+  if (action.patch === undefined && action.targets.some((target) => target.patch === undefined)) {
+    context.addIssue({ code: 'custom', path: ['patch'], message: 'Every Cell target requires a style patch when no shared patch is provided' });
+  }
 });
 
 export const TableRowRoleSchema = z.enum(['header', 'body', 'section']);
+
+export const TableStyleSetBaseActionSchema = z.object({
+  type: z.literal('table.style.setBase'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  expectedBase: CellStyleSchema,
+  expectedAnnotationGapMm: z.number().finite().nonnegative().optional(),
+  patch: CellStylePatchSchema.optional(),
+  annotationGapMm: z.number().finite().nonnegative().optional(),
+}).strict().superRefine((action, context) => {
+  if (action.patch === undefined && action.annotationGapMm === undefined) {
+    context.addIssue({ code: 'custom', path: ['patch'], message: 'Table base style action must change style or annotation gap' });
+  }
+  if (action.annotationGapMm !== undefined && action.expectedAnnotationGapMm === undefined) {
+    context.addIssue({ code: 'custom', path: ['expectedAnnotationGapMm'], message: 'Annotation gap CAS is required when changing annotation gap' });
+  }
+});
+
+export const TableStyleSetRowRoleActionSchema = z.object({
+  type: z.literal('table.style.setRowRole'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  role: TableRowRoleSchema,
+  expectedStyle: CellStyleSchema.optional(),
+  patch: CellStylePatchSchema,
+}).strict();
+
+export const TableStyleTargetSchema = z.object({
+  id: applicationId,
+  expectedStyle: CellStyleSchema.optional(),
+}).strict();
+
+export const TableRowsSetStyleActionSchema = z.object({
+  type: z.literal('table.rows.setStyle'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  targets: z.array(TableStyleTargetSchema).min(1),
+  patch: CellStylePatchSchema,
+}).strict().superRefine((action, context) => {
+  const ids = action.targets.map((target) => target.id);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Row style target IDs must be unique' });
+  }
+});
+
+export const TableColumnsSetStyleActionSchema = z.object({
+  type: z.literal('table.columns.setStyle'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  targets: z.array(TableStyleTargetSchema).min(1),
+  patch: CellStylePatchSchema,
+}).strict().superRefine((action, context) => {
+  const ids = action.targets.map((target) => target.id);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: 'custom', path: ['targets'], message: 'Column style target IDs must be unique' });
+  }
+});
+
+export const TablePresetIdSchema = z.enum([
+  'technical-specification',
+  'technical-grid',
+  'comparison',
+  'minimal',
+]);
+
+export const TablePresetPresentationSnapshotSchema = z.object({
+  base: CellStyleSchema,
+  rowRoles: z.object({
+    header: CellStyleSchema.optional(),
+    body: CellStyleSchema.optional(),
+    section: CellStyleSchema.optional(),
+  }).strict(),
+  rows: z.array(z.object({ id: applicationId, role: TableRowRoleSchema }).strict()).min(1),
+  columns: z.array(applicationId).min(1),
+}).strict().superRefine((snapshot, context) => {
+  if (new Set(snapshot.rows.map((row) => row.id)).size !== snapshot.rows.length) {
+    context.addIssue({ code: 'custom', path: ['rows'], message: 'Preset row IDs must be unique' });
+  }
+  if (new Set(snapshot.columns).size !== snapshot.columns.length) {
+    context.addIssue({ code: 'custom', path: ['columns'], message: 'Preset column IDs must be unique' });
+  }
+});
+
+export const TablePresetApplyActionSchema = z.object({
+  type: z.literal('table.preset.apply'),
+  pageId: applicationId,
+  objectId: applicationId,
+  tableId: applicationId,
+  presetId: TablePresetIdSchema,
+  expectedPresentation: TablePresetPresentationSnapshotSchema,
+}).strict();
+
 export const TableRowHeightPolicyUSchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('AUTO') }).strict(),
   z.object({ mode: z.literal('MIN_MM'), minU: safeInteger.positive() }).strict(),
@@ -596,6 +716,11 @@ export const ApplicationActionSchema = z.union([
   TableLegendUpdateActionSchema,
   TableLegendRemoveActionSchema,
   TableCellSetPropertiesActionSchema,
+  TableStyleSetBaseActionSchema,
+  TableStyleSetRowRoleActionSchema,
+  TableRowsSetStyleActionSchema,
+  TableColumnsSetStyleActionSchema,
+  TablePresetApplyActionSchema,
   TableRowsSetPropertiesActionSchema,
   TableColumnsSetPropertiesActionSchema,
   TableAxisReorderActionSchema,
@@ -611,8 +736,12 @@ export type TableBulkExpectedTopology = z.infer<typeof TableBulkExpectedTopology
 export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema>;
 export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
+export type CellStylePatch = z.infer<typeof CellStylePatchSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
+export type TableStyleTarget = z.infer<typeof TableStyleTargetSchema>;
+export type TablePresetId = z.infer<typeof TablePresetIdSchema>;
+export type TablePresetPresentationSnapshot = z.infer<typeof TablePresetPresentationSnapshotSchema>;
 export type TableRowHeightPolicyU = z.infer<typeof TableRowHeightPolicyUSchema>;
 export type TableRowPropertyTarget = z.infer<typeof TableRowPropertyTargetSchema>;
 export type TableColumnWidthU = z.infer<typeof TableColumnWidthUSchema>;

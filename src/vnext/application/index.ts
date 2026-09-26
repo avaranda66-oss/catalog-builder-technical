@@ -41,9 +41,18 @@ export {
   TableLegendCreateActionSchema,
   TableLegendUpdateActionSchema,
   TableLegendRemoveActionSchema,
+  CellStylePatchSchema,
   CellPropertyPatchSchema,
   TableCellPropertyTargetSchema,
   TableCellSetPropertiesActionSchema,
+  TableStyleSetBaseActionSchema,
+  TableStyleSetRowRoleActionSchema,
+  TableStyleTargetSchema,
+  TableRowsSetStyleActionSchema,
+  TableColumnsSetStyleActionSchema,
+  TablePresetIdSchema,
+  TablePresetPresentationSnapshotSchema,
+  TablePresetApplyActionSchema,
   TableRowRoleSchema,
   TableRowHeightPolicyUSchema,
   TableRowPropertyTargetSchema,
@@ -74,8 +83,12 @@ export type {
   TableBulkContentTarget,
   TableLegendCreateInput,
   TableFitHeightTypography,
+  CellStylePatch,
   CellPropertyPatch,
   TableCellPropertyTarget,
+  TableStyleTarget,
+  TablePresetId,
+  TablePresetPresentationSnapshot,
   TableRowHeightPolicyU,
   TableRowPropertyTarget,
   TableColumnWidthU,
@@ -110,6 +123,12 @@ export {
 } from './text-editing';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';
+export {
+  TABLE_PRESETS,
+  materializeTablePreset,
+  tablePresetPresentationSnapshot,
+} from './table-preset-registry';
+export type { TablePresetDefinition } from './table-preset-registry';
 export { createDocumentSession } from './session';
 export type { DocumentSession, DocumentSessionSnapshot, HistoryResult } from './session';
 export {
