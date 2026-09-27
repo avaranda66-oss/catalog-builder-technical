@@ -444,6 +444,7 @@ export function EditorWorkspace({
     .filter((object): object is EditorialObject => Boolean(object));
   const selectedImageObject = selectedObject?.type === 'image' ? selectedObject : undefined;
   const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
+  const lockedSelectedTableId = selectedTableObject?.locked === true ? selectedTableObject.id : undefined;
   const selectedOwnLocked = selectedObject?.locked === true;
   const selectedClosureLockedId = selectedObject ? objectClosureLockedId(selectedObject) : undefined;
   const selectedMutationLocked = Boolean(selectedClosureLockedId);
@@ -465,6 +466,46 @@ export function EditorWorkspace({
     const title = selectedTableObject?.table.title;
     setTableTitleDraft(title ? (projectEditableRichText(title) ?? '') : '');
   }, [document.id, editorState.activePageId, selectedTableObject?.id, selectedTableObject?.table.title]);
+  React.useEffect(() => {
+    if (!lockedSelectedTableId) return;
+    const wasCellEdit = editorState.mode === 'cell-edit';
+    const hadTableMode = editorState.mode === 'table-grid' || wasCellEdit;
+    const hadCellDraft = Boolean(cellDraftRef.current);
+    const hadTransientAuthoring = hadTableMode
+      || hadCellDraft
+      || Boolean(tableSelectionRef.current)
+      || tableRangeExtensionArmed
+      || tablePasteFallbackOpen
+      || markerPanelOpen;
+    if (!hadTransientAuthoring) return;
+    controller.cancel('superseded');
+    if (hadCellDraft) {
+      cellDraftRef.current = null;
+      setCellDraft(null);
+      persistence?.runtime.workspace.notifyDraftStateChanged();
+    }
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
+    setTableRangeExtensionArmed(false);
+    setTablePasteFallbackOpen(false);
+    setTablePasteFallbackText('');
+    setMarkerPanelOpen(false);
+    setEditorState((current) => ({ ...current, selectedObjectIds: [lockedSelectedTableId], mode: 'select' }));
+    if (wasCellEdit || hadCellDraft) {
+      setStatusMessage('A tabela foi bloqueada. A edição da célula foi encerrada.');
+    } else if (hadTableMode) {
+      setStatusMessage('A tabela foi bloqueada. A edição da grade foi encerrada.');
+    }
+  }, [
+    controller,
+    editorState.mode,
+    lockedSelectedTableId,
+    markerPanelOpen,
+    persistence?.runtime.workspace,
+    tablePasteFallbackOpen,
+    tableRangeExtensionArmed,
+  ]);
   React.useEffect(() => {
     if (!selectedImageObject) {
       imageFocalGestureRef.current = null;
@@ -2201,14 +2242,14 @@ export function EditorWorkspace({
 
   const setSelectedObjectLock = (locked: boolean) => {
     if (!selectedObjectId) return;
-    if (!finishTextEditBeforeCommand()) return;
-    controller.cancel('superseded');
     const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
     const object = page?.objects.find((entry) => entry.id === selectedObjectId);
     if (!object) {
       setStatusMessage('O objeto selecionado não está mais disponível.');
       return;
     }
+    if (!(locked && object.type === 'table') && !finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
     const result = session.execute({
       type: 'object.setLocked',
       objectId: object.id,
@@ -2733,6 +2774,7 @@ export function EditorWorkspace({
       if (target.closest('[data-cell-edit-session]') || target.closest('[data-table-grid-overlay]') || target.closest('[data-table-cell-inspector]')) return;
       if (target.closest('[data-persistence-save-action]')) return;
       if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      if (selectedTableObject && target.closest('[data-editor-action="toggle-object-lock"]')) return;
       if (!finishCellDraftForContextChange()) {
         event.preventDefault();
         event.stopPropagation();
@@ -3457,7 +3499,7 @@ export function EditorWorkspace({
             </div>
           </div>
 
-          {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && (
+          {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>Grade da tabela</strong>
               <div className="vnext-tool-group" aria-label="Ações de linha">
@@ -3505,7 +3547,7 @@ export function EditorWorkspace({
             </div>
           )}
 
-          {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && (
+          {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
               <label>
                 <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
@@ -3653,6 +3695,7 @@ export function EditorWorkspace({
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
                           {object.type === 'table'
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
+                            && !object.locked
                             && tableSelection
                             && plans.get(object.table.id)?.rowQ
                             && plans.get(object.table.id)?.gridOffsetYQ !== undefined
@@ -4039,8 +4082,8 @@ export function EditorWorkspace({
                       <button
                         type="button"
                         data-editor-action="open-table-semantics"
-                        disabled={Boolean(cellDraft)}
-                        aria-describedby={cellDraft ? tableSemanticDisabledReasonId : undefined}
+                        disabled={tableSemanticDisabled}
+                        aria-describedby={tableSemanticDisabledReasonId}
                         onClick={() => {
                           if (editorState.mode === 'select') startTableGrid(selectedObject);
                           setMarkerPanelOpen(true);
@@ -4109,7 +4152,7 @@ export function EditorWorkspace({
                   />
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && rowDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
@@ -4185,7 +4228,7 @@ export function EditorWorkspace({
                   </section>
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && columnDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
@@ -4296,7 +4339,7 @@ export function EditorWorkspace({
                   </section>
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-cell-inspector" data-table-cell-inspector="">
@@ -4542,7 +4585,7 @@ export function EditorWorkspace({
                       )}
                     </section>
 
-                    {markerPanelOpen && selectedTableObject && (
+                    {markerPanelOpen && selectedTableObject && !selectedTableObject.locked && (
                       <>
                         <div className="vnext-divider" />
                         <section className="vnext-marker-legend-panel" data-marker-legend-panel="">

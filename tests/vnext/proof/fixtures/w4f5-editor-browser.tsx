@@ -153,6 +153,44 @@ const primary: CatalogDocument = {
         axis: 'horizontal',
         color: '#173F52',
       },
+      {
+        id: 'proof-table',
+        type: 'table',
+        frame: { xMm: 25, yMm: 130, widthMm: 160, heightMm: 48 },
+        zIndex: 4,
+        table: {
+          id: 'proof-table-model',
+          columns: [
+            { id: 'proof-col-a', width: { mode: 'flex', weight: 1 }, minMm: 20 },
+            { id: 'proof-col-b', width: { mode: 'flex', weight: 1 }, minMm: 20 },
+          ],
+          rows: [
+            { id: 'proof-row-0', role: 'header', heightPolicy: { mode: 'AUTO' } },
+            { id: 'proof-row-1', role: 'body', heightPolicy: { mode: 'AUTO' } },
+          ],
+          cells: [
+            { id: 'proof-cell-0-0', rowId: 'proof-row-0', columnId: 'proof-col-a', content: { type: 'technicalCode', value: 'LOCK-ORIGINAL' } },
+            { id: 'proof-cell-0-1', rowId: 'proof-row-0', columnId: 'proof-col-b', content: { type: 'technicalCode', value: 'B' } },
+            { id: 'proof-cell-1-0', rowId: 'proof-row-1', columnId: 'proof-col-a', content: { type: 'technicalCode', value: 'C' } },
+            { id: 'proof-cell-1-1', rowId: 'proof-row-1', columnId: 'proof-col-b', content: { type: 'technicalCode', value: 'D' } },
+          ],
+          style: {
+            base: {
+              fontFamily: 'Noto Sans',
+              fontSizePt: 9,
+              lineHeight: 1.2,
+              color: '#172033',
+              textAlign: 'left',
+              paddingMm: { top: 1, right: 1, bottom: 1, left: 1 },
+            },
+            rowRoles: { header: { background: '#dcecff', fontWeight: 700 } },
+            annotation: { fontSizePt: 8, color: '#33445a' },
+            annotationGapMm: 1,
+          },
+          annotations: [],
+          legend: [],
+        },
+      },
     ],
   }],
 };
@@ -189,6 +227,7 @@ const api = {
   hold: () => { assets.hold = true; },
   release: () => { assets.release?.(); },
   reopen: (id: string) => runtime.reopenCoordinator.open(id),
+  execute: (action: Parameters<typeof session.execute>[0]) => session.execute(action),
   publish: () => publish(),
   publication: async () => {
     const doc = runtime.workspace.getSnapshot().session.getSnapshot().document;

@@ -210,6 +210,86 @@ async function assertNoGlobalOverflow(page, width) {
   return geometry;
 }
 
+async function exerciseTableLockLifecycle(page) {
+  const tableId = 'proof-table';
+  const tableNode = () => page.locator(`[data-editor-object-id="${tableId}"]`);
+  const grid = () => page.locator('[data-table-grid-overlay]');
+  const tableCellValue = (snapshot) => objectById(snapshot, tableId).table.cells.find((cell) => cell.id === 'proof-cell-0-0')?.content?.value;
+
+  await selectSingle(page, tableId);
+  await page.locator('[data-editor-action="edit-table"]').click();
+  await grid().waitFor({ timeout: 20000 });
+  await page.locator('[data-editor-action="open-table-semantics"]').click();
+  await page.locator('[data-marker-legend-panel]').waitFor();
+  const gridBeforeLock = await state(page);
+  const lockedFromGrid = await clickSemantic(page, 'toggle-object-lock');
+  await grid().waitFor({ state: 'detached' });
+  assert.equal(objectById(lockedFromGrid, tableId).locked, true);
+  assert.equal(lockedFromGrid.localSequence, gridBeforeLock.localSequence + 1);
+  assert.equal(await tableNode().getAttribute('data-selected'), 'true');
+  assert.equal(await page.locator('[data-table-axis-toolbar]').count(), 0);
+  assert.equal(await page.locator('[data-marker-legend-panel]').count(), 0);
+  assert.equal(await page.locator('[data-editor-action="open-table-semantics"]').isDisabled(), true);
+  assert.equal((await page.locator('[data-editor-action="toggle-object-lock"]').textContent()).trim(), 'Desbloquear objeto');
+
+  const unlockedAfterGrid = await clickSemantic(page, 'toggle-object-lock');
+  assert.equal(objectById(unlockedAfterGrid, tableId).locked, undefined);
+  assert.equal(await grid().count(), 0);
+  assert.equal(await page.locator('[data-editor-action="edit-table"]').isDisabled(), false);
+
+  await page.locator('[data-editor-action="edit-table"]').click();
+  await grid().waitFor({ timeout: 20000 });
+  await page.locator('[data-table-cell="0:0"]').click();
+  await grid().press('F2');
+  await page.locator('[data-cell-edit-session]').waitFor();
+  const technical = page.locator('[data-cell-technical-code]');
+  await technical.fill('DIRTY-MUST-NOT-COMMIT');
+  const dirtyBeforeLock = await state(page);
+  assert.equal(tableCellValue(dirtyBeforeLock), 'LOCK-ORIGINAL');
+  const cellLocked = await clickSemantic(page, 'toggle-object-lock');
+  await page.locator('[data-cell-edit-session]').waitFor({ state: 'detached' });
+  await grid().waitFor({ state: 'detached' });
+  assert.equal(objectById(cellLocked, tableId).locked, true);
+  assert.equal(tableCellValue(cellLocked), 'LOCK-ORIGINAL');
+  assert.equal(cellLocked.localSequence, dirtyBeforeLock.localSequence + 1);
+  assert.equal(await tableNode().getAttribute('data-selected'), 'true');
+  assert.equal((await page.locator('[data-editor-action="toggle-object-lock"]').textContent()).trim(), 'Desbloquear objeto');
+
+  await clickSemantic(page, 'toggle-object-lock');
+  assert.equal(await grid().count(), 0);
+  await page.locator('[data-editor-action="edit-table"]').click();
+  await grid().waitFor({ timeout: 20000 });
+  const concurrentBefore = await state(page);
+  const concurrentResult = await page.evaluate(() => window.__W4F5_PROOF__.execute({
+    type: 'object.setLocked',
+    objectId: 'proof-table',
+    expectedLocked: false,
+    locked: true,
+  }));
+  assert.equal(concurrentResult.ok, true);
+  await page.waitForFunction(() => window.__W4F5_PROOF__.state().document.pages[0].objects.find((object) => object.id === 'proof-table')?.locked === true);
+  await grid().waitFor({ state: 'detached' });
+  const concurrentLocked = await state(page);
+  assert.equal(concurrentLocked.localSequence, concurrentBefore.localSequence + 1);
+  assert.equal(objectById(concurrentLocked, tableId).locked, true);
+  assert.equal(await tableNode().getAttribute('data-selected'), 'true');
+  assert.equal(await page.locator('[data-table-axis-toolbar]').count(), 0);
+  assert.equal(await page.locator('[data-editor-action="open-table-semantics"]').isDisabled(), true);
+
+  const finalUnlocked = await clickSemantic(page, 'toggle-object-lock');
+  assert.equal(objectById(finalUnlocked, tableId).locked, undefined);
+  assert.equal(await grid().count(), 0);
+  assert.equal(await page.locator('[data-editor-action="edit-table"]').isDisabled(), false);
+  return {
+    localGridLock: true,
+    dirtyCellDraftCancelled: true,
+    canonicalCellPreserved: tableCellValue(finalUnlocked) === 'LOCK-ORIGINAL',
+    concurrentLock: true,
+    selectionPreserved: true,
+    unlockExplicit: true,
+  };
+}
+
 async function exerciseArrangement(page, imageId, tap = false) {
   const ids = ['movable-group', 'arrange-line', imageId];
   const baseline = await state(page);
@@ -278,6 +358,7 @@ try {
   }));
   const imageId = await addImage(page);
   const arranged = await exerciseArrangement(page, imageId);
+  const tableLockLifecycle = await exerciseTableLockLifecycle(page);
 
   // Own-lock and Group closure-lock stay distinct in the Father-facing UI.
   await selectSingle(page, 'locked-group');
@@ -456,6 +537,7 @@ try {
       groupRootPreserved: true,
       descendantLockBarrier: true,
       ownLock: true,
+      tableLockLifecycle,
       layerUx: true,
       saveReopen: true,
       publication: true,
