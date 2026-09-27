@@ -67,3 +67,4 @@ jobs:
           node tests/vnext/proof/editor-table-professional-style-proof.mjs
           node tests/vnext/proof/editor-table-semantic-content-proof.mjs
           node tests/vnext/proof/editor-standalone-image-professional-authoring-proof.mjs
+          node tests/vnext/proof/editor-object-arrangement-locking-proof.mjs

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createDocumentSession, createStaticPageTemplateRegistry, projectEditableRichText } from '@/vnext/application';
 import { mmToU, plainRichText, type CatalogDocument, type RichText } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
@@ -110,6 +110,88 @@ function seedTextDocument(options: {
   };
 }
 
+function seedArrangementDocument(options: { includeSecondPage?: boolean } = {}): CatalogDocument {
+  const base = createW2CDemoDocument(ids('arrange-seed'));
+  const objects = [
+    {
+      id: 'arrange-a',
+      type: 'shape' as const,
+      frame: { xMm: 20, yMm: 30, widthMm: 20, heightMm: 12 },
+      zIndex: 0,
+      shape: 'rectangle' as const,
+      style: { fill: '#edf5ff' },
+    },
+    {
+      id: 'arrange-b',
+      type: 'text' as const,
+      frame: { xMm: 70, yMm: 45, widthMm: 30, heightMm: 16 },
+      zIndex: 1,
+      text: plainRichText('arrange-b-rich', 'B'),
+      style: { fontSizePt: 10 },
+    },
+    {
+      id: 'arrange-c',
+      type: 'shape' as const,
+      frame: { xMm: 130, yMm: 60, widthMm: 20, heightMm: 12 },
+      zIndex: 2,
+      shape: 'rectangle' as const,
+      style: { fill: '#dbeafe' },
+    },
+  ];
+  const firstPage = { ...base.pages[0], objects };
+  return {
+    ...base,
+    pages: options.includeSecondPage
+      ? [firstPage, { ...base.pages[0], id: 'arrange-page-two', objects: [] }]
+      : [firstPage],
+  };
+}
+
+function seedClosureLockedGroupDocument(): CatalogDocument {
+  const base = createW2CDemoDocument(ids('closure-seed'));
+  return {
+    ...base,
+    pages: [{
+      ...base.pages[0],
+      objects: [
+        {
+          id: 'locked-group',
+          type: 'group' as const,
+          frame: { xMm: 20, yMm: 30, widthMm: 30, heightMm: 10 },
+          zIndex: 0,
+          objects: [
+            {
+              id: 'locked-child',
+              type: 'shape' as const,
+              frame: { xMm: 0, yMm: 0, widthMm: 10, heightMm: 10 },
+              zIndex: 0,
+              locked: true,
+              shape: 'rectangle' as const,
+              style: { fill: '#edf5ff' },
+            },
+            {
+              id: 'open-child',
+              type: 'shape' as const,
+              frame: { xMm: 20, yMm: 0, widthMm: 10, heightMm: 10 },
+              zIndex: 1,
+              shape: 'rectangle' as const,
+              style: { fill: '#dbeafe' },
+            },
+          ],
+        },
+        {
+          id: 'outside-shape',
+          type: 'shape' as const,
+          frame: { xMm: 90, yMm: 30, widthMm: 20, heightMm: 10 },
+          zIndex: 1,
+          shape: 'rectangle' as const,
+          style: { fill: '#f1f5f9' },
+        },
+      ],
+    }],
+  };
+}
+
 function complexText(): RichText {
   return {
     paragraphs: [{
@@ -158,6 +240,51 @@ function setPageRect(container: HTMLElement, width = 420, height = 594): HTMLEle
     toJSON: () => ({}),
   });
   return page;
+}
+
+function pointerClick(element: HTMLElement, pointerId: number): void {
+  fireEvent.pointerDown(element, { pointerId, button: 0 });
+  fireEvent.pointerUp(element, { pointerId, button: 0 });
+  fireEvent.click(element);
+}
+
+function enableTransformFreePhysicalMeasurement() {
+  const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+  const computedStyle = vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudoElement) => {
+    const style = nativeGetComputedStyle(element, pseudoElement);
+    return new Proxy(style, {
+      get(target, property) {
+        if (property === 'transform' || property === 'scale' || property === 'translate' || property === 'rotate') return 'none';
+        if (property === 'zoom') return '1';
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as CSSStyleDeclaration;
+  });
+  const originalDecode = HTMLImageElement.prototype.decode;
+  const originalGetClientRects = Range.prototype.getClientRects;
+  HTMLImageElement.prototype.decode = vi.fn().mockResolvedValue(undefined);
+  Range.prototype.getClientRects = vi.fn(() => [] as unknown as DOMRectList);
+  return () => {
+    computedStyle.mockRestore();
+    HTMLImageElement.prototype.decode = originalDecode;
+    Range.prototype.getClientRects = originalGetClientRects;
+  };
+}
+
+async function enterMeasuredTableGrid(container: HTMLElement, tableId: string, pointerId: number): Promise<void> {
+  setPageRect(container);
+  const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${tableId}"]`);
+  if (!hit) throw new Error('Missing Table hit target');
+  fireEvent.pointerDown(hit, { pointerId, button: 0, clientX: 120, clientY: 100 });
+  fireEvent.pointerUp(hit, { pointerId, button: 0, clientX: 120, clientY: 100 });
+  const shell = container.querySelector<HTMLElement>('[data-vnext-shell]');
+  if (!shell) throw new Error('Missing VNext shell');
+  await waitFor(() => {
+    if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(button(container, 'edit-table'));
+    expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
+  });
 }
 
 describe('W2.C visible editor workspace', () => {
@@ -699,6 +826,272 @@ describe('W2.F visible Group workflow', () => {
     expect(session.getSnapshot().document.pages[0].objects.map((object)=>object.id)).toEqual([textId,shapeId]);
     expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
     expect(button(container,'group')).not.toBeDisabled();
+  });
+});
+
+describe('W4.F.5 visible object arrangement and locking', () => {
+  it('adds modifier-free multi-selection, arrangement controls, touch-like selection, and page-change cleanup', () => {
+    const session = sessionWithDemo(seedArrangementDocument({ includeSecondPage: true }));
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+
+    const multi = button(container, 'toggle-multi-select');
+    expect(multi).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(multi);
+    expect(multi).toHaveAttribute('aria-pressed', 'true');
+
+    for (const [index, id] of ['arrange-a', 'arrange-b'].entries()) {
+      const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${id}"]`)!;
+      fireEvent.pointerDown(hit, { pointerId: 200 + index, button: 0, clientX: 80 + index * 40, clientY: 80 });
+    }
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(container.querySelector('.vnext-info h2')).toHaveTextContent('2 objetos selecionados');
+    expect(button(container, 'align-left')).not.toBeDisabled();
+    expect(button(container, 'distribute-horizontal')).toBeDisabled();
+
+    const third = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-c"]')!;
+    fireEvent.pointerDown(third, { pointerId: 203, button: 0, clientX: 200, clientY: 100 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(3);
+    expect(button(container, 'distribute-horizontal')).not.toBeDisabled();
+
+    fireEvent.click(button(container, 'align-left'));
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.align', alignment: 'left' });
+    expect(session.getSnapshot().document.pages[0].objects.map((object) => object.frame.xMm)).toEqual([20, 20, 20]);
+
+    fireEvent.click(button(container, 'distribute-horizontal'));
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.distribute', axis: 'horizontal' });
+
+    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button');
+    expect(pages).toHaveLength(2);
+    fireEvent.click(pages[1]);
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(0);
+  });
+
+  it('locks and unlocks a selected root while preserving selection and disabling ordinary mutation affordances', () => {
+    const session = sessionWithDemo(seedArrangementDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-b"]')!;
+
+    fireEvent.pointerDown(hit, { pointerId: 210, button: 0, clientX: 120, clientY: 100 });
+    fireEvent.pointerUp(hit, { pointerId: 210, button: 0, clientX: 120, clientY: 100 });
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(8);
+
+    const lock = button(container, 'toggle-object-lock');
+    expect(lock).toHaveTextContent('Bloquear objeto');
+    fireEvent.click(lock);
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'object.setLocked', objectId: 'arrange-b', expectedLocked: false, locked: true,
+    });
+    const locked = session.getSnapshot().document.pages[0].objects.find((object) => object.id === 'arrange-b');
+    expect(locked?.locked).toBe(true);
+    expect(container.querySelector('[data-editor-object-id="arrange-b"]')).toHaveAttribute('data-selected', 'true');
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(0);
+    for (const action of ['duplicate', 'delete', 'send-back', 'send-backward', 'bring-forward', 'bring-front', 'edit-text']) {
+      expect(button(container, action)).toBeDisabled();
+    }
+    for (const input of container.querySelectorAll<HTMLInputElement>('[data-inspector-field]')) expect(input).toBeDisabled();
+    expect(lock).not.toBeDisabled();
+    expect(lock).toHaveTextContent('Desbloquear objeto');
+    expect(container.querySelector('#vnext-object-lock-reason')).toHaveTextContent('Objeto bloqueado.');
+
+    fireEvent.click(lock);
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'object.setLocked', objectId: 'arrange-b', expectedLocked: true, locked: false,
+    });
+    expect(session.getSnapshot().document.pages[0].objects.find((object) => object.id === 'arrange-b')?.locked).toBeUndefined();
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(8);
+    expect(button(container, 'edit-text')).not.toBeDisabled();
+  });
+
+  it('distinguishes own Group lock from descendant closure lock and blocks arrangement without false unlock guidance', () => {
+    const session = sessionWithDemo(seedClosureLockedGroupDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const groupHit = container.querySelector<HTMLElement>('[data-editor-object-id="locked-group"]')!;
+
+    fireEvent.pointerDown(groupHit, { pointerId: 220, button: 0, clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(groupHit, { pointerId: 220, button: 0, clientX: 80, clientY: 80 });
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Bloquear objeto');
+    expect(container.querySelector('#vnext-object-closure-lock-reason')).toHaveTextContent(
+      'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
+    );
+    for (const input of container.querySelectorAll<HTMLInputElement>('[data-inspector-field]')) expect(input).toBeDisabled();
+    expect(button(container, 'duplicate')).toBeDisabled();
+    expect(button(container, 'ungroup')).toBeDisabled();
+
+    fireEvent.click(button(container, 'toggle-multi-select'));
+    const outside = container.querySelector<HTMLElement>('[data-editor-object-id="outside-shape"]')!;
+    fireEvent.pointerDown(outside, { pointerId: 221, button: 0, clientX: 190, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(container.querySelector('[data-object-arrangement]')).toHaveTextContent(
+      'Um dos grupos selecionados contém um objeto interno bloqueado.'
+    );
+    expect(button(container, 'align-left')).toBeDisabled();
+  });
+
+  it('disarms modifier-free selection and narrows selection when entering Text edit', () => {
+    const session = sessionWithDemo(seedArrangementDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    fireEvent.click(button(container, 'toggle-multi-select'));
+
+    const textHit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-b"]')!;
+    const shapeHit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-a"]')!;
+    fireEvent.pointerDown(textHit, { pointerId: 230, button: 0, clientX: 120, clientY: 100 });
+    fireEvent.pointerDown(shapeHit, { pointerId: 231, button: 0, clientX: 60, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+
+    fireEvent.pointerDown(shapeHit, { pointerId: 232, button: 0, clientX: 60, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    fireEvent.click(button(container, 'edit-text'));
+    expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-editor-mode', 'text-edit');
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(button(container, 'toggle-multi-select')).toBeDisabled();
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+  });
+
+  it('disarms modifier-free selection and keeps only the Table target when Table editing is requested', () => {
+    const document = createW4BTableDocument();
+    const table = document.pages[0].objects.find((object) => object.type === 'table');
+    if (!table || table.type !== 'table') throw new Error('Missing Table fixture');
+    const session = sessionWithDemo(document);
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+
+    fireEvent.click(button(container, 'toggle-multi-select'));
+    const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${table.id}"]`)!;
+    fireEvent.pointerDown(hit, { pointerId: 240, button: 0, clientX: 120, clientY: 100 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(button(container, 'edit-table'));
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    expect(container.querySelector(`[data-editor-object-id="${table.id}"][data-selected="true"]`)).toBeTruthy();
+    expect(container.querySelector('[role="status"]')).toHaveTextContent('Aguarde a medição da tabela para editar a grade.');
+  });
+
+  it('collapses real Table authoring for local, dirty-draft, and concurrent locks without auto-committing content', async () => {
+    const document = createW4BTableDocument();
+    const sourceTable = document.pages[0].objects.find((object) => object.type === 'table');
+    if (!sourceTable || sourceTable.type !== 'table') throw new Error('Missing Table fixture');
+    const session = sessionWithDemo(document);
+    const execute = vi.spyOn(session, 'execute');
+    const restorePhysicalMeasurement = enableTransformFreePhysicalMeasurement();
+    const { container } = render(<VNextApp session={session} />);
+    const shell = container.querySelector<HTMLElement>('[data-vnext-shell]');
+    if (!shell) throw new Error('Missing VNext shell');
+
+    const canonicalTable = () => {
+      const object = session.getSnapshot().document.pages[0].objects.find((entry) => entry.id === sourceTable.id);
+      if (!object || object.type !== 'table') throw new Error('Missing canonical Table');
+      return object;
+    };
+    const assertSingularTableSelection = () => {
+      expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+      expect(container.querySelector(`[data-editor-object-id="${sourceTable.id}"][data-selected="true"]`)).toBeTruthy();
+    };
+
+    await enterMeasuredTableGrid(container, sourceTable.id, 241);
+    expect(container.querySelector('[data-table-axis-toolbar]')).toBeTruthy();
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
+    expect(container.querySelector('[data-table-cell-inspector]')).toBeTruthy();
+    fireEvent.click(button(container, 'paste-table-cells'));
+    fireEvent.click(button(container, 'marker-panel'));
+    expect(container.querySelector('[data-table-paste-fallback]')).toBeTruthy();
+    expect(container.querySelector('[data-marker-legend-panel]')).toBeTruthy();
+
+    const localBefore = session.getSnapshot();
+    const tableBeforeLocalLock = structuredClone(canonicalTable().table);
+    const localCallsBefore = execute.mock.calls.length;
+    pointerClick(button(container, 'toggle-object-lock'), 242);
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    const localAfter = session.getSnapshot();
+    expect(localAfter.localSequence).toBe(localBefore.localSequence + 1);
+    expect(canonicalTable().table).toEqual(tableBeforeLocalLock);
+    expect(execute.mock.calls.slice(localCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    expect(execute.mock.calls.slice(localCallsBefore).some(([action]) => action.type === 'table.cell.setContent')).toBe(false);
+    assertSingularTableSelection();
+    expect(container.querySelector('[data-table-axis-toolbar]')).toBeNull();
+    expect(container.querySelector('[data-table-paste-fallback]')).toBeNull();
+    expect(container.querySelector('[data-marker-legend-panel]')).toBeNull();
+    expect(container.querySelector('[data-table-cell-inspector]')).toBeNull();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+    expect(button(container, 'toggle-object-lock')).not.toBeDisabled();
+    expect(button(container, 'open-table-semantics')).toBeDisabled();
+
+    const unlockBefore = session.getSnapshot();
+    pointerClick(button(container, 'toggle-object-lock'), 243);
+    await waitFor(() => expect(canonicalTable().locked).toBeUndefined());
+    expect(session.getSnapshot().localSequence).toBe(unlockBefore.localSequence + 1);
+    expect(shell).toHaveAttribute('data-editor-mode', 'select');
+    assertSingularTableSelection();
+    expect(button(container, 'edit-table')).not.toBeDisabled();
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+
+    await enterMeasuredTableGrid(container, sourceTable.id, 244);
+    fireEvent.click(button(container, 'edit-cell-content'));
+    await waitFor(() => expect(container.querySelector('[data-cell-edit-session]')).toBeTruthy());
+    expect(shell).toHaveAttribute('data-editor-mode', 'cell-edit');
+    const originalCellContent = structuredClone(canonicalTable().table.cells[0].content);
+    const draftSequence = session.getSnapshot().localSequence;
+    const draftCallsBefore = execute.mock.calls.length;
+    const richTextDraft = container.querySelector<HTMLTextAreaElement>('[data-cell-rich-text]');
+    if (!richTextDraft) throw new Error('Missing rich-text cell draft');
+    fireEvent.change(richTextDraft, { target: { value: 'DIRTY-MUST-NOT-COMMIT' } });
+    expect(session.getSnapshot().localSequence).toBe(draftSequence);
+    expect(canonicalTable().table.cells[0].content).toEqual(originalCellContent);
+    expect(execute.mock.calls).toHaveLength(draftCallsBefore);
+
+    pointerClick(button(container, 'toggle-object-lock'), 245);
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-cell-edit-session]')).toBeNull();
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    expect(session.getSnapshot().localSequence).toBe(draftSequence + 1);
+    expect(canonicalTable().table.cells[0].content).toEqual(originalCellContent);
+    expect(execute.mock.calls.slice(draftCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    expect(execute.mock.calls.slice(draftCallsBefore).some(([action]) => action.type === 'table.cell.setContent')).toBe(false);
+    assertSingularTableSelection();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+
+    pointerClick(button(container, 'toggle-object-lock'), 246);
+    await waitFor(() => expect(canonicalTable().locked).toBeUndefined());
+    await enterMeasuredTableGrid(container, sourceTable.id, 247);
+    const concurrentBefore = session.getSnapshot();
+    const concurrentCallsBefore = execute.mock.calls.length;
+    act(() => {
+      const result = session.execute({
+        type: 'object.setLocked',
+        objectId: sourceTable.id,
+        expectedLocked: false,
+        locked: true,
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    expect(session.getSnapshot().localSequence).toBe(concurrentBefore.localSequence + 1);
+    expect(execute.mock.calls.slice(concurrentCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    assertSingularTableSelection();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+    expect(button(container, 'open-table-semantics')).toBeDisabled();
+    restorePhysicalMeasurement();
   });
 });
 

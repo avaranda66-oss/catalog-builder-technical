@@ -177,6 +177,16 @@ function visualObjects(page: Page): EditorialObject[] {
     .map(({ object }) => object);
 }
 
+function objectClosureLockedId(object: EditorialObject): string | undefined {
+  if (object.locked === true) return object.id;
+  if (object.type === 'group') return object.objects.find((child) => child.locked === true)?.id;
+  return undefined;
+}
+
+function groupHasLockedDescendant(object: EditorialObject): boolean {
+  return object.type === 'group' && object.locked !== true && object.objects.some((child) => child.locked === true);
+}
+
 function frameStyle(frameU: FrameU): React.CSSProperties {
   return {
     left: qCss(uToQ(frameU.xU)),
@@ -334,6 +344,7 @@ export function EditorWorkspace({
     selectedObjectIds: [],
     mode: 'select',
   });
+  const [multiSelectArmed, setMultiSelectArmed] = React.useState(false);
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
@@ -428,8 +439,21 @@ export function EditorWorkspace({
   const selectedPageIndex = document.pages.findIndex((page) => page.id === selectedPage.id);
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
+  const selectedObjects = editorState.selectedObjectIds
+    .map((objectId) => selectedPage.objects.find((object) => object.id === objectId))
+    .filter((object): object is EditorialObject => Boolean(object));
   const selectedImageObject = selectedObject?.type === 'image' ? selectedObject : undefined;
   const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
+  const lockedSelectedTableId = selectedTableObject?.locked === true ? selectedTableObject.id : undefined;
+  const selectedOwnLocked = selectedObject?.locked === true;
+  const selectedClosureLockedId = selectedObject ? objectClosureLockedId(selectedObject) : undefined;
+  const selectedMutationLocked = Boolean(selectedClosureLockedId);
+  const selectedHasLockedClosure = selectedObjects.some((object) => Boolean(objectClosureLockedId(object)));
+  const selectedHasInternalLockedGroup = selectedObjects.some(groupHasLockedDescendant);
+  const selectedVisualOrder = visualObjects(selectedPage);
+  const selectedVisualIndex = selectedObject
+    ? selectedVisualOrder.findIndex((object) => object.id === selectedObject.id)
+    : -1;
   React.useEffect(() => {
     setTableRangeExtensionArmed(false);
   }, [document.id, editorState.activePageId, editorState.mode, selectedTableObject?.id, selectedTableObject?.table.id]);
@@ -442,6 +466,46 @@ export function EditorWorkspace({
     const title = selectedTableObject?.table.title;
     setTableTitleDraft(title ? (projectEditableRichText(title) ?? '') : '');
   }, [document.id, editorState.activePageId, selectedTableObject?.id, selectedTableObject?.table.title]);
+  React.useEffect(() => {
+    if (!lockedSelectedTableId) return;
+    const wasCellEdit = editorState.mode === 'cell-edit';
+    const hadTableMode = editorState.mode === 'table-grid' || wasCellEdit;
+    const hadCellDraft = Boolean(cellDraftRef.current);
+    const hadTransientAuthoring = hadTableMode
+      || hadCellDraft
+      || Boolean(tableSelectionRef.current)
+      || tableRangeExtensionArmed
+      || tablePasteFallbackOpen
+      || markerPanelOpen;
+    if (!hadTransientAuthoring) return;
+    controller.cancel('superseded');
+    if (hadCellDraft) {
+      cellDraftRef.current = null;
+      setCellDraft(null);
+      persistence?.runtime.workspace.notifyDraftStateChanged();
+    }
+    tableSelectionRef.current = null;
+    tableHistoryContextRef.current = null;
+    setTableSelection(null);
+    setTableRangeExtensionArmed(false);
+    setTablePasteFallbackOpen(false);
+    setTablePasteFallbackText('');
+    setMarkerPanelOpen(false);
+    setEditorState((current) => ({ ...current, selectedObjectIds: [lockedSelectedTableId], mode: 'select' }));
+    if (wasCellEdit || hadCellDraft) {
+      setStatusMessage('A tabela foi bloqueada. A edição da célula foi encerrada.');
+    } else if (hadTableMode) {
+      setStatusMessage('A tabela foi bloqueada. A edição da grade foi encerrada.');
+    }
+  }, [
+    controller,
+    editorState.mode,
+    lockedSelectedTableId,
+    markerPanelOpen,
+    persistence?.runtime.workspace,
+    tablePasteFallbackOpen,
+    tableRangeExtensionArmed,
+  ]);
   React.useEffect(() => {
     if (!selectedImageObject) {
       imageFocalGestureRef.current = null;
@@ -530,6 +594,7 @@ export function EditorWorkspace({
     const activePage = document.pages.find((page) => page.id === editorState.activePageId);
     if (!activePage) {
       controller.cancel('active-page-change');
+      setMultiSelectArmed(false);
       setEditorState({ activePageId: document.pages[0].id, selectedObjectIds: [], mode: 'select' });
       return;
     }
@@ -548,6 +613,7 @@ export function EditorWorkspace({
     setCellDraft(null);
     setTableRangeExtensionArmed(false);
     setTableSelection(null);
+    setMultiSelectArmed(false);
     setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
   }, [session]);
 
@@ -689,6 +755,7 @@ export function EditorWorkspace({
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
     setTableSelection(null);
+    setMultiSelectArmed(false);
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
     setStatusMessage(null);
   };
@@ -1001,6 +1068,7 @@ export function EditorWorkspace({
     };
     textEditRef.current = edit;
     setTextEdit(edit);
+    setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'text-edit' });
     setStatusMessage(null);
     persistence?.runtime.workspace.notifyDraftStateChanged();
@@ -1013,13 +1081,15 @@ export function EditorWorkspace({
       setStatusMessage('Tabela bloqueada não pode ser editada.');
       return false;
     }
+    controller.cancel('superseded');
+    cancelTextEdit('');
+    setMultiSelectArmed(false);
+    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'select' });
     const plan = plans.get(object.table.id);
     if (!plan?.rowQ || plan.gridOffsetYQ === undefined) {
       setStatusMessage('Aguarde a medição da tabela para editar a grade.');
       return false;
     }
-    controller.cancel('superseded');
-    cancelTextEdit('');
     const identity = tableSelectionIdentity(selectedPage.id, object.id, object.table.id);
     const first = { rowId: object.table.rows[0].id, columnId: object.table.columns[0].id };
     const next = tableCellSelection(identity, first);
@@ -1027,6 +1097,7 @@ export function EditorWorkspace({
     tableSelectionRef.current = next;
     tableHistoryContextRef.current = { table: object.table, selection: next };
     setTableSelection(next);
+    setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'table-grid' });
     setStatusMessage('Modo de grade da tabela.');
     return true;
@@ -1067,6 +1138,7 @@ export function EditorWorkspace({
       cellId: cell.id,
     }, cell.content);
     notifyCellDraftChanged(draft);
+    setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'cell-edit' });
     setStatusMessage(cell.content.type === 'marker' || cell.content.type === 'image'
       ? 'Este conteúdo é somente leitura neste modo.'
@@ -2103,6 +2175,98 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Ordem do objeto atualizada.' : 'Não foi possível alterar a ordem.');
   };
 
+  const liveArrangementSelection = () => {
+    const live = session.getSnapshot().document;
+    const page = live.pages.find((entry) => entry.id === editorState.activePageId);
+    if (!page) return undefined;
+    const objects = editorState.selectedObjectIds
+      .map((objectId) => page.objects.find((object) => object.id === objectId))
+      .filter((object): object is EditorialObject => Boolean(object));
+    if (objects.length !== editorState.selectedObjectIds.length) return undefined;
+    return {
+      pageId: page.id,
+      targets: objects.map((object) => ({ objectId: object.id, expectedFrame: frameToU(object.frame) })),
+    };
+  };
+
+  const arrangementFailureMessage = (code: string) => {
+    if (code === 'TARGET_STALE') return 'A posição de um dos objetos mudou. Revise a seleção e tente novamente.';
+    if (code === 'OBJECT_LOCKED') return 'Um dos objetos selecionados está bloqueado.';
+    return 'Não foi possível organizar os objetos selecionados.';
+  };
+
+  const runAlignSelected = (alignment: 'left' | 'horizontal-center' | 'right' | 'top' | 'vertical-center' | 'bottom') => {
+    if (editorState.selectedObjectIds.length < 2) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const live = liveArrangementSelection();
+    if (!live || live.targets.length < 2) {
+      setStatusMessage('A seleção mudou. Revise os objetos selecionados e tente novamente.');
+      return;
+    }
+    const result = session.execute({ type: 'objects.align', ...live, alignment });
+    if (!result.ok) {
+      setStatusMessage(arrangementFailureMessage(result.error.code));
+      return;
+    }
+    const labels = {
+      left: 'Objetos alinhados à esquerda.',
+      'horizontal-center': 'Objetos centralizados horizontalmente.',
+      right: 'Objetos alinhados à direita.',
+      top: 'Objetos alinhados ao topo.',
+      'vertical-center': 'Objetos centralizados verticalmente.',
+      bottom: 'Objetos alinhados à base.',
+    } as const;
+    setStatusMessage(result.metadata.changed ? labels[alignment] : 'Os objetos já estão organizados dessa forma.');
+  };
+
+  const runDistributeSelected = (axis: 'horizontal' | 'vertical') => {
+    if (editorState.selectedObjectIds.length < 3) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const live = liveArrangementSelection();
+    if (!live || live.targets.length < 3) {
+      setStatusMessage('A seleção mudou. Revise os objetos selecionados e tente novamente.');
+      return;
+    }
+    const result = session.execute({ type: 'objects.distribute', ...live, axis });
+    if (!result.ok) {
+      setStatusMessage(arrangementFailureMessage(result.error.code));
+      return;
+    }
+    const success = axis === 'horizontal'
+      ? 'Objetos distribuídos horizontalmente.'
+      : 'Objetos distribuídos verticalmente.';
+    setStatusMessage(result.metadata.changed ? success : 'Os objetos já estão organizados dessa forma.');
+  };
+
+  const setSelectedObjectLock = (locked: boolean) => {
+    if (!selectedObjectId) return;
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
+    const object = page?.objects.find((entry) => entry.id === selectedObjectId);
+    if (!object) {
+      setStatusMessage('O objeto selecionado não está mais disponível.');
+      return;
+    }
+    if (!(locked && object.type === 'table') && !finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const result = session.execute({
+      type: 'object.setLocked',
+      objectId: object.id,
+      expectedLocked: object.locked === true,
+      locked,
+    });
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'TARGET_STALE'
+        ? 'O estado de bloqueio do objeto mudou. Revise e tente novamente.'
+        : 'Não foi possível alterar o bloqueio do objeto.');
+      return;
+    }
+    setStatusMessage(result.metadata.changed
+      ? locked ? 'Objeto bloqueado.' : 'Objeto desbloqueado.'
+      : locked ? 'O objeto já está bloqueado.' : 'O objeto já está desbloqueado.');
+  };
+
   const liveSelectedImage = () => {
     const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
     const object = selectedObjectId ? page?.objects.find((entry) => entry.id === selectedObjectId) : undefined;
@@ -2326,6 +2490,12 @@ export function EditorWorkspace({
       if (selectedTableObject?.id === object.id) return;
       leaveTableGrid('');
     }
+    if (kind.type === 'move' && multiSelectArmed) {
+      controller.cancel('superseded');
+      toggleObjectSelection(object.id);
+      event.currentTarget.focus();
+      return;
+    }
     if (kind.type === 'move' && object.type === 'text') {
       const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
       const previous = lastTextPointerDownRef.current;
@@ -2385,6 +2555,13 @@ export function EditorWorkspace({
     if (kind.type === 'resize' && object.type === 'group') return;
     selectObject(object.id);
     event.currentTarget.focus();
+    const closureLockedId = objectClosureLockedId(object);
+    if (closureLockedId) {
+      setStatusMessage(groupHasLockedDescendant(object)
+        ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
+        : 'Objeto bloqueado. Desbloqueie para mover ou redimensionar.');
+      return;
+    }
     const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;
     const canonicalPage = stage?.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]');
     const rect = canonicalPage?.getBoundingClientRect();
@@ -2430,6 +2607,12 @@ export function EditorWorkspace({
 
   const commitInspector = (field: keyof InspectorDraft) => {
     if (!selectedObject) return;
+    if (selectedMutationLocked) {
+      setStatusMessage(groupHasLockedDescendant(selectedObject)
+        ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
+        : 'Objeto bloqueado. Desbloqueie para alterar a geometria.');
+      return;
+    }
     if (!finishTextEditBeforeCommand()) return;
     if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
     controller.cancel('superseded');
@@ -2591,6 +2774,7 @@ export function EditorWorkspace({
       if (target.closest('[data-cell-edit-session]') || target.closest('[data-table-grid-overlay]') || target.closest('[data-table-cell-inspector]')) return;
       if (target.closest('[data-persistence-save-action]')) return;
       if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      if (selectedTableObject && target.closest('[data-editor-action="toggle-object-lock"]')) return;
       if (!finishCellDraftForContextChange()) {
         event.preventDefault();
         event.stopPropagation();
@@ -3261,18 +3445,32 @@ export function EditorWorkspace({
               >
                 {snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado'}
               </button>
+              <button
+                type="button"
+                data-editor-action="toggle-multi-select"
+                aria-pressed={multiSelectArmed}
+                className={multiSelectArmed ? 'is-active' : undefined}
+                disabled={editorState.mode !== 'select'}
+                onClick={() => {
+                  controller.cancel('superseded');
+                  setMultiSelectArmed((armed) => !armed);
+                  setStatusMessage(multiSelectArmed ? 'Seleção múltipla desativada.' : 'Selecione os objetos que deseja organizar.');
+                }}
+              >
+                Selecionar vários
+              </button>
             </div>
             <div className="vnext-tool-group" aria-label="Ações do objeto selecionado">
-              <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2} onClick={groupSelected}>Agrupar</button>
-              <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group'} onClick={ungroupSelected}>Desagrupar</button>
-              <button type="button" data-editor-action="duplicate" disabled={!selectedObject} onClick={duplicateSelected}>Duplicar</button>
-              <button type="button" data-editor-action="delete" disabled={!selectedObject} onClick={deleteSelected}>Excluir</button>
-              <button type="button" data-editor-action="send-back" disabled={!selectedObject} onClick={() => reorderSelected('back')}>Fundo</button>
-              <button type="button" data-editor-action="send-backward" disabled={!selectedObject} onClick={() => reorderSelected('backward')}>Recuar</button>
-              <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
-              <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
-              <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image' || selectedObject.locked} onClick={replaceSelectedImage}>Substituir imagem</button>
-              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image' || selectedObject.locked} onClick={replaceSelectedImage}>Upload imagem</button>
+              <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2 || selectedHasLockedClosure} onClick={groupSelected}>Agrupar</button>
+              <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group' || selectedMutationLocked} onClick={ungroupSelected}>Desagrupar</button>
+              <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
+              <button type="button" data-editor-action="delete" disabled={!selectedObject || selectedMutationLocked} onClick={deleteSelected}>Excluir</button>
+              <button type="button" data-editor-action="send-back" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('back')}>Enviar para o fundo</button>
+              <button type="button" data-editor-action="send-backward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('backward')}>Recuar uma camada</button>
+              <button type="button" data-editor-action="bring-forward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('forward')}>Avançar uma camada</button>
+              <button type="button" data-editor-action="bring-front" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('front')}>Trazer para frente</button>
+              <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>Substituir imagem</button>
+              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>Upload imagem</button>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -3285,7 +3483,7 @@ export function EditorWorkspace({
               <button
                 type="button"
                 data-editor-action="edit-text"
-                disabled={selectedObject?.type !== 'text' || selectedObject.locked || projectEditableRichText(selectedObject.text) === null}
+                disabled={selectedObject?.type !== 'text' || selectedMutationLocked || projectEditableRichText(selectedObject.text) === null}
                 onClick={() => selectedObject && startTextEdit(selectedObject)}
               >
                 Editar texto
@@ -3293,7 +3491,7 @@ export function EditorWorkspace({
               <button
                 type="button"
                 data-editor-action="edit-table"
-                disabled={selectedObject?.type !== 'table' || selectedObject.locked}
+                disabled={selectedObject?.type !== 'table' || selectedMutationLocked}
                 onClick={() => selectedObject && startTableGrid(selectedObject)}
               >
                 Editar tabela
@@ -3301,7 +3499,7 @@ export function EditorWorkspace({
             </div>
           </div>
 
-          {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && (
+          {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>Grade da tabela</strong>
               <div className="vnext-tool-group" aria-label="Ações de linha">
@@ -3349,7 +3547,7 @@ export function EditorWorkspace({
             </div>
           )}
 
-          {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && (
+          {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
               <label>
                 <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
@@ -3497,6 +3695,7 @@ export function EditorWorkspace({
                           {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
                           {object.type === 'table'
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
+                            && !object.locked
                             && tableSelection
                             && plans.get(object.table.id)?.rowQ
                             && plans.get(object.table.id)?.gridOffsetYQ !== undefined
@@ -3537,7 +3736,7 @@ export function EditorWorkspace({
                                 }}
                               />
                             )}
-                          {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && resizeHandles.map((handle) => (
+                          {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && !objectClosureLockedId(object) && resizeHandles.map((handle) => (
                             <button
                               key={handle}
                               type="button"
@@ -3563,9 +3762,77 @@ export function EditorWorkspace({
 
         <aside className="vnext-info" aria-label="Inspector do objeto">
           <span className="vnext-info-kicker">Inspector</span>
-          <h2>{selectedObject ? 'Geometria do objeto' : 'Selecione um objeto'}</h2>
-          {selectedObject ? (
+          <h2>{selectedObject
+            ? 'Geometria do objeto'
+            : selectedObjects.length > 1
+              ? `${selectedObjects.length} objetos selecionados`
+              : 'Selecione um objeto'}</h2>
+          {selectedObjects.length > 1 ? (
+            <section className="vnext-arrangement-inspector" data-object-arrangement="">
+              <h3>Alinhar e distribuir</h3>
+              {selectedHasLockedClosure && (
+                <p id="vnext-arrangement-lock-reason" className="vnext-authoring-guidance">
+                  {selectedHasInternalLockedGroup
+                    ? 'Um dos grupos selecionados contém um objeto interno bloqueado.'
+                    : 'Desbloqueie todos os objetos selecionados para organizar.'}
+                </p>
+              )}
+              <div className="vnext-arrangement-actions" aria-label="Alinhar objetos">
+                <button type="button" data-editor-action="align-left" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('left')}>Alinhar à esquerda</button>
+                <button type="button" data-editor-action="align-horizontal-center" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('horizontal-center')}>Centralizar horizontalmente</button>
+                <button type="button" data-editor-action="align-right" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('right')}>Alinhar à direita</button>
+                <button type="button" data-editor-action="align-top" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('top')}>Alinhar ao topo</button>
+                <button type="button" data-editor-action="align-vertical-center" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('vertical-center')}>Centralizar verticalmente</button>
+                <button type="button" data-editor-action="align-bottom" disabled={selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runAlignSelected('bottom')}>Alinhar à base</button>
+              </div>
+              <div className="vnext-arrangement-actions" aria-label="Distribuir objetos">
+                <button type="button" data-editor-action="distribute-horizontal"
+                  disabled={selectedObjects.length < 3 || selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runDistributeSelected('horizontal')}>Distribuir horizontalmente</button>
+                <button type="button" data-editor-action="distribute-vertical"
+                  disabled={selectedObjects.length < 3 || selectedHasLockedClosure}
+                  aria-describedby={selectedHasLockedClosure ? 'vnext-arrangement-lock-reason' : undefined}
+                  onClick={() => runDistributeSelected('vertical')}>Distribuir verticalmente</button>
+              </div>
+            </section>
+          ) : selectedObject ? (
             <>
+              <section className="vnext-object-locking" data-object-locking="">
+                <h3>Objeto</h3>
+                <button
+                  type="button"
+                  className="vnext-inspector-action"
+                  data-editor-action="toggle-object-lock"
+                  aria-pressed={selectedOwnLocked}
+                  onClick={() => setSelectedObjectLock(!selectedOwnLocked)}
+                >
+                  {selectedOwnLocked ? 'Desbloquear objeto' : 'Bloquear objeto'}
+                </button>
+                {selectedOwnLocked && (
+                  <p id="vnext-object-lock-reason" className="vnext-authoring-guidance">
+                    Objeto bloqueado. Desbloqueie para mover, redimensionar ou organizar este objeto.
+                  </p>
+                )}
+                {groupHasLockedDescendant(selectedObject) && (
+                  <p id="vnext-object-closure-lock-reason" className="vnext-authoring-guidance">
+                    Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.
+                  </p>
+                )}
+              </section>
+              <div className="vnext-divider" />
               <p>Posição e tamanho em milímetros.</p>
               <div className="vnext-inspector-grid">
                 {([['x', 'X'], ['y', 'Y'], ['width', 'Largura'], ['height', 'Altura']] as const).map(([field, label]) => (
@@ -3573,6 +3840,10 @@ export function EditorWorkspace({
                     <span>{label}</span>
                     <div>
                       <input type="text" inputMode="decimal" data-inspector-field={field} value={inspectorDraft[field]}
+                        disabled={selectedMutationLocked}
+                        aria-describedby={selectedMutationLocked
+                          ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
+                          : undefined}
                         readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
                         onChange={(event) => updateInspectorDraft(field, event.target.value)}
                         onBlur={() => commitInspector(field)}
@@ -3811,8 +4082,8 @@ export function EditorWorkspace({
                       <button
                         type="button"
                         data-editor-action="open-table-semantics"
-                        disabled={Boolean(cellDraft)}
-                        aria-describedby={cellDraft ? tableSemanticDisabledReasonId : undefined}
+                        disabled={tableSemanticDisabled}
+                        aria-describedby={tableSemanticDisabledReasonId}
                         onClick={() => {
                           if (editorState.mode === 'select') startTableGrid(selectedObject);
                           setMarkerPanelOpen(true);
@@ -3881,7 +4152,7 @@ export function EditorWorkspace({
                   />
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && rowDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
@@ -3957,7 +4228,7 @@ export function EditorWorkspace({
                   </section>
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && columnDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
@@ -4068,7 +4339,7 @@ export function EditorWorkspace({
                   </section>
                 </>
               )}
-              {selectedObject.type === 'table' && tableSelection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-cell-inspector" data-table-cell-inspector="">
@@ -4314,7 +4585,7 @@ export function EditorWorkspace({
                       )}
                     </section>
 
-                    {markerPanelOpen && selectedTableObject && (
+                    {markerPanelOpen && selectedTableObject && !selectedTableObject.locked && (
                       <>
                         <div className="vnext-divider" />
                         <section className="vnext-marker-legend-panel" data-marker-legend-panel="">

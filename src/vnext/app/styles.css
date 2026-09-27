@@ -105,6 +105,13 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-inspector-grid input { width: 100%; min-width: 0; border: 0; outline: 0; color: #24364d; font: inherit; font-size: 12px; padding: 7px 6px; }
 .vnext-inspector-grid label > div > span { color: #7a8899; font-size: 10px; padding-right: 6px; text-transform: none; }
 .vnext-inspector-action { width: 100%; margin-top: 12px; }
+.vnext-object-locking, .vnext-arrangement-inspector { display: grid; gap: 9px; }
+.vnext-object-locking h3, .vnext-arrangement-inspector h3 { margin: 0; color: #2a394d; font-size: 12px; }
+.vnext-arrangement-actions { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.vnext-arrangement-actions button { min-height: 34px; min-width: 0; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; padding: 6px 8px; text-align: left; }
+.vnext-arrangement-actions button:hover:not(:disabled) { background: #f6f8fb; border-color: #95a6b8; }
+.vnext-arrangement-actions button:disabled, .vnext-inspector-action:disabled { cursor: not-allowed; opacity: .45; }
+.vnext-authoring-guidance { margin: 0; border-left: 3px solid #c6921d; background: #fff9e9; color: #67501d; font-size: 11px; line-height: 1.45; padding: 7px 8px; }
 .vnext-image-inspector { display:grid; min-width:0; gap:10px; }
 .vnext-image-field, .vnext-image-range-field { display:grid; min-width:0; gap:5px; color:#536176; font-size:11px; font-weight:700; }
 .vnext-image-field select { width:100%; min-width:0; box-sizing:border-box; border:1px solid #bdc9d6; border-radius:6px; background:#fff; color:#24364d; font:inherit; font-size:12px; padding:7px 8px; }
@@ -329,6 +336,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-table-axis-toolbar button { min-height: 44px; }
   .vnext-info { display: block; min-height: auto; flex: none; overflow: visible; border-top: 1px solid #d7dee8; border-left: 0; padding: 18px 14px 28px; }
   .vnext-inspector-action { min-height: 44px; }
+  .vnext-arrangement-actions button { min-height: 44px; }
   .vnext-image-actions button, .vnext-image-inspector > button, .vnext-image-field select { min-height: 44px; }
   .vnext-image-focal-pad { min-height: 144px; }
   .vnext-image-range-field input[type="range"] { min-height: 44px; }
