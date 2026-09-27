@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createDocumentSession, createStaticPageTemplateRegistry, projectEditableRichText } from '@/vnext/application';
 import { mmToU, plainRichText, type CatalogDocument, type RichText } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
@@ -240,6 +240,51 @@ function setPageRect(container: HTMLElement, width = 420, height = 594): HTMLEle
     toJSON: () => ({}),
   });
   return page;
+}
+
+function pointerClick(element: HTMLElement, pointerId: number): void {
+  fireEvent.pointerDown(element, { pointerId, button: 0 });
+  fireEvent.pointerUp(element, { pointerId, button: 0 });
+  fireEvent.click(element);
+}
+
+function enableTransformFreePhysicalMeasurement() {
+  const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+  const computedStyle = vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudoElement) => {
+    const style = nativeGetComputedStyle(element, pseudoElement);
+    return new Proxy(style, {
+      get(target, property) {
+        if (property === 'transform' || property === 'scale' || property === 'translate' || property === 'rotate') return 'none';
+        if (property === 'zoom') return '1';
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as CSSStyleDeclaration;
+  });
+  const originalDecode = HTMLImageElement.prototype.decode;
+  const originalGetClientRects = Range.prototype.getClientRects;
+  HTMLImageElement.prototype.decode = vi.fn().mockResolvedValue(undefined);
+  Range.prototype.getClientRects = vi.fn(() => [] as unknown as DOMRectList);
+  return () => {
+    computedStyle.mockRestore();
+    HTMLImageElement.prototype.decode = originalDecode;
+    Range.prototype.getClientRects = originalGetClientRects;
+  };
+}
+
+async function enterMeasuredTableGrid(container: HTMLElement, tableId: string, pointerId: number): Promise<void> {
+  setPageRect(container);
+  const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${tableId}"]`);
+  if (!hit) throw new Error('Missing Table hit target');
+  fireEvent.pointerDown(hit, { pointerId, button: 0, clientX: 120, clientY: 100 });
+  fireEvent.pointerUp(hit, { pointerId, button: 0, clientX: 120, clientY: 100 });
+  const shell = container.querySelector<HTMLElement>('[data-vnext-shell]');
+  if (!shell) throw new Error('Missing VNext shell');
+  await waitFor(() => {
+    if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(button(container, 'edit-table'));
+    expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
+  });
 }
 
 describe('W2.C visible editor workspace', () => {
@@ -928,6 +973,125 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
     expect(container.querySelector(`[data-editor-object-id="${table.id}"][data-selected="true"]`)).toBeTruthy();
     expect(container.querySelector('[role="status"]')).toHaveTextContent('Aguarde a medição da tabela para editar a grade.');
+  });
+
+  it('collapses real Table authoring for local, dirty-draft, and concurrent locks without auto-committing content', async () => {
+    const document = createW4BTableDocument();
+    const sourceTable = document.pages[0].objects.find((object) => object.type === 'table');
+    if (!sourceTable || sourceTable.type !== 'table') throw new Error('Missing Table fixture');
+    const session = sessionWithDemo(document);
+    const execute = vi.spyOn(session, 'execute');
+    const restorePhysicalMeasurement = enableTransformFreePhysicalMeasurement();
+    const { container } = render(<VNextApp session={session} />);
+    const shell = container.querySelector<HTMLElement>('[data-vnext-shell]');
+    if (!shell) throw new Error('Missing VNext shell');
+
+    const canonicalTable = () => {
+      const object = session.getSnapshot().document.pages[0].objects.find((entry) => entry.id === sourceTable.id);
+      if (!object || object.type !== 'table') throw new Error('Missing canonical Table');
+      return object;
+    };
+    const assertSingularTableSelection = () => {
+      expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+      expect(container.querySelector(`[data-editor-object-id="${sourceTable.id}"][data-selected="true"]`)).toBeTruthy();
+    };
+
+    await enterMeasuredTableGrid(container, sourceTable.id, 241);
+    expect(container.querySelector('[data-table-axis-toolbar]')).toBeTruthy();
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
+    expect(container.querySelector('[data-table-cell-inspector]')).toBeTruthy();
+    fireEvent.click(button(container, 'paste-table-cells'));
+    fireEvent.click(button(container, 'marker-panel'));
+    expect(container.querySelector('[data-table-paste-fallback]')).toBeTruthy();
+    expect(container.querySelector('[data-marker-legend-panel]')).toBeTruthy();
+
+    const localBefore = session.getSnapshot();
+    const tableBeforeLocalLock = structuredClone(canonicalTable().table);
+    const localCallsBefore = execute.mock.calls.length;
+    pointerClick(button(container, 'toggle-object-lock'), 242);
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    const localAfter = session.getSnapshot();
+    expect(localAfter.localSequence).toBe(localBefore.localSequence + 1);
+    expect(canonicalTable().table).toEqual(tableBeforeLocalLock);
+    expect(execute.mock.calls.slice(localCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    expect(execute.mock.calls.slice(localCallsBefore).some(([action]) => action.type === 'table.cell.setContent')).toBe(false);
+    assertSingularTableSelection();
+    expect(container.querySelector('[data-table-axis-toolbar]')).toBeNull();
+    expect(container.querySelector('[data-table-paste-fallback]')).toBeNull();
+    expect(container.querySelector('[data-marker-legend-panel]')).toBeNull();
+    expect(container.querySelector('[data-table-cell-inspector]')).toBeNull();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+    expect(button(container, 'toggle-object-lock')).not.toBeDisabled();
+    expect(button(container, 'open-table-semantics')).toBeDisabled();
+
+    const unlockBefore = session.getSnapshot();
+    pointerClick(button(container, 'toggle-object-lock'), 243);
+    await waitFor(() => expect(canonicalTable().locked).toBeUndefined());
+    expect(session.getSnapshot().localSequence).toBe(unlockBefore.localSequence + 1);
+    expect(shell).toHaveAttribute('data-editor-mode', 'select');
+    assertSingularTableSelection();
+    expect(button(container, 'edit-table')).not.toBeDisabled();
+    expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+
+    await enterMeasuredTableGrid(container, sourceTable.id, 244);
+    fireEvent.click(button(container, 'edit-cell-content'));
+    await waitFor(() => expect(container.querySelector('[data-cell-edit-session]')).toBeTruthy());
+    expect(shell).toHaveAttribute('data-editor-mode', 'cell-edit');
+    const originalCellContent = structuredClone(canonicalTable().table.cells[0].content);
+    const draftSequence = session.getSnapshot().localSequence;
+    const draftCallsBefore = execute.mock.calls.length;
+    const richTextDraft = container.querySelector<HTMLTextAreaElement>('[data-cell-rich-text]');
+    if (!richTextDraft) throw new Error('Missing rich-text cell draft');
+    fireEvent.change(richTextDraft, { target: { value: 'DIRTY-MUST-NOT-COMMIT' } });
+    expect(session.getSnapshot().localSequence).toBe(draftSequence);
+    expect(canonicalTable().table.cells[0].content).toEqual(originalCellContent);
+    expect(execute.mock.calls).toHaveLength(draftCallsBefore);
+
+    pointerClick(button(container, 'toggle-object-lock'), 245);
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-cell-edit-session]')).toBeNull();
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    expect(session.getSnapshot().localSequence).toBe(draftSequence + 1);
+    expect(canonicalTable().table.cells[0].content).toEqual(originalCellContent);
+    expect(execute.mock.calls.slice(draftCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    expect(execute.mock.calls.slice(draftCallsBefore).some(([action]) => action.type === 'table.cell.setContent')).toBe(false);
+    assertSingularTableSelection();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+
+    pointerClick(button(container, 'toggle-object-lock'), 246);
+    await waitFor(() => expect(canonicalTable().locked).toBeUndefined());
+    await enterMeasuredTableGrid(container, sourceTable.id, 247);
+    const concurrentBefore = session.getSnapshot();
+    const concurrentCallsBefore = execute.mock.calls.length;
+    act(() => {
+      const result = session.execute({
+        type: 'object.setLocked',
+        objectId: sourceTable.id,
+        expectedLocked: false,
+        locked: true,
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-editor-mode', 'select');
+      expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
+      expect(canonicalTable().locked).toBe(true);
+    });
+    expect(session.getSnapshot().localSequence).toBe(concurrentBefore.localSequence + 1);
+    expect(execute.mock.calls.slice(concurrentCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
+    assertSingularTableSelection();
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
+    expect(button(container, 'open-table-semantics')).toBeDisabled();
+    restorePhysicalMeasurement();
   });
 });
 
