@@ -186,6 +186,43 @@ export const ReorderObjectActionSchema = z.object({
   targetIndex: safeInteger.nonnegative(),
 }).strict();
 
+export const ObjectSetLockedActionSchema = z.object({
+  type: z.literal('object.setLocked'),
+  objectId: applicationId,
+  expectedLocked: z.boolean(),
+  locked: z.boolean(),
+}).strict();
+
+export const ObjectFrameExpectationSchema = z.object({
+  objectId: applicationId,
+  expectedFrame: FrameUSchema,
+}).strict();
+
+const uniqueObjectFrameTargets = (minimum: number) => z.array(ObjectFrameExpectationSchema)
+  .min(minimum)
+  .superRefine((targets, context) => {
+    if (new Set(targets.map((target) => target.objectId)).size !== targets.length) {
+      context.addIssue({ code: 'custom', message: 'Object targets must be unique' });
+    }
+  });
+
+export const ObjectFrameTargetsSchema = uniqueObjectFrameTargets(2);
+export const ObjectDistributionFrameTargetsSchema = uniqueObjectFrameTargets(3);
+
+export const AlignObjectsActionSchema = z.object({
+  type: z.literal('objects.align'),
+  pageId: applicationId,
+  targets: ObjectFrameTargetsSchema,
+  alignment: z.enum(['left', 'horizontal-center', 'right', 'top', 'vertical-center', 'bottom']),
+}).strict();
+
+export const DistributeObjectsActionSchema = z.object({
+  type: z.literal('objects.distribute'),
+  pageId: applicationId,
+  targets: ObjectDistributionFrameTargetsSchema,
+  axis: z.enum(['horizontal', 'vertical']),
+}).strict();
+
 export const ImageExpectedStateSchema = z.object({
   assetId: applicationId,
   fit: z.enum(['contain', 'cover']),
@@ -845,6 +882,9 @@ export const ApplicationActionSchema = z.union([
   ResizeObjectActionSchema,
   TableFitHeightActionSchema,
   ReorderObjectActionSchema,
+  ObjectSetLockedActionSchema,
+  AlignObjectsActionSchema,
+  DistributeObjectsActionSchema,
   ImageSetPresentationActionSchema,
   ReplaceImageActionSchema,
   RegisterAssetActionSchema,

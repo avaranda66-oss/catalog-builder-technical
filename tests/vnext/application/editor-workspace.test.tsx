@@ -110,6 +110,88 @@ function seedTextDocument(options: {
   };
 }
 
+function seedArrangementDocument(options: { includeSecondPage?: boolean } = {}): CatalogDocument {
+  const base = createW2CDemoDocument(ids('arrange-seed'));
+  const objects = [
+    {
+      id: 'arrange-a',
+      type: 'shape' as const,
+      frame: { xMm: 20, yMm: 30, widthMm: 20, heightMm: 12 },
+      zIndex: 0,
+      shape: 'rectangle' as const,
+      style: { fill: '#edf5ff' },
+    },
+    {
+      id: 'arrange-b',
+      type: 'text' as const,
+      frame: { xMm: 70, yMm: 45, widthMm: 30, heightMm: 16 },
+      zIndex: 1,
+      text: plainRichText('arrange-b-rich', 'B'),
+      style: { fontSizePt: 10 },
+    },
+    {
+      id: 'arrange-c',
+      type: 'shape' as const,
+      frame: { xMm: 130, yMm: 60, widthMm: 20, heightMm: 12 },
+      zIndex: 2,
+      shape: 'rectangle' as const,
+      style: { fill: '#dbeafe' },
+    },
+  ];
+  const firstPage = { ...base.pages[0], objects };
+  return {
+    ...base,
+    pages: options.includeSecondPage
+      ? [firstPage, { ...base.pages[0], id: 'arrange-page-two', objects: [] }]
+      : [firstPage],
+  };
+}
+
+function seedClosureLockedGroupDocument(): CatalogDocument {
+  const base = createW2CDemoDocument(ids('closure-seed'));
+  return {
+    ...base,
+    pages: [{
+      ...base.pages[0],
+      objects: [
+        {
+          id: 'locked-group',
+          type: 'group' as const,
+          frame: { xMm: 20, yMm: 30, widthMm: 30, heightMm: 10 },
+          zIndex: 0,
+          objects: [
+            {
+              id: 'locked-child',
+              type: 'shape' as const,
+              frame: { xMm: 0, yMm: 0, widthMm: 10, heightMm: 10 },
+              zIndex: 0,
+              locked: true,
+              shape: 'rectangle' as const,
+              style: { fill: '#edf5ff' },
+            },
+            {
+              id: 'open-child',
+              type: 'shape' as const,
+              frame: { xMm: 20, yMm: 0, widthMm: 10, heightMm: 10 },
+              zIndex: 1,
+              shape: 'rectangle' as const,
+              style: { fill: '#dbeafe' },
+            },
+          ],
+        },
+        {
+          id: 'outside-shape',
+          type: 'shape' as const,
+          frame: { xMm: 90, yMm: 30, widthMm: 20, heightMm: 10 },
+          zIndex: 1,
+          shape: 'rectangle' as const,
+          style: { fill: '#f1f5f9' },
+        },
+      ],
+    }],
+  };
+}
+
 function complexText(): RichText {
   return {
     paragraphs: [{
@@ -699,6 +781,153 @@ describe('W2.F visible Group workflow', () => {
     expect(session.getSnapshot().document.pages[0].objects.map((object)=>object.id)).toEqual([textId,shapeId]);
     expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
     expect(button(container,'group')).not.toBeDisabled();
+  });
+});
+
+describe('W4.F.5 visible object arrangement and locking', () => {
+  it('adds modifier-free multi-selection, arrangement controls, touch-like selection, and page-change cleanup', () => {
+    const session = sessionWithDemo(seedArrangementDocument({ includeSecondPage: true }));
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+
+    const multi = button(container, 'toggle-multi-select');
+    expect(multi).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(multi);
+    expect(multi).toHaveAttribute('aria-pressed', 'true');
+
+    for (const [index, id] of ['arrange-a', 'arrange-b'].entries()) {
+      const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${id}"]`)!;
+      fireEvent.pointerDown(hit, { pointerId: 200 + index, button: 0, clientX: 80 + index * 40, clientY: 80 });
+    }
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(container.querySelector('.vnext-info h2')).toHaveTextContent('2 objetos selecionados');
+    expect(button(container, 'align-left')).not.toBeDisabled();
+    expect(button(container, 'distribute-horizontal')).toBeDisabled();
+
+    const third = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-c"]')!;
+    fireEvent.pointerDown(third, { pointerId: 203, button: 0, clientX: 200, clientY: 100 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(3);
+    expect(button(container, 'distribute-horizontal')).not.toBeDisabled();
+
+    fireEvent.click(button(container, 'align-left'));
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.align', alignment: 'left' });
+    expect(session.getSnapshot().document.pages[0].objects.map((object) => object.frame.xMm)).toEqual([20, 20, 20]);
+
+    fireEvent.click(button(container, 'distribute-horizontal'));
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.distribute', axis: 'horizontal' });
+
+    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button');
+    expect(pages).toHaveLength(2);
+    fireEvent.click(pages[1]);
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(0);
+  });
+
+  it('locks and unlocks a selected root while preserving selection and disabling ordinary mutation affordances', () => {
+    const session = sessionWithDemo(seedArrangementDocument());
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-b"]')!;
+
+    fireEvent.pointerDown(hit, { pointerId: 210, button: 0, clientX: 120, clientY: 100 });
+    fireEvent.pointerUp(hit, { pointerId: 210, button: 0, clientX: 120, clientY: 100 });
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(8);
+
+    const lock = button(container, 'toggle-object-lock');
+    expect(lock).toHaveTextContent('Bloquear objeto');
+    fireEvent.click(lock);
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'object.setLocked', objectId: 'arrange-b', expectedLocked: false, locked: true,
+    });
+    const locked = session.getSnapshot().document.pages[0].objects.find((object) => object.id === 'arrange-b');
+    expect(locked?.locked).toBe(true);
+    expect(container.querySelector('[data-editor-object-id="arrange-b"]')).toHaveAttribute('data-selected', 'true');
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(0);
+    for (const action of ['duplicate', 'delete', 'send-back', 'send-backward', 'bring-forward', 'bring-front', 'edit-text']) {
+      expect(button(container, action)).toBeDisabled();
+    }
+    for (const input of container.querySelectorAll<HTMLInputElement>('[data-inspector-field]')) expect(input).toBeDisabled();
+    expect(lock).not.toBeDisabled();
+    expect(lock).toHaveTextContent('Desbloquear objeto');
+    expect(container.querySelector('#vnext-object-lock-reason')).toHaveTextContent('Objeto bloqueado.');
+
+    fireEvent.click(lock);
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'object.setLocked', objectId: 'arrange-b', expectedLocked: true, locked: false,
+    });
+    expect(session.getSnapshot().document.pages[0].objects.find((object) => object.id === 'arrange-b')?.locked).toBeUndefined();
+    expect(container.querySelectorAll('[data-resize-handle]')).toHaveLength(8);
+    expect(button(container, 'edit-text')).not.toBeDisabled();
+  });
+
+  it('distinguishes own Group lock from descendant closure lock and blocks arrangement without false unlock guidance', () => {
+    const session = sessionWithDemo(seedClosureLockedGroupDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    const groupHit = container.querySelector<HTMLElement>('[data-editor-object-id="locked-group"]')!;
+
+    fireEvent.pointerDown(groupHit, { pointerId: 220, button: 0, clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(groupHit, { pointerId: 220, button: 0, clientX: 80, clientY: 80 });
+    expect(button(container, 'toggle-object-lock')).toHaveTextContent('Bloquear objeto');
+    expect(container.querySelector('#vnext-object-closure-lock-reason')).toHaveTextContent(
+      'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
+    );
+    for (const input of container.querySelectorAll<HTMLInputElement>('[data-inspector-field]')) expect(input).toBeDisabled();
+    expect(button(container, 'duplicate')).toBeDisabled();
+    expect(button(container, 'ungroup')).toBeDisabled();
+
+    fireEvent.click(button(container, 'toggle-multi-select'));
+    const outside = container.querySelector<HTMLElement>('[data-editor-object-id="outside-shape"]')!;
+    fireEvent.pointerDown(outside, { pointerId: 221, button: 0, clientX: 190, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    expect(container.querySelector('[data-object-arrangement]')).toHaveTextContent(
+      'Um dos grupos selecionados contém um objeto interno bloqueado.'
+    );
+    expect(button(container, 'align-left')).toBeDisabled();
+  });
+
+  it('disarms modifier-free selection and narrows selection when entering Text edit', () => {
+    const session = sessionWithDemo(seedArrangementDocument());
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+    fireEvent.click(button(container, 'toggle-multi-select'));
+
+    const textHit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-b"]')!;
+    const shapeHit = container.querySelector<HTMLElement>('[data-editor-object-id="arrange-a"]')!;
+    fireEvent.pointerDown(textHit, { pointerId: 230, button: 0, clientX: 120, clientY: 100 });
+    fireEvent.pointerDown(shapeHit, { pointerId: 231, button: 0, clientX: 60, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+
+    fireEvent.pointerDown(shapeHit, { pointerId: 232, button: 0, clientX: 60, clientY: 80 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    fireEvent.click(button(container, 'edit-text'));
+    expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-editor-mode', 'text-edit');
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(button(container, 'toggle-multi-select')).toBeDisabled();
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+  });
+
+  it('disarms modifier-free selection and keeps only the Table target when Table editing is requested', () => {
+    const document = createW4BTableDocument();
+    const table = document.pages[0].objects.find((object) => object.type === 'table');
+    if (!table || table.type !== 'table') throw new Error('Missing Table fixture');
+    const session = sessionWithDemo(document);
+    const { container } = render(<VNextApp session={session} />);
+    setPageRect(container);
+
+    fireEvent.click(button(container, 'toggle-multi-select'));
+    const hit = container.querySelector<HTMLElement>(`[data-editor-object-id="${table.id}"]`)!;
+    fireEvent.pointerDown(hit, { pointerId: 240, button: 0, clientX: 120, clientY: 100 });
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(button(container, 'edit-table'));
+    expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(1);
+    expect(container.querySelector(`[data-editor-object-id="${table.id}"][data-selected="true"]`)).toBeTruthy();
+    expect(container.querySelector('[role="status"]')).toHaveTextContent('Aguarde a medição da tabela para editar a grade.');
   });
 });
 

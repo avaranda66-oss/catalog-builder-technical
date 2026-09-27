@@ -2,7 +2,7 @@ import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type Asset
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { resolveCellStyle } from '../domain/style-resolution';
 import { VNextError } from '../domain/diagnostics';
-import { add, minimumUForProjectedQ } from '../domain/physical';
+import { add, minimumUForProjectedQ, mul, roundRatio, sum } from '../domain/physical';
 import { deleteAxis, insertAxis, mergeCells, orderedAnchors, reorderAxis, unmergeCell, validateTable } from '../table';
 import { resolveColumns } from '../table/table-layout';
 import { cellIndex, getCellKey } from '../table/table-model';
@@ -289,6 +289,77 @@ function tableCellTarget(
 
 function exactEquals(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+interface ArrangementTarget {
+  object: EditorialObject;
+  objectIndex: number;
+  frameU: FrameU;
+  visualIndex: number;
+}
+
+function arrangementTargets(
+  document: CatalogDocument,
+  pageId: string,
+  targets: readonly { objectId: string; expectedFrame: FrameU }[]
+): { ok: true; page: Page; pageIndex: number; targets: ArrangementTarget[] } | ApplicationActionFailure {
+  const pageIndex = document.pages.findIndex((page) => page.id === pageId);
+  if (pageIndex < 0) return failure('PAGE_NOT_FOUND', pageId);
+  const page = document.pages[pageIndex];
+  const visualIndexes = new Map(visualPageObjects(page).map((entry) => [entry.object.id, entry.visualIndex]));
+  const resolved: ArrangementTarget[] = [];
+
+  for (const target of targets) {
+    const location = findObjectLocation(document, target.objectId);
+    if (!location) return failure('OBJECT_NOT_FOUND', target.objectId);
+    if (location.page.id !== pageId) {
+      return failure('ACTION_INVALID', `Object ${target.objectId} does not belong to page ${pageId}`);
+    }
+    if (location.parentGroup) {
+      return failure('ACTION_INVALID', `Direct arrangement of grouped child ${target.objectId} is not supported`);
+    }
+    const lockedId = closureLockedId(location.object);
+    if (lockedId) return failure('OBJECT_LOCKED', lockedId);
+    const frameU = frameToCanonicalU(location.object.frame);
+    if (!exactEquals(frameU, target.expectedFrame)) {
+      return failure('TARGET_STALE', `Object ${target.objectId} frame changed after arrangement was prepared`);
+    }
+    const visualIndex = visualIndexes.get(target.objectId);
+    if (visualIndex === undefined) {
+      return failure('ACTION_INVALID', `Object ${target.objectId} is not a top-level page object`);
+    }
+    resolved.push({ object: location.object, objectIndex: location.objectIndex, frameU, visualIndex });
+  }
+
+  return { ok: true, page, pageIndex, targets: resolved };
+}
+
+function candidateWithArrangedPositions(
+  document: CatalogDocument,
+  pageIndex: number,
+  nextPositions: ReadonlyMap<string, { xU: number; yU: number }>
+): CatalogDocument {
+  const page = document.pages[pageIndex];
+  return pageWithObjects(
+    document,
+    pageIndex,
+    page.objects.map((object) => {
+      const next = nextPositions.get(object.id);
+      if (!next) return object;
+      return {
+        ...object,
+        frame: {
+          ...object.frame,
+          xMm: materializeU(next.xU, 'arranged xU'),
+          yMm: materializeU(next.yU, 'arranged yU'),
+        },
+      };
+    })
+  );
+}
+
+function safeSubtract(left: number, right: number): number {
+  return add(left, -right);
 }
 
 function projectRowHeightPolicyU(
@@ -1074,6 +1145,149 @@ export function executeApplicationAction(
           })
           .map((object) => object.id);
         candidate = pageWithObjects(document, location.pageIndex, normalized);
+        break;
+      }
+      case 'object.setLocked': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const liveOwnLock = objectLocked(location.object);
+        if (liveOwnLock !== action.expectedLocked) {
+          return failure('TARGET_STALE', `Object ${action.objectId} lock state changed after the command was prepared`);
+        }
+        changed = liveOwnLock !== action.locked;
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (!changed) break;
+
+        let next: EditorialObject;
+        if (action.locked) {
+          next = { ...location.object, locked: true };
+        } else {
+          const { locked: _locked, ...unlocked } = location.object;
+          next = unlocked as EditorialObject;
+        }
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
+      case 'objects.align': {
+        const resolved = arrangementTargets(document, action.pageId, action.targets);
+        if (!resolved.ok) return resolved;
+        const frames = resolved.targets.map((target) => target.frameU);
+        let left: number;
+        let top: number;
+        let right: number;
+        let bottom: number;
+        try {
+          left = Math.min(...frames.map((frame) => frame.xU));
+          top = Math.min(...frames.map((frame) => frame.yU));
+          right = Math.max(...frames.map((frame) => add(frame.xU, frame.widthU)));
+          bottom = Math.max(...frames.map((frame) => add(frame.yU, frame.heightU)));
+        } catch (error) {
+          return failure('INVALID_GEOMETRY', `Arrangement arithmetic failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        const nextPositions = new Map<string, { xU: number; yU: number }>();
+        const changedIds: string[] = [];
+        try {
+          for (const target of resolved.targets) {
+            const frame = target.frameU;
+            let xU = frame.xU;
+            let yU = frame.yU;
+            switch (action.alignment) {
+              case 'left':
+                xU = left;
+                break;
+              case 'horizontal-center':
+                xU = roundRatio(safeSubtract(add(left, right), frame.widthU), 2);
+                break;
+              case 'right':
+                xU = safeSubtract(right, frame.widthU);
+                break;
+              case 'top':
+                yU = top;
+                break;
+              case 'vertical-center':
+                yU = roundRatio(safeSubtract(add(top, bottom), frame.heightU), 2);
+                break;
+              case 'bottom':
+                yU = safeSubtract(bottom, frame.heightU);
+                break;
+            }
+            nextPositions.set(target.object.id, { xU, yU });
+            if (xU !== frame.xU || yU !== frame.yU) changedIds.push(target.object.id);
+          }
+        } catch (error) {
+          return failure('INVALID_GEOMETRY', `Arrangement arithmetic failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        changed = changedIds.length > 0;
+        affectedIds = changedIds;
+        createdIds = [];
+        if (!changed) break;
+        candidate = candidateWithArrangedPositions(document, resolved.pageIndex, nextPositions);
+        break;
+      }
+      case 'objects.distribute': {
+        const resolved = arrangementTargets(document, action.pageId, action.targets);
+        if (!resolved.ok) return resolved;
+        const compare = (left: number, right: number) => left === right ? 0 : left < right ? -1 : 1;
+        const ordered = [...resolved.targets].sort((left, right) => {
+          const primary = action.axis === 'horizontal'
+            ? compare(left.frameU.xU, right.frameU.xU)
+            : compare(left.frameU.yU, right.frameU.yU);
+          if (primary !== 0) return primary;
+          const secondary = action.axis === 'horizontal'
+            ? compare(left.frameU.yU, right.frameU.yU)
+            : compare(left.frameU.xU, right.frameU.xU);
+          return secondary !== 0 ? secondary : compare(left.visualIndex, right.visualIndex);
+        });
+
+        const first = ordered[0];
+        const last = ordered[ordered.length - 1];
+        const middle = ordered.slice(1, -1);
+        const nextPositions = new Map<string, { xU: number; yU: number }>();
+        const changedIds: string[] = [];
+        try {
+          const middleExtent = sum(middle.map((target) => action.axis === 'horizontal'
+            ? target.frameU.widthU
+            : target.frameU.heightU));
+          const firstEnd = action.axis === 'horizontal'
+            ? add(first.frameU.xU, first.frameU.widthU)
+            : add(first.frameU.yU, first.frameU.heightU);
+          const lastStart = action.axis === 'horizontal' ? last.frameU.xU : last.frameU.yU;
+          const corridor = safeSubtract(safeSubtract(lastStart, firstEnd), middleExtent);
+          let priorMiddleExtent = 0;
+
+          ordered.forEach((target, index) => {
+            let xU = target.frameU.xU;
+            let yU = target.frameU.yU;
+            if (index > 0 && index < ordered.length - 1) {
+              const offset = roundRatio(mul(corridor, index), ordered.length - 1);
+              const position = add(add(firstEnd, priorMiddleExtent), offset);
+              if (action.axis === 'horizontal') xU = position;
+              else yU = position;
+              priorMiddleExtent = add(
+                priorMiddleExtent,
+                action.axis === 'horizontal' ? target.frameU.widthU : target.frameU.heightU
+              );
+            }
+            nextPositions.set(target.object.id, { xU, yU });
+            if (xU !== target.frameU.xU || yU !== target.frameU.yU) changedIds.push(target.object.id);
+          });
+        } catch (error) {
+          return failure('INVALID_GEOMETRY', `Distribution arithmetic failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        changed = changedIds.length > 0;
+        affectedIds = changedIds;
+        createdIds = [];
+        if (!changed) break;
+        candidate = candidateWithArrangedPositions(document, resolved.pageIndex, nextPositions);
         break;
       }
       case 'asset.register': {
