@@ -1,6 +1,6 @@
 import React from 'react';
 import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type TablePresetId } from '../application';
+import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
 import {
   mmToU,
   qCss,
@@ -126,6 +126,12 @@ type TextEditSession = {
   expectedText: RichText;
   draft: string;
 };
+type ImageFocalDraft = { x: number; y: number };
+type ImageFocalGesture = {
+  objectId: string;
+  expectedImage: ImageExpectedState;
+  pointerId?: number;
+};
 const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 const technicalSymbols = ['±', '°C', 'Ω', 'µ', '≤', '≥', '≈'] as const;
 const SNAP_RADIUS_PX = 8;
@@ -151,6 +157,11 @@ export function tableSemanticDisabledGuidance(hasCellDraft: boolean, isLocked: b
 function createGestureTransactionId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
   return globalThis.crypto.randomUUID();
+}
+
+function canonicalImageFocal(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(1, Math.max(0, Math.round(value * 1000) / 1000));
 }
 
 function useDocumentSession(session: DocumentSession) {
@@ -342,6 +353,12 @@ export function EditorWorkspace({
   const [newAnnotationKind, setNewAnnotationKind] = React.useState<'caption' | 'note' | 'footnote'>('note');
   const [newAnnotationText, setNewAnnotationText] = React.useState('');
   const [newAnnotationTarget, setNewAnnotationTarget] = React.useState<'TABLE' | 'CELL'>('TABLE');
+  const [imageAssetChoice, setImageAssetChoice] = React.useState('');
+  const [imageFitDraft, setImageFitDraft] = React.useState<'contain' | 'cover'>('contain');
+  const [imageFocalDraft, setImageFocalDraft] = React.useState<ImageFocalDraft>({ x: 0.5, y: 0.5 });
+  const imageFocalDraftRef = React.useRef<ImageFocalDraft>(imageFocalDraft);
+  imageFocalDraftRef.current = imageFocalDraft;
+  const imageFocalGestureRef = React.useRef<ImageFocalGesture | null>(null);
   const [imageCellAssetChoice, setImageCellAssetChoice] = React.useState('');
   const [imageCellFit, setImageCellFit] = React.useState<'contain' | 'cover'>('contain');
   const [imageCellWidthMm, setImageCellWidthMm] = React.useState(String(DEFAULT_IMAGE_CELL_WIDTH_U / 10_000));
@@ -411,6 +428,7 @@ export function EditorWorkspace({
   const selectedPageIndex = document.pages.findIndex((page) => page.id === selectedPage.id);
   const selectedObjectId = editorState.selectedObjectIds.length === 1 ? editorState.selectedObjectIds[0] : undefined;
   const selectedObject = selectedObjectId ? selectedPage.objects.find((object) => object.id === selectedObjectId) : undefined;
+  const selectedImageObject = selectedObject?.type === 'image' ? selectedObject : undefined;
   const selectedTableObject = selectedObject?.type === 'table' ? selectedObject : undefined;
   React.useEffect(() => {
     setTableRangeExtensionArmed(false);
@@ -424,6 +442,20 @@ export function EditorWorkspace({
     const title = selectedTableObject?.table.title;
     setTableTitleDraft(title ? (projectEditableRichText(title) ?? '') : '');
   }, [document.id, editorState.activePageId, selectedTableObject?.id, selectedTableObject?.table.title]);
+  React.useEffect(() => {
+    if (!selectedImageObject) {
+      imageFocalGestureRef.current = null;
+      setImageAssetChoice('');
+      setImageFitDraft('contain');
+      setImageFocalDraft({ x: 0.5, y: 0.5 });
+      return;
+    }
+    if (imageFocalGestureRef.current?.objectId === selectedImageObject.id) return;
+    const expected = projectImageExpectedState(selectedImageObject);
+    setImageAssetChoice(selectedImageObject.assetId);
+    setImageFitDraft(selectedImageObject.fit);
+    setImageFocalDraft({ ...expected.focalPoint });
+  }, [document.id, editorState.activePageId, selectedImageObject]);
   const editingObject = textEdit
     ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
     : undefined;
@@ -2071,9 +2103,135 @@ export function EditorWorkspace({
     setStatusMessage(result.ok ? 'Ordem do objeto atualizada.' : 'Não foi possível alterar a ordem.');
   };
 
+  const liveSelectedImage = () => {
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
+    const object = selectedObjectId ? page?.objects.find((entry) => entry.id === selectedObjectId) : undefined;
+    return object?.type === 'image' ? object : undefined;
+  };
+
+  const imagePresentationFeedback = (result: ReturnType<DocumentSession['execute']>, success: string) => {
+    if (result.ok) {
+      setStatusMessage(result.metadata.changed ? success : 'A imagem já está com essa apresentação.');
+      return;
+    }
+    setStatusMessage(result.error.code === 'TARGET_STALE'
+      ? 'A imagem mudou enquanto você editava. Revise e tente novamente.'
+      : 'Não foi possível atualizar a apresentação da imagem.');
+  };
+
+  const runImageFitChange = (fit: 'contain' | 'cover') => {
+    const image = liveSelectedImage();
+    if (!image || image.locked) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const expectedImage = projectImageExpectedState(image);
+    const result = session.execute({
+      type: 'image.setPresentation',
+      objectId: image.id,
+      expectedImage,
+      fit,
+      focalPoint: expectedImage.focalPoint,
+    });
+    imagePresentationFeedback(result, 'Ajuste da imagem atualizado.');
+  };
+
+  const runImageCenter = () => {
+    const image = liveSelectedImage();
+    if (!image || image.locked) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const result = session.execute({
+      type: 'image.setPresentation',
+      objectId: image.id,
+      expectedImage: projectImageExpectedState(image),
+      fit: image.fit,
+      focalPoint: { x: 0.5, y: 0.5 },
+    });
+    imagePresentationFeedback(result, 'Imagem centralizada.');
+  };
+
+  const beginImageFocalGesture = (pointerId?: number): boolean => {
+    if (imageFocalGestureRef.current) return true;
+    const image = liveSelectedImage();
+    if (!image || image.locked || image.fit !== 'cover') return false;
+    if (!finishTextEditBeforeCommand()) return false;
+    controller.cancel('superseded');
+    imageFocalGestureRef.current = {
+      objectId: image.id,
+      expectedImage: projectImageExpectedState(image),
+      ...(pointerId === undefined ? {} : { pointerId }),
+    };
+    return true;
+  };
+
+  const commitImageFocalGesture = () => {
+    const gesture = imageFocalGestureRef.current;
+    if (!gesture) return;
+    imageFocalGestureRef.current = null;
+    const result = session.execute({
+      type: 'image.setPresentation',
+      objectId: gesture.objectId,
+      expectedImage: gesture.expectedImage,
+      fit: gesture.expectedImage.fit,
+      focalPoint: { ...imageFocalDraftRef.current },
+    });
+    imagePresentationFeedback(result, 'Posição da imagem atualizada.');
+  };
+
+  const cancelImageFocalGesture = () => {
+    const gesture = imageFocalGestureRef.current;
+    imageFocalGestureRef.current = null;
+    const live = gesture
+      ? session.getSnapshot().document.pages.flatMap((page) => page.objects)
+        .find((object) => object.id === gesture.objectId && object.type === 'image')
+      : undefined;
+    if (live?.type === 'image') {
+      const focalPoint = { ...projectImageExpectedState(live).focalPoint };
+      imageFocalDraftRef.current = focalPoint;
+      setImageFocalDraft(focalPoint);
+    }
+  };
+
+  const setCanonicalImageFocalDraft = (next: ImageFocalDraft) => {
+    const canonical = { x: canonicalImageFocal(next.x), y: canonicalImageFocal(next.y) };
+    imageFocalDraftRef.current = canonical;
+    setImageFocalDraft(canonical);
+  };
+
+  const updateImageFocalFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    setCanonicalImageFocalDraft({
+      x: (event.clientX - rect.left) / rect.width,
+      y: (event.clientY - rect.top) / rect.height,
+    });
+  };
+
+  const replaceSelectedImageWithAsset = () => {
+    const image = liveSelectedImage();
+    if (!image || image.locked) return;
+    if (!imageAssetChoice) {
+      setStatusMessage('Escolha uma imagem do catálogo.');
+      return;
+    }
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const result = session.execute({
+      type: 'image.replace',
+      objectId: image.id,
+      expectedImage: projectImageExpectedState(image),
+      assetId: imageAssetChoice,
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Imagem substituída.' : 'A imagem selecionada já está em uso.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A imagem mudou enquanto você editava. Revise e tente novamente.'
+        : 'Não foi possível substituir a imagem.');
+  };
+
   const requestImageUpload = (target:
     | { type: 'insert'; pageId: string }
-    | { type: 'replace'; objectId: string }
+    | { type: 'replace'; objectId: string; expectedImage: ImageExpectedState }
     | {
         type: 'table-cell';
         pageId: string;
@@ -2103,15 +2261,26 @@ export function EditorWorkspace({
   };
 
   const replaceSelectedImage = () => {
-    if (!selectedObject || selectedObject.type !== 'image') return;
+    const image = liveSelectedImage();
+    if (!image || image.locked) return;
+    const expectedImage = projectImageExpectedState(image);
     if (persistence || !demoAssets) {
-      requestImageUpload({ type: 'replace', objectId: selectedObject.id });
+      requestImageUpload({ type: 'replace', objectId: image.id, expectedImage });
       return;
     }
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
-    const result = session.execute({ type: 'image.replace', objectId: selectedObject.id, assetId: alternateDemoAssetId(selectedObject.assetId) });
-    setStatusMessage(result.ok ? 'Imagem substituída.' : 'Não foi possível substituir a imagem.');
+    const result = session.execute({
+      type: 'image.replace',
+      objectId: image.id,
+      expectedImage,
+      assetId: alternateDemoAssetId(image.assetId),
+    });
+    setStatusMessage(result.ok
+      ? (result.metadata.changed ? 'Imagem substituída.' : 'A imagem selecionada já está em uso.')
+      : result.error.code === 'TARGET_STALE'
+        ? 'A imagem mudou enquanto você editava. Revise e tente novamente.'
+        : 'Não foi possível substituir a imagem.');
   };
 
   const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -3102,8 +3271,8 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="send-backward" disabled={!selectedObject} onClick={() => reorderSelected('backward')}>Recuar</button>
               <button type="button" data-editor-action="bring-forward" disabled={!selectedObject} onClick={() => reorderSelected('forward')}>Avançar</button>
               <button type="button" data-editor-action="bring-front" disabled={!selectedObject} onClick={() => reorderSelected('front')}>Frente</button>
-              <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image'} onClick={replaceSelectedImage}>Substituir imagem</button>
-              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image'} onClick={() => selectedObject && requestImageUpload({ type: 'replace', objectId: selectedObject.id })}>Upload imagem</button>
+              <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image' || selectedObject.locked} onClick={replaceSelectedImage}>Substituir imagem</button>
+              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image' || selectedObject.locked} onClick={replaceSelectedImage}>Upload imagem</button>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -3414,7 +3583,186 @@ export function EditorWorkspace({
                   </label>
                 ))}
               </div>
-              {selectedObject.type === 'image' && <button type="button" className="vnext-inspector-action" onClick={replaceSelectedImage}>Substituir imagem</button>}
+              {selectedObject.type === 'image' && (
+                <>
+                  <div className="vnext-divider" />
+                  <section className="vnext-image-inspector" data-image-professional-authoring="">
+                    <h3>Imagem</h3>
+                    <label className="vnext-image-field">
+                      <span>Ajuste</span>
+                      <select
+                        data-image-fit=""
+                        value={imageFitDraft}
+                        disabled={selectedObject.locked === true}
+                        aria-describedby={selectedObject.locked ? 'vnext-image-locked-reason' : undefined}
+                        onChange={(event) => {
+                          const fit = event.target.value as 'contain' | 'cover';
+                          setImageFitDraft(fit);
+                          runImageFitChange(fit);
+                        }}
+                      >
+                        <option value="contain">Conter</option>
+                        <option value="cover">Preencher</option>
+                      </select>
+                    </label>
+
+                    <div className="vnext-image-position-heading">
+                      <span>Posição da imagem</span>
+                      <output data-image-focal-output="">
+                        {Math.round(imageFocalDraft.x * 1000) / 10}% · {Math.round(imageFocalDraft.y * 1000) / 10}%
+                      </output>
+                    </div>
+
+                    <div
+                      className="vnext-image-focal-pad"
+                      data-image-focal-pad=""
+                      data-disabled={selectedObject.locked || imageFitDraft === 'contain' ? 'true' : 'false'}
+                      aria-label="Posição da imagem"
+                      onPointerDown={(event) => {
+                        if (selectedObject.locked || imageFitDraft === 'contain') return;
+                        if (!beginImageFocalGesture(event.pointerId)) return;
+                        event.preventDefault();
+                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                        updateImageFocalFromPointer(event);
+                      }}
+                      onPointerMove={(event) => {
+                        if (imageFocalGestureRef.current?.pointerId !== event.pointerId) return;
+                        updateImageFocalFromPointer(event);
+                      }}
+                      onPointerUp={(event) => {
+                        if (imageFocalGestureRef.current?.pointerId !== event.pointerId) return;
+                        updateImageFocalFromPointer(event);
+                        commitImageFocalGesture();
+                      }}
+                      onPointerCancel={cancelImageFocalGesture}
+                      onLostPointerCapture={() => {
+                        if (imageFocalGestureRef.current?.pointerId !== undefined) cancelImageFocalGesture();
+                      }}
+                    >
+                      <span
+                        className="vnext-image-focal-marker"
+                        style={{ left: `${imageFocalDraft.x * 100}%`, top: `${imageFocalDraft.y * 100}%` }}
+                        aria-hidden="true"
+                      />
+                    </div>
+
+                    {([
+                      ['x', 'Horizontal'],
+                      ['y', 'Vertical'],
+                    ] as const).map(([axis, label]) => (
+                      <label key={axis} className="vnext-image-range-field">
+                        <span>{label}</span>
+                        <div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            data-image-focal-axis={axis}
+                            value={imageFocalDraft[axis] * 100}
+                            disabled={selectedObject.locked === true || imageFitDraft === 'contain'}
+                            aria-valuetext={`${Math.round(imageFocalDraft[axis] * 1000) / 10}%`}
+                            aria-describedby={selectedObject.locked
+                              ? 'vnext-image-locked-reason'
+                              : imageFitDraft === 'contain'
+                                ? 'vnext-image-contain-guidance'
+                                : undefined}
+                            onPointerDown={(event) => {
+                              if (!beginImageFocalGesture(event.pointerId)) return;
+                              event.currentTarget.setPointerCapture?.(event.pointerId);
+                            }}
+                            onChange={(event) => {
+                              if (!imageFocalGestureRef.current && !beginImageFocalGesture()) return;
+                              setCanonicalImageFocalDraft({
+                                ...imageFocalDraftRef.current,
+                                [axis]: Number(event.target.value) / 100,
+                              });
+                            }}
+                            onPointerUp={() => commitImageFocalGesture()}
+                            onPointerCancel={cancelImageFocalGesture}
+                            onLostPointerCapture={(event) => {
+                              if (imageFocalGestureRef.current?.pointerId === event.pointerId) cancelImageFocalGesture();
+                            }}
+                            onKeyDown={(event) => {
+                              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+                                beginImageFocalGesture();
+                              }
+                            }}
+                            onKeyUp={(event) => {
+                              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+                                commitImageFocalGesture();
+                              }
+                            }}
+                            onBlur={() => commitImageFocalGesture()}
+                          />
+                          <output>{Math.round(imageFocalDraft[axis] * 1000) / 10}%</output>
+                        </div>
+                      </label>
+                    ))}
+
+                    {imageFitDraft === 'contain' && (
+                      <p id="vnext-image-contain-guidance" data-image-contain-guidance="">
+                        A posição é usada no modo Preencher e será preservada.
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      className="vnext-inspector-action"
+                      data-editor-action="center-image"
+                      disabled={selectedObject.locked === true}
+                      aria-describedby={selectedObject.locked ? 'vnext-image-locked-reason' : undefined}
+                      onClick={runImageCenter}
+                    >
+                      Centralizar
+                    </button>
+
+                    <label className="vnext-image-field">
+                      <span>Imagem do catálogo</span>
+                      <select
+                        data-image-asset-choice=""
+                        value={imageAssetChoice}
+                        disabled={selectedObject.locked === true}
+                        aria-describedby={selectedObject.locked ? 'vnext-image-locked-reason' : undefined}
+                        onChange={(event) => setImageAssetChoice(event.target.value)}
+                      >
+                        <option value="">Escolha uma imagem</option>
+                        {document.assets.map((asset) => (
+                          <option key={asset.id} value={asset.id}>{asset.name} — {asset.alt}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="vnext-image-actions">
+                      <button
+                        type="button"
+                        data-editor-action="use-image-asset"
+                        disabled={selectedObject.locked === true || !imageAssetChoice}
+                        aria-describedby={selectedObject.locked ? 'vnext-image-locked-reason' : undefined}
+                        onClick={replaceSelectedImageWithAsset}
+                      >
+                        Usar imagem
+                      </button>
+                      <button
+                        type="button"
+                        className="vnext-inspector-action"
+                        data-editor-action="upload-image-inspector"
+                        disabled={selectedObject.locked === true || (persistence ? !persistence.assetBridge : false)}
+                        aria-describedby={selectedObject.locked ? 'vnext-image-locked-reason' : undefined}
+                        onClick={replaceSelectedImage}
+                      >
+                        Enviar nova imagem…
+                      </button>
+                    </div>
+
+                    {selectedObject.locked && (
+                      <p id="vnext-image-locked-reason" data-image-locked-reason="">
+                        Esta imagem está bloqueada e não pode ser alterada.
+                      </p>
+                    )}
+                  </section>
+                </>
+              )}
               {selectedObject.type === 'table' && (
                 <>
                   <div className="vnext-divider" />

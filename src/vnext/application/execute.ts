@@ -52,6 +52,7 @@ import {
   parsePageTemplateDefinition,
   type PageTemplateRegistry,
 } from './template-registry';
+import { imageExpectedStateEquals, projectImageExpectedState } from './image-state';
 import { materializeTablePreset, tablePresetPresentationSnapshot } from './table-preset-registry';
 
 export interface ApplicationExecutionDependencies {
@@ -1098,7 +1099,48 @@ export function executeApplicationAction(
         createdIds = [action.asset.id];
         break;
       }
+      case 'image.setPresentation': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        if (location.object.type !== 'image') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
+        if (!imageExpectedStateEquals(location.object, action.expectedImage)) {
+          return failure('TARGET_STALE', `Image ${action.objectId} changed after presentation was prepared`);
+        }
+
+        const current = projectImageExpectedState(location.object);
+        const focalChanged = current.focalPoint.x !== action.focalPoint.x
+          || current.focalPoint.y !== action.focalPoint.y;
+        changed = location.object.fit !== action.fit || focalChanged;
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (!changed) break;
+
+        const next = {
+          ...location.object,
+          fit: action.fit,
+          ...(focalChanged ? { focalPoint: { ...action.focalPoint } } : {}),
+        };
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
       case 'image.replace': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        if (location.object.type !== 'image') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
+        if (!imageExpectedStateEquals(location.object, action.expectedImage)) {
+          return failure('TARGET_STALE', `Image ${action.objectId} changed after replacement was prepared`);
+        }
+
         const replacementAsset = action.asset;
         let assetAdded = false;
         if (replacementAsset !== undefined) {
@@ -1106,40 +1148,28 @@ export function executeApplicationAction(
             return failure('ACTION_INVALID', `Action assetId ${action.assetId} does not match asset payload id ${replacementAsset.id}`);
           }
           const parsedAsset = AssetRefSchema.safeParse(replacementAsset);
-          if (!parsedAsset.success) {
-            return failure('ACTION_INVALID', parsedAsset.error.message);
+          if (!parsedAsset.success) return failure('ACTION_INVALID', parsedAsset.error.message);
+          const existing = document.assets.find((asset) => asset.id === replacementAsset.id);
+          if (existing && !assetRefEquals(existing, replacementAsset)) {
+            return failure('ACTION_INVALID', `Asset ID ${replacementAsset.id} already exists with divergent metadata`);
           }
-          const existing = candidate.assets.find((asset) => asset.id === replacementAsset.id);
-          if (existing) {
-            if (!assetRefEquals(existing, replacementAsset)) {
-              return failure('ACTION_INVALID', `Asset ID ${replacementAsset.id} already exists with divergent metadata`);
-            }
-          } else {
-            candidate = {
-              ...candidate,
-              assets: [...candidate.assets, replacementAsset],
-            };
-            assetAdded = true;
-            createdIds = [replacementAsset.id];
-          }
+          assetAdded = !existing;
+        } else if (!document.assets.some((asset) => asset.id === action.assetId)) {
+          return failure('ASSET_NOT_FOUND', action.assetId);
         }
-
-        const location = findObjectLocation(candidate, action.objectId);
-        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        const childFailure = groupedChildMutation(location, action.objectId);
-        if (childFailure) return childFailure;
-        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
-        if (location.object.type !== 'image') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
-        if (!candidate.assets.some((asset) => asset.id === action.assetId)) return failure('ASSET_NOT_FOUND', action.assetId);
 
         const imageChanged = location.object.assetId !== action.assetId;
         changed = assetAdded || imageChanged;
-        affectedIds = action.asset !== undefined ? [action.objectId, action.asset.id] : [action.objectId];
-        if (!imageChanged) break;
+        affectedIds = changed ? [action.objectId, ...(assetAdded ? [action.assetId] : [])] : [];
+        createdIds = assetAdded ? [action.assetId] : [];
+        if (!changed) break;
 
-        const next = { ...location.object, assetId: action.assetId };
+        const withAsset = assetAdded
+          ? { ...document, assets: [...document.assets, replacementAsset!] }
+          : document;
+        const next = imageChanged ? { ...location.object, assetId: action.assetId } : location.object;
         candidate = pageWithObjects(
-          candidate,
+          withAsset,
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );

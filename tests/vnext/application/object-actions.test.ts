@@ -13,6 +13,7 @@ import {
   createCatalogDocument,
   createDocumentSession,
   executeApplicationAction,
+  projectImageExpectedState,
   type IdGenerator,
 } from '@/vnext/application';
 import { compilePlans } from '@/vnext/rendering';
@@ -279,7 +280,12 @@ describe('W2.B action contracts and geometry', () => {
       { type: 'object.move', objectId: 'object', xU: -1, yU: -2 },
       { type: 'object.resize', objectId: 'object', xU: -1, yU: -2, widthU: 1, heightU: 1 },
       { type: 'object.reorder', objectId: 'object', targetIndex: 0 },
-      { type: 'image.replace', objectId: 'object', assetId: 'asset-a' },
+      {
+        type: 'image.replace',
+        objectId: 'object',
+        expectedImage: { assetId: 'asset-a', fit: 'cover', focalPoint: { x: 0.5, y: 0.5 } },
+        assetId: 'asset-a',
+      },
     ];
 
     for (const action of validActions) {
@@ -627,7 +633,15 @@ describe('W2.B duplicate, lock and target semantics', () => {
       { document: lockedText, action: { type: 'object.move', objectId: 'text-object', xU: 1, yU: 1 } },
       { document: lockedText, action: { type: 'object.resize', objectId: 'text-object', xU: 1, yU: 1, widthU: 1, heightU: 1 } },
       { document: lockedText, action: { type: 'object.reorder', objectId: 'text-object', targetIndex: 0 } },
-      { document: lockedImage, action: { type: 'image.replace', objectId: 'image-object', assetId: 'asset-b' } },
+      {
+        document: lockedImage,
+        action: {
+          type: 'image.replace',
+          objectId: 'image-object',
+          expectedImage: { assetId: 'asset-a', fit: 'cover', focalPoint: { x: 0.2, y: 0.8 } },
+          assetId: 'asset-b',
+        },
+      },
     ];
 
     for (const entry of lockedCases) {
@@ -764,9 +778,10 @@ describe('W2.B reorder and image replacement', () => {
     expect(source.type).toBe('image');
     if (source.type !== 'image') return;
 
+    const expectedImage = projectImageExpectedState(source);
     const replaced = executeApplicationAction(
       document,
-      { type: 'image.replace', objectId: 'image-object', assetId: 'asset-b' },
+      { type: 'image.replace', objectId: 'image-object', expectedImage, assetId: 'asset-b' },
       { createId: sequenceIds('unused') }
     );
     expect(replaced.ok).toBe(true);
@@ -775,17 +790,17 @@ describe('W2.B reorder and image replacement', () => {
 
     expect(executeApplicationAction(
       document,
-      { type: 'image.replace', objectId: 'image-object', assetId: 'asset-a' },
+      { type: 'image.replace', objectId: 'image-object', expectedImage, assetId: 'asset-a' },
       { createId: sequenceIds('unused') }
     )).toMatchObject({ ok: true, metadata: { changed: false } });
     expect(executeApplicationAction(
       document,
-      { type: 'image.replace', objectId: 'image-object', assetId: 'missing' },
+      { type: 'image.replace', objectId: 'image-object', expectedImage, assetId: 'missing' },
       { createId: sequenceIds('unused') }
     )).toMatchObject({ ok: false, error: { code: 'ASSET_NOT_FOUND' } });
     expect(executeApplicationAction(
       document,
-      { type: 'image.replace', objectId: 'shape-object', assetId: 'asset-b' },
+      { type: 'image.replace', objectId: 'shape-object', expectedImage, assetId: 'asset-b' },
       { createId: sequenceIds('unused') }
     )).toMatchObject({ ok: false, error: { code: 'OBJECT_TYPE_MISMATCH' } });
   });
@@ -876,6 +891,10 @@ describe('W2.B DocumentSession history', () => {
     const ids = countedIds('history');
     const initial = allPrimitiveDocument();
     const session = createDocumentSession(initial, { createId: ids.createId });
+    const historyImage = findObject(initial, 'image-object');
+    expect(historyImage.type).toBe('image');
+    if (historyImage.type !== 'image') return;
+    const expectedImage = projectImageExpectedState(historyImage);
     const snapshots = [JSON.stringify(session.getSnapshot().document)];
     const actions = [
       { type: 'object.insert', pageId: initial.pages[0].id, object: insertSpecs().shape },
@@ -884,7 +903,7 @@ describe('W2.B DocumentSession history', () => {
       { type: 'object.move', objectId: 'image-object', xU: -10_000, yU: 500_000 },
       { type: 'object.resize', objectId: 'shape-object', xU: 1_000_000, yU: 1_000_000, widthU: 250_000, heightU: 150_000 },
       { type: 'object.reorder', objectId: 'icon-object', targetIndex: 0 },
-      { type: 'image.replace', objectId: 'image-object', assetId: 'asset-b' },
+      { type: 'image.replace', objectId: 'image-object', expectedImage, assetId: 'asset-b' },
     ].map((action) => ApplicationActionSchema.parse(action));
 
     for (const action of actions) {
@@ -927,7 +946,12 @@ describe('W2.B DocumentSession history', () => {
         heightU: mmToU(shape.frame.heightMm),
       },
       { type: 'object.reorder', objectId: 'shape-object', targetIndex: shapeVisualIndex },
-      { type: 'image.replace', objectId: 'image-object', assetId: image.type === 'image' ? image.assetId : 'asset-a' },
+      {
+        type: 'image.replace',
+        objectId: 'image-object',
+        expectedImage: image.type === 'image' ? projectImageExpectedState(image) : { assetId: 'asset-a', fit: 'cover' as const, focalPoint: { x: 0.5, y: 0.5 } },
+        assetId: image.type === 'image' ? image.assetId : 'asset-a',
+      },
     ] as const;
 
     for (const action of noOps) {
@@ -944,8 +968,15 @@ describe('W2.B DocumentSession history', () => {
     session.execute({ type: 'object.move', objectId: 'text-object', xU: 130_000, yU: 130_000 });
     session.undo();
     expect(session.getSnapshot().canRedo).toBe(true);
-    expect(session.execute({ type: 'image.replace', objectId: 'image-object', assetId: 'missing' }))
-      .toMatchObject({ ok: false, error: { code: 'ASSET_NOT_FOUND' } });
+    const failingImage = findObject(session.getSnapshot().document, 'image-object');
+    expect(failingImage.type).toBe('image');
+    if (failingImage.type !== 'image') return;
+    expect(session.execute({
+      type: 'image.replace',
+      objectId: 'image-object',
+      expectedImage: projectImageExpectedState(failingImage),
+      assetId: 'missing',
+    })).toMatchObject({ ok: false, error: { code: 'ASSET_NOT_FOUND' } });
     expect(session.getSnapshot().canRedo).toBe(true);
     expect(session.redo().ok).toBe(true);
 

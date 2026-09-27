@@ -1,4 +1,4 @@
-import type { DocumentSession } from '../application';
+import type { DocumentSession, ImageExpectedState } from '../application';
 import type { CellContent, CellContentPresentation } from '../domain/editorial-model';
 import type { AssetLineageContext, AssetPersistenceBridge } from '../asset';
 import type { VNextPersistenceRuntime } from '../persistence';
@@ -9,7 +9,7 @@ export type ImageUploadIntent = {
   readonly lineage: AssetLineageContext;
 } & (
   | { readonly type: 'insert'; readonly pageId: string }
-  | { readonly type: 'replace'; readonly objectId: string }
+  | { readonly type: 'replace'; readonly objectId: string; readonly expectedImage: ImageExpectedState }
   | {
       readonly type: 'table-cell';
       readonly pageId: string;
@@ -82,7 +82,13 @@ export async function uploadWorkspaceImage(input: {
     const result = intent.type === 'insert' && spec?.type === 'image'
       ? intent.session.execute({ type: 'object.insert', pageId: intent.pageId, object: { ...spec, assetId: upload.asset.id, asset: upload.asset } })
       : intent.type === 'replace'
-        ? intent.session.execute({ type: 'image.replace', objectId: intent.objectId, assetId: upload.asset.id, asset: upload.asset })
+        ? intent.session.execute({
+            type: 'image.replace',
+            objectId: intent.objectId,
+            expectedImage: intent.expectedImage,
+            assetId: upload.asset.id,
+            asset: upload.asset,
+          })
         : intent.type === 'table-cell'
           ? intent.session.execute({
               type: 'table.cell.setImage',
@@ -99,7 +105,12 @@ export async function uploadWorkspaceImage(input: {
               targetHeightU: intent.targetHeightU,
             })
           : undefined;
-    if (!result?.ok) return { message: 'Não foi possível vincular a imagem ao documento. Tente novamente.' };
+    if (!result?.ok) {
+      if (intent.type === 'replace' && result?.error.code === 'TARGET_STALE') {
+        return { message: 'O envio terminou, mas a imagem mudou. O arquivo não foi aplicado. Revise e tente novamente.' };
+      }
+      return { message: 'Não foi possível vincular a imagem ao documento. Tente novamente.' };
+    }
     runtime.workspace.setAssetRuntimeState(upload.asset.id, upload.runtimeState);
     if (upload.runtimeState.status === 'resolved') runtime.workspace.setAssetUrl(upload.asset.id, upload.runtimeState.url);
     const verb = intent.type === 'insert' ? 'adicionada' : intent.type === 'replace' ? 'substituída' : 'vinculada à célula';

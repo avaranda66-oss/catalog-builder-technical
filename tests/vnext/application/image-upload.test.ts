@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCatalogDocument, createDocumentSession } from '@/vnext/application';
+import { createCatalogDocument, createDocumentSession, projectImageExpectedState } from '@/vnext/application';
 import { mmToU, type CatalogDocument, type TableObject } from '@/vnext/domain';
 import { VNextPersistenceRuntime, type CatalogRepository } from '@/vnext/persistence';
 import type { AssetUploadResult } from '@/vnext/asset';
@@ -95,7 +95,16 @@ describe('shared Image upload orchestration', () => {
     s.bridge.upload.mockResolvedValue(s.success);
     const inserted = await uploadWorkspaceImage(s.input);
     const replacement = { ...s.asset, id: 'replacement' };
-    const intent: ImageUploadIntent = { type: 'replace', objectId: inserted.objectId!, session: s.session, lineage: imageUploadLineage(s.runtime) };
+    const live = s.session.getSnapshot().document.pages[0].objects.find((object) => object.id === inserted.objectId);
+    expect(live?.type).toBe('image');
+    if (live?.type !== 'image') return;
+    const intent: ImageUploadIntent = {
+      type: 'replace',
+      objectId: inserted.objectId!,
+      expectedImage: projectImageExpectedState(live),
+      session: s.session,
+      lineage: imageUploadLineage(s.runtime),
+    };
     if (remove) s.session.execute({ type: 'object.delete', objectId: inserted.objectId! });
     s.bridge.upload.mockResolvedValue({ ok: true, asset: replacement, runtimeState: { status: 'offline', asset: replacement } });
     const result = await uploadWorkspaceImage({ ...s.input, intent });
@@ -226,4 +235,242 @@ describe('W4.F.3 shared Image upload orchestration for Table Cells', () => {
     expect(s.runtime.workspace.getSnapshot().assetUrls.has(s.asset.id)).toBe(false);
     expect(s.runtime.workspace.getSnapshot().assetRuntimeStates.has(s.asset.id)).toBe(false);
   });
+});
+
+function setupStandaloneReplaceUpload(options: { locked?: boolean } = {}) {
+  let n = 0;
+  const createId = () => `standalone-id-${++n}`;
+  const base = createCatalogDocument(createId);
+  const primary = { ...W2C_DEMO_ASSETS[0], id: 'standalone-primary' };
+  const alternate = { ...W2C_DEMO_ASSETS[1], id: 'standalone-alternate' };
+  const document: CatalogDocument = {
+    ...base,
+    assets: [primary, alternate],
+    pages: [{
+      ...base.pages[0],
+      objects: [
+        {
+          id: 'standalone-image',
+          type: 'image',
+          frame: { xMm: 10, yMm: 10, widthMm: 60, heightMm: 40 },
+          zIndex: 0,
+          ...(options.locked ? { locked: true } : {}),
+          assetId: primary.id,
+          fit: 'cover',
+          focalPoint: { x: 0.2, y: 0.8 },
+        },
+        {
+          id: 'standalone-shape',
+          type: 'shape',
+          frame: { xMm: 80, yMm: 10, widthMm: 20, heightMm: 20 },
+          zIndex: 1,
+          shape: 'rectangle',
+          style: {},
+        },
+      ],
+    }],
+  };
+  const session = createDocumentSession(document, { createId });
+  const unavailable = async () => ({ ok: false as const, error: { code: 'OFFLINE' as const } });
+  const repository: CatalogRepository = {
+    getCatalog: unavailable,
+    listCatalogs: unavailable,
+    createCatalog: unavailable,
+    saveCAS: unavailable,
+    archiveCAS: unavailable,
+  };
+  const runtime = new VNextPersistenceRuntime({
+    session,
+    repository,
+    applicationDependencies: { createId },
+    createMutationId: createId,
+    createOpenSessionId: createId,
+    authLineage: 'user',
+    authorityScopeId: 'scope',
+    autosave: false,
+  });
+
+  const live = session.getSnapshot().document.pages[0].objects[0];
+  if (live.type !== 'image') throw new Error('standalone Image fixture missing');
+  const intent: ImageUploadIntent = {
+    type: 'replace',
+    objectId: live.id,
+    expectedImage: projectImageExpectedState(live),
+    session,
+    lineage: imageUploadLineage(runtime),
+  };
+  const uploaded = { ...W2C_DEMO_ASSETS[1], id: 'standalone-uploaded' };
+  const success: AssetUploadResult = {
+    ok: true,
+    asset: uploaded,
+    runtimeState: {
+      status: 'resolved',
+      asset: uploaded,
+      url: 'blob:standalone-uploaded',
+      expiresAt: 9999999999999,
+    },
+  };
+  let release!: (result: AssetUploadResult) => void;
+  const bridge = {
+    upload: vi.fn(() => new Promise<AssetUploadResult>((resolve) => { release = resolve; })),
+  };
+  const file = {
+    name: 'standalone.png',
+    type: 'image/png',
+    arrayBuffer: vi.fn(async () => new ArrayBuffer(8)),
+  };
+  const input = {
+    intent,
+    file,
+    runtime,
+    bridge,
+    getActivePageId: () => document.pages[0].id,
+    isCurrent: () => true,
+  };
+  return {
+    document,
+    session,
+    runtime,
+    primary,
+    alternate,
+    uploaded,
+    intent,
+    input,
+    bridge,
+    release: () => release(success),
+    createId,
+  };
+}
+
+describe('W4.F.4 standalone Image replacement upload concurrency', () => {
+  it.each(['focal', 'fit', 'asset', 'delete', 'group'] as const)(
+    'rejects stale/invalid target after pending upload: %s without canonical/runtime asset leak',
+    async (kind) => {
+      const s = setupStandaloneReplaceUpload();
+      const promise = uploadWorkspaceImage(s.input);
+      await vi.waitFor(() => expect(s.bridge.upload).toHaveBeenCalledTimes(1));
+      const image = s.session.getSnapshot().document.pages[0].objects.find((object) => object.id === 'standalone-image');
+      expect(image?.type).toBe('image');
+      if (image?.type !== 'image') return;
+      if (kind === 'focal' || kind === 'fit') {
+        const result = s.session.execute({
+          type: 'image.setPresentation',
+          objectId: image.id,
+          expectedImage: projectImageExpectedState(image),
+          fit: kind === 'fit' ? 'contain' : image.fit,
+          focalPoint: kind === 'focal' ? { x: 0.75, y: 0.25 } : projectImageExpectedState(image).focalPoint,
+        });
+        expect(result.ok).toBe(true);
+      } else if (kind === 'asset') {
+        expect(s.session.execute({
+          type: 'image.replace',
+          objectId: image.id,
+          expectedImage: projectImageExpectedState(image),
+          assetId: s.alternate.id,
+        }).ok).toBe(true);
+      } else if (kind === 'delete') {
+        expect(s.session.execute({ type: 'object.delete', objectId: image.id }).ok).toBe(true);
+      } else {
+        expect(s.session.execute({
+          type: 'group.create',
+          pageId: s.document.pages[0].id,
+          objectIds: [image.id, 'standalone-shape'],
+        }).ok).toBe(true);
+      }
+      const beforeReleaseSequence = s.session.getSnapshot().localSequence;
+      s.release();
+      const result = await promise;
+      expect(result.message).not.toMatch(/Imagem substituída\./);
+      expect(s.session.getSnapshot().document.assets.some((asset) => asset.id === s.uploaded.id)).toBe(false);
+      expect(s.runtime.workspace.getSnapshot().assetRuntimeStates.has(s.uploaded.id)).toBe(false);
+      expect(s.runtime.workspace.getSnapshot().assetUrls.has(s.uploaded.id)).toBe(false);
+      expect(s.session.getSnapshot().localSequence).toBe(beforeReleaseSequence);
+    }
+  );
+
+  it.each(['frame', 'zIndex'] as const)(
+    'does not over-CAS %s changes and preserves newer live geometry/order',
+    async (kind) => {
+      const s = setupStandaloneReplaceUpload();
+      const promise = uploadWorkspaceImage(s.input);
+      await vi.waitFor(() => expect(s.bridge.upload).toHaveBeenCalledTimes(1));
+      if (kind === 'frame') {
+        expect(s.session.execute({
+          type: 'object.move',
+          objectId: 'standalone-image',
+          xU: mmToU(31),
+          yU: mmToU(42),
+        }).ok).toBe(true);
+      } else {
+        expect(s.session.execute({
+          type: 'object.reorder',
+          objectId: 'standalone-image',
+          targetIndex: 1,
+        }).ok).toBe(true);
+      }
+      const beforeRelease = s.session.getSnapshot();
+      const liveBefore = beforeRelease.document.pages[0].objects.find((object) => object.id === 'standalone-image');
+      expect(liveBefore?.type).toBe('image');
+      s.release();
+      expect((await promise).message).toMatch(/substituída/);
+      const after = s.session.getSnapshot();
+      const liveAfter = after.document.pages[0].objects.find((object) => object.id === 'standalone-image');
+      expect(liveAfter?.type).toBe('image');
+      if (liveBefore?.type !== 'image' || liveAfter?.type !== 'image') return;
+      expect(liveAfter.frame).toEqual(liveBefore.frame);
+      expect(liveAfter.zIndex).toBe(liveBefore.zIndex);
+      expect(liveAfter.assetId).toBe(s.uploaded.id);
+      expect(liveAfter.fit).toBe('cover');
+      expect(liveAfter.focalPoint).toEqual({ x: 0.2, y: 0.8 });
+      expect(after.localSequence).toBe(beforeRelease.localSequence + 1);
+      expect(s.runtime.workspace.getSnapshot().assetUrls.get(s.uploaded.id)).toBe('blob:standalone-uploaded');
+    }
+  );
+
+  it('enforces live lock at link time and installs no runtime state', async () => {
+    const s = setupStandaloneReplaceUpload({ locked: true });
+    const promise = uploadWorkspaceImage(s.input);
+    await vi.waitFor(() => expect(s.bridge.upload).toHaveBeenCalledTimes(1));
+    const sequence = s.session.getSnapshot().localSequence;
+    s.release();
+    expect((await promise).message).toMatch(/Não foi possível vincular/);
+    expect(s.session.getSnapshot().localSequence).toBe(sequence);
+    expect(s.session.getSnapshot().document.assets.some((asset) => asset.id === s.uploaded.id)).toBe(false);
+    expect(s.runtime.workspace.getSnapshot().assetRuntimeStates.has(s.uploaded.id)).toBe(false);
+  });
+
+  it.each(['auth', 'authority', 'open', 'catalog', 'session', 'unmounted'] as const)(
+    'rejects replace lineage/session drift: %s before semantic link',
+    async (kind) => {
+      const s = setupStandaloneReplaceUpload();
+      const promise = uploadWorkspaceImage(s.input);
+      await vi.waitFor(() => expect(s.bridge.upload).toHaveBeenCalledTimes(1));
+      const workspace = s.runtime.workspace;
+      if (kind === 'auth') workspace.updateAuthLineage('other-user');
+      if (kind === 'authority') workspace.updateAuthContext('user', 'other-scope');
+      if (kind === 'session') {
+        workspace.replaceActive(
+          createDocumentSession(s.document, { createId: () => 'replacement-session-id' }),
+          workspace.getSnapshot().binding
+        );
+      }
+      if (kind === 'open' || kind === 'catalog') {
+        const binding = workspace.getSnapshot().binding;
+        workspace.replaceActive(
+          s.session,
+          {
+            ...binding,
+            ...(kind === 'open'
+              ? { openSessionId: 'other-open' }
+              : { kind: 'PERSISTED' as const, catalogId: 'other-catalog' }),
+          } as typeof binding
+        );
+      }
+      if (kind === 'unmounted') s.input.isCurrent = () => false;
+      s.release();
+      expect((await promise).message).toMatch(/descartado/);
+      expect(s.session.getSnapshot().document.assets.some((asset) => asset.id === s.uploaded.id)).toBe(false);
+      expect(workspace.getSnapshot().assetRuntimeStates.has(s.uploaded.id)).toBe(false);
+    }
+  );
 });

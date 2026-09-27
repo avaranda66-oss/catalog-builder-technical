@@ -24,9 +24,12 @@ it('real runtime without Bridge cannot insert or replace a demo asset', async ()
   expect(view.getByText('Envio de imagens indisponível neste ambiente.')).toBeTruthy();
   const id = before.document.pages[0].objects[0].id;
   fireEvent(view.container.querySelector(`[data-editor-object-id="${id}"]`)!, new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
-  await waitFor(() => expect(view.getAllByText('Substituir imagem')).toHaveLength(2));
-  for (const button of view.getAllByText('Substituir imagem')) fireEvent.click(button);
+  await waitFor(() => expect(view.getAllByText('Substituir imagem')).toHaveLength(1));
+  fireEvent.click(view.getByText('Substituir imagem'));
   fireEvent.click(view.getByText('Upload imagem'));
+  const inspectorUpload = view.getByText('Enviar nova imagem…') as HTMLButtonElement;
+  expect(inspectorUpload.disabled).toBe(true);
+  fireEvent.click(inspectorUpload);
   expect(click).not.toHaveBeenCalled();
   expect(session.getSnapshot()).toEqual(before);
   runtime.dispose();

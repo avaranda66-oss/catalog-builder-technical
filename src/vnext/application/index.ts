@@ -8,7 +8,9 @@ export {
   DuplicatePageActionSchema,
   FrameUSchema,
   IconObjectInsertSpecSchema,
+  ImageExpectedStateSchema,
   ImageObjectInsertSpecSchema,
+  ImageSetPresentationActionSchema,
   InsertObjectActionSchema,
   InsertPageTemplateActionSchema,
   InsertedTableColumnPropertiesSchema,
@@ -76,6 +78,7 @@ export type {
   ApplicationExecutionContext,
   FrameU,
   IdGenerator,
+  ImageExpectedState,
   ObjectInsertSpec,
   TableCellContentInput,
   TableBulkCellContentInput,
@@ -123,6 +126,7 @@ export {
 } from './text-editing';
 export { executeApplicationAction } from './execute';
 export type { ApplicationExecutionDependencies } from './execute';
+export { imageExpectedStateEquals, projectImageExpectedState } from './image-state';
 export {
   TABLE_PRESETS,
   materializeTablePreset,

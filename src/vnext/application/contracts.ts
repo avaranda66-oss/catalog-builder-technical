@@ -186,9 +186,24 @@ export const ReorderObjectActionSchema = z.object({
   targetIndex: safeInteger.nonnegative(),
 }).strict();
 
+export const ImageExpectedStateSchema = z.object({
+  assetId: applicationId,
+  fit: z.enum(['contain', 'cover']),
+  focalPoint: ImageFocalPointSchema,
+}).strict();
+
+export const ImageSetPresentationActionSchema = z.object({
+  type: z.literal('image.setPresentation'),
+  objectId: applicationId,
+  expectedImage: ImageExpectedStateSchema,
+  fit: z.enum(['contain', 'cover']),
+  focalPoint: ImageFocalPointSchema,
+}).strict();
+
 export const ReplaceImageActionSchema = z.object({
   type: z.literal('image.replace'),
   objectId: applicationId,
+  expectedImage: ImageExpectedStateSchema,
   assetId: applicationId,
   asset: AssetRefSchema.optional(),
 }).strict();
@@ -830,6 +845,7 @@ export const ApplicationActionSchema = z.union([
   ResizeObjectActionSchema,
   TableFitHeightActionSchema,
   ReorderObjectActionSchema,
+  ImageSetPresentationActionSchema,
   ReplaceImageActionSchema,
   RegisterAssetActionSchema,
   SetTextContentActionSchema,
@@ -868,6 +884,7 @@ export const ApplicationActionSchema = z.union([
 export type ApplicationAction = z.infer<typeof ApplicationActionSchema>;
 export type ApplicationActionType = ApplicationAction['type'];
 export type FrameU = z.infer<typeof FrameUSchema>;
+export type ImageExpectedState = z.infer<typeof ImageExpectedStateSchema>;
 export type ObjectInsertSpec = z.infer<typeof ObjectInsertSpecSchema>;
 export type TableCellContentInput = z.infer<typeof TableCellContentInputSchema>;
 export type TableBulkCellContentInput = z.infer<typeof TableBulkCellContentInputSchema>;

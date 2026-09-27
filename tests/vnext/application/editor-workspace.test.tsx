@@ -238,6 +238,57 @@ describe('W2.C visible editor workspace', () => {
     expect(redo).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['x', 'Horizontal', '80'],
+    ['y', 'Vertical', '20'],
+  ] as const)('cancels %s focal range gesture on owned capture loss and keeps later blur semantic no-op', async (axis, _label, draftValue) => {
+    const session = sessionWithDemo();
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = render(<VNextApp session={session} />);
+
+    fireEvent.click(button(container, 'add-image'));
+    const image = session.getSnapshot().document.pages[0].objects.at(-1);
+    expect(image?.type).toBe('image');
+    if (!image || image.type !== 'image') return;
+
+    const fit = container.querySelector<HTMLSelectElement>('[data-image-fit]')!;
+    fireEvent.change(fit, { target: { value: 'cover' } });
+    expect(session.getSnapshot().document.pages[0].objects.find((object) => object.id === image.id))
+      .toMatchObject({ type: 'image', fit: 'cover' });
+
+    const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')!;
+    fireEvent.change(x, { target: { value: '25' } });
+    fireEvent.blur(x);
+    fireEvent.click(button(container, 'undo'));
+    await waitFor(() => expect(session.getSnapshot().canRedo).toBe(true));
+
+    const range = container.querySelector<HTMLInputElement>(`[data-image-focal-axis="${axis}"]`)!;
+    const canonicalValue = range.value;
+    const before = session.getSnapshot();
+    const presentationCallsBefore = execute.mock.calls.filter(([action]) => action.type === 'image.setPresentation').length;
+    const pointerId = axis === 'x' ? 401 : 402;
+
+    fireEvent.pointerDown(range, { pointerId, button: 0 });
+    fireEvent.change(range, { target: { value: draftValue } });
+    expect(range.value).toBe(draftValue);
+    expect(session.getSnapshot().localSequence).toBe(before.localSequence);
+
+    fireEvent.lostPointerCapture(range, { pointerId: pointerId + 1000 });
+    expect(range.value).toBe(draftValue);
+    expect(session.getSnapshot().localSequence).toBe(before.localSequence);
+
+    fireEvent.lostPointerCapture(range, { pointerId });
+    await waitFor(() => expect(range.value).toBe(canonicalValue));
+    fireEvent.blur(range);
+
+    const after = session.getSnapshot();
+    expect(after.document).toBe(before.document);
+    expect(after.localSequence).toBe(before.localSequence);
+    expect(after.canUndo).toBe(before.canUndo);
+    expect(after.canRedo).toBe(before.canRedo);
+    expect(execute.mock.calls.filter(([action]) => action.type === 'image.setPresentation')).toHaveLength(presentationCallsBefore);
+  });
+
   it('shows eight handles for one selected object and selection itself creates no history', () => {
     const session = sessionWithDemo(seedShapeDocument());
     const execute = vi.spyOn(session, 'execute');
