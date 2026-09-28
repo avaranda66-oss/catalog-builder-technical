@@ -60,6 +60,7 @@ async function desktop(browser){
  await p.locator('[data-table-cell="1:0"]').click();await p.locator('[data-table-grid-overlay]').press('Enter');await p.locator('[data-cell-edit-session]').waitFor();const contextBefore=await state(p);
  await p.locator('[data-cell-rich-text]').fill('Integração W4.G via contexto');assert.equal((await state(p)).localSequence,contextBefore.localSequence);
  await p.locator(`[data-editor-object-id="${ids.image}"]`).click();await p.locator('[data-cell-edit-session]').waitFor({state:'detached'});await seq(p,contextBefore.localSequence);assert.equal(await p.locator(`[data-editor-object-id="${ids.image}"]`).getAttribute('data-selected'),'true');assert.equal(await p.locator('[data-table-grid-overlay]').count(),0);assert(JSON.stringify(main(await state(p)).table.cells.find(x=>x.id==='w4f1-cell-1-0').content).includes('Integração W4.G via contexto'));
+ assert.equal((await state(p)).localSequence,contextBefore.localSequence+1);
  // W4.F.4 standalone Image.
  await p.locator('[data-image-professional-authoring]').waitFor();n=(await state(p)).localSequence;await p.locator('[data-image-fit]').selectOption('cover');await seq(p,n);
  n=(await state(p)).localSequence;await p.locator('[data-image-focal-axis="x"]').focus();await p.locator('[data-image-focal-axis="x"]').press('ArrowRight');await seq(p,n);assert.equal(obj(await state(p),ids.image).fit,'cover');
@@ -67,6 +68,7 @@ async function desktop(browser){
  await p.locator('[data-editor-overlay]').click({position:{x:5,y:5}});const s0=await state(p);const multi=p.locator('[data-editor-action="toggle-multi-select"]');await multi.click();
  for(const id of [ids.image,ids.text,ids.line])await p.locator(`[data-editor-object-id="${id}"]`).click();assert.equal((await state(p)).localSequence,s0.localSequence);n=(await state(p)).localSequence;
  await p.locator('[data-editor-action="align-left"]').click();await seq(p,n);const aligned=structuredClone((await state(p)).document);
+ assert.equal((await state(p)).localSequence,n+1);
  n=(await state(p)).localSequence;await p.locator('[data-editor-action="undo"]').click();await seq(p,n);assert.notDeepEqual((await state(p)).document,aligned);
  n=(await state(p)).localSequence;await p.locator('[data-editor-action="redo"]').click();await seq(p,n);assert.deepEqual((await state(p)).document,aligned);
  // Cross-feature lifecycle: leave real multi-selection through Father controls, enter singular Table mode, then lock collapses Table authoring without extra history.
@@ -74,7 +76,9 @@ async function desktop(browser){
  await p.locator('[data-editor-object-id="w4f1-table-object"]').click();assert.equal((await state(p)).localSequence,multiExitSequence);assert.equal(await p.locator('[data-editor-object-id][data-selected="true"]').count(),1);assert.equal(await p.locator('[data-editor-object-id="w4f1-table-object"]').getAttribute('data-selected'),'true');
  await p.locator('[data-editor-action="edit-table"]').click();await p.locator('[data-table-grid-overlay]').waitFor({timeout:20000});assert.equal((await state(p)).localSequence,multiExitSequence);
  const tableLock=p.locator('[data-editor-action="toggle-object-lock"]');n=(await state(p)).localSequence;await tableLock.click();await seq(p,n);await p.locator('[data-table-grid-overlay]').waitFor({state:'detached'});assert.equal(obj(await state(p),'w4f1-table-object').locked,true);assert.equal(await p.locator('[data-editor-object-id="w4f1-table-object"]').getAttribute('data-selected'),'true');assert(await p.locator('[data-editor-action="edit-table"]').isDisabled());
+ assert.equal((await state(p)).localSequence,n+1);
  n=(await state(p)).localSequence;await tableLock.click();await seq(p,n);assert.equal(obj(await state(p),'w4f1-table-object').locked,undefined);assert.equal(await p.locator('[data-table-grid-overlay]').count(),0);
+ assert.equal((await state(p)).localSequence,n+1);
  await p.locator(`[data-editor-object-id="${ids.text}"]`).click();const lock=p.locator('[data-editor-action="toggle-object-lock"]');n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,true);
  n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,undefined);
  n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,true);
