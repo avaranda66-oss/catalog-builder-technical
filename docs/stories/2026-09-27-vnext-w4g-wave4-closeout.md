@@ -142,6 +142,24 @@ node tests/vnext/proof/editor-w4-wave4-closeout-proof.mjs
 
 It is appended after the W4.F.5 proof. No historical proof was removed, reordered, weakened, or skipped.
 
+### Final implementation evidence audited before F1 provenance amendment
+
+The full independent W4.G closeout adversarial audit reviewed this immutable implementation target:
+
+- Head: `f4f7cac6fa8fb7bf6c2fbe813879802cafd81271`
+- Tree: `3fc9b599ee16dd06b482c873b28a1b40a8d09934`
+- Exact-head Quality Gate: `36371207195 — COMPLETED / SUCCESS`
+- Exact-head job: `108767779441 — SUCCESS`
+- Test files: `270 / 270 passed`
+- Tests: `2886 passed`
+- Skipped: `1`
+- Failed: `0`
+- Dedicated token: `W4.G Wave 4 Closeout Chromium proof: PASS`
+
+The full independent audit classified that implementation head **B — W4.G MINOR AMENDMENT REQUIRED** solely because this repo-native final provenance record was missing. It did not identify a product or architecture failure.
+
+This documentation-only F1 amendment necessarily creates a later PR head and Quality Gate. That post-amendment exact-head provenance is recorded by GitHub live and the targeted F1 re-audit rather than recursively editing this story again.
+
 ## Promotion state
 
 W4.G remains **IMPLEMENTED / UNDER REVIEW** only.
