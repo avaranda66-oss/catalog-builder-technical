@@ -85,7 +85,7 @@ W5.A excludes typed/non-text surfaces rather than masking them into provider pay
 
 Structural IDs, geometry, style, asset identity/hash/version, diagnostics and persistence metadata are never provider-translated.
 
-Unknown future canonical object/cell surfaces fail closed as `UNCLASSIFIED_TEXT_SURFACE`.
+Translation-sensitive canonical shapes are guarded by executable known-key sentinels. A new object/content discriminator or a new field inside a known translation-sensitive shape fails closed as `UNCLASSIFIED_TEXT_SURFACE` until it is explicitly classified as TRANSLATE or EXCLUDE.
 
 ## RichText preservation
 
@@ -112,7 +112,7 @@ An unchanged source hashes identically.
 
 Relevant source mutation changes the hash.
 
-After provider/cache resolution W5.A re-extracts current semantic leaves and rejects mismatches as `STALE_RESULT`.
+At job start W5.A captures the complete eligible `leafId -> sourceHash` manifest. After every provider/cache asynchronous boundary and immediately before successful return it re-extracts the complete manifest and requires exact leaf-set and hash equality. Eligible leaf addition, removal, or source change rejects the whole job as `STALE_RESULT`.
 
 Translation request IDs are independent from W3 persistence mutation IDs.
 
@@ -122,9 +122,9 @@ The VNext protector was adapted from Legacy concepts without importing Legacy bl
 
 Evidence-backed forms include PRESYS/ISOPLAN/model codes, standards, protocols, units, ranges, uncertainty forms and NPT/BSP/thread notation.
 
-Deterministic collision-safe placeholders use the `[[VNEXT_TECH_...]]` family.
+Deterministic collision-safe placeholders use the `[[VNEXT_TECH_...]]` family. Production placeholders carry a SHA-256-derived namespace bound to the exact `unitId + runId`; token ordinal is only the final component.
 
-Validation rejects missing, extra, modified, duplicated or unresolved placeholders.
+Validation rejects missing, extra, modified, duplicated, unresolved, cross-run, and cross-unit placeholder transplants.
 
 The historical `0 a 70 bar` ambiguity is explicitly tested: lowercase Portuguese connector `a` remains language while uppercase Ampere `A` remains context-safe technical content.
 
@@ -216,7 +216,7 @@ Typed errors include:
 - `PAYLOAD_TOO_LARGE`;
 - `UNCLASSIFIED_TEXT_SURFACE`.
 
-Only provider unavailable/rate-limit errors are retried, bounded by default to three attempts.
+Only provider unavailable/rate-limit errors are retried, bounded by default to three attempts. The Supabase functions-client adapter reads the sanitized `{ error }` code from the real non-2xx FunctionsHttpError response/context so credential, payload, request, authorization, and invalid-provider errors retain their non-retryable typed identity.
 
 Abort makes a late result non-authoritative.
 
@@ -228,7 +228,7 @@ Only strictly validated, fresh responses enter cache.
 
 Cache identity excludes transport-only request ID but includes semantic request content/sourceHash, source/target locale, kind/context, protected text, provider/model, prompt, token-policy, contract and profile versions.
 
-Every cache hit is validated again against current sourceHash.
+Every cache hit is validated again against the exact current full eligible-leaf manifest, including both leaf-set identity and every sourceHash.
 
 No human-reviewed durable Translation Memory was introduced.
 
@@ -237,12 +237,14 @@ No human-reviewed durable Translation Memory was introduced.
 Focused W5.A tests cover:
 
 - complete whole-catalog extraction and Group descendants;
+- full eligible-leaf manifest freshness for add/remove/change, multi-batch, and cache-hit paths;
 - all eligible leaves;
 - explicit typed/asset/non-text exclusions;
 - RichText identities/marks/lists/line breaks;
 - deterministic sourceHash and mutation sensitivity;
-- fail-closed future surface;
+- executable fail-closed future fields inside known translation-sensitive shapes;
 - adversarial technical-token vectors;
+- context-bound placeholders and cross-run/cross-unit transplant rejection;
 - `0 a 70 bar`;
 - placeholder collisions/corruption;
 - strict provider response permutations;
@@ -251,7 +253,7 @@ Focused W5.A tests cover:
 - request-cache separation;
 - invalid-output no-cache;
 - retry/cancel;
-- gateway secret boundary and error mapping;
+- gateway secret boundary and real FunctionsHttpError-like non-2xx typed error mapping/retry behavior;
 - source document immutability;
 - server gateway contract.
 
@@ -267,7 +269,7 @@ Fixture:
 
 `tests/vnext/proof/fixtures/w5a-translation-foundation-browser.tsx`
 
-The proof uses the same application/provider contracts as the real client path and verifies extraction, exclusions, masking, strict validation, restoration, RichText identity, stale rejection, safe cache reuse, source immutability, secret absence and unsupported-language rejection.
+The proof uses the same application/provider contracts as the real client path and verifies extraction, exclusions, masking, strict validation, restoration, RichText identity, ordinary stale rejection, full eligible-leaf-set stale rejection, cross-run/cross-unit technical-token transplant rejection, safe cache reuse, source immutability, secret absence and unsupported-language rejection.
 
 Required success token:
 
@@ -295,6 +297,22 @@ W5.A does not modify:
 W5.B remains responsible for candidate/review/copy/provenance persistence.
 
 W5.C remains responsible for layout/publication/PDF/mobile/accessibility integrated closeout.
+
+## Independent audit F1-F5 amendment
+
+The first full independent adversarial audit classified the pre-amendment head as:
+
+`C — W5.A MATERIAL AMENDMENT REQUIRED`
+
+The same PR/branch was amended without rebase or architecture redesign for exactly:
+
+- W5A-AUD-F1 — complete eligible-leaf manifest freshness;
+- W5A-AUD-F2 — context-bound technical placeholder identity;
+- W5A-AUD-F3 — real Supabase FunctionsHttpError non-2xx typed mapping;
+- W5A-AUD-F4 — executable future-surface exhaustiveness sentinel;
+- W5A-AUD-F5 — focused/browser evidence that reaches the formerly broken paths.
+
+The historical pre-amendment Quality Gate remains historical only after the amendment push. Final amended exact-head evidence is recorded from the new GitHub run before targeted re-audit.
 
 ## Quality Gate
 

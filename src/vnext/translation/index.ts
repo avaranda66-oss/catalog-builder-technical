@@ -43,6 +43,7 @@ export {
   assertProtectedTokenIntegrity,
   protectTechnicalTokens,
   restoreTechnicalTokens,
+  technicalProtectionNamespace,
   technicalTokenFingerprintMaterial,
 } from './technical-token-protector';
 export type { ProtectedTechnicalToken, ProtectedText } from './technical-token-protector';

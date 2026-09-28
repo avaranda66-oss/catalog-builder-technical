@@ -6,6 +6,7 @@ import {
   W5_TRANSLATION_PROFILE_VERSION,
   W5_TRANSLATION_PROVIDER_ID,
   protectTechnicalTokens,
+  technicalProtectionNamespace,
   translationRunKey,
   validateProviderResponse,
   type TranslationErrorCode,
@@ -151,5 +152,116 @@ describe('W5.A strict provider response validation', () => {
       ...response,
       units: [{ ...response.units[0], arbitrary: true }],
     }, context));
+  });
+
+  it('rejects technical placeholder transplants across runs and units', async () => {
+    const unitA = 'unit-a';
+    const unitB = 'unit-b';
+    const runA1 = protectTechnicalTokens(
+      'Equipamento TA-25N',
+      await technicalProtectionNamespace(unitA, 'run-a1')
+    );
+    const runA2 = protectTechnicalTokens(
+      'Pressão 70 bar',
+      await technicalProtectionNamespace(unitA, 'run-a2')
+    );
+    const runB1 = protectTechnicalTokens(
+      'Sinal PSV-10',
+      await technicalProtectionNamespace(unitB, 'run-b1')
+    );
+
+    const request: TranslationProviderRequest = {
+      contractVersion: W5_TRANSLATION_CONTRACT_VERSION,
+      profileVersion: W5_TRANSLATION_PROFILE_VERSION,
+      requestId: 'context-bound-request',
+      sourceCatalogId: 'catalog-1',
+      sourceLocale: 'pt-BR',
+      targetLocale: 'es-ES',
+      units: [
+        {
+          unitId: unitA,
+          sourceHash: 'a'.repeat(64),
+          kind: 'textObject',
+          context: 'Text object',
+          runs: [
+            { runId: 'run-a1', protectedText: runA1.protectedText },
+            { runId: 'run-a2', protectedText: runA2.protectedText },
+          ],
+        },
+        {
+          unitId: unitB,
+          sourceHash: 'b'.repeat(64),
+          kind: 'tableCell',
+          context: 'Table cell',
+          runs: [{ runId: 'run-b1', protectedText: runB1.protectedText }],
+        },
+      ],
+    };
+    const baseResponse: TranslationProviderResponse = {
+      contractVersion: W5_TRANSLATION_CONTRACT_VERSION,
+      profileVersion: W5_TRANSLATION_PROFILE_VERSION,
+      requestId: request.requestId,
+      targetLocale: request.targetLocale,
+      units: [
+        {
+          unitId: unitA,
+          runs: [
+            { runId: 'run-a1', translatedText: `ES: ${runA1.protectedText}` },
+            { runId: 'run-a2', translatedText: `ES: ${runA2.protectedText}` },
+          ],
+        },
+        {
+          unitId: unitB,
+          runs: [{ runId: 'run-b1', translatedText: `ES: ${runB1.protectedText}` }],
+        },
+      ],
+      provider: { providerId: W5_TRANSLATION_PROVIDER_ID, modelId: W5_TRANSLATION_MODEL_ID },
+    };
+    const context = {
+      currentSourceHashes: new Map([[unitA, 'a'.repeat(64)], [unitB, 'b'.repeat(64)]]),
+      protectedRuns: new Map([
+        [translationRunKey(unitA, 'run-a1'), runA1],
+        [translationRunKey(unitA, 'run-a2'), runA2],
+        [translationRunKey(unitB, 'run-b1'), runB1],
+      ]),
+    };
+
+    expect(validateProviderResponse(request, baseResponse, context)).toEqual(baseResponse);
+
+    const crossRun: TranslationProviderResponse = {
+      ...baseResponse,
+      units: baseResponse.units.map((unit) => unit.unitId === unitA ? {
+        ...unit,
+        runs: unit.runs.map((run) => {
+          if (run.runId === 'run-a1') return { ...run, translatedText: `ES: ${runA2.protectedText}` };
+          if (run.runId === 'run-a2') return { ...run, translatedText: `ES: ${runA1.protectedText}` };
+          return run;
+        }),
+      } : unit),
+    };
+    invalidCode(
+      () => validateProviderResponse(request, crossRun, context),
+      'TECHNICAL_TOKEN_MISMATCH'
+    );
+
+    const crossUnit: TranslationProviderResponse = {
+      ...baseResponse,
+      units: baseResponse.units.map((unit) => ({
+        ...unit,
+        runs: unit.runs.map((run) => {
+          if (unit.unitId === unitA && run.runId === 'run-a1') {
+            return { ...run, translatedText: `ES: ${runB1.protectedText}` };
+          }
+          if (unit.unitId === unitB && run.runId === 'run-b1') {
+            return { ...run, translatedText: `ES: ${runA1.protectedText}` };
+          }
+          return run;
+        }),
+      })),
+    };
+    invalidCode(
+      () => validateProviderResponse(request, crossUnit, context),
+      'TECHNICAL_TOKEN_MISMATCH'
+    );
   });
 });

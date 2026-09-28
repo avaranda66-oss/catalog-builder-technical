@@ -14,6 +14,17 @@ export interface GatewayInvocationResult {
   readonly error: { readonly message?: string | null } | null;
 }
 
+interface FunctionsClientErrorLike {
+  readonly message?: string | null;
+  readonly context?: unknown;
+}
+
+interface FunctionsClientInvokeResult {
+  readonly data: unknown;
+  readonly error: FunctionsClientErrorLike | null;
+  readonly response?: unknown;
+}
+
 export type VNextTranslationGatewayInvoke = (
   request: TranslationProviderRequest
 ) => Promise<GatewayInvocationResult>;
@@ -22,6 +33,24 @@ function externalErrorCode(data: unknown): string | undefined {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
   const value = (data as Record<string, unknown>).error;
   return typeof value === 'string' ? value : undefined;
+}
+
+async function sanitizedGatewayErrorData(...candidates: readonly unknown[]): Promise<unknown> {
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const json = (candidate as { clone?: () => unknown; json?: () => Promise<unknown> }).clone?.();
+    const responseLike = json && typeof json === 'object' ? json : candidate;
+    const readJson = (responseLike as { json?: () => Promise<unknown> }).json;
+    if (typeof readJson !== 'function') continue;
+    try {
+      const parsed = await readJson.call(responseLike);
+      const code = externalErrorCode(parsed);
+      if (code) return { error: code };
+    } catch {
+      // FunctionsHttpError bodies are optional; fall through to sanitized generic mapping.
+    }
+  }
+  return null;
 }
 
 function mapGatewayFailure(data: unknown, message = ''): TranslationFoundationError {
@@ -52,10 +81,7 @@ export interface VNextTranslationFunctionsClient {
     invoke(
       functionName: string,
       options: { readonly body: TranslationProviderRequest }
-    ): Promise<{
-      readonly data: unknown;
-      readonly error: { readonly message?: string | null } | null;
-    }>;
+    ): Promise<FunctionsClientInvokeResult>;
   };
 }
 
@@ -64,8 +90,11 @@ export function vnextTranslationGatewayInvokeFromFunctionsClient(
 ): VNextTranslationGatewayInvoke {
   return async (request) => {
     const response = await client.functions.invoke('vnext-translation-provider', { body: request });
+    const sanitizedError = response.error
+      ? await sanitizedGatewayErrorData(response.error.context, response.response)
+      : null;
     return {
-      data: response.data,
+      data: sanitizedError ?? response.data,
       error: response.error ? { message: response.error.message } : null,
     };
   };

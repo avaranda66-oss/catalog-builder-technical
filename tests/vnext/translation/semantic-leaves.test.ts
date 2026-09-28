@@ -125,4 +125,25 @@ describe('W5.A canonical semantic translation leaves', () => {
       code: 'UNCLASSIFIED_TEXT_SURFACE',
     }));
   });
+
+  it('fails closed when a known translation-sensitive shape gains an unclassified future field', async () => {
+    const source = createW5ATranslationDocument();
+    const evolved = structuredClone(source) as unknown as {
+      pages: Array<{ objects: Array<Record<string, unknown>> }>;
+    };
+    const text = evolved.pages[0].objects.find((object) => object.id === 'w5a-text-main');
+    if (!text) throw new Error('Missing W5.A Text fixture');
+    text.futureCaption = {
+      paragraphs: [{
+        id: 'future-caption:p',
+        inlines: [{ kind: 'text', id: 'future-caption:t', text: 'Novo texto canônico', marks: [] }],
+      }],
+    };
+
+    await expect(
+      extractSemanticTranslationCoverage(evolved as unknown as CatalogDocument)
+    ).rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({
+      code: 'UNCLASSIFIED_TEXT_SURFACE',
+    }));
+  });
 });

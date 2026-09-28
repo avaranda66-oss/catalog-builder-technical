@@ -49,20 +49,34 @@ function collectMatches(source: string): Match[] {
   return matches.sort((left, right) => left.start - right.start || right.end - left.end);
 }
 
-function collisionSafeNamespace(source: string): string {
+function collisionSafeNamespace(source: string, baseNamespace: string): string {
   let suffix = 0;
   for (;;) {
-    const namespace = suffix === 0 ? 'VNEXT_TECH' : `VNEXT_TECH_${suffix}`;
+    const namespace = suffix === 0 ? baseNamespace : `${baseNamespace}_${suffix}`;
     if (!source.includes(`[[${namespace}_`)) return namespace;
     suffix += 1;
   }
 }
 
-export function protectTechnicalTokens(source: string): ProtectedText {
-  const matches = collectMatches(source);
-  if (matches.length === 0) return { protectedText: source, namespace: 'VNEXT_TECH', tokens: [] };
+export async function technicalProtectionNamespace(unitId: string, runId: string): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new TranslationFoundationError('INVALID_REQUEST', 'SHA-256 is unavailable for technical-token identity');
+  }
+  const identity = new TextEncoder().encode(`${unitId}\u0000${runId}`);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', identity);
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32)
+    .toUpperCase();
+  return `VNEXT_TECH_${hex}`;
+}
 
-  const namespace = collisionSafeNamespace(source);
+export function protectTechnicalTokens(source: string, baseNamespace = 'VNEXT_TECH'): ProtectedText {
+  const matches = collectMatches(source);
+  if (matches.length === 0) return { protectedText: source, namespace: baseNamespace, tokens: [] };
+
+  const namespace = collisionSafeNamespace(source, baseNamespace);
   const tokens = matches.map((match, index) => ({
     placeholder: `[[${namespace}_${String(index + 1).padStart(3, '0')}]]`,
     value: match.value,

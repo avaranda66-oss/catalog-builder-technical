@@ -15,6 +15,7 @@ import {
   type TranslationProfile,
   type TranslationProviderRequest,
   type TranslationProviderResponse,
+  type TranslationRequestCache,
 } from '@/vnext/translation';
 import { createW5ATranslationDocument } from './w5a-fixture';
 
@@ -32,6 +33,38 @@ function responseFor(request: TranslationProviderRequest): TranslationProviderRe
       })),
     })),
     provider: { providerId: W5_TRANSLATION_PROVIDER_ID, modelId: W5_TRANSLATION_MODEL_ID },
+  };
+}
+
+function addEligibleText(
+  source: ReturnType<typeof createW5ATranslationDocument>,
+  id: string,
+  text = 'Novo texto canônico'
+): void {
+  source.pages[0].objects.push({
+    id,
+    type: 'text',
+    frame: { xMm: 5, yMm: 245, widthMm: 35, heightMm: 10 },
+    zIndex: 100 + source.pages[0].objects.length,
+    text: {
+      paragraphs: [{
+        id: `${id}:p`,
+        inlines: [{ kind: 'text', id: `${id}:t`, text, marks: [] }],
+      }],
+    },
+    style: {},
+  });
+}
+
+function functionsHttpErrorResult(error: string, status = 503) {
+  const context = new Response(JSON.stringify({ error, message: 'sanitized gateway message' }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return {
+    data: null,
+    error: { message: 'Edge Function returned a non-2xx status code', context },
+    response: context,
   };
 }
 
@@ -113,6 +146,85 @@ describe('W5.A translation foundation service', () => {
     });
     await expect(service.translateCatalog(source))
       .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'STALE_RESULT' }));
+  });
+
+  it('rejects a job when an eligible leaf is added while the provider request is in flight', async () => {
+    const source = createW5ATranslationDocument();
+    const provider = new ControlledTranslationProvider((request) => {
+      addEligibleText(source, 'late-added-text');
+      return responseFor(request);
+    });
+    const service = new TranslationFoundationService(provider, {
+      requestId: () => 'request-stale-added',
+      sleep: async () => undefined,
+    });
+    await expect(service.translateCatalog(source))
+      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'STALE_RESULT' }));
+  });
+
+  it('rejects a job when an eligible leaf is removed while the provider request is in flight', async () => {
+    const source = createW5ATranslationDocument();
+    const provider = new ControlledTranslationProvider((request) => {
+      source.pages[0].objects = source.pages[0].objects.filter((object) => object.id !== 'w5a-text-main');
+      return responseFor(request);
+    });
+    const service = new TranslationFoundationService(provider, {
+      requestId: () => 'request-stale-removed',
+      sleep: async () => undefined,
+    });
+    await expect(service.translateCatalog(source))
+      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'STALE_RESULT' }));
+  });
+
+  it('keeps one immutable full-coverage manifest across multiple provider batches', async () => {
+    const source = createW5ATranslationDocument();
+    for (let index = 0; index < 55; index += 1) {
+      addEligibleText(source, `batch-text-${index}`, `Texto de lote ${index}`);
+    }
+    const provider = new ControlledTranslationProvider((request, invocation) => {
+      if (invocation === 2) addEligibleText(source, 'batch-late-added');
+      return responseFor(request);
+    });
+    const service = new TranslationFoundationService(provider, {
+      requestId: () => `request-multi-batch-${provider.requests.length + 1}`,
+      sleep: async () => undefined,
+    });
+    await expect(service.translateCatalog(source))
+      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'STALE_RESULT' }));
+    expect(provider.requests.length).toBe(2);
+  });
+
+  it('revalidates the complete coverage manifest after a cache hit', async () => {
+    const source = createW5ATranslationDocument();
+    const backingCache = new MemoryTranslationRequestCache();
+    const provider = new ControlledTranslationProvider();
+    const seedService = new TranslationFoundationService(provider, {
+      cache: backingCache,
+      requestId: () => 'request-cache-seed',
+      sleep: async () => undefined,
+    });
+    await seedService.translateCatalog(source);
+
+    let mutated = false;
+    const mutatingCache: TranslationRequestCache = {
+      get: async (key) => {
+        const value = await backingCache.get(key);
+        if (!mutated) {
+          addEligibleText(source, 'cache-late-added');
+          mutated = true;
+        }
+        return value;
+      },
+      set: (key, response) => backingCache.set(key, response),
+    };
+    const cachedService = new TranslationFoundationService(provider, {
+      cache: mutatingCache,
+      requestId: () => 'request-cache-stale',
+      sleep: async () => undefined,
+    });
+    await expect(cachedService.translateCatalog(source))
+      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'STALE_RESULT' }));
+    expect(provider.requests).toHaveLength(1);
   });
 
   it('makes a cancelled job non-authoritative even when the controlled provider returns late', async () => {
@@ -224,16 +336,62 @@ describe('W5.A VNext gateway client boundary', () => {
   });
 
   it.each([
-    ['CREDENTIAL_UNAVAILABLE', 'CREDENTIAL_UNAVAILABLE'],
-    ['PROVIDER_RATE_LIMIT', 'PROVIDER_RATE_LIMIT'],
-    ['PAYLOAD_TOO_LARGE', 'PAYLOAD_TOO_LARGE'],
-    ['INVALID_PROVIDER_RESPONSE', 'INVALID_PROVIDER_RESPONSE'],
-  ] as const)('maps sanitized server error %s to typed client error %s', async (serverCode, expectedCode) => {
-    const client = new VNextTranslationGatewayClient(async () => ({
-      data: { error: serverCode },
-      error: { message: 'sanitized' },
-    }));
-    await expect(client.translate(requestFixture()))
-      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: expectedCode }));
+    ['CREDENTIAL_UNAVAILABLE', 'CREDENTIAL_UNAVAILABLE', 503],
+    ['PROVIDER_RATE_LIMIT', 'PROVIDER_RATE_LIMIT', 429],
+    ['PAYLOAD_TOO_LARGE', 'PAYLOAD_TOO_LARGE', 413],
+    ['INVALID_REQUEST', 'INVALID_REQUEST', 400],
+    ['UNSUPPORTED_LANGUAGE', 'UNSUPPORTED_LANGUAGE', 400],
+    ['INVALID_PROVIDER_RESPONSE', 'INVALID_PROVIDER_RESPONSE', 502],
+    ['FORBIDDEN', 'INVALID_REQUEST', 403],
+  ] as const)(
+    'extracts sanitized FunctionsHttpError-like body %s as typed client error %s',
+    async (serverCode, expectedCode, status) => {
+      const invoke = vnextTranslationGatewayInvokeFromFunctionsClient({
+        functions: {
+          invoke: async () => functionsHttpErrorResult(serverCode, status),
+        },
+      });
+      const client = new VNextTranslationGatewayClient(invoke);
+      await expect(client.translate(requestFixture()))
+        .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: expectedCode }));
+    }
+  );
+
+  it('retries a real-shaped rate-limit response but does not retry a credential error', async () => {
+    let rateLimitCalls = 0;
+    const rateLimitInvoke = vnextTranslationGatewayInvokeFromFunctionsClient({
+      functions: {
+        invoke: async (_functionName, options) => {
+          rateLimitCalls += 1;
+          if (rateLimitCalls === 1) return functionsHttpErrorResult('PROVIDER_RATE_LIMIT', 429);
+          return { data: responseFor(options.body), error: null };
+        },
+      },
+    });
+    const rateLimitService = new TranslationFoundationService(
+      new VNextTranslationGatewayClient(rateLimitInvoke),
+      { requestId: () => 'real-shaped-rate-limit', sleep: async () => undefined }
+    );
+    await expect(rateLimitService.translateCatalog(createW5ATranslationDocument())).resolves.toBeDefined();
+    expect(rateLimitCalls).toBe(2);
+
+    let credentialCalls = 0;
+    const credentialInvoke = vnextTranslationGatewayInvokeFromFunctionsClient({
+      functions: {
+        invoke: async () => {
+          credentialCalls += 1;
+          return functionsHttpErrorResult('CREDENTIAL_UNAVAILABLE', 503);
+        },
+      },
+    });
+    const credentialService = new TranslationFoundationService(
+      new VNextTranslationGatewayClient(credentialInvoke),
+      { requestId: () => 'real-shaped-credential', sleep: async () => undefined }
+    );
+    await expect(credentialService.translateCatalog(createW5ATranslationDocument()))
+      .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({
+        code: 'CREDENTIAL_UNAVAILABLE',
+      }));
+    expect(credentialCalls).toBe(1);
   });
 });

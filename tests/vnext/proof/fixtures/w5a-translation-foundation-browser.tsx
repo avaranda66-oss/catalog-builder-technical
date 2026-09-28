@@ -33,6 +33,25 @@ function responseFor(request: TranslationProviderRequest): TranslationProviderRe
   };
 }
 
+function addEligibleTextForProof(
+  source: ReturnType<typeof createW5ATranslationDocument>,
+  id: string
+): void {
+  source.pages[0].objects.push({
+    id,
+    type: 'text',
+    frame: { xMm: 5, yMm: 245, widthMm: 35, heightMm: 10 },
+    zIndex: 100 + source.pages[0].objects.length,
+    text: {
+      paragraphs: [{
+        id: `${id}:p`,
+        inlines: [{ kind: 'text', id: `${id}:t`, text: 'Novo texto durante tradução', marks: [] }],
+      }],
+    },
+    style: {},
+  });
+}
+
 async function errorCode(work: () => Promise<unknown>): Promise<string | null> {
   try {
     await work();
@@ -81,6 +100,85 @@ async function runFoundationProof() {
     sleep: async () => undefined,
   });
   const staleCode = await errorCode(() => staleService.translateCatalog(staleSource));
+
+  const staleCoverageSource = createW5ATranslationDocument();
+  const staleCoverageProvider = new ControlledTranslationProvider((currentRequest) => {
+    addEligibleTextForProof(staleCoverageSource, 'browser-late-added-text');
+    return responseFor(currentRequest);
+  });
+  const staleCoverageService = new TranslationFoundationService(staleCoverageProvider, {
+    requestId: () => 'browser-stale-coverage',
+    sleep: async () => undefined,
+  });
+  const staleCoverageSetCode = await errorCode(
+    () => staleCoverageService.translateCatalog(staleCoverageSource)
+  );
+
+  const crossRunProvider = new ControlledTranslationProvider((currentRequest) => {
+    const requestUnit = currentRequest.units.find(
+      (unit) => unit.runs.filter((run) => run.protectedText.includes('[[VNEXT_TECH_')).length >= 2
+    );
+    if (!requestUnit) throw new Error('Missing multi-token W5.A proof unit');
+    const tokenRuns = requestUnit.runs.filter((run) => run.protectedText.includes('[[VNEXT_TECH_'));
+    const response = responseFor(currentRequest);
+    return {
+      ...response,
+      units: response.units.map((unit) => unit.unitId === requestUnit.unitId ? {
+        ...unit,
+        runs: unit.runs.map((run) => {
+          if (run.runId === tokenRuns[0].runId) {
+            return { ...run, translatedText: `ES: ${tokenRuns[1].protectedText}` };
+          }
+          if (run.runId === tokenRuns[1].runId) {
+            return { ...run, translatedText: `ES: ${tokenRuns[0].protectedText}` };
+          }
+          return run;
+        }),
+      } : unit),
+    };
+  });
+  const crossRunService = new TranslationFoundationService(crossRunProvider, {
+    requestId: () => 'browser-cross-run',
+    sleep: async () => undefined,
+  });
+  const crossRunTokenCode = await errorCode(
+    () => crossRunService.translateCatalog(createW5ATranslationDocument())
+  );
+
+  const crossUnitProvider = new ControlledTranslationProvider((currentRequest) => {
+    const tokenUnits = currentRequest.units
+      .map((unit) => ({
+        unit,
+        run: unit.runs.find((run) => run.protectedText.includes('[[VNEXT_TECH_')),
+      }))
+      .filter((entry): entry is { unit: TranslationProviderRequest['units'][number]; run: TranslationProviderRequest['units'][number]['runs'][number] } =>
+        Boolean(entry.run)
+      );
+    if (tokenUnits.length < 2) throw new Error('Missing cross-unit W5.A proof tokens');
+    const response = responseFor(currentRequest);
+    return {
+      ...response,
+      units: response.units.map((unit) => ({
+        ...unit,
+        runs: unit.runs.map((run) => {
+          if (unit.unitId === tokenUnits[0].unit.unitId && run.runId === tokenUnits[0].run.runId) {
+            return { ...run, translatedText: `ES: ${tokenUnits[1].run.protectedText}` };
+          }
+          if (unit.unitId === tokenUnits[1].unit.unitId && run.runId === tokenUnits[1].run.runId) {
+            return { ...run, translatedText: `ES: ${tokenUnits[0].run.protectedText}` };
+          }
+          return run;
+        }),
+      })),
+    };
+  });
+  const crossUnitService = new TranslationFoundationService(crossUnitProvider, {
+    requestId: () => 'browser-cross-unit',
+    sleep: async () => undefined,
+  });
+  const crossUnitTokenCode = await errorCode(
+    () => crossUnitService.translateCatalog(createW5ATranslationDocument())
+  );
 
   const invalidProvider = new ControlledTranslationProvider((currentRequest) => ({
     ...responseFor(currentRequest),
@@ -133,6 +231,9 @@ async function runFoundationProof() {
     resultRunIds: first.units.flatMap((unit) => unit.runs.map((run) => run.runId)),
     sourceHashes: coverage.eligible.map((leaf) => [leaf.leafId, leaf.sourceHash]),
     staleCode,
+    staleCoverageSetCode,
+    crossRunTokenCode,
+    crossUnitTokenCode,
     invalidCode,
     unsupportedCode,
     firstProviderRequests: first.providerRequests,

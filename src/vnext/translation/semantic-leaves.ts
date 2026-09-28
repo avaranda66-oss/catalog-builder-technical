@@ -70,6 +70,7 @@ async function richTextLeaf(
   context: string,
   richText: RichText
 ): Promise<TranslationSemanticLeaf | undefined> {
+  assertRichTextShape(richText, `rich-text:${locatorKey(locator)}`);
   const runs = richText.paragraphs.flatMap((paragraph) =>
     paragraph.inlines.flatMap((inline) => inline.kind === 'text'
       ? [{
@@ -126,6 +127,48 @@ function unknownSurface(label: string, value: unknown): never {
   );
 }
 
+function assertKnownKeys(
+  label: string,
+  value: Record<string, unknown>,
+  allowed: readonly string[]
+): void {
+  const allowedSet = new Set(allowed);
+  const unknown = Object.keys(value).filter((key) => !allowedSet.has(key));
+  if (unknown.length > 0) unknownSurface(`${label}-field`, unknown.sort().join(','));
+}
+
+function assertRichTextShape(richText: RichText, label: string): void {
+  assertKnownKeys(label, richText as unknown as Record<string, unknown>, ['paragraphs']);
+  richText.paragraphs.forEach((paragraph, paragraphIndex) => {
+    assertKnownKeys(
+      `${label}.paragraph[${paragraphIndex}]`,
+      paragraph as unknown as Record<string, unknown>,
+      ['id', 'inlines', 'list']
+    );
+    paragraph.inlines.forEach((inline, inlineIndex) => {
+      assertKnownKeys(
+        `${label}.paragraph[${paragraphIndex}].inline[${inlineIndex}]`,
+        inline as unknown as Record<string, unknown>,
+        inline.kind === 'text' ? ['kind', 'id', 'text', 'marks'] : ['kind', 'id']
+      );
+    });
+  });
+}
+
+function assertObjectShape(object: Record<string, unknown>): void {
+  const common = ['id', 'type', 'frame', 'zIndex', 'locked'];
+  switch (object.type) {
+    case 'table': assertKnownKeys('table-object', object, [...common, 'table']); break;
+    case 'text': assertKnownKeys('text-object', object, [...common, 'text', 'style']); break;
+    case 'image': assertKnownKeys('image-object', object, [...common, 'assetId', 'fit', 'focalPoint']); break;
+    case 'shape': assertKnownKeys('shape-object', object, [...common, 'shape', 'style']); break;
+    case 'line': assertKnownKeys('line-object', object, [...common, 'axis', 'color']); break;
+    case 'icon': assertKnownKeys('icon-object', object, [...common, 'assetId']); break;
+    case 'group': assertKnownKeys('group-object', object, [...common, 'objects']); break;
+    default: unknownSurface('editorial-object', object.type);
+  }
+}
+
 async function tableLeaves(
   pageId: string,
   objectId: string,
@@ -134,6 +177,20 @@ async function tableLeaves(
   eligible: TranslationSemanticLeaf[],
   exclusions: ExcludedTranslationSurface[]
 ): Promise<void> {
+  assertKnownKeys('table-model', table as unknown as Record<string, unknown>, [
+    'id', 'title', 'columns', 'rows', 'cells', 'style', 'annotationIds', 'annotations', 'legend',
+  ]);
+  table.columns.forEach((column, index) => {
+    assertKnownKeys(`table-column[${index}]`, column as unknown as Record<string, unknown>, [
+      'id', 'width', 'minMm', 'maxMm', 'style',
+    ]);
+  });
+  table.rows.forEach((row, index) => {
+    assertKnownKeys(`table-row[${index}]`, row as unknown as Record<string, unknown>, [
+      'id', 'role', 'heightPolicy', 'style',
+    ]);
+  });
+
   if (table.title) {
     const locator: TranslationLocator = { kind: 'tableTitle', pageId, objectId, tableId: table.id };
     const leaf = await richTextLeaf('tableTitle', locator, sourceLocale, 'Table title', table.title);
@@ -144,6 +201,32 @@ async function tableLeaves(
   const rows = new Map(table.rows.map((row) => [row.id, row] as const));
   for (const [cellIndex, cell] of table.cells.entries()) {
     const base = { pageId, objectId, tableId: table.id, cellId: cell.id };
+    assertKnownKeys(`table-cell[${cellIndex}]`, cell as unknown as Record<string, unknown>, [
+      'id', 'rowId', 'columnId', 'content', 'contentPresentation', 'span', 'coveredBy', 'annotationIds', 'style',
+    ]);
+    const contentRecord = cell.content as unknown as Record<string, unknown>;
+    switch (cell.content.type) {
+      case 'richText':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type', 'value']);
+        break;
+      case 'technicalCode':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type', 'value']);
+        break;
+      case 'measurement':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type', 'valueText', 'unit', 'qualifier']);
+        break;
+      case 'marker':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type', 'legendEntryId']);
+        break;
+      case 'image':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type', 'assetId']);
+        break;
+      case 'empty':
+        assertKnownKeys(`table-cell-content[${cellIndex}]`, contentRecord, ['type']);
+        break;
+      default:
+        unknownSurface('table-cell-content', contentRecord.type);
+    }
     switch (cell.content.type) {
       case 'richText': {
         const locator: TranslationLocator = { kind: 'tableCell', ...base };
@@ -180,6 +263,7 @@ async function tableLeaves(
   }
 
   for (const annotation of table.annotations) {
+    assertKnownKeys('table-annotation', annotation as unknown as Record<string, unknown>, ['id', 'kind', 'text']);
     if (!['caption', 'note', 'footnote'].includes(annotation.kind)) {
       unknownSurface('table-annotation-kind', annotation.kind);
     }
@@ -202,6 +286,7 @@ async function tableLeaves(
   }
 
   for (const legend of table.legend) {
+    assertKnownKeys('table-legend-entry', legend as unknown as Record<string, unknown>, ['id', 'markerCode', 'text']);
     const locator: TranslationLocator = {
       kind: 'tableLegend',
       pageId,
@@ -226,13 +311,23 @@ function assertUniqueLeafIds(leaves: readonly TranslationSemanticLeaf[]): void {
 }
 
 export async function extractSemanticTranslationCoverage(document: CatalogDocument): Promise<TranslationCoverage> {
+  assertKnownKeys('catalog-document', document as unknown as Record<string, unknown>, [
+    'schemaVersion', 'id', 'title', 'locale', 'style', 'pages', 'assets', 'source',
+  ]);
   const eligible: TranslationSemanticLeaf[] = [await catalogTitleLeaf(document)];
-  const exclusions: ExcludedTranslationSurface[] = document.assets.map((asset) =>
-    excluded('asset-alt', `asset-alt:${asset.id}`, { assetId: asset.id })
-  );
+  const exclusions: ExcludedTranslationSurface[] = document.assets.map((asset) => {
+    assertKnownKeys('asset-ref', asset as unknown as Record<string, unknown>, [
+      'id', 'version', 'sha256', 'mime', 'widthPx', 'heightPx', 'name', 'alt',
+    ]);
+    return excluded('asset-alt', `asset-alt:${asset.id}`, { assetId: asset.id });
+  });
 
   for (const page of document.pages) {
+    assertKnownKeys('page', page as unknown as Record<string, unknown>, [
+      'id', 'widthMm', 'heightMm', 'safeArea', 'objects',
+    ]);
     for (const { object } of walkPageObjects(page)) {
+      assertObjectShape(object as unknown as Record<string, unknown>);
       switch (object.type) {
         case 'text': {
           const locator: TranslationLocator = { kind: 'textObject', pageId: page.id, objectId: object.id };

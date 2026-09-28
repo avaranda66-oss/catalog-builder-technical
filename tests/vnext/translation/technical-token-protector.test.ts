@@ -4,6 +4,7 @@ import {
   assertProtectedTokenIntegrity,
   protectTechnicalTokens,
   restoreTechnicalTokens,
+  technicalProtectionNamespace,
 } from '@/vnext/translation';
 
 describe('W5.A technical-token protection', () => {
@@ -38,6 +39,19 @@ describe('W5.A technical-token protection', () => {
     expect(protectedValue.tokens.map((token) => token.value)).toContain('12 A');
     expect(restoreTechnicalTokens(protectedValue.protectedText, protectedValue))
       .toBe('Faixa de 0 a 70 bar com saída 12 A');
+  });
+
+  it('binds placeholder identity to unitId and runId so equal local ordinals cannot alias', async () => {
+    const namespaceA = await technicalProtectionNamespace('unit-a', 'run-a');
+    const namespaceB = await technicalProtectionNamespace('unit-a', 'run-b');
+    const namespaceC = await technicalProtectionNamespace('unit-b', 'run-a');
+    const first = protectTechnicalTokens('TA-25N', namespaceA);
+    const second = protectTechnicalTokens('70 bar', namespaceB);
+    const third = protectTechnicalTokens('PSV-10', namespaceC);
+
+    expect(first.tokens[0].placeholder).not.toBe(second.tokens[0].placeholder);
+    expect(first.tokens[0].placeholder).not.toBe(third.tokens[0].placeholder);
+    expect(second.tokens[0].placeholder).not.toBe(third.tokens[0].placeholder);
   });
 
   it('uses a collision-safe placeholder namespace when source text contains a placeholder-looking literal', () => {

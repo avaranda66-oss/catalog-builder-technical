@@ -75,6 +75,9 @@ try {
   assert.equal(result.richTextIdentity[0].inlines[2].kind, 'lineBreak');
   assert.equal(result.richTextIdentity[1].list.kind, 'unordered');
   assert.equal(result.staleCode, 'STALE_RESULT');
+  assert.equal(result.staleCoverageSetCode, 'STALE_RESULT');
+  assert.equal(result.crossRunTokenCode, 'TECHNICAL_TOKEN_MISMATCH');
+  assert.equal(result.crossUnitTokenCode, 'TECHNICAL_TOKEN_MISMATCH');
   assert.equal(result.invalidCode, 'INVALID_PROVIDER_RESPONSE');
   assert.equal(result.unsupportedCode, 'UNSUPPORTED_LANGUAGE');
   assert.equal(result.firstProviderRequests, 1);
@@ -106,6 +109,8 @@ try {
       strictValidation: true,
       richTextPreserved: true,
       staleProtection: true,
+      fullCoverageStaleProtection: true,
+      contextBoundTechnicalTokens: true,
       requestCache: true,
       sourceImmutability: true,
       noBrowserProviderSecret: true,
