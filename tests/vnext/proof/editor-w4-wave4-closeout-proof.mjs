@@ -29,6 +29,11 @@ async function desktop(browser){
  await p.locator('[data-editor-object-id="w4f1-table-object"]').click();await p.locator('[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"]').waitFor({timeout:30000});
  await p.locator('[data-editor-action="edit-table"]').click();await p.locator('[data-table-grid-overlay]').waitFor();
  const cellBox=await p.locator('[data-table-cell="0:0"]').boundingBox();assert(cellBox?.width>0&&cellBox?.height>0);
+ // W4.E Table-mode diagnostic navigation is zero-history: induce a real fixed-row overflow, Localizar, then restore.
+ const originalRowHeightPolicy=structuredClone(main(await state(p)).table.rows[0].heightPolicy);await p.locator('[data-table-row-selector="0"]').click();const rowHeight=p.locator('[data-row-property="height-mm"]');let diagnosticBefore=(await state(p)).localSequence;
+ await rowHeight.fill('2');await rowHeight.blur();await seq(p,diagnosticBefore);const rowDiagnostic=p.locator('[data-diagnostic-code="ROW_CONTENT_OVERFLOW"]').first();await rowDiagnostic.waitFor({timeout:30000});
+ const locateBefore=(await state(p)).localSequence;await rowDiagnostic.locator('[data-diagnostic-action="locate"]').click();await settle(p);assert.equal((await state(p)).localSequence,locateBefore);assert(await p.locator('[data-table-grid-overlay]').isVisible());
+ const diagnosticUndoBefore=(await state(p)).localSequence;await p.locator('[data-editor-action="undo"]').click();await seq(p,diagnosticUndoBefore);assert.deepEqual(main(await state(p)).table.rows[0].heightPolicy,originalRowHeightPolicy);
  const a0=await state(p);await p.locator('[data-table-row-selector="3"]').click();await p.locator('[data-editor-action="insert-row-after"]').click();await seq(p,a0.localSequence);assert.equal(main(await state(p)).table.rows.length,5);
  // W4.B local draft is ephemeral until canonical commit.
  await p.locator('[data-table-cell="1:0"]').click();await p.locator('[data-table-grid-overlay]').press('Enter');await p.locator('[data-cell-edit-session]').waitFor();
@@ -69,6 +74,8 @@ async function desktop(browser){
  const saved=await state(p);assert(saved.saved);await p.getByRole('button',{name:'Abrir outro catálogo'}).click();await p.waitForFunction(id=>window.__W4G_PROOF__.state().catalogId===id,ids.other);
  await p.getByRole('button',{name:'Reabrir catálogo original'}).click();await p.waitForFunction(id=>window.__W4G_PROOF__.state().catalogId===id,ids.primary);await settle(p);
  const reopened=await state(p);assert.deepEqual(reopened.document,saved.saved);assert.equal(reopened.canUndo,false);assert.equal(obj(reopened,ids.text).locked,true);assert.equal(obj(reopened,ids.image).fit,'cover');
+ const persistedImage=obj(reopened,ids.image),persistedAsset=reopened.document.assets.find(asset=>asset.id===persistedImage.assetId);assert(persistedAsset);assert.equal(persistedAsset.id,'asset-ta25n');assert.equal(persistedAsset.version,'repo-616332d');assert.equal(persistedAsset.sha256,'9a3b009caa49f76df16f59b8733dda1c1c5d8459479006c1bcc4b37e7071c067');
+ const persistedJson=JSON.stringify(reopened.document);assert(!persistedJson.includes('blob:'));assert(!persistedJson.includes('/src/labs/presys-editorial-proof/assets/ta-25n.jpg'));assert(!/"(?:url|signedUrl|blobUrl)"\s*:/.test(persistedJson));
  const t=main(reopened);assert.equal(t.table.rows[1].role,'section');assert.equal(t.table.cells.find(x=>x.id==='w4f1-cell-2-2').content.legendEntryId,'w4f3-legend-a');
  // Publication purity + real diagnostics + native Chromium PDF/PDF.js.
  const beforePub=JSON.stringify(reopened.document);await p.getByRole('button',{name:'Publicar prova'}).click();await p.locator('[data-publication] [data-editorial-root]').waitFor({timeout:30000});

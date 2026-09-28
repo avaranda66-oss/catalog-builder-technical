@@ -40,20 +40,21 @@ One real Chromium workflow uses the actual VNextApp, EditorWorkspace, DocumentSe
 Representative integrated path:
 1. select the canonical Table and observe a real TABLE_CONTENT_OVERFLOW diagnostic;
 2. enter the real Table Grid and verify measured Cell geometry;
-3. insert an axis through existing W4.A UI;
-4. edit a W4.B Cell through ephemeral draft then canonical commit;
-5. merge then unmerge an eligible W4.C range;
-6. apply W4.D TSV bulk paste and existing Marker/Legend assignment;
-7. change an existing W4.F.1 Row semantic property;
-8. apply an existing W4.F.2 Table preset;
-9. author a W4.F.3 Table title;
-10. invoke explicit W4.E Ajustar altura;
-11. exercise W4.F.4 standalone Image fit/focal authoring;
-12. exercise W4.F.5 modifier-free multi-selection, alignment, lock and unlock;
-13. verify Undo/Redo boundaries;
-14. Save through the persistence runtime, open another catalog, and reopen the original;
-15. verify canonical authored state;
-16. render publication, run diagnostics, generate native A4 PDF, and inspect with PDF.js.
+3. induce an existing fixed-row overflow through W4.F.1 controls, use the canonical W4.E `Localizar` diagnostic action from Table mode with zero history, then restore the row height;
+4. insert an axis through existing W4.A UI;
+5. edit a W4.B Cell through ephemeral draft then canonical commit;
+6. merge then unmerge an eligible W4.C range;
+7. apply W4.D TSV bulk paste and existing Marker/Legend assignment;
+8. change an existing W4.F.1 Row semantic property;
+9. apply an existing W4.F.2 Table preset;
+10. author a W4.F.3 Table title;
+11. invoke explicit W4.E Ajustar altura;
+12. exercise W4.F.4 standalone Image fit/focal authoring;
+13. exercise W4.F.5 modifier-free multi-selection, alignment, lock and unlock;
+14. verify Undo/Redo boundaries;
+15. Save through the persistence runtime, open another catalog, and reopen the original;
+16. verify canonical authored state;
+17. render publication, run diagnostics, generate native A4 PDF, and inspect with PDF.js.
 ## Controlled evidence boundary
 
 The closeout uses deterministic controlled persistence, not production Supabase E2E.
@@ -72,7 +73,7 @@ The proof reports controlledPersistence=true and productionSupabaseE2E=false.
 
 The integrated document reuses the canonical W4.F.3 immutable AssetRef. The standalone Image uses that same canonical asset identity.
 
-The fixture installs only the runtime URL/state outside CatalogDocument. Publication reuses the already-resolved AssetPersistenceBridge URL and waits for the real rendered image decode before canonical measurement. Blob/signed/runtime URLs are not serialized into CatalogDocument.
+The fixture installs only the runtime URL/state outside CatalogDocument. Publication reuses the already-resolved AssetPersistenceBridge seam and waits for the real rendered image decode before canonical measurement. After Save/reopen the proof asserts the standalone Image still references the canonical immutable `asset-ta25n` AssetRef (`repo-616332d` plus the canonical SHA-256) and asserts that no blob URL, controlled runtime asset URL, or URL-bearing field was serialized into CatalogDocument.
 
 ## Publication / PDF
 
