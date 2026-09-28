@@ -128,4 +128,3 @@ export class ControlledTranslationProvider implements TranslationProvider {
     return result;
   }
 }
-

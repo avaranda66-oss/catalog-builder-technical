@@ -69,3 +69,4 @@ jobs:
           node tests/vnext/proof/editor-standalone-image-professional-authoring-proof.mjs
           node tests/vnext/proof/editor-object-arrangement-locking-proof.mjs
           node tests/vnext/proof/editor-w4-wave4-closeout-proof.mjs
+          node tests/vnext/proof/w5a-semantic-translation-foundation-proof.mjs

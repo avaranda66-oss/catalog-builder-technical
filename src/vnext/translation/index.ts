@@ -71,4 +71,3 @@ export {
   TranslationFoundationService,
 } from './service';
 export type { TranslationFoundationServiceOptions } from './service';
-

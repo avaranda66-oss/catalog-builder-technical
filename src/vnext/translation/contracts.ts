@@ -209,4 +209,3 @@ export function requireSupportedLanguagePair(sourceLocale: string, targetLocale:
     );
   }
 }
-

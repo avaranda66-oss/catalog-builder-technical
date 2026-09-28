@@ -115,4 +115,3 @@ export function validateProviderResponse(
 export function translationRunKey(unitId: string, runId: string): string {
   return runKey(unitId, runId);
 }
-

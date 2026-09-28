@@ -384,4 +384,3 @@ serve(async (request: Request) => {
     return json(cors, 500, 'PROVIDER_UNAVAILABLE', 'Falha interna sanitizada no gateway de tradução.');
   }
 });
-

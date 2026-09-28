@@ -132,4 +132,3 @@ export function restoreTechnicalTokens(translatedText: string, protectedValue: P
 export function technicalTokenFingerprintMaterial(protectedValue: ProtectedText): string {
   return JSON.stringify(protectedValue.tokens.map((token) => [token.placeholder, token.value]));
 }
-

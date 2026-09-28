@@ -274,4 +274,3 @@ export async function extractSemanticTranslationCoverage(document: CatalogDocume
     complete: true,
   };
 }
-
