@@ -49,12 +49,15 @@ Representative integrated path:
 9. apply an existing W4.F.2 Table preset;
 10. author a W4.F.3 Table title;
 11. invoke explicit W4.E Ajustar altura;
-12. exercise W4.F.4 standalone Image fit/focal authoring;
-13. exercise W4.F.5 modifier-free multi-selection, alignment, lock and unlock;
-14. verify Undo/Redo boundaries;
-15. Save through the persistence runtime, open another catalog, and reopen the original;
-16. verify canonical authored state;
-17. render publication, run diagnostics, generate native A4 PDF, and inspect with PDF.js.
+12. create a valid dirty W4.B Cell draft, switch legitimately to standalone Image editing, and prove exactly one semantic commit plus Table-mode exit;
+13. exercise W4.F.4 standalone Image fit/focal authoring;
+14. exercise W4.F.5 modifier-free multi-selection and alignment with selection-only history staying unchanged;
+15. leave that multi-selection through Father controls, select the Table singularly, re-enter Table Grid, and prove navigation/selection creates no history;
+16. lock the Table from Table Grid, prove authoring collapses while root selection survives, then unlock without automatically reopening the grid;
+17. verify Undo/Redo boundaries;
+18. Save through the persistence runtime, open another catalog, and reopen the original;
+19. verify canonical authored state;
+20. render publication, run diagnostics, generate native A4 PDF, and inspect with PDF.js.
 ## Controlled evidence boundary
 
 The closeout uses deterministic controlled persistence, not production Supabase E2E.

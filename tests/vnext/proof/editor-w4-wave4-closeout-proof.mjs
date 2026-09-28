@@ -56,9 +56,12 @@ async function desktop(browser){
  await p.locator('[data-table-title-input]').fill('Tabela integrada W4.G');n=(await state(p)).localSequence;await p.locator('[data-editor-action="set-table-title"]').click();await seq(p,n);assert(main(await state(p)).table.title);
  // W4.E explicit Fit only.
  const h0=main(await state(p)).frame.heightMm;await p.locator('[data-editor-action="fit-table-height"]').waitFor({timeout:30000});n=(await state(p)).localSequence;await p.locator('[data-editor-action="fit-table-height"]').click();await seq(p,n);assert(main(await state(p)).frame.heightMm>h0);
- await p.locator('[data-editor-action="leave-table-grid"]').click();
+ // Cross-feature lifecycle: a valid dirty Cell draft commits exactly once when Father legitimately switches to object editing.
+ await p.locator('[data-table-cell="1:0"]').click();await p.locator('[data-table-grid-overlay]').press('Enter');await p.locator('[data-cell-edit-session]').waitFor();const contextBefore=await state(p);
+ await p.locator('[data-cell-rich-text]').fill('Integração W4.G via contexto');assert.equal((await state(p)).localSequence,contextBefore.localSequence);
+ await p.locator(`[data-editor-object-id="${ids.image}"]`).click();await p.locator('[data-cell-edit-session]').waitFor({state:'detached'});await seq(p,contextBefore.localSequence);assert.equal(await p.locator(`[data-editor-object-id="${ids.image}"]`).getAttribute('data-selected'),'true');assert.equal(await p.locator('[data-table-grid-overlay]').count(),0);assert(JSON.stringify(main(await state(p)).table.cells.find(x=>x.id==='w4f1-cell-1-0').content).includes('Integração W4.G via contexto'));
  // W4.F.4 standalone Image.
- await p.locator(`[data-editor-object-id="${ids.image}"]`).click();await p.locator('[data-image-professional-authoring]').waitFor();n=(await state(p)).localSequence;await p.locator('[data-image-fit]').selectOption('cover');await seq(p,n);
+ await p.locator('[data-image-professional-authoring]').waitFor();n=(await state(p)).localSequence;await p.locator('[data-image-fit]').selectOption('cover');await seq(p,n);
  n=(await state(p)).localSequence;await p.locator('[data-image-focal-axis="x"]').focus();await p.locator('[data-image-focal-axis="x"]').press('ArrowRight');await seq(p,n);assert.equal(obj(await state(p),ids.image).fit,'cover');
  // W4.F.5 modifier-free multi selection + arrangement; pure selection has no history.
  await p.locator('[data-editor-overlay]').click({position:{x:5,y:5}});const s0=await state(p);const multi=p.locator('[data-editor-action="toggle-multi-select"]');await multi.click();
@@ -66,7 +69,13 @@ async function desktop(browser){
  await p.locator('[data-editor-action="align-left"]').click();await seq(p,n);const aligned=structuredClone((await state(p)).document);
  n=(await state(p)).localSequence;await p.locator('[data-editor-action="undo"]').click();await seq(p,n);assert.notDeepEqual((await state(p)).document,aligned);
  n=(await state(p)).localSequence;await p.locator('[data-editor-action="redo"]').click();await seq(p,n);assert.deepEqual((await state(p)).document,aligned);
- await multi.click();await p.locator(`[data-editor-object-id="${ids.text}"]`).click();const lock=p.locator('[data-editor-action="toggle-object-lock"]');n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,true);
+ // Cross-feature lifecycle: leave real multi-selection through Father controls, enter singular Table mode, then lock collapses Table authoring without extra history.
+ assert.equal(await p.locator('[data-editor-object-id][data-selected="true"]').count(),3);await multi.click();assert.equal(await multi.getAttribute('aria-pressed'),'false');const multiExitSequence=(await state(p)).localSequence;
+ await p.locator('[data-editor-object-id="w4f1-table-object"]').click();assert.equal((await state(p)).localSequence,multiExitSequence);assert.equal(await p.locator('[data-editor-object-id][data-selected="true"]').count(),1);assert.equal(await p.locator('[data-editor-object-id="w4f1-table-object"]').getAttribute('data-selected'),'true');
+ await p.locator('[data-editor-action="edit-table"]').click();await p.locator('[data-table-grid-overlay]').waitFor({timeout:20000});assert.equal((await state(p)).localSequence,multiExitSequence);
+ const tableLock=p.locator('[data-editor-action="toggle-object-lock"]');n=(await state(p)).localSequence;await tableLock.click();await seq(p,n);await p.locator('[data-table-grid-overlay]').waitFor({state:'detached'});assert.equal(obj(await state(p),'w4f1-table-object').locked,true);assert.equal(await p.locator('[data-editor-object-id="w4f1-table-object"]').getAttribute('data-selected'),'true');assert(await p.locator('[data-editor-action="edit-table"]').isDisabled());
+ n=(await state(p)).localSequence;await tableLock.click();await seq(p,n);assert.equal(obj(await state(p),'w4f1-table-object').locked,undefined);assert.equal(await p.locator('[data-table-grid-overlay]').count(),0);
+ await p.locator(`[data-editor-object-id="${ids.text}"]`).click();const lock=p.locator('[data-editor-action="toggle-object-lock"]');n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,true);
  n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,undefined);
  n=(await state(p)).localSequence;await lock.click();await seq(p,n);assert.equal(obj(await state(p),ids.text).locked,true);
  // Real controlled Save/reopen through VNextPersistenceRuntime.
@@ -85,7 +94,7 @@ async function desktop(browser){
  assert.equal(JSON.stringify((await state(p)).document),beforePub);const pdf=await getDocument({data:new Uint8Array(await readFile(pdfPath)),isEvalSupported:false,useSystemFonts:false}).promise;assert.equal(pdf.numPages,1);
  const pg=await pdf.getPage(1),txt=(await pg.getTextContent()).items.filter(x=>'str'in x).map(x=>x.str).join(' '),ops=await pg.getOperatorList();assert(txt.includes('Tabela integrada W4.G'));assert(ops.fnArray.some(x=>[OPS.paintImageXObject,OPS.paintInlineImageXObject,OPS.paintImageXObjectRepeat].includes(x)));
  assert(Math.abs((pg.view[2]-pg.view[0])*25.4/72-210)<.2&&Math.abs((pg.view[3]-pg.view[1])*25.4/72-297)<.2);await pdf.destroy();await c.close();
- return {w4a:true,w4b:true,w4c:true,w4d:true,w4e:true,w4f1:true,w4f2:true,w4f3:true,w4f4:true,w4f5:true,history:true,saveReopen:true,publication:true,pdf:true};
+ return {w4a:true,w4b:true,w4c:true,w4d:true,w4e:true,w4f1:true,w4f2:true,w4f3:true,w4f4:true,w4f5:true,crossFeatureLifecycle:true,diagnosticNavigation:true,assetIntegrity:true,history:true,saveReopen:true,publication:true,pdf:true};
 }
 
 async function mobile(browser,width){
