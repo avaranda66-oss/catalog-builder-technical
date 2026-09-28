@@ -86,6 +86,8 @@ The proof requires:
 - zero publication ERROR diagnostics;
 - zero editor action/grid chrome inside publication;
 - authored Table title visible;
+- exact published left/top/width/height parity for the arranged standalone Image, Text, and Line against their reopened canonical frames;
+- materialized Table presentation from the technical-specification preset (published header white on #003366 and left-aligned, verified from computed publication style);
 - Image painting present in the PDF operator stream;
 - one native A4 page with approximately 210 × 297 mm dimensions;
 - CatalogDocument unchanged by publication and PDF generation.
