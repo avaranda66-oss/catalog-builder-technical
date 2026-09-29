@@ -419,14 +419,13 @@ describe('W3.C Father-visible Save integration', () => {
     expect(container.textContent).toContain('rascunho estava aberto');
   });
 
-  it('DIRTY-DRAFT-CANCEL republishes Saved after page activation discards the only visible draft', () => {
+  it('PILOT.A canonicalizes a valid Text draft before page activation and remains unsaved until persistence', () => {
     const document = twoPageTextDocument();
     const { runtime, session } = runtimeFor(repositoryBase(), document);
-    const acknowledgedDocument = session.getSnapshot().document;
     const { container } = render(<VNextApp runtime={runtime} />);
     const textarea = beginTextEdit(container);
 
-    fireEvent.change(textarea, { target: { value: 'Discard this draft' } });
+    fireEvent.change(textarea, { target: { value: 'Preserve this draft' } });
     expect(runtime.workspace.getSnapshot().dirty).toBe(true);
     expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
 
@@ -435,11 +434,50 @@ describe('W3.C Father-visible Save integration', () => {
     fireEvent.click(pageButtons[1]);
 
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
-    expect(session.getSnapshot().document).toBe(acknowledgedDocument);
-    expect(runtime.workspace.getSnapshot().dirty).toBe(false);
-    expect(runtime.workspace.getSnapshot().save.label).toBe('Saved');
+    expect(authoredText(session.getSnapshot().document)).toBe('Preserve this draft');
+    expect(runtime.workspace.getSnapshot().dirty).toBe(true);
+    expect(runtime.workspace.getSnapshot().save.label).toBe('Unsaved changes');
     expect(runtime.saveCoordinator.hasUnresolvedActiveMutation()).toBe(false);
-    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Salvo');
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
+  });
+
+  it('PILOT.A canonicalizes a valid Text draft before Add Page', () => {
+    const document = twoPageTextDocument();
+    const { runtime, session } = runtimeFor(repositoryBase(), document);
+    const { container } = render(<VNextApp runtime={runtime} />);
+    const textarea = beginTextEdit(container);
+    fireEvent.change(textarea, { target: { value: 'Text before Add Page' } });
+
+    const addPage = container.querySelector<HTMLButtonElement>('[aria-label="Adicionar nova página após a página atual"]');
+    if (!addPage) throw new Error('Missing Add Page button');
+    fireEvent.pointerDown(addPage, { pointerId: 71, button: 0 });
+    fireEvent.click(addPage);
+
+    expect(authoredText(session.getSnapshot().document)).toBe('Text before Add Page');
+    expect(session.getSnapshot().document.pages).toHaveLength(3);
+    expect(runtime.workspace.getSnapshot().dirty).toBe(true);
+    expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
+  });
+
+  it('PILOT.A canonicalizes Text on Catalogs pointerdown before the library callback observes dirty state', () => {
+    const document = twoPageTextDocument();
+    const { runtime, session } = runtimeFor(repositoryBase(), document);
+    const requestLibrary = vi.fn(() => {
+      expect(authoredText(session.getSnapshot().document)).toBe('Text before Catalogs');
+      expect(runtime.workspace.getSnapshot().dirty).toBe(true);
+    });
+    const { container } = render(<VNextApp runtime={runtime} onRequestLibrary={requestLibrary} />);
+    const textarea = beginTextEdit(container);
+    fireEvent.change(textarea, { target: { value: 'Text before Catalogs' } });
+
+    const library = button(container, 'library');
+    fireEvent.pointerDown(library, { pointerId: 72, button: 0 });
+    fireEvent.click(library);
+
+    expect(requestLibrary).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(authoredText(session.getSnapshot().document)).toBe('Text before Catalogs');
+    expect(runtime.workspace.getSnapshot().dirty).toBe(true);
   });
 });
 

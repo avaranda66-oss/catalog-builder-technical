@@ -314,4 +314,26 @@ describe('W4.B cell draft AuthoringBarrier and Recovery integration', () => {
       await dispose(active.runtime);
     }
   });
+
+  it('canonicalizes a valid cell draft before Undo and keeps Undo/Redo in DocumentSession history', async () => {
+    const document = createW4BTableDocument();
+    const repository = new StrictCasCatalogRepository(document);
+    const active = runtimeFixture(repository, document, 12600, { autosave: false });
+    seedRecoveredOverlay(active.runtime, tableCellOverlay());
+    const { container } = render(<VNextApp runtime={active.runtime} />);
+
+    await waitFor(() => expect(
+      container.querySelector<HTMLInputElement>('[data-cell-technical-code]')?.value
+    ).toBe('RECOVERED-CODE'));
+
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
+    expect(active.runtime.workspace.getAuthoringBarrier().hasPendingDraft()).toBe(false);
+    expect(codeContent(active.session.getSnapshot().document)).toEqual({ type: 'technicalCode', value: 'TC-001' });
+    expect(active.session.getSnapshot().canRedo).toBe(true);
+
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="redo"]')!);
+    expect(codeContent(active.session.getSnapshot().document)).toEqual({ type: 'technicalCode', value: 'RECOVERED-CODE' });
+    expect(active.session.getSnapshot().canUndo).toBe(true);
+    await dispose(active.runtime);
+  });
 });

@@ -65,6 +65,12 @@ function ValidRecoveryInspection({ candidate }: { readonly candidate: RecoverySt
           <textarea readOnly value={record.authoringRecoveryOverlay.draft} />
         </label>
       )}
+      {record.authoringRecoveryOverlay?.kind === 'TABLE_TITLE_DRAFT_V1' && (
+        <label>
+          <span>Rascunho do título da tabela ainda não confirmado</span>
+          <textarea readOnly value={record.authoringRecoveryOverlay.draft} />
+        </label>
+      )}
       {record.authoringRecoveryOverlay?.kind === 'INSPECTOR_FRAME_DRAFT_V1' && (
         <p>Rascunho do Inspector: {JSON.stringify(record.authoringRecoveryOverlay.draft)}</p>
       )}

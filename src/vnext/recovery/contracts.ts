@@ -39,6 +39,16 @@ const TextRecoveryOverlaySchema = z.object({
   compositionWasActive: z.boolean(),
 }).strict();
 
+const TableTitleRecoveryOverlaySchema = z.object({
+  kind: z.literal('TABLE_TITLE_DRAFT_V1'),
+  pageId: clean,
+  objectId: clean,
+  tableId: clean,
+  expectedTitle: RichTextSchema.nullable(),
+  draft: z.string(),
+  compositionWasActive: z.boolean(),
+}).strict();
+
 const InspectorRecoveryOverlaySchema = z.object({
   kind: z.literal('INSPECTOR_FRAME_DRAFT_V1'),
   pageId: clean,
@@ -74,6 +84,7 @@ const TableCellRecoveryOverlaySchema = z.object({
 
 export const AuthoringRecoveryOverlaySchema = z.discriminatedUnion('kind', [
   TextRecoveryOverlaySchema,
+  TableTitleRecoveryOverlaySchema,
   InspectorRecoveryOverlaySchema,
   TableCellRecoveryOverlaySchema,
 ]);
@@ -83,6 +94,16 @@ export type TextRecoveryOverlay = {
   readonly pageId: string;
   readonly objectId: string;
   readonly expectedText: RichText;
+  readonly draft: string;
+  readonly compositionWasActive: boolean;
+};
+
+export type TableTitleRecoveryOverlay = {
+  readonly kind: 'TABLE_TITLE_DRAFT_V1';
+  readonly pageId: string;
+  readonly objectId: string;
+  readonly tableId: string;
+  readonly expectedTitle: RichText | null;
   readonly draft: string;
   readonly compositionWasActive: boolean;
 };
@@ -115,7 +136,7 @@ export type TableCellRecoveryOverlay = {
   readonly compositionWasActive: boolean;
 };
 
-export type AuthoringRecoveryOverlay = TextRecoveryOverlay | InspectorRecoveryOverlay | TableCellRecoveryOverlay;
+export type AuthoringRecoveryOverlay = TextRecoveryOverlay | TableTitleRecoveryOverlay | InspectorRecoveryOverlay | TableCellRecoveryOverlay;
 
 const PendingRemoteMutationWireSchema = z.object({
   mutationId: canonicalUuid,
