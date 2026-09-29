@@ -126,6 +126,14 @@ type TextEditSession = {
   expectedText: RichText;
   draft: string;
 };
+type TableTitleDraftSession = {
+  pageId: string;
+  objectId: string;
+  tableId: string;
+  expectedTitle: RichText | null;
+  draft: string;
+  composing: boolean;
+};
 type ImageFocalDraft = { x: number; y: number };
 type ImageFocalGesture = {
   objectId: string;
@@ -360,7 +368,9 @@ export function EditorWorkspace({
   const [markerLegendChoice, setMarkerLegendChoice] = React.useState('');
   const [newMarkerCode, setNewMarkerCode] = React.useState('');
   const [newMarkerText, setNewMarkerText] = React.useState('');
-  const [tableTitleDraft, setTableTitleDraft] = React.useState('');
+  const [tableTitleDraft, setTableTitleDraft] = React.useState<TableTitleDraftSession | null>(null);
+  const tableTitleDraftRef = React.useRef<TableTitleDraftSession | null>(null);
+  tableTitleDraftRef.current = tableTitleDraft;
   const [newAnnotationKind, setNewAnnotationKind] = React.useState<'caption' | 'note' | 'footnote'>('note');
   const [newAnnotationText, setNewAnnotationText] = React.useState('');
   const [newAnnotationTarget, setNewAnnotationTarget] = React.useState<'TABLE' | 'CELL'>('TABLE');
@@ -462,10 +472,6 @@ export function EditorWorkspace({
     setTableStyleAdvancedOpen(false);
     setTableStylePaddingLinked(true);
   }, [document.id, editorState.activePageId, selectedTableObject?.id]);
-  React.useEffect(() => {
-    const title = selectedTableObject?.table.title;
-    setTableTitleDraft(title ? (projectEditableRichText(title) ?? '') : '');
-  }, [document.id, editorState.activePageId, selectedTableObject?.id, selectedTableObject?.table.title]);
   React.useEffect(() => {
     if (!lockedSelectedTableId) return;
     const wasCellEdit = editorState.mode === 'cell-edit';
@@ -589,6 +595,86 @@ export function EditorWorkspace({
   inspectorTargetRef.current = selectedObject
     ? { pageId: selectedPage.id, objectId: selectedObject.id, expectedFrame: selectedObject.frame }
     : null;
+  const inspectorDraftIsPending = (): boolean => {
+    const target = inspectorTargetRef.current;
+    if (!target) return false;
+    const draft = inspectorDraftRef.current;
+    return draft.x !== String(target.expectedFrame.xMm)
+      || draft.y !== String(target.expectedFrame.yMm)
+      || draft.width !== String(target.expectedFrame.widthMm)
+      || draft.height !== String(target.expectedFrame.heightMm);
+  };
+
+  const tableTitleBaselineText = (title: RichText | null): string | null => (
+    title === null ? '' : projectEditableRichText(title)
+  );
+  const sameTableTitleTarget = (
+    draft: TableTitleDraftSession,
+    pageId: string,
+    objectId: string,
+    tableId: string
+  ) => draft.pageId === pageId && draft.objectId === objectId && draft.tableId === tableId;
+  const tableTitleDraftIsDirty = (draft: TableTitleDraftSession): boolean => {
+    const baseline = tableTitleBaselineText(draft.expectedTitle);
+    return baseline === null || draft.draft !== baseline;
+  };
+  const publishTableTitleDraft = (next: TableTitleDraftSession | null) => {
+    tableTitleDraftRef.current = next;
+    setTableTitleDraft(next);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+  };
+
+  const selectedTableTitleProjected = selectedTableObject?.table.title ? projectEditableRichText(selectedTableObject.table.title) : '';
+  const selectedTableTitleValue = tableTitleDraft && selectedTableObject
+    && sameTableTitleTarget(tableTitleDraft, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id)
+    ? tableTitleDraft.draft
+    : selectedTableTitleProjected ?? '';
+  const updateTableTitleDraft = (value: string) => {
+    if (!selectedTableObject) return;
+    if (inspectorDraftIsPending()) {
+      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
+      return;
+    }
+    const normalized = value.replace(/\r\n?/g, '\n');
+    const current = tableTitleDraftRef.current;
+    const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
+    const expectedTitle = sameTarget ? current!.expectedTitle : selectedTableObject.table.title ?? null;
+    const baseline = tableTitleBaselineText(expectedTitle);
+    if (baseline === null) return;
+    if (!sameTarget && normalized === baseline) return;
+    const next: TableTitleDraftSession = {
+      pageId: selectedPage.id, objectId: selectedTableObject.id, tableId: selectedTableObject.table.id,
+      expectedTitle, draft: normalized, composing: sameTarget ? current!.composing : false,
+    };
+    if (!next.composing && normalized === baseline) publishTableTitleDraft(null);
+    else publishTableTitleDraft(next);
+  };
+  const setTableTitleComposition = (composing: boolean, value: string) => {
+    if (!selectedTableObject) return;
+    if (inspectorDraftIsPending()) {
+      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
+      return;
+    }
+    const normalized = value.replace(/\r\n?/g, '\n');
+    const current = tableTitleDraftRef.current;
+    const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
+    const expectedTitle = sameTarget ? current!.expectedTitle : selectedTableObject.table.title ?? null;
+    const baseline = tableTitleBaselineText(expectedTitle);
+    if (baseline === null) return;
+    if (!composing && normalized === baseline) {
+      publishTableTitleDraft(null);
+      return;
+    }
+    publishTableTitleDraft({
+      pageId: selectedPage.id, objectId: selectedTableObject.id, tableId: selectedTableObject.table.id,
+      expectedTitle, draft: normalized, composing,
+    });
+  };
+  const cancelTableTitleDraft = () => {
+    if (!tableTitleDraftRef.current) return;
+    publishTableTitleDraft(null);
+    setStatusMessage('Alterações do título canceladas.');
+  };
 
   React.useEffect(() => {
     const activePage = document.pages.find((page) => page.id === editorState.activePageId);
@@ -611,6 +697,8 @@ export function EditorWorkspace({
     tableHistoryContextRef.current = null;
     cellDraftRef.current = null;
     setCellDraft(null);
+    tableTitleDraftRef.current = null;
+    setTableTitleDraft(null);
     setTableRangeExtensionArmed(false);
     setTableSelection(null);
     setMultiSelectArmed(false);
@@ -742,8 +830,10 @@ export function EditorWorkspace({
     return true;
   };
 
+  const prepareAuthoringForContextChangeRef = React.useRef<() => boolean>(() => true);
+
   const setActivePage = (pageId: string) => {
-    if (!finishCellDraftForContextChange()) return;
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     activePageIdRef.current = pageId;
     controller.cancel('active-page-change');
     if (textEditRef.current) {
@@ -761,7 +851,7 @@ export function EditorWorkspace({
   };
 
   const selectObject = (objectId: string) => {
-    if (!finishCellDraftForContextChange()) return;
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
     setTableSelection(null);
@@ -786,20 +876,19 @@ export function EditorWorkspace({
     plainText: edit.draft,
   });
 
-  const commitTextEdit = (preserveOnFailure = false): boolean => {
+  const commitTextEdit = (): boolean => {
     const edit = textEditRef.current;
     if (!edit) return true;
+    if (compositionRef.current) {
+      setStatusMessage('Conclua a composição de texto antes de mudar de contexto.');
+      return false;
+    }
     const result = applyTextDraft(edit);
     if (!result.ok) {
       setStatusMessage(result.error.code === 'OBJECT_LOCKED'
         ? 'O texto foi bloqueado antes da conclusão; o rascunho não foi aplicado.'
         : 'O texto mudou ou não pode mais ser editado por este modo; o rascunho não foi aplicado.');
-      if (!preserveOnFailure) {
-        textEditRef.current = null;
-        compositionRef.current = false;
-        setTextEdit(null);
-        setEditorState((current) => ({ ...current, mode: 'select' }));
-      }
+      // Failed completion preserves the visible draft and active edit session.
       persistence?.runtime.workspace.notifyDraftStateChanged();
       return false;
     }
@@ -853,6 +942,79 @@ export function EditorWorkspace({
 
   const prepareTextDraftForSaveRef = React.useRef(prepareTextDraftForSave);
   prepareTextDraftForSaveRef.current = prepareTextDraftForSave;
+  const applyTableTitleDraft = (): AuthoringBarrierResult => {
+    const draft = tableTitleDraftRef.current;
+    if (!draft) return { ok: true };
+    if (!tableTitleDraftIsDirty(draft) && !draft.composing) {
+      publishTableTitleDraft(null);
+      return { ok: true };
+    }
+    if (draft.composing) {
+      setStatusMessage('Conclua a composição do título antes de continuar.');
+      return { ok: false, reason: 'COMPOSITION_ACTIVE', message: 'Conclua a composição do título antes de continuar.' };
+    }
+    const livePage = session.getSnapshot().document.pages.find((entry) => entry.id === draft.pageId);
+    const liveObject = livePage?.objects.find((entry) => entry.id === draft.objectId);
+    if (liveObject?.type !== 'table' || liveObject.table.id !== draft.tableId) {
+      setStatusMessage('A tabela do título não está mais disponível. O rascunho foi preservado.');
+      return { ok: false, reason: 'STALE_DRAFT', message: 'O alvo do título mudou e o rascunho foi preservado.' };
+    }
+    const result = session.execute({
+      type: 'table.title.set',
+      pageId: draft.pageId,
+      objectId: draft.objectId,
+      tableId: draft.tableId,
+      expectedTitle: draft.expectedTitle,
+      plainText: draft.draft,
+    });
+    if (!result.ok) {
+      const stale = result.error.code === 'TARGET_STALE';
+      setStatusMessage(stale
+        ? 'O título mudou enquanto este rascunho estava aberto. Revise antes de continuar.'
+        : 'O rascunho do título não pôde ser aplicado com segurança.');
+      return {
+        ok: false,
+        reason: stale ? 'STALE_DRAFT' : result.error.code === 'ACTION_INVALID' ? 'INVALID_DRAFT' : 'COMMIT_FAILED',
+        message: stale ? 'O rascunho do título ficou desatualizado e foi preservado.' : 'O rascunho do título foi preservado.',
+      };
+    }
+    publishTableTitleDraft(null);
+    setStatusMessage(result.metadata.changed ? 'Título da tabela atualizado.' : 'Título da tabela sem alterações.');
+    return { ok: true };
+  };
+  const captureInspectorRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
+    const target = inspectorTargetRef.current;
+    if (!target) return undefined;
+    const draft = inspectorDraftRef.current;
+    const canonical = {
+      x: String(target.expectedFrame.xMm),
+      y: String(target.expectedFrame.yMm),
+      width: String(target.expectedFrame.widthMm),
+      height: String(target.expectedFrame.heightMm),
+    };
+    if (draft.x === canonical.x && draft.y === canonical.y
+      && draft.width === canonical.width && draft.height === canonical.height) return undefined;
+    return {
+      kind: 'INSPECTOR_FRAME_DRAFT_V1',
+      pageId: target.pageId,
+      objectId: target.objectId,
+      expectedFrame: target.expectedFrame,
+      draft,
+    };
+  };
+  const prepareAuthoringForContextChange = (): boolean => {
+    if (!finishCellDraftForContextChange()) return false;
+    if (textEditRef.current && !commitTextEdit()) return false;
+    const titleResult = applyTableTitleDraft();
+    if (!titleResult.ok) return false;
+    if (captureInspectorRecoveryOverlay()) {
+      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
+      return false;
+    }
+    return true;
+  };
+  prepareAuthoringForContextChangeRef.current = prepareAuthoringForContextChange;
+
   const captureRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
     const cell = cellDraftRef.current;
     if (cell?.dirty) {
@@ -879,6 +1041,18 @@ export function EditorWorkspace({
         expectedText: edit.expectedText,
         draft: edit.draft,
         compositionWasActive: compositionRef.current,
+      };
+    }
+    const title = tableTitleDraftRef.current;
+    if (title && tableTitleDraftIsDirty(title)) {
+      return {
+        kind: 'TABLE_TITLE_DRAFT_V1',
+        pageId: title.pageId,
+        objectId: title.objectId,
+        tableId: title.tableId,
+        expectedTitle: title.expectedTitle,
+        draft: title.draft,
+        compositionWasActive: title.composing,
       };
     }
     const target = inspectorTargetRef.current;
@@ -942,6 +1116,8 @@ export function EditorWorkspace({
     }
     const textResult = prepareTextDraftForSaveRef.current();
     if (!textResult.ok) return textResult;
+    const titleResult = applyTableTitleDraft();
+    if (!titleResult.ok) return titleResult;
     if (captureRecoveryOverlayRef.current()?.kind === 'INSPECTOR_FRAME_DRAFT_V1') {
       setStatusMessage('Conclua ou reverta a edição do Inspector antes de salvar.');
       return {
@@ -960,7 +1136,7 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
+      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
@@ -1028,6 +1204,24 @@ export function EditorWorkspace({
       });
       restored = true;
     } else if (
+      recoveredOverlay.kind === 'TABLE_TITLE_DRAFT_V1'
+      && object?.type === 'table'
+      && object.table.id === recoveredOverlay.tableId
+      && JSON.stringify(object.table.title ?? null) === JSON.stringify(recoveredOverlay.expectedTitle)
+    ) {
+      const recoveredTitleDraft: TableTitleDraftSession = {
+        pageId: recoveredOverlay.pageId,
+        objectId: recoveredOverlay.objectId,
+        tableId: recoveredOverlay.tableId,
+        expectedTitle: recoveredOverlay.expectedTitle,
+        draft: recoveredOverlay.draft,
+        composing: false,
+      };
+      tableTitleDraftRef.current = recoveredTitleDraft;
+      setTableTitleDraft(recoveredTitleDraft);
+      setEditorState({ activePageId: recoveredOverlay.pageId, selectedObjectIds: [recoveredOverlay.objectId], mode: 'select' });
+      restored = true;
+    } else if (
       recoveredOverlay.kind === 'INSPECTOR_FRAME_DRAFT_V1'
       && object
       && JSON.stringify(object.frame) === JSON.stringify(recoveredOverlay.expectedFrame)
@@ -1081,8 +1275,8 @@ export function EditorWorkspace({
       setStatusMessage('Tabela bloqueada não pode ser editada.');
       return false;
     }
+    if (!prepareAuthoringForContextChangeRef.current()) return false;
     controller.cancel('superseded');
-    cancelTextEdit('');
     setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'select' });
     const plan = plans.get(object.table.id);
@@ -1626,14 +1820,18 @@ export function EditorWorkspace({
     const live = semanticMutationTable();
     if (!live) return;
     const current = live.object.table.title;
+    const pending = tableTitleDraftRef.current;
+    const samePendingTarget = Boolean(pending
+      && sameTableTitleTarget(pending, live.pageId, live.object.id, live.object.table.id));
     const result = session.execute({
       type: 'table.title.set',
       pageId: live.pageId,
       objectId: live.object.id,
       tableId: live.object.table.id,
-      expectedTitle: current ?? null,
+      expectedTitle: samePendingTarget ? pending!.expectedTitle : current ?? null,
       plainText,
     });
+    if (result.ok && samePendingTarget) publishTableTitleDraft(null);
     setStatusMessage(result.ok
       ? (result.metadata.changed ? (plainText === null ? 'Título da tabela removido.' : 'Título da tabela atualizado.') : 'Título da tabela sem alterações.')
       : result.error.code === 'TARGET_STALE'
@@ -2041,7 +2239,7 @@ export function EditorWorkspace({
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
   };
 
-  const finishTextEditBeforeCommand = (): boolean => finishCellDraftForContextChange() && (!textEditRef.current || commitTextEdit());
+  const finishTextEditBeforeCommand = (): boolean => prepareAuthoringForContextChangeRef.current();
 
   const toggleObjectSelection = (objectId: string) => {
     setEditorState((current) => {
@@ -2052,7 +2250,7 @@ export function EditorWorkspace({
   };
 
   const addPage = () => {
-    cancelTextEdit('');
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'page.add', afterPageId: selectedPage.id });
     if (!result.ok) { setStatusMessage('Não foi possível adicionar a página.'); return; }
@@ -2062,7 +2260,7 @@ export function EditorWorkspace({
   };
 
   const insertPageTemplate = () => {
-    cancelTextEdit('');
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('superseded');
     const result = session.execute({
       type: 'page.template.insert',
@@ -2076,26 +2274,14 @@ export function EditorWorkspace({
   };
 
   const undo = () => {
-    if (cellDraftRef.current) {
-      cancelCellEdit('');
-      controller.cancel('history');
-      setStatusMessage('Edição da célula cancelada antes de desfazer o documento.');
-      return;
-    }
-    cancelTextEdit('');
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.undo();
     setStatusMessage(result.ok ? 'Alteração desfeita.' : 'Não há alterações para desfazer.');
   };
 
   const redo = () => {
-    if (cellDraftRef.current) {
-      cancelCellEdit('');
-      controller.cancel('history');
-      setStatusMessage('Edição da célula cancelada antes de refazer o documento.');
-      return;
-    }
-    cancelTextEdit('');
+    if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.redo();
     setStatusMessage(result.ok ? 'Alteração refeita.' : 'Não há alterações para refazer.');
@@ -2248,7 +2434,7 @@ export function EditorWorkspace({
       setStatusMessage('O objeto selecionado não está mais disponível.');
       return;
     }
-    if (!(locked && object.type === 'table') && !finishTextEditBeforeCommand()) return;
+    if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({
       type: 'object.setLocked',
@@ -2613,7 +2799,10 @@ export function EditorWorkspace({
         : 'Objeto bloqueado. Desbloqueie para alterar a geometria.');
       return;
     }
-    if (!finishTextEditBeforeCommand()) return;
+    if (!finishCellDraftForContextChange()) return;
+    if (textEditRef.current && !commitTextEdit()) return;
+    const titleResult = applyTableTitleDraft();
+    if (!titleResult.ok) return;
     if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
     controller.cancel('superseded');
     const raw = inspectorDraft[field].trim();
@@ -2646,15 +2835,13 @@ export function EditorWorkspace({
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && cellDraftRef.current) {
       event.preventDefault();
       event.stopPropagation();
-      cancelCellEdit('');
-      setStatusMessage('Edição da célula cancelada antes de desfazer o documento.');
+      if (event.shiftKey) redo(); else undo();
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y' && cellDraftRef.current) {
       event.preventDefault();
       event.stopPropagation();
-      cancelCellEdit('');
-      setStatusMessage('Edição da célula cancelada antes de refazer o documento.');
+      redo();
       return;
     }
     if (!isNativeInput && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
@@ -2781,14 +2968,32 @@ export function EditorWorkspace({
         return;
       }
     }
-    if (!textEditRef.current) return;
-    if (target.closest('[data-text-edit-session]')) return;
-    if (target.closest('[data-persistence-save-action]')) return;
-    if (target.closest('[data-text-edit-cancel-on-activate]')) {
-      cancelTextEdit('');
-      return;
+    if (textEditRef.current) {
+      if (target.closest('[data-text-edit-session]')) return;
+      if (target.closest('[data-persistence-save-action]')) return;
+      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      if (!commitTextEdit()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
     }
-    if (!commitTextEdit()) {
+    if (tableTitleDraftRef.current) {
+      if (target.closest('[data-table-title-session]')) return;
+      if (target.closest('[data-persistence-save-action]')) return;
+      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      const titleResult = applyTableTitleDraft();
+      if (!titleResult.ok) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+    if (captureInspectorRecoveryOverlay()) {
+      if (target.closest('[data-inspector-authoring]')) return;
+      if (target.closest('[data-persistence-save-action]')) return;
+      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
+      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
       event.preventDefault();
       event.stopPropagation();
     }
@@ -2824,6 +3029,11 @@ export function EditorWorkspace({
   };
 
   const updateInspectorDraft = (field: keyof InspectorDraft, value: string) => {
+    if (!inspectorDraftIsPending()
+      && (cellDraftRef.current || textEditRef.current || tableTitleDraftRef.current)) {
+      setStatusMessage('Conclua a autoria atual antes de editar a geometria.');
+      return;
+    }
     const next = { ...inspectorDraftRef.current, [field]: value };
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
@@ -3372,7 +3582,7 @@ export function EditorWorkspace({
             <button
               type="button"
               data-editor-action="library"
-              data-text-edit-cancel-on-activate=""
+              data-authoring-context-transition=""
               onClick={onRequestLibrary}
               aria-label="Voltar aos catálogos"
             >
@@ -3393,8 +3603,8 @@ export function EditorWorkspace({
               <span>{fatherSaveLabel(persistence.save.label)}</span>
             </button>
           )}
-          <button type="button" data-editor-action="undo" data-text-edit-cancel-on-activate="" onClick={undo} disabled={!canUndo} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
-          <button type="button" data-editor-action="redo" data-text-edit-cancel-on-activate="" onClick={redo} disabled={!canRedo} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
+          <button type="button" data-editor-action="undo" data-authoring-context-transition="" onClick={undo} disabled={!canUndo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
+          <button type="button" data-editor-action="redo" data-authoring-context-transition="" onClick={redo} disabled={!canRedo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
         </div>
       </header>
 
@@ -3403,13 +3613,13 @@ export function EditorWorkspace({
           <div className="vnext-panel-heading"><span>Páginas</span><span>{document.pages.length}</span></div>
           <nav className="vnext-page-list" aria-label="Navegação de páginas">
             {document.pages.map((page, index) => (
-              <button key={page.id} type="button" data-text-edit-cancel-on-activate="" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
+              <button key={page.id} type="button" data-authoring-context-transition="" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
                 <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span><span>Página {index + 1}</span>
               </button>
             ))}
           </nav>
-          <button type="button" className="vnext-add-page" data-text-edit-cancel-on-activate="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
-          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-text-edit-cancel-on-activate="" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
+          <button type="button" className="vnext-add-page" data-authoring-context-transition="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
+          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-authoring-context-transition="" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
         </aside>
 
         <main className="vnext-canvas-area">
@@ -3834,7 +4044,7 @@ export function EditorWorkspace({
               </section>
               <div className="vnext-divider" />
               <p>Posição e tamanho em milímetros.</p>
-              <div className="vnext-inspector-grid">
+              <div className="vnext-inspector-grid" data-inspector-authoring="">
                 {([['x', 'X'], ['y', 'Y'], ['width', 'Largura'], ['height', 'Altura']] as const).map(([field, label]) => (
                   <label key={field}>
                     <span>{label}</span>
@@ -3845,6 +4055,9 @@ export function EditorWorkspace({
                           ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
                           : undefined}
                         readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
+                        onFocus={() => {
+                          if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
+                        }}
                         onChange={(event) => updateInspectorDraft(field, event.target.value)}
                         onBlur={() => commitInspector(field)}
                         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
@@ -4037,7 +4250,7 @@ export function EditorWorkspace({
               {selectedObject.type === 'table' && (
                 <>
                   <div className="vnext-divider" />
-                  <section className="vnext-table-semantic-title" data-table-semantic-title="">
+                  <section className="vnext-table-semantic-title" data-table-semantic-title="" data-table-title-session="">
                     <h3>Título da tabela</h3>
                     {selectedObject.table.title && projectEditableRichText(selectedObject.table.title) === null ? (
                       <p data-table-title-readonly="">
@@ -4048,10 +4261,12 @@ export function EditorWorkspace({
                         <span>Título</span>
                         <textarea
                           data-table-title-input=""
-                          value={tableTitleDraft}
+                          value={selectedTableTitleValue}
                           disabled={tableSemanticDisabled}
                           aria-describedby={tableSemanticDisabledReasonId}
-                          onChange={(event) => setTableTitleDraft(event.target.value.replace(/\r\n?/g, '\n'))}
+                          onChange={(event) => updateTableTitleDraft(event.target.value)}
+                          onCompositionStart={(event) => setTableTitleComposition(true, event.currentTarget.value)}
+                          onCompositionEnd={(event) => setTableTitleComposition(false, event.currentTarget.value)}
                         />
                       </label>
                     )}
@@ -4066,9 +4281,17 @@ export function EditorWorkspace({
                         data-editor-action="set-table-title"
                         disabled={tableSemanticDisabled || (selectedObject.table.title !== undefined && projectEditableRichText(selectedObject.table.title) === null)}
                         aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => runTableTitleSet(tableTitleDraft)}
+                        onClick={() => { applyTableTitleDraft(); }}
                       >
                         Salvar título
+                      </button>
+                      <button
+                        type="button"
+                        data-editor-action="cancel-table-title-draft"
+                        disabled={!tableTitleDraft}
+                        onClick={cancelTableTitleDraft}
+                      >
+                        Cancelar alterações do título
                       </button>
                       <button
                         type="button"

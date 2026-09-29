@@ -355,6 +355,13 @@ describe('W2.C visible editor workspace', () => {
     fireEvent.blur(width);
     expect(session.getSnapshot().document).toBe(beforeInvalid);
 
+    const callsBeforeBlockedDelete = execute.mock.calls.length;
+    fireEvent.click(button(container, 'delete'));
+    expect(execute.mock.calls).toHaveLength(callsBeforeBlockedDelete);
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')?.value).toBe('not-a-number');
+
+    fireEvent.change(width, { target: { value: '63.75' } });
+    fireEvent.blur(width);
     fireEvent.click(button(container, 'delete'));
     expect(execute.mock.calls.at(-1)?.[0].type).toBe('object.delete');
 
@@ -685,7 +692,7 @@ describe('W2.G direct Text editing workspace', () => {
     expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('±°CΩµ≤≥≈');
   });
 
-  it('controlled click-away commits before another object interaction, while page change cancels', () => {
+  it('controlled click-away and page change both canonicalize a valid Text draft before transition', () => {
     const session = sessionWithDemo(seedTextDocument({ includeShape: true, includeSecondPage: true }));
     const execute = vi.spyOn(session, 'execute');
     const { container } = render(<VNextApp session={session} />);
@@ -700,14 +707,14 @@ describe('W2.G direct Text editing workspace', () => {
 
     selectText(container, 94);
     fireEvent.click(button(container, 'edit-text'));
-    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Não deve persistir' } });
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Commit antes da troca de página' } });
     const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button')][1];
     fireEvent.click(secondPage);
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
-    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit no click-away');
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit antes da troca de página');
   });
 
-  it('Undo and Redo cancel an unconfirmed draft before navigating canonical history', () => {
+  it('Undo canonicalizes the current draft first and Redo restores that canonical history entry', () => {
     const session = sessionWithDemo(seedTextDocument());
     const original = textObject(session.getSnapshot().document).text;
     expect(session.execute({
@@ -720,17 +727,15 @@ describe('W2.G direct Text editing workspace', () => {
     const { container } = render(<VNextApp session={session} />);
     selectText(container, 95);
     fireEvent.click(button(container, 'edit-text'));
-    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho descartado por Undo' } });
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho canonicalizado por Undo' } });
     fireEvent.click(button(container, 'undo'));
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
-    expect(textObject(session.getSnapshot().document).text).toEqual(original);
-
-    selectText(container, 96);
-    fireEvent.click(button(container, 'edit-text'));
-    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Rascunho descartado por Redo' } });
-    fireEvent.click(button(container, 'redo'));
-    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
     expect(textObject(session.getSnapshot().document).text).toEqual(committed);
+    expect(session.getSnapshot().canRedo).toBe(true);
+
+    fireEvent.click(button(container, 'redo'));
+    expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Rascunho canonicalizado por Undo');
+    expect(session.getSnapshot().canUndo).toBe(true);
   });
 
   it('does not trigger commit during IME composition and commits after composition ends', () => {
@@ -751,7 +756,7 @@ describe('W2.G direct Text editing workspace', () => {
     expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Calibração á');
   });
 
-  it('fails a stale commit closed and keeps the intervening canonical content', () => {
+  it('fails a stale commit closed while preserving the visible draft and intervening canonical content', () => {
     const session = sessionWithDemo(seedTextDocument());
     const { container } = render(<VNextApp session={session} />);
     selectText(container, 98);
@@ -765,7 +770,7 @@ describe('W2.G direct Text editing workspace', () => {
       plainText: 'Mudança concorrente',
     }).ok).toBe(true);
     fireEvent.click(button(container, 'commit-text'));
-    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')?.value).toBe('Rascunho stale');
     expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Mudança concorrente');
     expect(container.querySelector('[role="status"]')?.textContent).toContain('rascunho não foi aplicado');
   });
@@ -975,7 +980,7 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     expect(container.querySelector('[role="status"]')).toHaveTextContent('Aguarde a medição da tabela para editar a grade.');
   });
 
-  it('collapses real Table authoring for local, dirty-draft, and concurrent locks without auto-committing content', async () => {
+  it('collapses real Table authoring for local/concurrent locks and canonicalizes a valid dirty cell draft before local lock', async () => {
     const document = createW4BTableDocument();
     const sourceTable = document.pages[0].objects.find((object) => object.type === 'table');
     if (!sourceTable || sourceTable.type !== 'table') throw new Error('Missing Table fixture');
@@ -1059,10 +1064,11 @@ describe('W4.F.5 visible object arrangement and locking', () => {
       expect(container.querySelector('[data-table-grid-overlay]')).toBeNull();
       expect(canonicalTable().locked).toBe(true);
     });
-    expect(session.getSnapshot().localSequence).toBe(draftSequence + 1);
-    expect(canonicalTable().table.cells[0].content).toEqual(originalCellContent);
-    expect(execute.mock.calls.slice(draftCallsBefore).map(([action]) => action.type)).toEqual(['object.setLocked']);
-    expect(execute.mock.calls.slice(draftCallsBefore).some(([action]) => action.type === 'table.cell.setContent')).toBe(false);
+    expect(session.getSnapshot().localSequence).toBe(draftSequence + 2);
+    expect(canonicalTable().table.cells[0].content).not.toEqual(originalCellContent);
+    expect(JSON.stringify(canonicalTable().table.cells[0].content)).toContain('DIRTY-MUST-NOT-COMMIT');
+    expect(execute.mock.calls.slice(draftCallsBefore).map(([action]) => action.type))
+      .toEqual(['table.cell.setContent', 'object.setLocked']);
     assertSingularTableSelection();
     expect(button(container, 'toggle-object-lock')).toHaveTextContent('Desbloquear objeto');
 

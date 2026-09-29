@@ -250,8 +250,8 @@ async function exerciseTableLockLifecycle(page) {
   await page.locator('[data-cell-edit-session]').waitFor({ state: 'detached' });
   await grid().waitFor({ state: 'detached' });
   assert.equal(objectById(cellLocked, tableId).locked, true);
-  assert.equal(tableCellValue(cellLocked), 'LOCK-ORIGINAL');
-  assert.equal(cellLocked.localSequence, dirtyBeforeLock.localSequence + 1);
+  assert.equal(tableCellValue(cellLocked), 'DIRTY-MUST-NOT-COMMIT');
+  assert.equal(cellLocked.localSequence, dirtyBeforeLock.localSequence + 2);
   assert.equal(await tableNode().getAttribute('data-selected'), 'true');
   assert.equal((await page.locator('[data-editor-action="toggle-object-lock"]').textContent()).trim(), 'Desbloquear objeto');
 
@@ -282,8 +282,8 @@ async function exerciseTableLockLifecycle(page) {
   assert.equal(await page.locator('[data-editor-action="edit-table"]').isDisabled(), false);
   return {
     localGridLock: true,
-    dirtyCellDraftCancelled: true,
-    canonicalCellPreserved: tableCellValue(finalUnlocked) === 'LOCK-ORIGINAL',
+    dirtyCellDraftCanonicalized: true,
+    canonicalCellPreserved: tableCellValue(finalUnlocked) === 'DIRTY-MUST-NOT-COMMIT',
     concurrentLock: true,
     selectionPreserved: true,
     unlockExplicit: true,

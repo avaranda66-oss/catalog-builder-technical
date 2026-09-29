@@ -164,33 +164,35 @@ try {
   await page.locator('[data-editor-action="redo"]').click();
   assert.deepEqual(cell(await state(page), 'w4b-rich').content, cell(richCommitted, 'w4b-rich').content);
 
-  // Draft Undo boundary: draft closes first and does not mutate canonical/history.
+  // PILOT.A: Undo canonicalizes a valid draft first, then navigates canonical DocumentSession history.
   await startCellByKeyboard(page, 0, 1, 'F2');
   const undoDraftBefore = await state(page);
-  await page.locator('[data-cell-technical-code]').fill('TEMP-NOT-CANONICAL');
+  await page.locator('[data-cell-technical-code]').fill('TEMP-CANONICAL-BEFORE-UNDO');
   await page.locator('[data-editor-action="undo"]').click();
   await page.locator('[data-cell-edit-session]').waitFor({ state: 'detached' });
   const undoDraftAfter = await state(page);
-  assert.equal(undoDraftAfter.localSequence, undoDraftBefore.localSequence);
+  assert.equal(undoDraftAfter.localSequence, undoDraftBefore.localSequence + 2);
   assert.deepEqual(cell(undoDraftAfter, 'w4b-code').content, cell(undoDraftBefore, 'w4b-code').content);
+  assert.equal(undoDraftAfter.canRedo, true);
+  await page.locator('[data-editor-action="redo"]').click();
+  const redoDraftAfter = await state(page);
+  assert.deepEqual(cell(redoDraftAfter, 'w4b-code').content, { type: 'technicalCode', value: 'TEMP-CANONICAL-BEFORE-UNDO' });
+  await selectTableAndEnter(page);
 
+  // Keyboard history follows the same canonical history semantics.
   await startCellByKeyboard(page, 0, 1, 'F2');
   const keyboardUndoBefore = await state(page);
   await page.locator('[data-cell-technical-code]').fill('KEYBOARD-UNDO-DRAFT');
   await page.locator('[data-cell-technical-code]').press('Control+z');
   await page.locator('[data-cell-edit-session]').waitFor({ state: 'detached' });
   const keyboardUndoAfter = await state(page);
-  assert.equal(keyboardUndoAfter.localSequence, keyboardUndoBefore.localSequence);
+  assert.equal(keyboardUndoAfter.localSequence, keyboardUndoBefore.localSequence + 2);
   assert.deepEqual(cell(keyboardUndoAfter, 'w4b-code').content, cell(keyboardUndoBefore, 'w4b-code').content);
-
-  await startCellByKeyboard(page, 0, 1, 'F2');
-  const keyboardRedoBefore = await state(page);
-  await page.locator('[data-cell-technical-code]').fill('KEYBOARD-REDO-DRAFT');
-  await page.locator('[data-cell-technical-code]').press('Control+y');
-  await page.locator('[data-cell-edit-session]').waitFor({ state: 'detached' });
+  assert.equal(keyboardUndoAfter.canRedo, true);
+  await page.locator('[data-editor-action="redo"]').click();
   const keyboardRedoAfter = await state(page);
-  assert.equal(keyboardRedoAfter.localSequence, keyboardRedoBefore.localSequence);
-  assert.deepEqual(cell(keyboardRedoAfter, 'w4b-code').content, cell(keyboardRedoBefore, 'w4b-code').content);
+  assert.deepEqual(cell(keyboardRedoAfter, 'w4b-code').content, { type: 'technicalCode', value: 'KEYBOARD-UNDO-DRAFT' });
+  await selectTableAndEnter(page);
 
   // Technical code valid and invalid visible paths.
   await startCellByDoubleClick(page, 0, 1);
