@@ -4,7 +4,7 @@ import { getSupabase } from '@/services/supabase.service';
 import { useCatalogStore } from '@/stores/useCatalogStore';
 
 export type EffectiveRole = 'admin' | 'editor';
-export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'forbidden' | 'profile-error';
+export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'forbidden' | 'session-error' | 'profile-error';
 
 interface ProfileRecord {
   id: string;
@@ -35,7 +35,16 @@ const resetIdentity = () => ({
 });
 
 const deniedMessage = 'Seu acesso ainda não foi liberado. Fale com o administrador do sistema.';
-const profileErrorMessage = 'Não foi possível validar seu acesso. Tente novamente mais tarde.';
+const sessionErrorMessage = 'Não foi possível verificar sua sessão agora. Tente novamente.';
+const profileErrorMessage = 'Não foi possível carregar seu perfil de acesso agora. Tente novamente.';
+
+function isAuthInfrastructureError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { name?: string; status?: number; message?: string };
+  if (candidate.name === 'AuthRetryableFetchError') return true;
+  if (candidate.status === 0 || (typeof candidate.status === 'number' && candidate.status >= 500)) return true;
+  return /fetch|network|timeout|timed out|connection/i.test(candidate.message ?? '');
+}
 
 const resolveSession = async (
   session: Session | null,
@@ -52,7 +61,7 @@ const resolveSession = async (
   const supabase = getSupabase();
   if (!supabase) {
     if (currentGeneration === generation) {
-      set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
+      set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
     }
     return;
   }
@@ -129,7 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const supabase = getSupabase();
 
     if (!supabase) {
-      set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
+      set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
       return;
     }
 
@@ -204,14 +213,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data: sessionData, error } = await supabase.auth.getSession();
       if (error) {
         if (currentGeneration === generation) {
-          set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
+          set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
         }
         return;
       }
       await resolveSession(sessionData.session, set, currentGeneration);
     } catch {
       if (currentGeneration === generation) {
-        set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
+        set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
       }
     }
   },
@@ -219,7 +228,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signIn: async (email, password) => {
     const supabase = getSupabase();
     if (!supabase) {
-      set({ status: 'profile-error', errorMessage: profileErrorMessage, ...resetIdentity() });
+      set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
       return false;
     }
 
@@ -229,11 +238,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error || !data.session) {
         if (currentGeneration === generation) {
-          set({
-            status: 'unauthenticated',
-            errorMessage: 'Não foi possível entrar. Verifique seus dados e tente novamente.',
-            ...resetIdentity()
-          });
+          if (isAuthInfrastructureError(error)) {
+            set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
+          } else {
+            set({
+              status: 'unauthenticated',
+              errorMessage: 'Não foi possível entrar. Verifique seus dados e tente novamente.',
+              ...resetIdentity()
+            });
+          }
         }
         return false;
       }
@@ -241,7 +254,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return get().status === 'authenticated';
     } catch {
       if (currentGeneration === generation) {
-        set({ status: 'unauthenticated', errorMessage: 'Não foi possível entrar. Tente novamente.', ...resetIdentity() });
+        set({ status: 'session-error', errorMessage: sessionErrorMessage, ...resetIdentity() });
       }
       return false;
     }

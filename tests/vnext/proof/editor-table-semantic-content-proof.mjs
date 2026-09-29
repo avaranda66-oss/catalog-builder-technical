@@ -40,6 +40,9 @@ function watch(page) {
     errors.requestFailures.push({ url: request.url(), error: request.failure()?.errorText ?? null });
   });
 }
+async function serveEmptyFavicon(context) {
+  await context.route('**/favicon.ico', (route) => route.fulfill({ status: 204, body: '' }));
+}
 
 async function settle(page, count = 4) {
   await page.evaluate(async (frames) => {
@@ -177,6 +180,7 @@ try {
   await server.listen();
   browser = await chromium.launch({ headless: Boolean(process.env.CI || process.env.W4F3_PROOF_HEADLESS) });
   const context = await browser.newContext({ viewport: { width: 1500, height: 1100 }, deviceScaleFactor: 1 });
+  await serveEmptyFavicon(context);
   const page = await context.newPage();
   watch(page);
   await page.goto(editorUrl, { waitUntil: 'domcontentloaded' });
@@ -475,6 +479,7 @@ try {
       isMobile: true,
       deviceScaleFactor: 1,
     });
+    await serveEmptyFavicon(mobileContext);
     const mobilePage = await mobileContext.newPage();
     watch(mobilePage);
     await mobilePage.goto(editorUrl, { waitUntil: 'domcontentloaded' });

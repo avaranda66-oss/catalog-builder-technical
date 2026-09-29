@@ -12,6 +12,7 @@ import { LibraryExperienceGate } from './components/library-v2';
 import { PublicationsView } from './components/publications/PublicationsView';
 import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
+import { consumeTrustedV2ReturnTarget } from './components/auth/return-target';
 import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
 import { useWorkbookDraftStore } from './stores/useWorkbookDraftStore';
@@ -45,10 +46,19 @@ export const App: React.FC = () => {
   const signOut = useAuthStore((state) => state.signOut);
 
   const bootstrappedUserIdRef = React.useRef<string | null>(null);
+  const redirectingToV2Ref = React.useRef(false);
 
   useEffect(() => {
     void initializeAuth();
   }, [initializeAuth]);
+
+  useEffect(() => {
+    if (status !== 'authenticated' || redirectingToV2Ref.current) return;
+    const target = consumeTrustedV2ReturnTarget();
+    if (!target) return;
+    redirectingToV2Ref.current = true;
+    window.location.replace(target);
+  }, [status, userId]);
 
   // Atalho Global Profissional: Ctrl+S / Cmd+S (Salva documento ou planilha ativa)
   useEffect(() => {
@@ -64,6 +74,7 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (redirectingToV2Ref.current) return;
     if (status !== 'authenticated') {
       bootstrappedUserIdRef.current = null;
       return;
@@ -216,11 +227,16 @@ export const App: React.FC = () => {
 
   if (status === 'unauthenticated') return <LoginView />;
 
-  if (status === 'forbidden' || status === 'profile-error') {
+  if (status === 'forbidden' || status === 'session-error' || status === 'profile-error') {
+    const title = status === 'session-error'
+      ? 'Sessão indisponível'
+      : status === 'profile-error'
+        ? 'Perfil indisponível'
+        : 'Acesso não disponível';
     return (
       <main className="min-h-screen bg-slate-100 flex items-center justify-center p-5">
         <section className="max-w-md bg-white border border-slate-300 p-6 shadow-sm">
-          <h1 className="text-lg font-bold text-slate-900">Acesso não disponível</h1>
+          <h1 className="text-lg font-bold text-slate-900">{title}</h1>
           <p className="mt-2 text-sm text-slate-600">{errorMessage}</p>
           <p className="mt-3 text-xs text-slate-500">Nenhum catálogo ou dado da Biblioteca foi carregado.</p>
           <div className="mt-5 flex gap-2">

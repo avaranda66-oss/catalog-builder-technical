@@ -609,14 +609,16 @@ try {
   assert(disposal.disposedRuntimeCount >= 1);
 
   // Layer 1: real /v2 production bootstrap smoke and canonical W3 wiring source assertions.
+  // PILOT.B now requires canonical auth before protected Library/editor state can mount.
   const productionPage = await context.newPage();
   observe(productionPage, 'production-smoke');
   const productionRequests = [];
   productionPage.on('request', (request) => productionRequests.push(request.url()));
   await productionPage.goto(productionUrl, { waitUntil: 'networkidle' });
-  await productionPage.locator('[data-catalog-library]').waitFor();
+  await productionPage.waitForURL(`http://127.0.0.1:${port}/`);
   assert.equal(productionRequests.some((url) => url.includes('/src/vnext/app/bootstrap')), true);
-  assert.equal(productionRequests.some((url) => url.includes('/src/legacy-main')), false);
+  assert.equal(await productionPage.locator('[data-catalog-library]').count(), 0);
+  assert.equal(await productionPage.locator('[data-vnext-shell]').count(), 0);
   const bootstrapSource = await readFile(resolve(root, 'src/vnext/app/bootstrap.tsx'), 'utf8');
   for (const seam of [
     'SupabaseCatalogRepository',
@@ -638,7 +640,9 @@ try {
     productionBootstrapSmoke: {
       route: '/v2',
       vnextBootstrapLoaded: true,
-      legacyBootstrapLoaded: false,
+      canonicalAuthPrerequisiteEnforced: true,
+      protectedLibraryMounted: false,
+      protectedEditorMounted: false,
       canonicalRuntimeSeams: [
         'SupabaseCatalogRepository',
         'VNextPersistenceRuntime',

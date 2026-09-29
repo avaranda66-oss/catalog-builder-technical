@@ -22,6 +22,9 @@ function watch(page) {
   page.on('response', (r) => { if (r.status() >= 400) errors.failedResources.push({ status: r.status(), url: r.url() }); });
   page.on('requestfailed', (r) => errors.requestFailures.push({ url: r.url(), error: r.failure()?.errorText ?? null }));
 }
+async function serveEmptyFavicon(context) {
+  await context.route('**/favicon.ico', (route) => route.fulfill({ status: 204, body: '' }));
+}
 async function settle(page, count = 3) { await page.evaluate(async (n) => { for (let i = 0; i < n; i += 1) await new Promise((r) => requestAnimationFrame(r)); }, count); }
 async function enterTable(page, objectId) {
   if (await page.locator('[data-table-grid-overlay]').count()) await page.locator('[data-editor-action="leave-table-grid"]').click();
@@ -143,6 +146,7 @@ try {
   await server.listen();
   browser = await chromium.launch({ headless: Boolean(process.env.CI || process.env.W4F1_PROOF_HEADLESS) });
   const context = await browser.newContext({ viewport: { width: 1500, height: 1100 }, deviceScaleFactor: 1 });
+  await serveEmptyFavicon(context);
   const page = await context.newPage(); watch(page);
   await page.goto(editorUrl, { waitUntil: 'domcontentloaded' }); await page.locator('[data-vnext-shell]').waitFor();
   const ids = await page.evaluate(() => ({ primaryId: window.__W4F1_PROOF__.primaryId, otherId: window.__W4F1_PROOF__.otherId, objectId: window.__W4F1_PROOF__.mainObjectId, mergedObjectId: window.__W4F1_PROOF__.mergedObjectId }));
@@ -261,6 +265,7 @@ try {
 
   // Prove the same physical calibration at a second desktop breakpoint with a different rendered page scale.
   const secondDesktopContext = await browser.newContext({ viewport: { width: 1000, height: 1000 }, deviceScaleFactor: 1 });
+  await serveEmptyFavicon(secondDesktopContext);
   const secondDesktopPage = await secondDesktopContext.newPage();
   watch(secondDesktopPage);
   await secondDesktopPage.goto(editorUrl, { waitUntil: 'domcontentloaded' });
@@ -278,6 +283,7 @@ try {
   const mobile = [];
   for (const width of [320, 360, 390]) {
     const mc = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+    await serveEmptyFavicon(mc);
     const mp = await mc.newPage(); watch(mp); await mp.goto(editorUrl, { waitUntil: 'domcontentloaded' }); await mp.locator('[data-vnext-shell]').waitFor(); await enterTable(mp, ids.objectId);
     await mp.locator('[data-table-row-selector="0"]').tap(); await mp.locator('[data-row-property="role"]').selectOption('section');
     await mp.locator('[data-row-property="height-mode"]').selectOption('MIN_MM'); await settle(mp);

@@ -31,18 +31,20 @@ try {
   const page = await context.newPage();
   const consoleErrors = [];
   const pageErrors = [];
-  const requests = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  page.on('request', (request) => requests.push(request.url()));
 
+  // PILOT.B access prerequisite: the production route must not expose Library/editor
+  // without canonical auth/profile authority. The controlled fixture below supplies
+  // the authorized repository state for the historical W3.E product assertions.
   await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
-  await page.locator('[data-catalog-library]').waitFor();
-  assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Production /v2 must not load the Legacy app');
+  await page.waitForURL(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.locator('[data-catalog-library]').count(), 0, 'Unauthenticated/unconfigured production /v2 must not expose the Library');
+  assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'Unauthenticated/unconfigured production /v2 must not expose the editor');
 
   await page.goto(`http://127.0.0.1:${port}/v2?catalog=99999999-9999-4999-8999-999999999999`, { waitUntil: 'networkidle' });
-  await page.locator('[data-catalog-open-failure]').waitFor();
-  assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'Failed production exact-open must not expose demo editor fallback');
+  await page.waitForURL(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'Unauthorized exact-open must not expose demo editor fallback');
 
   await page.goto(`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w3e-library-browser.html`, { waitUntil: 'networkidle' });
   await page.locator('[data-catalog-library]').waitFor();

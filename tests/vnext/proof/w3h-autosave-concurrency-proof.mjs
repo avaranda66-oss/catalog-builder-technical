@@ -241,8 +241,9 @@ try {
   await pageA.screenshot({ path: resolve(output, 'tab-a-autosave.png'), fullPage: true });
   await pageB.screenshot({ path: resolve(output, 'tab-b-copy.png'), fullPage: true });
 
-  // Production bootstrap wiring smoke: real /v2 route loads the VNext bootstrap, and source wiring
-  // explicitly enables autosave + the disposable online-retry bridge. No cloud multi-tab claim is made.
+  // Production bootstrap wiring smoke: real /v2 loads the VNext bootstrap, then PILOT.B
+  // enforces canonical auth before any protected Library/editor state mounts. Autosave and the
+  // disposable online-retry bridge remain source-wired for the authorized editor runtime.
   const bootstrapSource = await readFile(resolve(root, 'src/vnext/app/bootstrap.tsx'), 'utf8');
   assert.match(bootstrapSource, /autosave:\s*\{\}/);
   assert.match(bootstrapSource, /attachPersistenceOnlineRetry\(runtime\)/);
@@ -251,8 +252,10 @@ try {
   const productionRequests = [];
   productionPage.on('request', (request) => productionRequests.push(request.url()));
   await productionPage.goto(productionUrl, { waitUntil: 'networkidle' });
+  await productionPage.waitForURL(`http://127.0.0.1:${port}/`);
   assert.equal(productionRequests.some((url) => url.includes('/src/vnext/app/bootstrap')), true);
-  assert.equal(productionRequests.some((url) => url.includes('/src/legacy-main')), false);
+  assert.equal(await productionPage.locator('[data-catalog-library]').count(), 0);
+  assert.equal(await productionPage.locator('[data-vnext-shell]').count(), 0);
   await productionPage.close();
 
   assert.deepEqual(consoleErrors, []);
@@ -285,7 +288,9 @@ try {
     productionBootstrapSmoke: {
       route: '/v2?catalog=<controlled-id>',
       vnextBootstrapLoaded: true,
-      legacyBootstrapLoaded: false,
+      canonicalAuthPrerequisiteEnforced: true,
+      protectedLibraryMounted: false,
+      protectedEditorMounted: false,
       autosaveOptInPresent: true,
       disposableOnlineRetryPresent: true,
       cloudMultiTabClaim: false,

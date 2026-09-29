@@ -49,7 +49,11 @@ describe('useAuthStore', () => {
     });
 
     await expect(useAuthStore.getState().signIn('admin@example.test', 'senha-errada')).resolves.toBe(false);
-    expect(useAuthStore.getState()).toMatchObject({ status: 'unauthenticated', role: null });
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'unauthenticated',
+      role: null,
+      errorMessage: 'Não foi possível entrar. Verifique seus dados e tente novamente.',
+    });
   });
 
   it('mapeia editor ativo para Colaborador limitado sem privilégio admin', async () => {
@@ -114,5 +118,108 @@ describe('useAuthStore', () => {
     expect(mockSupabaseClient.auth).not.toHaveProperty('signUp');
     expect(mockSupabaseClient.auth).not.toHaveProperty('signInWithOtp');
     expect(mockSupabaseClient.auth).not.toHaveProperty('resetPasswordForEmail');
+  });
+});
+
+describe('PILOT.B auth classification', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
+    vi.clearAllMocks();
+    useAuthStore.getState().resetForTests();
+    mockSupabaseClient.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    mockSupabaseClient.auth.signInWithPassword.mockResolvedValue({ data: { session: null }, error: null });
+    mockSupabaseClient.from.mockImplementation(() => profileBuilder(null));
+    mockSupabaseClient.auth.onAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
+  });
+
+  it('classifies getSession infrastructure failure as session-error', async () => {
+    mockSupabaseClient.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'network unavailable' },
+    });
+
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'session-error',
+      role: null,
+      errorMessage: 'Não foi possível verificar sua sessão agora. Tente novamente.',
+    });
+  });
+
+  it('classifies thrown auth bootstrap failure as session-error', async () => {
+    mockSupabaseClient.auth.getSession.mockRejectedValueOnce(new Error('network down'));
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState().status).toBe('session-error');
+  });
+
+  it('classifies a valid active admin profile as authenticated', async () => {
+    mockSupabaseClient.auth.getSession.mockResolvedValue({ data: { session: mockAdminSession }, error: null });
+    mockSupabaseClient.from.mockImplementation(() => profileBuilder(mockProfiles.admin));
+
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState()).toMatchObject({ status: 'authenticated', role: 'admin' });
+  });
+
+  it('keeps profile infrastructure failure distinct from session failure', async () => {
+    mockSupabaseClient.auth.getSession.mockResolvedValue({ data: { session: mockAdminSession }, error: null });
+    mockSupabaseClient.from.mockImplementation(() => profileBuilder(null, { message: 'profile fetch failed' }));
+
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'profile-error',
+      role: null,
+      errorMessage: 'Não foi possível carregar seu perfil de acesso agora. Tente novamente.',
+    });
+  });
+
+  it('classifies provider/network sign-in exception as session-error rather than authorization denial', async () => {
+    mockSupabaseClient.auth.signInWithPassword.mockRejectedValueOnce(new Error('provider offline'));
+
+    await expect(useAuthStore.getState().signIn('', '')).resolves.toBe(false);
+    expect(useAuthStore.getState()).toMatchObject({ status: 'session-error', role: null });
+  });
+});
+
+describe('PILOT.B returned sign-in transport errors', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://mock-test.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'mock-anon-key');
+    resetSupabaseClientForTests();
+    vi.clearAllMocks();
+    useAuthStore.getState().resetForTests();
+    mockSupabaseClient.auth.onAuthStateChange.mockReturnValue({
+      data: { subscription: { unsubscribe: vi.fn() } },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetSupabaseClientForTests();
+  });
+
+  it('classifies a returned retryable transport error as session-error', async () => {
+    mockSupabaseClient.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { session: null },
+      error: {
+        name: 'AuthRetryableFetchError',
+        status: 0,
+        message: 'Failed to fetch',
+      },
+    });
+
+    await expect(useAuthStore.getState().signIn('', '')).resolves.toBe(false);
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'session-error',
+      errorMessage: 'Não foi possível verificar sua sessão agora. Tente novamente.',
+    });
   });
 });
