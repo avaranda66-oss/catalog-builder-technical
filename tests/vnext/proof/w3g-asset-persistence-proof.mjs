@@ -45,21 +45,17 @@ try {
     });
   });
 
-  // Phase 1: Production /v2 route verification
-  const productionRequests = [];
-  page.on('request', (req) => productionRequests.push(req.url()));
+  // Phase 1: PILOT.B canonical access prerequisite.
+  // Asset persistence assertions continue in the controlled authorized fixture below.
   await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
-  await page.locator('[data-catalog-library]').waitFor();
-  assert.equal(
-    productionRequests.some((url) => url.includes('/src/legacy-main')),
-    false,
-    'Legacy bootstrap must not be loaded on /v2 route'
-  );
+  await page.waitForURL(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.locator('[data-catalog-library]').count(), 0, 'Production /v2 must not expose Library before canonical access resolves');
+  assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'Production /v2 must not expose editor before canonical access resolves');
 
   const productionSmoke = {
-    v2Mounted: true,
-    legacyBootstrapLoaded: false,
-    productionRouteVerified: true,
+    accessPrerequisiteEnforced: true,
+    protectedLibraryMounted: false,
+    protectedEditorMounted: false,
   };
 
   // Phase 2: Controlled repository W3.G Father-flow proof

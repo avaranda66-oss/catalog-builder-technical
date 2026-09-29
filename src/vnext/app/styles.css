@@ -248,6 +248,10 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-library-shell { width: 100%; min-width: 0; height: 100%; overflow: auto; background: #f4f6f8; color: #172033; }
 .vnext-library-header { position: sticky; top: 0; z-index: 20; display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #d9e0e8; background: rgb(255 255 255 / .97); padding: 0 max(22px, calc((100vw - 1160px) / 2)); backdrop-filter: blur(10px); }
 .vnext-library-header h1 { margin: 1px 0 0; color: #172033; font-size: 20px; letter-spacing: -.02em; }
+.vnext-library-header-actions { display: flex; align-items: center; gap: 10px; }
+.vnext-library-secondary { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #b9c5d3; border-radius: 7px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 14px; }
+.vnext-library-secondary:hover:not(:disabled) { background: #f6f8fb; border-color: #95a6b8; }
+.vnext-library-secondary:disabled { cursor: not-allowed; opacity: .55; }
 .vnext-library-create { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #003f78; border-radius: 7px; background: #003f78; color: #fff; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 16px; }
 .vnext-library-create:hover:not(:disabled) { background: #002f59; }
 .vnext-library-create:disabled { cursor: not-allowed; opacity: .55; }
@@ -386,3 +390,11 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-library-row-actions { grid-template-columns: 1fr; }
   .vnext-library-row-actions button { width: 100%; }
 }
+
+.vnext-access-shell { min-height: 100vh; display: grid; place-items: center; background: #f4f6f8; color: #172033; padding: 24px; }
+.vnext-access-card { width: min(460px, 100%); border: 1px solid #d4dde7; border-radius: 10px; background: #fff; box-shadow: 0 16px 45px rgb(15 23 42 / .10); padding: 24px; }
+.vnext-access-card h1 { margin: 0 0 10px; font-size: 20px; }
+.vnext-access-card p { margin: 0; color: #66758a; font-size: 14px; line-height: 1.55; }
+.vnext-access-actions, .vnext-open-failure-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.vnext-access-actions button, .vnext-open-failure-actions > button:not(.vnext-library-create) { min-height: 42px; border: 1px solid #b9c5d3; border-radius: 7px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 14px; }
+.vnext-access-actions button.is-primary { border-color: #003f78; background: #003f78; color: #fff; }

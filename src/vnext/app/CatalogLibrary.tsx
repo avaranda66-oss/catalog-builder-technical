@@ -8,6 +8,7 @@ import {
   FilePlus2,
   FolderOpen,
   LayoutTemplate,
+  LogOut,
   Pencil,
   Search,
   X,
@@ -24,6 +25,14 @@ import './styles.css';
 interface CatalogLibraryProps {
   readonly service: CatalogLibraryService;
   readonly onOpen: (catalogId: string) => void;
+  readonly onSignOut?: () => void | Promise<void>;
+  readonly onUnauthorized?: () => void | Promise<void>;
+}
+
+interface LibraryActionError {
+  readonly message: string;
+  readonly retry?: () => void;
+  readonly retryLabel?: string;
 }
 
 function dateLabel(value: string): string {
@@ -57,7 +66,7 @@ function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'creat
     : 'Não foi possível confirmar o resultado no servidor. Tente novamente.';
   if (code === 'INVALID_TITLE') return 'Digite um nome para o catálogo.';
   if (code === 'STARTER_NOT_FOUND') return 'Este modelo inicial não está mais disponível. Escolha outro modelo.';
-  if (action === 'create') return 'Não foi possível criar o novo catálogo.';
+  if (action === 'create') return 'Não foi possível criar o catálogo. Tente novamente.';
   if (action === 'rename') return 'Não foi possível renomear este catálogo.';
   if (action === 'archive') return 'Não foi possível arquivar este catálogo.';
   return 'Não foi possível carregar a biblioteca.';
@@ -106,14 +115,16 @@ function CatalogRow({
   );
 }
 
-export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
+export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: CatalogLibraryProps) {
   const [view, setView] = React.useState<CatalogLibraryView>('active');
   const [search, setSearch] = React.useState('');
   const [sort, setSort] = React.useState<CatalogLibrarySort>('updated-desc');
   const [items, setItems] = React.useState<readonly CatalogListItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | undefined>();
+  const [accessInvalidated, setAccessInvalidated] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | undefined>();
+  const [actionError, setActionError] = React.useState<LibraryActionError | undefined>();
   const [renameTarget, setRenameTarget] = React.useState<CatalogListItem | undefined>();
   const [renameTitle, setRenameTitle] = React.useState('');
   const [archiveTarget, setArchiveTarget] = React.useState<CatalogListItem | undefined>();
@@ -126,6 +137,13 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const createDialog = React.useRef<HTMLElement | null>(null);
   const createPending = service.getCreateState() === 'pending-verification';
   const starters = service.listStarters();
+
+  const invalidateUnauthorized = React.useCallback((code: CatalogLibraryFailureCode): boolean => {
+    if (code !== 'UNAUTHORIZED' || !onUnauthorized) return false;
+    setAccessInvalidated(true);
+    void onUnauthorized();
+    return true;
+  }, [onUnauthorized]);
 
   React.useEffect(() => {
     if (createPending) {
@@ -188,16 +206,22 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const load = React.useCallback(async (nextView = view, nextSearch = search, nextSort = sort) => {
     const generation = ++loadGeneration.current;
     setLoading(true);
-    setError(undefined);
+    setLoadError(undefined);
+    setActionError(undefined);
     const result = await service.list({ view: nextView, search: nextSearch, sort: nextSort });
     if (generation !== loadGeneration.current) return;
-    if (result.ok) setItems(result.value);
-    else {
+    if (result.ok) {
+      setItems(result.value);
+    } else {
       setItems([]);
-      setError(failureMessage(result.error.code, 'load'));
+      if (invalidateUnauthorized(result.error.code)) {
+        setLoading(false);
+        return;
+      }
+      setLoadError(failureMessage(result.error.code, 'load'));
     }
     setLoading(false);
-  }, [service, sort, search, view]);
+  }, [service, sort, search, view, invalidateUnauthorized]);
 
   React.useEffect(() => { void load(); }, [load]);
 
@@ -209,12 +233,17 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const createBlank = async () => {
     if (busy) return;
     setBusy(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.createBlank();
     setBusy(false);
     setCreateChooserOpen(false);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'create'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({
+        message: failureMessage(result.error.code, 'create'),
+        retry: () => { void createBlank(); },
+        retryLabel: service.getCreateState() === 'pending-verification' ? 'Verificar criação' : 'Tentar novamente',
+      });
       return;
     }
     onOpen(result.value.catalogId);
@@ -223,12 +252,17 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const createFromStarter = async (starterId: string) => {
     if (busy) return;
     setBusy(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.createFromStarter(starterId);
     setBusy(false);
     setCreateChooserOpen(false);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'create'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({
+        message: failureMessage(result.error.code, 'create'),
+        retry: () => { void createFromStarter(starterId); },
+        retryLabel: service.getCreateState() === 'pending-verification' ? 'Verificar criação' : 'Tentar novamente',
+      });
       return;
     }
     onOpen(result.value.catalogId);
@@ -238,12 +272,17 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
     if (busy || createPending) return;
     setBusy(true);
     setDuplicateTargetId(item.catalogId);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.duplicate(item.catalogId);
     setBusy(false);
     setDuplicateTargetId(undefined);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'create'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({
+        message: failureMessage(result.error.code, 'create'),
+        retry: () => { void duplicateCatalog(item); },
+        retryLabel: service.getCreateState() === 'pending-verification' ? 'Verificar criação' : 'Tentar novamente',
+      });
       return;
     }
     await load();
@@ -252,11 +291,16 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const verifyPendingCreate = async () => {
     if (busy) return;
     setBusy(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.createBlank();
     setBusy(false);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'create'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({
+        message: failureMessage(result.error.code, 'create'),
+        retry: () => { void verifyPendingCreate(); },
+        retryLabel: 'Verificar criação',
+      });
       return;
     }
     if (result.value.origin?.originKind === 'duplicate') {
@@ -279,11 +323,12 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
     event.preventDefault();
     if (!renameTarget || busy || createPending) return;
     setBusy(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.rename(renameTarget.catalogId, renameTitle);
     setBusy(false);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'rename'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({ message: failureMessage(result.error.code, 'rename') });
       if (result.error.code === 'CONFLICT' || result.error.code === 'STALE_RESULT' || result.error.code === 'ARCHIVED') {
         setRenameTarget(undefined);
         await load();
@@ -298,12 +343,13 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
     if (!archiveTarget || busy || createPending) return;
     const target = archiveTarget;
     setBusy(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await service.archive(target.catalogId);
     setBusy(false);
     setArchiveTarget(undefined);
     if (!result.ok) {
-      setError(failureMessage(result.error.code, 'archive'));
+      if (invalidateUnauthorized(result.error.code)) return;
+      setActionError({ message: failureMessage(result.error.code, 'archive') });
       await load();
       return;
     }
@@ -313,6 +359,14 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   const hasItems = items.length > 0;
   const emptySearch = !loading && !hasItems && search.trim().length > 0;
   const emptyView = !loading && !hasItems && !search.trim();
+
+  if (accessInvalidated) {
+    return (
+      <main className="vnext-access-shell" data-library-access-invalidated="">
+        <section className="vnext-access-card" role="status">Validando acesso…</section>
+      </main>
+    );
+  }
 
   return (
     <main className="vnext-library-shell" data-catalog-library="" onKeyDown={handleDialogKeyboard}>
@@ -324,16 +378,26 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
             <h1>Catálogos</h1>
           </div>
         </div>
-        <button
-          type="button"
-          className="vnext-library-create"
-          onClick={requestNewCatalog}
-          disabled={busy}
-          aria-label={busy ? (createPending ? 'Verificando criação' : 'Criando catálogo') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
-        >
-          <FilePlus2 size={18} aria-hidden="true" />
-          <span>{busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
-        </button>
+        <div className="vnext-library-header-actions">
+          {!loading && !loadError && (
+            <button
+              type="button"
+              className="vnext-library-create"
+              onClick={requestNewCatalog}
+              disabled={busy}
+              aria-label={busy ? (createPending ? 'Verificando criação' : 'Criando catálogo') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
+            >
+              <FilePlus2 size={18} aria-hidden="true" />
+              <span>{busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
+            </button>
+          )}
+          {onSignOut && (
+            <button type="button" className="vnext-library-secondary" onClick={() => { void onSignOut(); }} disabled={busy}>
+              <LogOut size={17} aria-hidden="true" />
+              <span>Sair</span>
+            </button>
+          )}
+        </div>
       </header>
 
       <section className="vnext-library-content" aria-labelledby="library-heading">
@@ -368,16 +432,25 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
           </div>
         </div>
 
-        {error && (
-          <div className="vnext-library-error" role="alert">
-            <span>{error}</span>
-            <button type="button" onClick={() => { if (createPending) void verifyPendingCreate(); else void load(); }}>
-              {createPending ? 'Verificar criação' : 'Tentar novamente'}
-            </button>
+        {loadError ? (
+          <div className="vnext-library-error" role="alert" data-library-list-error="">
+            <span>{loadError}</span>
+            <button type="button" onClick={() => { void load(); }}>Tentar novamente</button>
           </div>
-        )}
+        ) : (
+          <>
+            {actionError && (
+              <div className="vnext-library-error" role="alert" data-library-action-error="">
+                <span>{actionError.message}</span>
+                {actionError.retry && (
+                  <button type="button" onClick={actionError.retry}>
+                    {actionError.retryLabel ?? 'Tentar novamente'}
+                  </button>
+                )}
+              </div>
+            )}
 
-        {loading ? (
+            {loading ? (
           <div className="vnext-library-loading" role="status">Carregando catálogos…</div>
         ) : hasItems ? (
           <div className="vnext-library-list" aria-live="polite">
@@ -416,6 +489,8 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
             <h3>Nenhum catálogo arquivado</h3>
             <p>Catálogos arquivados aparecerão aqui, separados dos seus trabalhos ativos.</p>
           </div>
+        )}
+          </>
         )}
       </section>
 
@@ -473,14 +548,26 @@ export function CatalogLibrary({ service, onOpen }: CatalogLibraryProps) {
   );
 }
 
-export function CatalogOpenFailure({ code, onBack }: { readonly code: CatalogLibraryFailureCode; readonly onBack: () => void }) {
+export function CatalogOpenFailure({
+  code,
+  onBack,
+  onRetry,
+}: {
+  readonly code: CatalogLibraryFailureCode;
+  readonly onBack: () => void;
+  readonly onRetry?: () => void;
+}) {
+  const retryable = code === 'OFFLINE' || code === 'REMOTE_FAILURE';
   return (
     <main className="vnext-library-shell vnext-open-failure" data-catalog-open-failure={code}>
       <section>
         <div className="vnext-brand-mark" aria-hidden="true">P</div>
         <h1>Não foi possível abrir o catálogo</h1>
-        <p>{failureMessage(code, 'load')}</p>
-        <button type="button" className="vnext-library-create" onClick={onBack}>Voltar aos catálogos</button>
+        <p>{retryable ? 'Não foi possível abrir este catálogo agora. Tente novamente.' : failureMessage(code, 'load')}</p>
+        <div className="vnext-open-failure-actions">
+          {retryable && onRetry && <button type="button" onClick={onRetry}>Tentar novamente</button>}
+          <button type="button" className="vnext-library-create" onClick={onBack}>Voltar aos catálogos</button>
+        </div>
       </section>
     </main>
   );

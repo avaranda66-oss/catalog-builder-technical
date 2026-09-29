@@ -49,31 +49,17 @@ try {
     });
   });
 
-  // Phase 1: Production /v2 bootstrap + W3.F wiring smoke
-  const productionRequests = [];
-  page.on('request', (req) => productionRequests.push(req.url()));
+  // Phase 1: PILOT.B canonical access prerequisite.
+  // Historical Starter assertions continue in the authorized controlled fixture below.
   await page.goto(`http://127.0.0.1:${port}/v2`, { waitUntil: 'networkidle' });
-  await page.locator('[data-catalog-library]').waitFor();
-  assert.equal(
-    productionRequests.some((url) => url.includes('/src/legacy-main')),
-    false,
-    'Legacy bootstrap must not be loaded on /v2 route'
-  );
-  await page.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
-  const productionChooser = page.getByRole('dialog', { name: 'Novo catálogo' });
-  await productionChooser.waitFor();
-  assert.equal(
-    await productionChooser.getByRole('button', { name: /Ficha técnica essencial/ }).count(),
-    1,
-    'Registered production Starter "Ficha técnica essencial" must be present in the production chooser'
-  );
-  await productionChooser.getByRole('button', { name: 'Fechar' }).click();
-  await productionChooser.waitFor({ state: 'detached' });
+  await page.waitForURL(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.locator('[data-catalog-library]').count(), 0, 'Production /v2 must not expose Library before canonical access resolves');
+  assert.equal(await page.getByRole('button', { name: 'Novo catálogo', exact: true }).count(), 0, 'Production create affordance must remain protected before auth');
+
   const productionSmoke = {
-    v2Mounted: true,
-    legacyBootstrapLoaded: false,
-    essentialStarterPresent: true,
-    chooserDismissedCleanly: true,
+    accessPrerequisiteEnforced: true,
+    protectedLibraryMounted: false,
+    essentialStarterVerifiedInControlledPhase: true,
   };
 
   // Phase 2: Controlled repository Father-flow proof

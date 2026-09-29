@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import {
   createDocumentSession,
   createStaticPageTemplateRegistry,
@@ -15,12 +14,8 @@ import {
   SupabaseCatalogRepository,
   VNextPersistenceRuntime,
   type CatalogRepository,
-  type PersistenceResult,
 } from '../persistence';
-import {
-  getVNextSupabaseClient,
-  vnextRpcClientFromSupabase,
-} from '../persistence/supabase-client';
+import { vnextRpcClientFromSupabase } from '../persistence/supabase-client';
 import type { CatalogDocument } from '../domain';
 import {
   DefaultAssetPersistenceBridge,
@@ -31,8 +26,6 @@ import {
 } from '../asset';
 import { IndexedDbRecoveryRepository } from '../recovery';
 import {
-  ANONYMOUS_AUTH_IDENTITY,
-  advanceAuthLineage,
   authLineageValue,
   createAuthLineageState,
 } from './auth-lineage';
@@ -40,31 +33,16 @@ import { CatalogLibrary, CatalogOpenFailure } from './CatalogLibrary';
 import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-defaults';
 import { VNextApp } from './VNextApp';
 import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
+import { getSupabase } from '../../services/supabase.service';
+import { useAuthStore } from '../../stores/useAuthStore';
+import {
+  currentTrustedV2ReturnTarget,
+  storeTrustedV2ReturnTarget,
+} from '../../components/auth/return-target';
 
 function createBrowserId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
   return globalThis.crypto.randomUUID();
-}
-
-function unavailable<T>(): Promise<PersistenceResult<T>> {
-  return Promise.resolve({
-    ok: false,
-    error: { code: 'OFFLINE', message: 'Remote persistence is unavailable' },
-  });
-}
-
-function unavailableRepository(): CatalogRepository {
-  return {
-    listCatalogs: () => unavailable(),
-    getCatalog: () => unavailable(),
-    createCatalog: () => unavailable(),
-    saveCAS: () => unavailable(),
-    archiveCAS: () => unavailable(),
-  };
-}
-
-function authIdentity(session: Session | null): string {
-  return session?.user.id ?? ANONYMOUS_AUTH_IDENTITY;
 }
 
 function authorityScopeId(identity: string): string {
@@ -83,6 +61,45 @@ function openFailureCode(code: string): CatalogLibraryFailureCode {
   if (code === 'REQUESTED_ID_MISMATCH') return 'ENVELOPE_MISMATCH';
   if (code === 'UNSAVED_CHANGES') return 'STALE_RESULT';
   return code as CatalogLibraryFailureCode;
+}
+
+function rememberCurrentV2Target(): void {
+  const target = currentTrustedV2ReturnTarget();
+  if (target) storeTrustedV2ReturnTarget(target);
+}
+
+function replaceWithCanonicalRoot(): void {
+  rememberCurrentV2Target();
+  window.location.replace('/');
+}
+
+export function VNextAccessResolving({ message = 'Validando acesso…' }: { readonly message?: string }) {
+  return (
+    <main className="vnext-access-shell" data-vnext-access-state="resolving">
+      <section className="vnext-access-card" role="status">{message}</section>
+    </main>
+  );
+}
+
+export function VNextServerAccessUnavailable({
+  onRetry,
+  onSignOut,
+}: {
+  readonly onRetry: () => void;
+  readonly onSignOut: () => void;
+}) {
+  return (
+    <main className="vnext-access-shell" data-vnext-access-state="server-unauthorized">
+      <section className="vnext-access-card">
+        <h1>Acesso não disponível</h1>
+        <p>Não foi possível confirmar seu acesso com o servidor. Tente novamente.</p>
+        <div className="vnext-access-actions">
+          <button type="button" onClick={onRetry}>Tentar novamente</button>
+          <button type="button" className="is-primary" onClick={onSignOut}>Sair</button>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 export function attachPersistenceOnlineRetry(
@@ -106,20 +123,99 @@ export function attachPersistenceOnlineRetry(
 }
 
 export async function mountVNextApp(root: HTMLElement): Promise<void> {
+  const reactRoot = ReactDOM.createRoot(root);
+  const renderResolving = (message?: string) => {
+    reactRoot.render(
+      <React.StrictMode>
+        <VNextAccessResolving message={message} />
+      </React.StrictMode>
+    );
+  };
+
+  renderResolving();
+  await useAuthStore.getState().initialize();
+
+  const initialAuth = useAuthStore.getState();
+  if (initialAuth.status !== 'authenticated' || !initialAuth.userId) {
+    replaceWithCanonicalRoot();
+    return;
+  }
+
+  const authorizedUserId = initialAuth.userId;
+  const supabase = getSupabase();
+  if (!supabase) {
+    replaceWithCanonicalRoot();
+    return;
+  }
+
   const applicationDependencies: ApplicationExecutionDependencies = {
     createId: createBrowserId,
     templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]),
   };
-  const supabase = getVNextSupabaseClient();
-  const repository: CatalogRepository = supabase
-    ? new SupabaseCatalogRepository(vnextRpcClientFromSupabase(supabase))
-    : unavailableRepository();
-
-  const authSession = supabase ? (await supabase.auth.getSession()).data.session : null;
-  let authLineage = createAuthLineageState(authIdentity(authSession));
+  const repository: CatalogRepository = new SupabaseCatalogRepository(
+    vnextRpcClientFromSupabase(supabase)
+  );
+  const authLineage = createAuthLineageState(authorizedUserId);
   const lineage = () => authLineageValue(authLineage);
-  const identity = () => authLineage.identity;
   const requestedCatalogId = new URLSearchParams(window.location.search).get('catalog');
+
+  let authorityInvalidated = false;
+  let revalidatingServerAccess = false;
+  let runtime: VNextPersistenceRuntime | undefined;
+  let detachOnlineRetry: (() => void) | undefined;
+
+  const exitProtectedVNext = () => {
+    if (authorityInvalidated) return;
+    authorityInvalidated = true;
+    detachOnlineRetry?.();
+    void runtime?.dispose();
+    renderResolving();
+    replaceWithCanonicalRoot();
+  };
+
+  const unsubscribeAuth = useAuthStore.subscribe((state) => {
+    if (revalidatingServerAccess || authorityInvalidated) return;
+    if (state.status !== 'authenticated' || state.userId !== authorizedUserId) {
+      exitProtectedVNext();
+    }
+  });
+  window.addEventListener('pagehide', unsubscribeAuth, { once: true });
+
+  const revalidateAfterServerUnauthorized = async () => {
+    if (authorityInvalidated || revalidatingServerAccess) return;
+    revalidatingServerAccess = true;
+    renderResolving();
+    await useAuthStore.getState().initialize();
+    const nextAuth = useAuthStore.getState();
+    revalidatingServerAccess = false;
+
+    if (nextAuth.status !== 'authenticated' || nextAuth.userId !== authorizedUserId) {
+      exitProtectedVNext();
+      return;
+    }
+
+    reactRoot.render(
+      <React.StrictMode>
+        <VNextServerAccessUnavailable
+          onRetry={() => {
+            void (async () => {
+              revalidatingServerAccess = true;
+              renderResolving();
+              await useAuthStore.getState().initialize();
+              const retryAuth = useAuthStore.getState();
+              revalidatingServerAccess = false;
+              if (retryAuth.status !== 'authenticated' || retryAuth.userId !== authorizedUserId) {
+                exitProtectedVNext();
+                return;
+              }
+              window.location.reload();
+            })();
+          }}
+          onSignOut={() => { void useAuthStore.getState().signOut(); }}
+        />
+      </React.StrictMode>
+    );
+  };
 
   if (!requestedCatalogId) {
     const library = new CatalogLibraryService({
@@ -129,22 +225,17 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       createMutationId: createBrowserId,
       createOpenSessionId: createBrowserId,
       authLineage: lineage,
-      authorityScopeId: () => authorityScopeId(identity()),
+      authorityScopeId: () => authorityScopeId(authorizedUserId),
       starterRegistry: createDefaultCatalogStarterRegistry(),
     });
-    if (supabase) {
-      supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
-        const previousIdentity = authLineage.identity;
-        const nextIdentity = authIdentity(nextSession);
-        authLineage = advanceAuthLineage(authLineage, nextIdentity);
-        if (nextIdentity !== previousIdentity) window.location.reload();
-      });
-    }
-    ReactDOM.createRoot(root).render(
+
+    reactRoot.render(
       <React.StrictMode>
         <CatalogLibrary
           service={library}
           onOpen={(catalogId) => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
+          onSignOut={() => useAuthStore.getState().signOut()}
+          onUnauthorized={revalidateAfterServerUnauthorized}
         />
       </React.StrictMode>
     );
@@ -156,52 +247,42 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     applicationDependencies
   );
   const recoveryRepository = new IndexedDbRecoveryRepository();
-  const assetRepository = supabase
-    ? new SupabaseAssetRepository(
-        vnextRpcClientFromSupabase(supabase),
-        supabaseStorageClientFromSupabase(supabase.storage)
-      )
-    : undefined;
+  const assetRepository = new SupabaseAssetRepository(
+    vnextRpcClientFromSupabase(supabase),
+    supabaseStorageClientFromSupabase(supabase.storage)
+  );
   let getActiveLineage: () => AssetLineageContext = () => ({
     authLineage: lineage(),
-    authorityScopeId: authorityScopeId(identity()),
+    authorityScopeId: authorityScopeId(authorizedUserId),
   });
 
-  const assetBridge = assetRepository
-    ? new DefaultAssetPersistenceBridge(assetRepository, {
-        getActiveLineage: () => getActiveLineage(),
-      })
-    : undefined;
+  const assetBridge = new DefaultAssetPersistenceBridge(assetRepository, {
+    getActiveLineage: () => getActiveLineage(),
+  });
 
   const resolveAssetUrls = async (
     doc: CatalogDocument
   ): Promise<{ urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, AssetRuntimeState> }> => {
     const urls = new Map<string, string>(resolveKnownW2CDemoAssetUrls(doc));
     const states = new Map<string, AssetRuntimeState>();
-    if (assetBridge) {
-      try {
-        const resolved = await assetBridge.resolveDocumentAssets(doc, { authLineage: lineage() });
-        for (const [id, url] of resolved.urls.entries()) {
-          urls.set(id, url);
-        }
-        for (const [id, state] of resolved.states.entries()) {
-          states.set(id, state);
-        }
-      } catch {
-        // Degraded editing: remote asset failure is ephemeral runtime state
-      }
+    try {
+      const resolved = await assetBridge.resolveDocumentAssets(doc, { authLineage: lineage() });
+      for (const [id, url] of resolved.urls.entries()) urls.set(id, url);
+      for (const [id, state] of resolved.states.entries()) states.set(id, state);
+    } catch {
+      // Degraded editing: remote asset failure is ephemeral runtime state.
     }
     return { urls, states };
   };
 
-  const runtime = new VNextPersistenceRuntime({
+  runtime = new VNextPersistenceRuntime({
     session: initialSession,
     repository,
     applicationDependencies,
     createMutationId: createBrowserId,
     createOpenSessionId: createBrowserId,
     authLineage: lineage(),
-    authorityScopeId: authorityScopeId(identity()),
+    authorityScopeId: authorityScopeId(authorizedUserId),
     recoveryRepository,
     autosave: {},
     assetUrls: resolveKnownW2CDemoAssetUrls(initialSession.getSnapshot().document),
@@ -209,95 +290,98 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   });
 
   getActiveLineage = (): AssetLineageContext => {
-    const snapshot = runtime.workspace.getSnapshot();
+    const snapshot = runtime!.workspace.getSnapshot();
     return {
       authLineage: lineage(),
-      authorityScopeId: authorityScopeId(identity()),
+      authorityScopeId: authorityScopeId(authorizedUserId),
       openSessionId: snapshot.binding.openSessionId,
       catalogId: snapshot.binding.kind === 'PERSISTED' ? snapshot.binding.catalogId : undefined,
     };
   };
 
-  let authorityInvalidated = false;
-  let detachOnlineRetry: (() => void) | undefined;
-  if (supabase) {
-    supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
-      const previousIdentity = authLineage.identity;
-      const nextIdentity = authIdentity(nextSession);
-      authLineage = advanceAuthLineage(authLineage, nextIdentity);
-      runtime.updateAuthContext(lineage(), authorityScopeId(nextIdentity));
-      if (nextIdentity === previousIdentity) return;
-      authorityInvalidated = true;
+  let editorRuntimeInstalled = false;
+  const installEditorRuntime = () => {
+    if (!runtime || editorRuntimeInstalled || authorityInvalidated) return;
+    editorRuntimeInstalled = true;
+
+    void navigator.storage?.persist?.().catch(() => false);
+
+    window.addEventListener('beforeunload', (event) => {
+      const snapshot = runtime!.workspace.getSnapshot();
+      if (!snapshot.dirty && !runtime!.saveCoordinator.hasUnresolvedActiveMutation()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+
+    detachOnlineRetry = attachPersistenceOnlineRetry(runtime);
+    window.addEventListener('pagehide', () => {
       detachOnlineRetry?.();
-      void runtime.dispose();
-      root.replaceChildren();
+      void runtime?.dispose();
+    }, { once: true });
+
+    window.addEventListener('popstate', () => {
+      const targetCatalogId = new URLSearchParams(window.location.search).get('catalog');
+      const snapshot = runtime!.workspace.getSnapshot();
+      const active = snapshot.binding;
+      if (active.kind === 'PERSISTED' && targetCatalogId === active.catalogId) return;
+      if (snapshot.dirty || runtime!.saveCoordinator.hasUnresolvedActiveMutation()) {
+        window.history.replaceState(null, '', activeV2Url(runtime!));
+        runtime!.workspace.setPhase('blocked', 'Salve suas alterações antes de sair deste catálogo.');
+        return;
+      }
       window.location.reload();
     });
-  }
 
-  if (authorityInvalidated) return;
+    const requestLibrary = () => {
+      const snapshot = runtime!.workspace.getSnapshot();
+      if (snapshot.dirty || runtime!.saveCoordinator.hasUnresolvedActiveMutation()) {
+        runtime!.workspace.setPhase('blocked', 'Salve suas alterações antes de voltar aos catálogos.');
+        return;
+      }
+      window.location.assign('/v2');
+    };
 
-  const opened = await runtime.reopenCoordinator.open(
-    requestedCatalogId,
-    { allowDiscardUnsaved: true }
-  );
-  if (authorityInvalidated) return;
-  if (!opened.ok) {
-    ReactDOM.createRoot(root).render(
+    reactRoot.render(
       <React.StrictMode>
-        <CatalogOpenFailure
-          code={openFailureCode(opened.error.code)}
-          onBack={() => window.location.assign('/v2')}
+        <VNextApp
+          runtime={runtime}
+          assetBridge={assetBridge}
+          onRequestLibrary={requestLibrary}
         />
       </React.StrictMode>
     );
-    return;
-  }
-
-  void navigator.storage?.persist?.().catch(() => false);
-
-  window.addEventListener('beforeunload', (event) => {
-    const snapshot = runtime.workspace.getSnapshot();
-    if (!snapshot.dirty && !runtime.saveCoordinator.hasUnresolvedActiveMutation()) return;
-    event.preventDefault();
-    event.returnValue = '';
-  });
-
-  detachOnlineRetry = attachPersistenceOnlineRetry(runtime);
-  window.addEventListener('pagehide', () => {
-    detachOnlineRetry?.();
-    void runtime.dispose();
-  }, { once: true });
-
-  window.addEventListener('popstate', () => {
-    const targetCatalogId = new URLSearchParams(window.location.search).get('catalog');
-    const snapshot = runtime.workspace.getSnapshot();
-    const active = snapshot.binding;
-    if (active.kind === 'PERSISTED' && targetCatalogId === active.catalogId) return;
-    if (snapshot.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()) {
-      window.history.replaceState(null, '', activeV2Url(runtime));
-      runtime.workspace.setPhase('blocked', 'Salve suas alterações antes de sair deste catálogo.');
-      return;
-    }
-    window.location.reload();
-  });
-
-  const requestLibrary = () => {
-    const snapshot = runtime.workspace.getSnapshot();
-    if (snapshot.dirty || runtime.saveCoordinator.hasUnresolvedActiveMutation()) {
-      runtime.workspace.setPhase('blocked', 'Salve suas alterações antes de voltar aos catálogos.');
-      return;
-    }
-    window.location.assign('/v2');
   };
 
-  ReactDOM.createRoot(root).render(
-    <React.StrictMode>
-      <VNextApp
-        runtime={runtime}
-        assetBridge={assetBridge}
-        onRequestLibrary={requestLibrary}
-      />
-    </React.StrictMode>
-  );
+  const openRequestedCatalog = async () => {
+    if (!runtime || authorityInvalidated) return;
+    renderResolving('Abrindo catálogo…');
+    const opened = await runtime.reopenCoordinator.open(
+      requestedCatalogId,
+      { allowDiscardUnsaved: true }
+    );
+    if (authorityInvalidated) return;
+
+    if (!opened.ok) {
+      const code = openFailureCode(opened.error.code);
+      if (code === 'UNAUTHORIZED') {
+        await revalidateAfterServerUnauthorized();
+        return;
+      }
+      const retryable = code === 'OFFLINE' || code === 'REMOTE_FAILURE';
+      reactRoot.render(
+        <React.StrictMode>
+          <CatalogOpenFailure
+            code={code}
+            onBack={() => window.location.assign('/v2')}
+            onRetry={retryable ? () => { void openRequestedCatalog(); } : undefined}
+          />
+        </React.StrictMode>
+      );
+      return;
+    }
+
+    installEditorRuntime();
+  };
+
+  await openRequestedCatalog();
 }

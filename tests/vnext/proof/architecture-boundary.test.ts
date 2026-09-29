@@ -5,6 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot=resolve('.');
 const vnextRoot=resolve(repoRoot,'src/vnext');
+const pilotBSharedAuthBoundary=new Set([
+  'src/stores/useAuthStore',
+  'src/services/supabase.service',
+  'src/components/auth/return-target',
+]);
 const approvedSharedRepoImports=new Set<string>();
 
 const forbiddenAuthorities=[
@@ -199,11 +204,12 @@ describe('VNext architecture boundary',()=>{
         const target=repoTarget(file,specifier);
         if(!target||isWithin(vnextRoot,target))continue;
         const normalized=normalize(relative(repoRoot,target));
+        const approvedPilotBAuthImport=relFile==='src/vnext/app/bootstrap'&&pilotBSharedAuthBoundary.has(normalized);
         const authority=forbiddenAuthorities.find(([,prefix])=>normalized===prefix||normalized.startsWith(prefix+'/'));
-        if(authority)violations.push(`${relFile}: ${authority[0]} -> ${specifier}`);
-        else if(normalized.startsWith('src/labs/')||normalized.startsWith('tests/')||normalized.startsWith('scratch/'))
+        if(authority&&!approvedPilotBAuthImport)violations.push(`${relFile}: ${authority[0]} -> ${specifier}`);
+        else if(!approvedPilotBAuthImport&&(normalized.startsWith('src/labs/')||normalized.startsWith('tests/')||normalized.startsWith('scratch/')))
           violations.push(`${relFile}: reverse proof dependency -> ${specifier}`);
-        else if(!approvedSharedRepoImports.has(normalized))
+        else if(!approvedPilotBAuthImport&&!approvedSharedRepoImports.has(normalized))
           violations.push(`${relFile}: unapproved repository dependency -> ${specifier}`);
       }
       if(relFile.startsWith('src/vnext/domain/')||relFile.startsWith('src/vnext/table/')){
@@ -245,11 +251,24 @@ describe('VNext architecture boundary',()=>{
   it('keeps the VNext app graph isolated from Legacy application authorities',()=>{
     const entry=resolve(vnextRoot,'app/bootstrap.tsx');
     const violations:string[]=[];
-    for(const file of localGraph(entry)){
+    const pending=[entry];
+    const seen=new Set<string>();
+    while(pending.length){
+      const file=pending.pop()!;
+      if(seen.has(file))continue;
+      seen.add(file);
       const relFile=normalize(relative(repoRoot,file));
       if(relFile==='src/App'||relFile==='src/legacy-main')violations.push(`${relFile}: Legacy bootstrap reachable from /v2`);
+      const approvedPilotBAuthBoundary=pilotBSharedAuthBoundary.has(relFile);
       const authority=forbiddenAuthorities.find(([,prefix])=>relFile===prefix||relFile.startsWith(prefix+'/'));
-      if(authority)violations.push(`${relFile}: ${authority[0]} reachable from /v2`);
+      if(authority&&!approvedPilotBAuthBoundary)violations.push(`${relFile}: ${authority[0]} reachable from /v2`);
+      if(file.endsWith('.css')||approvedPilotBAuthBoundary)continue;
+      const text=readFileSync(file,'utf8');
+      const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,file.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);
+      for(const specifier of specifiers(source)){
+        const target=localModule(file,specifier);
+        if(target&&!seen.has(target))pending.push(target);
+      }
     }
     expect(violations,violations.join('\n')).toEqual([]);
   });
@@ -275,18 +294,20 @@ describe('VNext architecture boundary',()=>{
   it('invalidates an exact-open production route before an async reopen can survive an account switch',()=>{
     const file=resolve(vnextRoot,'app/bootstrap.tsx');
     const text=readFileSync(file,'utf8');
-    const runtimeIndex=text.indexOf('const runtime = new VNextPersistenceRuntime');
-    const listenerIndex=text.indexOf('supabase.auth.onAuthStateChange',runtimeIndex);
+    const initializeIndex=text.indexOf('await useAuthStore.getState().initialize()');
+    const listenerIndex=text.indexOf('useAuthStore.subscribe');
+    const runtimeIndex=text.indexOf('runtime = new VNextPersistenceRuntime');
     const openIndex=text.indexOf('await runtime.reopenCoordinator.open',runtimeIndex);
-    expect(runtimeIndex).toBeGreaterThanOrEqual(0);
-    expect(listenerIndex).toBeGreaterThan(runtimeIndex);
-    expect(openIndex).toBeGreaterThan(listenerIndex);
-    const guard=text.slice(listenerIndex,openIndex);
-    expect(guard).toContain('runtime.updateAuthContext');
-    expect(guard).toContain('authorityInvalidated = true');
-    expect(guard).toContain('root.replaceChildren()');
-    expect(guard).toContain('window.location.reload()');
-    expect(text.slice(openIndex,openIndex+260)).toContain('if (authorityInvalidated) return;');
+    expect(initializeIndex).toBeGreaterThanOrEqual(0);
+    expect(listenerIndex).toBeGreaterThan(initializeIndex);
+    expect(runtimeIndex).toBeGreaterThan(listenerIndex);
+    expect(openIndex).toBeGreaterThan(runtimeIndex);
+    const invalidationStart=text.indexOf('const exitProtectedVNext');
+    const invalidation=text.slice(invalidationStart,listenerIndex);
+    expect(invalidation).toContain('authorityInvalidated = true');
+    expect(invalidation).toContain('void runtime');
+    expect(invalidation).toContain('replaceWithCanonicalRoot()');
+    expect(text.slice(openIndex,openIndex+420)).toContain('if (authorityInvalidated) return;');
   });
 
   it('selects the VNext or Legacy entry before either application graph is loaded',()=>{
