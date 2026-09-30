@@ -305,8 +305,12 @@ describe('VNext architecture boundary',()=>{
     const invalidationStart=text.indexOf('const exitProtectedVNext');
     const invalidation=text.slice(invalidationStart,listenerIndex);
     expect(invalidation).toContain('authorityInvalidated = true');
-    expect(invalidation).toContain('void runtime');
-    expect(invalidation).toContain('replaceWithCanonicalRoot()');
+    expect(invalidation).toContain("showAuthorityLossBoundary(");
+    expect(invalidation).toContain('await activeRuntime?.protectForAuthorityLoss()');
+    expect(invalidation).not.toContain('void runtime?.dispose()');
+    const protectIndex=invalidation.indexOf('await activeRuntime?.protectForAuthorityLoss()');
+    const navigateIndex=invalidation.indexOf('replaceWithCanonicalRoot()');
+    expect(navigateIndex).toBeGreaterThan(protectIndex);
     expect(text.slice(openIndex,openIndex+420)).toContain('if (authorityInvalidated) return;');
   });
 

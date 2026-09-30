@@ -186,6 +186,30 @@ export class SessionRecoveryManager {
     await this.scheduler.flush();
   }
 
+  async protectCurrent(): Promise<void> {
+    const source = this.options.getSource();
+    if (!this.ownsActiveScope(source)) {
+      throw new Error('Recovery authority scope is not active');
+    }
+    const token = sourceToken(source, this.pendingRemoteMutation);
+    if (token !== this.lastScheduledToken) {
+      this.lastScheduledToken = token;
+      this.scheduler.schedule(source);
+    }
+    await this.scheduler.flush();
+
+    const latest = this.options.getSource();
+    if (!this.ownsActiveScope(latest)) {
+      throw new Error('Recovery authority scope changed during protection');
+    }
+    const latestToken = sourceToken(latest, this.pendingRemoteMutation);
+    if (latestToken !== this.lastScheduledToken) {
+      this.lastScheduledToken = latestToken;
+      this.scheduler.schedule(latest);
+      await this.scheduler.flush();
+    }
+  }
+
   async close(): Promise<void> {
     this.unsubscribe();
     await this.scheduler.close();

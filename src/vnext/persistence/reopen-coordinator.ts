@@ -61,12 +61,19 @@ export interface CanonicalReopenCoordinatorOptions {
 }
 
 export class CanonicalReopenCoordinator {
+  private invalidated = false;
+
   constructor(private readonly options: CanonicalReopenCoordinatorOptions) {}
+
+  invalidate(): void {
+    this.invalidated = true;
+  }
 
   async open(
     catalogId: string,
     openOptions: { readonly allowDiscardUnsaved?: boolean } = {}
   ): Promise<ReopenResult> {
+    if (this.invalidated) return { ok: false, error: { code: 'STALE_RESULT' } };
     const before = this.options.workspace.getSnapshot();
     if (
       !openOptions.allowDiscardUnsaved
@@ -86,7 +93,8 @@ export class CanonicalReopenCoordinator {
     const result = await this.options.repository.getCatalog(catalogId);
     const afterRead = this.options.workspace.getSnapshot();
     if (
-      afterRead.binding.authLineage !== authLineage
+      this.invalidated
+      || afterRead.binding.authLineage !== authLineage
       || afterRead.activeAuthorityScopeId !== authorityScopeId
       || afterRead.binding.openSessionId !== before.binding.openSessionId
       || afterRead.session !== before.session
@@ -152,6 +160,7 @@ export class CanonicalReopenCoordinator {
     // Second authority/stale gate AFTER async asset resolution (Point 11)
     const afterResolve = this.options.workspace.getSnapshot();
     if (
+      this.invalidated ||
       afterResolve.binding.authLineage !== authLineage ||
       afterResolve.activeAuthorityScopeId !== authorityScopeId ||
       afterResolve.binding.openSessionId !== before.binding.openSessionId ||
