@@ -122,6 +122,9 @@ export class AutosaveCoordinator {
     const result = await this.options.saveCoordinator.save();
     if (!isRetryableManualResult(result)) return result;
     await this.options.saveCoordinator.waitForActiveSave();
+    if (this.disposed) {
+      return { ok: false, error: { code: 'STALE_RESULT', message: 'Autosave coordinator is disposed' } };
+    }
     return this.options.saveCoordinator.save();
   }
 
@@ -150,9 +153,12 @@ export class AutosaveCoordinator {
     }
     this.suspendedSessionToken = undefined;
     if (this.running) await this.running;
+    if (this.disposed) {
+      return { ok: false, error: { code: 'STALE_RESULT', message: 'Autosave coordinator is disposed' } };
+    }
 
     let result = await this.runOne();
-    while (result.ok) {
+    while (result.ok && !this.disposed) {
       const snapshot = this.options.workspace.getSnapshot();
       if (!snapshot.dirty || snapshot.binding.kind !== 'PERSISTED' || snapshot.save.phase !== 'idle') break;
       result = await this.runOne();

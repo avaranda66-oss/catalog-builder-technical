@@ -89,6 +89,7 @@ export class VNextPersistenceRuntime {
   private readonly resolveAssetUrls:
     | ((document: CatalogDocument) => RuntimeAssetResolutionResult | Promise<RuntimeAssetResolutionResult>)
     | undefined;
+  private authorityLossProtection: Promise<void> | undefined;
 
   constructor(options: VNextPersistenceRuntimeOptions) {
     this.resolveAssetUrls = options.resolveAssetUrls;
@@ -361,15 +362,45 @@ export class VNextPersistenceRuntime {
   }
 
   manualSave(): Promise<import('./save-coordinator').ManualSaveResult> {
+    if (this.authorityLossProtection) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'STALE_RESULT', message: 'Authority-loss protection is active' },
+      });
+    }
     return this.autosaveCoordinator?.flush() ?? this.saveCoordinator.save();
   }
 
   retryRemoteSave(): Promise<import('./save-coordinator').ManualSaveResult> {
+    if (this.authorityLossProtection) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'STALE_RESULT', message: 'Authority-loss protection is active' },
+      });
+    }
     return this.autosaveCoordinator?.retryNow() ?? this.saveCoordinator.save();
   }
 
-  async dispose(): Promise<void> {
+  protectForAuthorityLoss(): Promise<void> {
+    if (this.authorityLossProtection) return this.authorityLossProtection;
+    this.reopenCoordinator.invalidate();
+    this.saveCoordinator.invalidate();
     this.autosaveCoordinator?.dispose();
+    const protection = (async () => {
+      await this.recoveryManager?.protectCurrent();
+      await this.recoveryManager?.close();
+    })();
+    this.authorityLossProtection = protection;
+    return protection;
+  }
+
+  async dispose(): Promise<void> {
+    this.reopenCoordinator.invalidate();
+    this.autosaveCoordinator?.dispose();
+    if (this.authorityLossProtection) {
+      await this.authorityLossProtection;
+      return;
+    }
     await this.recoveryManager?.close();
   }
 }

@@ -73,6 +73,39 @@ function replaceWithCanonicalRoot(): void {
   window.location.replace('/');
 }
 
+const AUTHORITY_LOSS_BOUNDARY_ID = 'vnext-authority-loss-boundary';
+
+function showAuthorityLossBoundary(
+  root: HTMLElement,
+  state: 'protecting' | 'protection-failed',
+  message: string
+): void {
+  root.setAttribute('inert', '');
+  root.setAttribute('aria-hidden', 'true');
+  root.style.display = 'none';
+
+  let boundary = document.getElementById(AUTHORITY_LOSS_BOUNDARY_ID);
+  if (!boundary) {
+    boundary = document.createElement('main');
+    boundary.id = AUTHORITY_LOSS_BOUNDARY_ID;
+    boundary.className = 'vnext-access-shell';
+    root.insertAdjacentElement('afterend', boundary);
+  }
+  boundary.setAttribute('data-vnext-access-state', state);
+  boundary.replaceChildren();
+  const card = document.createElement('section');
+  card.className = 'vnext-access-card';
+  card.setAttribute('role', state === 'protecting' ? 'status' : 'alert');
+  const heading = document.createElement('h1');
+  heading.textContent = state === 'protecting'
+    ? 'Protegendo alterações locais…'
+    : 'Proteção local não concluída';
+  const body = document.createElement('p');
+  body.textContent = message;
+  card.append(heading, body);
+  boundary.append(card);
+}
+
 export function VNextAccessResolving({ message = 'Validando acesso…' }: { readonly message?: string }) {
   return (
     <main className="vnext-access-shell" data-vnext-access-state="resolving">
@@ -163,20 +196,39 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   let revalidatingServerAccess = false;
   let runtime: VNextPersistenceRuntime | undefined;
   let detachOnlineRetry: (() => void) | undefined;
+  let authorityExit: Promise<void> | undefined;
 
-  const exitProtectedVNext = () => {
-    if (authorityInvalidated) return;
+  const exitProtectedVNext = (): Promise<void> => {
+    if (authorityExit) return authorityExit;
     authorityInvalidated = true;
     detachOnlineRetry?.();
-    void runtime?.dispose();
-    renderResolving();
-    replaceWithCanonicalRoot();
+    showAuthorityLossBoundary(
+      root,
+      'protecting',
+      'A edição foi bloqueada enquanto protegemos suas alterações no Recovery local.'
+    );
+    const activeRuntime = runtime;
+    authorityExit = (async () => {
+      try {
+        await activeRuntime?.protectForAuthorityLoss();
+      } catch {
+        showAuthorityLossBoundary(
+          root,
+          'protection-failed',
+          'Não foi possível confirmar a proteção local. Esta aba continuará bloqueada para evitar perda ou atribuição incorreta das alterações.'
+        );
+        return;
+      }
+      unsubscribeAuth();
+      replaceWithCanonicalRoot();
+    })();
+    return authorityExit;
   };
 
   const unsubscribeAuth = useAuthStore.subscribe((state) => {
     if (revalidatingServerAccess || authorityInvalidated) return;
     if (state.status !== 'authenticated' || state.userId !== authorizedUserId) {
-      exitProtectedVNext();
+      void exitProtectedVNext();
     }
   });
   window.addEventListener('pagehide', unsubscribeAuth, { once: true });
@@ -190,7 +242,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     revalidatingServerAccess = false;
 
     if (nextAuth.status !== 'authenticated' || nextAuth.userId !== authorizedUserId) {
-      exitProtectedVNext();
+      await exitProtectedVNext();
       return;
     }
 
@@ -205,7 +257,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
               const retryAuth = useAuthStore.getState();
               revalidatingServerAccess = false;
               if (retryAuth.status !== 'authenticated' || retryAuth.userId !== authorizedUserId) {
-                exitProtectedVNext();
+                await exitProtectedVNext();
                 return;
               }
               window.location.reload();

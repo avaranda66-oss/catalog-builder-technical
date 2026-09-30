@@ -67,8 +67,13 @@ export interface SaveCoordinatorOptions {
 export class SaveCoordinator {
   private flight: SaveFlight | undefined;
   private ambiguousAttempt: SaveAttempt | undefined;
+  private remoteDispatchInvalidated = false;
 
   constructor(private readonly options: SaveCoordinatorOptions) {}
+
+  invalidate(): void {
+    this.remoteDispatchInvalidated = true;
+  }
 
   hasUnresolvedActiveMutation(): boolean {
     const active = this.options.workspace.getSnapshot().binding;
@@ -187,6 +192,10 @@ export class SaveCoordinator {
     const snapshot = this.options.workspace.getSnapshot();
     return snapshot.session === attempt.session
       && this.options.workspace.matches(attempt.openSessionId, attempt.authLineage);
+  }
+
+  private mayBeginRemoteOperation(attempt: SaveAttemptBase): boolean {
+    return !this.remoteDispatchInvalidated && this.isCurrent(attempt);
   }
 
   private rebindAmbiguousAttempt(attempt: SaveAttempt): SaveAttempt | undefined {
@@ -312,6 +321,9 @@ export class SaveCoordinator {
   }
 
   private async dispatchAttempt(attempt: SaveAttempt): Promise<ManualSaveResult> {
+    if (!this.mayBeginRemoteOperation(attempt)) {
+      return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
     let result: PersistenceResult<CatalogPersistenceEnvelope>;
     try {
       result = await this.options.repository.saveCAS(attempt.request);
@@ -347,7 +359,9 @@ export class SaveCoordinator {
   }
 
   private async reconcileAmbiguous(attempt: SaveAttempt): Promise<ManualSaveResult> {
-    if (!this.isCurrent(attempt)) return { ok: false, error: { code: 'STALE_RESULT' } };
+    if (!this.mayBeginRemoteOperation(attempt)) {
+      return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
     this.options.workspace.setPhase('ambiguous', 'Verifying the previous save');
 
     let read: PersistenceResult<CatalogPersistenceEnvelope>;
@@ -411,6 +425,10 @@ export class SaveCoordinator {
         'Authoritative state digest does not match the captured remote base'
       );
       return { ok: false, error: { code: 'REMOTE_DIVERGENCE' } };
+    }
+
+    if (!this.mayBeginRemoteOperation(attempt)) {
+      return { ok: false, error: { code: 'STALE_RESULT' } };
     }
 
     let replay: PersistenceResult<CatalogPersistenceEnvelope>;
