@@ -89,7 +89,7 @@ let pendingOpen: Deferred<{ data: unknown; error: null }> | undefined;
 let pendingOpenStarted = deferred<void>();
 let pendingAsset: Deferred<{ urls: Map<string, string>; states: Map<string, AssetRuntimeState> }> | undefined;
 let pendingAssetStarted = deferred<void>();
-let pendingSave: Deferred<{ data: unknown; error: null }> | undefined;
+let pendingSave: Deferred<{ data: unknown; error: { code?: string; message?: string } | null }> | undefined;
 let pendingSaveStarted = deferred<void>();
 let saveCount = 0;
 let getCount = 0;
@@ -261,6 +261,7 @@ declare global {
       beginPendingSave(): void;
       waitPendingSaveStarted(): Promise<void>;
       resolvePendingSave(): void;
+      resolvePendingSaveAmbiguous(): void;
       recoveryFor(identity: string): Promise<RecoveryView[]>;
       rpcState(): unknown;
     };
@@ -353,7 +354,7 @@ window.__L1_PROOF__ = {
     pendingAsset = undefined;
   },
   beginPendingSave() {
-    pendingSave = deferred<{ data: unknown; error: null }>();
+    pendingSave = deferred<{ data: unknown; error: { code?: string; message?: string } | null }>();
     pendingSaveStarted = deferred<void>();
   },
   waitPendingSaveStarted() {
@@ -365,6 +366,14 @@ window.__L1_PROOF__ = {
     const expected = saveRequest.p_expected_remote_revision as number;
     const mutationId = saveRequest.p_mutation_id as string;
     pendingSave.resolve({ data: envelope(document, expected + 1, mutationId), error: null });
+    pendingSave = undefined;
+  },
+  resolvePendingSaveAmbiguous() {
+    if (!pendingSave) throw new Error('No pending save');
+    pendingSave.resolve({
+      data: null,
+      error: { code: 'ETIMEDOUT', message: 'L1 controlled ambiguous timeout' },
+    });
     pendingSave = undefined;
   },
   recoveryFor,

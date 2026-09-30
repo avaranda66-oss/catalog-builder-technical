@@ -384,6 +384,7 @@ export class VNextPersistenceRuntime {
   protectForAuthorityLoss(): Promise<void> {
     if (this.authorityLossProtection) return this.authorityLossProtection;
     this.reopenCoordinator.invalidate();
+    this.saveCoordinator.invalidate();
     this.autosaveCoordinator?.dispose();
     const protection = (async () => {
       await this.recoveryManager?.protectCurrent();

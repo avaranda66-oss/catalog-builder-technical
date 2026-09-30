@@ -151,6 +151,43 @@ try {
   const pendingAssetEvidence = { lateEditorMounted: false, navigatedAfterProtection: true };
   await assetContext.close();
 
+  const preDispatchContext = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const preDispatchPage = await preDispatchContext.newPage();
+  watch(preDispatchPage, 'pre-dispatch-A-B');
+  await setIdentityAtRoot(preDispatchPage, A);
+  await openEditor(preDispatchPage);
+  await preDispatchPage.evaluate(() => {
+    window.__L1_PROOF__.blockRecovery();
+    window.__L1_PROOF__.blockAuthorityProtection();
+    window.__L1_PROOF__.editTitle('Prepared by A before dispatch');
+  });
+  const preDispatchSave = preDispatchPage.evaluate(() => window.__L1_PROOF__.save());
+  await preDispatchPage.evaluate(() => window.__L1_PROOF__.waitRecoveryStarted());
+  assert.equal((await preDispatchPage.evaluate(() => window.__L1_PROOF__.rpcState())).saveCount, 0);
+  await preDispatchPage.evaluate(id => window.__L1_PROOF__.setNextIdentity(id), B);
+  await preDispatchPage.locator('[data-vnext-access-state="protecting"]').waitFor();
+  await preDispatchPage.evaluate(() => window.__L1_PROOF__.waitAuthorityProtectionStarted());
+  await preDispatchPage.evaluate(() => window.__L1_PROOF__.releaseRecovery());
+  assert.deepEqual(await preDispatchSave, {
+    ok: false,
+    error: { code: 'STALE_RESULT' },
+  });
+  const preDispatchRpc = await preDispatchPage.evaluate(() => window.__L1_PROOF__.rpcState());
+  assert.equal(preDispatchRpc.saveCount, 0);
+  const preDispatchRecoveryA = await rec(preDispatchPage, A);
+  assert.equal(preDispatchRecoveryA.length, 1);
+  assert.equal(preDispatchRecoveryA[0].title, 'Prepared by A before dispatch');
+  assert.deepEqual(await rec(preDispatchPage, B), []);
+  await preDispatchPage.evaluate(() => window.__L1_PROOF__.releaseAuthorityProtection());
+  await preDispatchPage.waitForURL(origin + '/');
+  const preDispatchEvidence = {
+    saveDispatchCount: preDispatchRpc.saveCount,
+    aRecoveryTitle: preDispatchRecoveryA[0].title,
+    bRecoveryCount: 0,
+    staleResult: true,
+  };
+  await preDispatchContext.close();
+
   const saveContext = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const savePage = await saveContext.newPage();
   watch(savePage, 'pending-save');
@@ -198,6 +235,44 @@ try {
   };
   await saveContext.close();
 
+  const ambiguousContext = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const ambiguousPage = await ambiguousContext.newPage();
+  watch(ambiguousPage, 'ambiguous-after-authority-loss');
+  await setIdentityAtRoot(ambiguousPage, A);
+  await openEditor(ambiguousPage);
+  await ambiguousPage.evaluate(() => {
+    window.__L1_PROOF__.beginPendingSave();
+    window.__L1_PROOF__.blockAuthorityProtection();
+    window.__L1_PROOF__.editTitle('Ambiguous A before authority loss');
+  });
+  const ambiguousSave = ambiguousPage.evaluate(() => window.__L1_PROOF__.save());
+  await ambiguousPage.evaluate(() => window.__L1_PROOF__.waitPendingSaveStarted());
+  const ambiguousBefore = await ambiguousPage.evaluate(() => window.__L1_PROOF__.rpcState());
+  assert.equal(ambiguousBefore.saveCount, 1);
+  await ambiguousPage.evaluate(() => window.__L1_PROOF__.loseAuthority());
+  await ambiguousPage.locator('[data-vnext-access-state="protecting"]').waitFor();
+  await ambiguousPage.evaluate(() => window.__L1_PROOF__.waitAuthorityProtectionStarted());
+  await ambiguousPage.evaluate(() => window.__L1_PROOF__.resolvePendingSaveAmbiguous());
+  assert.deepEqual(await ambiguousSave, { ok: false, error: { code: 'STALE_RESULT' } });
+  const ambiguousAfter = await ambiguousPage.evaluate(() => window.__L1_PROOF__.rpcState());
+  assert.equal(ambiguousAfter.saveCount, 1);
+  assert.equal(ambiguousAfter.getCount, ambiguousBefore.getCount);
+  const ambiguousRecoveryA = await rec(ambiguousPage, A);
+  assert.equal(ambiguousRecoveryA.length, 1);
+  assert.equal(ambiguousRecoveryA[0].pendingMutationId !== undefined, true);
+  assert.deepEqual(await rec(ambiguousPage, B), []);
+  await ambiguousPage.evaluate(() => window.__L1_PROOF__.releaseAuthorityProtection());
+  await ambiguousPage.waitForURL(origin + '/');
+  const ambiguousEvidence = {
+    initialSaveDispatchCount: ambiguousBefore.saveCount,
+    verificationDispatchDelta: ambiguousAfter.getCount - ambiguousBefore.getCount,
+    replayDispatchCount: ambiguousAfter.saveCount - ambiguousBefore.saveCount,
+    pendingMutationPreserved: ambiguousRecoveryA[0].pendingMutationId !== undefined,
+    bRecoveryCount: 0,
+    staleResult: true,
+  };
+  await ambiguousContext.close();
+
   const failureContext = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const failurePage = await failureContext.newPage();
   watch(failurePage, 'protection-failure');
@@ -234,7 +309,9 @@ try {
       dirtyAuthorityLossAndIdentityIsolation: identityEvidence,
       pendingOpen: pendingOpenEvidence,
       pendingAssetResolution: pendingAssetEvidence,
+      preDispatchAuthorityLossAtoB: preDispatchEvidence,
       alreadyDispatchedSave: pendingSaveEvidence,
+      ambiguousAfterAuthorityLoss: ambiguousEvidence,
       protectionFailure: failureEvidence,
     },
     ...errors,

@@ -227,6 +227,97 @@ describe('L1 authority-loss protection boundary', () => {
     expect(runtime.workspace.getSnapshot().session.getSnapshot().document.id).toBe(A_ID);
   });
 
+  it('L1-I blocks a Save that entered preparation but had not crossed the remote boundary', async () => {
+    const recovery = new DelayedRecoveryRepository();
+    const saveCAS = vi.fn(() => failure<CatalogPersistenceEnvelope>());
+    const { runtime, session } = runtimeFor(repositoryBase({ saveCAS }), recovery);
+    session.execute({ type: 'document.rename', title: 'Prepared but not dispatched' });
+
+    const save = runtime.manualSave();
+    await recovery.started.promise;
+    expect(saveCAS).not.toHaveBeenCalled();
+
+    const protection = runtime.protectForAuthorityLoss();
+    recovery.release.resolve();
+
+    expect(await save).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    await protection;
+    expect(saveCAS).not.toHaveBeenCalled();
+
+    const recordsA = await recovery.inner.listByScope(AUTH_A);
+    expect(recordsA).toHaveLength(1);
+    expect(recordsA[0]).toMatchObject({
+      status: 'VALID',
+      record: { documentSnapshot: { title: 'Prepared but not dispatched' } },
+    });
+    expect(await recovery.inner.listByScope('authority-b')).toEqual([]);
+  });
+
+  it('L1-K blocks ambiguous verification and replay after authority loss', async () => {
+    const remote = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    const saveCAS = vi.fn(() => remote.promise);
+    const getCatalog = vi.fn(() => failure<CatalogPersistenceEnvelope>());
+    const recovery = new InMemoryRecoveryRepository();
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS, getCatalog }),
+      recovery
+    );
+    session.execute({ type: 'document.rename', title: 'Ambiguous A mutation' });
+
+    const save = runtime.manualSave();
+    await vi.waitFor(() => expect(saveCAS).toHaveBeenCalledTimes(1));
+    await runtime.protectForAuthorityLoss();
+
+    remote.resolve({
+      ok: false,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' },
+    });
+
+    expect(await save).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(getCatalog).not.toHaveBeenCalled();
+
+    const recordsA = await recovery.listByScope(AUTH_A);
+    expect(recordsA).toHaveLength(1);
+    expect(recordsA[0]).toMatchObject({
+      status: 'VALID',
+      record: {
+        documentSnapshot: { title: 'Ambiguous A mutation' },
+        pendingRemoteMutation: { mutationId: MUTATION_1 },
+      },
+    });
+    expect(await recovery.listByScope('authority-b')).toEqual([]);
+  });
+
+  it('L1-K blocks replay when verification was already dispatched before authority loss', async () => {
+    const verification = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    const saveCAS = vi.fn(() => Promise.resolve({
+      ok: false as const,
+      error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const },
+    }));
+    const getCatalog = vi.fn(() => verification.promise);
+    const recovery = new InMemoryRecoveryRepository();
+    const { runtime, session } = runtimeFor(
+      repositoryBase({ saveCAS, getCatalog }),
+      recovery
+    );
+    session.execute({ type: 'document.rename', title: 'Replay must be fenced' });
+
+    const save = runtime.manualSave();
+    await vi.waitFor(() => expect(getCatalog).toHaveBeenCalledTimes(1));
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+
+    await runtime.protectForAuthorityLoss();
+    verification.resolve({ ok: true, value: envelope() });
+    expect(await save).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect((await recovery.listByScope(AUTH_A))[0]).toMatchObject({
+      status: 'VALID',
+      record: { pendingRemoteMutation: { mutationId: MUTATION_1 } },
+    });
+  });
+
   it('L1-G keeps an already-dispatched Save owned by A and blocks any new dispatch', async () => {
     const remote = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
     let request!: SaveCatalogCasRequest;
