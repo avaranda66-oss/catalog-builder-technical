@@ -334,6 +334,7 @@ export function EditorWorkspace({
   persistence,
   onRequestLibrary,
   onRequestTranslation,
+  onRequestPublication,
   demoAssets = false,
 }: {
   session: DocumentSession;
@@ -341,6 +342,7 @@ export function EditorWorkspace({
   persistence?: EditorWorkspacePersistenceProps;
   onRequestLibrary?: () => void;
   onRequestTranslation?: () => void;
+  onRequestPublication?: () => void;
 }) {
   const snapshot = useDocumentSession(session);
   const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
@@ -3609,6 +3611,8 @@ export function EditorWorkspace({
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
+          {onRequestPublication && <button type="button" data-editor-action="publish" data-authoring-context-transition=""
+            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestPublication(); }}>Publicar / PDF</button>}
           {onRequestTranslation && <button type="button" data-editor-action="translate" data-authoring-context-transition=""
             onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
           {persistence && onRequestLibrary && (

@@ -449,6 +449,17 @@ describe('VNext architecture boundary',()=>{
     expect(coordinator).not.toContain('repository.createCatalog');
   });
 
+  it('keeps W5.C publication on the canonical renderer and existing readiness pipeline', () => {
+    const review = readFileSync(resolve(vnextRoot, 'publication/review.ts'), 'utf8');
+    const dialog = readFileSync(resolve(vnextRoot, 'app/PublicationReview.tsx'), 'utf8');
+    expect(review).toContain('parseCanonicalDocument');
+    for (const authority of ['compilePlans', 'loadFonts', 'resolveAssets', 'decodeImages', 'measureTables', 'captureSnapshot', 'compareSnapshots', 'layoutReport']) expect(review).toContain(authority);
+    expect(dialog).toContain('<DocumentRenderer');
+    expect(dialog).toContain('verifyPublicationForPrint');
+    expect(dialog).toContain('window.print()');
+    expect(review + dialog).not.toMatch(/html2canvas|jsPDF|localStorage|sessionStorage|createCatalog|saveCatalog|translateCatalog|document\.write|innerHTML/);
+  });
+
   it('keeps W3.F on one application clone authority and the hardened W3.E Create coordinator',()=>{
     const applicationSource=filesUnder(resolve(vnextRoot,'application'))
       .filter(path=>/\.ts$/.test(path))

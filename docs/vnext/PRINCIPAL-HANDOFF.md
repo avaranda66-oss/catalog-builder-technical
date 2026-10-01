@@ -1,5 +1,13 @@
 # Catalog Builder VNext — Principal Handoff
 
+## Current resume checkpoint — 2026-10-01
+
+W5.A/W5.B are canonical. Main `49db0f976efa1c39be54a97dad83d67d85bdae80`, tree `c04d3e6864e29d017dd9827c3459bbfe69161134`; PR #58 merged; post-merge gate `36818454508` attempt 1 SUCCESS. W5.C is implemented in the preserved `codex/w5c-publication-review` worktree, pending final verification/promotion. [W5 closeout](W5-CLOSEOUT.md) is the current reconstruction entry point.
+
+The latest human Master Night Shift delegates safe completion, conditional squash after all gates and continued bounded W6 Father readiness after W5.C canonical push SUCCESS. Human boundaries remain migrations/SQL/RLS, auth or Recovery/L1 redesign, secrets, destructive production operations and rewritten history. GitHub live outranks this checkpoint. The following W4 snapshot is historical; its W5-not-started/preflight-only statements are superseded and must not restart completed work.
+
+## Historical W4 closeout snapshot
+
 STATUS: **W4 COMPLETE / CANONICAL; W5 NOT STARTED; GITHUB LIVE IS AUTHORITY**
 
 DATE: 2026-09-28

@@ -85,6 +85,13 @@ function showAuthorityLossBoundary(
   root.setAttribute('inert', '');
   root.setAttribute('aria-hidden', 'true');
   root.style.display = 'none';
+  // Publication lives in a body portal, outside the protected React root.
+  for (const portal of document.querySelectorAll<HTMLElement>('[data-publication-host]')) {
+    portal.inert = true;
+    portal.setAttribute('aria-hidden', 'true');
+    portal.style.display = 'none';
+    portal.removeAttribute('data-print-approved');
+  }
 
   let boundary = document.getElementById(AUTHORITY_LOSS_BOUNDARY_ID);
   if (!boundary) {
@@ -444,6 +451,13 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
           onRequestLibrary={requestLibrary}
           translation={translation}
           onOpenTranslatedCopy={catalogId => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
+          getPublicationSource={() => {
+            if (authorityInvalidated || !runtime) return undefined;
+            const source = runtime.workspace.getSnapshot(), binding = source.binding;
+            if (binding.kind !== 'PERSISTED' || source.dirty || source.save.phase !== 'idle' || runtime.saveCoordinator.hasUnresolvedActiveMutation()) return undefined;
+            return { document: source.session.getSnapshot().document, remoteRevision: binding.remoteRevision,
+              openSessionId: binding.openSessionId, authLineage: lineage(), authorityScopeId: authorityScopeId(authorizedUserId), assetUrls: source.assetUrls };
+          }}
         />
       </React.StrictMode>
     );

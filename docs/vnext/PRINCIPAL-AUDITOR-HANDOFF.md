@@ -1,5 +1,13 @@
 # Catalog Builder VNext — Principal / Auditor Executive Handoff
 
+## Current resume checkpoint — 2026-10-01
+
+Current main: `49db0f976efa1c39be54a97dad83d67d85bdae80`; tree `c04d3e6864e29d017dd9827c3459bbfe69161134`; PR #58 W5.B merged; exact push gate `36818454508` attempt 1 SUCCESS. W5.A/B are canonical; W5.C canonical publication/review/PDF is implemented and pending final checks/promotion on `codex/w5c-publication-review`. Start at [W5 closeout](W5-CLOSEOUT.md).
+
+Latest human Master Night Shift supersedes the historical W5-not-started/preflight-only restrictions below. Audit the preserved W5.C diff, exact-head CI and source/renderer/readiness/modal invariants. Conditional squash requires matching live base, all gates and no unresolved HIGH/CRITICAL. W6 Father readiness follows only after the W5.C exact main push gate is green. Preserve the following historical W4 evidence; do not repeat completed W5 archaeology or reset uncommitted work.
+
+## Historical W4 closeout snapshot
+
 **W4 COMPLETE / CANONICAL**
 
 **W5 NOT STARTED**

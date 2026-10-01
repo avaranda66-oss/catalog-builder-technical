@@ -79,3 +79,6 @@ jobs:
 
       - name: W5.B translation review and copy Chromium proof
         run: node tests/vnext/proof/w5b-translation-review-copy-proof.mjs
+
+      - name: W5.C canonical publication review Chromium and PDF proof
+        run: node tests/vnext/proof/w5c-publication-review-proof.mjs

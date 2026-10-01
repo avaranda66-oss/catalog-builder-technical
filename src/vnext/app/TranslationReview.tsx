@@ -1,6 +1,7 @@
 import React from 'react';
 import { TranslationReviewCoordinator } from '../translation/review-coordinator';
 import { translationReviewKey, type TranslationReviewRun } from '../translation/candidate';
+import { trapReviewTab, useReviewDialog } from './review-dialog';
 
 const labels: Readonly<Record<string, string>> = {
   catalogTitle: 'Nome do catálogo', textObject: 'Texto', tableCell: 'Célula da tabela',
@@ -26,21 +27,16 @@ export function TranslationReview({ coordinator, onClose, onOpenCopy }: {
   const snapshot = React.useSyncExternalStore(coordinator.subscribe, coordinator.getSnapshot, coordinator.getSnapshot);
   const close = () => { if (coordinator.cancel()) onClose(); };
   const busy = snapshot.phase === 'generating' || snapshot.phase === 'creating';
-  const closeRef = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => { closeRef.current?.focus(); }, []);
+  const dialogRef = React.useRef<HTMLElement>(null);
+  useReviewDialog(dialogRef, `${snapshot.phase}:${snapshot.pending}`);
   return <div className="vnext-translation-backdrop">
-    <section role="dialog" aria-modal="true" aria-labelledby="translation-heading" data-translation-review=""
+    <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="translation-heading" data-translation-review=""
       className="vnext-translation-dialog" onKeyDown={event => {
         if (event.key === 'Escape' && !snapshot.pending && snapshot.phase !== 'creating') close();
-        if (event.key === 'Tab') {
-          const elements = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),textarea:not(:disabled),select:not(:disabled)')];
-          const first = elements[0], last = elements.at(-1);
-          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        }
+        trapReviewTab(event);
       }}>
       <header><h2 id="translation-heading">Traduzir catálogo</h2>
-        <button ref={closeRef} type="button" onClick={close} disabled={snapshot.phase === 'creating' || snapshot.pending}>Fechar</button></header>
+        <button type="button" onClick={close} disabled={snapshot.phase === 'creating' || snapshot.pending}>Fechar</button></header>
       <p>Crie uma cópia em espanhol. O catálogo original será preservado.</p>
       <label>Idioma de destino <select aria-label="Idioma de destino" disabled={busy || snapshot.pending}><option value="es-ES">Espanhol</option></select></label>
       {snapshot.message && <p role="alert">{snapshot.message}</p>}

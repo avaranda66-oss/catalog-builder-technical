@@ -1,6 +1,6 @@
 # W5.B — Review and persist a translated catalog copy
 
-Status: Ready for Review
+Status: Done / Canonical — PR #58, main `49db0f976efa1c39be54a97dad83d67d85bdae80`, post-merge Quality Gates `36818454508` attempt 1 SUCCESS (revalidated 2026-10-01).
 
 ## Principal contract
 
@@ -34,7 +34,7 @@ Forbidden: backend/functions/migrations/SQL/RLS, auth/Recovery/L1/CAS redesign, 
 - [x] Expose production translation/review/copy UI and gateway composition.
 - [x] Prove focused invariants and controlled production Chromium journey.
 - [x] Pass full gates and unchanged historical proofs.
-- [ ] Adversarial audit, exact-head CI, conditional promotion and canonical gate.
+- [x] Adversarial audit, exact-head CI, conditional promotion and canonical gate.
 
 ## File List
 
@@ -64,4 +64,4 @@ Local infrastructure diagnosis: an ignored dependency junction parked under scra
 
 CodeRabbit completed the 12-file audit-only Linux snapshot review with one minor and zero HIGH/CRITICAL. Its keyboard context-transition finding was verified by two failing-before/passing-after UI regressions and fixed by calling the existing authoring barrier directly on click. Final self-review found no unresolved introduced HIGH/CRITICAL. An agent-caused Windows/WSL snapshot preparation error briefly unpacked tracked baseline files locally; the exact preserved overlay restored them before promotion. The interrupted historical export proof passed unchanged after restoration. No canonical commit/history was changed by the incident.
 
-Exact-head CI and conditional promotion remain the final checklist gate. Immutable GitHub IDs and canonical post-merge evidence are recorded externally after they exist; this story does not claim a merge or real-provider acceptance in advance.
+Promotion closeout: PR #58 is merged, canonical SHA `49db0f976efa1c39be54a97dad83d67d85bdae80`, tree `c04d3e6864e29d017dd9827c3459bbfe69161134`; exact main push Quality Gates `36818454508` attempt 1 completed successfully. This durable update records the already-completed promotion, not a new W5.B implementation or rerun. Real-provider/backend acceptance remains separate.
