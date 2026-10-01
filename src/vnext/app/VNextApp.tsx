@@ -21,6 +21,7 @@ export interface VNextAppProps {
   session?: DocumentSession;
   runtime?: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
+  simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
@@ -30,6 +31,7 @@ export interface VNextAppProps {
 function RuntimeWorkspace({
   runtime,
   assetBridge,
+  simpleByDefault,
   onRequestLibrary,
   translation,
   onOpenTranslatedCopy,
@@ -37,6 +39,7 @@ function RuntimeWorkspace({
 }: {
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
+  simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
@@ -74,6 +77,7 @@ function RuntimeWorkspace({
         <EditorWorkspace
           key={snapshot.binding.openSessionId}
           session={snapshot.session}
+          simpleByDefault={simpleByDefault}
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
           onRequestPublication={getPublicationSource ? () => setPublicationOpen(true) : undefined}
@@ -112,18 +116,18 @@ function RuntimeWorkspace({
   );
 }
 
-function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSession }) {
+function InMemoryWorkspace({ suppliedSession, simpleByDefault }: { suppliedSession?: DocumentSession; simpleByDefault?: boolean }) {
   const sessionRef = React.useRef<DocumentSession | null>(null);
   if (!suppliedSession && !sessionRef.current) {
     sessionRef.current = createDocumentSession(createW2CDemoDocument(createBrowserId), { createId: createBrowserId, templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]) });
   }
   const session = suppliedSession ?? sessionRef.current;
   if (!session) throw new Error('VNext document session unavailable');
-  return <EditorWorkspace session={session} demoAssets />;
+  return <EditorWorkspace session={session} demoAssets simpleByDefault={simpleByDefault} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
-    : <InMemoryWorkspace suppliedSession={suppliedSession} />;
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
+    : <InMemoryWorkspace suppliedSession={suppliedSession} simpleByDefault={simpleByDefault} />;
 }
