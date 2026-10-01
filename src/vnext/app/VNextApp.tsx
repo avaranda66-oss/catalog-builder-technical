@@ -9,6 +9,8 @@ import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
 import './styles.css';
 import type { TranslationReviewCoordinator } from '../translation/review-coordinator';
 import { TranslationReview } from './TranslationReview';
+import { PublicationReview } from './PublicationReview';
+import type { PublicationSource } from '../publication/review';
 
 function createBrowserId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
@@ -22,6 +24,7 @@ export interface VNextAppProps {
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
+  getPublicationSource?: () => PublicationSource | undefined;
 }
 
 function RuntimeWorkspace({
@@ -30,14 +33,22 @@ function RuntimeWorkspace({
   onRequestLibrary,
   translation,
   onOpenTranslatedCopy,
+  getPublicationSource,
 }: {
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
+  getPublicationSource?: () => PublicationSource | undefined;
 }) {
   const [translationOpen, setTranslationOpen] = React.useState(false);
+  const [publicationOpen, setPublicationOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!getPublicationSource) return;
+    document.body.setAttribute('data-vnext-print-policy', '');
+    return () => document.body.removeAttribute('data-vnext-print-policy');
+  }, [getPublicationSource]);
   const snapshot = React.useSyncExternalStore(
     runtime.workspace.subscribe,
     runtime.workspace.getSnapshot,
@@ -65,6 +76,7 @@ function RuntimeWorkspace({
           session={snapshot.session}
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
+          onRequestPublication={getPublicationSource ? () => setPublicationOpen(true) : undefined}
           persistence={{
             runtime,
             openSessionId: snapshot.binding.openSessionId,
@@ -84,6 +96,9 @@ function RuntimeWorkspace({
       )}
       {activeRecoveryGatePhase === 'RELEASED' && translationOpen && translation && onOpenTranslatedCopy && (
         <TranslationReview coordinator={translation} onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
+      )}
+      {activeRecoveryGatePhase === 'RELEASED' && publicationOpen && getPublicationSource && (
+        <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)} />
       )}
       {runtime.recoveryStartup && (
         <RecoveryCenter
@@ -107,8 +122,8 @@ function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSess
   return <EditorWorkspace session={session} demoAssets />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary, translation, onOpenTranslatedCopy }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} />
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} />;
 }

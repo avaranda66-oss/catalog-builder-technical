@@ -1,5 +1,13 @@
 # Catalog Builder VNext — Project State
 
+## Current resume checkpoint — 2026-10-01
+
+W5.A and W5.B are canonical. Current main is `49db0f976efa1c39be54a97dad83d67d85bdae80`, tree `c04d3e6864e29d017dd9827c3459bbfe69161134`; PR #58 merged; push gate `36818454508` attempt 1 SUCCESS. W5.C publication/review/PDF is implemented on `codex/w5c-publication-review`, pending final checks and promotion. See [W5 closeout](W5-CLOSEOUT.md) and its W5.C story.
+
+The latest human Master Night Shift authorizes bounded W5.C completion and subsequent W6 Father-readiness slices. Squash promotion requires all local/browser/PDF gates, successful exact-head CI, unchanged live base, mergeability and no unresolved HIGH/CRITICAL finding. W6 begins only after W5.C exact post-merge main gate succeeds. GitHub live and this checkpoint supersede the historical W4 snapshot below, including its obsolete W5-not-started and next-gate statements. Preserve historical ledger/evidence; do not restart completed W5 archaeology.
+
+## Historical W4 closeout snapshot
+
 STATUS: **W4 COMPLETE / CANONICAL; W5 NOT STARTED; GITHUB LIVE IS AUTHORITY**
 
 DATE: 2026-09-28

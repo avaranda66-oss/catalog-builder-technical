@@ -6,12 +6,12 @@ import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 
 afterEach(cleanup);
 
-function entry() {
+function entry(publication = false) {
   let id = 0;
   const createId = () => `translation-entry-${++id}`;
   const session = createDocumentSession(createW2CDemoDocument(createId), { createId });
   const open = vi.fn();
-  const view = render(<EditorWorkspace session={session} onRequestTranslation={open} />);
+  const view = render(<EditorWorkspace session={session} onRequestTranslation={publication ? undefined : open} onRequestPublication={publication ? open : undefined} />);
   fireEvent.click(view.getByRole('button', { name: 'Adicionar texto' }));
   const hit = view.container.querySelector<HTMLElement>('[data-editor-object-id][data-selected="true"]')!;
   fireEvent.keyDown(hit, { key: 'Enter' });
@@ -37,5 +37,20 @@ describe('W5.B keyboard translation entry', () => {
     fireEvent.click(view.getByRole('button', { name: /^Traduzir$/ }), { detail: 0 });
     expect(open).not.toHaveBeenCalled();
     expect(view.container.querySelector('[data-text-edit-textarea]')).not.toBeNull();
+  });
+});
+
+describe('W5.C keyboard publication entry', () => {
+  it('commits visible text before publication preflight can inspect saved state', () => {
+    const { session, view, open } = entry(true);
+    fireEvent.click(view.getByRole('button', { name: /^Publicar \/ PDF$/ }), { detail: 0 });
+    expect(open).toHaveBeenCalledOnce();
+    const object = session.getSnapshot().document.pages[0].objects.find(object => object.type === 'text')!;
+    expect(object.type === 'text' && projectEditableRichText(object.text)).toBe('PRESYS conteúdo visível antes da tradução');
+  });
+  it('refuses publication transition during composition', () => {
+    const { view, open, textarea } = entry(true); fireEvent.compositionStart(textarea);
+    fireEvent.click(view.getByRole('button', { name: /^Publicar \/ PDF$/ }), { detail: 0 });
+    expect(open).not.toHaveBeenCalled();
   });
 });

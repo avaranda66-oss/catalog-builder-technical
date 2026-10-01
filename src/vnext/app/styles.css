@@ -408,3 +408,26 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-translation-source { white-space: pre-wrap; }
 .vnext-translation-source span { display: block; font-size: 12px; color: #56647a; }
 .vnext-translation-run textarea { width: 100%; min-height: 76px; box-sizing: border-box; font: inherit; padding: 8px; }
+.vnext-publication-backdrop { position: fixed; inset: 0; z-index: 100; padding: 16px; background: #17203380; display: grid; place-items: center; }
+.vnext-publication-dialog { width: min(1200px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: #fff; color: #172033; border-radius: 12px; padding: 20px; box-sizing: border-box; }
+.vnext-publication-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vnext-publication-dialog h2 { margin: 0; font-size: 20px; }
+.vnext-publication-dialog button { padding: 12px; min-height: 44px; cursor: pointer; }
+.vnext-publication-dialog button:disabled { opacity: .6; cursor: default; }
+.vnext-publication-controls { line-height: 1.5; }
+.vnext-publication-pages { max-height: 65dvh; overflow: auto; background: #eef2f6; margin-top: 16px; }
+.vnext-publication-pages > [data-editorial-root] { margin: 0 auto; }
+.vnext-publication-pages .editorial-page { margin-bottom: 16px; }
+@media print {
+  @page { size: A4; margin: 0; }
+  body[data-vnext-print-policy] { margin: 0 !important; padding: 0 !important; }
+  body[data-vnext-print-policy] > * { display: none !important; }
+  body[data-vnext-print-policy]::before { content: 'Use Publicar / PDF no catálogo para revisar as páginas antes de imprimir.'; display: block; padding: 24px; }
+  body[data-vnext-print-policy]:has(> [data-publication-status="READY"][data-print-approved="true"])::before { display: none; }
+  body[data-vnext-print-policy] > [data-publication-status="READY"][data-print-approved="true"] { display: block !important; position: static; padding: 0; background: white; }
+  body[data-vnext-print-policy] .vnext-publication-dialog { width: 210mm; max-height: none; overflow: visible; border-radius: 0; padding: 0; }
+  body[data-vnext-print-policy] .vnext-publication-dialog > header, body[data-vnext-print-policy] .vnext-publication-controls { display: none; }
+  body[data-vnext-print-policy] .vnext-publication-pages { max-height: none; overflow: visible; background: white; margin: 0; }
+  body[data-vnext-print-policy] .vnext-publication-pages > [data-editorial-root] { margin: 0; }
+  body[data-vnext-print-policy] .vnext-publication-pages .editorial-page { margin: 0; }
+}
