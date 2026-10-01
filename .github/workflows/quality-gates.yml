@@ -70,6 +70,7 @@ jobs:
           node tests/vnext/proof/editor-object-arrangement-locking-proof.mjs
           node tests/vnext/proof/editor-w4-wave4-closeout-proof.mjs
           node tests/vnext/proof/productization-p1a-workspace-proof.mjs
+          node tests/vnext/proof/productization-p1b-contextual-inspector-proof.mjs
           node tests/vnext/proof/w5a-semantic-translation-foundation-proof.mjs
           node tests/vnext/proof/pilot-a-authorship-trust-proof.mjs
           node tests/vnext/proof/pilot-b-access-entry-proof.mjs

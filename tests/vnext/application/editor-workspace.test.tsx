@@ -1298,3 +1298,30 @@ describe('P1.A simple-by-default workspace', () => {
     expect(container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
   });
 });
+
+describe('P1.B contextual inspector disclosure', () => {
+  it('hides universal geometry and locking until requested in simple mode', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    selectText(container, 501);
+    expect(container.querySelector('.vnext-info h2')).toHaveTextContent('Texto');
+    expect(container.querySelector('[data-inspector-authoring]')).toBeNull();
+    expect(container.querySelector('[data-object-locking]')).toBeNull();
+    const details = button(container, 'toggle-inspector-details');
+    expect(details).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(details);
+    expect(details).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector('[data-inspector-authoring]')).toBeTruthy();
+    expect(container.querySelector('[data-object-locking]')).toBeTruthy();
+  });
+
+  it('preserves the full historical inspector outside simple mode', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} />);
+    selectText(container, 502);
+    expect(container.querySelector('.vnext-info h2')).toHaveTextContent('Geometria do objeto');
+    expect(container.querySelector('[data-editor-action="toggle-inspector-details"]')).toBeNull();
+    expect(container.querySelector('[data-inspector-authoring]')).toBeTruthy();
+    expect(container.querySelector('[data-object-locking]')).toBeTruthy();
+  });
+});
