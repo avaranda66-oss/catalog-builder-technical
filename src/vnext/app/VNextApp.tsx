@@ -7,6 +7,8 @@ import { EditorWorkspace } from './EditorWorkspace';
 import { RecoveryCenter, type RecoveryGatePhase } from './RecoveryCenter';
 import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
 import './styles.css';
+import type { TranslationReviewCoordinator } from '../translation/review-coordinator';
+import { TranslationReview } from './TranslationReview';
 
 function createBrowserId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
@@ -18,17 +20,24 @@ export interface VNextAppProps {
   runtime?: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
   onRequestLibrary?: () => void;
+  translation?: TranslationReviewCoordinator;
+  onOpenTranslatedCopy?: (catalogId: string) => void;
 }
 
 function RuntimeWorkspace({
   runtime,
   assetBridge,
   onRequestLibrary,
+  translation,
+  onOpenTranslatedCopy,
 }: {
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
   onRequestLibrary?: () => void;
+  translation?: TranslationReviewCoordinator;
+  onOpenTranslatedCopy?: (catalogId: string) => void;
 }) {
+  const [translationOpen, setTranslationOpen] = React.useState(false);
   const snapshot = React.useSyncExternalStore(
     runtime.workspace.subscribe,
     runtime.workspace.getSnapshot,
@@ -55,6 +64,7 @@ function RuntimeWorkspace({
           key={snapshot.binding.openSessionId}
           session={snapshot.session}
           onRequestLibrary={onRequestLibrary}
+          onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
           persistence={{
             runtime,
             openSessionId: snapshot.binding.openSessionId,
@@ -71,6 +81,9 @@ function RuntimeWorkspace({
             assetBridge,
           }}
         />
+      )}
+      {activeRecoveryGatePhase === 'RELEASED' && translationOpen && translation && onOpenTranslatedCopy && (
+        <TranslationReview coordinator={translation} onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
       )}
       {runtime.recoveryStartup && (
         <RecoveryCenter
@@ -94,8 +107,8 @@ function InMemoryWorkspace({ suppliedSession }: { suppliedSession?: DocumentSess
   return <EditorWorkspace session={session} demoAssets />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, onRequestLibrary, translation, onOpenTranslatedCopy }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} />
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} />;
 }

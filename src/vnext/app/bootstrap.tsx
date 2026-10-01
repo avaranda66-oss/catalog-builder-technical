@@ -35,6 +35,8 @@ import { createPresysPageTemplateRegistry } from '../library/presys-ta25n-starte
 import { DefaultStarterDependencyPreparer, bindPresysPageReuse } from '../library/starter-dependencies';
 import { getSupabase } from '../../services/supabase.service';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { TranslationFoundationService, VNextTranslationGatewayClient, vnextTranslationGatewayInvokeFromFunctionsClient } from '../translation';
+import { TranslationReviewCoordinator } from '../translation/review-coordinator';
 import {
   currentTrustedV2ReturnTarget,
   storeTrustedV2ReturnTarget,
@@ -417,12 +419,31 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       if (runtime!.workspace.getSnapshot().session !== reusableSession) bindReusableSession();
     });
     window.addEventListener('pagehide', detachPageReuse, { once: true });
+    const translation = new TranslationReviewCoordinator({
+      foundation: new TranslationFoundationService(new VNextTranslationGatewayClient(vnextTranslationGatewayInvokeFromFunctionsClient(supabase))),
+      repository,
+      createId: createBrowserId,
+      createMutationId: createBrowserId,
+      authLineage: () => authorityInvalidated ? '' : lineage(),
+      authorityScopeId: () => authorityInvalidated ? '' : authorityScopeId(authorizedUserId),
+      getSource: () => {
+        if (authorityInvalidated || !runtime) return undefined;
+        const source = runtime.workspace.getSnapshot();
+        const binding = source.binding;
+        if (binding.kind !== 'PERSISTED' || source.dirty || source.save.phase !== 'idle' || runtime.saveCoordinator.hasUnresolvedActiveMutation()) return undefined;
+        return { document: source.session.getSnapshot().document, remoteRevision: binding.remoteRevision,
+          openSessionId: binding.openSessionId, authLineage: lineage(), authorityScopeId: authorityScopeId(authorizedUserId) };
+      },
+    });
+    window.addEventListener('pagehide', () => { translation.cancel(); }, { once: true });
     reactRoot.render(
       <React.StrictMode>
         <VNextApp
           runtime={runtime}
           assetBridge={assetBridge}
           onRequestLibrary={requestLibrary}
+          translation={translation}
+          onOpenTranslatedCopy={catalogId => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
         />
       </React.StrictMode>
     );

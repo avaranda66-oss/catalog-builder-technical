@@ -434,8 +434,19 @@ describe('VNext architecture boundary',()=>{
     expect(applicationSource.match(/class\s+IdAllocator\b/g)?.length??0).toBe(1);
     expect(applicationSource).not.toMatch(/contentEditable|innerHTML|beforeinput|compositionstart|compositionend/i);
     expect(publicationSource).not.toMatch(/data-text-edit|vnext-text-symbols|Concluir|Cancelar|technicalSymbols/i);
-    expect(editor+'\n'+textEditing).not.toMatch(/localStorage|sessionStorage|indexedDB|translation|translateText|persistDraft/i);
+    // W5.B wires an external review callback; direct Text editing still owns no translation operation.
+    expect(editor.replace(/\bonRequestTranslation\b/g,'')+'\n'+textEditing).not.toMatch(/localStorage|sessionStorage|indexedDB|translation|translateText|persistDraft/i);
+    expect(editor).not.toMatch(/translateCatalog|TranslationFoundation|repository\.createCatalog/);
     expect(editor).not.toMatch(/parentGroup|childIndex|drill.?down/i);
+  });
+
+  it('keeps W5.B candidate and review coordination outside browser, rendering and persistence implementations', () => {
+    expect(applicationGraphViolations(resolve(vnextRoot,'translation/candidate.ts'))).toEqual([]);
+    expect(persistenceGraphViolations(resolve(vnextRoot,'translation/review-coordinator.ts'))).toEqual([]);
+    const coordinator = readFileSync(resolve(vnextRoot,'translation/review-coordinator.ts'),'utf8');
+    expect(coordinator).toContain('new CatalogCloneService');
+    expect(coordinator).toContain('new PreparedCatalogCreateCoordinator');
+    expect(coordinator).not.toContain('repository.createCatalog');
   });
 
   it('keeps W3.F on one application clone authority and the hardened W3.E Create coordinator',()=>{

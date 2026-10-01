@@ -398,3 +398,13 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-access-actions, .vnext-open-failure-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .vnext-access-actions button, .vnext-open-failure-actions > button:not(.vnext-library-create) { min-height: 42px; border: 1px solid #b9c5d3; border-radius: 7px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 14px; }
 .vnext-access-actions button.is-primary { border-color: #003f78; background: #003f78; color: #fff; }
+.vnext-translation-backdrop { position: fixed; inset: 0; z-index: 100; background: #17203380; display: flex; justify-content: center; align-items: center; padding: 16px; }
+.vnext-translation-dialog { background: #fff; color: #172033; border-radius: 12px; padding: 24px; width: min(760px, 100%); max-height: 90dvh; overflow: auto; box-shadow: 0 16px 48px #17203340; }
+.vnext-translation-dialog header, .vnext-translation-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.vnext-translation-dialog button, .vnext-translation-dialog select { padding: 9px 12px; cursor: pointer; }
+.vnext-translation-dialog button:disabled { cursor: default; opacity: .6; }
+.vnext-translation-runs { display: grid; gap: 16px; margin: 20px 0; }
+.vnext-translation-run { border: 1px solid #d8deea; border-radius: 8px; padding: 12px; overflow-wrap: anywhere; }
+.vnext-translation-source { white-space: pre-wrap; }
+.vnext-translation-source span { display: block; font-size: 12px; color: #56647a; }
+.vnext-translation-run textarea { width: 100%; min-height: 76px; box-sizing: border-box; font: inherit; padding: 8px; }
