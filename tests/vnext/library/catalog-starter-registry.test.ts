@@ -3,6 +3,7 @@ import { createCatalogDocument } from '@/vnext/application';
 import {
   CatalogStarterRegistryError,
   createStaticCatalogStarterRegistry,
+  createDefaultCatalogStarterRegistry,
   type CatalogStarterDefinition,
 } from '@/vnext/library';
 
@@ -19,6 +20,14 @@ function definition(starterId: string, revision = 1): CatalogStarterDefinition {
 }
 
 describe('W3.F static Catalog Starter registry', () => {
+  it('C1-01 retains essential and lists official starter separately without leaking dependencies in summary', () => {
+    const registry = createDefaultCatalogStarterRegistry();
+    expect(registry.list().map(item => item.starterId)).toEqual(['essential-technical-sheet', 'presys-ta25n-a4']);
+    expect(registry.get('essential-technical-sheet')?.sourceDocument.assets).toEqual([]);
+    expect(registry.get('essential-technical-sheet')?.sourceDocument.pages).toHaveLength(1);
+    expect(registry.list()[1]).not.toHaveProperty('sourceDocument');
+    expect(registry.list()[1]).not.toHaveProperty('requiredAssets');
+  });
   it('preserves deterministic declaration order and exposes metadata without authored documents', () => {
     const registry = createStaticCatalogStarterRegistry([definition('alpha', 3), definition('beta', 7)]);
     expect(registry.list()).toEqual([

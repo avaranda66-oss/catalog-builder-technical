@@ -66,6 +66,7 @@ function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'creat
     : 'Não foi possível confirmar o resultado no servidor. Tente novamente.';
   if (code === 'INVALID_TITLE') return 'Digite um nome para o catálogo.';
   if (code === 'STARTER_NOT_FOUND') return 'Este modelo inicial não está mais disponível. Escolha outro modelo.';
+  if (code === 'STARTER_DEPENDENCY_UNAVAILABLE') return 'Não foi possível preparar a imagem oficial. Nenhum catálogo foi criado. Confira a conexão e tente novamente.';
   if (action === 'create') return 'Não foi possível criar o catálogo. Tente novamente.';
   if (action === 'rename') return 'Não foi possível renomear este catálogo.';
   if (action === 'archive') return 'Não foi possível arquivar este catálogo.';

@@ -17,6 +17,7 @@ import {
   type SaveFailureCode,
 } from '../persistence';
 import type { CatalogStarterRegistry, CatalogStarterSummary } from './starter-registry';
+import { StarterDependencyError, type StarterDependencyPreparer } from './starter-dependencies';
 
 export const CATALOG_CLONE_ORIGIN_KIND = {
   duplicate: 'duplicate',
@@ -45,6 +46,7 @@ export type CatalogLibraryFailureCode =
   | SaveFailureCode
   | 'INVALID_TITLE'
   | 'STARTER_NOT_FOUND'
+  | 'STARTER_DEPENDENCY_UNAVAILABLE'
   | 'ACTION_REJECTED'
   | 'REMOTE_DIVERGENCE'
   | 'STALE_RESULT';
@@ -62,6 +64,7 @@ export interface CatalogLibraryServiceOptions {
   readonly authLineage: () => string;
   readonly authorityScopeId: () => string;
   readonly starterRegistry?: CatalogStarterRegistry;
+  readonly starterDependencies?: StarterDependencyPreparer;
 }
 
 interface CatalogLibraryAuthority {
@@ -124,6 +127,7 @@ export function projectCatalogLibraryItems(
 export class CatalogLibraryService {
   private readonly cloneService: CatalogCloneService;
   private readonly createCoordinator: PreparedCatalogCreateCoordinator;
+  private starterCreateInFlight?: { starterId: string; attempt: Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> };
 
   constructor(private readonly options: CatalogLibraryServiceOptions) {
     this.cloneService = new CatalogCloneService(options.createId);
@@ -234,6 +238,18 @@ export class CatalogLibraryService {
   }
 
   async createFromStarter(starterId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+    if (this.starterCreateInFlight) {
+      return this.starterCreateInFlight.starterId === starterId
+        ? this.starterCreateInFlight.attempt
+        : failure('STALE_RESULT', 'Another starter creation is already in progress');
+    }
+    const attempt = this.prepareStarterCreate(starterId);
+    this.starterCreateInFlight = { starterId, attempt };
+    try { return await attempt; }
+    finally { if (this.starterCreateInFlight?.attempt === attempt) this.starterCreateInFlight = undefined; }
+  }
+
+  private async prepareStarterCreate(starterId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
     const continued = await this.continuePendingCreate(authority);
     if (continued) return continued;
@@ -242,8 +258,15 @@ export class CatalogLibraryService {
 
     let documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
     try {
-      documentSnapshot = this.cloneService.clone(starter.sourceDocument);
+      let source = starter.sourceDocument;
+      if (starter.requiredAssets?.length) {
+        if (!this.options.starterDependencies) return failure('STARTER_DEPENDENCY_UNAVAILABLE');
+        source = await this.options.starterDependencies.prepare(starter, authority, () => this.authorityIsCurrent(authority));
+        if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+      }
+      documentSnapshot = this.cloneService.clone(source);
     } catch (error) {
+      if (error instanceof StarterDependencyError) return failure(error.code, error.message);
       return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
     }
     const origin: CatalogCloneOriginMetadata = {

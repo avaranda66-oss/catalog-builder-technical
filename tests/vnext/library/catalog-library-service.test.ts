@@ -829,6 +829,12 @@ describe('W3.F Duplicate and Starter creation', () => {
       label: 'Ficha técnica essencial',
       description: 'Título e tabela básica para começar uma ficha de produto.',
       category: 'Ficha técnica',
+    }, {
+      starterId: 'presys-ta25n-a4',
+      revision: 1,
+      label: 'PRESYS · TA-25N — produto e especificações',
+      description: 'Duas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.',
+      category: 'PRESYS',
     }]);
 
     const first = await library.createFromStarter('essential-technical-sheet');

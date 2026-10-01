@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {
   createDocumentSession,
-  createStaticPageTemplateRegistry,
   type ApplicationExecutionDependencies,
 } from '../application';
 import {
@@ -32,7 +31,8 @@ import {
 import { CatalogLibrary, CatalogOpenFailure } from './CatalogLibrary';
 import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-defaults';
 import { VNextApp } from './VNextApp';
-import { W2E_PAGE_TEMPLATE } from './page-template-fixtures';
+import { createPresysPageTemplateRegistry } from '../library/presys-ta25n-starter';
+import { DefaultStarterDependencyPreparer, bindPresysPageReuse } from '../library/starter-dependencies';
 import { getSupabase } from '../../services/supabase.service';
 import { useAuthStore } from '../../stores/useAuthStore';
 import {
@@ -181,9 +181,10 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     return;
   }
 
+  const presysTemplates = createPresysPageTemplateRegistry();
   const applicationDependencies: ApplicationExecutionDependencies = {
     createId: createBrowserId,
-    templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]),
+    templateRegistry: presysTemplates,
   };
   const repository: CatalogRepository = new SupabaseCatalogRepository(
     vnextRpcClientFromSupabase(supabase)
@@ -269,6 +270,19 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     );
   };
 
+  const assetRepository = new SupabaseAssetRepository(
+    vnextRpcClientFromSupabase(supabase),
+    supabaseStorageClientFromSupabase(supabase.storage)
+  );
+  let getActiveLineage: () => AssetLineageContext = () => ({
+    authLineage: lineage(),
+    authorityScopeId: authorityScopeId(authorizedUserId),
+  });
+  const assetBridge = new DefaultAssetPersistenceBridge(assetRepository, {
+    getActiveLineage: () => authorityInvalidated ? { authLineage: '', authorityScopeId: '' } : getActiveLineage(),
+  });
+  const starterDependencies = new DefaultStarterDependencyPreparer(assetBridge);
+
   if (!requestedCatalogId) {
     const library = new CatalogLibraryService({
       repository,
@@ -276,9 +290,10 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       createId: createBrowserId,
       createMutationId: createBrowserId,
       createOpenSessionId: createBrowserId,
-      authLineage: lineage,
-      authorityScopeId: () => authorityScopeId(authorizedUserId),
+      authLineage: () => authorityInvalidated ? '' : lineage(),
+      authorityScopeId: () => authorityInvalidated ? '' : authorityScopeId(authorizedUserId),
       starterRegistry: createDefaultCatalogStarterRegistry(),
+      starterDependencies,
     });
 
     reactRoot.render(
@@ -299,19 +314,6 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     applicationDependencies
   );
   const recoveryRepository = new IndexedDbRecoveryRepository();
-  const assetRepository = new SupabaseAssetRepository(
-    vnextRpcClientFromSupabase(supabase),
-    supabaseStorageClientFromSupabase(supabase.storage)
-  );
-  let getActiveLineage: () => AssetLineageContext = () => ({
-    authLineage: lineage(),
-    authorityScopeId: authorityScopeId(authorizedUserId),
-  });
-
-  const assetBridge = new DefaultAssetPersistenceBridge(assetRepository, {
-    getActiveLineage: () => getActiveLineage(),
-  });
-
   const resolveAssetUrls = async (
     doc: CatalogDocument
   ): Promise<{ urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, AssetRuntimeState> }> => {
@@ -393,6 +395,28 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       window.location.assign('/v2');
     };
 
+    let reusableSession = runtime.workspace.getSnapshot().session;
+    const bindReusableSession = () => {
+      if (authorityInvalidated) return;
+      reusableSession = runtime!.workspace.getSnapshot().session;
+      const boundSession = reusableSession;
+      bindPresysPageReuse(boundSession, {
+        templates: presysTemplates,
+        preparer: starterDependencies,
+        getLineage: () => getActiveLineage(),
+        isCurrent: () => !authorityInvalidated && runtime!.workspace.getSnapshot().session === boundSession,
+        installRuntimeAsset: (asset, state) => {
+          runtime!.workspace.setAssetRuntimeState(asset.id, state);
+          runtime!.workspace.setAssetUrl(asset.id, state.url);
+        },
+      });
+    };
+    bindReusableSession();
+    // Recovery can install a new canonical session. Bind its page UI without changing Recovery ownership.
+    const detachPageReuse = runtime.workspace.subscribe(() => {
+      if (runtime!.workspace.getSnapshot().session !== reusableSession) bindReusableSession();
+    });
+    window.addEventListener('pagehide', detachPageReuse, { once: true });
     reactRoot.render(
       <React.StrictMode>
         <VNextApp
