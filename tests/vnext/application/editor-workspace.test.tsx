@@ -1315,6 +1315,27 @@ describe('P1.B contextual inspector disclosure', () => {
     expect(container.querySelector('[data-object-locking]')).toBeTruthy();
   });
 
+  it('resets advanced disclosure when the selection context changes', () => {
+    const session = sessionWithDemo(seedTextDocument({ includeShape: true }));
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    selectText(container, 502);
+    const details = button(container, 'toggle-inspector-details');
+    fireEvent.click(details);
+    expect(details).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector('[data-inspector-authoring]')).toBeTruthy();
+
+    setPageRect(container);
+    const shape = container.querySelector<HTMLElement>('[data-editor-object-id="shape-other"]');
+    if (!shape) throw new Error('Missing shape target');
+    fireEvent.pointerDown(shape, { pointerId: 503, button: 0, clientX: 250, clientY: 80 });
+    fireEvent.pointerUp(shape, { pointerId: 503, button: 0, clientX: 250, clientY: 80 });
+
+    expect(container.querySelector('.vnext-info h2')).toHaveTextContent('Forma');
+    expect(button(container, 'toggle-inspector-details')).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector('[data-inspector-authoring]')).toBeNull();
+    expect(container.querySelector('[data-object-locking]')).toBeNull();
+  });
+
   it('preserves the full historical inspector outside simple mode', () => {
     const session = sessionWithDemo(seedTextDocument());
     const { container } = render(<VNextApp session={session} />);

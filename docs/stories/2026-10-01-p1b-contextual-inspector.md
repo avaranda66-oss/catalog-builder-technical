@@ -13,6 +13,7 @@ Table selection can additionally expose dimensions, semantic cell properties, im
 
 ## P1.B decisions
 - Production `simpleByDefault` gets a contextual inspector heading based on the selected object type.
+- Advanced inspector disclosures reset when the selected object/page context changes, so a new selection always returns to the simple surface.
 - Universal lock and X/Y/width/height controls move behind **Mais propriedades** in simple mode.
 - Full technical mode keeps the historical inspector surface open by default.
 - Task-specific image and table controls remain reachable; ordinary editing is not removed.

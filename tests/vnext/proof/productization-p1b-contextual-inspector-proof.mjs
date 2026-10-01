@@ -47,10 +47,10 @@ async function desktop(browser) {
   assert.equal(await details.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('[data-inspector-authoring]').count(), 1);
   assert.equal(await page.locator('[data-object-locking]').count(), 1);
-  await details.click();
 
   await page.locator(`[data-editor-object-id="${ids.image}"]`).click();
   assert.equal((await page.locator('.vnext-info h2').textContent())?.trim(), 'Imagem');
+  assert.equal(await page.locator('[data-editor-action="toggle-inspector-details"]').getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('[data-inspector-authoring]').count(), 0);
   assert.equal(await page.locator('[data-image-professional-authoring]').count(), 1);
 

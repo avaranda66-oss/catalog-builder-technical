@@ -490,6 +490,11 @@ export function EditorWorkspace({
     setTableStylePaddingLinked(true);
   }, [document.id, editorState.activePageId, selectedTableObject?.id]);
   React.useEffect(() => {
+    if (!simpleByDefault) return;
+    setInspectorDetailsOpen(false);
+    setTableInspectorAdvancedOpen(false);
+  }, [simpleByDefault, document.id, editorState.activePageId, selectedObject?.id]);
+  React.useEffect(() => {
     if (!lockedSelectedTableId) return;
     const wasCellEdit = editorState.mode === 'cell-edit';
     const hadTableMode = editorState.mode === 'table-grid' || wasCellEdit;
