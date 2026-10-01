@@ -1,5 +1,7 @@
 import { parseCanonicalDocument } from '../application/document';
 import { plainRichText, type CatalogDocument } from '../domain';
+import { PRESYS_STARTER } from './presys-ta25n-starter';
+import type { StarterAssetManifest } from './starter-dependencies';
 
 export interface CatalogStarterDefinition {
   readonly starterId: string;
@@ -8,9 +10,10 @@ export interface CatalogStarterDefinition {
   readonly description?: string;
   readonly category?: string;
   readonly sourceDocument: CatalogDocument;
+  readonly requiredAssets?: readonly StarterAssetManifest[];
 }
 
-export type CatalogStarterSummary = Omit<CatalogStarterDefinition, 'sourceDocument'>;
+export type CatalogStarterSummary = Omit<CatalogStarterDefinition, 'sourceDocument' | 'requiredAssets'>;
 
 export interface CatalogStarterRegistry {
   list(): readonly CatalogStarterSummary[];
@@ -42,6 +45,7 @@ function parseDefinition(definition: CatalogStarterDefinition): CatalogStarterDe
     ...(definition.description === undefined ? {} : { description: clean(definition.description, 'description') }),
     ...(definition.category === undefined ? {} : { category: clean(definition.category, 'category') }),
     sourceDocument: parseCanonicalDocument(definition.sourceDocument),
+    ...(definition.requiredAssets ? { requiredAssets: definition.requiredAssets.map(asset => ({ ...asset })) } : {}),
   };
 }
 
@@ -56,7 +60,7 @@ export function createStaticCatalogStarterRegistry(
     }
     byId.set(definition.starterId, definition);
   }
-  const summaries = parsed.map(({ sourceDocument: _sourceDocument, ...summary }) => summary);
+  const summaries = parsed.map(({ sourceDocument: _sourceDocument, requiredAssets: _requiredAssets, ...summary }) => summary);
   return {
     list: () => summaries.map((summary) => ({ ...summary })),
     get: (starterId) => byId.get(starterId),
@@ -140,5 +144,5 @@ export function createDefaultCatalogStarterRegistry(): CatalogStarterRegistry {
     description: 'Título e tabela básica para começar uma ficha de produto.',
     category: 'Ficha técnica',
     sourceDocument: ESSENTIAL_TECHNICAL_SHEET,
-  }]);
+  }, PRESYS_STARTER]);
 }

@@ -1,0 +1,405 @@
+{
+  "starterId": "presys-ta25n-a4",
+  "revision": 1,
+  "displayName": "PRESYS · TA-25N — produto e especificações",
+  "product": "TA-25N",
+  "sourceFreezeDate": "2026-09-30",
+  "canonicalBase": "3fd13fc5c00a91024c6aa7fe793640be73eb27df",
+  "sources": {
+    "product-page": {
+      "publisher": "PRESYS Instrumentos e Sistemas",
+      "url": "https://presys.com.br/banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada/",
+      "revision": null,
+      "date": "2026-07-30",
+      "dateKind": "page modification",
+      "currentAtFreeze": true
+    },
+    "manual-pt": {
+      "publisher": "PRESYS Instrumentos e Sistemas",
+      "url": "https://presys.com.br/wp-content/uploads/2026/07/banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual.pdf",
+      "documentId": "EM0291-04",
+      "sha256": "cfa15db3a434e31e7a3b16048b46c3288f0526ec50f3be819ff900f8982c6598",
+      "date": "2026-07-30",
+      "dateKind": "PDF metadata, not printed issue date",
+      "currentAtFreeze": true
+    },
+    "folder-pt": {
+      "publisher": "PRESYS Instrumentos e Sistemas",
+      "url": "https://presys.com.br/pdf/presys-folder-ta.pdf",
+      "documentId": "Official PT TA folder; revision not identified",
+      "sha256": "a7fec059e62e1d3976a2d5e1ea88bb3d6be48cb2eecffd7775c8e90e35886be5",
+      "date": "2026-07-17",
+      "dateKind": "PDF metadata",
+      "currentAtFreeze": true
+    },
+    "folder-en": {
+      "publisher": "PRESYS Instrumentos e Sistemas",
+      "url": "https://en.presys.com.br/pdf/presys-ta-folder.pdf",
+      "documentId": "Official EN TA folder; revision not identified",
+      "sha256": "ec1430063f603a5588577b0cf334a98262bfa8c36a096101ad7b2105905c5e42",
+      "date": "2026-08-03",
+      "dateKind": "PDF metadata",
+      "currentAtFreeze": true
+    },
+    "ec-declaration": {
+      "publisher": "PRESYS Instrumentos e Sistemas",
+      "url": "https://en.presys.com.br/wp-content/uploads/2026/02/ec-declaration-of-conformity-linha-ta.pdf",
+      "documentId": "EC Declaration of Conformity, TA line including TA-25N",
+      "sha256": "7f7cb44e549c4a2e47351806eac6f62b6ddf57c96351b731f2c1aec15cff1a8c",
+      "date": "2026-01-01",
+      "dateKind": "printed issue date",
+      "currentAtFreeze": true
+    }
+  },
+  "facts": {
+    "brand": {
+      "label": "Marca",
+      "value": "PRESYS",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product heading",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "product": {
+      "label": "Produto",
+      "value": "Banho térmico tipo bloco seco",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product heading",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "model": {
+      "label": "Modelo",
+      "value": "TA-25N",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product heading",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "family": {
+      "label": "Família",
+      "value": "Linha TA / Industrial Avançada",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product heading",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "description": {
+      "label": "Descrição",
+      "value": "Calibrador de bloco seco com referência interna e leitura de sinais de sensores",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product description; factual paraphrase approved by Principal",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "application": {
+      "label": "Aplicação",
+      "value": "Calibração de termopares, termorresistências e termostatos",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product description",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "functions": {
+      "label": "Funções / entradas",
+      "value": "TCs, RTDs, mA, mV, ohms e termostatos",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product description",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "accuracy": {
+      "label": "Exatidão da referência interna",
+      "value": "±0,1 °C",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5, TA-25N column",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "resolution": {
+      "label": "Resolução",
+      "value": "0,01 °C",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "stability": {
+      "label": "Estabilidade",
+      "value": "±0,02 °C",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "axial": {
+      "label": "Uniformidade axial",
+      "value": "±0,05 °C em 40 mm",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "radial": {
+      "label": "Uniformidade radial",
+      "value": "±0,01 °C",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "power": {
+      "label": "Potência elétrica",
+      "value": "200 W",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5, TA-25N column",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "well": {
+      "label": "Poço",
+      "value": "Ø25,4 mm × 124 mm",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5, TA-25N column",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "weight": {
+      "label": "Peso",
+      "value": "10,5 kg",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 2 / PDF p. 5",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "auxiliarySupply": {
+      "label": "Fonte auxiliar",
+      "value": "24 Vcc regulada para transmissores",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product description",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "currentRange": {
+      "label": "Entrada de corrente",
+      "value": "−1 a 24,5 mA",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Printed p. 3 / PDF p. 6",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "interfaces": {
+      "label": "Interfaces",
+      "value": "Ethernet e USB",
+      "sources": [
+        "product-page"
+      ],
+      "pageSection": "Product description",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "hart": {
+      "label": "HART",
+      "value": "Opcional, conforme configuração",
+      "sources": [
+        "manual-pt"
+      ],
+      "pageSection": "Introduction / optional configuration",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "display": {
+      "label": "Display",
+      "value": "Touchscreen de 5,7″",
+      "sources": [
+        "folder-pt"
+      ],
+      "pageSection": "Common specifications, p. 2",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "conformity": {
+      "label": "Declaração do fabricante",
+      "value": "LVD 2014/35/EU; EMC 2014/30/EU; RoHS 2011/65/EU",
+      "sources": [
+        "ec-declaration"
+      ],
+      "pageSection": "p. 1",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "standards": {
+      "label": "Normas declaradas pelo fabricante",
+      "value": "EN 61010-1:2010+A1:2019; EN IEC 61010-2-010:2020; EN IEC 61326-1:2021",
+      "sources": [
+        "ec-declaration"
+      ],
+      "pageSection": "p. 1",
+      "confidence": "HIGH",
+      "approved": true,
+      "suitableForProductPresentation": true
+    },
+    "temperatureRange": {
+      "label": "Faixa de temperatura",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "PT manual introduction 125 °C versus table 140 °C; EN folder 155 °C"
+    },
+    "dimensions": {
+      "label": "Dimensões",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "PT 354.5 × 206 × 318 mm versus EN 260 × 200 × 305 mm"
+    },
+    "mainSupply": {
+      "label": "Alimentação principal",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "PT 110/220 Vac versus EN 115/230 Vac"
+    },
+    "currentPrecision": {
+      "label": "Exatidão da entrada de corrente",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "PT manual ±0.02% FS versus folder ±0.01% FS"
+    },
+    "environment": {
+      "label": "Condições ambientais",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "20 °C versus 23 °C reference conditions; not a verified operating envelope"
+    },
+    "heatingCooling": {
+      "label": "Aquecimento / resfriamento",
+      "value": "A COMPLETAR",
+      "sources": [
+        "manual-pt",
+        "folder-pt",
+        "folder-en"
+      ],
+      "pageSection": "Preflight conflicting specifications / conditions",
+      "confidence": "UNRESOLVED",
+      "approved": false,
+      "notes": "Context and generation/range not reconciled"
+    }
+  },
+  "image": {
+    "source": "https://presys.com.br/wp-content/uploads/2025/07/banhos-termicos-tipo-bloco-seco-ta-25n-industrial-avancada.png",
+    "publisher": "PRESYS",
+    "sha256": "e6c377af5ce42ce0604076d1919144f823efdd345e2b2ac11f40efe003174486",
+    "mime": "image/png",
+    "widthPx": 720,
+    "heightPx": 482,
+    "byteLength": 229530,
+    "packagedPath": "public/assets/presys/ta-25n-starter-v1.png",
+    "runtimePackagedPath": "/assets/presys/ta-25n-starter-v1.png",
+    "name": "PRESYS TA-25N — imagem oficial",
+    "alt": "Banho térmico tipo bloco seco PRESYS TA-25N",
+    "approval": {
+      "authority": "Principal / human user",
+      "date": "2026-09-30",
+      "scope": "Exact hash approved for intended TA-25N version and internal/team starter packaging only"
+    }
+  },
+  "assetManifestSemantics": {
+    "seedAssetId": "00000000-0000-4000-8000-000000000025",
+    "seedIsDurable": false,
+    "storageBucket": "product-assets",
+    "storagePath": "vnext/<canonical UUID>/1.png",
+    "version": "1",
+    "identity": "Assigned by existing asset bridge under active authority; retained after clone/reuse",
+    "creation": "Verified bytes, durable metadata AND resolved runtime state before PreparedCatalogCreateCoordinator",
+    "reopen": "Existing repository/storage only, no upload or packaged/external fallback"
+  },
+  "contentPolicy": "Structurally complete; partially factually populated. Unresolved facts explicitly A COMPLETAR. Manufacturer declarations are not independent certification."
+}

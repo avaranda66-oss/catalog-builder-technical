@@ -73,3 +73,6 @@ jobs:
           node tests/vnext/proof/pilot-a-authorship-trust-proof.mjs
           node tests/vnext/proof/pilot-b-access-entry-proof.mjs
           node tests/vnext/proof/l1-authority-loss-proof.mjs
+
+      - name: C.1 official starter Chromium proof
+        run: node tests/vnext/proof/pilot-c1-official-starter-proof.mjs

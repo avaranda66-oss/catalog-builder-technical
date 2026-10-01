@@ -113,6 +113,8 @@ import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from
 import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
+import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
+import { PRESYS_PRESENTATION_PAGE_ID, PRESYS_SPECIFICATIONS_PAGE_ID } from '../library/presys-ta25n-starter';
 import { fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
@@ -356,6 +358,10 @@ export function EditorWorkspace({
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
+  const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
+  const pageTemplateBusyRef = React.useRef(false);
+  const officialPageReuse = hasPresysPageReuse(session);
   const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(true);
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
@@ -2259,9 +2265,32 @@ export function EditorWorkspace({
     setStatusMessage('Página adicionada.');
   };
 
-  const insertPageTemplate = () => {
+  const insertPageTemplate = async () => {
+    if (pageTemplateBusyRef.current) return;
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('superseded');
+    if (officialPageReuse) {
+      const targetPageId = selectedPage.id;
+      pageTemplateBusyRef.current = true;
+      setPageTemplateBusy(true);
+      try {
+        const result = await insertPresysPage(session, pageTemplateChoice, targetPageId, () =>
+          liveUploadContextRef.current.mounted && sessionRef.current === session && activePageIdRef.current === targetPageId);
+        if (!liveUploadContextRef.current.mounted) return;
+        if (!result.ok) {
+          setStatusMessage(result.code === 'STALE_RESULT' ? 'A sessão ou página mudou. Selecione o modelo novamente.' : 'Não foi possível preparar e inserir o modelo. Nenhuma página foi adicionada. Tente novamente.');
+          return;
+        }
+        setActivePage(result.pageId);
+        setStatusMessage(activePageIdRef.current === result.pageId
+          ? 'Modelo PRESYS inserido como página independente.'
+          : 'Modelo PRESYS inserido. Conclua ou cancele a edição pendente para abrir a nova página.');
+      } finally {
+        pageTemplateBusyRef.current = false;
+        if (liveUploadContextRef.current.mounted) setPageTemplateBusy(false);
+      }
+      return;
+    }
     const result = session.execute({
       type: 'page.template.insert',
       templateId: W2E_PAGE_TEMPLATE_ID,
@@ -3619,7 +3648,11 @@ export function EditorWorkspace({
             ))}
           </nav>
           <button type="button" className="vnext-add-page" data-authoring-context-transition="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
-          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-authoring-context-transition="" onClick={insertPageTemplate} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />Inserir modelo</button>
+          {officialPageReuse && <select aria-label="Modelo de página PRESYS" value={pageTemplateChoice} onChange={event => setPageTemplateChoice(event.target.value)} disabled={pageTemplateBusy} style={{ width: '100%', padding: 8, border: '1px solid #D9E2EC', borderRadius: 6, font: 'inherit', fontSize: 12, background: '#FFFFFF', color: '#003366' }}>
+            <option value={PRESYS_PRESENTATION_PAGE_ID}>TA-25N · Apresentação</option>
+            <option value={PRESYS_SPECIFICATIONS_PAGE_ID}>TA-25N · Especificações</option>
+          </select>}
+          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
         </aside>
 
         <main className="vnext-canvas-area">
