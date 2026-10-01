@@ -47,6 +47,12 @@ function dateLabel(value: string): string {
   }).format(parsed);
 }
 
+function localeLabel(locale: string): string {
+  if (locale === 'pt-BR') return 'Português (Brasil)';
+  if (locale === 'es-ES') return 'Espanhol (Espanha)';
+  return locale;
+}
+
 function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'create' | 'rename' | 'archive'): string {
   if (code === 'NOT_FOUND') return 'Este catálogo não foi encontrado. Atualize a lista e tente novamente.';
   if (code === 'UNAUTHORIZED') return 'Você não tem acesso a este catálogo. Entre novamente ou peça acesso à equipe.';
@@ -82,6 +88,7 @@ function CatalogRow({
   onArchive,
   disabled,
   duplicating,
+  translationSourceTitle,
 }: {
   readonly item: CatalogListItem;
   readonly view: CatalogLibraryView;
@@ -91,15 +98,27 @@ function CatalogRow({
   readonly onArchive: () => void;
   readonly disabled: boolean;
   readonly duplicating: boolean;
+  readonly translationSourceTitle?: string;
 }) {
+  const isTranslatedCopy = item.origin?.originKind === 'translation';
+
   return (
     <article className="vnext-library-row" data-library-catalog-id={item.catalogId}>
       <div className="vnext-library-row-main">
-        <h2>{item.title}</h2>
+        <div className="vnext-library-title-line">
+          <h2>{item.title}</h2>
+          {isTranslatedCopy && <span className="vnext-library-origin-badge">Cópia traduzida</span>}
+        </div>
         <div className="vnext-library-meta">
-          <span>{item.locale}</span>
+          <span>{localeLabel(item.locale)}</span>
           <span aria-hidden="true">·</span>
           <span>{view === 'archived' && item.archivedAt ? `Arquivado em ${dateLabel(item.archivedAt)}` : `Atualizado em ${dateLabel(item.updatedAt)}`}</span>
+          {isTranslatedCopy && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{translationSourceTitle ? `Origem: ${translationSourceTitle}` : 'Origem: catálogo original'}</span>
+            </>
+          )}
         </div>
       </div>
       {view === 'active' ? (
@@ -357,6 +376,10 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
     setItems((current) => current.filter((item) => item.catalogId !== target.catalogId));
   };
 
+  const titleById = React.useMemo(
+    () => new Map(items.map((item) => [item.catalogId, item.title] as const)),
+    [items]
+  );
   const hasItems = items.length > 0;
   const emptySearch = !loading && !hasItems && search.trim().length > 0;
   const emptyView = !loading && !hasItems && !search.trim();
@@ -466,6 +489,9 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
                 onArchive={() => { if (!busy && !createPending) { rememberDialogTrigger(); setArchiveTarget(item); } }}
                 disabled={busy || createPending}
                 duplicating={duplicateTargetId === item.catalogId}
+                translationSourceTitle={item.origin?.originKind === 'translation' && item.origin.originId
+                  ? titleById.get(item.origin.originId)
+                  : undefined}
               />
             ))}
           </div>

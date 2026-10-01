@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CatalogLibrary } from '@/vnext/app/CatalogLibrary';
 import {
@@ -57,7 +57,12 @@ function validEnvelope(id: string, title: string): CatalogPersistenceEnvelope {
   };
 }
 
-function item(title: string, suffix: string, archived = false): CatalogListItem {
+function item(
+  title: string,
+  suffix: string,
+  archived = false,
+  overrides: Partial<CatalogListItem> = {}
+): CatalogListItem {
   return {
     catalogId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`,
     remoteRevision: 1,
@@ -69,6 +74,7 @@ function item(title: string, suffix: string, archived = false): CatalogListItem 
     updatedBy: 'user-a',
     archivedAt: archived ? '2026-09-14T12:10:00.000Z' : null,
     documentSchemaVersion: 1,
+    ...overrides,
   };
 }
 
@@ -120,6 +126,44 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     expect(getByRole('button', { name: 'Duplicar' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Renomear' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Arquivar' })).toBeInTheDocument();
+  });
+
+  it('W6.A makes translated copies recognizable without mislabeling other origins', async () => {
+    const source = item('TA-25N original', '11');
+    const translated = item('TA-25N espanhol', '12', false, {
+      locale: 'es-ES',
+      origin: { originKind: 'translation', originId: source.catalogId, originRevision: 3 },
+    });
+    const missingSource = item('Tradução sem origem carregada', '13', false, {
+      locale: 'es-ES',
+      origin: { originKind: 'translation', originId: testUuid(999), originRevision: 1 },
+    });
+    const duplicate = item('Cópia comum', '14', false, {
+      origin: { originKind: 'duplicate', originId: source.catalogId, originRevision: 3 },
+    });
+    const list = vi.fn().mockResolvedValue({ ok: true, value: [translated, source, missingSource, duplicate] });
+    const onOpen = vi.fn();
+    const { getAllByText, getByText } = render(
+      <CatalogLibrary service={serviceWithList(list)} onOpen={onOpen} />
+    );
+
+    const translatedRow = (await waitFor(() => getByText('TA-25N espanhol'))).closest('[data-library-catalog-id]');
+    expect(translatedRow).not.toBeNull();
+    expect(within(translatedRow as HTMLElement).getByText('Espanhol (Espanha)')).toBeInTheDocument();
+    expect(within(translatedRow as HTMLElement).getByText('Cópia traduzida')).toBeInTheDocument();
+    expect(within(translatedRow as HTMLElement).getByText('Origem: TA-25N original')).toBeInTheDocument();
+
+    expect(getAllByText('Espanhol (Espanha)')).toHaveLength(2);
+    expect(getAllByText('Cópia traduzida')).toHaveLength(2);
+    expect(getByText('Origem: catálogo original')).toBeInTheDocument();
+    expect(getAllByText('Português (Brasil)')).toHaveLength(2);
+
+    const duplicateRow = getByText('Cópia comum').closest('[data-library-catalog-id]');
+    expect(duplicateRow).not.toBeNull();
+    expect(within(duplicateRow as HTMLElement).queryByText('Cópia traduzida')).toBeNull();
+
+    fireEvent.click(within(translatedRow as HTMLElement).getByRole('button', { name: 'Abrir' }));
+    expect(onOpen).toHaveBeenCalledWith(translated.catalogId);
   });
 
   it('traps dialog focus, supports Escape, and restores focus to the triggering action', async () => {
