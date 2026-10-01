@@ -333,12 +333,14 @@ export function EditorWorkspace({
   session,
   persistence,
   onRequestLibrary,
+  onRequestTranslation,
   demoAssets = false,
 }: {
   session: DocumentSession;
   demoAssets?: boolean;
   persistence?: EditorWorkspacePersistenceProps;
   onRequestLibrary?: () => void;
+  onRequestTranslation?: () => void;
 }) {
   const snapshot = useDocumentSession(session);
   const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
@@ -3607,6 +3609,8 @@ export function EditorWorkspace({
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
+          {onRequestTranslation && <button type="button" data-editor-action="translate" data-authoring-context-transition=""
+            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
           {persistence && onRequestLibrary && (
             <button
               type="button"
