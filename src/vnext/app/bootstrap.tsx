@@ -448,6 +448,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
         <VNextApp
           runtime={runtime}
           assetBridge={assetBridge}
+          simpleByDefault
           onRequestLibrary={requestLibrary}
           translation={translation}
           onOpenTranslatedCopy={catalogId => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}

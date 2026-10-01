@@ -336,9 +336,11 @@ export function EditorWorkspace({
   onRequestTranslation,
   onRequestPublication,
   demoAssets = false,
+  simpleByDefault = false,
 }: {
   session: DocumentSession;
   demoAssets?: boolean;
+  simpleByDefault?: boolean;
   persistence?: EditorWorkspacePersistenceProps;
   onRequestLibrary?: () => void;
   onRequestTranslation?: () => void;
@@ -366,7 +368,10 @@ export function EditorWorkspace({
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
   const officialPageReuse = hasPresysPageReuse(session);
-  const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(true);
+  const [advancedToolsOpen, setAdvancedToolsOpen] = React.useState(!simpleByDefault);
+  const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
+  const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
+  const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(!simpleByDefault);
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
   const [markerPanelOpen, setMarkerPanelOpen] = React.useState(false);
@@ -3596,6 +3601,7 @@ export function EditorWorkspace({
     <div
       className="vnext-shell"
       data-vnext-shell=""
+      data-simple-by-default={simpleByDefault ? 'true' : undefined}
       data-active-page-id={selectedPage.id}
       data-editor-mode={editorState.mode}
       onPointerDownCapture={handleTextEditPointerDownCapture}
@@ -3607,17 +3613,19 @@ export function EditorWorkspace({
           <div className="vnext-brand-mark" aria-hidden="true">P</div>
           <div>
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
-            <div className="vnext-title-row"><h1>{document.title}</h1><span className="vnext-badge">VNext</span></div>
+            <div className="vnext-title-row"><h1>{document.title}</h1></div>
+            {simpleByDefault && persistence && (
+              <span className="vnext-save-summary" data-save-state="" data-save-phase={persistence.save.phase}>
+                {fatherSaveLabel(persistence.save.label)}
+              </span>
+            )}
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
-          {onRequestPublication && <button type="button" data-editor-action="publish" data-authoring-context-transition=""
-            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestPublication(); }}>Publicar / PDF</button>}
-          {onRequestTranslation && <button type="button" data-editor-action="translate" data-authoring-context-transition=""
-            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
           {persistence && onRequestLibrary && (
             <button
               type="button"
+              className="vnext-action-library"
               data-editor-action="library"
               data-authoring-context-transition=""
               onClick={onRequestLibrary}
@@ -3630,6 +3638,7 @@ export function EditorWorkspace({
           {persistence && (
             <button
               type="button"
+              className="vnext-action-save"
               data-editor-action="save"
               data-persistence-save-action=""
               onClick={() => { void persistence.runtime.manualSave(); }}
@@ -3637,11 +3646,17 @@ export function EditorWorkspace({
               aria-label={fatherSaveLabel(persistence.save.label)}
             >
               <SaveIcon size={17} aria-hidden="true" />
-              <span>{fatherSaveLabel(persistence.save.label)}</span>
+              <span>{simpleByDefault ? 'Salvar' : fatherSaveLabel(persistence.save.label)}</span>
             </button>
           )}
-          <button type="button" data-editor-action="undo" data-authoring-context-transition="" onClick={undo} disabled={!canUndo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
-          <button type="button" data-editor-action="redo" data-authoring-context-transition="" onClick={redo} disabled={!canRedo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
+          <span className="vnext-history-actions" aria-label="Histórico de alterações">
+            <button type="button" data-editor-action="undo" data-authoring-context-transition="" onClick={undo} disabled={!canUndo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Desfazer última alteração"><Undo2 size={17} aria-hidden="true" /><span>Desfazer</span></button>
+            <button type="button" data-editor-action="redo" data-authoring-context-transition="" onClick={redo} disabled={!canRedo && !cellDraft && !textEdit && !tableTitleDraft && !inspectorDraftIsPending()} aria-label="Refazer última alteração"><Redo2 size={17} aria-hidden="true" /><span>Refazer</span></button>
+          </span>
+          {onRequestTranslation && <button type="button" className="vnext-action-translate" data-editor-action="translate" data-authoring-context-transition=""
+            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
+          {onRequestPublication && <button type="button" className="vnext-action-publish" data-editor-action="publish" data-authoring-context-transition=""
+            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestPublication(); }}>Publicar / PDF</button>}
         </div>
       </header>
 
@@ -3656,11 +3671,27 @@ export function EditorWorkspace({
             ))}
           </nav>
           <button type="button" className="vnext-add-page" data-authoring-context-transition="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
-          {officialPageReuse && <select aria-label="Modelo de página PRESYS" value={pageTemplateChoice} onChange={event => setPageTemplateChoice(event.target.value)} disabled={pageTemplateBusy} style={{ width: '100%', padding: 8, border: '1px solid #D9E2EC', borderRadius: 6, font: 'inherit', fontSize: 12, background: '#FFFFFF', color: '#003366' }}>
-            <option value={PRESYS_PRESENTATION_PAGE_ID}>TA-25N · Apresentação</option>
-            <option value={PRESYS_SPECIFICATIONS_PAGE_ID}>TA-25N · Especificações</option>
-          </select>}
-          <button type="button" className="vnext-add-page" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
+          {simpleByDefault && (
+            <button
+              type="button"
+              className="vnext-page-reuse-toggle"
+              data-editor-action="toggle-page-reuse"
+              aria-expanded={pageReuseOpen}
+              aria-controls="vnext-page-reuse"
+              onClick={() => setPageReuseOpen((open) => !open)}
+            >
+              {pageReuseOpen ? 'Ocultar modelos' : 'Usar modelo…'}
+            </button>
+          )}
+          {pageReuseOpen && (
+            <div id="vnext-page-reuse" className="vnext-page-reuse">
+              {officialPageReuse && <select aria-label="Modelo de página PRESYS" value={pageTemplateChoice} onChange={event => setPageTemplateChoice(event.target.value)} disabled={pageTemplateBusy}>
+                <option value={PRESYS_PRESENTATION_PAGE_ID}>TA-25N · Apresentação</option>
+                <option value={PRESYS_SPECIFICATIONS_PAGE_ID}>TA-25N · Especificações</option>
+              </select>}
+              <button type="button" className="vnext-page-reuse-action" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
+            </div>
+          )}
         </aside>
 
         <main className="vnext-canvas-area">
@@ -3675,84 +3706,100 @@ export function EditorWorkspace({
                   {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)
                 </span>
               )}
-              <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>
+              {!simpleByDefault && <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>}
             </div>
           </div>
-          <div className="vnext-authoring-toolbar" aria-label="Adicionar e organizar objetos">
-            <div className="vnext-tool-group" aria-label="Adicionar objeto">
-              <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>Adicionar texto</button>
-              <button type="button" data-editor-action="add-image" onClick={() => insertObject('image')}>Adicionar imagem</button>
-              <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>Adicionar tabela</button>
-              <button type="button" data-editor-action="add-shape" onClick={() => insertObject('shape')}>Adicionar forma</button>
-              <button type="button" data-editor-action="add-line" onClick={() => insertObject('line')}>Adicionar linha</button>
+          <div className="vnext-authoring-toolbar" aria-label="Ferramentas de edição">
+            <div className="vnext-tool-group vnext-toolbar-primary" aria-label="Adicionar conteúdo">
+              <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
+              <button type="button" data-editor-action="add-image" onClick={() => insertObject('image')}>{simpleByDefault ? 'Imagem' : 'Adicionar imagem'}</button>
+              <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
+              {(!simpleByDefault || selectedObject) && (
+                <>
+                  <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
+                  <button type="button" data-editor-action="delete" disabled={!selectedObject || selectedMutationLocked} onClick={deleteSelected}>Excluir</button>
+                </>
+              )}
+              {(!simpleByDefault || selectedObject?.type === 'text') && (
+                <button type="button" data-editor-action="edit-text" disabled={selectedObject?.type !== 'text' || selectedMutationLocked || projectEditableRichText(selectedObject.text) === null} onClick={() => selectedObject && startTextEdit(selectedObject)}>Editar texto</button>
+              )}
+              {(!simpleByDefault || selectedObject?.type === 'table') && (
+                <button type="button" data-editor-action="edit-table" disabled={selectedObject?.type !== 'table' || selectedMutationLocked} onClick={() => selectedObject && startTableGrid(selectedObject)}>Editar tabela</button>
+              )}
             </div>
-            <div className="vnext-tool-group" aria-label="Assistência de posicionamento">
+            {simpleByDefault && (
               <button
                 type="button"
-                data-editor-action="toggle-snapping"
-                aria-pressed={snappingEnabled}
-                className={snappingEnabled ? 'is-active' : undefined}
-                onClick={toggleSnapping}
+                className="vnext-more-options"
+                data-editor-action="toggle-advanced-tools"
+                aria-expanded={advancedToolsOpen}
+                aria-controls="vnext-advanced-tools"
+                onClick={() => setAdvancedToolsOpen((open) => !open)}
               >
-                {snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado'}
+                {advancedToolsOpen ? 'Ocultar opções' : 'Mais opções'}
               </button>
-              <button
-                type="button"
-                data-editor-action="toggle-multi-select"
-                aria-pressed={multiSelectArmed}
-                className={multiSelectArmed ? 'is-active' : undefined}
-                disabled={editorState.mode !== 'select'}
-                onClick={() => {
-                  controller.cancel('superseded');
-                  setMultiSelectArmed((armed) => !armed);
-                  setStatusMessage(multiSelectArmed ? 'Seleção múltipla desativada.' : 'Selecione os objetos que deseja organizar.');
-                }}
-              >
-                Selecionar vários
-              </button>
-            </div>
-            <div className="vnext-tool-group" aria-label="Ações do objeto selecionado">
-              <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2 || selectedHasLockedClosure} onClick={groupSelected}>Agrupar</button>
-              <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group' || selectedMutationLocked} onClick={ungroupSelected}>Desagrupar</button>
-              <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
-              <button type="button" data-editor-action="delete" disabled={!selectedObject || selectedMutationLocked} onClick={deleteSelected}>Excluir</button>
-              <button type="button" data-editor-action="send-back" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('back')}>Enviar para o fundo</button>
-              <button type="button" data-editor-action="send-backward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('backward')}>Recuar uma camada</button>
-              <button type="button" data-editor-action="bring-forward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('forward')}>Avançar uma camada</button>
-              <button type="button" data-editor-action="bring-front" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('front')}>Trazer para frente</button>
-              <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>Substituir imagem</button>
-              <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>Upload imagem</button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                data-editor-action="upload-image-input"
-                accept="image/png,image/jpeg,image/webp"
-                style={{ display: 'none' }}
-                onChange={handleImageFileChange}
-                aria-hidden="true"
-              />
-              <button
-                type="button"
-                data-editor-action="edit-text"
-                disabled={selectedObject?.type !== 'text' || selectedMutationLocked || projectEditableRichText(selectedObject.text) === null}
-                onClick={() => selectedObject && startTextEdit(selectedObject)}
-              >
-                Editar texto
-              </button>
-              <button
-                type="button"
-                data-editor-action="edit-table"
-                disabled={selectedObject?.type !== 'table' || selectedMutationLocked}
-                onClick={() => selectedObject && startTableGrid(selectedObject)}
-              >
-                Editar tabela
-              </button>
-            </div>
+            )}
+            {advancedToolsOpen && (
+              <div id="vnext-advanced-tools" className="vnext-toolbar-advanced" data-advanced-tools="">
+                <div className="vnext-tool-group" aria-label="Adicionar elementos avançados">
+                  <button type="button" data-editor-action="add-shape" onClick={() => insertObject('shape')}>{simpleByDefault ? 'Forma' : 'Adicionar forma'}</button>
+                  <button type="button" data-editor-action="add-line" onClick={() => insertObject('line')}>{simpleByDefault ? 'Linha' : 'Adicionar linha'}</button>
+                </div>
+                <div className="vnext-tool-group" aria-label="Seleção e posicionamento">
+                  <button type="button" data-editor-action="toggle-snapping" aria-pressed={snappingEnabled} className={snappingEnabled ? 'is-active' : undefined} onClick={toggleSnapping}>
+                    {simpleByDefault ? (snappingEnabled ? 'Encaixe ligado' : 'Encaixe desligado') : (snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado')}
+                  </button>
+                  <button
+                    type="button"
+                    data-editor-action="toggle-multi-select"
+                    aria-pressed={multiSelectArmed}
+                    className={multiSelectArmed ? 'is-active' : undefined}
+                    disabled={editorState.mode !== 'select'}
+                    onClick={() => {
+                      controller.cancel('superseded');
+                      setMultiSelectArmed((armed) => !armed);
+                      setStatusMessage(multiSelectArmed ? 'Seleção múltipla desativada.' : 'Selecione os objetos que deseja organizar.');
+                    }}
+                  >Selecionar vários</button>
+                </div>
+                <div className="vnext-tool-group" aria-label="Organização avançada">
+                  <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2 || selectedHasLockedClosure} onClick={groupSelected}>Agrupar</button>
+                  <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group' || selectedMutationLocked} onClick={ungroupSelected}>Desagrupar</button>
+                  <button type="button" data-editor-action="send-back" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('back')}>{simpleByDefault ? 'Enviar ao fundo' : 'Enviar para o fundo'}</button>
+                  <button type="button" data-editor-action="send-backward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('backward')}>{simpleByDefault ? 'Recuar camada' : 'Recuar uma camada'}</button>
+                  <button type="button" data-editor-action="bring-forward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('forward')}>{simpleByDefault ? 'Avançar camada' : 'Avançar uma camada'}</button>
+                  <button type="button" data-editor-action="bring-front" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex < 0 || selectedVisualIndex >= selectedVisualOrder.length - 1} onClick={() => reorderSelected('front')}>{simpleByDefault ? 'Trazer à frente' : 'Trazer para frente'}</button>
+                  <button type="button" data-editor-action="replace-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>Substituir imagem</button>
+                  <button type="button" data-editor-action="upload-image" disabled={selectedObject?.type !== 'image' || selectedMutationLocked} onClick={replaceSelectedImage}>{simpleByDefault ? 'Enviar imagem' : 'Upload imagem'}</button>
+                </div>
+              </div>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              data-editor-action="upload-image-input"
+              accept="image/png,image/jpeg,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleImageFileChange}
+              aria-hidden="true"
+            />
           </div>
 
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
-              <strong>Grade da tabela</strong>
+              <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
+              {simpleByDefault && (
+                <button
+                  type="button"
+                  className="vnext-table-options-toggle"
+                  data-editor-action="toggle-table-options"
+                  aria-expanded={tableOptionsOpen}
+                  onClick={() => setTableOptionsOpen((open) => !open)}
+                >
+                  {tableOptionsOpen ? 'Ocultar opções da tabela' : 'Opções da tabela'}
+                </button>
+              )}
+              {(!simpleByDefault || tableOptionsOpen) && <>
               <div className="vnext-tool-group" aria-label="Ações de linha">
                 <button type="button" data-editor-action="insert-row-before" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
                 <button type="button" data-editor-action="insert-row-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
@@ -3794,6 +3841,7 @@ export function EditorWorkspace({
                 <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
                 <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
               </div>
+              </>}
               <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
             </div>
           )}
@@ -5160,8 +5208,9 @@ export function EditorWorkspace({
               </div>
             </>
           ) : <p>Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.</p>}
+          {(!simpleByDefault || persistence?.save.phase === 'conflict') && <>
           <div className="vnext-divider" />
-          <h3>Salvamento</h3>
+          <h3>{persistence?.save.phase === 'conflict' ? 'Atenção ao salvamento' : 'Salvamento'}</h3>
           <p>
             {persistence
               ? persistence.save.message ?? fatherSaveLabel(persistence.save.label)
@@ -5204,6 +5253,7 @@ export function EditorWorkspace({
               </button>
             </div>
           )}
+          </>}
           {persistence?.localProtection === 'unavailable' && (
             <p className="vnext-live-status" role="alert">
               {persistence.localProtectionMessage ?? 'Proteção local indisponível.'}

@@ -1264,3 +1264,37 @@ describe('W4.F.2 F1 disabled Table style guidance', () => {
     );
   });
 });
+
+
+describe('P1.A simple-by-default workspace', () => {
+  it('keeps the novice toolbar compact until advanced tools are requested', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-simple-by-default', 'true');
+    expect(button(container, 'add-text')).toHaveTextContent('Texto');
+    expect(button(container, 'add-image')).toHaveTextContent('Imagem');
+    expect(button(container, 'add-table')).toHaveTextContent('Tabela');
+    expect(container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
+    expect(container.querySelector('[data-editor-action="toggle-multi-select"]')).toBeNull();
+    expect(container.querySelector('[data-editor-action="group"]')).toBeNull();
+    const more = button(container, 'toggle-advanced-tools');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(button(container, 'add-shape')).toBeTruthy();
+    expect(button(container, 'toggle-multi-select')).toBeTruthy();
+    expect(button(container, 'group')).toBeTruthy();
+  });
+
+  it('shows ordinary selection actions contextually without opening advanced tools', () => {
+    const session = sessionWithDemo(seedTextDocument());
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    expect(container.querySelector('[data-editor-action="edit-text"]')).toBeNull();
+    expect(container.querySelector('[data-editor-action="duplicate"]')).toBeNull();
+    selectText(container, 401);
+    expect(button(container, 'edit-text')).toBeEnabled();
+    expect(button(container, 'duplicate')).toBeEnabled();
+    expect(button(container, 'delete')).toBeEnabled();
+    expect(container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
+  });
+});
