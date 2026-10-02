@@ -370,6 +370,8 @@ export function EditorWorkspace({
   const officialPageReuse = hasPresysPageReuse(session);
   const [advancedToolsOpen, setAdvancedToolsOpen] = React.useState(!simpleByDefault);
   const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
+  const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
+  const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
   const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(!simpleByDefault);
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
@@ -487,6 +489,11 @@ export function EditorWorkspace({
     setTableStyleAdvancedOpen(false);
     setTableStylePaddingLinked(true);
   }, [document.id, editorState.activePageId, selectedTableObject?.id]);
+  React.useEffect(() => {
+    if (!simpleByDefault) return;
+    setInspectorDetailsOpen(false);
+    setTableInspectorAdvancedOpen(false);
+  }, [simpleByDefault, document.id, editorState.activePageId, selectedObject?.id]);
   React.useEffect(() => {
     if (!lockedSelectedTableId) return;
     const wasCellEdit = editorState.mode === 'cell-edit';
@@ -4062,7 +4069,15 @@ export function EditorWorkspace({
         <aside className="vnext-info" aria-label="Inspector do objeto">
           <span className="vnext-info-kicker">Inspector</span>
           <h2>{selectedObject
-            ? 'Geometria do objeto'
+            ? simpleByDefault
+              ? selectedObject.type === 'text' ? 'Texto'
+                : selectedObject.type === 'image' ? 'Imagem'
+                  : selectedObject.type === 'table' ? 'Tabela'
+                    : selectedObject.type === 'shape' ? 'Forma'
+                      : selectedObject.type === 'line' ? 'Linha'
+                        : selectedObject.type === 'group' ? 'Grupo'
+                          : 'Objeto'
+              : 'Geometria do objeto'
             : selectedObjects.length > 1
               ? `${selectedObjects.length} objetos selecionados`
               : 'Selecione um objeto'}</h2>
@@ -4109,6 +4124,19 @@ export function EditorWorkspace({
             </section>
           ) : selectedObject ? (
             <>
+              {simpleByDefault && (
+                <button
+                  type="button"
+                  className="vnext-inspector-action vnext-inspector-disclosure"
+                  data-editor-action="toggle-inspector-details"
+                  aria-expanded={inspectorDetailsOpen}
+                  aria-controls="vnext-object-details"
+                  onClick={() => setInspectorDetailsOpen((open) => !open)}
+                >
+                  {inspectorDetailsOpen ? 'Ocultar propriedades' : 'Mais propriedades'}
+                </button>
+              )}
+              {(!simpleByDefault || inspectorDetailsOpen) && <div id="vnext-object-details" data-inspector-details="">
               <section className="vnext-object-locking" data-object-locking="">
                 <h3>Objeto</h3>
                 <button
@@ -4156,6 +4184,7 @@ export function EditorWorkspace({
                   </label>
                 ))}
               </div>
+              </div>}
               {selectedObject.type === 'image' && (
                 <>
                   <div className="vnext-divider" />
@@ -4405,6 +4434,19 @@ export function EditorWorkspace({
                       </button>
                     </div>
                   </section>
+                  {simpleByDefault && (
+                    <button
+                      type="button"
+                      className="vnext-inspector-action vnext-inspector-disclosure"
+                      data-editor-action="toggle-table-inspector-advanced"
+                      aria-expanded={tableInspectorAdvancedOpen}
+                      aria-controls="vnext-table-advanced-details"
+                      onClick={() => setTableInspectorAdvancedOpen((open) => !open)}
+                    >
+                      {tableInspectorAdvancedOpen ? 'Ocultar detalhes da tabela' : 'Detalhes da tabela'}
+                    </button>
+                  )}
+                  {(!simpleByDefault || tableInspectorAdvancedOpen) && <div id="vnext-table-advanced-details" data-table-advanced-details="">
                   <div className="vnext-divider" />
                   <section
                     className="vnext-fit-height-section"
@@ -4439,9 +4481,10 @@ export function EditorWorkspace({
                       </p>
                     )}
                   </section>
+                  </div>}
                 </>
               )}
-              {selectedObject.type === 'table' && tableStyleScope && (
+              {selectedObject.type === 'table' && tableStyleScope && (!simpleByDefault || tableInspectorAdvancedOpen) && (
                 <>
                   <div className="vnext-divider" />
                   <TableStyleInspector
@@ -4464,7 +4507,7 @@ export function EditorWorkspace({
                   />
                 </>
               )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
@@ -4540,7 +4583,7 @@ export function EditorWorkspace({
                   </section>
                 </>
               )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (
+              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
                 <>
                   <div className="vnext-divider" />
                   <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
@@ -4798,6 +4841,7 @@ export function EditorWorkspace({
                       </div>
                     )}
 
+                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
                     <div className="vnext-divider" />
                     <section className="vnext-image-cell-panel" data-image-cell-authoring="">
                       <h3>Imagem da célula</h3>
@@ -4896,6 +4940,7 @@ export function EditorWorkspace({
                         </>
                       )}
                     </section>
+                    </>}
 
                     {markerPanelOpen && selectedTableObject && !selectedTableObject.locked && (
                       <>
@@ -5071,6 +5116,7 @@ export function EditorWorkspace({
                       </>
                     )}
 
+                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
                     <div className="vnext-divider" />
                     <h3>Propriedades da seleção</h3>
                     <label>
@@ -5136,6 +5182,7 @@ export function EditorWorkspace({
                         Redefinir todo padding
                       </button>
                     </fieldset>
+                    </>}
                   </section>
                 </>
               )}
