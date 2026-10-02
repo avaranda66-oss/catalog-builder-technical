@@ -2,33 +2,8 @@ import React from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { DocumentRenderer } from '../rendering';
 import { releasePublicationResources, reviewPublication, samePublicationSource, verifyPublicationForPrint, type PublicationReviewResult, type PublicationSource } from '../publication/review';
-import { diagnosticMessage, W2D_DIAGNOSTIC_CODES } from './authoring-diagnostics';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
-import { walkPageObjects, type CatalogDocument, type Diagnostic } from '../domain';
-
-function publicationLocation(document: CatalogDocument, issue: Diagnostic): string {
-  const pageIndex = document.pages.findIndex(page => page.id === issue.pageId);
-  if (pageIndex < 0) return '';
-  const object = walkPageObjects(document.pages[pageIndex]).find(entry => entry.object.id === issue.objectId)?.object;
-  const parts = [`Página ${pageIndex + 1}`];
-  if (object) {
-    const objects = walkPageObjects(document.pages[pageIndex]);
-    parts.push(`${object.type === 'table' ? 'tabela' : object.type === 'text' ? 'texto' : 'objeto'} ${objects.findIndex(entry => entry.object.id === object.id) + 1}`);
-    if (object.type === 'table' && issue.cellId) {
-      const cell = object.table.cells.find(cell => cell.id === issue.cellId);
-      if (cell) parts.push(`linha ${object.table.rows.findIndex(row => row.id === cell.rowId) + 1}, coluna ${object.table.columns.findIndex(column => column.id === cell.columnId) + 1}`);
-    }
-  }
-  return `${parts.join(' · ')}: `;
-}
-
-function publicationMessage(code: string, fallback: () => string): string {
-  if (code === 'PUBLICATION_SOURCE_CHANGED') return 'O catálogo ou o acesso mudou. Feche a revisão, salve e abra novamente.';
-  if (/FONT/.test(code)) return 'Não foi possível carregar as fontes do catálogo. Tente novamente com conexão.';
-  if (/ASSET|IMAGE/.test(code)) return 'Não foi possível verificar uma imagem. Volte ao editor e confira as imagens antes de publicar.';
-  if (W2D_DIAGNOSTIC_CODES.has(code)) return fallback();
-  return 'Não foi possível verificar esta versão. Volte ao editor e tente novamente antes de publicar.';
-}
+import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage } from './publication-diagnostic-presentation';
 
 export function PublicationReview({ getSource, subscribe, onClose }: {
   getSource: () => PublicationSource | undefined; subscribe: (listener: () => void) => () => void; onClose: () => void;
@@ -91,19 +66,33 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
   const close = () => { generation.current++; host.current?.removeAttribute('data-print-approved'); onClose(); };
 
   return createPortal(<div ref={host} data-publication-host="" data-publication-status={status} className="vnext-publication-backdrop">
-    <section ref={dialog} role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="publication-heading" className="vnext-publication-dialog"
+    <section ref={dialog} role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="publication-heading" aria-describedby="publication-description" className="vnext-publication-dialog"
       onKeyDown={event => { trapReviewTab(event); if (event.key === 'Escape') close(); }}>
-      <header><h2 id="publication-heading">Revisar e publicar</h2><button type="button" onClick={close}>Voltar ao editor</button></header>
+      <header><div className="vnext-dialog-heading"><p className="vnext-dialog-eyebrow">Publicação</p>
+        <h2 id="publication-heading">Revisar e publicar</h2></div>
+        <button type="button" className="vnext-btn-secondary" onClick={close}>Voltar ao editor</button></header>
       <div className="vnext-publication-controls">
-        {!source ? <p role="alert">Salve o catálogo e aguarde a confirmação antes de publicar.</p>
-          : !current ? <p role="alert">O catálogo ou o acesso mudou. Feche a revisão, salve e abra novamente.</p>
-          : <p role="status">{running ? 'Verificando páginas, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.' : 'Publicação bloqueada. Corrija os itens abaixo no editor e salve novamente.'}</p>}
-        {result?.diagnostics.length ? <ul>{result.diagnostics.map((item, i) => <li key={i} data-publication-diagnostic={item.code}>
-          {publicationLocation(result.document, item)}
-          {publicationMessage(item.code, () => diagnosticMessage(item))}</li>)}</ul> : null}
-        {printMessage && <p role="alert">{printMessage}</p>}
-        <p>Confira o conteúdo de todas as páginas. Na janela de impressão, escolha Salvar como PDF, papel A4, sem cabeçalhos e rodapés.</p>
-        <button type="button" data-publication-action="print" disabled={status !== 'READY' || Boolean(printMessage)} onClick={() => { void print(); }}>Imprimir / salvar PDF</button>
+        <p id="publication-description" className="vnext-dialog-description">Confira as páginas e a verificação do catálogo antes de gerar o PDF.</p>
+        {!source ? <p role="alert" className="vnext-status" data-tone="warning">Salve o catálogo e aguarde a confirmação antes de publicar.</p>
+          : !current ? <p role="alert" className="vnext-status" data-tone="warning">O catálogo ou o acesso mudou. Feche a revisão, salve e abra novamente.</p>
+          : <p role="status" className="vnext-status" data-tone={running ? 'pending' : result?.status === 'READY' ? 'success' : 'error'}>
+            {running ? 'Verificando páginas, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.' : 'Publicação bloqueada. Corrija os itens abaixo no editor e salve novamente.'}</p>}
+        {result?.diagnostics.length ? <div>
+          <h3>{result.status === 'BLOCKED' ? 'Itens para corrigir' : 'Pontos para revisar'}</h3>
+          <ul className="vnext-publication-diagnostics">{result.diagnostics.map((item, i) => <li key={i}
+            className="vnext-publication-diagnostic" data-severity={item.severity} data-publication-diagnostic={item.code}>
+            <strong className="vnext-diagnostic-location">{publicationDiagnosticLocation(result.document, item)}</strong>
+            <span className="vnext-diagnostic-kind">{item.severity === 'ERROR' ? 'Correção necessária' : 'Revisar'}</span>
+            <p className="vnext-diagnostic-message">{publicationDiagnosticMessage(item.code)}</p>
+            <details className="vnext-technical-details"><summary>Detalhes técnicos</summary>
+              <dl>{publicationDiagnosticDetails(item).map(([label, value]) => <React.Fragment key={label}>
+                <dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
+            </details>
+          </li>)}</ul>
+        </div> : null}
+        {printMessage && <p role="alert" className="vnext-status" data-tone="error">{printMessage}</p>}
+        <p className="vnext-dialog-description">Confira o conteúdo de todas as páginas. Na janela de impressão, escolha Salvar como PDF, papel A4, sem cabeçalhos e rodapés.</p>
+        <button type="button" className="vnext-btn-primary" data-publication-action="print" disabled={status !== 'READY' || Boolean(printMessage)} onClick={() => { void print(); }}>Imprimir / salvar PDF</button>
       </div>
       <div ref={renderer} className="vnext-publication-pages" role="region" tabIndex={0} aria-label="Prévia de todas as páginas">
         {preview && <DocumentRenderer document={preview.document} plans={preview.plans} assetUrls={preview.urls} />}

@@ -3622,7 +3622,7 @@ export function EditorWorkspace({
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
             <div className="vnext-title-row"><h1>{document.title}</h1></div>
             {simpleByDefault && persistence && (
-              <span className="vnext-save-summary" data-save-state="" data-save-phase={persistence.save.phase}>
+              <span className="vnext-save-summary" role="status" data-save-state="" data-save-phase={persistence.save.phase}>
                 {fatherSaveLabel(persistence.save.label)}
               </span>
             )}
@@ -3710,7 +3710,7 @@ export function EditorWorkspace({
                   className={'vnext-diagnostic-summary ' + (pageDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR') ? 'is-error' : 'is-warning')}
                   data-page-diagnostic-summary=""
                 >
-                  {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · {pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)
+                  {simpleByDefault ? `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} a corrigir · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} para revisar` : `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)`}
                 </span>
               )}
               {!simpleByDefault && <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>}
@@ -3795,6 +3795,7 @@ export function EditorWorkspace({
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
+              {simpleByDefault && <p className="vnext-disclosure-help">Clique em uma célula para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
               {simpleByDefault && (
                 <button
                   type="button"
@@ -4067,7 +4068,7 @@ export function EditorWorkspace({
         </main>
 
         <aside className="vnext-info" aria-label="Inspector do objeto">
-          <span className="vnext-info-kicker">Inspector</span>
+          <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
               ? selectedObject.type === 'text' ? 'Texto'
@@ -4081,6 +4082,21 @@ export function EditorWorkspace({
             : selectedObjects.length > 1
               ? `${selectedObjects.length} objetos selecionados`
               : 'Selecione um objeto'}</h2>
+          {simpleByDefault && selectedObject && (
+            <p className="vnext-context-help" data-inspector-context-help="">
+              {selectedObject.type === 'text' ? 'Use Editar texto na barra acima da página ou dê dois cliques no texto.'
+                : selectedObject.type === 'image' ? 'Ajuste o enquadramento ou escolha outra imagem abaixo.'
+                  : selectedObject.type === 'table' ? 'Use Editar tabela para alterar células, linhas e colunas. O título e a aparência ficam aqui.'
+                    : 'Arraste na página para mover. Use as alças para mudar o tamanho.'}
+            </p>
+          )}
+          {simpleByDefault && persistence && (persistence.save.phase === 'unavailable' || persistence.save.phase === 'ambiguous') && (
+            <p className="vnext-status" data-tone="warning" role="alert" data-save-guidance="">
+              {persistence.save.phase === 'ambiguous'
+                ? 'O salvamento ainda não foi confirmado. Mantenha esta aba aberta e use Salvar para verificar novamente.'
+                : 'Não foi possível salvar agora. Mantenha esta aba aberta, confira a conexão e tente Salvar novamente.'}
+            </p>
+          )}
           {selectedObjects.length > 1 ? (
             <section className="vnext-arrangement-inspector" data-object-arrangement="">
               <h3>Alinhar e distribuir</h3>
@@ -4435,6 +4451,7 @@ export function EditorWorkspace({
                     </div>
                   </section>
                   {simpleByDefault && (
+                    <>
                     <button
                       type="button"
                       className="vnext-inspector-action vnext-inspector-disclosure"
@@ -4445,6 +4462,8 @@ export function EditorWorkspace({
                     >
                       {tableInspectorAdvancedOpen ? 'Ocultar detalhes da tabela' : 'Detalhes da tabela'}
                     </button>
+                    <p className="vnext-disclosure-help">Altura, dimensões, cores e bordas.</p>
+                    </>
                   )}
                   {(!simpleByDefault || tableInspectorAdvancedOpen) && <div id="vnext-table-advanced-details" data-table-advanced-details="">
                   <div className="vnext-divider" />
@@ -4822,8 +4841,8 @@ export function EditorWorkspace({
                           </div>
                         )}
                         {cellDraft.activeType === 'empty' && <p data-cell-empty-content="">A célula ficará vazia.</p>}
-                        {cellDraft.activeType === 'marker' && <p data-cell-readonly-content="">Marcador existente. A edição de marcadores será disponibilizada em uma etapa posterior.</p>}
-                        {cellDraft.activeType === 'image' && <p data-cell-readonly-content="">Imagem existente. A edição de imagem da célula não faz parte desta etapa.</p>}
+                        {cellDraft.activeType === 'marker' && <p data-cell-readonly-content="">{simpleByDefault ? 'Marcador existente. Use Notas e legenda para revisar as notas e os símbolos da tabela.' : 'Marcador existente. A edição de marcadores será disponibilizada em uma etapa posterior.'}</p>}
+                        {cellDraft.activeType === 'image' && <p data-cell-readonly-content="">{simpleByDefault ? 'Para ajustar esta imagem, abra Detalhes da tabela e use Imagem da célula.' : 'Imagem existente. A edição de imagem da célula não faz parte desta etapa.'}</p>}
                         {cellDraft.originalContent.type !== 'marker' && cellDraft.originalContent.type !== 'image' && (
                           <button type="button" data-editor-action="clear-cell-content"
                             onClick={() => notifyCellDraftChanged(clearTableCellDraft(cellDraft))}>
@@ -5254,7 +5273,9 @@ export function EditorWorkspace({
                 ))}
               </div>
             </>
-          ) : <p>Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.</p>}
+          ) : <p className="vnext-context-help">{simpleByDefault
+            ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
+            : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>}
           {(!simpleByDefault || persistence?.save.phase === 'conflict') && <>
           <div className="vnext-divider" />
           <h3>{persistence?.save.phase === 'conflict' ? 'Atenção ao salvamento' : 'Salvamento'}</h3>

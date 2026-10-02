@@ -86,7 +86,7 @@ try {
 
   // 1 — Anonymous direct /v2: canonical root Login, no protected controls.
   await page.goto(`${origin}/v2`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: 'PRESYS Catalog Studio' }).waitFor();
+  await page.getByRole('heading', { name: 'Acesse seus catálogos' }).waitFor();
   assert.equal(new URL(page.url()).pathname, '/');
   assert.equal(await page.locator('[data-catalog-library]').count(), 0);
   assert.equal(await page.getByRole('button', { name: /Novo catálogo|Criar novo catálogo|Abrir/ }).count(), 0);
@@ -166,7 +166,7 @@ try {
   await page.goto(`${origin}/v2`, { waitUntil: 'networkidle' });
   await page.getByText('Comece seu primeiro catálogo', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Sair' }).click();
-  await page.getByRole('heading', { name: 'PRESYS Catalog Studio' }).waitFor();
+  await page.getByRole('heading', { name: 'Acesse seus catálogos' }).waitFor();
   assert.equal(new URL(page.url()).pathname, '/');
   assert.equal(await page.evaluate(() => window.__PILOT_B_PROOF__.returnTarget()), '/v2');
 
@@ -178,7 +178,7 @@ try {
   await page.reload({ waitUntil: 'networkidle' });
   await page.locator('[data-catalog-library]').waitFor();
   assert.equal(new URL(page.url()).pathname, '/v2');
-  assert.equal(await page.getByRole('heading', { name: 'PRESYS Catalog Studio' }).count(), 0);
+  assert.equal(await page.getByRole('heading', { name: 'Acesse seus catálogos' }).count(), 0);
   const logoutReturnRefresh = {
     finalUrl: page.url(),
     returnTargetConsumed: true,

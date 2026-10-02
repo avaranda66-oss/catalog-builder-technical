@@ -35,7 +35,7 @@ describe('Auth gate and limited collaborator interface', () => {
       root.render(<App />);
     });
 
-    expect(container.querySelector('h1')?.textContent).toBe('PRESYS Catalog Studio');
+    expect(container.querySelector('h1')?.textContent).toBe('Acesse seus catálogos');
     expect(products).not.toHaveBeenCalled();
     expect(catalog).not.toHaveBeenCalled();
     expect(media).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 @import '@fontsource/noto-sans/400.css';
 @import '@fontsource/noto-sans/600.css';
 @import '@fontsource/noto-sans/700.css';
+@import './product-primitives.css';
 
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto Sans', Arial, sans-serif; }
@@ -272,7 +273,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; clip-path: inset(50%) !important; }
 .vnext-library-shell, .vnext-library-shell * { box-sizing: border-box; }
-.vnext-library-shell { width: 100%; min-width: 0; height: 100%; overflow: auto; background: #f4f6f8; color: #172033; }
+.vnext-library-shell { width: 100%; min-width: 0; height: 100%; overflow: auto; background: var(--vnext-background); color: var(--vnext-text); }
 .vnext-library-header { position: sticky; top: 0; z-index: 20; display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #d9e0e8; background: rgb(255 255 255 / .97); padding: 0 max(22px, calc((100vw - 1160px) / 2)); backdrop-filter: blur(10px); }
 .vnext-library-header h1 { margin: 1px 0 0; color: #172033; font-size: 20px; letter-spacing: -.02em; }
 .vnext-library-header-actions { display: flex; align-items: center; gap: 10px; }
@@ -308,8 +309,13 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-library-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .vnext-library-row-actions button, .vnext-library-dialog-actions button, .vnext-library-error button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #c8d2de; border-radius: 6px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 0 12px; }
 .vnext-library-row-actions button:hover, .vnext-library-dialog-actions button:hover, .vnext-library-error button:hover { border-color: #8fa2b6; background: #f7f9fb; }
-.vnext-library-row-actions button.is-primary, .vnext-library-dialog-actions button.is-primary { border-color: #003f78; background: #003f78; color: #fff; }
-.vnext-library-row-actions button.is-primary:hover, .vnext-library-dialog-actions button.is-primary:hover { background: #002f59; }
+.vnext-library-row-actions button.is-primary { border-color: #a8bed3; background: var(--vnext-surface); color: var(--vnext-primary); }
+.vnext-library-row-actions button.is-primary:hover:not(:disabled) { border-color: var(--vnext-primary); background: var(--vnext-accent-surface); }
+.vnext-library-row-actions button.is-quiet { border-color: transparent; background: transparent; color: var(--vnext-text-muted); font-weight: 600; }
+.vnext-library-row-actions button.is-quiet:hover:not(:disabled) { border-color: var(--vnext-border); background: var(--vnext-surface); color: var(--vnext-text-secondary); }
+.vnext-library-row-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.vnext-library-dialog-actions button.is-primary { border-color: var(--vnext-primary); background: var(--vnext-primary); color: var(--vnext-surface); }
+.vnext-library-dialog-actions button.is-primary:hover:not(:disabled) { background: var(--vnext-primary-hover); }
 .vnext-library-dialog-actions button.is-danger { border-color: #a34242; background: #a34242; color: #fff; }
 .vnext-library-dialog-actions button:disabled { cursor: not-allowed; opacity: .55; }
 .vnext-library-archived-state { border: 1px solid #cfd7e1; border-radius: 999px; background: #eef2f6; color: #657488; font-size: 11px; font-weight: 700; padding: 6px 10px; }
@@ -321,7 +327,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-library-empty.is-search { min-height: 230px; }
 .vnext-library-error { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; border: 1px solid #e0b3b3; border-radius: 8px; background: #fff5f5; color: #7e3030; font-size: 13px; line-height: 1.45; padding: 12px 14px; }
 .vnext-library-dialog-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; overflow: auto; background: rgb(15 23 42 / .58); padding: 20px; }
-.vnext-library-dialog { position: relative; width: min(480px, 100%); border: 1px solid #ccd6e2; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgb(15 23 42 / .24); padding: 26px; }
+.vnext-library-dialog { position: relative; width: min(480px, 100%); border: 1px solid var(--vnext-border); border-radius: var(--vnext-radius-dialog); background: var(--vnext-surface); box-shadow: var(--vnext-dialog-shadow); padding: var(--vnext-space-lg); }
 .vnext-library-dialog h2 { margin: 0 36px 8px 0; color: #1d2d42; font-size: 20px; line-height: 1.3; letter-spacing: -.02em; }
 .vnext-library-dialog p { margin: 0 0 19px; color: #66758a; font-size: 13px; line-height: 1.55; }
 .vnext-library-dialog label { display: grid; gap: 7px; color: #45566d; font-size: 12px; font-weight: 700; }
@@ -338,6 +344,9 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-library-create-options button span { display: grid; min-width: 0; gap: 3px; }
 .vnext-library-create-options strong { color: #203349; font-size: 13px; }
 .vnext-library-create-options small { color: #6e7d90; font-size: 12px; line-height: 1.4; }
+.vnext-library-create-options button.is-recommended { border-color: #83a7c7; background: var(--vnext-accent-surface); }
+.vnext-library-create-options button.is-recommended:hover:not(:disabled) { border-color: var(--vnext-primary); background: #e6f1fa; }
+.vnext-library-create-options .vnext-create-recommendation { color: var(--vnext-primary); font-size: 11px; font-weight: 600; }
 .vnext-library-shell button:focus-visible, .vnext-library-shell input:focus-visible, .vnext-library-shell select:focus-visible { outline: 3px solid rgb(0 114 206 / .28); outline-offset: 2px; }
 .vnext-open-failure { display: grid; place-items: center; padding: 24px; }
 .vnext-open-failure > section { width: min(520px, 100%); text-align: center; }
@@ -427,26 +436,72 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-access-actions, .vnext-open-failure-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .vnext-access-actions button, .vnext-open-failure-actions > button:not(.vnext-library-create) { min-height: 42px; border: 1px solid #b9c5d3; border-radius: 7px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0 14px; }
 .vnext-access-actions button.is-primary { border-color: #003f78; background: #003f78; color: #fff; }
-.vnext-translation-backdrop { position: fixed; inset: 0; z-index: 100; background: #17203380; display: flex; justify-content: center; align-items: center; padding: 16px; }
-.vnext-translation-dialog { background: #fff; color: #172033; border-radius: 12px; padding: 24px; width: min(760px, 100%); max-height: 90dvh; overflow: auto; box-shadow: 0 16px 48px #17203340; }
-.vnext-translation-dialog header, .vnext-translation-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.vnext-translation-dialog button, .vnext-translation-dialog select { padding: 9px 12px; cursor: pointer; }
-.vnext-translation-dialog button:disabled { cursor: default; opacity: .6; }
-.vnext-translation-runs { display: grid; gap: 16px; margin: 20px 0; }
-.vnext-translation-run { border: 1px solid #d8deea; border-radius: 8px; padding: 12px; overflow-wrap: anywhere; }
-.vnext-translation-source { white-space: pre-wrap; }
-.vnext-translation-source span { display: block; font-size: 12px; color: #56647a; }
-.vnext-translation-run textarea { width: 100%; min-height: 76px; box-sizing: border-box; font: inherit; padding: 8px; }
-.vnext-publication-backdrop { position: fixed; inset: 0; z-index: 100; padding: 16px; background: #17203380; display: grid; place-items: center; }
-.vnext-publication-dialog { width: min(1200px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: #fff; color: #172033; border-radius: 12px; padding: 20px; box-sizing: border-box; }
-.vnext-publication-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.vnext-publication-dialog h2 { margin: 0; font-size: 20px; }
-.vnext-publication-dialog button { padding: 12px; min-height: 44px; cursor: pointer; }
-.vnext-publication-dialog button:disabled { opacity: .6; cursor: default; }
-.vnext-publication-controls { line-height: 1.5; }
+.vnext-translation-backdrop, .vnext-publication-backdrop { position: fixed; inset: 0; z-index: 100; padding: 20px; background: rgb(23 32 51 / .5); display: grid; place-items: center; }
+.vnext-translation-dialog, .vnext-publication-dialog { min-width: 0; border: 1px solid var(--vnext-border); border-radius: var(--vnext-radius-dialog); background: var(--vnext-surface); color: var(--vnext-text); padding: var(--vnext-space-lg); box-shadow: var(--vnext-dialog-shadow); }
+.vnext-translation-dialog { width: min(820px, 100%); max-height: calc(100dvh - 40px); overflow: auto; }
+.vnext-translation-dialog > header, .vnext-publication-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.vnext-translation-dialog > header > button, .vnext-publication-dialog > header > button { flex: none; }
+.vnext-translation-dialog footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 24px; border-top: 1px solid var(--vnext-border); padding-top: 18px; }
+.vnext-translation-dialog > p:not(.vnext-status) { color: var(--vnext-text-muted); font-size: 13px; line-height: 1.6; }
+.vnext-translation-runs { display: grid; gap: 16px; margin: 18px 0; }
+.vnext-translation-run { border: 1px solid var(--vnext-border); border-radius: var(--vnext-radius-surface); padding: 16px; overflow-wrap: anywhere; }
+.vnext-translation-source span { display: block; font-size: 12px; color: var(--vnext-text-muted); }
+.vnext-publication-dialog { width: min(1200px, 100%); max-height: calc(100dvh - 40px); overflow: auto; }
+.vnext-publication-dialog h2 { margin: 0; font-size: 22px; }
+.vnext-publication-controls { line-height: 1.6; }
+.vnext-publication-controls > p:not(.vnext-status) { color: var(--vnext-text-muted); font-size: 13px; }
 .vnext-publication-pages { max-height: 65dvh; overflow: auto; background: #eef2f6; margin-top: 16px; }
 .vnext-publication-pages > [data-editorial-root] { margin: 0 auto; }
 .vnext-publication-pages .editorial-page { margin-bottom: 16px; }
+
+.vnext-shell[data-simple-by-default="true"] .vnext-info { padding: 22px 18px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info h2 { margin-top: 6px; margin-bottom: 12px; font-size: 18px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info h3 { font-size: 13px; line-height: 1.4; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(.vnext-context-help, .vnext-disclosure-help) { color: var(--vnext-text-muted); font-size: 12px; line-height: 1.6; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info .vnext-context-help { margin-bottom: 16px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info .vnext-disclosure-help { margin: 7px 0 0; font-size: 11px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(.vnext-table-semantic-title, .vnext-cell-inspector, .vnext-image-cell-panel, [data-cell-edit-session]) { display: grid; min-width: 0; gap: 12px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(label, fieldset) { min-width: 0; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(.vnext-table-semantic-title, .vnext-cell-inspector, .vnext-image-cell-panel) label { display: grid; gap: 6px; color: var(--vnext-text-secondary); font-size: 12px; font-weight: 600; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(.vnext-table-semantic-title, .vnext-cell-inspector, .vnext-image-cell-panel) :where(input:not([type="checkbox"]):not([type="range"]), select, textarea) { width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--vnext-control-border); border-radius: var(--vnext-radius-control); background: var(--vnext-surface); color: var(--vnext-text); font: inherit; font-size: 12px; line-height: 1.5; padding: 8px 9px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(.vnext-table-semantic-title, .vnext-cell-inspector, .vnext-image-cell-panel) textarea { min-height: 84px; resize: vertical; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info button { min-height: 36px; min-width: 0; border: 1px solid var(--vnext-control-border); border-radius: var(--vnext-radius-control); background: var(--vnext-surface); color: var(--vnext-text-secondary); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 8px 10px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info button:hover:not(:disabled) { border-color: #95a6b8; background: var(--vnext-surface-muted); }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(button, input, select, textarea):disabled { cursor: not-allowed; opacity: .55; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info :where(button, input, select, textarea, summary):focus-visible { outline: 3px solid rgb(0 114 206 / .35); outline-offset: 2px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-cell-edit-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info [data-editor-action="set-table-title"] { border-color: #a8bed3; background: var(--vnext-accent-surface); color: var(--vnext-primary); }
+.vnext-shell[data-simple-by-default="true"] .vnext-info .vnext-inspector-disclosure { margin-top: 18px; border-color: var(--vnext-border); background: var(--vnext-surface-muted); color: var(--vnext-primary); text-align: left; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info .vnext-inspector-disclosure[aria-expanded="true"] { border-color: #a8bed3; background: var(--vnext-accent-surface); }
+.vnext-shell[data-simple-by-default="true"] .vnext-cell-measurement { display: grid; gap: 12px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-info [role="alert"] { border-radius: var(--vnext-radius-control); }
+.vnext-shell[data-simple-by-default="true"] .vnext-style-palette button { padding: 0; min-height: 30px; }
+
+@media (min-width: 901px) and (max-width: 1100px) {
+  .vnext-shell[data-simple-by-default="true"] .vnext-workspace { grid-template-columns: 148px minmax(0, 1fr) 244px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-info { display: block; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-canvas-area { padding-left: 16px; padding-right: 16px; }
+}
+@media (max-width: 900px) {
+  .vnext-shell[data-simple-by-default="true"] .vnext-document-preview { min-height: 720px; justify-content: center; padding: 28px 24px 32px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-page-stage { zoom: .62; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-info { padding: 22px 18px 28px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-info button { min-height: 44px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-style-palette button { min-height: 44px; }
+  .vnext-translation-backdrop, .vnext-publication-backdrop { padding: 12px; }
+  .vnext-translation-dialog, .vnext-publication-dialog { max-height: calc(100dvh - 24px); padding: 22px; }
+}
+@media (max-width: 640px) {
+  .vnext-shell[data-simple-by-default="true"] .vnext-document-preview { min-height: 580px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-page-stage { zoom: .5; }
+  .vnext-translation-dialog > header, .vnext-publication-dialog > header { gap: 12px; }
+}
+@media (max-width: 480px) {
+  .vnext-shell[data-simple-by-default="true"] .vnext-document-preview { min-height: 450px; padding-left: 14px; padding-right: 14px; }
+  .vnext-shell[data-simple-by-default="true"] .vnext-page-stage { zoom: .38; }
+  .vnext-translation-dialog, .vnext-publication-dialog { padding: 18px; }
+  .vnext-translation-dialog > header, .vnext-publication-dialog > header { flex-wrap: wrap; }
+}
 @media print {
   @page { size: A4; margin: 0; }
   body[data-vnext-print-policy] { margin: 0 !important; padding: 0 !important; }
@@ -454,7 +509,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   body[data-vnext-print-policy]::before { content: 'Use Publicar / PDF no catálogo para revisar as páginas antes de imprimir.'; display: block; padding: 24px; }
   body[data-vnext-print-policy]:has(> [data-publication-status="READY"][data-print-approved="true"])::before { display: none; }
   body[data-vnext-print-policy] > [data-publication-status="READY"][data-print-approved="true"] { display: block !important; position: static; padding: 0; background: white; }
-  body[data-vnext-print-policy] .vnext-publication-dialog { width: 210mm; max-height: none; overflow: visible; border-radius: 0; padding: 0; }
+  body[data-vnext-print-policy] .vnext-publication-dialog { width: 210mm; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
   body[data-vnext-print-policy] .vnext-publication-dialog > header, body[data-vnext-print-policy] .vnext-publication-controls { display: none; }
   body[data-vnext-print-policy] .vnext-publication-pages { max-height: none; overflow: visible; background: white; margin: 0; }
   body[data-vnext-print-policy] .vnext-publication-pages > [data-editorial-root] { margin: 0; }
