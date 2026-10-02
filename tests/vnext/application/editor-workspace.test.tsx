@@ -1346,3 +1346,25 @@ describe('P1.B contextual inspector disclosure', () => {
     expect(container.querySelector('[data-object-locking]')).toBeTruthy();
   });
 });
+
+describe('P1.C office-user inspector guidance', () => {
+  it('explains the editing task before advanced controls while preserving disclosure reset', () => {
+    const session = sessionWithDemo(seedTextDocument({ includeShape: true }));
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    const inspector = container.querySelector('.vnext-info');
+    expect(inspector).toHaveTextContent('Para adicionar conteúdo, use a barra acima da página.');
+    expect(inspector).not.toHaveTextContent('geometria');
+    selectText(container, 601);
+    expect(inspector).toHaveTextContent('Use Editar texto');
+    expect(button(container, 'toggle-inspector-details')).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(button(container, 'toggle-inspector-details'));
+    expect(container.querySelector('[data-inspector-authoring]')).toBeTruthy();
+    setPageRect(container);
+    const shape = container.querySelector<HTMLElement>('[data-editor-object-id="shape-other"]');
+    if (!shape) throw new Error('Missing shape target');
+    fireEvent.pointerDown(shape, { pointerId: 602, button: 0, clientX: 250, clientY: 80 });
+    fireEvent.pointerUp(shape, { pointerId: 602, button: 0, clientX: 250, clientY: 80 });
+    expect(inspector).toHaveTextContent('Use as alças para mudar o tamanho.');
+    expect(button(container, 'toggle-inspector-details')).toHaveAttribute('aria-expanded', 'false');
+  });
+});

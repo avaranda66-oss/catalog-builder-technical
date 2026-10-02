@@ -99,7 +99,8 @@ function RuntimeWorkspace({
         />
       )}
       {activeRecoveryGatePhase === 'RELEASED' && translationOpen && translation && onOpenTranslatedCopy && (
-        <TranslationReview coordinator={translation} onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
+        <TranslationReview coordinator={translation} sourceLocale={snapshot.session.getSnapshot().document.locale}
+          onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
       )}
       {activeRecoveryGatePhase === 'RELEASED' && publicationOpen && getPublicationSource && (
         <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)} />

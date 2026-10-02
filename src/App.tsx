@@ -222,7 +222,7 @@ export const App: React.FC = () => {
   }, [loadProducts, loadLatestCatalog, loadAssets, loadTemplates, handleRealtimeTemplateEvent, status, userId]);
 
   if (status === 'loading') {
-    return <main className="min-h-screen bg-slate-100 flex items-center justify-center text-sm text-slate-600">Validando acesso…</main>;
+    return <main className="vnext-login-shell"><section className="vnext-login-card" role="status"><p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p><p className="vnext-dialog-description">Validando acesso…</p></section></main>;
   }
 
   if (status === 'unauthenticated') return <LoginView />;
@@ -234,14 +234,15 @@ export const App: React.FC = () => {
         ? 'Perfil indisponível'
         : 'Acesso não disponível';
     return (
-      <main className="min-h-screen bg-slate-100 flex items-center justify-center p-5">
-        <section className="max-w-md bg-white border border-slate-300 p-6 shadow-sm">
-          <h1 className="text-lg font-bold text-slate-900">{title}</h1>
-          <p className="mt-2 text-sm text-slate-600">{errorMessage}</p>
-          <p className="mt-3 text-xs text-slate-500">Nenhum catálogo ou dado da Biblioteca foi carregado.</p>
-          <div className="mt-5 flex gap-2">
-            <button onClick={() => void retryProfile()} className="px-3 py-2 text-sm font-semibold border border-slate-300 bg-white hover:bg-slate-50 rounded-none">Tentar novamente</button>
-            <button onClick={() => void signOut()} className="px-3 py-2 text-sm font-semibold bg-[#003366] text-white rounded-none">Sair</button>
+      <main className="vnext-login-shell">
+        <section className="vnext-login-card" aria-labelledby="access-error-title">
+          <p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p>
+          <h1 id="access-error-title">{title}</h1>
+          <p className="vnext-status" data-tone="error" role="alert">{errorMessage}</p>
+          <p className="vnext-login-help">Nenhum catálogo ou dado da Biblioteca foi carregado.</p>
+          <div className="vnext-login-actions">
+            <button onClick={() => void retryProfile()} className="vnext-btn-primary">Tentar novamente</button>
+            <button onClick={() => void signOut()} className="vnext-btn-secondary">Sair</button>
           </div>
         </section>
       </main>

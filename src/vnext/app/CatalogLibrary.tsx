@@ -124,9 +124,9 @@ function CatalogRow({
       {view === 'active' ? (
         <div className="vnext-library-row-actions" aria-label={`Ações de ${item.title}`}>
           <button type="button" className="is-primary" onClick={onOpen} disabled={disabled}><FolderOpen size={17} aria-hidden="true" />Abrir</button>
-          <button type="button" onClick={onDuplicate} disabled={disabled}><Copy size={16} aria-hidden="true" />{duplicating ? 'Duplicando…' : 'Duplicar'}</button>
-          <button type="button" onClick={onRename} disabled={disabled}><Pencil size={16} aria-hidden="true" />Renomear</button>
-          <button type="button" onClick={onArchive} disabled={disabled}><Archive size={16} aria-hidden="true" />Arquivar</button>
+          <button type="button" className="is-quiet" onClick={onDuplicate} disabled={disabled}><Copy size={16} aria-hidden="true" />{duplicating ? 'Duplicando…' : 'Duplicar'}</button>
+          <button type="button" className="is-quiet" onClick={onRename} disabled={disabled}><Pencil size={16} aria-hidden="true" />Renomear</button>
+          <button type="button" className="is-quiet" onClick={onArchive} disabled={disabled}><Archive size={16} aria-hidden="true" />Arquivar</button>
         </div>
       ) : (
         <div className="vnext-library-archived-state">Arquivado</div>
@@ -505,7 +505,7 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
           <div className="vnext-library-empty">
             <FilePlus2 size={30} aria-hidden="true" />
             <h3>Comece seu primeiro catálogo</h3>
-            <p>Comece em branco ou use um modelo inicial preparado.</p>
+            <p>Use uma ficha técnica pronta para editar ou comece com uma página em branco.</p>
             <button type="button" className="vnext-library-create" onClick={requestNewCatalog} disabled={busy}>
               {createPending ? 'Verificar criação' : 'Criar novo catálogo'}
             </button>
@@ -526,16 +526,21 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
           <section ref={createDialog} className="vnext-library-dialog vnext-library-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-title">
             <button type="button" className="vnext-library-dialog-close" aria-label="Fechar" onClick={() => setCreateChooserOpen(false)}><X size={18} /></button>
             <h2 id="create-title">Novo catálogo</h2>
-            <p>Escolha um ponto de partida. Depois de criado, o catálogo será totalmente independente.</p>
+            <p>Escolha como começar. Você poderá editar textos, imagens e tabelas depois.</p>
             <div className="vnext-library-create-options">
               <button type="button" autoFocus onClick={() => { void createBlank(); }} disabled={busy}>
                 <FilePlus2 size={20} aria-hidden="true" />
                 <span><strong>Em branco</strong><small>Comece com uma página vazia.</small></span>
               </button>
               {starters.map((starter) => (
-                <button key={starter.starterId} type="button" onClick={() => { void createFromStarter(starter.starterId); }} disabled={busy}>
+                <button key={starter.starterId} type="button" className={starter.starterId === 'essential-technical-sheet' ? 'is-recommended' : undefined}
+                  onClick={() => { void createFromStarter(starter.starterId); }} disabled={busy}>
                   <LayoutTemplate size={20} aria-hidden="true" />
-                  <span><strong>{starter.label}</strong>{starter.description && <small>{starter.description}</small>}</span>
+                  <span>
+                    <strong>{starter.label}</strong>
+                    {starter.starterId === 'essential-technical-sheet' && <small className="vnext-create-recommendation">Recomendado para começar</small>}
+                    {starter.description && <small>{starter.description}</small>}
+                  </span>
                 </button>
               ))}
             </div>

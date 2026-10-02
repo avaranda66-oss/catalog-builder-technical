@@ -82,4 +82,30 @@ describe('W5.C publication dialog guards', () => {
     await act(async () => { complete(checked); });
     expect(checks.release).toHaveBeenCalledWith(checked); expect(window.print).not.toHaveBeenCalled();
   });
+  it('shows an actionable blocked issue and preserves exact evidence in a closed disclosure', async () => {
+    checks.review.mockImplementation(async (source: PublicationSource) => ({ status: 'BLOCKED', document: source.document,
+      plans: new Map(), urls: new Map(), diagnostics: [{ code: 'TABLE_WIDTH_INFEASIBLE', severity: 'ERROR',
+        details: 'Fixed widths and minima exceed frame', pageId: source.document.pages[0].id }] }));
+    const { view } = setup();
+    await waitFor(() => expect(view.getByText(/As larguras das colunas não cabem/)).toBeInTheDocument());
+    expect(view.getByText('Página 1')).toBeInTheDocument();
+    expect(view.getByRole('button', { name: 'Imprimir / salvar PDF' })).toBeDisabled();
+    const detail = view.getByText('Detalhes técnicos').closest('details')!;
+    expect(detail.open).toBe(false);
+    expect(detail).toHaveTextContent('TABLE_WIDTH_INFEASIBLE');
+    expect(detail).toHaveTextContent('Fixed widths and minima exceed frame');
+    expect(detail).toHaveTextContent('dialog-2');
+    expect(view.getByText(/As larguras das colunas não cabem/)).not.toHaveTextContent('TABLE_WIDTH_INFEASIBLE');
+  });
+  it('labels a warning as a review point without changing the engine ready status', async () => {
+    checks.review.mockImplementation(async (source: PublicationSource) => ({ status: 'READY', document: source.document,
+      plans: new Map(), urls: new Map(), diagnostics: [{ code: 'SAFE_AREA_VIOLATION', severity: 'WARNING',
+        details: 'Authored frame crosses configured safe area', pageId: source.document.pages[0].id }],
+      snapshot: { facts: [], geometryDiagnostics: [] } }));
+    const { view } = setup();
+    await waitFor(() => expect(view.getByRole('button', { name: 'Imprimir / salvar PDF' })).toBeEnabled());
+    expect(view.getByRole('heading', { name: 'Pontos para revisar' })).toBeInTheDocument();
+    expect(view.getByText('Revisar', { exact: true })).toBeInTheDocument();
+    expect(document.querySelector('[data-publication-host]')).toHaveAttribute('data-publication-status', 'READY');
+  });
 });

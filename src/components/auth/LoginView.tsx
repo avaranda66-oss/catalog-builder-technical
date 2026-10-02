@@ -1,6 +1,7 @@
 import React, { FormEvent, useState } from 'react';
 import { LockKeyhole, LogIn } from 'lucide-react';
 import { useAuthStore } from '@/stores/useAuthStore';
+import '@/vnext/app/product-primitives.css';
 
 export const LoginView: React.FC = () => {
   const signIn = useAuthStore((state) => state.signIn);
@@ -17,20 +18,20 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 flex items-center justify-center p-5">
-      <section className="w-full max-w-sm bg-white border border-slate-300 shadow-sm p-6" aria-labelledby="login-title">
-        <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-          <div className="w-9 h-9 bg-[#003366] text-white flex items-center justify-center">
-            <LockKeyhole className="w-4 h-4" />
+    <main className="vnext-login-shell">
+      <section className="vnext-login-card" aria-labelledby="login-title">
+        <div className="vnext-brand">
+          <div className="vnext-brand-mark">
+            <LockKeyhole size={18} aria-hidden="true" />
           </div>
           <div>
-            <h1 id="login-title" className="font-bold text-slate-900">PRESYS Catalog Studio</h1>
-            <p className="text-xs text-slate-500">Acesso interno</p>
+            <p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p>
+            <h1 id="login-title">Acesse seus catálogos</h1>
           </div>
         </div>
-
-        <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
-          <label className="block text-sm font-medium text-slate-800">
+        <p className="vnext-login-intro">Entre com sua conta de trabalho para criar e editar catálogos técnicos.</p>
+        <form className="vnext-form" onSubmit={handleSubmit}>
+          <label>
             E-mail
             <input
               type="email"
@@ -38,10 +39,9 @@ export const LoginView: React.FC = () => {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full border border-slate-300 px-3 py-2 rounded-none focus:outline-none focus:border-[#003366]"
             />
           </label>
-          <label className="block text-sm font-medium text-slate-800">
+          <label>
             Senha
             <input
               type="password"
@@ -49,20 +49,19 @@ export const LoginView: React.FC = () => {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full border border-slate-300 px-3 py-2 rounded-none focus:outline-none focus:border-[#003366]"
             />
           </label>
-          {errorMessage && <p className="text-sm text-red-700" role="alert">{errorMessage}</p>}
+          {errorMessage && <p className="vnext-status" data-tone="error" role="alert">{errorMessage}</p>}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-[#003366] text-white py-2 font-semibold disabled:opacity-60 flex items-center justify-center gap-2 rounded-none"
+            className="vnext-btn-primary"
           >
-            <LogIn className="w-4 h-4" />
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+            <LogIn size={17} aria-hidden="true" />
+            {isSubmitting ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-        <p className="mt-5 text-xs text-slate-500 leading-relaxed">
+        <p className="vnext-login-help">
           Contas são criadas e liberadas internamente. Para trocar senha ou solicitar acesso, fale com o administrador.
         </p>
       </section>
