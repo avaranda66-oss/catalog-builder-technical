@@ -78,8 +78,11 @@ e impedir terceira tentativa. Caps só valem se garantidos no transporte real an
 Não registrar chaves, auth tokens, signed URLs ou pacote confidencial em artefatos.
 
 Sem sessão/credencial/modelo autorizado ou sem caps garantidos: NOT_AVAILABLE, zero chamadas.
-Gateway remoto anterior não aceita en-US; sem deployment autorizado, real en-US continua
-NOT_AVAILABLE. Dois calls não autorizam bypass de gateway/auth nem implantação de P2.
+A premissa inicial de gateway remoto Spanish-only não foi confirmada: a observação pública
+de 03/10/2026 retornou 404 NOT_FOUND no endpoint conhecido. Fonte/versão/perfis remotos são
+NOT_AVAILABLE sem management auth; não declarar servidor espanhol existente ou ausente.
+Real es-ES/en-US continuam NOT_AVAILABLE. Dois calls não autorizam bypass de gateway/auth
+nem implantação de P2, e autorização de deployment não dispensa caps/budget verificados.
 
 ## Prova integrada de layout/entrega
 
@@ -133,8 +136,10 @@ amostra linguística do benchmark nem comprova qualidade Gemini real.
 
 `scratch/p2-real-acceptance.json` registra callsDispatched=0, actualCostUsd=0,
 deploymentPerformed=false. Motivos: sessão/runtime Supabase autorizados não verificados,
-gateway remoto anterior Spanish-only, caps declarados não garantidos por ele. Uma variável
-Google nominal não configura gateway nem autoriza bypass. Full suite PASS 293 arquivos/3285
+o recibo inicial presumiu gateway remoto Spanish-only, mas essa premissa é histórica e
+NÃO CONFIRMADA pelo live 404 em `scratch/p2-rollout-public-live.json`; fonte/versão/perfis
+da função não são verificados. Caps declarados continuam não garantidos para chamada real.
+Uma variável Google nominal não configura gateway nem autoriza bypass. Full suite PASS 293 arquivos/3285
 testes + 1 skip preexistente, 32/32 históricos PASS, typecheck/lint/build e QA final PASS são
 evidências separadas registradas na story. PR/CI do head exato ainda não são alegados neste
 congelamento; esses resultados não decorrem do benchmark nem comprovam provider/backend reais.

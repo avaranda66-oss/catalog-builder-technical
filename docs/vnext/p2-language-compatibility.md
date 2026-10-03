@@ -14,8 +14,9 @@ estão registradas abaixo; isso não declara implantação remota ou canonicidad
 | en-US | English | English (United States) | US | Latn | ltr | noto-sans-latin-v1 / Noto Sans | NÃO | SIM, a partir de pt-BR | testes e prova controlada PASS |
 
 "Permitido" significa allowlist do contrato P2. Não comprova gateway remoto implantado nem
-qualidade linguística de resposta Gemini real. Hoje a main anterior a P2 suporta somente
-pt-BR → es-ES; inglês não passa a estar disponível remotamente por editar esta branch.
+qualidade linguística de resposta Gemini real. O código main anterior a P2 suporta somente
+pt-BR → es-ES; isso não confirma perfil/disponibilidade da função remota. Editar esta branch
+não habilita inglês remotamente.
 
 ## Metadados futuros — NOT_AVAILABLE
 
@@ -68,17 +69,61 @@ em normas/protocolos/símbolos, corrigidas pontualmente com testes. Cache inclui
 perfil/prompt/política; resultado antigo não é reutilizado nem aceito silenciosamente.
 O alias W5 no cliente continua sendo default espanhol, agora v2.
 
-## Compatibilidade de deployment — sem deploy nesta sessão
+## Compatibilidade de rollout — contrato de remediação, sem deploy
 
-Cliente P2, gateway e registry precisam avançar juntos em uma implantação futura autorizada.
-O handler importa o registry VNext puro como fonte única de perfis/allowlists; esse arquivo
-é dependência de build/bundle do gateway. Não publicar só o handler nem duplicar mapas
-divergentes. A revisão/testes de runtime exercitam essa dependência com fetch controlado.
+Auditoria QA do head inicial `5597514e1779c1efd43d22060446cc85ab0fe8c0` identificou HIGH:
+gateway P2 Spanish-v2/English-v1 rejeita o request Spanish-v1 do cliente canônico `40b85d6`;
+esse cliente também rejeita response v2. Um flag somente para inglês não torna o rollout
+seguro. O gate `37095084780` do head inicial é histórico e não valida o próximo head.
 
-Requests P2 Spanish-v2/English-v1 são incompatíveis com o gateway remoto anterior Spanish-v1,
-e falham fechados. Isso também significa que abrir o cliente P2 contra gateway antigo não
-prova regressão espanhola real. O cliente canônico P1 e seu gateway antigo não foram alterados
-remotamente. Deployment, migração ou aceitação de perfis antigos não são simulados como sucesso.
+A correção limitada aceita no servidor o perfil canônico Spanish-v1 exato, além dos
+perfis P2. Não alterar o registry/UI/cache/validador P2 para aceitar v1. Não reescrever v1 em
+v2: o envelope de resposta ecoa profileVersion/requestId/targetLocale do request validado.
+
+| Contrato aceito no gateway corrigido | sourceLocale | targetLocale | contractVersion | profileVersion | Política do cliente |
+| --- | --- | --- | --- | --- | --- |
+| Canônico pré-P2, somente compatibilidade servidor | pt-BR | es-ES | w5a-v1 | w5-ptbr-eses-v1 | cliente canônico W5 v1; não aceito pelo cliente P2 |
+| P2 espanhol | pt-BR | es-ES | w5a-v1 | w5-ptbr-eses-v2 | P2 tokenPolicy p2-tech-tokens-v2 |
+| P2 inglês | pt-BR | en-US | w5a-v1 | p2-ptbr-enus-v1 | P2 tokenPolicy p2-tech-tokens-v2 |
+
+O perfil antigo possui prompt `w5-technical-es-v1` e tokenPolicy `w5-tech-tokens-v1` no cliente
+canônico; não recebe alegação de proteção P2 v2. Combinações de perfil/par/contract erradas
+continuam rejeitadas, sem fallback nem expansão de idiomas suportados.
+
+Após prova, gateway corrigido pode preceder o cliente P2: cliente canônico + gateway novo
+deve passar v1, e cliente P2 + gateway novo deve passar Spanish-v2/English-v1. Cliente P2 +
+gateway do código pré-P2 permanece incompatível. A ordem é condicionada a QA/gates/CI e autorização
+futura, não a sucesso simulado ou a esta documentação. Nenhum deployment foi executado.
+
+O handler importa o registry VNext puro como fonte de perfis P2/allowlists; esse arquivo é
+dependência do bundle exato do gateway. Compatibilidade v1 é explícita somente no servidor;
+nenhum alias permissivo é propagado ao cliente. Typecheck Deno e ESZip devem provar o
+artefato/registry exatos antes de preparar implantação futura.
+
+Auth, verify_jwt/config existentes, secrets, provider client/modelo/transporte e DB não mudam.
+Management browser/CLI sem autorização verificável não fornecem versão/alias/config live:
+esses dados permanecem NOT_AVAILABLE. Cliente P1/gateway remoto não são alterados nesta etapa;
+zero chamadas reais e zero deploy. Packet futuro deve distinguir bundle provado de runtime
+remoto não verificado, e registrar critérios/ordem/rollback antes de qualquer execução.
+
+### Observação pública atual, sem management auth
+
+`scratch/p2-rollout-public-live.json` (03/10/2026 14:35:08 UTC) observou login normal em
+`https://catalog-builder-technical.vercel.app/vnext`, sem sessão autorizada. O bootstrap
+público `/assets/bootstrap-Cpo4e8if.js` contém `w5-ptbr-eses-v1`, não contém os perfis P2 v2/
+English-v1, e usa origem Supabase pública `https://bjxqvrpbigwgabwbhtqa.supabase.co`.
+Asset SHA256 `aae3f2ee3faa7aba9ea76f9c2250bf7af879a1516d79f2f79d21118414f05dfe`;
+binding exato do asset a um SHA de Git não verificado.
+
+GET não autenticado da função conhecida `vnext-translation-provider` retornou 404,
+`NOT_FOUND`, "Requested function was not found". Servidor remoto Spanish-only **NÃO
+CONFIRMADO**. Fonte/versão/perfis/artefato de rollback da função são NOT_AVAILABLE sem
+management auth. A premissa anterior de gateway remoto espanhol não é comprovada por esse
+endpoint, e o 404 não autoriza inferir sucesso após uma implantação.
+
+`scratch/p2-rollout-vercel-github-readonly.json` registra evidência histórica de deployment;
+productionBranch, mapping exato de alias e settings efetivos atuais não foram autenticados.
+A URL pública foi observada, mas não substitui prova do mapping/configuração de promoção.
 
 `vercel.json` desabilita deployment automático somente para a branch
 `codex/p2-multilingual-translation-center` por `git.deploymentEnabled`, sem alterar rewrites.
@@ -94,10 +139,14 @@ Uma implantação futura depende de autorização própria e da compatibilidade 
 4. Real Gemini: somente resposta real autorizada/capada; não confundir com mock.
 5. Real Supabase: somente ACK/readback/reopen autenticados; não confundir com transporte controlado.
 
-Sem implantação autorizada de P2, gateway remoto English é NOT_AVAILABLE. P2 termina no PR,
-sem merge/auto-merge/deploy; nenhuma tentativa para desbloquear real altera essa fronteira.
+Real Gemini/Supabase e ambos os idiomas no gateway remoto são NOT_AVAILABLE nesta etapa:
+endpoint conhecido 404, configuração não confirmada e sem sessão autorizada. Gateway segue
+sem garantia dos caps output/thinking; não chamar até 4k input/4k output incluindo thinking,
+máximo 2 upstream calls e teto US$0,05 serem impostos/verificados antes da primeira chamada.
+Autorização de deployment isolada não remove esse bloqueio. Nesta etapa: 0 chamadas/US$0.
+P2 continua sem merge/auto-merge/deploy; provas controladas não alteram essa fronteira.
 
-## Estado de verificação
+## Estado de verificação P2 inicial — evidência histórica
 
 - [x] Matriz limitada congelada após BEFORE 87 capturas/3 larguras.
 - [x] Registry, allowlists e perfis implementados.
@@ -111,4 +160,33 @@ Evidência: `scratch/p2-kernel-focused.log`, testes `p2-technical-benchmark` (5 
 zero erros) e `scratch/p2-real-acceptance.json`. Full suite PASS: 293 arquivos, 3285 testes e
 1 skip preexistente, com workers limitados a 2; 32/32 históricos PASS, comandos/ordem mantidos.
 Typecheck/lint/build e QA final PASS, sem HIGH/CRITICAL; lint tem 268 avisos e zero erros.
-PR/CI do head exato permanecem externos e pendentes neste congelamento. Não declarar P2 canônico.
+PR #64 e CI `37095084780` passaram para o head inicial; não comprovam rollout seguro nem a
+remediação. Novo código exige focados de compatibilidade, lint/typecheck/full/build, 33 provas
+(32 históricas + P2), Deno/ESZip e QA/CI do novo head. Não declarar P2 canônico.
+
+- [x] Contrato da remediação congelado antes do código, com compatibilidade v1 somente servidor.
+- [x] Canônico v1 e P2 v2/en-US passam contra gateway corrigido em transporte controlado; negativos e client P2 fail-closed.
+- [x] Typecheck do código local Deno e roundtrip ESZip oficial genérico do gateway/registry exatos PASS; sem alegar writer/runtime remoto validado.
+- [ ] Todos os gates/33 provas, QA sem HIGH/CRITICAL e novo CI do head exato PASS.
+- [ ] Packet revisável com configuração conhecida/lacunas/ordem/rollback; sem merge/deploy ou chamada real.
+
+Prova local corrigida: Deno 2.5.6/2.9.7 PASS; ESM graph/bundle de 25 módulos; ESZip
+`denoland/eszip v0.109.0`, 26 módulos, 421988 bytes, ESZIP2.3, roundtrip PASS. SHA256 ESZip
+`dde9737af20501d1aaf3728e78b5fc77f8613ef84b74d2801c2d5cf886b74005`; Git blob gateway
+`b3d90ddd5a02263b5f4924d18a71c67e8a5e2091`, sem novo head/tree ainda. Recibo:
+`scratch/p2-rollout-bundle/remediation-working/eszip-result.json`. Registry unchanged.
+Arquivo gateway raw SHA256 `1b5fee72ba4396ea1cf97db6fa6c597587e956b2a414cfe0ff090efa9544691b`;
+sourceHashes no ESZip é hash do módulo retornado pelo parser, não do .ts raw. Os hashes dos
+arquivos raw antes/depois do bundle/QA são iguais, sem confundir esses domínios de identidade.
+Deno --all FAIL com 39 erros de declarações externas Supabase WebAuthn/Node (zero locais);
+writer otimizado Supabase via Docker NOT_VALIDATED, runtime deployed exato NOT_AVAILABLE.
+O roundtrip genérico não substitui esses passos nem valida produção.
+
+Focados atuais 184 testes/3 arquivos PASS; lint zero erros/268 avisos; typecheck/build PASS.
+Full suite corrigida PASS 293 arquivos/3295 testes + 1 skip preexistente, workers2/min1,
+240,67 s, `scratch/p2-rollout-full-tests.log`; QA final zero HIGH/CRITICAL. Prova canônica
+executa service/GatewayClient/validador/proteção/cache/cobertura reais do 40b: 9 elegíveis/11
+exclusões, prompt/envelope deep-equal, cache-hit/original imutável, três perfis 200 e 11
+negativos sem dispatch. Evidência controlada, zero chamadas externas; recibo no packet
+`P2_CANONICAL_CLIENT_GATEWAY_COMPATIBILITY_QA.json`. UI/fixtures de prova/dependências não
+mudaram. As 33 provas no novo CI e o packet/head exatos permanecem externos e pendentes.

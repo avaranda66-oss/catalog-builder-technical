@@ -20,8 +20,9 @@ describe('W5.A VNext server gateway contract', () => {
   it('uses the shared P2 allowlist/profile with unchanged authentication, roles and bounded request surface', () => {
     expect(gatewaySource).toContain("from '../../../src/vnext/translation/language-registry.ts'");
     expect(gatewaySource).toContain('const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion');
-    expect(gatewaySource).toContain('findRegisteredTranslationProfile(value.sourceLocale, value.targetLocale)');
-    expect(gatewaySource).toContain('value.profileVersion !== profile.profileVersion');
+    expect(gatewaySource).toContain('resolveGatewayProfile(value.sourceLocale, value.targetLocale, value.profileVersion)');
+    expect(gatewaySource).toContain('profileVersion === current.profileVersion');
+    expect(gatewaySource).toContain('profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion');
     expect(gatewaySource).toContain('maxUnits: 60');
     expect(gatewaySource).toContain('maxCharsPerRun: 4_000');
     expect(gatewaySource).toContain('maxTotalChars: 30_000');

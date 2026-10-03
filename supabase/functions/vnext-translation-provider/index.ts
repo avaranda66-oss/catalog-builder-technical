@@ -6,6 +6,27 @@ import { VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTransl
 
 const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion;
 
+// Server-only bridge for the canonical P1 client while P2 rolls out. Never a client profile.
+const CANONICAL_SPANISH_PROFILE = Object.freeze({
+  contractVersion: 'w5a-v1',
+  profileVersion: 'w5-ptbr-eses-v1',
+  sourceLocale: 'pt-BR',
+  targetLocale: 'es-ES',
+  providerId: 'gemini',
+  modelId: 'gemini-2.5-flash',
+  promptVersion: 'w5-technical-es-v1',
+  tokenPolicyVersion: 'w5-tech-tokens-v1',
+} as const);
+
+function resolveGatewayProfile(sourceLocale: string, targetLocale: string, profileVersion: unknown) {
+  const current = findRegisteredTranslationProfile(sourceLocale, targetLocale);
+  if (current && profileVersion === current.profileVersion) return current;
+  if (sourceLocale === CANONICAL_SPANISH_PROFILE.sourceLocale &&
+    targetLocale === CANONICAL_SPANISH_PROFILE.targetLocale &&
+    profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion) return CANONICAL_SPANISH_PROFILE;
+  return undefined;
+}
+
 const LIMITS = {
   maxUnits: 60,
   maxCharsPerRun: 4_000,
@@ -111,8 +132,8 @@ function parseRequest(value: unknown): GatewayRequest | null {
     value.units.length === 0 ||
     value.units.length > LIMITS.maxUnits
   ) return null;
-  const profile = findRegisteredTranslationProfile(value.sourceLocale, value.targetLocale);
-  if (!profile || value.profileVersion !== profile.profileVersion) return null;
+  const profile = resolveGatewayProfile(value.sourceLocale, value.targetLocale, value.profileVersion);
+  if (!profile) return null;
 
   const units: GatewayUnit[] = [];
   const unitIds = new Set<string>();
@@ -159,7 +180,7 @@ function parseRequest(value: unknown): GatewayRequest | null {
 
   return {
     contractVersion: value.contractVersion,
-    profileVersion: value.profileVersion,
+    profileVersion: profile.profileVersion,
     requestId: value.requestId,
     sourceCatalogId: value.sourceCatalogId,
     sourceLocale: value.sourceLocale,
@@ -300,19 +321,24 @@ serve(async (request: Request) => {
       return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
     }
 
-    const translationProfile = findRegisteredTranslationProfile(body.sourceLocale, body.targetLocale)!;
+    const translationProfile = resolveGatewayProfile(body.sourceLocale, body.targetLocale, body.profileVersion)!;
+    const canonicalSpanish = translationProfile.profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion;
     const promptContract = {
       contractVersion: CONTRACT_VERSION,
       profileVersion: translationProfile.profileVersion,
-      promptVersion: translationProfile.promptVersion,
-      tokenPolicyVersion: translationProfile.tokenPolicyVersion,
+      ...(canonicalSpanish ? {} : {
+        promptVersion: translationProfile.promptVersion,
+        tokenPolicyVersion: translationProfile.tokenPolicyVersion,
+      }),
       sourceLocale: translationProfile.sourceLocale,
       targetLocale: translationProfile.targetLocale,
       rules: [
         `Translate only protectedText values from Portuguese (Brazil) to ${getTranslationLanguage(translationProfile.targetLocale)!.englishName}.`,
-        'Use professional PRESYS engineering, instrumentation and metrology language. Context locates the text; it supplies no new product facts.',
-        'Never improve, correct, complete, infer or invent specifications, commercial values or missing information. Keep pending fields pending.',
-        'Preserve all numbers, decimal separators, signs, ranges, uncertainty, units, product/model codes, standards, protocols and symbols exactly; preserve the meaning of technical qualifiers.',
+        ...(canonicalSpanish ? [] : [
+          'Use professional PRESYS engineering, instrumentation and metrology language. Context locates the text; it supplies no new product facts.',
+          'Never improve, correct, complete, infer or invent specifications, commercial values or missing information. Keep pending fields pending.',
+          'Preserve all numbers, decimal separators, signs, ranges, uncertainty, units, product/model codes, standards, protocols and symbols exactly; preserve the meaning of technical qualifiers.',
+        ]),
         'Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.',
         'Return the same unitId and runId identities. Do not add or remove units or runs.',
         'Return plain text only; do not emit HTML or Markdown formatting.',

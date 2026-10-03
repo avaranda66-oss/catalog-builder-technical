@@ -117,13 +117,13 @@ describe.each(VNEXT_TRANSLATION_PROFILES)('P2 executed server gateway $targetLoc
     if (scenario !== 'missing-secret') expect(g.envReads).not.toContain('GEMINI_API_KEY');
   });
 
-  it.each(['future-target', 'copy-source', 'cross-profile', 'old-profile', 'contract', 'browser-key', 'extra-field', 'duplicate-unit', 'duplicate-run', 'wrong-hash', 'wrong-kind', 'empty-units', 'empty-runs', 'max-units', 'max-run', 'max-total'])('rejects %s independently of the client', async scenario => {
+  it.each(['future-target', 'copy-source', 'cross-profile', 'unknown-profile', 'contract', 'browser-key', 'extra-field', 'duplicate-unit', 'duplicate-run', 'wrong-hash', 'wrong-kind', 'empty-units', 'empty-runs', 'max-units', 'max-run', 'max-total'])('rejects %s independently of the client', async scenario => {
     const g = gateway(); const body = structuredClone(request(profile)) as unknown as Record<string, unknown>;
     const units = body.units as Array<{ unitId: string; sourceHash: string; kind: string; context: string; runs: Array<{ runId: string; protectedText: string }> }>;
     if (scenario === 'future-target') body.targetLocale = 'en-GB';
     if (scenario === 'copy-source') body.sourceLocale = 'es-ES';
     if (scenario === 'cross-profile') body.profileVersion = VNEXT_TRANSLATION_PROFILES.find(item => item.targetLocale !== profile.targetLocale)!.profileVersion;
-    if (scenario === 'old-profile') body.profileVersion = 'w5-ptbr-eses-v1';
+    if (scenario === 'unknown-profile') body.profileVersion = 'w5-ptbr-eses-v0';
     if (scenario === 'contract') body.contractVersion = 'unknown';
     if (scenario === 'browser-key') body.apiKey = 'fixture-client-key';
     if (scenario === 'extra-field') body.documentSnapshot = {};
@@ -178,6 +178,58 @@ describe.each(VNEXT_TRANSLATION_PROFILES)('P2 executed server gateway $targetLoc
     g.state.providerThrows = false; g.state.malformedEnvelope = true;
     expect((await (await g.invoke(request(profile))).json()).error).toBe('INVALID_PROVIDER_RESPONSE');
     expect(g.fakeProvider).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('P2 server-first compatibility with the canonical Spanish client', () => {
+  const canonicalRequest = () => ({ ...request(VNEXT_TRANSLATION_PROFILES[0]), profileVersion: 'w5-ptbr-eses-v1' });
+
+  it('accepts the exact old identity and preserves its original prompt and response contract', async () => {
+    const g = gateway(); const body = canonicalRequest(); const response = await g.invoke(body);
+    const output = await response.json();
+    expect(response.status).toBe(200);
+    expect(Object.keys(output).sort()).toEqual(['contractVersion', 'profileVersion', 'requestId', 'targetLocale', 'units', 'provider'].sort());
+    expect(output).toMatchObject({ contractVersion: 'w5a-v1', profileVersion: 'w5-ptbr-eses-v1', requestId: body.requestId,
+      targetLocale: 'es-ES', provider: { providerId: 'gemini', modelId: 'gemini-2.5-flash' } });
+    expect(output.units.map((unit: { unitId: string }) => unit.unitId)).toEqual(body.units.map(unit => unit.unitId));
+    const input = JSON.parse(g.fakeProvider.mock.calls[0][1].body as string) as { contents: Array<{ parts: Array<{ text: string }> }> };
+    const prompt = JSON.parse(input.contents[0].parts[0].text) as Prompt;
+    expect(Object.keys(prompt).sort()).toEqual(['contractVersion', 'profileVersion', 'sourceLocale', 'targetLocale', 'rules', 'units', 'responseShape'].sort());
+    expect(prompt.rules).toEqual([
+      'Translate only protectedText values from Portuguese (Brazil) to Spanish (Spain).',
+      'Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.',
+      'Return the same unitId and runId identities. Do not add or remove units or runs.',
+      'Return plain text only; do not emit HTML or Markdown formatting.',
+    ]);
+    expect(g.fakeProvider).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(output)).not.toContain('fixture-server-key');
+  });
+
+  it.each(['en-US', 'es-MX', 'fr-FR'])('does not reuse the old Spanish identity for %s', async targetLocale => {
+    const g = gateway(); const response = await g.invoke({ ...canonicalRequest(), targetLocale });
+    expect(response.status).toBe(400); expect(g.fakeProvider).not.toHaveBeenCalled();
+    expect(g.envReads).not.toContain('GEMINI_API_KEY');
+  });
+
+  it.each(['es-ES', 'en-US'])('does not accept translated-copy source %s with the old identity', async sourceLocale => {
+    const g = gateway(); expect((await g.invoke({ ...canonicalRequest(), sourceLocale })).status).toBe(400);
+    expect(g.fakeProvider).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing-auth', 'inactive', 'missing-secret'])('keeps %s fail-closed for the old client', async scenario => {
+    const g = gateway();
+    if (scenario === 'inactive') g.state.active = false;
+    if (scenario === 'missing-secret') g.state.missingEnvironment = 'GEMINI_API_KEY';
+    const response = await g.invoke(canonicalRequest(), { auth: scenario !== 'missing-auth' });
+    expect(response.status).toBe(scenario === 'missing-auth' ? 401 : scenario === 'inactive' ? 403 : 503);
+    expect(g.fakeProvider).not.toHaveBeenCalled();
+  });
+
+  it('keeps technical placeholder validation and avoids automatic upstream retry', async () => {
+    const g = gateway(); g.state.transform = payload => { payload.units[0].runs[0].translatedText = 'Missing token'; return payload; };
+    const response = await g.invoke(canonicalRequest());
+    expect(response.status).toBe(502); expect((await response.json()).error).toBe('INVALID_PROVIDER_RESPONSE');
+    expect(g.fakeProvider).toHaveBeenCalledTimes(1);
   });
 });
 
