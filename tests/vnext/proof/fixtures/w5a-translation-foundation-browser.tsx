@@ -195,7 +195,8 @@ async function runFoundationProof() {
     requestId: () => 'browser-unsupported',
   });
   const unsupportedCode = await errorCode(
-    () => unsupportedService.translateCatalog(createW5ATranslationDocument(), 'en-US')
+    // P2 supports English; French remains outside the explicit target allowlist.
+    () => unsupportedService.translateCatalog(createW5ATranslationDocument(), 'fr-FR')
   );
 
   const mainText = source.pages[0].objects.find((object) => object.id === 'w5a-text-main');

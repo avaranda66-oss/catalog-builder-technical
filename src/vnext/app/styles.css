@@ -515,3 +515,72 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   body[data-vnext-print-policy] .vnext-publication-pages > [data-editorial-root] { margin: 0; }
   body[data-vnext-print-policy] .vnext-publication-pages .editorial-page { margin: 0; }
 }
+
+/* P2 Translation Center: presentation stays scoped to its existing dialog. */
+.vnext-translation-center { display: flex; width: min(1080px, 100%); flex-direction: column; overflow: hidden; }
+.vnext-translation-center > :not(.vnext-translation-runs) { flex: none; }
+.vnext-translation-center .vnext-dialog-description { margin: 10px 0 16px; }
+.vnext-translation-center .vnext-translation-steps { display: flex; gap: 24px; margin: 0 0 18px; padding: 0; list-style: none; }
+.vnext-translation-center .vnext-translation-steps li { display: flex; align-items: center; gap: 8px; color: var(--vnext-text-muted); font-size: 12px; font-weight: 600; }
+.vnext-translation-center .vnext-translation-steps li > span { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid var(--vnext-border); border-radius: 50%; background: var(--vnext-surface-muted); font-size: 11px; }
+.vnext-translation-center .vnext-translation-steps [data-state="current"] { color: var(--vnext-primary); }
+.vnext-translation-center .vnext-translation-steps [data-state="current"] > span { border-color: var(--vnext-primary); background: var(--vnext-primary); color: var(--vnext-surface); }
+.vnext-translation-center .vnext-translation-steps [data-state="complete"] { color: var(--vnext-success); }
+.vnext-translation-center .vnext-translation-steps [data-state="complete"] > span { border-color: #bdddc9; background: var(--vnext-success-surface); }
+.vnext-translation-center .vnext-translation-languages { grid-template-columns: minmax(0, 1fr) minmax(220px, .8fr); padding: 14px 16px; }
+.vnext-translation-center .vnext-translation-origin > strong { padding-top: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.vnext-translation-center .vnext-translation-origin > p { margin: 0; color: var(--vnext-text-muted); font-size: 12px; font-weight: 400; }
+.vnext-translation-center .vnext-translation-languages select { min-height: 40px; padding: 8px 10px; }
+.vnext-translation-center .vnext-translation-locale-note { color: var(--vnext-text-muted); font-size: 11px; font-weight: 400; }
+.vnext-translation-center .vnext-translation-review-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-top: 18px; }
+.vnext-translation-center .vnext-translation-review-intro > div:first-child { min-width: 0; }
+.vnext-translation-center .vnext-translation-review-progress { display: grid; flex: none; gap: 5px; color: var(--vnext-text-muted); font-size: 11px; text-align: right; }
+.vnext-translation-center .vnext-translation-review-progress strong { color: var(--vnext-text-secondary); font-size: 12px; font-weight: 600; }
+.vnext-translation-center .vnext-translation-runs { display: block; min-height: 140px; max-height: 48dvh; flex: 1 1 auto; margin: 14px 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scroll-padding-top: 42px; padding-right: 8px; }
+.vnext-translation-center .vnext-translation-runs:focus-visible { outline: 3px solid rgb(0 114 206 / .35); outline-offset: 2px; }
+.vnext-translation-center .vnext-translation-page + .vnext-translation-page { margin-top: 18px; }
+.vnext-translation-center .vnext-translation-page > h4 { position: sticky; top: 0; z-index: 1; margin: 0; border-bottom: 1px solid var(--vnext-border); background: var(--vnext-surface); color: var(--vnext-primary); font-size: 14px; line-height: 1.5; padding: 8px 0; }
+.vnext-translation-center .vnext-translation-type-heading { display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 0; color: var(--vnext-text-secondary); font-size: 12px; font-weight: 600; }
+.vnext-translation-center .vnext-translation-type-heading span { color: var(--vnext-text-muted); font-size: 11px; font-weight: 400; }
+.vnext-translation-center .vnext-translation-run { border: 0; border-bottom: 1px solid var(--vnext-border); border-radius: 0; padding: 14px 0; }
+.vnext-translation-center .vnext-translation-run:last-child { border-bottom: 0; }
+.vnext-translation-center .vnext-translation-run[data-translation-run-state="invalid"] { border-left: 3px solid var(--vnext-error); background: var(--vnext-error-surface); padding: 14px 12px; }
+.vnext-translation-center .vnext-translation-run-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.vnext-translation-center .vnext-translation-run-heading h5 { margin: 0; color: var(--vnext-text-muted); font-size: 11px; font-weight: 600; line-height: 1.6; }
+.vnext-translation-center .vnext-translation-run-status { flex: none; color: var(--vnext-text-muted); font-size: 11px; line-height: 1.6; }
+.vnext-translation-center .vnext-translation-run-status[data-tone="success"] { color: var(--vnext-success); }
+.vnext-translation-center .vnext-translation-run-status[data-tone="error"] { color: var(--vnext-error); font-weight: 600; }
+.vnext-translation-center .vnext-translation-target textarea { min-height: 104px; }
+.vnext-translation-center .vnext-translation-target textarea[aria-invalid="true"] { border-color: var(--vnext-error); }
+.vnext-translation-center .vnext-translation-inline-error { margin: 0; color: var(--vnext-error); font-size: 12px; line-height: 1.6; }
+.vnext-translation-center .vnext-translation-run-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 12px; }
+.vnext-translation-center .vnext-translation-run-footer > button { min-height: 36px; flex: none; font-size: 12px; padding: 7px 10px; }
+.vnext-translation-center .vnext-translation-run-footer > button.is-reviewed { color: var(--vnext-success); }
+.vnext-translation-center .vnext-translation-protected { min-width: 0; color: var(--vnext-text-muted); font-size: 11px; line-height: 1.6; }
+.vnext-translation-center .vnext-translation-protected summary { width: fit-content; min-height: 36px; align-content: center; cursor: pointer; font-weight: 600; }
+.vnext-translation-center .vnext-translation-protected p { margin: 6px 0; }
+.vnext-translation-center .vnext-translation-protected ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vnext-translation-center .vnext-translation-protected li { border: 1px solid var(--vnext-border); border-radius: 4px; background: var(--vnext-surface-muted); padding: 3px 6px; overflow-wrap: anywhere; }
+.vnext-translation-center .vnext-translation-protected code { font-size: 11px; white-space: pre-wrap; }
+.vnext-translation-center .vnext-translation-run-help { margin: 8px 0 0; color: var(--vnext-text-muted); font-size: 11px; line-height: 1.6; }
+.vnext-translation-center > .vnext-translation-accept-help { margin: 0; font-size: 12px; }
+.vnext-translation-center > footer { margin-top: 16px; padding-top: 14px; }
+@media (max-width: 700px) {
+  .vnext-translation-center .vnext-translation-review-intro { flex-direction: column; gap: 10px; }
+  .vnext-translation-center .vnext-translation-review-progress { display: flex; gap: 12px; flex-wrap: wrap; text-align: left; }
+  .vnext-translation-center .vnext-translation-languages { grid-template-columns: 1fr; gap: 12px; }
+  .vnext-translation-center .vnext-translation-run-heading { flex-wrap: wrap; gap: 4px 10px; }
+  .vnext-translation-center .vnext-translation-run-footer { flex-wrap: wrap; gap: 8px; }
+  .vnext-translation-center .vnext-translation-steps { gap: 14px; flex-wrap: wrap; }
+}
+@media (max-height: 740px) {
+  .vnext-translation-center { padding: 18px; }
+  .vnext-translation-center .vnext-translation-steps { margin-bottom: 12px; }
+  .vnext-translation-center .vnext-translation-languages { padding: 10px 12px; }
+  .vnext-translation-center .vnext-translation-review-intro { margin-top: 12px; }
+  .vnext-translation-center .vnext-translation-runs { min-height: 100px; margin: 10px 0; }
+}
+@media (max-height: 620px) {
+  .vnext-translation-center { overflow: auto; }
+  .vnext-translation-center .vnext-translation-runs { flex: none; max-height: 45dvh; }
+}

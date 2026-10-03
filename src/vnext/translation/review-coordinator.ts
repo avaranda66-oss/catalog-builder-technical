@@ -1,7 +1,8 @@
 import { CatalogCloneService } from '../application';
 import type { CatalogDocument } from '../domain';
 import { PreparedCatalogCreateCoordinator, canonicalDocumentEquivalence, parsePersistenceEnvelope, type CatalogPersistenceEnvelope, type CatalogRepository } from '../persistence';
-import { TranslationFoundationError, type TranslationFoundationResult } from './contracts';
+import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult } from './contracts';
+import type { VNextTranslationTargetLocale } from './language-registry';
 import { TranslationFoundationService } from './service';
 import { materializeTranslationCandidate, requireReviewText, translationReviewKey, type TranslationReviewRun } from './candidate';
 
@@ -20,6 +21,11 @@ export interface TranslationReviewSnapshot {
   readonly copy?: CatalogPersistenceEnvelope;
   readonly pending: boolean;
   readonly reviewInvalid?: boolean;
+  readonly targetLocale: VNextTranslationTargetLocale;
+  readonly reviewedRunKeys: readonly string[];
+  readonly correctedRunKeys: readonly string[];
+  readonly invalidRunKeys: readonly string[];
+  readonly correctionCount: number;
 }
 
 export interface TranslationReviewOptions {
@@ -36,7 +42,7 @@ function message(error: unknown): string {
   const code = error instanceof TranslationFoundationError ? error.code : String(error);
   if (code === 'STALE_RESULT') return 'O catálogo de origem mudou. Gere a tradução novamente.';
   if (code === 'TECHNICAL_TOKEN_MISMATCH') return 'Mantenha os códigos e valores técnicos da origem ao revisar.';
-  if (code === 'UNSUPPORTED_LANGUAGE') return 'Esta tradução está disponível apenas de português para espanhol.';
+  if (code === 'UNSUPPORTED_LANGUAGE') return 'Escolha um catálogo em português (Brasil) para traduzir para espanhol ou inglês.';
   if (code === 'CREDENTIAL_UNAVAILABLE') return 'O serviço de tradução ainda não está configurado. Contate o administrador.';
   if (code === 'ABORTED') return 'Tradução cancelada. O catálogo original foi preservado.';
   if (code === 'AMBIGUOUS_COMMIT_OUTCOME') return 'Não foi possível confirmar a cópia. Tente verificar novamente; nenhuma nova cópia será preparada.';
@@ -45,7 +51,8 @@ function message(error: unknown): string {
 
 /** Ephemeral review composition over W5.A, canonical clone and the existing W3 verified CREATE. */
 export class TranslationReviewCoordinator {
-  private snapshot: TranslationReviewSnapshot = { phase: 'idle', runs: [], pending: false };
+  private snapshot: TranslationReviewSnapshot = { phase: 'idle', runs: [], pending: false, targetLocale: 'es-ES',
+    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0 };
   private readonly listeners = new Set<() => void>();
   private readonly create: PreparedCatalogCreateCoordinator;
   private readonly clone: CatalogCloneService;
@@ -56,6 +63,7 @@ export class TranslationReviewCoordinator {
   private accepting?: Promise<void>;
   private readonly corrections = new Map<string, string>();
   private readonly invalidCorrections = new Set<string>();
+  private readonly reviewed = new Set<string>();
 
   constructor(private readonly options: TranslationReviewOptions) {
     this.create = new PreparedCatalogCreateCoordinator(options);
@@ -66,6 +74,10 @@ export class TranslationReviewCoordinator {
   private publish(snapshot: TranslationReviewSnapshot): void {
     this.snapshot = snapshot;
     this.listeners.forEach(listener => listener());
+  }
+  private progress() {
+    return { targetLocale: this.snapshot.targetLocale, reviewedRunKeys: [...this.reviewed],
+      correctedRunKeys: [...this.corrections.keys()], invalidRunKeys: [...this.invalidCorrections], correctionCount: this.corrections.size };
   }
   private current(): boolean {
     const source = this.source;
@@ -80,32 +92,35 @@ export class TranslationReviewCoordinator {
   cancel(): boolean {
     if (this.accepting || this.create.getState() === 'pending-verification') return false;
     this.abort?.abort(); this.generation += 1;
-    this.source = undefined; this.result = undefined; this.corrections.clear(); this.invalidCorrections.clear();
-    this.publish({ phase: 'idle', runs: [], pending: false });
+    this.source = undefined; this.result = undefined; this.corrections.clear(); this.invalidCorrections.clear(); this.reviewed.clear();
+    this.publish({ ...this.progress(), phase: 'idle', runs: [], pending: false });
     return true;
   }
-  async generate(): Promise<void> {
+  async generate(targetLocale: VNextTranslationTargetLocale = 'es-ES'): Promise<void> {
     if (this.accepting || this.snapshot.phase === 'generating' || this.create.getState() === 'pending-verification') return;
     this.cancel();
     const source = this.options.getSource();
     if (!source) {
-      this.publish({ phase: 'error', runs: [], pending: false, message: 'Salve o catálogo e conclua as edições antes de traduzir.' });
+      this.publish({ ...this.progress(), phase: 'error', runs: [], pending: false, message: 'Salve o catálogo e conclua as edições antes de traduzir.' });
       return;
     }
+    try { resolveTranslationProfile(source.document.locale, targetLocale); }
+    catch (error) { this.publish({ ...this.progress(), phase: 'error', runs: [], pending: false, message: message(error) }); return; }
     this.source = { ...source, document: structuredClone(source.document) };
     const generation = this.generation;
     this.abort = new AbortController();
-    this.publish({ phase: 'generating', runs: [], pending: false });
+    this.publish({ ...this.progress(), targetLocale, phase: 'generating', runs: [], pending: false });
     try {
-      const result = await this.options.foundation.translateCatalog(this.source.document, 'es-ES', this.abort.signal);
+      const result = await this.options.foundation.translateCatalog(this.source.document, targetLocale, this.abort.signal);
       if (generation !== this.generation) return;
+      if (result.targetLocale !== targetLocale) throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', 'Translation target changed during generation');
       this.requireCurrent();
       const candidate = await materializeTranslationCandidate(this.source.document, result);
       if (generation !== this.generation) return;
       this.requireCurrent(); this.result = result;
-      this.publish({ phase: 'review', runs: candidate.runs, pending: false });
+      this.publish({ ...this.progress(), phase: 'review', runs: candidate.runs, pending: false });
     } catch (error) {
-      if (generation === this.generation) this.publish({ phase: 'error', runs: [], pending: false, message: message(error) });
+      if (generation === this.generation) this.publish({ ...this.progress(), phase: 'error', runs: [], pending: false, message: message(error) });
     }
   }
   correct(unitId: string, runId: string, text: string): boolean {
@@ -116,14 +131,28 @@ export class TranslationReviewCoordinator {
     try { this.requireCurrent(); requireReviewText(run.sourceText, text); }
     catch (error) {
       this.invalidCorrections.add(key);
-      this.publish({ ...this.snapshot, reviewInvalid: true, message: message(error) }); return false;
+      this.reviewed.delete(key);
+      this.publish({ ...this.snapshot, ...this.progress(), reviewInvalid: true, message: message(error) }); return false;
     }
     this.invalidCorrections.delete(key);
-    this.corrections.set(key, text);
+    const generated = this.result?.units.find(unit => unit.unitId === unitId)?.runs.find(item => item.runId === runId)?.translatedText;
+    if (text === generated) this.corrections.delete(key); else this.corrections.set(key, text);
+    this.reviewed.add(key);
     const reviewInvalid = this.invalidCorrections.size > 0;
-    this.publish({ phase: 'review', pending: false, reviewInvalid,
+    this.publish({ ...this.progress(), phase: 'review', pending: false, reviewInvalid,
       ...(reviewInvalid ? { message: 'Corrija todos os textos sinalizados antes de salvar a cópia.' } : {}),
       runs: this.snapshot.runs.map(item => item === run ? { ...item, translatedText: text } : item) });
+    return true;
+  }
+  markReviewed(unitId: string, runId: string): boolean {
+    if (this.snapshot.phase !== 'review' || this.snapshot.pending) return false;
+    const key = translationReviewKey(unitId, runId);
+    if (this.invalidCorrections.has(key) || !this.snapshot.runs.some(run => run.unitId === unitId && run.runId === runId)) return false;
+    try { this.requireCurrent(); } catch (error) {
+      this.publish({ ...this.snapshot, phase: 'error', message: message(error) }); return false;
+    }
+    this.reviewed.add(key);
+    this.publish({ ...this.snapshot, ...this.progress() });
     return true;
   }
   accept(): Promise<void> {
@@ -155,7 +184,7 @@ export class TranslationReviewCoordinator {
         created = await this.create.create(copy, { originKind: 'translation', originId: source.document.id, originRevision: source.remoteRevision });
       }
       if (!created.ok) throw created.error.code;
-      this.publish({ phase: 'created', runs: [], pending: false, copy: created.value });
+      this.publish({ ...this.progress(), phase: 'created', runs: [], pending: false, copy: created.value });
     } catch (error) {
       this.publish({ ...this.snapshot, phase: 'error', pending: this.create.getState() === 'pending-verification', message: message(error) });
     }

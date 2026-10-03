@@ -444,10 +444,18 @@ async function workflow(browser, width, first) {
     const copyRow = page.locator(`[data-library-catalog-id="${copy.catalogId}"]`);
     await copyRow.getByRole('button', { name: 'Abrir', exact: true }).click();
     await page.locator('[data-vnext-shell]').waitFor();
-    assert.equal((await state(page)).document.locale, 'es-ES');
+    const reopenedCopy = (await state(page)).document;
+    assert.equal(reopenedCopy.locale, 'es-ES');
     await page.locator('[data-editor-action="translate"]').click();
     await page.locator('[data-translation-review]').waitFor();
-    assert.equal((await page.locator('.vnext-translation-languages strong').textContent()).trim(), 'Espanhol');
+    // P2 separates catalog context from its regional source-language label.
+    assert.equal((await page.locator('.vnext-translation-origin strong').textContent()).trim(), reopenedCopy.title);
+    assert.equal((await page.locator('.vnext-translation-origin p').textContent()).trim(), 'Espanhol (Espanha)');
+    const requestsBeforeUnsupportedSource = translationRequests;
+    await page.locator('[data-translation-action="generate"]').click();
+    await page.locator('[data-translation-review] [role="alert"]').waitFor();
+    assert.equal(translationRequests, requestsBeforeUnsupportedSource, 'Translated copies cannot dispatch another translation');
+    assert.equal(await page.locator('[data-translation-run]').count(), 0);
     await shot(page, 'translated-copy-source-locale', width);
     await page.keyboard.press('Escape');
     await page.locator('[data-translation-review]').waitFor({ state: 'detached' });

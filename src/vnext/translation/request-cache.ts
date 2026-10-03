@@ -1,5 +1,5 @@
 ﻿import {
-  W5_TRANSLATION_PROFILE,
+  resolveTranslationProfile,
   type TranslationProfile,
   type TranslationProviderRequest,
   type TranslationProviderResponse,
@@ -34,7 +34,7 @@ export class MemoryTranslationRequestCache implements TranslationRequestCache {
 
 export async function buildTranslationRequestCacheKey(
   request: TranslationProviderRequest,
-  profile: TranslationProfile = W5_TRANSLATION_PROFILE
+  profile: TranslationProfile = resolveTranslationProfile(request.sourceLocale, request.targetLocale, request.profileVersion)
 ): Promise<string> {
   return sha256Hex(stableSerialize({
     contractVersion: request.contractVersion,
@@ -44,6 +44,8 @@ export async function buildTranslationRequestCacheKey(
     targetLocale: request.targetLocale,
     units: request.units,
     providerProfile: {
+      sourceLocale: profile.sourceLocale,
+      targetLocale: profile.targetLocale,
       providerId: profile.providerId,
       modelId: profile.modelId,
       promptVersion: profile.promptVersion,

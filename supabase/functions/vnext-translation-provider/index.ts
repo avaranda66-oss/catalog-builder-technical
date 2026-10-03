@@ -1,12 +1,10 @@
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const CONTRACT_VERSION = 'w5a-v1';
-const PROFILE_VERSION = 'w5-ptbr-eses-v1';
-const SOURCE_LOCALE = 'pt-BR';
-const TARGET_LOCALE = 'es-ES';
-const PROVIDER_ID = 'gemini';
-const MODEL_ID = 'gemini-2.5-flash';
+// Bundle this pure local dependency with the Edge Function; VM tests resolve the same source.
+import { VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
+
+const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion;
 
 const LIMITS = {
   maxUnits: 60,
@@ -105,15 +103,16 @@ function parseRequest(value: unknown): GatewayRequest | null {
   ])) return null;
   if (
     value.contractVersion !== CONTRACT_VERSION ||
-    value.profileVersion !== PROFILE_VERSION ||
-    value.sourceLocale !== SOURCE_LOCALE ||
-    value.targetLocale !== TARGET_LOCALE ||
+    !nonempty(value.sourceLocale) ||
+    !nonempty(value.targetLocale) ||
     !nonempty(value.requestId) ||
     !nonempty(value.sourceCatalogId) ||
     !Array.isArray(value.units) ||
     value.units.length === 0 ||
     value.units.length > LIMITS.maxUnits
   ) return null;
+  const profile = findRegisteredTranslationProfile(value.sourceLocale, value.targetLocale);
+  if (!profile || value.profileVersion !== profile.profileVersion) return null;
 
   const units: GatewayUnit[] = [];
   const unitIds = new Set<string>();
@@ -213,7 +212,13 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
     const runs: ProviderRun[] = [];
     for (const rawRun of rawUnit.runs) {
       if (!isRecord(rawRun) || !exactKeys(rawRun, ['runId', 'translatedText'])) return null;
-      if (!nonempty(rawRun.runId) || !nonempty(rawRun.translatedText)) return null;
+      if (!nonempty(rawRun.runId) || !nonempty(rawRun.translatedText) || !rawRun.translatedText.trim()
+        || rawRun.translatedText.length > LIMITS.maxCharsPerRun
+        || /<\/?[A-Za-z][^>]*>/.test(rawRun.translatedText)
+        || Array.from(rawRun.translatedText).some(character => {
+          const code = character.charCodeAt(0);
+          return code < 32 && code !== 9 && code !== 10 && code !== 13;
+        })) return null;
       const expectedRun = expectedByRun.get(rawRun.runId);
       if (!expectedRun) return null;
       returnedRunIds.push(rawRun.runId);
@@ -221,6 +226,7 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
         JSON.stringify(placeholderMultiset(expectedRun.protectedText)) !==
         JSON.stringify(placeholderMultiset(rawRun.translatedText))
       ) return null;
+      if (rawRun.translatedText.replace(PLACEHOLDER, '').includes('[[VNEXT_TECH_')) return null;
       runs.push({ runId: rawRun.runId, translatedText: rawRun.translatedText });
     }
     if (!exactStringSet(expectedUnit.runs.map((run) => run.runId), returnedRunIds)) return null;
@@ -294,13 +300,19 @@ serve(async (request: Request) => {
       return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
     }
 
+    const translationProfile = findRegisteredTranslationProfile(body.sourceLocale, body.targetLocale)!;
     const promptContract = {
       contractVersion: CONTRACT_VERSION,
-      profileVersion: PROFILE_VERSION,
-      sourceLocale: SOURCE_LOCALE,
-      targetLocale: TARGET_LOCALE,
+      profileVersion: translationProfile.profileVersion,
+      promptVersion: translationProfile.promptVersion,
+      tokenPolicyVersion: translationProfile.tokenPolicyVersion,
+      sourceLocale: translationProfile.sourceLocale,
+      targetLocale: translationProfile.targetLocale,
       rules: [
-        'Translate only protectedText values from Portuguese (Brazil) to Spanish (Spain).',
+        `Translate only protectedText values from Portuguese (Brazil) to ${getTranslationLanguage(translationProfile.targetLocale)!.englishName}.`,
+        'Use professional PRESYS engineering, instrumentation and metrology language. Context locates the text; it supplies no new product facts.',
+        'Never improve, correct, complete, infer or invent specifications, commercial values or missing information. Keep pending fields pending.',
+        'Preserve all numbers, decimal separators, signs, ranges, uncertainty, units, product/model codes, standards, protocols and symbols exactly; preserve the meaning of technical qualifiers.',
         'Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.',
         'Return the same unitId and runId identities. Do not add or remove units or runs.',
         'Return plain text only; do not emit HTML or Markdown formatting.',
@@ -319,7 +331,7 @@ serve(async (request: Request) => {
     let providerResponse: Response;
     try {
       providerResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${translationProfile.modelId}:generateContent`,
         {
           method: 'POST',
           headers: {
@@ -368,13 +380,13 @@ serve(async (request: Request) => {
 
     return new Response(JSON.stringify({
       contractVersion: CONTRACT_VERSION,
-      profileVersion: PROFILE_VERSION,
+      profileVersion: translationProfile.profileVersion,
       requestId: body.requestId,
-      targetLocale: TARGET_LOCALE,
+      targetLocale: translationProfile.targetLocale,
       units,
       provider: {
-        providerId: PROVIDER_ID,
-        modelId: MODEL_ID,
+        providerId: translationProfile.providerId,
+        modelId: translationProfile.modelId,
       },
     }), {
       status: 200,

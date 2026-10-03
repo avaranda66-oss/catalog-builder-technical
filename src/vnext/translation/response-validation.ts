@@ -1,14 +1,12 @@
 ﻿import { z } from 'zod';
 import {
   TranslationFoundationError,
-  W5_SUPPORTED_TARGET_LOCALE,
   W5_TRANSLATION_CONTRACT_VERSION,
-  W5_TRANSLATION_MODEL_ID,
-  W5_TRANSLATION_PROFILE_VERSION,
-  W5_TRANSLATION_PROVIDER_ID,
+  resolveTranslationProfile,
   type TranslationProviderRequest,
   type TranslationProviderResponse,
 } from './contracts';
+import { VNEXT_TRANSLATION_PROFILES } from './language-registry';
 import {
   assertProtectedTokenIntegrity,
   type ProtectedText,
@@ -26,9 +24,9 @@ const ProviderUnitSchema = z.object({
 
 const ProviderResponseSchema = z.object({
   contractVersion: z.literal(W5_TRANSLATION_CONTRACT_VERSION),
-  profileVersion: z.literal(W5_TRANSLATION_PROFILE_VERSION),
+  profileVersion: z.enum([VNEXT_TRANSLATION_PROFILES[0].profileVersion, VNEXT_TRANSLATION_PROFILES[1].profileVersion]),
   requestId: z.string().min(1),
-  targetLocale: z.literal(W5_SUPPORTED_TARGET_LOCALE),
+  targetLocale: z.enum(['es-ES', 'en-US']),
   units: z.array(ProviderUnitSchema),
   provider: z.object({
     providerId: z.string().min(1),
@@ -41,6 +39,7 @@ function invalid(message: string): never {
 }
 
 function assertExactSet(label: string, expected: readonly string[], actual: readonly string[]): void {
+  if (new Set(expected).size !== expected.length) invalid(`Duplicate requested ${label}`);
   if (new Set(actual).size !== actual.length) invalid(`Duplicate ${label}`);
   if (expected.length !== actual.length) invalid(`${label} count mismatch`);
   const expectedSet = new Set(expected);
@@ -61,6 +60,8 @@ export function validateProviderResponse(
   rawResponse: unknown,
   context: TranslationResponseValidationContext
 ): TranslationProviderResponse {
+  const profile = resolveTranslationProfile(request.sourceLocale, request.targetLocale, request.profileVersion);
+  if (request.contractVersion !== profile.contractVersion) invalid('Unsupported request contract');
   const parsed = ProviderResponseSchema.safeParse(rawResponse);
   if (!parsed.success) {
     invalid(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '));
@@ -72,8 +73,8 @@ export function validateProviderResponse(
   if (response.contractVersion !== request.contractVersion) invalid('contractVersion mismatch');
   if (response.profileVersion !== request.profileVersion) invalid('profileVersion mismatch');
   if (
-    response.provider.providerId !== W5_TRANSLATION_PROVIDER_ID ||
-    response.provider.modelId !== W5_TRANSLATION_MODEL_ID
+    response.provider.providerId !== profile.providerId ||
+    response.provider.modelId !== profile.modelId
   ) {
     invalid('provider profile metadata mismatch');
   }
@@ -100,6 +101,10 @@ export function validateProviderResponse(
       const returnedRun = returnedRuns.get(requestedRun.runId);
       if (!returnedRun) invalid(`Missing run ${requestedRun.runId}`);
       if (returnedRun.translatedText.trim().length === 0) invalid(`Empty translation for ${requestedRun.runId}`);
+      if (returnedRun.translatedText.length > 4000 || Array.from(returnedRun.translatedText).some(character => {
+        const code = character.charCodeAt(0);
+        return code < 32 && code !== 9 && code !== 10 && code !== 13;
+      })) invalid('Unsupported translated text');
       if (/<\/?[A-Za-z][^>]*>/.test(returnedRun.translatedText)) {
         invalid(`Markup is not allowed in translated run ${requestedRun.runId}`);
       }

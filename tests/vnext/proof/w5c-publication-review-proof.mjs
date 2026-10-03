@@ -291,6 +291,10 @@ try {
   assert.equal(await fresh.locator('[data-translation-action="accept"]').isEnabled(), false);
   await fresh.locator('[data-translation-run="0"]').fill('Catálogo revisado PRESYS TA-25N');
   await fresh.locator('[data-translation-run="0"]').blur();
+  // The P2 numeric policy also protects the authored revision marker in C.1.
+  assert.equal(await fresh.locator('[data-translation-action="accept"]').isEnabled(), false);
+  await secondRun.fill('PRESYS · revisión interna C.1');
+  await secondRun.blur();
   assert.equal(await fresh.locator('[data-translation-action="accept"]').isEnabled(), true);
   await fresh.screenshot({ path: resolve(output, 'translation-review.png'), fullPage: true });
   await fresh.getByRole('button', { name: 'Salvar cópia traduzida', exact: true }).dblclick();
