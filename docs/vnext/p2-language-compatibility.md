@@ -190,3 +190,57 @@ exclusões, prompt/envelope deep-equal, cache-hit/original imutável, três perf
 negativos sem dispatch. Evidência controlada, zero chamadas externas; recibo no packet
 `P2_CANONICAL_CLIENT_GATEWAY_COMPATIBILITY_QA.json`. UI/fixtures de prova/dependências não
 mudaram. As 33 provas no novo CI e o packet/head exatos permanecem externos e pendentes.
+
+## Hard-Cap — contrato de remediação congelado em 03/10/2026
+
+Contrato atual aprovado antes do código, baseado no head `3ef74a3`; resultados/404/rollout
+anteriores acima são históricos. Não autoriza redeploy, secrets, merge ou chamada Gemini.
+O usuário resolveu a divergência 4k/4096: **input <=4000, output <=4096 incluindo thinking**
+somente no modo bounded. Perfis ESv1 exclusivamente servidor, ESv2/ENv1, prompts, identidade,
+cache e auth permanecem intactos; modelo/REST/dependências/engines não mudam.
+
+`VNEXT_TRANSLATION_BUDGET_MODE` é apenas servidor: ausente/`production` preserva batching
+60 unidades/30000 caracteres e thinking dinâmico; envia `candidateCount=1`/`maxOutputTokens=65536`,
+sem nova contagem. `bounded-acceptance` conta o generateContentRequest completo/modelo exato
+antes da geração; totalTokens inteiro seguro <=4000, `candidateCount=1`/output 4096/`thinkingBudget=0`.
+Config inválida, count inválido/falho/acima do limite impedem geração sem retry/fallback;
+browser não controla config. Ambos exigem `finishReason=STOP` antes da validação estrita;
+MAX_TOKENS/não STOP/ausente falham mesmo com JSON válido.
+[countTokens](https://ai.google.dev/api/tokens),
+[output/thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
+
+Factory `createTranslationCenterFoundation` fixa `maxAttempts=1` no bootstrap; default genérico 3
+histórico permanece. B lotes não cacheados implicam B tentativas, não uma por catálogo.
+Fixture real eventual usa cache novo/1 lote por idioma/execução sequencial/ledger externo:
+máximo 2 counts + 2 generations, falhas incluídas, US$0,05. A estimativa Standard para duas gerações
+4000/4096 é US$0,02288; reserva US$0,02528 assume contagens cobradas como input, sem tarifa
+oficial countTokens comprovada. Não alegar gratuitas/total garantido: billing precisa ser
+verificado antes do real. Modelo 2.5 restrito a usuários anteriores, sem shutdown anunciado;
+não mudar modelo/criar chave. Sem precondições existentes e autorizadas: REAL NOT_AVAILABLE,
+zero chamadas. [Pricing](https://ai.google.dev/gemini-api/docs/pricing),
+[modelo](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash),
+[depreciações](https://ai.google.dev/gemini-api/docs/deprecations).
+
+AC19–AC21 da story comprovados localmente: focados 481 testes/14 arquivos PASS; QA independente
+398 PASS e nova prova com cliente/validador reais 40b contra gateway atual, production/bounded
+ESv1, prompt canônico preservado, cache-hit e original imutável. Não confundir código canônico
+executado em transporte controlado com chamada real. O frontend público 40b ainda usa default 3;
+maxAttempts 1 é da nova factory P2 local. Real futuro exige novo cliente exato/sessão normal
+autorizada/cache novo/um lote por idioma/ledger, não o retry do cliente público antigo.
+
+AC22-local PASS: typecheck/lint/full/build novos, lint zero erros/268 avisos, full 3488 PASS e
+1 skip/294 arquivos; Deno 2.9.7 check local e ESZip genérico 26 módulos/429781 bytes PASS.
+Deno --all tem 39 erros externos/zero locais; check offline 2.5.6, writer otimizado Supabase e
+runtime novo implantado NOT_VALIDATED. As 33 provas sequenciais atuais PASS, manifest completo
+com quatro gates/33 provas, todos exitCode=0. AFTER fresco: 74 capturas, zero erros; root revisou
+oito imagens atuais (quatro telas e quatro páginas PDF), visual PASS. Provider/transporte/auth
+controlados; mistura deliberada PT/ES/EN não comprova qualidade Gemini ou persistência real.
+Story Ready for Review local; commit/push/CI do novo head continuam pendentes e externos.
+Resultados/checklist/file list exata na story e recibos externos. Nenhum resultado histórico
+valida esta remediação, nenhuma chamada Gemini/redeploy está autorizada nesta etapa.
+
+Retomada 04/10: revisão independente dos 20 adversariais do diff/evidência preservada PASS,
+zero HIGH/CRITICAL; bindings de sources/registry, runtime test pós-correção readonly e 33
+scripts confirmados. Root revisou mais 12 capturas atuais, visual PASS. Não houve nova
+execução de teste/prova, Gemini, redeploy ou alteração de código; novo CI exato permanece
+externo e pendente. Recibo final e limites de atribuição na story e no report QA externo.

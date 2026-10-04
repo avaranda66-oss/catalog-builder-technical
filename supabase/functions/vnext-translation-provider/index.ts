@@ -33,6 +33,11 @@ const LIMITS = {
   maxTotalChars: 30_000,
 };
 
+// Operational budgets belong to the server; the authoring request cannot override them.
+const BOUNDED_ACCEPTANCE_MAX_INPUT_TOKENS = 4_000;
+const BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS = 4_096;
+const PRODUCTION_MAX_OUTPUT_TOKENS = 65_536;
+
 const LEAF_KINDS = new Set([
   'catalogTitle',
   'textObject',
@@ -316,6 +321,12 @@ serve(async (request: Request) => {
       return json(cors, 400, 'INVALID_REQUEST', 'Contrato de tradução inválido ou não suportado.');
     }
 
+    const budgetMode = Deno.env.get('VNEXT_TRANSLATION_BUDGET_MODE');
+    if (budgetMode !== undefined && budgetMode !== 'production' && budgetMode !== 'bounded-acceptance') {
+      return json(cors, 503, 'PROVIDER_UNAVAILABLE', 'Configuração de orçamento de tradução indisponível.');
+    }
+    const boundedAcceptance = budgetMode === 'bounded-acceptance';
+
     const providerSecret = Deno.env.get('GEMINI_API_KEY') ?? '';
     if (!providerSecret) {
       return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
@@ -354,26 +365,60 @@ serve(async (request: Request) => {
       },
     };
 
+    // Construct once so the counted prompt/config is exactly the one generated afterwards.
+    const generationRequest = {
+      contents: [{ role: 'user', parts: [{ text: JSON.stringify(promptContract) }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+        candidateCount: 1,
+        maxOutputTokens: boundedAcceptance ? BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS : PRODUCTION_MAX_OUTPUT_TOKENS,
+        ...(boundedAcceptance ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      },
+    };
+    const generationBody = JSON.stringify(generationRequest);
+    const providerHeaders = { 'Content-Type': 'application/json', 'x-goog-api-key': providerSecret };
+    const modelResource = `models/${translationProfile.modelId}`;
+    const providerEndpoint = `https://generativelanguage.googleapis.com/v1beta/${modelResource}`;
+
+    if (boundedAcceptance) {
+      let countResponse: Response;
+      try {
+        countResponse = await fetch(`${providerEndpoint}:countTokens`, {
+          method: 'POST', headers: providerHeaders,
+          body: JSON.stringify({ generateContentRequest: { model: modelResource, ...generationRequest } }),
+        });
+      } catch {
+        return json(cors, 502, 'PROVIDER_UNAVAILABLE', 'Não foi possível verificar o limite de entrada. Nenhuma tradução foi gerada.');
+      }
+      if (!countResponse.ok) {
+        if (countResponse.status === 429) {
+          return json(cors, 429, 'PROVIDER_RATE_LIMIT', 'Limite temporário na verificação de entrada. Nenhuma tradução foi gerada.');
+        }
+        if ([400, 401, 403].includes(countResponse.status)) {
+          return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Verificação de entrada indisponível para o provedor. Nenhuma tradução foi gerada.');
+        }
+        return json(cors, 502, 'PROVIDER_UNAVAILABLE', 'Verificação de entrada temporariamente indisponível. Nenhuma tradução foi gerada.');
+      }
+      let counted: unknown;
+      try { counted = await countResponse.json(); } catch { counted = null; }
+      if (!isRecord(counted) || typeof counted.totalTokens !== 'number' ||
+        !Number.isSafeInteger(counted.totalTokens) || counted.totalTokens < 0) {
+        return json(cors, 502, 'INVALID_PROVIDER_RESPONSE', 'Não foi possível validar a contagem de entrada. Nenhuma tradução foi gerada.');
+      }
+      if (counted.totalTokens > BOUNDED_ACCEPTANCE_MAX_INPUT_TOKENS) {
+        return json(cors, 413, 'PAYLOAD_TOO_LARGE', 'O texto completo excede o limite desta validação. Reduza o conteúdo e tente novamente.');
+      }
+    }
+
     let providerResponse: Response;
     try {
       providerResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${translationProfile.modelId}:generateContent`,
+        `${providerEndpoint}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': providerSecret,
-          },
-          body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [{ text: JSON.stringify(promptContract) }],
-            }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.1,
-            },
-          }),
+          headers: providerHeaders,
+          body: generationBody,
         }
       );
     } catch {
@@ -393,8 +438,12 @@ serve(async (request: Request) => {
     let providerJson: unknown;
     try {
       const envelope = await providerResponse.json();
-      const candidate = envelope?.candidates?.[0]?.content?.parts?.[0]?.text;
-      providerJson = typeof candidate === 'string' ? JSON.parse(candidate) : null;
+      const candidate = isRecord(envelope) && Array.isArray(envelope.candidates) && envelope.candidates.length === 1
+        ? envelope.candidates[0] : null;
+      const text = isRecord(candidate) && candidate.finishReason === 'STOP' && isRecord(candidate.content) &&
+        Array.isArray(candidate.content.parts) && isRecord(candidate.content.parts[0])
+        ? candidate.content.parts[0].text : null;
+      providerJson = typeof text === 'string' ? JSON.parse(text) : null;
     } catch {
       providerJson = null;
     }

@@ -1,6 +1,6 @@
 # P2 — Multilingual Translation Center
 
-## Status: Ready for Review
+## Status: Ready for Review — remediação Hard-Cap local; novo CI pendente
 
 ## Story
 
@@ -395,3 +395,131 @@ aguardam novo CI e packet externo.
 O próximo head/gate e a conclusão externa
 do PR são registrados no packet/handoff, sem reescrever a tree para incluir seu próprio gate.
 STOP / NO MERGE / NO AUTO-MERGE / NO DEPLOY continuam obrigatórios.
+
+## Contrato Hard-Cap congelado — 2026-10-03, antes do código
+
+O novo pedido autoriza somente esta remediação no worktree/branch P2. Base da remediação:
+head `3ef74a3a5998c21fefbba4e9feca989aa0b50001`, tree
+`c0789feea819ad499426bc22c42e35426d2ef057`. Gates e rollout isolado anteriores são históricos;
+não validam o próximo head. As seções anteriores registram a etapa em que foram escritas.
+Nesta implementação: **zero Gemini real, zero redeploy, zero criação/alteração de secrets,
+sem merge/auto-merge**. O usuário confirmou saída **4.096**, conforme seção 5 do pedido,
+resolvendo a divergência com 4.000 na seção 4; entrada bounded permanece **4.000 tokens**.
+
+| `VNEXT_TRANSLATION_BUDGET_MODE` — somente servidor | Política antes do dispatch |
+| --- | --- |
+| ausente ou `production` | `candidateCount=1`, `maxOutputTokens=65536`; thinking dinâmico existente; batching de 60 unidades/30000 caracteres preservado, nenhuma nova chamada countTokens |
+| `bounded-acceptance` | uma countTokens do generateContentRequest completo/modelo exato; entrada <=4000 antes de gerar; `candidateCount=1`, `maxOutputTokens=4096`, `thinkingBudget=0` |
+| qualquer outro valor | erro sanitizado antes de qualquer upstream; sem fallback |
+
+Não aceitar mode/caps/modelo/credential pelo browser nem overrides numéricos livres. Construir
+uma vez o envelope final; countTokens recebe model+contents+generationConfig exatos, sem
+alterar o prompt depois. Contagem ausente, negativa, não inteira/não segura, >4000, JSON/HTTP/
+transport inválidos impedem geração, sem retry. Em ambos os modos exigir `finishReason=STOP`:
+MAX_TOKENS, outro motivo ou ausente rejeitam mesmo JSON válido, mantendo o validador atual.
+Production com 65536 usa o máximo oficial do modelo, evitando cap global de 4k nos lotes atuais;
+IDs/context/runs também ocupam tokens, portanto chars não garantem que toda resposta caiba.
+[Modelo](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash),
+[countTokens REST](https://ai.google.dev/api/tokens),
+[cap incluindo thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
+
+`createTranslationCenterFoundation(provider, options: Omit<TranslationFoundationServiceOptions,
+'maxAttempts'> = {})` retorna o serviço com `{ ...options, maxAttempts: 1 }`; bootstrap usa
+essa factory. Serviço genérico conserva default 3. Uma tentativa por lote: B lotes não
+cacheados fazem B dispatches. Erros 503/429/transport não fazem retry; nova ação manual é
+uma operação separada. Não alterar batching/cache/perfis/prompt/auth/DB/engines/dependências.
+ESv1 continua exclusivamente no gateway; ESv2/ENv1 e identidades continuam estritos.
+
+Aceitação real eventual: fixture pequena, um lote/idioma, cache novo, sequencial, ledger
+externo com reserva antes de dispatch; máximo **2 countTokens + 2 generateContent**, incluindo
+falhas/timeouts, teto **US$0,05**. Contador de isolate não é quota global. Standard textual
+US$0,30/M input e US$2,50/M output incluindo thinking implica US$0,02288 para duas gerações
+4000/4096. Reserva estimada US$0,02528 assume adicionalmente duas contagens cobradas como
+4000 tokens de input cada; é hipótese, não tarifa countTokens verificada. Não declarar free
+ou garantia total sem confirmar billing aplicável antes de qualquer chamada. Gemini 2.5 tem
+acesso restrito a usuários anteriores e nenhum shutdown anunciado; não migrar modelo/criar
+chave. Sem precondições autorizadas existentes/configuração/billing comprovados: NOT_AVAILABLE,
+zero chamadas. [Pricing](https://ai.google.dev/gemini-api/docs/pricing),
+[acesso/depreciações](https://ai.google.dev/gemini-api/docs/deprecations).
+
+### ACs / checklist Hard-Cap — verificação local
+
+- [x] AC19 — Modos exatos/ausente/production e cap 65536 sem nova contagem; modo/browser override inválido não despacha. Bounded conta envelope final completo/modelo exato e envia cap 4096/thinking 0/candidate 1.
+- [x] AC20 — Count 4000 aceita; 4001 rejeita; ausência/negativo/fração/overflow/malformed/HTTP/transport impedem generate sem retry/fallback. STOP obrigatório; MAX_TOKENS/não STOP/ausente rejeitam mesmo JSON válido, preservando validações técnicas.
+- [x] AC21 — Factory e bootstrap uma tentativa: 503/429/transport um dispatch; default genérico 3 preservado; multibatch/cache hit e nova ação manual separados. Cliente canônico ESv1/validador real e P2 ESv2/ENv1 continuam compatíveis; prompt intacto, distinguindo adição autorizada de generationConfig.
+- [ ] AC22 — Focados, lint/typecheck/full/build, Deno/ESZip, todas as 33 provas e QA sem HIGH/CRITICAL; novo commit/push/CI exato pelo DevOps. Packet distingue controlled/real, cap por chamada/ledger agregado, billing/model access/precondições; nenhum gate 3ef reutilizado como aprovação do novo código.
+
+### Evidência Hard-Cap local — concluída; novo CI pendente
+
+Focados atuais: 481 testes/14 arquivos PASS em `scratch/p2-hard-cap/focused-translation.log`.
+QA independente executou 398 testes PASS (39 cliente, 359 gateway/contratos), revisão sem
+HIGH/CRITICAL, e nova prova com service/GatewayClient/proteção/cache/cobertura/validador e
+fixture reais do Git canônico 40b: 9 elegíveis/11 exclusões, ESv1 aceito nos modos production
+e bounded, original imutável e cache-hit. Prompt contents deep-equal canônico; apenas as
+adições autorizadas de generationConfig mudam. Tudo é transporte/auth/provider controlado,
+zero chamadas reais. Relatório externo `CATALOG_BUILDER_P2_HARD_CAP_QA.md` e recibo
+`p2-hard-cap-qa/canonical-client-hard-cap-proof.json` em Documents/Codex/2026-10-03.
+CodeRabbit CLI NOT_AVAILABLE: root verificou executável nativo/configurado ausente. Nenhum
+CodeRabbit PASS ou instalação é alegado; foi aplicada a revisão manual independente acima.
+
+Gates locais novos PASS em `scratch/p2-hard-cap/verification-results.json`: typecheck 18,31 s;
+lint 13,50 s, zero erros/268 avisos; full suite 294 arquivos, 3488 PASS/1 skip preexistente,
+234,20 s com workers2/min1; build 30,07 s, aviso existente de chunks grandes. Tempos são os
+do runner externo; logs em `verification-logs`. A primeira tentativa de typecheck detectou
+mutação readonly somente no fixture, corrigida por construção imutável; tentativa preservada
+em `scratch/p2-hard-cap/attempt-1`, sem relaxar assertion ou mudar gateway para passar.
+
+Deno 2.9.7 check local cached-only PASS; graph/bundle 25 módulos e ESZip oficial genérico
+roundtrip 26 módulos/429781 bytes PASS. ESZip SHA256
+`9126a870c947be3491c39b858dc1ee7be8f319766b19ad6c469d99ac8f8c82fc`, conferido pela QA.
+Gateway blob `d861a1aa19ac5c6abb151456983971cc83b030d7`, registry unchanged. Deno --all:
+39 erros de declarações externas, zero locais; Deno 2.5.6 offline NOT_VALIDATED. Writer
+otimizado Supabase e runtime novo implantado NOT_VALIDATED; genérico ESZip não os comprova.
+Recibo `scratch/p2-rollout-bundle/hard-cap-working/eszip-result.json` e relatório externo
+`CATALOG_BUILDER_P2_HARD_CAP_GATEWAY_PREFLIGHT.md`. Nenhuma prova implicou redeploy.
+
+As 33 provas atuais PASS, mantendo registros/comandos/ordem; manifest completo com 37
+resultados (quatro gates e 33 provas), todos exitCode=0. A última prova P2 concluiu em
+46,45 s. AFTER fresco tem 74 capturas e zero erros de console/page/resource/request.
+Root inspecionou oito arquivos atuais: review ES 1600, idioma EN 1280, review EN 820,
+publicação ES bloqueada 820 e quatro páginas PDF ES/EN. Revisão visual PASS: diálogo,
+footer/foco preservados; proposta adversarial permanece BLOCKED; PDF corrigido legível,
+duas páginas por destino. Provider/transporte/auth são controlados; mistura deliberada
+PT/ES/EN não comprova qualidade de tradução Gemini nem persistência Supabase real.
+
+- [x] AC22-local — Focados/gates locais novos, compatibilidade canônica controlada, Deno/ESZip genérico e QA sem HIGH/CRITICAL comprovados com limitações acima.
+- [x] AC22-provas — As 33 provas da nova remediação e revisão visual atual PASS, evidenciadas pelo manifest completo e AFTER fresco.
+- [ ] AC22-CI — Commit/push e CI do novo head exato ficam no packet externo após execução. Ready for Review indica verificação local concluída; não declara aprovação do próximo CI. Sem novo head/CI autorreferente nesta tree.
+
+O frontend público canônico 40b ainda usa default 3; a factory com maxAttempts1 pertence ao
+novo cliente P2 local. Não alegar que o frontend live já impõe uma tentativa. Aceitação real
+futura requer o cliente do novo head exato, sessão normal autorizada, cache novo, um lote por
+idioma e ledger agregado; nunca usar retries do cliente antigo para cumprir o budget de duas gerações.
+
+### File list incremental Hard-Cap — nove paths
+
+- `docs/stories/2026-10-02-p2-multilingual-translation-center.md`
+- `docs/vnext/p2-language-compatibility.md`
+- `src/vnext/app/bootstrap.tsx`
+- `src/vnext/translation/index.ts`
+- `src/vnext/translation/service.ts`
+- `supabase/functions/vnext-translation-provider/index.ts`
+- `tests/vnext/translation/p2-server-gateway-runtime.test.ts`
+- `tests/vnext/translation/server-gateway-contract.test.ts`
+- `tests/vnext/translation/p2-translation-center-attempts.test.ts` — novo, 18 testes ES/EN de tentativas, retry manual, cache, batching e original imutável.
+
+Root/dev possui código/testes; PO somente os dois docs. Fonte working ainda baseada no head
+3ef; novo commit/CI são externos e pendentes. Não alterar engines, auth, SQL ou dependências.
+
+### Retomada 2026-10-04 — revisão final sem reexecução
+
+Os 20 adversariais do pedido final PASS na revisão independente do diff e da evidência
+controlada preservada, zero HIGH/CRITICAL. Os cinco arquivos de código, incluindo registry, continuam vinculados
+aos hashes QA; os 33 scripts continuam iguais ao manifest. O runtime test também corresponde
+ao hash informado pelo owner após a correção readonly e antes do full suite. Os outros dois
+testes recebem snapshot final, sem inventar uma comparação histórica não registrada.
+Root revisou mais 12 capturas atuais dos estados solicitados nas três larguras: visual PASS;
+as quatro páginas PDF já revisadas pertencem à mesma fonte. Traduções são controladas.
+Recibo externo `Documents/Codex/2026-10-04/p2-hard-cap-final-qa/FINAL_QA_20_CASES.json`.
+Sem rerun de testes/provas, chamadas Gemini, leitura de credenciais, redeploy ou alteração de
+código nesta retomada. Ready for Review local e novo CI externo pendente permanecem distintos.

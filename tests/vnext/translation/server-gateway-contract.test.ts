@@ -38,4 +38,15 @@ describe('W5.A VNext server gateway contract', () => {
     expect(gatewaySource).toContain('providerId: translationProfile.providerId');
     expect(gatewaySource).toContain('modelId: translationProfile.modelId');
   });
+
+  it('keeps server-only acceptance caps separate from production capacity and requires completed generation', () => {
+    expect(gatewaySource).toContain("Deno.env.get('VNEXT_TRANSLATION_BUDGET_MODE')");
+    expect(gatewaySource).toContain('BOUNDED_ACCEPTANCE_MAX_INPUT_TOKENS = 4_000');
+    expect(gatewaySource).toContain('BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS = 4_096');
+    expect(gatewaySource).toContain('PRODUCTION_MAX_OUTPUT_TOKENS = 65_536');
+    expect(gatewaySource).toContain('candidateCount: 1');
+    expect(gatewaySource).toContain('thinkingConfig: { thinkingBudget: 0 }');
+    expect(gatewaySource).toContain('generateContentRequest: { model: modelResource, ...generationRequest }');
+    expect(gatewaySource).toContain("candidate.finishReason === 'STOP'");
+  });
 });

@@ -281,3 +281,11 @@ export class TranslationFoundationService {
     };
   }
 }
+
+export function createTranslationCenterFoundation(
+  provider: TranslationProvider,
+  options: Omit<TranslationFoundationServiceOptions, 'maxAttempts'> = {}
+): TranslationFoundationService {
+  // A failed batch requires an explicit new user action, never a hidden billed retry.
+  return new TranslationFoundationService(provider, { ...options, maxAttempts: 1 });
+}

@@ -72,6 +72,7 @@ export type {
   VNextTranslationGatewayInvoke,
 } from './provider-client';
 export {
+  createTranslationCenterFoundation,
   TranslationFoundationService,
 } from './service';
 export type { TranslationFoundationServiceOptions } from './service';
