@@ -1,6 +1,6 @@
 import { parseCanonicalDocument } from '../application';
 import { findObjectInTree, type CatalogDocument, type RichText } from '../domain';
-import { TranslationFoundationError, requireSupportedLanguagePair, type TranslationFoundationResult, type TranslationLocator } from './contracts';
+import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult, type TranslationLocator, type TranslationSemanticLeaf } from './contracts';
 import { extractSemanticTranslationCoverage, stableSerialize } from './semantic-leaves';
 import { protectTechnicalTokens } from './technical-token-protector';
 
@@ -10,6 +10,9 @@ export interface TranslationReviewRun {
   readonly kind: string;
   readonly sourceText: string;
   readonly translatedText: string;
+  readonly pageLabel: string;
+  readonly typeLabel: string;
+  readonly locationLabel: string;
 }
 
 function invalid(message: string): never {
@@ -17,11 +20,14 @@ function invalid(message: string): never {
 }
 
 export function requireReviewText(source: string, translated: string): void {
+  // Authored placeholder-looking literals are facts too. Only newly introduced transport placeholders are forbidden.
+  let withoutSourceLiterals = translated;
+  for (const literal of source.match(/\[\[VNEXT_TECH_[^\]]+\]\]/g) ?? []) withoutSourceLiterals = withoutSourceLiterals.replace(literal, '');
   const unsupportedControl = Array.from(translated).some(character => {
     const code = character.charCodeAt(0);
     return code < 32 && code !== 9 && code !== 10 && code !== 13;
   });
-  if (!translated.trim() || translated.length > 4000 || /<\/?[a-z][^>]*>|\[\[VNEXT_TECH_/i.test(translated) || unsupportedControl) {
+  if (!translated.trim() || translated.length > 4000 || /<\/?[a-z][^>]*>/i.test(translated) || withoutSourceLiterals.includes('[[VNEXT_TECH_') || unsupportedControl) {
     invalid('Review text is empty, too large or contains unsupported markup');
   }
   const tokens = (text: string) => protectTechnicalTokens(text).tokens.map(token => token.value).sort();
@@ -50,7 +56,8 @@ export async function materializeTranslationCandidate(
   result: TranslationFoundationResult,
   corrections: ReadonlyMap<string, string> = new Map()
 ): Promise<{ document: CatalogDocument; runs: readonly TranslationReviewRun[] }> {
-  requireSupportedLanguagePair(source.locale, result.targetLocale);
+  const profile = resolveTranslationProfile(source.locale, result.targetLocale, result.profileVersion);
+  if (result.provider.providerId !== profile.providerId || result.provider.modelId !== profile.modelId) invalid('Wrong candidate provider profile');
   if (result.sourceCatalogId !== source.id || result.sourceLocale !== source.locale) invalid('Wrong translation source');
   const coverage = await extractSemanticTranslationCoverage(source);
   const units = new Map(result.units.map(unit => [unit.unitId, unit]));
@@ -79,7 +86,8 @@ export async function materializeTranslationCandidate(
         if (!inline || inline.kind !== 'text') invalid('Missing canonical text run');
         inline.text = translated;
       }
-      runs.push({ unitId: leaf.leafId, runId: sourceRun.runId, kind: leaf.kind, sourceText: sourceRun.text, translatedText: translated });
+      runs.push({ unitId: leaf.leafId, runId: sourceRun.runId, kind: leaf.kind, sourceText: sourceRun.text, translatedText: translated,
+        ...reviewLocation(source, leaf) });
     }
   }
   if (usedCorrections.size !== corrections.size) invalid('Unknown review correction');
@@ -89,4 +97,12 @@ export async function materializeTranslationCandidate(
 
 export function translationReviewKey(unitId: string, runId: string): string {
   return JSON.stringify([unitId, runId]);
+}
+
+function reviewLocation(source: CatalogDocument, leaf: TranslationSemanticLeaf): { pageLabel: string; typeLabel: string; locationLabel: string } {
+  const labels = { catalogTitle: 'Título do catálogo', textObject: 'Texto', tableCell: 'Célula da tabela', tableTitle: 'Título da tabela', tableAnnotation: 'Nota da tabela', tableLegend: 'Legenda da tabela' };
+  const pageId = leaf.locator.kind === 'catalogTitle' ? undefined : leaf.locator.pageId;
+  const pageLabel = pageId === undefined ? 'Catálogo' : `Página ${source.pages.findIndex(page => page.id === pageId) + 1}`;
+  const typeLabel = labels[leaf.kind];
+  return { pageLabel, typeLabel, locationLabel: `${pageLabel} · ${typeLabel}` };
 }

@@ -35,7 +35,7 @@ import { createPresysPageTemplateRegistry } from '../library/presys-ta25n-starte
 import { DefaultStarterDependencyPreparer, bindPresysPageReuse } from '../library/starter-dependencies';
 import { getSupabase } from '../../services/supabase.service';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { TranslationFoundationService, VNextTranslationGatewayClient, vnextTranslationGatewayInvokeFromFunctionsClient } from '../translation';
+import { createTranslationCenterFoundation, VNextTranslationGatewayClient, vnextTranslationGatewayInvokeFromFunctionsClient } from '../translation';
 import { TranslationReviewCoordinator } from '../translation/review-coordinator';
 import {
   currentTrustedV2ReturnTarget,
@@ -427,7 +427,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     });
     window.addEventListener('pagehide', detachPageReuse, { once: true });
     const translation = new TranslationReviewCoordinator({
-      foundation: new TranslationFoundationService(new VNextTranslationGatewayClient(vnextTranslationGatewayInvokeFromFunctionsClient(supabase))),
+      foundation: createTranslationCenterFoundation(new VNextTranslationGatewayClient(vnextTranslationGatewayInvokeFromFunctionsClient(supabase))),
       repository,
       createId: createBrowserId,
       createMutationId: createBrowserId,

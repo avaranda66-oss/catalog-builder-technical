@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { CatalogListItem } from '../persistence';
+import { getTranslationLanguage } from '../translation/language-registry';
 import type {
   CatalogLibraryFailureCode,
   CatalogLibraryService,
@@ -48,9 +49,7 @@ function dateLabel(value: string): string {
 }
 
 function localeLabel(locale: string): string {
-  if (locale === 'pt-BR') return 'Português (Brasil)';
-  if (locale === 'es-ES') return 'Espanhol (Espanha)';
-  return locale;
+  return getTranslationLanguage(locale)?.displayName ?? locale;
 }
 
 function failureMessage(code: CatalogLibraryFailureCode, action: 'load' | 'create' | 'rename' | 'archive'): string {

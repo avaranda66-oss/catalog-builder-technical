@@ -166,6 +166,30 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     expect(onOpen).toHaveBeenCalledWith(translated.catalogId);
   });
 
+  it('P2 distinguishes English and Spanish copies of the same original with regional labels and lineage', async () => {
+    const source = item('PRESYS TA-25N', '21');
+    const english = item('TA-25N English', '22', false, {
+      locale: 'en-US', origin: { originKind: 'translation', originId: source.catalogId, originRevision: 4 },
+    });
+    const spanish = item('TA-25N Español', '23', false, {
+      locale: 'es-ES', origin: { originKind: 'translation', originId: source.catalogId, originRevision: 4 },
+    });
+    const list = vi.fn().mockResolvedValue({ ok: true, value: [english, spanish, source] });
+    const onOpen = vi.fn();
+    const view = render(<CatalogLibrary service={serviceWithList(list)} onOpen={onOpen} />);
+    const englishRow = (await waitFor(() => view.getByText('TA-25N English'))).closest('[data-library-catalog-id]') as HTMLElement;
+    const spanishRow = view.getByText('TA-25N Español').closest('[data-library-catalog-id]') as HTMLElement;
+    expect(within(englishRow).getByText('Inglês (Estados Unidos)')).toBeInTheDocument();
+    expect(within(spanishRow).getByText('Espanhol (Espanha)')).toBeInTheDocument();
+    for (const row of [englishRow, spanishRow]) {
+      expect(within(row).getByText('Cópia traduzida')).toBeInTheDocument();
+      expect(within(row).getByText('Origem: PRESYS TA-25N')).toBeInTheDocument();
+      expect(row.textContent).not.toContain(source.catalogId);
+    }
+    fireEvent.click(within(englishRow).getByRole('button', { name: 'Abrir' }));
+    expect(onOpen).toHaveBeenCalledWith(english.catalogId);
+  });
+
   it('traps dialog focus, supports Escape, and restores focus to the triggering action', async () => {
     const list = vi.fn().mockResolvedValue({ ok: true, value: [item('Catálogo foco', '4')] });
     const { getByRole, queryByRole } = render(

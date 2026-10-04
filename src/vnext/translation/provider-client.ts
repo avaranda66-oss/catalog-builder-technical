@@ -1,9 +1,6 @@
 ﻿import {
   TranslationFoundationError,
-  W5_TRANSLATION_CONTRACT_VERSION,
-  W5_TRANSLATION_MODEL_ID,
-  W5_TRANSLATION_PROFILE_VERSION,
-  W5_TRANSLATION_PROVIDER_ID,
+  resolveTranslationProfile,
   type TranslationProvider,
   type TranslationProviderRequest,
   type TranslationProviderResponse,
@@ -105,6 +102,8 @@ export class VNextTranslationGatewayClient implements TranslationProvider {
 
   async translate(request: TranslationProviderRequest, signal?: AbortSignal): Promise<unknown> {
     if (signal?.aborted) throw new TranslationFoundationError('ABORTED', 'Translation request was cancelled');
+    const profile = resolveTranslationProfile(request.sourceLocale, request.targetLocale, request.profileVersion);
+    if (request.contractVersion !== profile.contractVersion) throw new TranslationFoundationError('INVALID_REQUEST', 'Unsupported translation contract');
     let response: GatewayInvocationResult;
     try {
       response = await this.invoke(request);
@@ -123,21 +122,22 @@ export type ControlledTranslationHandler = (
 ) => unknown | Promise<unknown>;
 
 function defaultControlledResponse(request: TranslationProviderRequest): TranslationProviderResponse {
+  const profile = resolveTranslationProfile(request.sourceLocale, request.targetLocale, request.profileVersion);
   return {
-    contractVersion: W5_TRANSLATION_CONTRACT_VERSION,
-    profileVersion: W5_TRANSLATION_PROFILE_VERSION,
+    contractVersion: profile.contractVersion,
+    profileVersion: profile.profileVersion,
     requestId: request.requestId,
     targetLocale: request.targetLocale,
     units: request.units.map((unit) => ({
       unitId: unit.unitId,
       runs: unit.runs.map((run) => ({
         runId: run.runId,
-        translatedText: `ES: ${run.protectedText}`,
+        translatedText: `${profile.targetLocale === 'es-ES' ? 'ES' : 'EN'}: ${run.protectedText}`,
       })),
     })),
     provider: {
-      providerId: W5_TRANSLATION_PROVIDER_ID,
-      modelId: W5_TRANSLATION_MODEL_ID,
+      providerId: profile.providerId,
+      modelId: profile.modelId,
     },
   };
 }

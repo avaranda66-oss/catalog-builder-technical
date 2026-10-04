@@ -4,9 +4,7 @@ import {
   W5_SUPPORTED_TARGET_LOCALE,
   W5_TRANSLATION_CONTRACT_VERSION,
   W5_TRANSLATION_LIMITS,
-  W5_TRANSLATION_PROFILE,
-  W5_TRANSLATION_PROFILE_VERSION,
-  requireSupportedLanguagePair,
+  resolveTranslationProfile,
   type TranslationFoundationResult,
   type TranslationProvider,
   type TranslationProviderMetadata,
@@ -180,7 +178,7 @@ export class TranslationFoundationService {
     targetLocale: string = W5_SUPPORTED_TARGET_LOCALE,
     signal?: AbortSignal
   ): Promise<TranslationFoundationResult> {
-    requireSupportedLanguagePair(source.locale, targetLocale);
+    const profile = resolveTranslationProfile(source.locale, targetLocale);
     abortIfNeeded(signal);
 
     const coverage = await extractSemanticTranslationCoverage(source);
@@ -197,14 +195,14 @@ export class TranslationFoundationService {
       abortIfNeeded(signal);
       const request: TranslationProviderRequest = {
         contractVersion: W5_TRANSLATION_CONTRACT_VERSION,
-        profileVersion: W5_TRANSLATION_PROFILE_VERSION,
+        profileVersion: profile.profileVersion,
         requestId: this.requestId(),
         sourceCatalogId: source.id,
-        sourceLocale: source.locale,
-        targetLocale: W5_SUPPORTED_TARGET_LOCALE,
+        sourceLocale: profile.sourceLocale,
+        targetLocale: profile.targetLocale,
         units: batch.map((item) => item.unit),
       };
-      const cacheKey = await buildTranslationRequestCacheKey(request, W5_TRANSLATION_PROFILE);
+      const cacheKey = await buildTranslationRequestCacheKey(request, profile);
       const cached = await this.cache.get(cacheKey);
       let freshHashes = await requireFullCoverageFresh(source, initialManifest);
       let rawResponse: unknown;
@@ -272,9 +270,9 @@ export class TranslationFoundationService {
 
     return {
       sourceCatalogId: source.id,
-      sourceLocale: source.locale,
-      targetLocale: W5_SUPPORTED_TARGET_LOCALE,
-      profileVersion: W5_TRANSLATION_PROFILE_VERSION,
+      sourceLocale: profile.sourceLocale,
+      targetLocale: profile.targetLocale,
+      profileVersion: profile.profileVersion,
       units: translatedUnits,
       provider: providerMetadata,
       coverage,
@@ -282,4 +280,12 @@ export class TranslationFoundationService {
       providerRequests,
     };
   }
+}
+
+export function createTranslationCenterFoundation(
+  provider: TranslationProvider,
+  options: Omit<TranslationFoundationServiceOptions, 'maxAttempts'> = {}
+): TranslationFoundationService {
+  // A failed batch requires an explicit new user action, never a hidden billed retry.
+  return new TranslationFoundationService(provider, { ...options, maxAttempts: 1 });
 }

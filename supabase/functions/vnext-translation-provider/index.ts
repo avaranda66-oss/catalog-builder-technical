@@ -1,18 +1,42 @@
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
-const CONTRACT_VERSION = 'w5a-v1';
-const PROFILE_VERSION = 'w5-ptbr-eses-v1';
-const SOURCE_LOCALE = 'pt-BR';
-const TARGET_LOCALE = 'es-ES';
-const PROVIDER_ID = 'gemini';
-const MODEL_ID = 'gemini-2.5-flash';
+// Bundle this pure local dependency with the Edge Function; VM tests resolve the same source.
+import { VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
+
+const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion;
+
+// Server-only bridge for the canonical P1 client while P2 rolls out. Never a client profile.
+const CANONICAL_SPANISH_PROFILE = Object.freeze({
+  contractVersion: 'w5a-v1',
+  profileVersion: 'w5-ptbr-eses-v1',
+  sourceLocale: 'pt-BR',
+  targetLocale: 'es-ES',
+  providerId: 'gemini',
+  modelId: 'gemini-2.5-flash',
+  promptVersion: 'w5-technical-es-v1',
+  tokenPolicyVersion: 'w5-tech-tokens-v1',
+} as const);
+
+function resolveGatewayProfile(sourceLocale: string, targetLocale: string, profileVersion: unknown) {
+  const current = findRegisteredTranslationProfile(sourceLocale, targetLocale);
+  if (current && profileVersion === current.profileVersion) return current;
+  if (sourceLocale === CANONICAL_SPANISH_PROFILE.sourceLocale &&
+    targetLocale === CANONICAL_SPANISH_PROFILE.targetLocale &&
+    profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion) return CANONICAL_SPANISH_PROFILE;
+  return undefined;
+}
 
 const LIMITS = {
   maxUnits: 60,
   maxCharsPerRun: 4_000,
   maxTotalChars: 30_000,
 };
+
+// Operational budgets belong to the server; the authoring request cannot override them.
+const BOUNDED_ACCEPTANCE_MAX_INPUT_TOKENS = 4_000;
+const BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS = 4_096;
+const PRODUCTION_MAX_OUTPUT_TOKENS = 65_536;
 
 const LEAF_KINDS = new Set([
   'catalogTitle',
@@ -105,15 +129,16 @@ function parseRequest(value: unknown): GatewayRequest | null {
   ])) return null;
   if (
     value.contractVersion !== CONTRACT_VERSION ||
-    value.profileVersion !== PROFILE_VERSION ||
-    value.sourceLocale !== SOURCE_LOCALE ||
-    value.targetLocale !== TARGET_LOCALE ||
+    !nonempty(value.sourceLocale) ||
+    !nonempty(value.targetLocale) ||
     !nonempty(value.requestId) ||
     !nonempty(value.sourceCatalogId) ||
     !Array.isArray(value.units) ||
     value.units.length === 0 ||
     value.units.length > LIMITS.maxUnits
   ) return null;
+  const profile = resolveGatewayProfile(value.sourceLocale, value.targetLocale, value.profileVersion);
+  if (!profile) return null;
 
   const units: GatewayUnit[] = [];
   const unitIds = new Set<string>();
@@ -160,7 +185,7 @@ function parseRequest(value: unknown): GatewayRequest | null {
 
   return {
     contractVersion: value.contractVersion,
-    profileVersion: value.profileVersion,
+    profileVersion: profile.profileVersion,
     requestId: value.requestId,
     sourceCatalogId: value.sourceCatalogId,
     sourceLocale: value.sourceLocale,
@@ -213,7 +238,13 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
     const runs: ProviderRun[] = [];
     for (const rawRun of rawUnit.runs) {
       if (!isRecord(rawRun) || !exactKeys(rawRun, ['runId', 'translatedText'])) return null;
-      if (!nonempty(rawRun.runId) || !nonempty(rawRun.translatedText)) return null;
+      if (!nonempty(rawRun.runId) || !nonempty(rawRun.translatedText) || !rawRun.translatedText.trim()
+        || rawRun.translatedText.length > LIMITS.maxCharsPerRun
+        || /<\/?[A-Za-z][^>]*>/.test(rawRun.translatedText)
+        || Array.from(rawRun.translatedText).some(character => {
+          const code = character.charCodeAt(0);
+          return code < 32 && code !== 9 && code !== 10 && code !== 13;
+        })) return null;
       const expectedRun = expectedByRun.get(rawRun.runId);
       if (!expectedRun) return null;
       returnedRunIds.push(rawRun.runId);
@@ -221,6 +252,7 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
         JSON.stringify(placeholderMultiset(expectedRun.protectedText)) !==
         JSON.stringify(placeholderMultiset(rawRun.translatedText))
       ) return null;
+      if (rawRun.translatedText.replace(PLACEHOLDER, '').includes('[[VNEXT_TECH_')) return null;
       runs.push({ runId: rawRun.runId, translatedText: rawRun.translatedText });
     }
     if (!exactStringSet(expectedUnit.runs.map((run) => run.runId), returnedRunIds)) return null;
@@ -289,18 +321,35 @@ serve(async (request: Request) => {
       return json(cors, 400, 'INVALID_REQUEST', 'Contrato de tradução inválido ou não suportado.');
     }
 
+    const budgetMode = Deno.env.get('VNEXT_TRANSLATION_BUDGET_MODE');
+    if (budgetMode !== undefined && budgetMode !== 'production' && budgetMode !== 'bounded-acceptance') {
+      return json(cors, 503, 'PROVIDER_UNAVAILABLE', 'Configuração de orçamento de tradução indisponível.');
+    }
+    const boundedAcceptance = budgetMode === 'bounded-acceptance';
+
     const providerSecret = Deno.env.get('GEMINI_API_KEY') ?? '';
     if (!providerSecret) {
       return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
     }
 
+    const translationProfile = resolveGatewayProfile(body.sourceLocale, body.targetLocale, body.profileVersion)!;
+    const canonicalSpanish = translationProfile.profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion;
     const promptContract = {
       contractVersion: CONTRACT_VERSION,
-      profileVersion: PROFILE_VERSION,
-      sourceLocale: SOURCE_LOCALE,
-      targetLocale: TARGET_LOCALE,
+      profileVersion: translationProfile.profileVersion,
+      ...(canonicalSpanish ? {} : {
+        promptVersion: translationProfile.promptVersion,
+        tokenPolicyVersion: translationProfile.tokenPolicyVersion,
+      }),
+      sourceLocale: translationProfile.sourceLocale,
+      targetLocale: translationProfile.targetLocale,
       rules: [
-        'Translate only protectedText values from Portuguese (Brazil) to Spanish (Spain).',
+        `Translate only protectedText values from Portuguese (Brazil) to ${getTranslationLanguage(translationProfile.targetLocale)!.englishName}.`,
+        ...(canonicalSpanish ? [] : [
+          'Use professional PRESYS engineering, instrumentation and metrology language. Context locates the text; it supplies no new product facts.',
+          'Never improve, correct, complete, infer or invent specifications, commercial values or missing information. Keep pending fields pending.',
+          'Preserve all numbers, decimal separators, signs, ranges, uncertainty, units, product/model codes, standards, protocols and symbols exactly; preserve the meaning of technical qualifiers.',
+        ]),
         'Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.',
         'Return the same unitId and runId identities. Do not add or remove units or runs.',
         'Return plain text only; do not emit HTML or Markdown formatting.',
@@ -316,26 +365,60 @@ serve(async (request: Request) => {
       },
     };
 
+    // Construct once so the counted prompt/config is exactly the one generated afterwards.
+    const generationRequest = {
+      contents: [{ role: 'user', parts: [{ text: JSON.stringify(promptContract) }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+        candidateCount: 1,
+        maxOutputTokens: boundedAcceptance ? BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS : PRODUCTION_MAX_OUTPUT_TOKENS,
+        ...(boundedAcceptance ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      },
+    };
+    const generationBody = JSON.stringify(generationRequest);
+    const providerHeaders = { 'Content-Type': 'application/json', 'x-goog-api-key': providerSecret };
+    const modelResource = `models/${translationProfile.modelId}`;
+    const providerEndpoint = `https://generativelanguage.googleapis.com/v1beta/${modelResource}`;
+
+    if (boundedAcceptance) {
+      let countResponse: Response;
+      try {
+        countResponse = await fetch(`${providerEndpoint}:countTokens`, {
+          method: 'POST', headers: providerHeaders,
+          body: JSON.stringify({ generateContentRequest: { model: modelResource, ...generationRequest } }),
+        });
+      } catch {
+        return json(cors, 502, 'PROVIDER_UNAVAILABLE', 'Não foi possível verificar o limite de entrada. Nenhuma tradução foi gerada.');
+      }
+      if (!countResponse.ok) {
+        if (countResponse.status === 429) {
+          return json(cors, 429, 'PROVIDER_RATE_LIMIT', 'Limite temporário na verificação de entrada. Nenhuma tradução foi gerada.');
+        }
+        if ([400, 401, 403].includes(countResponse.status)) {
+          return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Verificação de entrada indisponível para o provedor. Nenhuma tradução foi gerada.');
+        }
+        return json(cors, 502, 'PROVIDER_UNAVAILABLE', 'Verificação de entrada temporariamente indisponível. Nenhuma tradução foi gerada.');
+      }
+      let counted: unknown;
+      try { counted = await countResponse.json(); } catch { counted = null; }
+      if (!isRecord(counted) || typeof counted.totalTokens !== 'number' ||
+        !Number.isSafeInteger(counted.totalTokens) || counted.totalTokens < 0) {
+        return json(cors, 502, 'INVALID_PROVIDER_RESPONSE', 'Não foi possível validar a contagem de entrada. Nenhuma tradução foi gerada.');
+      }
+      if (counted.totalTokens > BOUNDED_ACCEPTANCE_MAX_INPUT_TOKENS) {
+        return json(cors, 413, 'PAYLOAD_TOO_LARGE', 'O texto completo excede o limite desta validação. Reduza o conteúdo e tente novamente.');
+      }
+    }
+
     let providerResponse: Response;
     try {
       providerResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`,
+        `${providerEndpoint}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': providerSecret,
-          },
-          body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [{ text: JSON.stringify(promptContract) }],
-            }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.1,
-            },
-          }),
+          headers: providerHeaders,
+          body: generationBody,
         }
       );
     } catch {
@@ -355,8 +438,12 @@ serve(async (request: Request) => {
     let providerJson: unknown;
     try {
       const envelope = await providerResponse.json();
-      const candidate = envelope?.candidates?.[0]?.content?.parts?.[0]?.text;
-      providerJson = typeof candidate === 'string' ? JSON.parse(candidate) : null;
+      const candidate = isRecord(envelope) && Array.isArray(envelope.candidates) && envelope.candidates.length === 1
+        ? envelope.candidates[0] : null;
+      const text = isRecord(candidate) && candidate.finishReason === 'STOP' && isRecord(candidate.content) &&
+        Array.isArray(candidate.content.parts) && isRecord(candidate.content.parts[0])
+        ? candidate.content.parts[0].text : null;
+      providerJson = typeof text === 'string' ? JSON.parse(text) : null;
     } catch {
       providerJson = null;
     }
@@ -368,13 +455,13 @@ serve(async (request: Request) => {
 
     return new Response(JSON.stringify({
       contractVersion: CONTRACT_VERSION,
-      profileVersion: PROFILE_VERSION,
+      profileVersion: translationProfile.profileVersion,
       requestId: body.requestId,
-      targetLocale: TARGET_LOCALE,
+      targetLocale: translationProfile.targetLocale,
       units,
       provider: {
-        providerId: PROVIDER_ID,
-        modelId: MODEL_ID,
+        providerId: translationProfile.providerId,
+        modelId: translationProfile.modelId,
       },
     }), {
       status: 200,

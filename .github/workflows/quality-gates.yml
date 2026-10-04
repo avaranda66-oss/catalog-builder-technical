@@ -85,3 +85,6 @@ jobs:
 
       - name: W5.C canonical publication review Chromium and PDF proof
         run: node tests/vnext/proof/w5c-publication-review-proof.mjs
+
+      - name: P2 multilingual Translation Center Chromium and PDF proof
+        run: node tests/vnext/proof/p2-multilingual-translation-center-proof.mjs
