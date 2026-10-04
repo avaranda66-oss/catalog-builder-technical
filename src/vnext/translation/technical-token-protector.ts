@@ -12,15 +12,19 @@ export interface ProtectedText {
 }
 
 const PATTERNS: readonly RegExp[] = [
+  /\[\[VNEXT_TECH_[^\]]+\]\]/g,
   /\b(?:ISO\/IEC\s*17025|ISO\s*9001|IP6[5-8]|NEMA\s*[A-Za-z0-9.-]+|HART\s*\d*|Modbus(?:\s+(?:RTU|TCP))?|Profibus|FOUNDATION\s+Fieldbus|Fieldbus|RS-?485|RS-?232)\b/gi,
+  /\b(?:IEC\s*\d{4,5}(?:-\d+)*(?::\d{4})?|TCP\/IP|USB|Ethernet)\b/gi,
   /\b(?:PRESYS|ISOPLAN|(?:TA|TT|PSV|PCON)-[A-Za-z0-9._-]+|PCON|PSV)\b/gi,
-  /(?:±\s*)?[+-]?\d+(?:[.,]\d+)?\s*[–—-]\s*[+-]?\d+(?:[.,]\d+)?\s*(?:°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|%\s*FS|%\s*FE|ppm|Ω|kΩ|MΩ)\b/gi,
-  /±\s*\d+(?:[.,]\d+)?\s*(?:%\s*FS|%\s*FE|%|°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|ppm|Ω|kΩ|MΩ)?\b/gi,
-  /[+-]?\d+(?:[.,]\d+)?\s*(?:°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|%\s*FS|%\s*FE|ppm|Ω|kΩ|MΩ)\b/gi,
-  /[+-]?\d+(?:[.,]\d+)?\s*(?:A|V|W|K)\b/g,
+  /(?:±\s*)?[+−-]?\d+(?:[.,]\d+)*\s*[–—−-]\s*[+−-]?\d+(?:[.,]\d+)*\s*(?:°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|%\s*FS|%\s*FE|ppm|Ω|kΩ|MΩ)(?![\p{L}\p{N}_])/giu,
+  /±\s*\d+(?:[.,]\d+)*\s*(?:%\s*FS|%\s*FE|%|°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|ppm|Ω|kΩ|MΩ)?(?![\p{L}\p{N}_])/giu,
+  /[+−-]?\d+(?:[.,]\d+)*\s*(?:°C|°F|bar|mbar|psi|kPa|MPa|Pa|mA|µA|uA|mV|Vdc|Vac|Vcc|Hz|kHz|MHz|%\s*FS|%\s*FE|ppm|Ω|kΩ|MΩ)(?![\p{L}\p{N}_])/giu,
+  /[+−-]?\d+(?:[.,]\d+)*\s*(?:A|V|W|K)\b/g,
   /\b\d+\/\d+["”]?\s*(?:NPT|BSP|BSPT|UNF)\b/gi,
   /\bM\d+x\d+(?:[.,]\d+)?\b/g,
-  /(?:^|(?<=\s))[+-]?\d+(?:[.,]\d+)?(?=\s|$|[.,;:!])/g,
+  /(?<![\p{L}\p{N}_])[+−-]?\d+(?:[.,]\d+)*(?![\p{L}\p{N}_])/gu,
+  /(?<![\p{L}\p{N}_])(?:mA|µA|uA|mV|Vdc|Vac|Vcc|bar|mbar|psi|kPa|MPa|Pa|Hz|kHz|MHz|ppm|kΩ|MΩ|Ω|ohms?|TCs|RTDs)(?![\p{L}\p{N}_])/gu,
+  /(?:°C|°F|Ω|±|%|≤|≥|≈|µ)/g,
 ];
 
 interface Match {
@@ -113,6 +117,7 @@ function placeholderPattern(namespace: string): RegExp {
 
 export function assertProtectedTokenIntegrity(translatedText: string, protectedValue: ProtectedText): void {
   const expected = new Set(protectedValue.tokens.map((token) => token.placeholder));
+  let withoutExpected = translatedText;
   for (const placeholder of expected) {
     if (occurrences(translatedText, placeholder) !== 1) {
       throw new TranslationFoundationError(
@@ -120,6 +125,10 @@ export function assertProtectedTokenIntegrity(translatedText: string, protectedV
         `Protected placeholder must appear exactly once: ${placeholder}`
       );
     }
+    withoutExpected = withoutExpected.replace(placeholder, '');
+  }
+  if (withoutExpected.includes('[[VNEXT_TECH_')) {
+    throw new TranslationFoundationError('TECHNICAL_TOKEN_MISMATCH', 'Unexpected technical placeholder namespace or fragment');
   }
 
   const actual = translatedText.match(placeholderPattern(protectedValue.namespace)) ?? [];

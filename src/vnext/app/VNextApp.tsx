@@ -100,6 +100,7 @@ function RuntimeWorkspace({
       )}
       {activeRecoveryGatePhase === 'RELEASED' && translationOpen && translation && onOpenTranslatedCopy && (
         <TranslationReview coordinator={translation} sourceLocale={snapshot.session.getSnapshot().document.locale}
+          sourceTitle={snapshot.session.getSnapshot().document.title}
           onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
       )}
       {activeRecoveryGatePhase === 'RELEASED' && publicationOpen && getPublicationSource && (

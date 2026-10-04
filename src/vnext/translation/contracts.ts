@@ -1,9 +1,12 @@
 ﻿import type { TextMark } from '../domain/editorial-model';
 
+import { VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, type RegisteredTranslationProfile, type VNextTranslationTargetLocale, type VNextTranslationProfileVersion } from './language-registry';
+
 export const W5_TRANSLATION_CONTRACT_VERSION = 'w5a-v1' as const;
-export const W5_TRANSLATION_PROFILE_VERSION = 'w5-ptbr-eses-v1' as const;
-export const W5_TRANSLATION_TOKEN_POLICY_VERSION = 'w5-tech-tokens-v1' as const;
-export const W5_TRANSLATION_PROMPT_VERSION = 'w5-technical-es-v1' as const;
+// W5 names remain Spanish defaults; obsolete profile v1 is never accepted silently.
+export const W5_TRANSLATION_PROFILE_VERSION = VNEXT_TRANSLATION_PROFILES[0].profileVersion;
+export const W5_TRANSLATION_TOKEN_POLICY_VERSION = VNEXT_TRANSLATION_PROFILES[0].tokenPolicyVersion;
+export const W5_TRANSLATION_PROMPT_VERSION = VNEXT_TRANSLATION_PROFILES[0].promptVersion;
 export const W5_TRANSLATION_PROVIDER_ID = 'gemini' as const;
 export const W5_TRANSLATION_MODEL_ID = 'gemini-2.5-flash' as const;
 
@@ -92,11 +95,11 @@ export interface TranslationProviderUnit {
 
 export interface TranslationProviderRequest {
   readonly contractVersion: typeof W5_TRANSLATION_CONTRACT_VERSION;
-  readonly profileVersion: typeof W5_TRANSLATION_PROFILE_VERSION;
+  readonly profileVersion: VNextTranslationProfileVersion;
   readonly requestId: string;
   readonly sourceCatalogId: string;
   readonly sourceLocale: typeof W5_SUPPORTED_SOURCE_LOCALE;
-  readonly targetLocale: typeof W5_SUPPORTED_TARGET_LOCALE;
+  readonly targetLocale: VNextTranslationTargetLocale;
   readonly units: readonly TranslationProviderUnit[];
 }
 
@@ -117,9 +120,9 @@ export interface TranslationProviderMetadata {
 
 export interface TranslationProviderResponse {
   readonly contractVersion: typeof W5_TRANSLATION_CONTRACT_VERSION;
-  readonly profileVersion: typeof W5_TRANSLATION_PROFILE_VERSION;
+  readonly profileVersion: VNextTranslationProfileVersion;
   readonly requestId: string;
-  readonly targetLocale: typeof W5_SUPPORTED_TARGET_LOCALE;
+  readonly targetLocale: VNextTranslationTargetLocale;
   readonly units: readonly TranslationProviderUnitResult[];
   readonly provider: TranslationProviderMetadata;
 }
@@ -139,16 +142,7 @@ export interface TranslationProfile {
   readonly contractVersion: string;
 }
 
-export const W5_TRANSLATION_PROFILE: TranslationProfile = Object.freeze({
-  profileVersion: W5_TRANSLATION_PROFILE_VERSION,
-  sourceLocale: W5_SUPPORTED_SOURCE_LOCALE,
-  targetLocale: W5_SUPPORTED_TARGET_LOCALE,
-  providerId: W5_TRANSLATION_PROVIDER_ID,
-  modelId: W5_TRANSLATION_MODEL_ID,
-  promptVersion: W5_TRANSLATION_PROMPT_VERSION,
-  tokenPolicyVersion: W5_TRANSLATION_TOKEN_POLICY_VERSION,
-  contractVersion: W5_TRANSLATION_CONTRACT_VERSION,
-});
+export const W5_TRANSLATION_PROFILE = VNEXT_TRANSLATION_PROFILES[0];
 
 export const TRANSLATION_ERROR_CODES = [
   'UNSUPPORTED_LANGUAGE',
@@ -192,8 +186,8 @@ export interface ValidatedTranslationUnit {
 export interface TranslationFoundationResult {
   readonly sourceCatalogId: string;
   readonly sourceLocale: typeof W5_SUPPORTED_SOURCE_LOCALE;
-  readonly targetLocale: typeof W5_SUPPORTED_TARGET_LOCALE;
-  readonly profileVersion: typeof W5_TRANSLATION_PROFILE_VERSION;
+  readonly targetLocale: VNextTranslationTargetLocale;
+  readonly profileVersion: VNextTranslationProfileVersion;
   readonly units: readonly ValidatedTranslationUnit[];
   readonly provider: TranslationProviderMetadata;
   readonly coverage: TranslationCoverage;
@@ -202,10 +196,14 @@ export interface TranslationFoundationResult {
 }
 
 export function requireSupportedLanguagePair(sourceLocale: string, targetLocale: string): asserts sourceLocale is typeof W5_SUPPORTED_SOURCE_LOCALE {
-  if (sourceLocale !== W5_SUPPORTED_SOURCE_LOCALE || targetLocale !== W5_SUPPORTED_TARGET_LOCALE) {
-    throw new TranslationFoundationError(
-      'UNSUPPORTED_LANGUAGE',
-      `W5 supports only ${W5_SUPPORTED_SOURCE_LOCALE} -> ${W5_SUPPORTED_TARGET_LOCALE}`
-    );
+  resolveTranslationProfile(sourceLocale, targetLocale);
+}
+
+export function resolveTranslationProfile(sourceLocale: string, targetLocale: string, profileVersion?: string): RegisteredTranslationProfile {
+  const profile = findRegisteredTranslationProfile(sourceLocale, targetLocale);
+  if (!profile) throw new TranslationFoundationError('UNSUPPORTED_LANGUAGE', `Unsupported translation pair: ${sourceLocale} -> ${targetLocale}`);
+  if (profileVersion !== undefined && profile.profileVersion !== profileVersion) {
+    throw new TranslationFoundationError('INVALID_REQUEST', 'Translation profile does not match the requested language pair');
   }
+  return profile;
 }

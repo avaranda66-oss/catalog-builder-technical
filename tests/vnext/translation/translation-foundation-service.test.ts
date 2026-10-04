@@ -129,7 +129,7 @@ describe('W5.A translation foundation service', () => {
   it('rejects unsupported language pairs without provider invocation', async () => {
     const provider = new ControlledTranslationProvider();
     const service = new TranslationFoundationService(provider, { requestId: () => 'request-unsupported' });
-    await expect(service.translateCatalog(createW5ATranslationDocument(), 'en-US'))
+    await expect(service.translateCatalog(createW5ATranslationDocument(), 'en-GB'))
       .rejects.toEqual(expect.objectContaining<Partial<TranslationFoundationError>>({ code: 'UNSUPPORTED_LANGUAGE' }));
     expect(provider.requests).toHaveLength(0);
   });
@@ -281,7 +281,7 @@ describe('W5.A request cache key', () => {
       { ...base, targetLocale: 'es-MX' } as unknown as TranslationProviderRequest,
     ];
     for (const variant of variants) {
-      expect(await buildTranslationRequestCacheKey(variant)).not.toBe(key);
+      expect(await buildTranslationRequestCacheKey(variant, W5_TRANSLATION_PROFILE)).not.toBe(key);
     }
 
     const profileVariants: TranslationProfile[] = [

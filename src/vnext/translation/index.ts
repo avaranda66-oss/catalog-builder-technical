@@ -12,7 +12,10 @@
   W5_TRANSLATION_PROVIDER_ID,
   W5_TRANSLATION_TOKEN_POLICY_VERSION,
   requireSupportedLanguagePair,
+  resolveTranslationProfile,
 } from './contracts';
+export { VNEXT_TRANSLATION_LANGUAGES, VNEXT_TRANSLATION_FUTURE_LANGUAGES, VNEXT_TRANSLATION_PROFILES, getTranslationLanguage } from './language-registry';
+export type { VNextTranslationLocale, VNextTranslationTargetLocale, VNextTranslationLanguage, VNextTranslationProfileVersion, RegisteredTranslationProfile } from './language-registry';
 export type {
   ExcludedTranslationSurface,
   ProtectedTranslationRun,
@@ -69,6 +72,7 @@ export type {
   VNextTranslationGatewayInvoke,
 } from './provider-client';
 export {
+  createTranslationCenterFoundation,
   TranslationFoundationService,
 } from './service';
 export type { TranslationFoundationServiceOptions } from './service';
