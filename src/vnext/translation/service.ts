@@ -14,13 +14,9 @@ import {
   type TranslationSemanticLeaf,
   type ValidatedTranslationUnit,
 } from './contracts';
-import { extractSemanticTranslationCoverage } from './semantic-leaves';
-import {
-  protectTechnicalTokens,
-  restoreTechnicalTokens,
-  technicalProtectionNamespace,
-  type ProtectedText,
-} from './technical-token-protector';
+import { extractSemanticTranslationCoverage, stableSerialize } from './semantic-leaves';
+import { restoreTechnicalTokens, type ProtectedText } from './technical-token-protector';
+import { prepareTranslationLeaf, type PreparedTranslationUnit } from './request-preparation';
 import {
   buildTranslationRequestCacheKey,
   MemoryTranslationRequestCache,
@@ -35,9 +31,13 @@ export interface TranslationFoundationServiceOptions {
   readonly maxAttempts?: number;
 }
 
-interface PreparedUnit {
-  readonly unit: TranslationProviderUnit;
-  readonly protections: ReadonlyMap<string, ProtectedText>;
+export interface TranslationBatchProgress {
+  readonly totalBatches: number;
+  readonly completedBatches: number;
+  readonly cacheHits: number;
+  readonly providerRequests: number;
+  readonly eligibleUnits: number;
+  readonly excludedSurfaces: number;
 }
 
 function defaultRequestId(): string {
@@ -51,36 +51,13 @@ function abortIfNeeded(signal?: AbortSignal): void {
   if (signal?.aborted) throw new TranslationFoundationError('ABORTED', 'Translation request was cancelled');
 }
 
-async function prepareLeaf(leaf: TranslationSemanticLeaf): Promise<PreparedUnit> {
-  const protections = new Map<string, ProtectedText>();
-  const runs = await Promise.all(leaf.runs.map(async (run) => {
-    const namespace = await technicalProtectionNamespace(leaf.leafId, run.runId);
-    const protectedValue = protectTechnicalTokens(run.text, namespace);
-    if (protectedValue.protectedText.length > W5_TRANSLATION_LIMITS.maxCharsPerRun) {
-      throw new TranslationFoundationError('PAYLOAD_TOO_LARGE', `Run ${run.runId} exceeds the W5.A per-run limit`);
-    }
-    protections.set(translationRunKey(leaf.leafId, run.runId), protectedValue);
-    return { runId: run.runId, protectedText: protectedValue.protectedText };
-  }));
-  return {
-    unit: {
-      unitId: leaf.leafId,
-      sourceHash: leaf.sourceHash,
-      kind: leaf.kind,
-      context: leaf.context,
-      runs,
-    },
-    protections,
-  };
-}
-
 function unitChars(unit: TranslationProviderUnit): number {
   return unit.runs.reduce((sum, run) => sum + run.protectedText.length, 0);
 }
 
-function batchPreparedUnits(prepared: readonly PreparedUnit[]): PreparedUnit[][] {
-  const batches: PreparedUnit[][] = [];
-  let current: PreparedUnit[] = [];
+function batchPreparedUnits(prepared: readonly PreparedTranslationUnit[]): PreparedTranslationUnit[][] {
+  const batches: PreparedTranslationUnit[][] = [];
+  let current: PreparedTranslationUnit[] = [];
   let chars = 0;
   for (const item of prepared) {
     const nextChars = unitChars(item.unit);
@@ -102,7 +79,7 @@ function batchPreparedUnits(prepared: readonly PreparedUnit[]): PreparedUnit[][]
   return batches;
 }
 
-function mergeProtections(items: readonly PreparedUnit[]): Map<string, ProtectedText> {
+function mergeProtections(items: readonly PreparedTranslationUnit[]): Map<string, ProtectedText> {
   const merged = new Map<string, ProtectedText>();
   items.forEach((item) => item.protections.forEach((value, key) => merged.set(key, value)));
   return merged;
@@ -112,19 +89,17 @@ function currentHashes(leaves: readonly TranslationSemanticLeaf[]): Map<string, 
   return new Map(leaves.map((leaf) => [leaf.leafId, leaf.sourceHash] as const));
 }
 
-async function requireFullCoverageFresh(
+function requireFullCoverageFresh(
   source: CatalogDocument,
+  initialSource: string,
   initialManifest: ReadonlyMap<string, string>
-): Promise<Map<string, string>> {
-  const currentCoverage = await extractSemanticTranslationCoverage(source);
-  const currentManifest = currentHashes(currentCoverage.eligible);
-  if (
-    currentManifest.size !== initialManifest.size ||
-    [...initialManifest].some(([leafId, sourceHash]) => currentManifest.get(leafId) !== sourceHash)
-  ) {
-    throw new TranslationFoundationError('STALE_RESULT', 'Semantic translation coverage changed during the job');
+): ReadonlyMap<string, string> {
+  // Exact source identity also covers new/removed leaves, marks and excluded content. Rehashing
+  // every leaf at each batch boundary needlessly repeats thousands of Web Crypto operations.
+  if (stableSerialize(source) !== initialSource) {
+    throw new TranslationFoundationError('STALE_RESULT', 'Translation source changed during the job');
   }
-  return currentManifest;
+  return initialManifest;
 }
 
 function rebaseCachedResponse(
@@ -176,20 +151,27 @@ export class TranslationFoundationService {
   async translateCatalog(
     source: CatalogDocument,
     targetLocale: string = W5_SUPPORTED_TARGET_LOCALE,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: TranslationBatchProgress) => void
   ): Promise<TranslationFoundationResult> {
     const profile = resolveTranslationProfile(source.locale, targetLocale);
     abortIfNeeded(signal);
 
+    const initialSource = stableSerialize(source);
     const coverage = await extractSemanticTranslationCoverage(source);
     const initialManifest = currentHashes(coverage.eligible);
-    const prepared = await Promise.all(coverage.eligible.map(prepareLeaf));
+    const prepared = (await Promise.all(coverage.eligible.map(prepareTranslationLeaf))).flat();
+    requireFullCoverageFresh(source, initialSource, initialManifest);
     const batches = batchPreparedUnits(prepared);
     const leavesById = new Map(coverage.eligible.map((leaf) => [leaf.leafId, leaf] as const));
-    const translatedUnits: ValidatedTranslationUnit[] = [];
+    const translatedParts = new Map<string, { partIndex: number; text: string }[]>();
     let cacheHits = 0;
     let providerRequests = 0;
     let providerMetadata: TranslationProviderMetadata | undefined;
+    let completedBatches = 0;
+    const reportProgress = () => onProgress?.({ totalBatches: batches.length, completedBatches, cacheHits,
+      providerRequests, eligibleUnits: coverage.eligible.length, excludedSurfaces: coverage.excluded.length });
+    reportProgress();
 
     for (const batch of batches) {
       abortIfNeeded(signal);
@@ -204,7 +186,7 @@ export class TranslationFoundationService {
       };
       const cacheKey = await buildTranslationRequestCacheKey(request, profile);
       const cached = await this.cache.get(cacheKey);
-      let freshHashes = await requireFullCoverageFresh(source, initialManifest);
+      let freshHashes = requireFullCoverageFresh(source, initialSource, initialManifest);
       let rawResponse: unknown;
       if (cached) {
         cacheHits += 1;
@@ -212,20 +194,20 @@ export class TranslationFoundationService {
       } else {
         providerRequests += 1;
         rawResponse = await this.invokeWithRetry(request, signal);
-        freshHashes = await requireFullCoverageFresh(source, initialManifest);
+        freshHashes = requireFullCoverageFresh(source, initialSource, initialManifest);
       }
       abortIfNeeded(signal);
 
       const protections = mergeProtections(batch);
       const validated = validateProviderResponse(request, rawResponse, {
-        currentSourceHashes: freshHashes,
+        currentSourceHashes: new Map(batch.map(item => [item.unit.unitId, freshHashes.get(item.sourceLeafId)!])),
         protectedRuns: protections,
       });
       abortIfNeeded(signal);
 
       if (!cached) {
         await this.cache.set(cacheKey, validated);
-        await requireFullCoverageFresh(source, initialManifest);
+        requireFullCoverageFresh(source, initialSource, initialManifest);
       }
       providerMetadata ??= validated.provider;
       if (
@@ -236,37 +218,46 @@ export class TranslationFoundationService {
       }
 
       const responseUnits = new Map(validated.units.map((unit) => [unit.unitId, unit] as const));
-      for (const requested of request.units) {
-        const sourceLeaf = leavesById.get(requested.unitId);
+      for (const item of batch) {
+        const requested = item.unit;
+        const sourceLeaf = leavesById.get(item.sourceLeafId);
         const responseUnit = responseUnits.get(requested.unitId);
         if (!sourceLeaf || !responseUnit) {
           throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', `Missing validated unit ${requested.unitId}`);
         }
-        translatedUnits.push({
-          unitId: requested.unitId,
-          sourceHash: sourceLeaf.sourceHash,
-          kind: sourceLeaf.kind,
-          locator: sourceLeaf.locator,
-          runs: responseUnit.runs.map((run) => {
-            const protection = protections.get(translationRunKey(requested.unitId, run.runId));
-            if (!protection) {
-              throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', `Missing protection context for ${run.runId}`);
-            }
-            return {
-              runId: run.runId,
-              translatedText: restoreTechnicalTokens(run.translatedText, protection),
-            };
-          }),
-        });
+        const responseRuns = new Map(responseUnit.runs.map(run => [run.runId, run]));
+        for (const part of item.parts) {
+          const run = responseRuns.get(part.runId)!;
+          const protection = protections.get(translationRunKey(requested.unitId, run.runId));
+          if (!protection) {
+            throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', `Missing protection context for ${run.runId}`);
+          }
+          const key = translationRunKey(sourceLeaf.leafId, part.sourceRunId);
+          const parts = translatedParts.get(key) ?? [];
+          const text = restoreTechnicalTokens(part.fragmented ? run.translatedText.trim() : run.translatedText, protection);
+          parts.push({ partIndex: part.partIndex, text: part.prefixBefore + text + part.separatorAfter });
+          translatedParts.set(key, parts);
+        }
       }
+      completedBatches += 1;
+      reportProgress();
     }
 
     if (!providerMetadata) {
       throw new TranslationFoundationError('INVALID_REQUEST', 'No translatable semantic units were produced');
     }
 
-    await requireFullCoverageFresh(source, initialManifest);
+    requireFullCoverageFresh(source, initialSource, initialManifest);
     abortIfNeeded(signal);
+
+    const translatedUnits: ValidatedTranslationUnit[] = coverage.eligible.map(leaf => ({
+      unitId: leaf.leafId, sourceHash: leaf.sourceHash, kind: leaf.kind, locator: leaf.locator,
+      runs: leaf.runs.map(run => {
+        const parts = translatedParts.get(translationRunKey(leaf.leafId, run.runId));
+        if (!parts?.length) throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', 'Missing assembled translation run');
+        return { runId: run.runId, translatedText: parts.sort((left, right) => left.partIndex - right.partIndex).map(part => part.text).join('') };
+      }),
+    }));
 
     return {
       sourceCatalogId: source.id,

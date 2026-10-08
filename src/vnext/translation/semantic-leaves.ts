@@ -72,7 +72,7 @@ async function richTextLeaf(
 ): Promise<TranslationSemanticLeaf | undefined> {
   assertRichTextShape(richText, `rich-text:${locatorKey(locator)}`);
   const runs = richText.paragraphs.flatMap((paragraph) =>
-    paragraph.inlines.flatMap((inline) => inline.kind === 'text'
+    paragraph.inlines.flatMap((inline) => inline.kind === 'text' && inline.text.trim().length > 0
       ? [{
           paragraphId: paragraph.id,
           runId: inline.id,

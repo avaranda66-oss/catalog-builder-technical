@@ -43,6 +43,23 @@ function savedCopy(): CatalogPersistenceEnvelope {
 }
 
 describe('P2 Translation Center presentation and safety guards', () => {
+  it('shows truthful batch progress and explains partial retry and reload without technical error codes', () => {
+    const { view, publish, coordinator } = setup({ phase: 'generating', batchProgress: {
+      totalBatches: 5, completedBatches: 2, cacheHits: 0, providerRequests: 2, eligibleUnits: 210, excludedSurfaces: 9,
+    } });
+    expect(view.getByRole('progressbar', { name: 'Progresso da tradução' })).toHaveAttribute('value', '2');
+    expect(view.getByRole('progressbar')).toHaveAttribute('max', '5');
+    expect(view.getByText(/2 de 5 etapas concluídas/)).toBeInTheDocument();
+    expect(view.getByText(/Mantenha esta página aberta/)).toBeInTheDocument();
+    publish({ phase: 'error', message: 'O serviço de tradução está ocupado. Aguarde um pouco e tente novamente; o original foi preservado.' });
+    expect(view.getByText(/Tentar novamente reaproveita os textos já validados/)).toBeInTheDocument();
+    expect(view.getByText(/Recarregar ou fechar o navegador reinicia a tradução/)).toBeInTheDocument();
+    expect(view.container.textContent).not.toContain('PROVIDER_RATE_LIMIT');
+    fireEvent.click(view.getByRole('button', { name: 'Tentar tradução novamente' }));
+    expect(coordinator.generate).toHaveBeenCalledWith('es-ES');
+    expect(coordinator.accept).not.toHaveBeenCalled();
+  });
+
   it('puts original context before two regional targets and generates the selected active locale', () => {
     const { view, coordinator } = setup({});
     expect(view.getByRole('dialog', { name: 'Centro de Tradução' })).toBeInTheDocument();

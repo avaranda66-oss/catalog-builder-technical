@@ -152,7 +152,17 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
       </div>
       {sourceLocale !== 'pt-BR' && <p className="vnext-status" data-tone="warning">A origem precisa estar em português (Brasil). Abra o catálogo original em português na Biblioteca para gerar uma cópia em espanhol ou inglês.</p>}
       {snapshot.message && <p role="alert" className="vnext-status" data-tone={snapshot.pending ? 'warning' : 'error'}>{snapshot.message}</p>}
-      {snapshot.phase === 'generating' && <p role="status" className="vnext-status" data-tone="pending">Gerando tradução em {targetLanguage.name.toLocaleLowerCase('pt-BR')}… Você poderá revisar os textos antes de salvar a cópia.</p>}
+      {snapshot.phase === 'generating' && <div role="status" className="vnext-status" data-tone="pending">
+        <p>Gerando tradução em {targetLanguage.name.toLocaleLowerCase('pt-BR')}… Você poderá revisar os textos antes de salvar a cópia.</p>
+        {snapshot.batchProgress ? <>
+          <p>{snapshot.batchProgress.completedBatches} de {snapshot.batchProgress.totalBatches} etapas concluídas. {snapshot.batchProgress.eligibleUnits} partes do catálogo para traduzir.</p>
+          <progress aria-label="Progresso da tradução" value={snapshot.batchProgress.completedBatches} max={snapshot.batchProgress.totalBatches || 1} />
+        </> : <p>Preparando os textos do catálogo…</p>}
+        <p>Mantenha esta página aberta. Cancelar preserva o original; etapas já concluídas podem ser reaproveitadas nesta sessão.</p>
+      </div>}
+      {snapshot.phase === 'error' && !snapshot.pending && snapshot.runs.length === 0 && Boolean(snapshot.batchProgress?.completedBatches) && <p className="vnext-status" data-tone="warning">
+        {snapshot.batchProgress!.completedBatches} de {snapshot.batchProgress!.totalBatches} etapas concluídas. Tentar novamente reaproveita os textos já validados nesta sessão, se o original e o idioma forem os mesmos. Recarregar ou fechar o navegador reinicia a tradução.
+      </p>}
       {snapshot.phase === 'creating' && <p role="status" className="vnext-status" data-tone="pending">Salvando e verificando a cópia… Aguarde a confirmação para abrir o catálogo traduzido.</p>}
       {snapshot.runs.length > 0 && <>
         <div className="vnext-translation-review-intro"><div><h3>Revise a tradução</h3>
@@ -179,7 +189,7 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
         {snapshot.phase !== 'created' && <button type="button" className="vnext-btn-secondary" onClick={close} disabled={snapshot.phase === 'creating' || snapshot.pending}>Cancelar</button>}
         {(snapshot.phase === 'idle' || (snapshot.phase === 'error' && !snapshot.pending)) && <button type="button"
           className={snapshot.runs.length > 0 ? 'vnext-btn-secondary' : 'vnext-btn-primary'}
-          data-translation-action="generate" onClick={() => { drafts.current.clear(); setEditingKeys([]); setReviewAttempt(attempt => attempt + 1); void coordinator.generate(targetLocale); }}>Gerar tradução</button>}
+          data-translation-action="generate" onClick={() => { drafts.current.clear(); setEditingKeys([]); setReviewAttempt(attempt => attempt + 1); void coordinator.generate(targetLocale); }}>{snapshot.phase === 'error' && snapshot.runs.length === 0 ? 'Tentar tradução novamente' : 'Gerar tradução'}</button>}
         {snapshot.runs.length > 0 && <button type="button" className="vnext-btn-primary" data-translation-action="accept" disabled={busy || snapshot.reviewInvalid}
           onClick={accept}>{snapshot.pending ? 'Verificar cópia' : 'Salvar cópia traduzida'}</button>}
         {snapshot.phase === 'created' && snapshot.copy && <button type="button" className="vnext-btn-primary" data-translation-action="open-copy"

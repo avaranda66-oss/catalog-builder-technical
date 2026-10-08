@@ -75,4 +75,4 @@ export {
   createTranslationCenterFoundation,
   TranslationFoundationService,
 } from './service';
-export type { TranslationFoundationServiceOptions } from './service';
+export type { TranslationBatchProgress, TranslationFoundationServiceOptions } from './service';
