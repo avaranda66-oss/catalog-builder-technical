@@ -40,6 +40,7 @@ import {
   prepareNewMarkerAssignment,
   prepareTypedTablePaste,
   TableBulkAuthoringError,
+  TablePasteGeometryError,
   type PreparedTableBulkMutation,
 } from '../editor/table-bulk-authoring';
 import {
@@ -110,7 +111,7 @@ import {
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
-import { alternateDemoAssetId, createInsertSpec, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { alternateDemoAssetId, createInsertSpec, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
@@ -371,6 +372,9 @@ export function EditorWorkspace({
   const [advancedToolsOpen, setAdvancedToolsOpen] = React.useState(!simpleByDefault);
   const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
   const [tableRowsToInsert, setTableRowsToInsert] = React.useState('10');
+  const [newTableSizeOpen, setNewTableSizeOpen] = React.useState(false);
+  const [newTableRows, setNewTableRows] = React.useState('1');
+  const [newTableColumns, setNewTableColumns] = React.useState('1');
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
@@ -1654,8 +1658,17 @@ export function EditorWorkspace({
       const count = prepared.targets.length;
       return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
     } catch (error) {
-      if (error instanceof TableBulkAuthoringError) setStatusMessage(tableBulkActionMessage(error.code));
-      else if (error instanceof TableTsvError) setStatusMessage('O texto colado não forma uma tabela TSV válida.');
+      if (error instanceof TablePasteGeometryError) {
+        const source = `${error.sourceRows} linha(s) × ${error.sourceColumns} coluna(s)`;
+        const destination = `${error.destinationRows} linha(s) × ${error.destinationColumns} coluna(s)`;
+        setStatusMessage(error.destinationKind === 'capacity'
+          ? `Os dados têm ${source}, mas a partir desta célula só cabem ${destination}. Adicione linhas ou colunas, ou escolha outra célula inicial. Nada foi alterado.`
+          : `Os dados têm ${source}, e a seleção tem ${destination}. Selecione uma única célula inicial ou uma área do mesmo tamanho dos dados. Nada foi alterado.`);
+      }
+      else if (error instanceof TableBulkAuthoringError) setStatusMessage(tableBulkActionMessage(error.code));
+      else if (error instanceof TableTsvError) setStatusMessage(error.code === 'TSV_ROW_WIDTH_MISMATCH'
+        ? 'As linhas coladas têm quantidades diferentes de colunas. Copie uma área retangular da planilha, incluindo as células vazias. Nada foi alterado.'
+        : 'O conteúdo colado tem aspas incompletas ou fora de posição. Copie novamente as células da planilha. Nada foi alterado.');
       else if (error instanceof TableClipboardError) setStatusMessage('O conteúdo interno copiado não é válido para esta tabela.');
       else setStatusMessage('Não foi possível interpretar o conteúdo colado.');
       return false;
@@ -2339,6 +2352,13 @@ export function EditorWorkspace({
   };
 
   const insertObject = (tool: InsertTool) => {
+    const tableSize = newTableSizeOpen
+      ? { rows: Number(newTableRows), columns: Number(newTableColumns) }
+      : { rows: 1, columns: 1 };
+    if (tool === 'table' && !isValidNewTableSize(tableSize)) {
+      setStatusMessage(`Informe quantidades inteiras: de 1 a ${MAX_NEW_TABLE_ROWS} linhas e de 1 a ${MAX_NEW_TABLE_COLUMNS} colunas. Nenhuma tabela foi criada.`);
+      return;
+    }
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const currentPage = session.getSnapshot().document.pages.find((page) => page.id === editorState.activePageId);
@@ -2347,12 +2367,15 @@ export function EditorWorkspace({
       requestImageUpload({ type: 'insert', pageId: currentPage.id });
       return;
     }
-    const result = session.execute({ type: 'object.insert', pageId: currentPage.id, object: createInsertSpec(tool, currentPage) });
+    const result = session.execute({ type: 'object.insert', pageId: currentPage.id, object: createInsertSpec(tool, currentPage, tableSize) });
     if (!result.ok) { setStatusMessage('Não foi possível inserir o objeto.'); return; }
     const objectId = result.metadata.createdIds[0];
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
-    setStatusMessage(names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
+    if (tool === 'table') setNewTableSizeOpen(false);
+    setStatusMessage(tool === 'table' && (tableSize.rows > 1 || tableSize.columns > 1)
+      ? `Tabela de ${tableSize.rows} linhas × ${tableSize.columns} colunas adicionada. Confira a altura e os limites A4 antes de publicar.`
+      : names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
   };
 
   const deleteSelected = () => {
@@ -2987,7 +3010,7 @@ export function EditorWorkspace({
         return;
       }
     }
-    if (event.key === 'Enter' && selectedObject?.type === 'table' && !isNativeInput) {
+    if (event.key === 'Enter' && selectedObject?.type === 'table' && !isNativeInput && !target.closest('button, a[href]')) {
       event.preventDefault();
       startTableGrid(selectedObject);
       return;
@@ -3727,6 +3750,7 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
               <button type="button" data-editor-action="add-image" onClick={() => insertObject('image')}>{simpleByDefault ? 'Imagem' : 'Adicionar imagem'}</button>
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
+              <button type="button" className="vnext-more-options" data-editor-action="new-table-size" aria-expanded={newTableSizeOpen} aria-controls="vnext-new-table-size" onClick={() => setNewTableSizeOpen((open) => !open)}>Tamanho da nova tabela</button>
               {(!simpleByDefault || selectedObject) && (
                 <>
                   <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
@@ -3798,10 +3822,18 @@ export function EditorWorkspace({
             />
           </div>
 
+          {newTableSizeOpen && (
+            <div id="vnext-new-table-size" className="vnext-new-table-size" role="region" aria-label="Tamanho da nova tabela">
+              <label>Linhas <input type="number" aria-label="Linhas da nova tabela" min="1" max={MAX_NEW_TABLE_ROWS} step="1" value={newTableRows} onChange={(event) => setNewTableRows(event.target.value)} /></label>
+              <label>Colunas <input type="number" aria-label="Colunas da nova tabela" min="1" max={MAX_NEW_TABLE_COLUMNS} step="1" value={newTableColumns} onChange={(event) => setNewTableColumns(event.target.value)} /></label>
+              <p>Escolha o tamanho e clique em {simpleByDefault ? 'Tabela' : 'Adicionar tabela'}. Tabelas extensas precisam ser organizadas em várias páginas; a criação não divide o conteúdo automaticamente.</p>
+            </div>
+          )}
+
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
-              {simpleByDefault && <p className="vnext-disclosure-help">Clique em uma célula para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
+              {simpleByDefault && <p className="vnext-disclosure-help">Clique em uma célula para selecionar. Dê dois cliques ou pressione Enter para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
               {simpleByDefault && (
                 <button
                   type="button"
@@ -3853,19 +3885,22 @@ export function EditorWorkspace({
                   disabled={editorState.mode !== 'table-grid' || !tableSelection || tableSelection.kind === 'table'}
                   onClick={toggleTableRangeExtension}
                 >Estender seleção</button>
-                <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
-                <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
                 <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
                 <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
                 <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
               </div>
               </>}
+              <div className="vnext-tool-group" aria-label="Copiar e colar dados">
+                <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
+                <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
+              </div>
               <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
             </div>
           )}
 
           {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
+              <p className="vnext-disclosure-help">Selecione uma célula inicial para colar uma área da planilha. Os dados devem caber nas linhas e colunas existentes. Use Desfazer para recuperar o conteúdo anterior.</p>
               <label>
                 <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
                 <textarea

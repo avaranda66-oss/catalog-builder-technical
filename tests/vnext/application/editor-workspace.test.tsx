@@ -9,6 +9,7 @@ import { TableStyleInspector } from '@/vnext/app/TableStyleInspector';
 import { VNextApp } from '@/vnext/app/VNextApp';
 import { W2E_PAGE_TEMPLATE } from '@/vnext/app/page-template-fixtures';
 import { createW4BTableDocument } from '../proof/fixtures/w4b-table-document';
+import { createW4DTableDocument, W4D_OBJECT_B_ID } from '../proof/fixtures/w4d-table-document';
 
 afterEach(cleanup);
 
@@ -1269,6 +1270,90 @@ describe('W4.F.2 F1 disabled Table style guidance', () => {
 
 
 describe('P1.A simple-by-default workspace', () => {
+  it('creates the default table when the size disclosure is closed despite retained custom or invalid inputs', () => {
+    const session = sessionWithDemo();
+    const { container, getByLabelText } = render(<VNextApp session={session} simpleByDefault />);
+    for (const rows of ['10', '0']) {
+      fireEvent.click(button(container, 'new-table-size'));
+      fireEvent.change(getByLabelText('Linhas da nova tabela'), { target: { value: rows } });
+      fireEvent.change(getByLabelText('Colunas da nova tabela'), { target: { value: '5' } });
+      fireEvent.click(button(container, 'new-table-size'));
+      const before = session.getSnapshot();
+      fireEvent.click(button(container, 'add-table'));
+      const after = session.getSnapshot();
+      const created = after.document.pages[0].objects.find((object) => !before.document.pages[0].objects.some((existing) => existing.id === object.id));
+      if (!created || created.type !== 'table') throw new Error('Missing default table');
+      expect(created.table.rows).toHaveLength(1);
+      expect(created.table.columns).toHaveLength(1);
+      expect(after.localSequence).toBe(before.localSequence + 1);
+      fireEvent.click(button(container, 'undo'));
+      expect(session.getSnapshot().document).toEqual(before.document);
+    }
+  });
+
+  it('creates the chosen 10 by 5 table in one action with exact undo/redo and rejects invalid dimensions', () => {
+    const session = sessionWithDemo();
+    const { container, getByLabelText } = render(<VNextApp session={session} simpleByDefault />);
+    fireEvent.click(button(container, 'new-table-size'));
+    fireEvent.change(getByLabelText('Linhas da nova tabela'), { target: { value: '10' } });
+    fireEvent.change(getByLabelText('Colunas da nova tabela'), { target: { value: '5' } });
+    const before = session.getSnapshot();
+    fireEvent.click(button(container, 'add-table'));
+    const after = session.getSnapshot();
+    const table = after.document.pages[0].objects.find((object) => object.type === 'table');
+    if (!table || table.type !== 'table') throw new Error('Missing created table');
+    expect(table.table.rows).toHaveLength(10);
+    expect(table.table.columns).toHaveLength(5);
+    expect(table.table.cells).toHaveLength(50);
+    expect(table.table.cells.every((cell) => cell.content.type === 'empty')).toBe(true);
+    expect(after.localSequence).toBe(before.localSequence + 1);
+    expect(new Set([table.table.id, ...table.table.rows.map((row) => row.id), ...table.table.columns.map((column) => column.id), ...table.table.cells.map((cell) => cell.id)]).size).toBe(66);
+    fireEvent.click(button(container, 'undo'));
+    expect(session.getSnapshot().document).toEqual(before.document);
+    fireEvent.click(button(container, 'redo'));
+    expect(session.getSnapshot().document).toEqual(after.document);
+    fireEvent.click(button(container, 'new-table-size'));
+    for (const value of ['', '0', '1.5', '151', '-1']) {
+      fireEvent.change(getByLabelText('Linhas da nova tabela'), { target: { value } });
+      const unchanged = session.getSnapshot();
+      fireEvent.click(button(container, 'add-table'));
+      expect(container.querySelector('[role="status"]')).toHaveTextContent('Nenhuma tabela foi criada.');
+      expect(session.getSnapshot().document).toEqual(unchanged.document);
+      expect(session.getSnapshot().localSequence).toBe(unchanged.localSequence);
+    }
+  });
+
+  it.each([
+    ['00017\t±0,01%\n°C\tμA', '2 linha(s) × 2 coluna(s)', '1 linha(s) × 1 coluna(s)'],
+    ['A\tB\nC', 'quantidades diferentes de colunas', 'incluindo as células vazias'],
+    ['"sem fechamento', 'aspas incompletas', 'Copie novamente'],
+  ])('keeps paste discoverable and explains rejected input without changing the table: %s', async (input, diagnosis, recovery) => {
+    const session = sessionWithDemo(createW4DTableDocument());
+    const restore = enableTransformFreePhysicalMeasurement();
+    try {
+      const { container } = render(<VNextApp session={session} simpleByDefault />);
+      await enterMeasuredTableGrid(container, W4D_OBJECT_B_ID, 701);
+      expect(button(container, 'toggle-table-options')).toHaveAttribute('aria-expanded', 'false');
+      expect(button(container, 'copy-table-cells')).toBeEnabled();
+      expect(button(container, 'paste-table-cells')).toBeEnabled();
+      const cell = container.querySelector<HTMLElement>('[data-table-cell="3:3"]');
+      if (!cell) throw new Error('Missing destination cell');
+      pointerClick(cell, 702);
+      fireEvent.click(button(container, 'paste-table-cells'));
+      const textarea = container.querySelector<HTMLTextAreaElement>('[data-table-paste-textarea]');
+      if (!textarea) throw new Error('Missing paste input');
+      fireEvent.change(textarea, { target: { value: input } });
+      const before = session.getSnapshot();
+      fireEvent.click(button(container, 'apply-native-table-paste'));
+      expect(container.querySelector('[role="status"]')).toHaveTextContent(diagnosis);
+      expect(container.querySelector('[role="status"]')).toHaveTextContent(recovery);
+      expect(container.querySelector('[role="status"]')).toHaveTextContent('Nada foi alterado.');
+      expect(textarea.value).toBe(input);
+      expect(session.getSnapshot().document).toEqual(before.document);
+      expect(session.getSnapshot().localSequence).toBe(before.localSequence);
+    } finally { restore(); }
+  });
+
   it('keeps the novice toolbar compact until advanced tools are requested', () => {
     const session = sessionWithDemo(seedTextDocument());
     const { container } = render(<VNextApp session={session} simpleByDefault />);

@@ -27,11 +27,11 @@ export interface UnmergeEligibility {
   anchorCellId?: string;
 }
 
-function slotCell(table: TableModel, rowIndex: number, columnIndex: number): Cell | undefined {
+function slotCell(table: TableModel, rowIndex: number, columnIndex: number, slots: ReadonlyMap<string, Cell>): Cell | undefined {
   const row = table.rows[rowIndex];
   const column = table.columns[columnIndex];
   if (!row || !column) return undefined;
-  return cellIndex(table).get(getCellKey(row.id, column.id));
+  return slots.get(getCellKey(row.id, column.id));
 }
 
 export function mergeEligibility(table: TableModel, selection: TableSelection): MergeEligibility {
@@ -44,13 +44,14 @@ export function mergeEligibility(table: TableModel, selection: TableSelection): 
   const columns = normalized.columnEnd - normalized.columnStart + 1;
   if (rows * columns < 2) return { enabled: false, reason: 'Selecione duas ou mais células adjacentes.' };
 
-  const anchor = slotCell(table, normalized.rowStart, normalized.columnStart);
+  const slots = cellIndex(table);
+  const anchor = slotCell(table, normalized.rowStart, normalized.columnStart, slots);
   if (!anchor) return { enabled: false, reason: 'A seleção não é mais válida.' };
 
   const cells: Cell[] = [];
   for (let row = normalized.rowStart; row <= normalized.rowEnd; row += 1) {
     for (let column = normalized.columnStart; column <= normalized.columnEnd; column += 1) {
-      const cell = slotCell(table, row, column);
+      const cell = slotCell(table, row, column, slots);
       if (!cell) return { enabled: false, reason: 'A seleção não é mais válida.' };
       cells.push(cell);
     }

@@ -26,6 +26,22 @@ describe('W4.C merge authoring helpers',()=>{
     let t=mergeCells(emptyTable(),'cell1-0',1,2); expect(mergeEligibility(t,tableRangeSelection(identity,point(1,0),point(2,1))).reason).toContain('Desmescle');
     t=emptyTable(); t.rows[0].role='header'; expect(mergeEligibility(t,tableRangeSelection(identity,point(0,0),point(1,0))).reason).toContain('cabeçalho');
   });
+  it('checks distant content and annotations across a large reversed range without changing the table',()=>{
+    const table=emptyTable(150,10);
+    const selection=tableRangeSelection(identity,point(149,9),point(0,0));
+    const last=table.cells.at(-1)!;
+    last.content={type:'technicalCode',value:'LAST-00017'};
+    let before=structuredClone(table);
+    expect(mergeEligibility(table,selection)).toEqual({enabled:false,reason:'Não é possível mesclar porque outra célula contém conteúdo.'});
+    expect(table).toEqual(before);
+    last.content={type:'empty'};
+    last.annotationIds=['last-note'];
+    before=structuredClone(table);
+    expect(mergeEligibility(table,selection)).toEqual({enabled:false,reason:'Não é possível mesclar porque outra célula contém uma anotação.'});
+    expect(table).toEqual(before);
+    delete last.annotationIds;
+    expect(mergeEligibility(table,selection)).toEqual({enabled:true,prepared:{anchorCellId:'cell0-0',rows:150,columns:10}});
+  });
   it('resolves a covered visual slot to owner for unmerge and creates post selections',()=>{
     const merged=mergeCells(emptyTable(),'cell0-0',2,2);
     const covered=tableCellSelection(identity,point(1,1)); const eligible=unmergeEligibility(merged,covered); expect(eligible).toEqual({enabled:true,anchorCellId:'cell0-0'});
