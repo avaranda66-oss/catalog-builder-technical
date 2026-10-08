@@ -306,6 +306,9 @@ async function workflow(browser, width, first) {
   await shot(page, 'inspector-text-properties', width);
   await page.locator(`[data-editor-object-id="${image.id}"]`).click();
   assert.equal((await page.locator('.vnext-info h2').textContent()).trim(), 'Imagem');
+  // The selection-change effect closes the detail panel after React commits.
+  // Await the same required state rather than racing that effect in a busy CI runner.
+  await page.waitForFunction(() => document.querySelector('[data-editor-action="toggle-inspector-details"]')?.getAttribute('aria-expanded') === 'false');
   assert.equal(await page.locator('[data-editor-action="toggle-inspector-details"]').getAttribute('aria-expanded'), 'false');
   assert.equal(JSON.stringify((await state(page)).document), beforeDisclosure);
   await shot(page, 'inspector-image', width);
