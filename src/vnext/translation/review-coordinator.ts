@@ -3,7 +3,7 @@ import type { CatalogDocument } from '../domain';
 import { PreparedCatalogCreateCoordinator, canonicalDocumentEquivalence, parsePersistenceEnvelope, type CatalogPersistenceEnvelope, type CatalogRepository } from '../persistence';
 import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult } from './contracts';
 import type { VNextTranslationTargetLocale } from './language-registry';
-import { TranslationFoundationService } from './service';
+import { TranslationFoundationService, type TranslationBatchProgress } from './service';
 import { materializeTranslationCandidate, requireReviewText, translationReviewKey, type TranslationReviewRun } from './candidate';
 
 export interface TranslationSource {
@@ -26,6 +26,7 @@ export interface TranslationReviewSnapshot {
   readonly correctedRunKeys: readonly string[];
   readonly invalidRunKeys: readonly string[];
   readonly correctionCount: number;
+  readonly batchProgress?: TranslationBatchProgress;
 }
 
 export interface TranslationReviewOptions {
@@ -44,6 +45,11 @@ function message(error: unknown): string {
   if (code === 'TECHNICAL_TOKEN_MISMATCH') return 'Mantenha os códigos e valores técnicos da origem ao revisar.';
   if (code === 'UNSUPPORTED_LANGUAGE') return 'Escolha um catálogo em português (Brasil) para traduzir para espanhol ou inglês.';
   if (code === 'CREDENTIAL_UNAVAILABLE') return 'O serviço de tradução ainda não está configurado. Contate o administrador.';
+  if (code === 'PAYLOAD_TOO_LARGE') return 'Esta etapa excede o limite atual do serviço de tradução. Contate o administrador; o original foi preservado.';
+  if (code === 'PROVIDER_RATE_LIMIT') return 'O serviço de tradução está ocupado. Aguarde um pouco e tente novamente; o original foi preservado.';
+  if (code === 'PROVIDER_UNAVAILABLE') return 'A conexão com o serviço de tradução falhou. Confira sua conexão e tente novamente; o original foi preservado.';
+  if (code === 'INVALID_PROVIDER_RESPONSE') return 'Não foi possível validar todos os textos recebidos. Tente novamente; nenhuma cópia incompleta foi criada.';
+  if (code === 'UNCLASSIFIED_TEXT_SURFACE') return 'Há conteúdo neste catálogo que o serviço ainda não consegue traduzir. Contate o administrador; o original foi preservado.';
   if (code === 'ABORTED') return 'Tradução cancelada. O catálogo original foi preservado.';
   if (code === 'AMBIGUOUS_COMMIT_OUTCOME') return 'Não foi possível confirmar a cópia. Tente verificar novamente; nenhuma nova cópia será preparada.';
   return 'Não foi possível concluir a tradução. Tente novamente; o original foi preservado.';
@@ -111,16 +117,19 @@ export class TranslationReviewCoordinator {
     this.abort = new AbortController();
     this.publish({ ...this.progress(), targetLocale, phase: 'generating', runs: [], pending: false });
     try {
-      const result = await this.options.foundation.translateCatalog(this.source.document, targetLocale, this.abort.signal);
+      const result = await this.options.foundation.translateCatalog(this.source.document, targetLocale, this.abort.signal, batchProgress => {
+        if (generation === this.generation) this.publish({ ...this.snapshot, batchProgress });
+      });
       if (generation !== this.generation) return;
       if (result.targetLocale !== targetLocale) throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', 'Translation target changed during generation');
       this.requireCurrent();
       const candidate = await materializeTranslationCandidate(this.source.document, result);
       if (generation !== this.generation) return;
       this.requireCurrent(); this.result = result;
-      this.publish({ ...this.progress(), phase: 'review', runs: candidate.runs, pending: false });
+      this.publish({ ...this.progress(), batchProgress: this.snapshot.batchProgress, phase: 'review', runs: candidate.runs, pending: false });
     } catch (error) {
-      if (generation === this.generation) this.publish({ ...this.progress(), phase: 'error', runs: [], pending: false, message: message(error) });
+      if (generation === this.generation) this.publish({ ...this.progress(), batchProgress: this.snapshot.batchProgress,
+        phase: 'error', runs: [], pending: false, message: message(error) });
     }
   }
   correct(unitId: string, runId: string, text: string): boolean {

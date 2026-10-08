@@ -94,6 +94,52 @@ function resultTable(document: CatalogDocument): TableModel {
   return object.table;
 }
 
+describe('Father bulk row insertion', () => {
+  it('adds 30 complete rows atomically, keeps old content and gives one exact Undo/Redo', () => {
+    const table = enrichedTable();
+    table.cells[0].content = { type: 'technicalCode', value: 'TA-25N ±0,1 °C' };
+    const initial = tableDocument(table);
+    const session = createDocumentSession(initial, { createId: sequenceIds('bulk') });
+    const result = session.execute(insertAction(table, { count: 30, position: 'after' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const next = resultTable(result.document);
+    expect(next.rows).toHaveLength(33);
+    expect(next.cells).toHaveLength(99);
+    expect(result.metadata.createdIds).toHaveLength(120);
+    expect(next.rows[0].id).toBe(table.rows[0].id);
+    expect(next.rows[31].id).toBe(table.rows[1].id);
+    for (const cell of table.cells) expect(next.cells.find(candidate => candidate.id === cell.id)).toEqual(cell);
+    expect(next.annotations).toEqual(table.annotations);
+    expect(next.legend).toEqual(table.legend);
+    expect(session.getSnapshot().localSequence).toBe(1);
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(initial);
+    expect(session.redo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(result.document);
+    expect(session.undo().ok).toBe(true);
+    expect(session.undo().ok).toBe(false);
+  });
+
+  it.each([0, -1, 101, 1.5, NaN])('rejects invalid bulk count %s without changing state or history', count => {
+    const table = enrichedTable();
+    const session = createDocumentSession(tableDocument(table), { createId: sequenceIds('bulk') });
+    const before = session.getSnapshot();
+    expect(session.execute(insertAction(table, { count })).ok).toBe(false);
+    expect(session.getSnapshot()).toBe(before);
+  });
+
+  it('expands an existing row span over all inserted rows without discarding covered data', () => {
+    const table = mergeCells(emptyTable(4, 4), 'cell0-0', 3, 2);
+    const result = executeApplicationAction(tableDocument(table), insertAction(table, { count: 30, position: 'after' }), { createId: sequenceIds('span') });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const next = resultTable(result.document);
+    expect(next.cells.find(cell => cell.id === 'cell0-0')?.span).toEqual({ rows: 33, columns: 2 });
+    expect(next.cells.filter(cell => cell.coveredBy === 'cell0-0')).toHaveLength(65);
+  });
+});
+
 describe('W4.A table axis action contracts', () => {
   it('validates strict insert/remove payloads and axis-specific properties', () => {
     const table = enrichedTable();

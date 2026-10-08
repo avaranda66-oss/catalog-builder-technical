@@ -405,6 +405,10 @@ try {
   };
 
   const published = await publish(context, afterFit.document);
+  await writeFile(resolve(output, 'layout-after-fit.json'), JSON.stringify({
+    frames: afterFit.document.pages.flatMap((item) => item.objects.map((object) => ({ id: object.id, frame: object.frame }))),
+    report: published.report,
+  }, null, 2) + '\n', 'utf8');
   assert.equal(published.report.status, 'READY', JSON.stringify(published.report.diagnostics));
   const publishedText = await published.page.locator('[data-editorial-root]').innerText();
   for (const expected of [

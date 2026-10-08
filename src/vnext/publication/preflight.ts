@@ -21,8 +21,43 @@ export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
   }
   return result;
 }
+
+/** Inspect printed content, not generous authored text frames or intentional decorative backgrounds. */
+export function printableContentOverlapDiagnostics(doc:CatalogDocument,root:HTMLElement,plans?:ReadonlyMap<string,TablePlan>):Diagnostic[] {
+  const result:Diagnostic[]=[];
+  for(const page of doc.pages) {
+    // An infeasible table has no plan/grid and is already blocked by compilePlans.
+    // Missing DOM for a table with a valid plan must still fail the publication check.
+    const printable=walkPageObjects(page).filter(({object})=>object.type==='text'||object.type==='table');
+    if(printable.length<2)continue;
+    const content=printable.filter(({object})=>object.type!=='table'||!plans||plans.has(object.table.id)).map(({object})=>{
+      const node=findElement(root,'data-object-id',object.id),rects:DOMRect[]=[];
+      if(object.type==='table')rects.push(findElement(node,'data-table-id',object.table.id).getBoundingClientRect());
+      const textRoot=object.type==='table'
+        ? [...node.querySelectorAll<HTMLElement>('[data-table-title],[data-annotation-id]')]
+        : [node];
+      for(const text of textRoot)for(const inline of text.querySelectorAll<HTMLElement>('[data-inline-id]')) {
+        if(!inline.textContent?.trim())continue;
+        const range=document.createRange();range.selectNodeContents(inline);
+        rects.push(...range.getClientRects());
+      }
+      return {object,rects};
+    });
+    for(let left=0;left<content.length;left++)for(let right=left+1;right<content.length;right++) {
+      const first=content[left],second=content[right];
+      // Half a screen pixel avoids touching edges/rounding while catching visibly colliding printed content.
+      if(!first.rects.some(a=>second.rects.some(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>.5
+        &&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>.5)))continue;
+      result.push(diagnostic('PRINTABLE_CONTENT_OVERLAP','Printed content intersects another text or table object',
+        {pageId:page.id,objectId:first.object.id}));
+      result.push(diagnostic('PRINTABLE_CONTENT_OVERLAP','Printed content intersects another text or table object',
+        {pageId:page.id,objectId:second.object.id}));
+    }
+  }
+  return result;
+}
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
-  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc)];
+  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc),...printableContentOverlapDiagnostics(doc,root,plans)];
   for(const page of doc.pages) {
     const frames=walkPageObjects(page).map(({object})=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
     for(const frame of frames) {

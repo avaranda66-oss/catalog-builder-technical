@@ -489,6 +489,10 @@ try {
 
   // Publication and PDF use the same canonical styled Table.
   const { page: publicationPage, report } = await publish(context, afterFit.document);
+  await writeFile(resolve(output, 'layout-after-fit.json'), JSON.stringify({
+    frames: afterFit.document.pages.flatMap((item) => item.objects.map((object) => ({ id: object.id, frame: object.frame }))),
+    report,
+  }, null, 2) + '\n', 'utf8');
   assert.equal(report.status, 'READY', JSON.stringify(report.diagnostics));
   assert.equal(await publicationPage.locator('[data-editorial-root] [data-editor-action]').count(), 0);
   assert.equal(await publicationPage.locator('[data-table-style-inspector]').count(), 0);

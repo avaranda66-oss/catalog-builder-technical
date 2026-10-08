@@ -27,7 +27,9 @@ export function requireReviewText(source: string, translated: string): void {
     const code = character.charCodeAt(0);
     return code < 32 && code !== 9 && code !== 10 && code !== 13;
   });
-  if (!translated.trim() || translated.length > 4000 || /<\/?[a-z][^>]*>/i.test(translated) || withoutSourceLiterals.includes('[[VNEXT_TECH_') || unsupportedControl) {
+  // Transport fragments remain bounded; a reviewed canonical run may be longer after safe assembly.
+  const maxReviewChars = Math.max(4_000, source.length * 2);
+  if (!translated.trim() || translated.length > maxReviewChars || /<\/?[a-z][^>]*>/i.test(translated) || withoutSourceLiterals.includes('[[VNEXT_TECH_') || unsupportedControl) {
     invalid('Review text is empty, too large or contains unsupported markup');
   }
   const tokens = (text: string) => protectTechnicalTokens(text).tokens.map(token => token.value).sort();

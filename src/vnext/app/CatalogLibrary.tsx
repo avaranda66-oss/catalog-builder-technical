@@ -408,10 +408,10 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
               className="vnext-library-create"
               onClick={requestNewCatalog}
               disabled={busy}
-              aria-label={busy ? (createPending ? 'Verificando criação' : 'Criando catálogo') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
+              aria-label={busy && (createChooserOpen || createPending) ? (createPending ? 'Verificando criação' : 'Criando catálogo') : (createPending ? 'Verificar criação' : 'Novo catálogo')}
             >
               <FilePlus2 size={18} aria-hidden="true" />
-              <span>{busy ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
+              <span>{busy && (createChooserOpen || createPending) ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
             </button>
           )}
           {onSignOut && (

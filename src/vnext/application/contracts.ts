@@ -289,6 +289,7 @@ export const TableAxisInsertActionSchema = z.object({
   axis: z.enum(['row', 'column']),
   referenceAxisId: applicationId,
   position: z.enum(['before', 'after']),
+  count: safeInteger.min(1).max(100).optional(),
   properties: z.union([
     InsertedTableRowPropertiesSchema,
     InsertedTableColumnPropertiesSchema,

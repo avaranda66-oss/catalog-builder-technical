@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CatalogDocument, TableModel } from '@/vnext/domain';
 import {
   canonicalTablePoint,
+  createTablePointResolver,
   explicitTableAxisIds,
   navigateTableSelection,
   normalizeTableSelection,
@@ -43,6 +44,30 @@ function documentWith(table: TableModel): CatalogDocument {
 }
 
 describe('W4.A pure Table selection', () => {
+  it('selects and navigates a 110×8 table without losing any cell or axis identity', () => {
+    const table = emptyTable(110, 8);
+    const range = tableRangeSelection(identity, { rowId: 'r109', columnId: 'c7' }, { rowId: 'r0', columnId: 'c0' });
+    const normalized = normalizeTableSelection(table, range);
+    expect(normalized?.displayCellIds).toHaveLength(880);
+    expect(normalized?.displayCellIds[0]).toBe('cell0-0');
+    expect(normalized?.displayCellIds.at(-1)).toBe('cell109-7');
+    const resolve = createTablePointResolver(table);
+    expect(resolve({ rowId: 'r109', columnId: 'c7' })).toEqual({ rowId: 'r109', columnId: 'c7' });
+    expect(resolve({ rowId: 'missing', columnId: 'c7' })).toBeUndefined();
+    expect(navigateTableSelection(table, tableCellSelection(identity, { rowId: 'r109', columnId: 'c6' }), 'Tab').selection)
+      .toMatchObject({ focus: { rowId: 'r109', columnId: 'c7' } });
+  });
+
+  it('keeps point resolution scoped to the immutable table snapshot including covered cells', () => {
+    const table = emptyTable();
+    const resolveBefore = createTablePointResolver(table);
+    const merged = mergeCells(table, 'cell0-0', 2, 2);
+    const resolveAfter = createTablePointResolver(merged);
+    const covered = { rowId: 'r1', columnId: 'c1' };
+    expect(resolveBefore(covered)).toEqual(covered);
+    expect(resolveAfter(covered)).toEqual({ rowId: 'r0', columnId: 'c0' });
+    expect(resolveBefore(covered)).toEqual(covered);
+  });
   it('keeps original anchor/focus while normalizing forward and reverse rectangular drags', () => {
     const table = emptyTable();
     const forward = tableRangeSelection(identity, { rowId: 'r0', columnId: 'c0' }, { rowId: 'r2', columnId: 'c1' });

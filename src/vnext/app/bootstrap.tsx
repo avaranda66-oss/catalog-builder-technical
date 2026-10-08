@@ -37,6 +37,7 @@ import { getSupabase } from '../../services/supabase.service';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { createTranslationCenterFoundation, VNextTranslationGatewayClient, vnextTranslationGatewayInvokeFromFunctionsClient } from '../translation';
 import { TranslationReviewCoordinator } from '../translation/review-coordinator';
+import { createSaveBeforeLibraryNavigation } from './catalog-navigation';
 import {
   currentTrustedV2ReturnTarget,
   storeTrustedV2ReturnTarget,
@@ -395,14 +396,11 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       window.location.reload();
     });
 
-    const requestLibrary = () => {
-      const snapshot = runtime!.workspace.getSnapshot();
-      if (snapshot.dirty || runtime!.saveCoordinator.hasUnresolvedActiveMutation()) {
-        runtime!.workspace.setPhase('blocked', 'Salve suas alterações antes de voltar aos catálogos.');
-        return;
-      }
-      window.location.assign('/v2');
-    };
+    const requestLibrary = createSaveBeforeLibraryNavigation(
+      runtime,
+      () => window.location.assign('/v2'),
+      () => !authorityInvalidated
+    );
 
     let reusableSession = runtime.workspace.getSnapshot().session;
     const bindReusableSession = () => {
@@ -449,7 +447,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
           runtime={runtime}
           assetBridge={assetBridge}
           simpleByDefault
-          onRequestLibrary={requestLibrary}
+          onRequestLibrary={() => { void requestLibrary(); }}
           translation={translation}
           onOpenTranslatedCopy={catalogId => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
           getPublicationSource={() => {

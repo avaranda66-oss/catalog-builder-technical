@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ControlledTranslationProvider, TranslationFoundationService } from '@/vnext/translation';
+import { ControlledTranslationProvider, TranslationFoundationService, TranslationFoundationError } from '@/vnext/translation';
 import { translationReviewKey } from '@/vnext/translation/candidate';
 import { TranslationReviewCoordinator, type TranslationSource } from '@/vnext/translation/review-coordinator';
 import { deferred, idSequence, StrictCasCatalogRepository, uuid } from '../persistence/w3h-fixtures';
 import { createW5ATranslationDocument } from './w5a-fixture';
+import { fatherTranslationCatalog } from './father-translation-fixture';
 
-function setup(provider = new ControlledTranslationProvider()) {
-  const document = createW5ATranslationDocument(); const repository = new StrictCasCatalogRepository(document);
+function setup(provider = new ControlledTranslationProvider(), document = createW5ATranslationDocument()) {
+  const repository = new StrictCasCatalogRepository(document);
   let source: TranslationSource | undefined = { document, remoteRevision: 1, authLineage: 'user-a', authorityScopeId: 'scope-a', openSessionId: 'open-a' };
   const foundation = new TranslationFoundationService(provider, { maxAttempts: 1 });
   const review = new TranslationReviewCoordinator({ foundation, repository,
@@ -15,6 +16,29 @@ function setup(provider = new ControlledTranslationProvider()) {
 }
 
 describe.each(['es-ES', 'en-US'] as const)('P2 review %s', targetLocale => {
+  it('retains validated partial progress on failure and manual retry reaches review without dispatching or creating duplicates', async () => {
+    const ordinary = new ControlledTranslationProvider();
+    const provider = new ControlledTranslationProvider((request, invocation) => {
+      if (invocation === 2) throw new TranslationFoundationError('PROVIDER_RATE_LIMIT', 'Controlled rate limit');
+      return ordinary.translate(request);
+    });
+    const f = setup(provider, fatherTranslationCatalog('medium'));
+    await f.review.generate(targetLocale);
+    expect(f.review.getSnapshot()).toMatchObject({ phase: 'error', runs: [], batchProgress: { completedBatches: 1 } });
+    expect(f.review.getSnapshot().message).toContain('Aguarde um pouco');
+    expect(f.review.getSnapshot().message).not.toContain('PROVIDER_RATE_LIMIT');
+    expect(f.provider.requests).toHaveLength(2);
+    await f.review.accept();
+    expect(f.repository.createCatalog).not.toHaveBeenCalled();
+    const total = f.review.getSnapshot().batchProgress!.totalBatches;
+    await f.review.generate(targetLocale);
+    expect(f.review.getSnapshot()).toMatchObject({ phase: 'review', targetLocale,
+      batchProgress: { completedBatches: total, totalBatches: total, cacheHits: 1 } });
+    expect(f.provider.requests).toHaveLength(total + 1);
+    await f.review.accept();
+    expect(f.repository.createCatalog).toHaveBeenCalledTimes(1);
+  });
+
   it('records generated/reviewed/corrected/invalid presentation without changing acceptance authority', async () => {
     const f = setup(); const before = structuredClone(f.document);
     expect(f.review.getSnapshot().reviewedRunKeys).toEqual([]);

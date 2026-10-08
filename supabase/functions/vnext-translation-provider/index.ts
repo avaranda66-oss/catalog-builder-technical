@@ -194,7 +194,7 @@ function parseRequest(value: unknown): GatewayRequest | null {
   };
 }
 
-const PLACEHOLDER = /\[\[VNEXT_TECH(?:_[A-Z0-9]+)*_\d{3}\]\]/g;
+const PLACEHOLDER = /\[\[VNEXT_TECH(?:_[A-Z0-9]+)*_\d{3,}\]\]/g;
 
 function placeholderMultiset(text: string): string[] {
   return (text.match(PLACEHOLDER) ?? []).sort();

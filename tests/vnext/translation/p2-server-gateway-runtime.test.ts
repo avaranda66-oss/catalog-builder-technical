@@ -104,6 +104,26 @@ function request(profile: RegisteredTranslationProfile): TranslationProviderRequ
 }
 
 describe.each(VNEXT_TRANSLATION_PROFILES)('P2 executed server gateway $targetLocale', profile => {
+  it('accepts intact technical placeholders beyond the 999th value and still rejects changed or duplicated values', async () => {
+    for (const variant of ['intact', 'changed', 'duplicate'] as const) {
+      const g = gateway();
+      const original = request(profile);
+      const body = { ...original, units: [{ ...original.units[0], runs: [{ runId: 'long-run-part',
+        protectedText: 'Condição [[VNEXT_TECH_0123456789ABCDEF_1000]] e [[VNEXT_TECH_0123456789ABCDEF_1020]]' }] }] };
+      if (variant !== 'intact') g.state.transform = payload => {
+        const run = payload.units[0].runs[0];
+        run.translatedText = variant === 'changed'
+          ? run.translatedText.replace('_1000]]', '_1001]]')
+          : run.translatedText + ' [[VNEXT_TECH_0123456789ABCDEF_1000]]';
+        return payload;
+      };
+      const response = await g.invoke(body);
+      expect(response.status).toBe(variant === 'intact' ? 200 : 502);
+      expect(g.generateProvider).toHaveBeenCalledTimes(1);
+      expect(g.countProvider).not.toHaveBeenCalled();
+    }
+  });
+
   it('uses the actual shared target/profile/prompt, server key and authenticated role checks', async () => {
     const g = gateway(); const body = request(profile); const response = await g.invoke(body); const output = await response.json();
     expect(response.status).toBe(200);

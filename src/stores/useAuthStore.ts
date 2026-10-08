@@ -102,8 +102,10 @@ const resolveSession = async (
 
 const revalidateProfileInBackground = async (
   userId: string,
-  set: (partial: Partial<AuthState>) => void
+  set: (partial: Partial<AuthState>) => void,
+  get: () => AuthState
 ) => {
+  const startedGeneration = generation;
   const supabase = getSupabase();
   if (!supabase) return;
 
@@ -114,6 +116,9 @@ const revalidateProfileInBackground = async (
       .eq('id', userId)
       .maybeSingle();
 
+    // A profile response may arrive after logout, reinitialization or an account switch.
+    // Only the identity that started this read may receive its role or denial.
+    if (startedGeneration !== generation || get().status !== 'authenticated' || get().userId !== userId) return;
     if (error) return; // Falhas transitórias de rede não desautenticam
     const profile = data as ProfileRecord | null;
     if (!profile || !profile.is_active || (profile.role !== 'admin' && profile.role !== 'editor')) {
@@ -172,26 +177,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 2. TOKEN_REFRESHED: Renovação silenciosa de token NÃO pode mudar status para loading nem desmontar editor!
       if (event === 'TOKEN_REFRESHED') {
-        if (prevStatus === 'authenticated' && session?.user) {
+        if (prevStatus === 'authenticated' && session?.user && prevUserId === currentUserId) {
           set({
             userId: session.user.id,
             email: session.user.email ?? get().email
           });
-          void revalidateProfileInBackground(session.user.id, set);
+          void revalidateProfileInBackground(session.user.id, set, get);
           return;
         }
       }
 
       // 3. USER_UPDATED: Revalida perfil em background silenciosamente
       if (event === 'USER_UPDATED') {
-        if (prevStatus === 'authenticated' && session?.user) {
-          void revalidateProfileInBackground(session.user.id, set);
+        if (prevStatus === 'authenticated' && session?.user && prevUserId === currentUserId) {
+          void revalidateProfileInBackground(session.user.id, set, get);
           return;
         }
       }
 
       // 4. SIGNED_IN: Se já autenticado para o mesmo usuário, não reseta nada
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         if (prevStatus === 'authenticated' && prevUserId === currentUserId) {
           return;
         }

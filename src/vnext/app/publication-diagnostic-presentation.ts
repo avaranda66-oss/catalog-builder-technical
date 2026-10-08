@@ -11,6 +11,8 @@ export function publicationDiagnosticMessage(code: string): string {
       return 'Parte do objeto está fora da página. Mova o objeto ou reduza seu tamanho no editor.';
     case 'TEXT_OBJECT_OVERFLOW':
       return 'O texto não cabe no espaço reservado. Aumente o quadro de texto ou reduza o conteúdo.';
+    case 'PRINTABLE_CONTENT_OVERLAP':
+      return 'O conteúdo deste objeto está sobre outro texto ou tabela. Mova os objetos para separar o conteúdo antes de publicar.';
     case 'TABLE_CONTENT_OVERFLOW':
       return 'A tabela ultrapassa a altura reservada. Aumente o quadro da tabela ou reduza seu conteúdo.';
     case 'TABLE_WIDTH_INFEASIBLE':

@@ -545,7 +545,7 @@ describe('W3.D typed authoring recovery overlays', () => {
       localProtection: 'unavailable',
       save: { label: 'Saved' },
     });
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Proteção local indisponível.');
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Não foi possível proteger as alterações neste computador. Mantenha esta aba aberta e use Salvar antes de sair.');
   });
 
   it('persists an Inspector draft as a typed overlay without committing a keystroke', async () => {

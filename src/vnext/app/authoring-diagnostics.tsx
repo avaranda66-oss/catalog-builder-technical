@@ -9,6 +9,7 @@ export const W2D_DIAGNOSTIC_CODES = new Set([
   'SAFE_AREA_VIOLATION',
   'OBJECT_OUTSIDE_PAGE',
   'TEXT_OBJECT_OVERFLOW',
+  'PRINTABLE_CONTENT_OVERLAP',
   'TABLE_CONTENT_OVERFLOW',
   'TABLE_WIDTH_INFEASIBLE',
   'ROW_CONTENT_OVERFLOW',
@@ -117,6 +118,8 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
       return 'Parte do objeto está fora da página física. Corrija a posição ou o tamanho para liberar a publicação.';
     case 'TEXT_OBJECT_OVERFLOW':
       return 'O texto não cabe no quadro criado. Ajuste o conteúdo ou redimensione o quadro manualmente.';
+    case 'PRINTABLE_CONTENT_OVERLAP':
+      return 'Este texto ou tabela está sobre outro conteúdo. Mova os objetos para separar o conteúdo antes de publicar.';
     case 'TABLE_CONTENT_OVERFLOW':
       return 'O conteúdo da tabela ultrapassa a altura criada. Redimensione o quadro ou ajuste o conteúdo manualmente.';
     case 'TABLE_WIDTH_INFEASIBLE':

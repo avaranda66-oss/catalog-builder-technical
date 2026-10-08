@@ -3,7 +3,7 @@ import { pxToQ, qCss, uToQ, type TableModel } from '../domain';
 import { pointerAxisDeltaU } from './editor-interaction';
 import type { TablePlan } from '../rendering';
 import {
-  canonicalTablePoint,
+  createTablePointResolver,
   normalizeTableSelection,
   tableColumnSelection,
   tableRangeSelection,
@@ -88,6 +88,7 @@ export function TableGridOverlay({
   const dragRef = React.useRef<DragState | null>(null);
   const dimensionDragRef = React.useRef<DimensionDragState | null>(null);
   const [dimensionPreview, setDimensionPreview] = React.useState<DimensionDragState | null>(null);
+  const resolvePoint = React.useMemo(() => createTablePointResolver(table), [table]);
   const rows = plan.rowQ ?? [];
   const columns = plan.trackQ;
   const x = cumulative(columns);
@@ -117,7 +118,7 @@ export function TableGridOverlay({
   if (rows.length !== table.rows.length || columns.length !== table.columns.length || !normalized) return null;
 
   const selectCell = (point: TableSelectionPoint, extend: boolean) => {
-    const canonical = canonicalTablePoint(table, point);
+    const canonical = resolvePoint(point);
     if (!canonical) return;
     if (rangeExtensionArmed && (selection.kind === 'cell' || selection.kind === 'range')) {
       onSelectionChange(tableRangeSelection(identity, selection.anchor, point));
@@ -147,7 +148,7 @@ export function TableGridOverlay({
   const beginCellDrag = (event: React.PointerEvent<HTMLButtonElement>, point: TableSelectionPoint) => {
     if (event.button !== 0) return;
     event.stopPropagation();
-    const canonical = canonicalTablePoint(table, point);
+    const canonical = resolvePoint(point);
     if (!canonical) return;
     const anchor = event.shiftKey && (selection.kind === 'cell' || selection.kind === 'range')
       ? selection.anchor
@@ -187,7 +188,7 @@ export function TableGridOverlay({
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
     if (drag.touch) return;
     const focus = pointAtClient(event.clientX, event.clientY) ?? point;
-    if (canonicalTablePoint(table, focus)) onSelectionChange(tableRangeSelection(identity, drag.anchor, focus));
+    if (resolvePoint(focus)) onSelectionChange(tableRangeSelection(identity, drag.anchor, focus));
   };
 
   const finishCellDrag = (event: React.PointerEvent<HTMLButtonElement>, point: TableSelectionPoint) => {
@@ -422,8 +423,9 @@ export function TableGridOverlay({
             data-table-cell={`${rowIndex}:${columnIndex}`}
             aria-label={`Linha ${rowIndex + 1}, coluna ${columnIndex + 1}`}
             data-cell-editing={(() => {
-              const canonical = canonicalTablePoint(table, point);
-              if (!canonical || !editingCellId) return undefined;
+              if (!editingCellId) return undefined;
+              const canonical = resolvePoint(point);
+              if (!canonical) return undefined;
               const anchor = table.cells.find((cell) => cell.rowId === canonical.rowId && cell.columnId === canonical.columnId);
               return anchor?.id === editingCellId ? 'true' : undefined;
             })()}
@@ -440,7 +442,7 @@ export function TableGridOverlay({
             onLostPointerCapture={cancelCellDrag}
             onDoubleClick={(event) => {
               event.stopPropagation();
-              const canonical = canonicalTablePoint(table, point);
+              const canonical = resolvePoint(point);
               if (!canonical) return;
               onSelectionChange(tableRangeSelection(identity, canonical, canonical));
               onActivateCell?.(canonical);

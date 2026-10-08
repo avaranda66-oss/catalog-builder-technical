@@ -2437,28 +2437,32 @@ export function executeApplicationAction(
         }
 
         const allocator = createCanonicalIdAllocator(document, dependencies.createId);
-        const axisId = allocator.next();
-        const cells: Cell[] = (action.axis === 'row' ? table.columns : table.rows).map((item) => ({
-          id: allocator.next(),
-          rowId: action.axis === 'row' ? axisId : item.id,
-          columnId: action.axis === 'column' ? axisId : item.id,
-          content: { type: 'empty' },
-        }));
-        let nextTable: TableModel;
+        let nextTable = table;
+        createdIds = [];
         try {
-          const axisItem = action.axis === 'row'
-            ? { id: axisId, ...InsertedTableRowPropertiesSchema.parse(action.properties) }
-            : { id: axisId, ...InsertedTableColumnPropertiesSchema.parse(action.properties) };
-          nextTable = insertAxis(table, action.axis, at, axisItem, cells);
+          for (let offset = 0; offset < (action.count ?? 1); offset++) {
+            const axisId = allocator.next();
+            const cells: Cell[] = (action.axis === 'row' ? table.columns : table.rows).map(item => ({
+              id: allocator.next(),
+              rowId: action.axis === 'row' ? axisId : item.id,
+              columnId: action.axis === 'column' ? axisId : item.id,
+              content: { type: 'empty' },
+            }));
+            const axisItem = action.axis === 'row'
+              ? { id: axisId, ...InsertedTableRowPropertiesSchema.parse(action.properties) }
+              : { id: axisId, ...InsertedTableColumnPropertiesSchema.parse(action.properties) };
+            nextTable = insertAxis(nextTable, action.axis, at + offset, axisItem, cells);
+            createdIds.push(axisId, ...cells.map(cell => cell.id));
+          }
         } catch (error) {
           return tableOperationFailure(error, action.referenceAxisId);
         }
+        const beforeCells = new Map(table.cells.map(cell => [cell.id, cell]));
         const changedAnchorIds = nextTable.cells
-          .filter((cell) => table.cells.find((before) => before.id === cell.id && before.span !== cell.span))
+          .filter(cell => beforeCells.has(cell.id) && beforeCells.get(cell.id)!.span !== cell.span)
           .map((cell) => cell.id);
         candidate = replaceTableObject(document, target, nextTable);
         affectedIds = [action.objectId, action.tableId, action.referenceAxisId, ...changedAnchorIds];
-        createdIds = [axisId, ...cells.map((cell) => cell.id)];
         break;
       }
       case 'table.axis.remove': {

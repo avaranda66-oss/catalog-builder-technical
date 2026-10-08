@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,8 +44,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium and Microsoft Edge
+        run: npx playwright install --with-deps chromium msedge
 
       - name: VNext Chromium and PDF proofs
         run: |
@@ -88,3 +90,9 @@ jobs:
 
       - name: P2 multilingual Translation Center Chromium and PDF proof
         run: node tests/vnext/proof/p2-multilingual-translation-center-proof.mjs
+
+      - name: Father large catalog and table publication proof
+        run: node tests/vnext/proof/father-large-catalog-proof.mjs
+
+      - name: Father translation batching and partial failure proof
+        run: node tests/vnext/proof/father-translation-batching-proof.mjs

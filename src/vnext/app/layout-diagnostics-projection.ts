@@ -5,6 +5,7 @@ import {
   type Severity,
   type TableObject,
 } from '../domain';
+import { publicationDiagnosticMessage } from './publication-diagnostic-presentation';
 
 export type LayoutDiagnosticAction = 'FIT_HEIGHT' | 'LOCATE' | 'NONE';
 
@@ -31,6 +32,9 @@ const GROUPED_CHILD_GUIDANCE = 'Desagrupe para editar esta tabela.';
 
 const fatherMessage = (diagnostic: Diagnostic): string => {
   switch (diagnostic.code) {
+    case 'TEXT_OBJECT_OVERFLOW':
+    case 'PRINTABLE_CONTENT_OVERLAP':
+      return publicationDiagnosticMessage(diagnostic.code);
     case 'TABLE_CONTENT_OVERFLOW':
       return 'Conteúdo excede a altura da tabela';
     case 'ROW_CONTENT_OVERFLOW':
@@ -56,7 +60,7 @@ const fatherMessage = (diagnostic: Diagnostic): string => {
     case 'ASSET_INTEGRITY_FAILED':
       return 'Uma imagem da tabela falhou na verificação de integridade';
     default:
-      return diagnostic.details;
+      return publicationDiagnosticMessage(diagnostic.code);
   }
 };
 
