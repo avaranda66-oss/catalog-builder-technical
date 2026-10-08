@@ -8,6 +8,17 @@ import {
   W4D_TABLE_A_ID,
 } from '../proof/fixtures/w4d-table-document';
 
+describe('Father diagnostic language', () => {
+  it.each(['TEXT_OBJECT_OVERFLOW', 'UNRECOGNIZED_CHECK'])('never exposes raw technical detail for %s', code => {
+    const document = createW4DTableDocument();
+    const [projected] = projectLayoutDiagnostics(document, [{ code, severity: 'ERROR', details: 'Text exceeds authored object frame signed-url-private', pageId: W4D_PAGE_ID, objectId: W4D_OBJECT_A_ID }], W4D_PAGE_ID, W4D_OBJECT_A_ID);
+    expect(projected.message).not.toContain('Text exceeds');
+    expect(projected.message).not.toContain('signed-url-private');
+    expect(projected.message).toContain(code === 'TEXT_OBJECT_OVERFLOW' ? 'Aumente o quadro' : 'Volte ao editor');
+    expect(projected.publicationBlocked).toBe(true);
+  });
+});
+
 function groupedDiagnosticsDocument(): {
   document: CatalogDocument;
   groupId: string;

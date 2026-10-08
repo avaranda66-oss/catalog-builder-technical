@@ -85,6 +85,26 @@ function serviceWithList(
 }
 
 describe('W3.E CatalogLibrary UI coordination', () => {
+  it('does not announce catalog creation while a rename is saving', async () => {
+    const pending = deferred<CatalogLibraryResult<CatalogPersistenceEnvelope>>();
+    const source = item('Catálogo do pai', '90');
+    const service = {
+      list: vi.fn().mockResolvedValue({ ok: true, value: [source] }),
+      listStarters: () => [],
+      getCreateState: () => 'idle',
+      rename: vi.fn(() => pending.promise),
+    } as unknown as CatalogLibraryService;
+    const { getByRole, queryByRole } = render(<CatalogLibrary service={service} onOpen={vi.fn()} />);
+    await waitFor(() => getByRole('button', { name: 'Renomear' }));
+    fireEvent.click(getByRole('button', { name: 'Renomear' }));
+    fireEvent.change(getByRole('textbox', { name: 'Nome do catálogo' }), { target: { value: 'Novo nome' } });
+    fireEvent.click(getByRole('button', { name: 'Salvar nome' }));
+    expect(getByRole('button', { name: 'Novo catálogo' })).toBeDisabled();
+    expect(getByRole('button', { name: 'Salvando…' })).toBeDisabled();
+    expect(queryByRole('button', { name: 'Criando catálogo' })).toBeNull();
+    await act(async () => { pending.resolve({ ok: false, error: { code: 'OFFLINE' } }); });
+  });
+
   it('ignores an older archived load that resolves after a newer active load', async () => {
     const initial = deferred<CatalogLibraryResult<readonly CatalogListItem[]>>();
     const archived = deferred<CatalogLibraryResult<readonly CatalogListItem[]>>();

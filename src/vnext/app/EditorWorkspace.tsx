@@ -115,7 +115,7 @@ import { EditorInteractionController, frameToU, type FinishGestureResult, type G
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
 import { PRESYS_PRESENTATION_PAGE_ID, PRESYS_SPECIFICATIONS_PAGE_ID } from '../library/presys-ta25n-starter';
-import { fatherSaveLabel } from './save-presentation';
+import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 import { TableStyleInspector } from './TableStyleInspector';
@@ -370,6 +370,7 @@ export function EditorWorkspace({
   const officialPageReuse = hasPresysPageReuse(session);
   const [advancedToolsOpen, setAdvancedToolsOpen] = React.useState(!simpleByDefault);
   const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
+  const [tableRowsToInsert, setTableRowsToInsert] = React.useState('10');
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
@@ -1455,10 +1456,14 @@ export function EditorWorkspace({
     return 'Não foi possível alterar a estrutura da tabela.';
   };
 
-  const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after') => {
+  const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after', count = 1) => {
     const object = selectedTableObject;
     const selection = tableSelectionRef.current;
     if (!object || !selection || editorState.mode !== 'table-grid') return;
+    if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
+      setStatusMessage('Informe uma quantidade entre 1 e 100 linhas.');
+      return;
+    }
     const axisIds = explicitTableAxisIds(object.table, selection, axis);
     if (axisIds.length !== 1) {
       setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para usar esta ação.`);
@@ -1474,6 +1479,7 @@ export function EditorWorkspace({
       axis,
       referenceAxisId,
       position,
+      count,
       properties: { role: referenceRow?.role === 'header' ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } },
       expectedTable: object.table,
     } : {
@@ -1501,7 +1507,7 @@ export function EditorWorkspace({
       tableHistoryContextRef.current = { table: nextObject!.table, selection: nextSelection };
       setTableSelection(nextSelection);
     }
-    setStatusMessage(axis === 'row' ? 'Linha inserida.' : 'Coluna inserida.');
+    setStatusMessage(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.');
   };
 
   const runTableAxisRemove = (axis: 'row' | 'column') => {
@@ -2346,7 +2352,7 @@ export function EditorWorkspace({
     const objectId = result.metadata.createdIds[0];
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
-    setStatusMessage(names[tool] + ' adicionada.');
+    setStatusMessage(names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
   };
 
   const deleteSelected = () => {
@@ -3812,6 +3818,10 @@ export function EditorWorkspace({
                 <button type="button" data-editor-action="insert-row-before" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
                 <button type="button" data-editor-action="insert-row-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
                 <button type="button" data-editor-action="remove-row" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
+              </div>
+              <div className="vnext-tool-group" aria-label="Adicionar várias linhas">
+                <label>Quantidade de linhas <input type="number" min="1" max="100" step="1" aria-label="Quantidade de linhas para adicionar" data-table-row-count="" value={tableRowsToInsert} onChange={event => setTableRowsToInsert(event.target.value)} style={{ width: '64px' }} /></label>
+                <button type="button" data-editor-action="insert-rows-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas depois</button>
               </div>
               <div className="vnext-tool-group" aria-label="Ações de coluna">
                 <button type="button" data-editor-action="insert-column-before" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
@@ -5281,7 +5291,7 @@ export function EditorWorkspace({
           <h3>{persistence?.save.phase === 'conflict' ? 'Atenção ao salvamento' : 'Salvamento'}</h3>
           <p>
             {persistence
-              ? persistence.save.message ?? fatherSaveLabel(persistence.save.label)
+              ? fatherSaveExplanation(persistence.save)
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
           {persistence?.save.phase === 'conflict' && (
@@ -5294,7 +5304,7 @@ export function EditorWorkspace({
                 onClick={() => {
                   void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
                     if (!result.ok) {
-                      setStatusMessage(result.error.message ?? 'Não foi possível abrir a versão mais recente.');
+                      setStatusMessage('Não foi possível abrir a versão mais recente. Mantenha esta aba aberta e tente novamente.');
                     }
                   });
                 }}
@@ -5310,7 +5320,7 @@ export function EditorWorkspace({
                 onClick={() => {
                   void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
                     if (!result.ok) {
-                      setStatusMessage(result.error.message ?? 'Não foi possível salvar seu trabalho como cópia.');
+                      setStatusMessage('Não foi possível salvar seu trabalho como cópia. Mantenha esta aba aberta e tente novamente.');
                     }
                   });
                 }}
@@ -5324,7 +5334,7 @@ export function EditorWorkspace({
           </>}
           {persistence?.localProtection === 'unavailable' && (
             <p className="vnext-live-status" role="alert">
-              {persistence.localProtectionMessage ?? 'Proteção local indisponível.'}
+              Não foi possível proteger as alterações neste computador. Mantenha esta aba aberta e use Salvar antes de sair.
             </p>
           )}
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}

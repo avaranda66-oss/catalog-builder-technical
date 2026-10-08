@@ -90,17 +90,24 @@ function inclusiveIds(ids: readonly string[], startId: string, endId: string): s
   return ids.slice(Math.min(start, end), Math.max(start, end) + 1);
 }
 
-function ownerExtent(table: TableModel, point: TableSelectionPoint): CellExtent | undefined {
-  const row = table.rows.findIndex((entry) => entry.id === point.rowId);
-  const column = table.columns.findIndex((entry) => entry.id === point.columnId);
-  if (row < 0 || column < 0) return undefined;
-  const slot = cellIndex(table).get(getCellKey(point.rowId, point.columnId));
+function tableLookup(table: TableModel) {
+  return {
+    rows: new Map(table.rows.map((row, index) => [row.id, index])),
+    columns: new Map(table.columns.map((column, index) => [column.id, index])),
+    cells: cellIndex(table),
+    byId: new Map(table.cells.map(cell => [cell.id, cell])),
+  };
+}
+
+function ownerExtent(table: TableModel, point: TableSelectionPoint, lookup = tableLookup(table)): CellExtent | undefined {
+  if (!lookup.rows.has(point.rowId) || !lookup.columns.has(point.columnId)) return undefined;
+  const slot = lookup.cells.get(getCellKey(point.rowId, point.columnId));
   if (!slot) return undefined;
-  const cell = slot.coveredBy ? table.cells.find((entry) => entry.id === slot.coveredBy) : slot;
+  const cell = slot.coveredBy ? lookup.byId.get(slot.coveredBy) : slot;
   if (!cell) return undefined;
-  const rowStart = table.rows.findIndex((entry) => entry.id === cell.rowId);
-  const columnStart = table.columns.findIndex((entry) => entry.id === cell.columnId);
-  if (rowStart < 0 || columnStart < 0) return undefined;
+  const rowStart = lookup.rows.get(cell.rowId);
+  const columnStart = lookup.columns.get(cell.columnId);
+  if (rowStart === undefined || columnStart === undefined) return undefined;
   return {
     cell,
     rowStart,
@@ -113,6 +120,15 @@ function ownerExtent(table: TableModel, point: TableSelectionPoint): CellExtent 
 export function canonicalTablePoint(table: TableModel, point: TableSelectionPoint): TableSelectionPoint | undefined {
   const extent = ownerExtent(table, point);
   return extent ? { rowId: extent.cell.rowId, columnId: extent.cell.columnId } : undefined;
+}
+
+/** One lookup per immutable table render, instead of rebuilding the entire grid for every hit target. */
+export function createTablePointResolver(table: TableModel): (point: TableSelectionPoint) => TableSelectionPoint | undefined {
+  const lookup = tableLookup(table);
+  return point => {
+    const extent = ownerExtent(table, point, lookup);
+    return extent ? { rowId: extent.cell.rowId, columnId: extent.cell.columnId } : undefined;
+  };
 }
 
 function intersects(
@@ -129,6 +145,7 @@ function intersects(
 }
 
 export function normalizeTableSelection(table: TableModel, selection: TableSelection): NormalizedTableSelection | undefined {
+  const lookup = tableLookup(table);
   let rowStart: number;
   let rowEnd: number;
   let columnStart: number;
@@ -137,8 +154,8 @@ export function normalizeTableSelection(table: TableModel, selection: TableSelec
   let explicitColumnIds: string[] = [];
 
   if (selection.kind === 'cell' || selection.kind === 'range') {
-    const anchor = ownerExtent(table, selection.anchor);
-    const focus = ownerExtent(table, selection.focus);
+    const anchor = ownerExtent(table, selection.anchor, lookup);
+    const focus = ownerExtent(table, selection.focus, lookup);
     if (!anchor || !focus) return undefined;
     rowStart = Math.min(anchor.rowStart, focus.rowStart);
     rowEnd = Math.max(anchor.rowEnd, focus.rowEnd);
@@ -167,10 +184,10 @@ export function normalizeTableSelection(table: TableModel, selection: TableSelec
     explicitColumnIds = table.columns.map((column) => column.id);
   }
 
-  const extents = orderedAnchors(table).map((cell) => ownerExtent(table, {
+  const extents = table.cells.filter(cell => !cell.coveredBy).map((cell) => ownerExtent(table, {
     rowId: cell.rowId,
     columnId: cell.columnId,
-  })!);
+  }, lookup)!);
   let expanded = true;
   while (expanded) {
     expanded = false;
@@ -192,7 +209,7 @@ export function normalizeTableSelection(table: TableModel, selection: TableSelec
 
   const displayRows = table.rows.slice(rowStart, rowEnd + 1);
   const displayColumns = table.columns.slice(columnStart, columnEnd + 1);
-  const slots = cellIndex(table);
+  const slots = lookup.cells;
   return {
     rowStart,
     rowEnd,

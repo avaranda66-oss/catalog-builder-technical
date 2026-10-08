@@ -29,5 +29,9 @@ export function createW4F2Document(
     table.frame.heightMm = 72;
     table.table.rows[0].heightPolicy = { mode: 'FIXED_MM', heightMm: 18 };
   }
+  // These proofs deliberately enlarge the first table, then explicitly fit its height.
+  // Keep the companion merge fixture below the resulting printed content.
+  const merged = document.pages[0].objects.find((object) => object.id === W4F2_MERGED_OBJECT_ID);
+  if (merged) merged.frame.yMm = 150;
   return document;
 }
