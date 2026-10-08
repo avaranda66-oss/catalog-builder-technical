@@ -104,14 +104,23 @@ function clearInsertFrame(page: Page, preferred: ReturnType<typeof frame>): Retu
       || candidate.yU + candidate.heightU + gapU <= other.yU
     );
 
-  if (clear(preferred)) return preferred;
+  const withinSafeArea = (candidate: ReturnType<typeof frame>): boolean =>
+    candidate.xU >= leftU && candidate.xU + candidate.widthU <= rightU
+    && candidate.yU >= topU && candidate.yU + candidate.heightU <= bottomU;
+
+  if (clear(preferred) && withinSafeArea(preferred)) return preferred;
   if (lastXU < leftU || lastYU < topU) return preferred;
   const startYU = Math.max(topU, preferred.yU);
-  const columns = Array.from(new Set([preferred.xU, leftU, lastXU]))
+  const columns = [preferred.xU, leftU, lastXU]
     .filter((xU) => xU >= leftU && xU <= lastXU);
+  // Search remaining A4 columns on the same bounded 2 mm grid. A middle
+  // column can be free even when the preferred and edge columns are blocked.
+  for (let xU = leftU; xU <= lastXU; xU += stepU) {
+    if (!columns.includes(xU)) columns.push(xU);
+  }
 
   for (const xU of columns) {
-    for (const [start, end] of [[startYU, lastYU], [topU, startYU - stepU]]) {
+    for (const [start, end] of [[startYU, lastYU], [topU, Math.min(lastYU, startYU - stepU)]]) {
       for (let yU = start; yU <= end; yU += stepU) {
         const candidate = { ...preferred, xU, yU };
         if (clear(candidate)) return candidate;
