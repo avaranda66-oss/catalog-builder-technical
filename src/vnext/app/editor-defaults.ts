@@ -76,6 +76,51 @@ function nextZIndex(page: Page): number {
   return current < Number.MAX_SAFE_INTEGER ? current + 1 : current;
 }
 
+/**
+ * Prefer a clear A4 slot instead of adding a new object on top of existing work.
+ * This is an authoring convenience only: if the page is full, retain the
+ * canonical default so publication preflight can surface the collision.
+ */
+function clearInsertFrame(page: Page, preferred: ReturnType<typeof frame>): ReturnType<typeof frame> {
+  if (!page.objects.length) return preferred;
+
+  const gapU = mmToU(2);
+  const stepU = mmToU(2);
+  const leftU = mmToU(Math.max(20, page.safeArea?.leftMm ?? 0));
+  const topU = mmToU(Math.max(20, page.safeArea?.topMm ?? 0));
+  const rightU = mmToU(page.widthMm - Math.max(20, page.safeArea?.rightMm ?? 0));
+  const bottomU = mmToU(page.heightMm - Math.max(20, page.safeArea?.bottomMm ?? 0));
+  const lastXU = rightU - preferred.widthU;
+  const lastYU = bottomU - preferred.heightU;
+
+  const occupied = page.objects.map((object) => frame(
+    object.frame.xMm, object.frame.yMm, object.frame.widthMm, object.frame.heightMm
+  ));
+  const clear = (candidate: ReturnType<typeof frame>): boolean =>
+    occupied.every((other) =>
+      candidate.xU >= other.xU + other.widthU + gapU
+      || candidate.xU + candidate.widthU + gapU <= other.xU
+      || candidate.yU >= other.yU + other.heightU + gapU
+      || candidate.yU + candidate.heightU + gapU <= other.yU
+    );
+
+  if (clear(preferred)) return preferred;
+  if (lastXU < leftU || lastYU < topU) return preferred;
+  const startYU = Math.max(topU, preferred.yU);
+  const columns = Array.from(new Set([preferred.xU, leftU, lastXU]))
+    .filter((xU) => xU >= leftU && xU <= lastXU);
+
+  for (const xU of columns) {
+    for (const [start, end] of [[startYU, lastYU], [topU, startYU - stepU]]) {
+      for (let yU = start; yU <= end; yU += stepU) {
+        const candidate = { ...preferred, xU, yU };
+        if (clear(candidate)) return candidate;
+      }
+    }
+  }
+  return preferred;
+}
+
 export function createMinimalW2CTable(): TableModel {
   return {
     id: 'w2c-table-seed',
@@ -126,7 +171,7 @@ export function createInsertSpec(tool: InsertTool, page: Page): ObjectInsertSpec
     case 'text':
       return {
         type: 'text',
-        frameU: frame(20, 20, 82, 22),
+        frameU: clearInsertFrame(page, frame(20, 20, 82, 22)),
         zIndex,
         text: plainRichText('w2c-text-seed', 'Novo texto'),
         style: {
@@ -141,7 +186,7 @@ export function createInsertSpec(tool: InsertTool, page: Page): ObjectInsertSpec
     case 'image':
       return {
         type: 'image',
-        frameU: frame(20, 52, 58, 58),
+        frameU: clearInsertFrame(page, frame(20, 52, 58, 58)),
         zIndex,
         assetId: W2C_PRIMARY_ASSET_ID,
         fit: 'contain',
@@ -150,7 +195,7 @@ export function createInsertSpec(tool: InsertTool, page: Page): ObjectInsertSpec
     case 'table':
       return {
         type: 'table',
-        frameU: frame(20, 122, 118, 34),
+        frameU: clearInsertFrame(page, frame(20, 122, 118, 34)),
         zIndex,
         table: createMinimalW2CTable(),
       };
