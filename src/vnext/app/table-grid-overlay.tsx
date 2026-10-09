@@ -99,7 +99,11 @@ export function TableGridOverlay({
   const normalized = normalizeTableSelection(table, selection);
 
   React.useLayoutEffect(() => {
-    rootRef.current?.focus({ preventScroll: true });
+    const root = rootRef.current;
+    const activeElement = root?.ownerDocument.activeElement;
+    // Physical measurement can remount the grid while an inspector field is in use.
+    if (activeElement?.closest('input, textarea, select, [contenteditable="true"]')) return;
+    root?.focus({ preventScroll: true });
   }, [identity.objectId]);
 
   React.useEffect(() => {

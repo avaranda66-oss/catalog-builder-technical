@@ -68,6 +68,36 @@ function setup(sequence = 0) {
 }
 
 describe('W4.A visible Table grid gesture state', () => {
+  it.each(['input', 'textarea', 'select', 'contenteditable'] as const)(
+    'preserves the focused %s inspector field when physical measurement remounts the grid',
+    (kind) => {
+      const { rerender, Harness, document: canonical, activate } = setup();
+      const before = JSON.stringify(canonical);
+      const inspector = render(kind === 'contenteditable'
+        ? <div contentEditable suppressContentEditableWarning>Descrição</div>
+        : kind === 'select' ? <select defaultValue="wrap"><option value="wrap">Quebrar</option></select>
+          : kind === 'textarea' ? <textarea defaultValue="Descrição" /> : <input defaultValue="2.5" />);
+      const field = inspector.container.firstElementChild as HTMLElement;
+      const blurred = vi.fn();
+      field.addEventListener('blur', blurred);
+      field.focus();
+      rerender(<React.Fragment />);
+      rerender(<Harness localSequence={1} />);
+      expect(globalThis.document.activeElement).toBe(field);
+      expect(blurred).not.toHaveBeenCalled();
+      expect(activate).not.toHaveBeenCalled();
+      expect(JSON.stringify(canonical)).toBe(before);
+    }
+  );
+
+  it('focuses the grid on intentional entry from the edit-table button', () => {
+    const toolbar = render(<button type="button">Editar tabela</button>);
+    const button = toolbar.container.firstElementChild as HTMLElement;
+    button.focus();
+    const { container } = setup();
+    expect(globalThis.document.activeElement).toBe(container.querySelector('[data-table-grid-overlay]'));
+  });
+
   it('selects a first touch without editing when the browser inherits a double click from a toolbar tap', () => {
     const { container, changes, activate } = setup();
     const cell = container.querySelector<HTMLElement>('[data-table-cell="0:1"]')!;
