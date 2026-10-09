@@ -13,6 +13,19 @@ export function findElement(root:ParentNode,attribute:string,id:string):HTMLElem
   if(!element)throw new VNextError('RENDER_ELEMENT_MISSING',attribute+'='+id);
   return element;
 }
+/** Local to one measurement pass; retain DOM-first lookup and refresh replaced nodes. */
+function indexedElements(root:HTMLElement,attribute:string):(id:string)=>HTMLElement {
+  const elements=new Map<string,HTMLElement>();
+  for(const element of root.querySelectorAll<HTMLElement>('['+attribute+']')) {
+    const id=element.getAttribute(attribute)!;
+    if(!elements.has(id))elements.set(id,element);
+  }
+  return id=>{
+    const element=elements.get(id);
+    if(element?.getAttribute(attribute)===id&&root.contains(element))return element;
+    return findElement(root,attribute,id);
+  };
+}
 export function assertTransformFree(root:HTMLElement):void {
   let element:HTMLElement|null=root;
   while(element) {
@@ -133,6 +146,7 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
       const grid=findElement(node,'data-table-id',table.id),gridRect=grid.getBoundingClientRect(),computed=getComputedStyle(grid);
       assertDomIds(grid,'data-cell-id',orderedAnchors(table).map(c=>c.id));
       assertDomIds(grid,'data-paint-edge',plan.edges.map(e=>e.id));
+      const cellElement=indexedElements(grid,'data-cell-id'),edgeElement=indexedElements(grid,'data-paint-edge');
       const trackQ=computed.gridTemplateColumns.split(' ').map(value=>pxToQ(parseFloat(value)));
       const rowQ=computed.gridTemplateRows.split(' ').map(value=>pxToQ(parseFloat(value)));
       const frameQ=pxToQ(gridRect.width);
@@ -146,7 +160,7 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
       const x=cumulative(plan.trackQ),y=cumulative(plan.rowQ),actualY=cumulative(rowQ);
       table.rows.forEach((row,i)=>facts.push({kind:'row',pageId:page.id,tableId:table.id,rowId:row.id,resolvedHeightU:plan.heightsU![i],yQ:actualY[i],heightQ:rowQ[i]}));
       for(const cell of orderedAnchors(table)) {
-        const cellNode=findElement(grid,'data-cell-id',cell.id),flow=cellNode.querySelector<HTMLElement>('[data-flow-root]')!;
+        const cellNode=cellElement(cell.id),flow=cellNode.querySelector<HTMLElement>('[data-flow-root]')!;
         const b=bounds(cellNode,gridRect),metrics=intrinsicMetrics(flow,cellDisplayText(cell,table));
         const r=table.rows.findIndex(row=>row.id===cell.rowId),c=table.columns.findIndex(col=>col.id===cell.columnId);
         const cellLocation={...location,tableId:table.id,cellId:cell.id};
@@ -174,10 +188,13 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
           intrinsicContentHeightQ:metrics.heightQ,textFlowSignature:await sha256(JSON.stringify(metrics.records))});
       }
       for(const edge of plan.edges) {
-        const node=findElement(grid,'data-paint-edge',edge.id),b=bounds(node,gridRect);
+        const node=edgeElement(edge.id),b=bounds(node,gridRect);
         for(const field of ['xQ','yQ','widthQ','heightQ'] as const)check(b[field],edge[field],'edge '+edge.id+' '+field,{...location,tableId:table.id});
         facts.push({kind:'paintEdge',pageId:page.id,tableId:table.id,edgeId:edge.id,...b,thicknessQ:edge.orientation==='vertical'?b.widthQ:b.heightQ});
       }
+      // Hashing text is asynchronous: reject identities changed while the snapshot was captured.
+      assertDomIds(grid,'data-cell-id',orderedAnchors(table).map(c=>c.id));
+      assertDomIds(grid,'data-paint-edge',plan.edges.map(e=>e.id));
     }
   }
   facts.sort((a,b)=>factKey(a)<factKey(b)?-1:factKey(a)>factKey(b)?1:0);
@@ -191,8 +208,9 @@ export function compareSnapshots(a:LayoutSnapshot,b:LayoutSnapshot):Diagnostic[]
 export function tableConstraints(table:TableModel,root:HTMLElement,plan:TablePlan):{constraints:SpanConstraint[]} {
   const constraints:SpanConstraint[]=[];
   const grid=findElement(root,'data-table-id',table.id);
+  const cellElement=indexedElements(grid,'data-cell-id');
   for(const cell of orderedAnchors(table)) {
-    const flow=findElement(grid,'data-cell-id',cell.id).querySelector<HTMLElement>('[data-flow-root]')!;
+    const flow=cellElement(cell.id).querySelector<HTMLElement>('[data-flow-root]')!;
     const metrics=intrinsicMetrics(flow,cellDisplayText(cell,table)),padding=plan.styles.get(cell.id)!.paddingQ;
     const requiredQ=sum([metrics.heightQ,padding.top,padding.bottom]);
     const row=table.rows.findIndex(r=>r.id===cell.rowId),column=table.columns.findIndex(c=>c.id===cell.columnId),span=cell.span?.rows??1;

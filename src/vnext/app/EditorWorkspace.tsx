@@ -3114,9 +3114,12 @@ export function EditorWorkspace({
     persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
+  const selectedCellsById = selectedTableObject && tableSelection
+    ? new Map(selectedTableObject.table.cells.map((cell) => [cell.id, cell]))
+    : undefined;
   const selectedAnchorCells = selectedTableObject && tableSelection
     ? selectedTableAnchorIds(selectedTableObject.table, tableSelection)
-      .map((cellId) => selectedTableObject.table.cells.find((cell) => cell.id === cellId))
+      .map((cellId) => selectedCellsById?.get(cellId))
       .filter((cell): cell is Cell => Boolean(cell))
     : [];
   const selectedSemanticCell = selectedAnchorCells.length === 1 && !selectedAnchorCells[0].coveredBy

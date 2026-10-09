@@ -26,9 +26,9 @@ const layoutRepairOnly = process.env.ADVANCED_TABLE_LAYOUT_REPAIR_ONLY === '1';
 const counters = { seeds: 0, saves: 0, gets: 0 };
 const records = new Map();
 await mkdir(output, { recursive: true });
-const sourcePaths = ['src/vnext/app/EditorWorkspace.tsx', 'src/vnext/app/editor-defaults.ts', 'src/vnext/app/styles.css',
+const sourcePaths = ['src/vnext/app/EditorWorkspace.tsx', 'src/vnext/app/editor-defaults.ts', 'src/vnext/app/styles.css', 'src/vnext/app/table-grid-overlay.tsx',
   'src/vnext/editor/table-bulk-authoring.ts', 'src/vnext/editor/table-tsv.ts', 'src/vnext/editor/table-selection.ts', 'src/vnext/editor/table-merge-authoring.ts',
-  'src/vnext/table/table-model.ts', 'tests/vnext/proof/advanced-table-matrix-proof.mjs',
+  'src/vnext/table/table-model.ts', 'src/vnext/rendering/measurement.ts', 'tests/vnext/proof/advanced-table-matrix-proof.mjs',
   'tests/vnext/proof/fixtures/advanced-table-matrix-data.ts', 'tests/vnext/proof/fixtures/advanced-table-matrix-browser.tsx',
   'tests/vnext/proof/fixtures/advanced-table-matrix-browser.html'];
 const sourceManifest = async () => Promise.all(sourcePaths.map(async path => ({ path, sha256: createHash('sha256').update(await readFile(resolve(root, path))).digest('hex') })));
@@ -300,6 +300,27 @@ async function creationCase(browserName) {
       rows: 10, columns: 5, actions: ['Open Tamanho da nova tabela', 'Fill Linhas=10', 'Fill Colunas=5', 'Click Tabela'],
       interactions: 4, durationMs, blankCells: 50, atomicUndoRedo: true, savedReopenedExact: true, status: 'PASS',
       boundary: 'Agent-operated UI task; no human discovery measurement or historical baseline timing claim.' });
+    for (const [label, rows, columns] of [['valid', '10', '5'], ['invalid', '0', '11']]) {
+      await page.goto(url(1, 1, run++) + '&empty=1', { waitUntil: 'networkidle' }); await page.locator('[data-vnext-shell]').waitFor();
+      const before = await state(page); assert.equal(before.document.pages[0].objects.length, 0);
+      await action(page, 'new-table-size').click();
+      await page.getByRole('spinbutton', { name: 'Linhas da nova tabela', exact: true }).fill(rows);
+      await page.getByRole('spinbutton', { name: 'Colunas da nova tabela', exact: true }).fill(columns);
+      await action(page, 'new-table-size').click();
+      assert.equal(await page.getByRole('region', { name: 'Tamanho da nova tabela', exact: true }).count(), 0);
+      await action(page, 'add-table').click(); await changed(page, before.sequence); await frames(page);
+      const insertedDefault = (await state(page)).document; const defaultTable = tableOf(insertedDefault);
+      assert.equal(defaultTable.rows.length, 1); assert.equal(defaultTable.columns.length, 1); assert.equal(defaultTable.cells.length, 1);
+      assert.equal(defaultTable.cells[0].content.type, 'empty'); assert.equal((await state(page)).sequence, before.sequence + 1);
+      await action(page, 'undo').click(); await frames(page); assert.deepEqual((await state(page)).document, before.document);
+      await action(page, 'redo').click(); await frames(page); assert.deepEqual((await state(page)).document, insertedDefault);
+      await action(page, 'save').click(); await saved(page); await page.evaluate(() => window.__ADVANCED_TABLE__.reopen()); await frames(page);
+      assert.deepEqual((await state(page)).document, insertedDefault);
+      await page.screenshot({ path: resolve(output, `new-table-closed-panel-${label}-${browserName}.png`), fullPage: true });
+      results.creation.push({ id: `TABLE-CLOSED-SIZE-${String(results.creation.length + 1).padStart(3, '0')}`, browser: browserName,
+        hiddenInputs: { rows, columns }, panelClosed: true, rows: 1, columns: 1, blankCells: 1,
+        atomicUndoRedo: true, savedReopenedExact: true, status: 'PASS' });
+    }
   } finally { await page.close(); }
 }
 async function layoutRepairCase(browserName) {
