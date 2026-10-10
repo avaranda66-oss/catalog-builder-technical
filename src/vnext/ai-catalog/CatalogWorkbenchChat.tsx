@@ -12,6 +12,9 @@ interface Props {
   canPublish: boolean;
   onPublication: () => void;
   onEditor: () => void;
+  ownerScope?: string;
+  compactMode?: boolean;
+  onBeforeMutation?: () => boolean;
 }
 interface ReferenceImage { id: string; name: string; url: string }
 /**
@@ -19,13 +22,16 @@ interface ReferenceImage { id: string; name: string; url: string }
  * executes only bounded/reversible native document actions in the existing
  * DocumentSession. No unchecked freeform HTML, PDF mutations or remote uploads.
  */
-export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublication, onEditor }: Props) {
+export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublication, onEditor, ownerScope, compactMode = false, onBeforeMutation }: Props) {
   const [message, setMessage] = React.useState('');
   const [entries, setEntries] = React.useState<WorkbenchEntry[]>(() =>
-    readWorkbenchDialogue(localStorage, documentId));
+    readWorkbenchDialogue(localStorage, documentId, ownerScope));
+  const entriesRef = React.useRef(entries);
   const [references, setReferences] = React.useState<ReferenceImage[]>([]);
   const [warning, setWarning] = React.useState('');
   const logRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
+  React.useEffect(() => { inputRef.current?.focus(); }, []);
   React.useEffect(() => {
     logRef.current?.scrollTo?.({ top: logRef.current.scrollHeight, behavior: 'auto' });
   }, [entries]);
@@ -42,15 +48,17 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     timestamp: new Date().toISOString(), revision: session.getSnapshot().localSequence,
     ...(action ? { action } : {}),
   });
+  // Persist synchronously before navigation/unmount; never write to storage
+  // as a side effect inside React's state updater (which may be replayed).
   const persist = (next: WorkbenchEntry) => {
-    setEntries(previous => {
-      try {
-        return appendWorkbenchDialogue(localStorage, documentId, previous, next);
-      } catch {
-        setWarning('Limite de histórico local atingido ou espaço indisponível. Exporte a conversa antes de continuar.');
-        return previous;
-      }
-    });
+    try {
+      const nextEntries = appendWorkbenchDialogue(
+        localStorage, documentId, entriesRef.current, next, ownerScope);
+      entriesRef.current = nextEntries;
+      setEntries(nextEntries);
+    } catch {
+      setWarning('Histórico local indisponível ou no limite. Exporte a conversa antes de continuar.');
+    }
   };
   const submit = () => {
     const submitted = message.trim();
@@ -60,10 +68,16 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     const action = interpretWorkbenchRequest(submitted);
     let response = '';
     try {
-      switch (action) {
+      if (['compact', 'undo', 'redo'].includes(action) && onBeforeMutation && !onBeforeMutation()) {
+        response = 'Conclua ou cancele a edição em andamento antes de pedir outra alteração. O catálogo não foi modificado.';
+      } else switch (action) {
         case 'compact':
-          applyRefinement(session, 'compact');
-          response = 'Apliquei uma alteração reversível no espaçamento das tabelas. A prévia foi atualizada; revise e salve a nova versão antes do PDF.';
+          if (!session.getSnapshot().document.pages.some(page => page.objects.some(object => object.type === 'table'))) {
+            response = 'Ainda não há tabelas neste catálogo para compactar. Adicione uma tabela ou peça outra alteração.';
+          } else {
+            applyRefinement(session, 'compact');
+            response = 'Compactei as tabelas no catálogo aberto. Veja a mudança na página, confira e use Salvar quando estiver satisfeito.';
+          }
           break;
         case 'undo':
           session.undo();
@@ -125,12 +139,12 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
 
   return <section className="ai-workbench-chat" aria-label="Chat de edição do catálogo">
     <div className="ai-chat-heading">
-      <div><h3>Assistente de edição</h3>
-        <p>Alterações reversíveis, com atualização imediata na prévia.</p></div>
+      <div><h3>Como posso ajudar?</h3>
+        <p>Peça uma mudança neste catálogo. A página é atualizada quando a ação for suportada.</p></div>
       <span aria-label="Quantidade de mensagens" className="ai-chat-count">{entries.length}</span>
     </div>
     <div ref={logRef} className="ai-chat-log" role="log" aria-label="Histórico do catálogo" aria-live="polite">
-      {entries.length === 0 && <p className="ai-chat-start">Experimente: “Deixe as tabelas mais compactas”. Você também pode pedir “Desfaça”, “Refaça” ou “Abra o editor”.</p>}
+      {entries.length === 0 && <div className="ai-chat-welcome"><p>O que você quer ajustar primeiro?</p><div className="ai-chat-suggestions">{['Deixe as tabelas mais compactas', 'Desfaça a última alteração', canPublish ? 'Abra a revisão do PDF' : 'Abra o editor'].map(suggestion => <button key={suggestion} type="button" onClick={() => { setMessage(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}</div><small>Por enquanto, só comandos seguros do editor. O Gemini ainda não controla este catálogo.</small></div>}
       {entries.map(entry => <article key={entry.id} className={'ai-chat-turn ai-chat-' + entry.role}>
         <strong>{entry.role === 'user' ? 'Você' : 'Assistente'}</strong>
         <p>{entry.content}</p>
@@ -139,21 +153,21 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     </div>
     <div className="ai-chat-compose">
       <label htmlFor="ai-workbench-command">Peça uma alteração</label>
-      <textarea id="ai-workbench-command" aria-label="Peça uma alteração" rows={3}
+      <textarea ref={inputRef} id="ai-workbench-command" aria-label="Peça uma alteração" rows={3}
         value={message} maxLength={800}
         placeholder="Ex.: Deixe as tabelas mais compactas"
         onChange={event => setMessage(event.target.value)}
-        onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); submit(); } }} />
+        onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} />
       <div className="ai-chat-actions">
         <button type="button" className="vnext-btn-primary"
           disabled={!message.trim() || entries.length > WORKBENCH_MESSAGE_LIMIT - 2}
-          onClick={submit}>Aplicar pedido seguro</button>
+          onClick={submit}>Enviar pedido <span aria-hidden="true">↗</span></button>
         <button type="button" disabled={!entries.length} onClick={exportHistory}>Exportar histórico</button>
       </div>
-      <label className="ai-image-reference">Fotos de referência (consulta visual, sem processamento por IA)
+      {!compactMode && <label className="ai-image-reference">Fotos de referência (consulta visual, sem processamento por IA)
         <input aria-label="Anexar imagens de referência" type="file" accept="image/png,image/jpeg,image/webp" multiple
           onChange={event => { addImages(event.target.files); event.target.value = ''; }} />
-      </label>
+      </label>}
       {references.length > 0 && <div className="ai-reference-thumbs">
         {references.map(ref => <div key={ref.id}>
           <img src={ref.url} alt={'Referência: ' + ref.name} loading="lazy" />
@@ -161,7 +175,9 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
         </div>)}
       </div>}
       {warning && <p role="alert">{warning}</p>}
-      <p className="ai-boundary">Histórico local por catálogo, até {WORKBENCH_MESSAGE_LIMIT} mensagens. Não é ainda um chat Gemini contínuo. Nenhuma imagem é enviada ao provedor.</p>
+      <p className="ai-boundary">{compactMode
+        ? 'Este painel executa somente alterações guiadas disponíveis. Gemini ainda não edita este catálogo. Histórico local neste navegador.'
+        : `Seu histórico fica neste navegador, separado por conta e catálogo (até ${WORKBENCH_MESSAGE_LIMIT} mensagens). Gemini, tratamento de imagens e edição livre por IA ainda não estão conectados nesta tela.`}</p>
     </div>
   </section>;
 }

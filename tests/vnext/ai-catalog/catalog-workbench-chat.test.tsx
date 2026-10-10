@@ -21,7 +21,7 @@ async function setup(canPublish = false) {
 }
 function send(message: string) {
   fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), { target: { value: message } });
-  fireEvent.click(screen.getByRole('button', { name: 'Aplicar pedido seguro' }));
+  fireEvent.click(screen.getByRole('button', { name: /Enviar pedido/ }));
 }
 describe('side-by-side live A4 editing with an extended persistent chat', () => {
   it('applies compact layout immediately, then undo/redo without technical value loss', async () => {
@@ -29,7 +29,7 @@ describe('side-by-side live A4 editing with an extended persistent chat', () => 
     const before = session.getSnapshot().document;
     send('Deixe as tabelas mais compactas');
     expect(session.getSnapshot().document).not.toEqual(before);
-    expect(screen.getByRole('log', { name: 'Histórico do catálogo' }).textContent).toContain('Apliquei uma alteração reversível');
+    expect(screen.getByRole('log', { name: 'Histórico do catálogo' }).textContent).toContain('Compactei as tabelas');
     send('desfaça');
     expect(session.getSnapshot().document).toEqual(before);
     send('refaça');
