@@ -13,6 +13,8 @@ import {
   type WorkbenchEntry,
 } from './workbench-dialogue';
 import { redactConversationMessage } from './conversation-evidence';
+import { VerifiedPdfTableReview } from './VerifiedPdfTableReview';
+import type { NativePdfCellFillTarget } from './native-pdf-cell-fill';
 
 interface Props {
   session: DocumentSession;
@@ -21,6 +23,7 @@ interface Props {
   client?: NativeComposeFunctionsClient;
   onBeforeMutation?: () => boolean;
   selected?: SelectedEditorialText;
+  selectedTable?: NativePdfCellFillTarget;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -29,7 +32,7 @@ interface Pending {
   requestSequence: number;
 }
 
-export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected }: Props) {
+export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable }: Props) {
   const [message, setMessage] = React.useState('');
   const [turns, setTurns] = React.useState<WorkbenchEntry[]>(() =>
     readWorkbenchDialogue(localStorage, documentId, ownerScope));
@@ -260,6 +263,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
             requestSerial.current++; setPending(undefined); }}
         />
       </div>}
+      {selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}
+        session={session} target={selectedTable} onBeforeMutation={onBeforeMutation}/>}
       {error && <p role="alert">{error}</p>}
       <p className="ai-boundary">Gemini propõe estruturas para o motor do catálogo; você aprova antes de inserir.
         O serviço depende de ativação segura do gateway e limite de gastos. Não interpreta PDFs,

@@ -132,6 +132,18 @@ jobs:
       - name: Check disabled-by-default Gemini composer Edge TS syntax
         run: node -e "const fs=require('fs'); const esbuild=require('esbuild'); esbuild.transformSync(fs.readFileSync('supabase/functions/vnext-catalog-composer/index.ts','utf8'),{loader:'ts',target:'es2022',format:'esm'}); console.log('COMPOSER_SYNTAX_PASS')"
 
+      - name: Real local PDF byte quotes to reviewed native table, saved A4 PDF and reopen (no paid provider)
+        run: node tests/vnext/proof/native-pdf-cell-fill-browser-proof.mjs
+
+      - name: Preserve real-source PDF cell-fill proof, citations, original PDFs and result PDF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-native-cell-proof-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/native-pdf-cell-fill-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Native agent conversation to saved and reopened A4 PDF proof (fake provider only)
         run: node tests/vnext/proof/agent-native-full-workflow-proof.mjs
 

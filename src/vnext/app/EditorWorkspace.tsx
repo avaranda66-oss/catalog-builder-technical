@@ -5418,6 +5418,9 @@ export function EditorWorkspace({
               selected={selectedObject?.type === 'text'
                 ? { objectId: selectedObject.id, text: selectedObject.text, locked: selectedObject.locked }
                 : undefined}
+              selectedTable={selectedTableObject && !selectedTableObject.locked
+                ? { pageId: selectedPage.id, objectId: selectedTableObject.id }
+                : undefined}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
             /> : <CatalogWorkbenchChat
               key={document.id}
