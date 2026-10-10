@@ -13,6 +13,7 @@ import { LocalGenerationRepository, type SavedGeneration } from './repository';
 import { GeminiPlannerChat } from './GeminiPlannerChat';
 import type { CatalogPlan } from './composition';
 import { extractPdfText, type ExtractedPdf } from './pdf-intake';
+import { ProviderCredentialsSettings } from './ProviderCredentialsSettings';
 import type { CatalogAgentGateway } from './gemini-plan';
 import '../app/styles.css';
 import './prototype.css';
@@ -127,6 +128,7 @@ export function AiCatalogPrototypeApp({ gateway }: { gateway?: CatalogAgentGatew
     {step !== 'library' && <ol className="ai-steps" aria-label="Etapas"><li>Fornecer materiais</li><li>Gerar catálogo</li><li>Revisar e publicar</li></ol>}
     {message && <p role="alert">{message}</p>}
     {step === 'library' && <section className="ai-card"><h2>Library local de demonstração</h2><p>Receba uma primeira versão completa e revise os dados antes do PDF.</p><button className="vnext-btn-primary" onClick={() => { setChosenPlan(undefined); setStep('intake'); setMessage(''); }}>Criar com IA</button>{active && <button onClick={() => setStep('review')}>Voltar ao catálogo em revisão</button>}<ul>{savedItems.map(item => <li key={item.id}>{item.title} <button onClick={() => { void repository.getGeneration(item.id).then(saved => { setActive({ value: saved.generation, saved }); setStep('review'); }).catch(() => setMessage('Registro ou aprovação inválidos; reabertura bloqueada.')); }}>Reabrir catálogo</button></li>)}</ul></section>}
+    {step === 'library' && <details className="ai-card"><summary>Configurar provedores de IA no dispositivo</summary><ProviderCredentialsSettings /></details>}
     {step === 'intake' && <section className="ai-card"><h2>1. Fornecer materiais</h2><p>Use o conjunto original de exemplo: três instrumentos fictícios, duas seções técnicas e duas dúvidas para revisar.</p><div className="ai-actions"><button disabled={busy} onClick={() => { void createSyntheticSpecifications().then(setInput); }}>Usar especificações de exemplo</button><label>Arquivo de especificações sintéticas<input type="file" accept=".json,application/json" onChange={event => { const file = event.target.files?.[0]; if (file) { setInput(undefined); void file.text().then(text => validateTechnicalInput(JSON.parse(text))).then(setInput).catch(() => setMessage('Arquivo sintético inválido. Confira conteúdo, origem e hash; nenhum catálogo foi alterado.')); } }} /></label></div>
       <section className="ai-card" aria-label="Documentos PDF locais"><h3>Seus documentos técnicos</h3>
         <p>Selecione até cinco PDFs. A leitura é local e indica páginas que precisam de inspeção visual. Esta etapa ainda não gera fichas a partir dos PDFs automaticamente.</p>
