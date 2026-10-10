@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createDocumentSession, type DocumentSession } from '../application';
 import { mmToU, plainRichText, type CatalogDocument, type TableModel } from '../domain';
 import { createSizedEmptyTable } from '../app/editor-defaults';
+import { applyNativeTableDesign, NativeTableDesignSchema } from './native-table-design';
 
 /**
  * A creative, bounded editorial draft, not an AI-authored engineering record.
@@ -17,6 +18,7 @@ export const ComposePageSchema = z.object({
   table: z.object({
     columns: z.array(prose).min(2).max(6),
     rowLabels: z.array(prose).min(1).max(12),
+    design: NativeTableDesignSchema.optional(),
   }).strict().optional(),
 }).strict().superRefine((page, ctx) => {
   if (page.type === 'comparison' && !page.table) ctx.addIssue({ code: 'custom', message: 'COMPARISON_NEEDS_TABLE' });
@@ -94,7 +96,7 @@ function scaffoldTable(page: z.infer<typeof ComposePageSchema>): TableModel {
   if (!page.table) throw new Error('SCAFFOLD_MISSING_TABLE');
   const { columns, rowLabels } = page.table;
   const table = createSizedEmptyTable({ rows: rowLabels.length + 1, columns: columns.length });
-  return {
+  return applyNativeTableDesign({
     ...table,
     rows: table.rows.map((row, i) => ({ ...row, role: i === 0 ? 'header' as const : 'body' as const })),
     columns: table.columns.map(col => ({ ...col, width: { mode: 'flex' as const, weight: 1 }, minMm: 15 })),
@@ -106,7 +108,7 @@ function scaffoldTable(page: z.infer<typeof ComposePageSchema>): TableModel {
         ? { type: 'richText' as const, value: plainRichText(cell.id + ':draft', text) }
         : { type: 'empty' as const } };
     }),
-  };
+  }, page.table.design ?? 'comparison');
 }
 
 /** Preflight a complete draft in isolation, then commit through canonical CAS actions. */

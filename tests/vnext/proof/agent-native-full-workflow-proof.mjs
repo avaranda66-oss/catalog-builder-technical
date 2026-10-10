@@ -87,6 +87,13 @@ try{
   const finalBefore=await state(page);
   assert.equal(finalBefore.pageCount,12);
   assert.equal(finalBefore.tableCount,4);
+  const renderedTableDesigns = finalBefore.document.pages.flatMap(p=>p.objects)
+    .filter(object=>object.type==='table')
+    .map(object=>({header:object.table.style.rowRoles.header?.background,
+      font:object.table.style.base.fontSizePt,
+      padding:object.table.style.base.paddingMm?.top}));
+  assert.equal(new Set(renderedTableDesigns.map(x=>x.header)).size,3,
+    'Require three visibly distinct native table design profiles in one PDF');
   assert.equal(finalBefore.modelRequests,4);
   assert.equal(finalBefore.lastHistoryLength,8,
     'The last eight conversation turns must reach the next proposal without truncating UI history');
@@ -157,7 +164,7 @@ try{
     baselinePages:baseline.pageCount,steps,rounds:4,totalUserRequests:4,
     modelCalls:{simulated:4,realGoogle:0},supabaseWrites:0,
     dialogueMessagesAfterReopen:dialogueCount,
-    editorialQuality,
+    editorialQuality,tableDesigns:renderedTableDesigns,
     document:{pages:12,tables:4,engineeringCellsBlank:afterReopen.emptyEngineeringCells,
       finalSnapshotSha256:snapshotHash,localSaves:afterReopen.saves,
       reopened:true,revision:afterReopen.remoteRevision},
