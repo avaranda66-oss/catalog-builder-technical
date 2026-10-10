@@ -132,6 +132,18 @@ jobs:
       - name: Check disabled-by-default Gemini composer Edge TS syntax
         run: node -e "const fs=require('fs'); const esbuild=require('esbuild'); esbuild.transformSync(fs.readFileSync('supabase/functions/vnext-catalog-composer/index.ts','utf8'),{loader:'ts',target:'es2022',format:'esm'}); console.log('COMPOSER_SYNTAX_PASS')"
 
+      - name: Native agent conversation to saved and reopened A4 PDF proof (fake provider only)
+        run: node tests/vnext/proof/agent-native-full-workflow-proof.mjs
+
+      - name: Preserve native agent complete workflow PDF and chat receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-agent-workflow-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/agent-native-full-workflow-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Inline assistant UX on the actual VNext editor, desktop and narrow browser
         run: node tests/vnext/proof/inline-assistant-browser-proof.mjs
 
