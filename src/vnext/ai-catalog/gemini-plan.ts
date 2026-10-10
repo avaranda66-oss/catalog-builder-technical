@@ -8,10 +8,16 @@ import { CatalogPlanSchema, type CatalogPlan } from './composition';
  */
 const id = z.string().regex(/^[a-z0-9-]{1,40}$/);
 const label = z.string().min(1).max(100);
+export const CatalogConversationTurnSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  message: z.string().trim().min(1).max(800),
+}).strict();
+export type CatalogConversationTurn = z.infer<typeof CatalogConversationTurnSchema>;
 export const CatalogAgentRequestSchema = z.object({
   version: z.literal(1),
   task: z.literal('plan_catalog'),
   message: z.string().trim().min(4).max(800),
+  history: z.array(CatalogConversationTurnSchema).max(8).optional(),
   sections: z.array(z.object({ id, title: label }).strict()).min(1).max(16),
   models: z.array(label).min(2).max(6),
 }).strict().superRefine((value, ctx) => {
@@ -27,13 +33,15 @@ export const CatalogAgentReplySchema = z.discriminatedUnion('status', [
 ]);
 export type CatalogAgentReply = z.infer<typeof CatalogAgentReplySchema>;
 
-export function prepareCatalogAgentRequest(input: TechnicalInput, message: string): CatalogAgentRequest {
+export function prepareCatalogAgentRequest(input: TechnicalInput, message: string,
+  history: readonly CatalogConversationTurn[] = []): CatalogAgentRequest {
   // Only metadata is sent for layout planning. Never send specification values,
   // document bytes, source quotations or local storage contents on this route.
   return CatalogAgentRequestSchema.parse({
     version: 1,
     task: 'plan_catalog',
     message,
+    ...(history.length ? { history: history.slice(-8) } : {}),
     sections: input.sections.map(section => ({ id: section.id, title: section.title })),
     models: input.models,
   });
@@ -51,9 +59,10 @@ export function verifyCatalogAgentReply(request: CatalogAgentRequest, untrusted:
 
 export type CatalogAgentGateway = (request: CatalogAgentRequest) => Promise<unknown>;
 export async function proposeCatalogPlan(
-  input: TechnicalInput, message: string, gateway: CatalogAgentGateway
+  input: TechnicalInput, message: string, gateway: CatalogAgentGateway,
+  history: readonly CatalogConversationTurn[] = [],
 ): Promise<CatalogAgentReply> {
-  const request = prepareCatalogAgentRequest(input, message);
+  const request = prepareCatalogAgentRequest(input, message, history);
   const raw = await gateway(request);
   return verifyCatalogAgentReply(request, raw);
 }

@@ -117,6 +117,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Two-turn Gemini clarification and approved follow-up browser proof (mock)
+        run: node tests/vnext/proof/gemini-multiturn-browser-proof.mjs
+
+      - name: Preserve Gemini multi-turn acceptance receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-multiturn-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/gemini-multiturn-browser-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: BYOK agent conversation to native A4 PDF, mock transport only
         run: node tests/vnext/proof/byok-agent-conversation-browser-proof.mjs
 

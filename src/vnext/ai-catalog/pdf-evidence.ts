@@ -1,4 +1,5 @@
 import type { ExtractedPdf } from './pdf-intake';
+import { hasLiteralEvidence } from './pdf-literal-evidence';
 
 export interface PdfFactCandidate {
   readonly factId: string;
@@ -36,18 +37,8 @@ export function verifyPdfFactEvidence(pdf: ExtractedPdf, candidate: PdfFactCandi
   // Strict literal preservation. No implicit decimal conversion, sign repair,
   // rounded tolerances, unit inference, or model-generated math.
   // Do not treat '10.0' as a valid citation of '10.00'.
-  const numericBoundaryMatch = (haystack: string, needle: string): boolean => {
-    let index = haystack.indexOf(needle);
-    while (index !== -1) {
-      const before = haystack[index - 1] ?? '';
-      const after = haystack[index + needle.length] ?? '';
-      if (!/[0-9.,]/.test(before) && !/[0-9.,]/.test(after)) return true;
-      index = haystack.indexOf(needle, index + 1);
-    }
-    return false;
-  };
-  if (!numericBoundaryMatch(quote, candidate.value) ||
-      (candidate.unit && !quote.includes(candidate.unit))) {
+  if (!hasLiteralEvidence(quote, candidate.value, 'value') ||
+      (candidate.unit && !hasLiteralEvidence(quote, candidate.unit, 'unit'))) {
     throw new Error('PDF_FACT_VALUE_UNGROUNDED');
   }
 }
