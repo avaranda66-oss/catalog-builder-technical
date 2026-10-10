@@ -105,6 +105,24 @@ jobs:
           node tests/vnext/proof/ai-catalog-prototype-proof.mjs
           AI_PROOF_BROWSER=msedge node tests/vnext/proof/ai-catalog-prototype-proof.mjs
 
+      - name: Institutional 27-page technical catalog, controlled Gemini intent, saved catalog and PDF proof
+        env:
+          LONG_PROOF_SECTIONS: '12'
+          LONG_PROOF_INSTITUTIONAL: '1'
+          LONG_PROOF_REFINE: '1'
+          LONG_PROOF_PRODUCTION: '1'
+          LONG_PROOF_PORT: '5364'
+        run: node tests/vnext/proof/long-institutional-catalog-proof.mjs
+
+      - name: Upload institutional PDF and cell geometry receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: institutional-long-pdf-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/long-institutional-a4/12x16-premium/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload AI-first prototype proof receipts
         if: always()
         uses: actions/upload-artifact@v4

@@ -24,13 +24,13 @@ export const TechnicalInputSchema = z.object({
   sections: z.array(z.object({ id: key, title: name, rows: z.array(z.object({
     id: key, label: name, unit: literal, condition: literal,
     values: z.array(fact).min(2).max(4),
-  }).strict()).min(1).max(16) }).strict()).min(1).max(6),
+  }).strict()).min(1).max(16) }).strict()).min(1).max(16),
 }).strict().superRefine((input, ctx) => {
   const unique = (values: string[], path: string) => {
     if (new Set(values).size !== values.length) ctx.addIssue({ code: 'custom', path: [path], message: 'Duplicate identity' });
   };
   unique(input.models, 'models'); unique(input.sources.map(source => source.id), 'sources'); unique(input.sections.map(section => section.id), 'sections');
-  if (input.sections.reduce((total, section) => total + section.rows.length, 0) > 48) ctx.addIssue({ code: 'custom', message: 'Maximum 48 facts' });
+  if (input.sections.reduce((total, section) => total + section.rows.length, 0) > 192) ctx.addIssue({ code: 'custom', message: 'Maximum 192 facts' });
   for (const source of input.sources) unique(source.pages.map(page => String(page.number)), 'sources');
   for (const section of input.sections) {
     unique(section.rows.map(row => row.id), 'sections');
