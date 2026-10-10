@@ -1,7 +1,9 @@
 import React from 'react';
 import type { DocumentSession } from '../application';
 import { ProviderCredentialsSettings } from './ProviderCredentialsSettings';
-import { nativeComposeGateway, type NativeComposeFunctionsClient } from './native-compose-client';
+import { nativeComposeGateway, nativeTextEditGateway, type NativeComposeFunctionsClient } from './native-compose-client';
+import { applyNativeTextEdit, plainSelectedEditorialText, proposeNativeTextEdit,
+  type NativeTextEditReply, type SelectedEditorialText } from './native-text-edit';
 import {
   applyNativeCompose, requestNativeCompose,
   type NativeComposePlan, type NativeComposeRequest,
@@ -18,6 +20,7 @@ interface Props {
   ownerScope?: string;
   client?: NativeComposeFunctionsClient;
   onBeforeMutation?: () => boolean;
+  selected?: SelectedEditorialText;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -26,7 +29,7 @@ interface Pending {
   requestSequence: number;
 }
 
-export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation }: Props) {
+export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected }: Props) {
   const [message, setMessage] = React.useState('');
   const [turns, setTurns] = React.useState<WorkbenchEntry[]>(() =>
     readWorkbenchDialogue(localStorage, documentId, ownerScope));
@@ -36,11 +39,17 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const requestSerial = React.useRef(0);
   const [busy, setBusy] = React.useState(false);
   const [pending, setPending] = React.useState<Pending>();
+  const [rewriteMode, setRewriteMode] = React.useState(false);
+  const [pendingRewrite, setPendingRewrite] = React.useState<{ reply: NativeTextEditReply;
+    target: SelectedEditorialText; revision: number; serial: number }>();
+  const editableSelectedText = selected ? plainSelectedEditorialText(selected) : null;
   const [error, setError] = React.useState('');
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { input.current?.focus(); }, []);
+  React.useEffect(() => { requestSerial.current++; setPendingRewrite(undefined);
+    setRewriteMode(false); }, [selected?.objectId]);
   React.useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [turns]);
   React.useEffect(() => () => {
     requestSerial.current++;
@@ -78,12 +87,16 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       role: turn.role, message: redactConversationMessage(turn.content).slice(0, 800),
     }));
     const sequence = ++requestSerial.current;
-    setBusy(true); setError(''); setPending(undefined);
+    setBusy(true); setError(''); setPending(undefined); setPendingRewrite(undefined);
     setMessage('');
     if (!saveTurn('user', text)) { setBusy(false); return; }
     try {
-      const gateway = nativeComposeGateway(client, credential.current);
-      const reply = await requestNativeCompose(snapshot.document, text, gateway, history);
+      const isRewriting = rewriteMode && !!selected;
+      const reply = isRewriting
+        ? await proposeNativeTextEdit(selected, text,
+          nativeTextEditGateway(client, credential.current), history)
+        : await requestNativeCompose(snapshot.document, text,
+          nativeComposeGateway(client, credential.current), history);
       if (sequence !== requestSerial.current) return;
       if (session.getSnapshot().localSequence !== snapshot.localSequence ||
           session.getSnapshot().document.id !== snapshot.document.id) {
@@ -92,6 +105,10 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       }
       if (reply.status === 'clarification') {
         saveTurn('assistant', reply.question);
+      } else if ('revisedText' in reply) {
+        if (!isRewriting || !selected) throw new Error('TEXT_EDIT_CONTEXT_LOST');
+        setPendingRewrite({ reply, target: selected, revision: snapshot.localSequence, serial: sequence });
+        saveTurn('assistant', 'Preparei uma reescrita do texto selecionado. Confira o antes e depois antes de aplicar.');
       } else {
         setPending({ plan: reply, revision: snapshot.localSequence,
           documentId: snapshot.document.id, requestSequence: sequence });
@@ -129,6 +146,29 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setError('A aplicação foi bloqueada por conflito ou documento inválido. Confira o editor antes de tentar novamente.');
     }
   };
+  const approveRewrite = () => {
+    const proposal = pendingRewrite;
+    if (!proposal || proposal.reply.status !== 'proposal' ||
+        proposal.serial !== requestSerial.current || busy) return;
+    if (onBeforeMutation && !onBeforeMutation()) {
+      setError('Conclua ou cancele a edição de texto em andamento antes de aprovar a reescrita.');
+      return;
+    }
+    try {
+      const result = applyNativeTextEdit(session, proposal.target,
+        proposal.reply, proposal.revision);
+      saveTurn('assistant', 'Reescrevi o texto editorial selecionado no documento. ' +
+        'Você pode desfazer esta alteração e deve salvar depois de revisar.');
+      setPendingRewrite(undefined);
+      setError('');
+      setRewriteMode(false);
+      // Preserve no raw model-generated content in browser console.
+      void result.newRevision;
+    } catch {
+      setPendingRewrite(undefined);
+      setError('O texto mudou ou não era seguro alterar. Nenhuma reescrita foi aprovada.');
+    }
+  };
   return <section className="ai-workbench-chat" aria-label="Chat de criação com Gemini">
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>
@@ -136,6 +176,16 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       <span className="ai-chat-count" aria-label="Quantidade de mensagens">{turns.length}</span>
     </div>
     <div className="ai-chat-log" ref={log} role="log" aria-label="Histórico de criação do catálogo" aria-live="polite">
+      {editableSelectedText && <div className="ai-selection-context">
+        <small>Texto selecionado na página:</small>
+        <p>{editableSelectedText}</p>
+        <button type="button" aria-pressed={rewriteMode}
+          onClick={() => { requestSerial.current++; setPending(undefined); setPendingRewrite(undefined);
+            setRewriteMode(value => !value); setError(''); input.current?.focus(); }}>
+          {rewriteMode ? 'Voltar a criar páginas' : 'Reescrever este texto com Gemini'}
+        </button>
+        {rewriteMode && <small>Ao enviar, este trecho será transmitido ao provedor para propor uma revisão. Você confirma antes de alterar o catálogo.</small>}
+      </div>}
       {turns.length === 0 && <div className="ai-chat-welcome">
         <p>O que vamos criar?</p>
         <div className="ai-chat-suggestions">
@@ -152,6 +202,17 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <small>Revisão {turn.revision}</small>
       </article>)}
       {busy && <p role="status">Gemini está preparando uma proposta de páginas…</p>}
+      {pendingRewrite?.reply.status === 'proposal' && <div className="ai-compose-proposal"
+        role="group" aria-label="Revisão de texto selecionado">
+        <h4>Antes de alterar, confira</h4>
+        <p><strong>Texto atual:</strong> {plainSelectedEditorialText(pendingRewrite.target)}</p>
+        <p><strong>Nova proposta:</strong> {pendingRewrite.reply.revisedText}</p>
+        <div className="ai-chat-actions">
+          <button type="button" className="vnext-btn-primary"
+            onClick={approveRewrite}>Confirmar reescrita selecionada</button>
+          <button type="button" onClick={() => { requestSerial.current++; setPendingRewrite(undefined); }}>Rejeitar reescrita</button>
+        </div>
+      </div>}
       {pending && <div className="ai-compose-proposal" role="group" aria-label="Proposta de páginas">
         <h4>Proposta para revisar</h4>
         <p>{pending.plan.summary}</p>
@@ -168,17 +229,19 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       </div>}
     </div>
     <div className="ai-chat-compose">
-      <label htmlFor="gemini-catalog-command">Seu pedido ao Gemini</label>
+      <label htmlFor="gemini-catalog-command">{rewriteMode ? 'Como deseja reescrever o texto selecionado?' : 'Seu pedido ao Gemini'}</label>
       <textarea id="gemini-catalog-command" ref={input} value={message} maxLength={1200} rows={3}
-        placeholder="Crie um catálogo técnico com capa, índice e tabelas comparativas…"
-        onChange={event => { setMessage(event.target.value); setPending(undefined); requestSerial.current++; }}
+        placeholder={rewriteMode ? 'Torne este título mais claro, conciso e profissional…'
+          : 'Crie um catálogo técnico com capa, índice e tabelas comparativas…'}
+        onChange={event => { setMessage(event.target.value); setPending(undefined);
+          setPendingRewrite(undefined); requestSerial.current++; }}
         onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault(); void send();
         } }} />
       <div className="ai-chat-actions">
         <button className="vnext-btn-primary" type="button" onClick={() => { void send(); }}
           disabled={!message.trim() || busy || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
-          {busy ? 'Preparando…' : 'Enviar ao Gemini ↗'}
+          {busy ? 'Preparando…' : rewriteMode ? 'Pedir reescrita ao Gemini ↗' : 'Enviar ao Gemini ↗'}
         </button>
         <button type="button" onClick={() => setSettingsOpen(v => !v)}
           aria-expanded={settingsOpen} aria-controls="catalog-gemini-settings">

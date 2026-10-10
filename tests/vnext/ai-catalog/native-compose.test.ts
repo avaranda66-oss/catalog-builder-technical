@@ -88,4 +88,23 @@ describe('Gemini conversational scaffold -> native document actions', () => {
     expect(() => verifyNativeComposeReply({ ...plan,
       pages: [{ ...plan.pages[2], table: { columns: ['A','B'], rowLabels: Array(100).fill('x') } }] })).toThrow();
   });
+  it('extends a pre-existing catalog over four conversational rounds without erasing prior work', () => {
+    const session = createDocumentSession(doc(), { createId: id });
+    const firstId = session.getSnapshot().document.pages[0].id;
+    for (let turn = 0; turn < 4; turn++) {
+      const baseline = session.getSnapshot().document;
+      const currentRevision = session.getSnapshot().localSequence;
+      const receipt = applyNativeCompose(session, plan, currentRevision);
+      expect(receipt.tablesAdded).toBe(1);
+      const changed = session.getSnapshot().document;
+      expect(changed.pages.slice(0, baseline.pages.length - (turn === 0 ? 1 : 0)))
+        .toEqual(baseline.pages.slice(0, baseline.pages.length - (turn === 0 ? 1 : 0)));
+      expect(changed.pages[0].id).toBe(firstId);
+      expect(changed.pages.length).toBe(3 + 3 * turn);
+      expect(changed.pages.some(p => p.objects.some(o => o.type === 'table'))).toBe(true);
+    }
+    expect(session.getSnapshot().document.pages).toHaveLength(12);
+    expect(session.getSnapshot().document.pages.flatMap(page => page.objects)
+      .filter(object => object.type === 'table')).toHaveLength(4);
+  });
 });

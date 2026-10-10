@@ -9,7 +9,7 @@ import '../../../../src/vnext/app/styles.css';
 
 declare global {
   interface Window {
-    __INLINE_ASSISTANT_PROOF__?: { snapshot: () => { pages: number; revision: number; tables: number } };
+    __INLINE_ASSISTANT_PROOF__?: { snapshot: () => { pages: number; revision: number; tables: number; editableTextObjectId: string | null } };
   }
 }
 const element = document.getElementById('root');
@@ -19,6 +19,9 @@ const generated = await compileCatalog(input);
 const session = createDocumentSession(generated.document, { createId: () => crypto.randomUUID() });
 window.__INLINE_ASSISTANT_PROOF__ = {
   snapshot: () => ({
+    editableTextObjectId: session.getSnapshot().document.pages[0].objects
+      .find(object => object.type === 'text' && object.text.paragraphs.some(paragraph =>
+        paragraph.inlines.some(inline => inline.kind === 'text' && !/[0-9]/.test(inline.text))))?.id ?? null,
     pages: session.getSnapshot().document.pages.length,
     revision: session.getSnapshot().localSequence,
     tables: session.getSnapshot().document.pages.flatMap(page => page.objects)
@@ -26,10 +29,14 @@ window.__INLINE_ASSISTANT_PROOF__ = {
   }),
 };
 const client = { functions: { invoke: async (name, { body }) => {
-  if (name !== 'vnext-catalog-composer' || body.task !== 'compose_scaffold' ||
+  if (name !== 'vnext-catalog-composer' ||
+      !['compose_scaffold', 'revise_selected_text'].includes(body.task) ||
       body.credential?.provider !== 'gemini' || !body.credential.apiKey) {
     return { data: null, error: { message: 'TEST_REJECTED' } };
   }
+  if (body.task === 'revise_selected_text') return { data: {
+    reply: { status: 'proposal', revisedText: 'Apresentação institucional de instrumentos profissionais' } },
+    error: null };
   return { data: { reply: {
     version: 1, status: 'proposal', summary: 'Plano editorial com uma capa e uma tabela nativa para revisão.',
     pages: [

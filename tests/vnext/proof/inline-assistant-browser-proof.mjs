@@ -99,15 +99,39 @@ try {
   assert.equal(afterCompose.pages, after.pages + 2);
   assert.equal(afterCompose.tables, after.tables + 1);
   await page.screenshot({ path: resolve(evidence, 'gemini-scaffold-created-native-pages.png'), fullPage: false });
+  // Select real editorial prose on the A4 page. Its contents are never sent
+  // to the fake backend until the author asks to rewrite this selection.
+  const textId = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot().editableTextObjectId);
+  assert(textId, 'Need plain editorial text on the active A4 page');
+  await page.locator('[data-editor-object-id="' + textId + '"]').click();
+  await page.getByRole('button', { name: 'Reescrever este texto com Gemini' }).waitFor();
+  await page.getByRole('button', { name: 'Reescrever este texto com Gemini' }).click();
+  await page.getByRole('textbox', { name: 'Como deseja reescrever o texto selecionado?' })
+    .fill('Reescreva o texto de apresentação em linguagem editorial profissional.');
+  await page.getByRole('button', { name: /Pedir reescrita ao Gemini/ }).click();
+  await page.getByRole('button', { name: 'Confirmar reescrita selecionada' }).waitFor();
+  const beforeRewrite = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
+  await page.screenshot({ path: resolve(evidence, 'gemini-selected-text-before-approval.png'), fullPage: false });
+  await page.getByRole('button', { name: 'Confirmar reescrita selecionada' }).click();
+  await page.getByRole('log', { name: 'Histórico de criação do catálogo' })
+    .getByText('Reescrevi o texto editorial selecionado', { exact: false }).waitFor();
+  const afterRewrite = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
+  assert(afterRewrite.revision > beforeRewrite.revision);
+  assert.equal(afterRewrite.pages, beforeRewrite.pages);
+  assert.equal(afterRewrite.tables, beforeRewrite.tables);
+  await page.screenshot({ path: resolve(evidence, 'gemini-selected-text-after-approval.png'), fullPage: false });
   assert.deepEqual(errors, [], 'No runtime exceptions');
   assert.deepEqual(outbound, [], 'Local proof must send neither documents nor keys to a provider');
   const receipt = { status: 'PASS', mode: 'LOCAL_EDITOR_FAKE_COMPOSER_NO_REAL_GEMINI',
-    initial, after, afterCompose, desktop: geometry, compactWithEnter: true, reopenHistory: true,
+    initial, after, afterCompose, beforeRewrite, afterRewrite,
+    desktop: geometry, compactWithEnter: true, reopenHistory: true,
     mobile, screenshots: [
       'assistant-at-right-of-real-editor-desktop.png',
       'assistant-mobile-overlay-with-close-button.png',
       'gemini-scaffold-proposal-before-approval.png',
       'gemini-scaffold-created-native-pages.png',
+      'gemini-selected-text-before-approval.png',
+      'gemini-selected-text-after-approval.png',
     ], authorizedProductionSession: false, liveProviderCalls: 0,
       simulatedComposerCalls: 1, cloudSaveTested: false, errors, outbound };
   await writeFile(resolve(evidence, 'receipt.json'), JSON.stringify(receipt, null, 2));
