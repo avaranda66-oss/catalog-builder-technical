@@ -111,7 +111,29 @@ try {
   await page.getByRole('button', { name: 'Reabrir catálogo' }).click();
   await page.waitForFunction(count => document.querySelectorAll('.ai-pages [data-table-id]').length === count, expected.length);
   await page.getByRole('button', { name: 'Revisar publicação / PDF' }).click();
-  await page.locator('[data-publication-status="READY"]').waitFor({ timeout: 120000 });
+  try {
+    await page.locator('[data-publication-status="READY"]').waitFor({ timeout: 120000 });
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      statusAttributes: [...document.querySelectorAll('[data-publication-status]')].map(node =>
+        ({ tag: node.tagName, status: node.getAttribute('data-publication-status'), text: node.textContent?.slice(0, 1800) })),
+      openDialogs: [...document.querySelectorAll('[role="dialog"]')].map(node => node.textContent?.slice(0, 1500)),
+      warnings: [...document.querySelectorAll('[role="alert"],[data-prototype-diagnostic],.vnext-preflight-issue')]
+        .slice(0, 45).map(node => node.textContent?.slice(0, 500)),
+      documentPages: document.querySelectorAll('.editorial-page').length,
+      tables: document.querySelectorAll('.ai-pages [data-table-id]').length,
+      hasPrintPolicy: document.body.getAttribute('data-vnext-print-policy'),
+      bodyLast: document.body.innerText.slice(-4500),
+    }));
+    await writeFile(resolve(folder, 'publication-blocker-diagnostic.json'), JSON.stringify({
+      debug: diagnostics,
+      expectedPages: expected.length + (institutional ? 3 : 0),
+      exception: String(error), browser: browser?.version(),
+    }, null, 2));
+    await page.screenshot({ path: resolve(folder, 'publication-blocker.png'), fullPage: false });
+    console.error('LONG_PROOF_PUBLICATION_DIAGNOSTIC',JSON.stringify(diagnostics).slice(0, 7500));
+    throw error;
+  }
   const pages = page.locator('[data-publication-host] .editorial-page');
   await pages.first().screenshot({ path: resolve(folder,'first-page.png') });
   await pages.last().screenshot({ path: resolve(folder,'last-page.png') });
