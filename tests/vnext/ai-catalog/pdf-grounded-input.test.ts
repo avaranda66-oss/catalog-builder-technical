@@ -3,6 +3,8 @@ import { jsPDF } from 'jspdf';
 import { extractPdfText } from '../../../src/vnext/ai-catalog/pdf-intake';
 import { prepareGroundedPdfInput } from '../../../src/vnext/ai-catalog/pdf-grounded-input';
 import { approveGeneration, assertGeneratedIntegrity, compileCatalog, tableMatrix } from '../../../src/vnext/ai-catalog/composition';
+import { validateSyntheticFileInput } from '../../../src/vnext/ai-catalog/contracts';
+import { createSyntheticSpecifications } from '../../../src/vnext/ai-catalog/fixture';
 
 async function fixture() {
   const models = ['AX-041', 'BX-062'];
@@ -45,6 +47,14 @@ async function fixture() {
 }
 
 describe('Authentic PDF byte-grounded extraction boundary', () => {
+  it('allows original synthetic JSON but rejects a self-declared PDF at the file-upload boundary', async () => {
+    const synthetic = await createSyntheticSpecifications();
+    expect(await validateSyntheticFileInput(synthetic)).toEqual(synthetic);
+    const forged = { ...synthetic, kind: 'grounded-pdf-specifications', sources: synthetic.sources.map(source => ({
+      ...source, kind: 'pdf', pdfSha256: '0'.repeat(64), pdfPageCount: 1,
+    })) };
+    await expect(validateSyntheticFileInput(forged)).rejects.toThrow('PDF_BYTES_REQUIRED');
+  });
   it('ingests native PDFs, compiles a canonical catalog with correct values and real-byte hashes', async () => {
     const { materials, proposal } = await fixture();
     const result = await prepareGroundedPdfInput(materials, proposal);

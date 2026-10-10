@@ -5,6 +5,7 @@ import {
   type TechnicalInput,
 } from './contracts';
 import { extractPdfText, type ExtractedPdf } from './pdf-intake';
+import { hasAtomicPdfEvidence } from './pdf-literal-evidence';
 
 const literal = z.string().max(160);
 const key = z.string().regex(/^[a-z0-9-]{1,40}$/);
@@ -78,6 +79,7 @@ export async function prepareGroundedPdfInput(
   const selectedPages = new Map<string, Set<number>>(
     [...references.keys()].map(id => [id, new Set<number>()]),
   );
+  const labels = proposal.sections.flatMap(section => section.rows.map(row => row.label));
   for (const section of proposal.sections) for (const row of section.rows) {
     if (row.values.length !== proposal.models.length) throw new Error('PDF_MODEL_COVERAGE_INVALID');
     for (const [modelIndex, fact] of row.values.entries()) {
@@ -88,18 +90,10 @@ export async function prepareGroundedPdfInput(
         if (!source || !page || page.needsVisualExtraction || page.textLength !== page.text.length) {
           throw new Error('PDF_EVIDENCE_PAGE_UNREADABLE');
         }
-        const q = candidate.source.quote;
-        const value = candidate.value;
-        // Match exact literal tokens, never normalize decimal separators,
-        // minus/plus signs, degree symbol or engineering units.
-        let exact = false, i = q.indexOf(value);
-        while (i !== -1) {
-          const before = q[i - 1] ?? '', after = q[i + value.length] ?? '';
-          if (!/[0-9.,]/.test(before) && !/[0-9.,]/.test(after)) { exact = true; break; }
-          i = q.indexOf(value, i + 1);
-        }
-        if (!page.text.includes(q) || !q.includes(proposal.models[modelIndex]) ||
-            !q.includes(row.label) || !exact || (row.unit && !q.includes(row.unit))) {
+        if (!page.text.includes(candidate.source.quote) || !hasAtomicPdfEvidence({
+          quote: candidate.source.quote, model: proposal.models[modelIndex], models: proposal.models,
+          label: row.label, labels, value: candidate.value, unit: row.unit, condition: row.condition,
+        })) {
           throw new Error('PDF_EVIDENCE_VALUE_UNGROUNDED');
         }
         selectedPages.get(candidate.source.sourceId)!.add(candidate.source.page);

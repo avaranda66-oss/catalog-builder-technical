@@ -34,11 +34,14 @@ export async function extractPdfText(
   if (!fileName.toLowerCase().endsWith('.pdf') || bytes.byteLength < 8 || bytes.byteLength > MAX_PDF_BYTES) {
     throw new Error('PDF_INPUT_INVALID');
   }
-  const signature = new TextDecoder('ascii').decode(new Uint8Array(bytes, 0, 5));
+  // Capture once before yielding: callers can still mutate their ArrayBuffer
+  // while digest awaits. Hash and parser must observe the same document.
+  const sourceBytes = bytes.slice(0);
+  const signature = new TextDecoder('ascii').decode(new Uint8Array(sourceBytes, 0, 5));
   if (signature !== '%PDF-') throw new Error('PDF_SIGNATURE_INVALID');
-  const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
+  const sha256 = hex(await crypto.subtle.digest('SHA-256', sourceBytes));
   const pdf = await getDocument({
-    data: new Uint8Array(bytes.slice(0)), // PDF.js takes ownership of its buffer
+    data: new Uint8Array(sourceBytes), // PDF.js owns the captured, already-hashed buffer
     useSystemFonts: true, disableFontFace: true, isEvalSupported: false,
     stopAtErrors: true,
   }).promise;
