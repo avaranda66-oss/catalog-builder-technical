@@ -20,7 +20,11 @@ export function serializeTsv(matrix: readonly (readonly string[])[]): string {
   if (matrix.some((row) => row.length !== width)) {
     throw new TableTsvError('TSV_ROW_WIDTH_MISMATCH', 'TSV matrix must be rectangular');
   }
-  return matrix.map((row) => row.map(serializeField).join('\t')).join('\n');
+  return matrix.map((row, index) => {
+    // A final blank one-column row otherwise looks like an optional record terminator.
+    if (width === 1 && index === matrix.length - 1 && row[0] === '') return '""';
+    return row.map(serializeField).join('\t');
+  }).join('\n');
 }
 
 export function parseTsv(input: string): string[][] {

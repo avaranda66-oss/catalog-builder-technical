@@ -32,6 +32,18 @@ export class TableBulkAuthoringError extends Error {
     this.name = 'TableBulkAuthoringError';
   }
 }
+export class TablePasteGeometryError extends TableBulkAuthoringError {
+  constructor(
+    readonly sourceRows: number,
+    readonly sourceColumns: number,
+    readonly destinationRows: number,
+    readonly destinationColumns: number,
+    readonly destinationKind: 'capacity' | 'selection'
+  ) {
+    super('TABLE_PASTE_GEOMETRY_INVALID', 'Pasted matrix does not match the destination geometry');
+    this.name = 'TablePasteGeometryError';
+  }
+}
 export interface PreparedTableBulkMutation {
   geometry: {
     rowIds: string[];
@@ -105,9 +117,11 @@ function destinationGeometry(
   if (isSingleCell && (sourceRows > 1 || sourceColumns > 1)) {
     if (normalized.rowStart + sourceRows > table.rows.length
         || normalized.columnStart + sourceColumns > table.columns.length) {
-      throw new TableBulkAuthoringError(
-        'TABLE_PASTE_GEOMETRY_INVALID',
-        'Pasted matrix does not fit inside the destination Table'
+      throw new TablePasteGeometryError(
+        sourceRows, sourceColumns,
+        table.rows.length - normalized.rowStart,
+        table.columns.length - normalized.columnStart,
+        'capacity'
       );
     }
     return {
@@ -128,9 +142,8 @@ function destinationGeometry(
   }
 
   if (sourceRows !== selectedRows || sourceColumns !== selectedColumns) {
-    throw new TableBulkAuthoringError(
-      'TABLE_PASTE_GEOMETRY_INVALID',
-      `Clipboard ${sourceRows}×${sourceColumns} does not match selection ${selectedRows}×${selectedColumns}`
+    throw new TablePasteGeometryError(
+      sourceRows, sourceColumns, selectedRows, selectedColumns, 'selection'
     );
   }
   return {

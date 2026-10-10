@@ -7,6 +7,7 @@ import {
   prepareNewMarkerAssignment,
   prepareTypedTablePaste,
   TableBulkAuthoringError,
+  TablePasteGeometryError,
 } from '@/vnext/editor/table-bulk-authoring';
 import {
   prepareTableClipboard,
@@ -84,6 +85,27 @@ describe('W4.D clipboard preparation', () => {
 });
 
 describe('W4.D deterministic paste geometry', () => {
+  it('reports the source and remaining capacity without changing data when a paste cannot fit', () => {
+    const table = emptyTable(4, 4);
+    const before = structuredClone(table);
+    let rejected: unknown;
+    try {
+      prepareExternalTsvPaste(table, tableCellSelection(identity, point(3, 2)), [['00017', '', '±0,01%'], ['μA', 'Δ', '°C']]);
+    } catch (error) { rejected = error; }
+    expect(rejected).toBeInstanceOf(TablePasteGeometryError);
+    expect(rejected).toMatchObject({ code: 'TABLE_PASTE_GEOMETRY_INVALID', sourceRows: 2, sourceColumns: 3, destinationRows: 1, destinationColumns: 2, destinationKind: 'capacity' });
+    expect(table).toEqual(before);
+  });
+
+  it('distinguishes a mismatched range from insufficient table capacity', () => {
+    const table = emptyTable(4, 4);
+    let rejected: unknown;
+    try {
+      prepareExternalTsvPaste(table, tableRangeSelection(identity, point(0, 0), point(1, 1)), [['a', 'b', 'c']]);
+    } catch (error) { rejected = error; }
+    expect(rejected).toBeInstanceOf(TablePasteGeometryError);
+    expect(rejected).toMatchObject({ sourceRows: 1, sourceColumns: 3, destinationRows: 2, destinationColumns: 2, destinationKind: 'selection' });
+  });
   it('expands MxN from one ordinary cell, accepts exact range, and rejects larger mismatches/no tiling', () => {
     const table = emptyTable(4, 4);
     const matrix = [['A', 'B', 'C'], ['D', 'E', 'F']];
