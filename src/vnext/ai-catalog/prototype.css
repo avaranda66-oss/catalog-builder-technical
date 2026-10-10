@@ -1,0 +1,19 @@
+body:has(.ai-shell) { overflow:auto; height:auto; }
+.ai-shell { max-width:1200px; margin:0 auto; padding:24px; color:var(--vnext-text); }
+.ai-shell * { box-sizing:border-box; }
+.ai-header,.ai-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+.ai-header h1 { margin:0; font-size:26px; }.ai-header p { color:var(--vnext-primary); margin:0 0 6px; }
+.ai-boundary { color:var(--vnext-text-muted); font-size:13px; line-height:1.6; }
+.ai-steps { display:flex; gap:32px; padding:18px 24px; background:white; border-radius:var(--vnext-radius-control); flex-wrap:wrap; }
+.ai-card { padding:22px; background:white; border:1px solid var(--vnext-border); border-radius:var(--vnext-radius-surface); margin:20px 0; }
+.ai-shell h2 { font-size:22px; }.ai-shell h3 { font-size:17px; }
+.ai-shell label { display:block; margin:12px 0; font-size:14px; }
+.ai-shell input:not([type=checkbox]),.ai-shell textarea,.ai-shell select { display:block; width:100%; max-width:680px; padding:10px; border:1px solid var(--vnext-control-border); border-radius:6px; font:inherit; margin-top:8px; }
+.ai-shell button { border:1px solid var(--vnext-control-border); background:white; color:var(--vnext-primary); padding:10px 14px; border-radius:7px; font:inherit; cursor:pointer; }
+.ai-shell button:disabled { opacity:.5; cursor:not-allowed; }.ai-shell .vnext-btn-primary { background:var(--vnext-primary); color:white; }
+.ai-actions { justify-content:flex-start; }.ai-issue { padding:14px; margin:12px 0; border-left:4px solid var(--vnext-primary); background:var(--vnext-accent-surface); }
+.ai-pages { overflow:auto; max-height:800px; background:#dce4ed; padding:20px; }.ai-pages .editorial-page { margin:0 auto 18px; box-shadow:0 4px 16px #17203322; }
+.ai-trace { border-collapse:collapse; width:100%; font-size:12px; }.ai-trace th,.ai-trace td { border-bottom:1px solid var(--vnext-border); padding:10px; text-align:left; white-space:pre-wrap; vertical-align:top; }.ai-trace pre { white-space:pre-wrap; }
+.ai-proposal { padding:12px; background:var(--vnext-accent-surface); margin-top:12px; }.ai-proposal button { margin-right:12px; }
+.ai-editor { height:720px; overflow:auto; }.ai-check { font-weight:700; }
+@media(max-width:600px) { .ai-shell { padding:14px; }.ai-steps { display:block; }.ai-steps li { margin:10px; }.ai-card { padding:14px; } }

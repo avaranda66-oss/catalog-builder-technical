@@ -96,3 +96,20 @@ jobs:
 
       - name: Father translation batching and partial failure proof
         run: node tests/vnext/proof/father-translation-batching-proof.mjs
+
+      - name: AI-first prototype production Chromium, Edge and PDF proof
+        env:
+          AI_PROOF_PRODUCTION: '1'
+          AI_PROOF_OUTPUT: scratch/ai-catalog-production
+        run: |
+          node tests/vnext/proof/ai-catalog-prototype-proof.mjs
+          AI_PROOF_BROWSER=msedge node tests/vnext/proof/ai-catalog-prototype-proof.mjs
+
+      - name: Upload AI-first prototype proof receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-catalog-prototype-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/ai-catalog-production/
+          if-no-files-found: warn
+          retention-days: 30
