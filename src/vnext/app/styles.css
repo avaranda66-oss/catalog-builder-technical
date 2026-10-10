@@ -76,6 +76,10 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-shell[data-simple-by-default="true"] .vnext-table-axis-toolbar { width: min(100%, 680px); justify-content: flex-start; background: #f8fbfe; }
 .vnext-shell[data-simple-by-default="true"] .vnext-leave-table-grid { margin-left: auto; }
 .vnext-tool-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.vnext-new-table-size { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: min(100%, 680px); margin: 0 auto 12px; padding: 12px; border: 1px solid #dbe3ec; border-radius: 8px; background: #fff; color: #31445b; font-size: 12px; }
+.vnext-new-table-size label { display: flex; align-items: center; gap: 6px; }
+.vnext-new-table-size input { width: 76px; min-height: 32px; border: 1px solid #c7d1dd; border-radius: 6px; padding: 4px 8px; font: inherit; }
+.vnext-new-table-size p { flex-basis: 100%; margin: 0; line-height: 1.5; }
 .vnext-tool-group button, .vnext-inspector-action { min-height: 32px; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #31445b; cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; padding: 0 9px; }
 .vnext-tool-group button:hover:not(:disabled), .vnext-inspector-action:hover:not(:disabled) { background: #f6f8fb; border-color: #95a6b8; }
 .vnext-tool-group button:disabled { cursor: not-allowed; opacity: .38; }

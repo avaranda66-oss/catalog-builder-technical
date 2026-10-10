@@ -86,6 +86,8 @@ export function TableGridOverlay({
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<DragState | null>(null);
+  const lastCellPointerTypeRef = React.useRef('');
+  const lastTouchTapRef = React.useRef<(TableSelectionPoint & { completedAt: number }) | null>(null);
   const dimensionDragRef = React.useRef<DimensionDragState | null>(null);
   const [dimensionPreview, setDimensionPreview] = React.useState<DimensionDragState | null>(null);
   const resolvePoint = React.useMemo(() => createTablePointResolver(table), [table]);
@@ -99,11 +101,14 @@ export function TableGridOverlay({
   React.useLayoutEffect(() => {
     const root = rootRef.current;
     const activeElement = root?.ownerDocument.activeElement;
-    // Async layout measurement may remount the grid during inspector edits.
-    // Never take focus away from a field while its value/Enter is committing.
+    // Physical measurement can remount the grid while an inspector field is in use.
     if (activeElement?.closest('input, textarea, select, [contenteditable="true"]')) return;
     root?.focus({ preventScroll: true });
   }, [identity.objectId]);
+
+  React.useEffect(() => {
+    lastTouchTapRef.current = null;
+  }, [identity.objectId, localSequence]);
 
   React.useEffect(() => {
     const drag = dragRef.current;
@@ -159,6 +164,8 @@ export function TableGridOverlay({
       ? selection.anchor
       : canonical;
     const touch = event.pointerType === 'touch';
+    lastCellPointerTypeRef.current = event.pointerType;
+    if (!touch) lastTouchTapRef.current = null;
     dragRef.current = {
       pointerId: event.pointerId,
       sourceSequence: localSequence,
@@ -205,13 +212,25 @@ export function TableGridOverlay({
       onStaleGesture();
       return;
     }
-    if (drag.touch && !drag.moved) selectCell(pointAtClient(event.clientX, event.clientY) ?? point, event.shiftKey);
+    if (drag.touch) {
+      const target = !drag.moved ? pointAtClient(event.clientX, event.clientY) ?? point : undefined;
+      const canonical = target && resolvePoint(target);
+      const previous = lastTouchTapRef.current;
+      const secondTap = Boolean(canonical && previous && !rangeExtensionArmed
+        && canonical.rowId === previous.rowId && canonical.columnId === previous.columnId
+        && event.timeStamp - previous.completedAt >= 0 && event.timeStamp - previous.completedAt <= 500);
+      lastTouchTapRef.current = !secondTap && canonical && !rangeExtensionArmed
+        ? { ...canonical, completedAt: event.timeStamp } : null;
+      if (target) selectCell(target, event.shiftKey);
+      if (secondTap && canonical) onActivateCell?.(canonical);
+    }
   };
 
   const cancelCellDrag = () => {
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
+    lastTouchTapRef.current = null;
     onSelectionChange(drag.before);
   };
 
@@ -306,6 +325,14 @@ export function TableGridOverlay({
       tabIndex={0}
       onCopy={onCopyClipboard}
       onPaste={onPasteClipboard}
+      onBlurCapture={(event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        lastTouchTapRef.current = null;
+      }}
+      onPointerDownCapture={(event) => {
+        if (event.target instanceof Element && event.target.closest('[data-table-cell]')) return;
+        lastTouchTapRef.current = null;
+      }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="vnext-table-selection-highlight" data-table-selection-highlight="" style={highlightStyle} aria-hidden="true" />
@@ -447,6 +474,9 @@ export function TableGridOverlay({
             onLostPointerCapture={cancelCellDrag}
             onDoubleClick={(event) => {
               event.stopPropagation();
+              // Touch click counts can carry over from other targets; completed taps handle touch editing.
+              if (lastCellPointerTypeRef.current === 'touch') return;
+              lastTouchTapRef.current = null;
               const canonical = resolvePoint(point);
               if (!canonical) return;
               onSelectionChange(tableRangeSelection(identity, canonical, canonical));

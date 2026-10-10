@@ -8,6 +8,15 @@ describe('W4.D TSV parser/serializer', () => {
     expect(parseTsv(serializeTsv(matrix))).toEqual(matrix);
   });
 
+  it.each([
+    [['00017'], ['']],
+    [[''], ['']],
+    [['Ω ±0,01%'], [''], ['']],
+    [['']],
+  ])('preserves the final empty record in a single-column matrix %j', (...rows) => {
+    expect(parseTsv(serializeTsv(rows))).toEqual(rows);
+  });
+
   it('normalizes CRLF/CR records and preserves trailing empty columns', () => {
     expect(parseTsv('A\t\r\nB\tC\rD\t')).toEqual([
       ['A', ''],

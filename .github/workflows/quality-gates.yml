@@ -180,3 +180,15 @@ jobs:
           path: scratch/ai-catalog-production/
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Advanced technical table matrix Chromium, Edge and PDF proof
+        run: node tests/vnext/proof/advanced-table-matrix-proof.mjs
+
+      - name: Preserve advanced table proof receipts and PDFs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: advanced-technical-tables-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/advanced-table-matrix-proof/
+          if-no-files-found: warn
+          retention-days: 30

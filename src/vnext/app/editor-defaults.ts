@@ -174,7 +174,35 @@ export function createMinimalW2CTable(): TableModel {
   };
 }
 
-export function createInsertSpec(tool: InsertTool, page: Page): ObjectInsertSpec {
+export interface NewTableSize { rows: number; columns: number }
+export const MAX_NEW_TABLE_ROWS = 150;
+export const MAX_NEW_TABLE_COLUMNS = 10;
+
+export function isValidNewTableSize(size: NewTableSize): boolean {
+  return Number.isInteger(size.rows) && size.rows >= 1 && size.rows <= MAX_NEW_TABLE_ROWS
+    && Number.isInteger(size.columns) && size.columns >= 1 && size.columns <= MAX_NEW_TABLE_COLUMNS;
+}
+
+export function createSizedEmptyTable(size: NewTableSize): TableModel {
+  if (!isValidNewTableSize(size)) throw new RangeError('New table dimensions are outside authoring limits');
+  const seed = createMinimalW2CTable();
+  if (size.rows === 1 && size.columns === 1) return seed;
+  const rows: TableModel['rows'] = Array.from({ length: size.rows }, (_, index) => ({
+    ...seed.rows[0], id: `w2c-table-row-${index}`,
+  }));
+  const columns: TableModel['columns'] = Array.from({ length: size.columns }, (_, index) => ({
+    ...seed.columns[0], id: `w2c-table-column-${index}`,
+  }));
+  return {
+    ...seed, rows, columns,
+    cells: rows.flatMap((row, rowIndex) => columns.map((column, columnIndex) => ({
+      id: `w2c-table-cell-${rowIndex}-${columnIndex}`,
+      rowId: row.id, columnId: column.id, content: { type: 'empty' as const },
+    }))),
+  };
+}
+
+export function createInsertSpec(tool: InsertTool, page: Page, tableSize: NewTableSize = { rows: 1, columns: 1 }): ObjectInsertSpec {
   const zIndex = nextZIndex(page);
   switch (tool) {
     case 'text':
@@ -201,13 +229,19 @@ export function createInsertSpec(tool: InsertTool, page: Page): ObjectInsertSpec
         fit: 'contain',
         focalPoint: { x: 0.5, y: 0.5 },
       };
-    case 'table':
+    case 'table': {
+      // Leave room for ordinary empty rows without changing the historical 1×1 default.
+      // Larger content is still measured and checked by the existing A4 preflight.
+      const topMm = Math.max(20, page.safeArea?.topMm ?? 0);
+      const usableHeightMm = Math.max(1, page.heightMm - topMm - Math.max(20, page.safeArea?.bottomMm ?? 0));
+      const heightMm = tableSize.rows === 1 ? 34 : Math.min(usableHeightMm, Math.max(34, tableSize.rows * 10));
       return {
         type: 'table',
-        frameU: clearInsertFrame(page, frame(20, 122, 118, 34)),
+        frameU: clearInsertFrame(page, frame(20, heightMm > 34 ? topMm : 122, 118, heightMm)),
         zIndex,
-        table: createMinimalW2CTable(),
+        table: createSizedEmptyTable(tableSize),
       };
+    }
     case 'shape':
       return {
         type: 'shape',

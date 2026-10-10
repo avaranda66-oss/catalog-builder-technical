@@ -35,6 +35,7 @@ function setup(sequence = 0) {
   const initial = tableCellSelection(identity, { rowId: table.rows[0].id, columnId: table.columns[0].id });
   const changes: TableSelection[] = [];
   const stale = vi.fn();
+  const activate = vi.fn();
 
   function Harness({ localSequence }: { localSequence: number }) {
     const [selection, setSelection] = React.useState<TableSelection>(initial);
@@ -48,6 +49,7 @@ function setup(sequence = 0) {
       pageHeightU={mmToU(document.pages[0].heightMm)}
       onSelectionChange={(next) => { changes.push(next); setSelection(next); }}
       onStaleGesture={stale}
+      onActivateCell={activate}
     />;
   }
 
@@ -62,30 +64,83 @@ function setup(sequence = 0) {
       width: 100, height: 40, toJSON: () => ({}),
     });
   });
-  return { ...rendered, document, Harness, changes, stale, initial };
+  return { ...rendered, document, Harness, changes, stale, activate, initial };
 }
 
 describe('W4.A visible Table grid gesture state', () => {
   it.each(['input', 'textarea', 'select', 'contenteditable'] as const)(
-    'does not steal focus from inspector %s during an async grid remount',
+    'preserves the focused %s inspector field when physical measurement remounts the grid',
     (kind) => {
-      const { rerender, Harness, document: original } = setup();
-      const before = JSON.stringify(original);
-      const control = render(kind === 'contenteditable'
-        ? <div contentEditable suppressContentEditableWarning>Details</div>
-        : kind === 'select' ? <select defaultValue="wrap"><option value="wrap">Wrap</option></select>
-          : kind === 'textarea' ? <textarea defaultValue="Details" /> : <input defaultValue="2.5" />);
-      const field = control.container.firstElementChild as HTMLElement;
-      const blur = vi.fn();
-      field.addEventListener('blur', blur);
+      const { rerender, Harness, document: canonical, activate } = setup();
+      const before = JSON.stringify(canonical);
+      const inspector = render(kind === 'contenteditable'
+        ? <div contentEditable suppressContentEditableWarning>Descrição</div>
+        : kind === 'select' ? <select defaultValue="wrap"><option value="wrap">Quebrar</option></select>
+          : kind === 'textarea' ? <textarea defaultValue="Descrição" /> : <input defaultValue="2.5" />);
+      const field = inspector.container.firstElementChild as HTMLElement;
+      const blurred = vi.fn();
+      field.addEventListener('blur', blurred);
       field.focus();
       rerender(<React.Fragment />);
       rerender(<Harness localSequence={1} />);
       expect(globalThis.document.activeElement).toBe(field);
-      expect(blur).not.toHaveBeenCalled();
-      expect(JSON.stringify(original)).toBe(before);
+      expect(blurred).not.toHaveBeenCalled();
+      expect(activate).not.toHaveBeenCalled();
+      expect(JSON.stringify(canonical)).toBe(before);
     }
   );
+
+  it('focuses the grid on intentional entry from the edit-table button', () => {
+    const toolbar = render(<button type="button">Editar tabela</button>);
+    const button = toolbar.container.firstElementChild as HTMLElement;
+    button.focus();
+    const { container } = setup();
+    expect(globalThis.document.activeElement).toBe(container.querySelector('[data-table-grid-overlay]'));
+  });
+
+  it('selects a first touch without editing when the browser inherits a double click from a toolbar tap', () => {
+    const { container, changes, activate } = setup();
+    const cell = container.querySelector<HTMLElement>('[data-table-cell="0:1"]')!;
+    fireEvent.pointerDown(cell, { pointerId: 20, pointerType: 'touch', button: 0, clientX: 110, clientY: 10 });
+    fireEvent.pointerUp(cell, { pointerId: 20, pointerType: 'touch', clientX: 110, clientY: 10 });
+    fireEvent.doubleClick(cell, { detail: 2 });
+    expect(changes.at(-1)).toMatchObject({ focus: { columnId: 'w4a-column-b' } });
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('requires consecutive touches on the same cell for touch editing and preserves mouse double click', () => {
+    const { container, activate } = setup();
+    const tap = (target: HTMLElement, x: number, pointerId: number) => {
+      fireEvent.pointerDown(target, { pointerId, pointerType: 'touch', button: 0, clientX: x, clientY: 10 });
+      fireEvent.pointerUp(target, { pointerId, pointerType: 'touch', clientX: x, clientY: 10 });
+    };
+    const first = container.querySelector<HTMLElement>('[data-table-cell="0:0"]')!;
+    const second = container.querySelector<HTMLElement>('[data-table-cell="0:1"]')!;
+    tap(first, 10, 21);
+    tap(second, 110, 22);
+    fireEvent.doubleClick(second, { detail: 2 });
+    expect(activate).not.toHaveBeenCalled();
+    tap(second, 110, 23);
+    fireEvent.doubleClick(second, { detail: 2 });
+    expect(activate).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(first, { pointerId: 24, pointerType: 'mouse', button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(first, { pointerId: 24, pointerType: 'mouse', clientX: 10, clientY: 10 });
+    fireEvent.doubleClick(first, { detail: 2 });
+    expect(activate).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reuse a stale touch on the same cell for a later inherited double click', () => {
+    const { container, activate } = setup();
+    const cell = container.querySelector<HTMLElement>('[data-table-cell="0:0"]')!;
+    for (const [pointerId, completedAt] of [[25, 100], [26, 1100]]) {
+      fireEvent.pointerDown(cell, { pointerId, pointerType: 'touch', button: 0, clientX: 10, clientY: 10 });
+      const event = new PointerEvent('pointerup', { bubbles: true, pointerId, pointerType: 'touch', clientX: 10, clientY: 10 } as PointerEventInit);
+      Object.defineProperty(event, 'timeStamp', { value: completedAt });
+      fireEvent(cell, event);
+    }
+    fireEvent.doubleClick(cell, { detail: 2 });
+    expect(activate).not.toHaveBeenCalled();
+  });
 
   it.each(['pointerCancel', 'lostPointerCapture'] as const)('restores the prior selection on %s without document mutation', (eventName) => {
     const { container, document, changes, initial } = setup();
