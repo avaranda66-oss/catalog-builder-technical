@@ -123,6 +123,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Device local BYOK vault crypto / unlock / reload / deletion proof
+        run: node tests/vnext/proof/provider-byok-device-proof.mjs
+
+      - name: Upload provider credential vault browser receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: byok-provider-device-vault
+          path: scratch/provider-local-byok-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Browser local PDF upload, indexed source, fail-closed invalid PDF
         if: always()
         run: node tests/vnext/proof/real-pdf-local-index-proof.mjs
