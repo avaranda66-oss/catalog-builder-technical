@@ -1,4 +1,5 @@
 import React from 'react';
+import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
 import {
@@ -365,6 +366,7 @@ export function EditorWorkspace({
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
@@ -3641,6 +3643,7 @@ export function EditorWorkspace({
       className="vnext-shell"
       data-vnext-shell=""
       data-simple-by-default={simpleByDefault ? 'true' : undefined}
+      data-assistant-open={assistantOpen ? 'true' : undefined}
       data-active-page-id={selectedPage.id}
       data-editor-mode={editorState.mode}
       onPointerDownCapture={handleTextEditPointerDownCapture}
@@ -3661,6 +3664,12 @@ export function EditorWorkspace({
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
+          {simpleByDefault && <button
+            type="button" className="vnext-action-assistant" data-editor-action="assistant-toggle"
+            aria-controls="vnext-assistant-chat" aria-expanded={assistantOpen}
+            aria-label={assistantOpen ? 'Fechar assistente de edição' : 'Abrir assistente de edição'}
+            onClick={() => setAssistantOpen(value => !value)}
+          ><span aria-hidden="true">✦</span><span>{assistantOpen ? 'Fechar assistente' : 'Assistente IA'}</span></button>}
           {persistence && onRequestLibrary && (
             <button
               type="button"
@@ -5377,6 +5386,36 @@ export function EditorWorkspace({
           )}
           {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
+        {assistantOpen && simpleByDefault && (
+          <aside
+            id="vnext-assistant-chat"
+            className="vnext-assistant-dock"
+            aria-label="Assistente do catálogo atual"
+            data-vnext-assistant="open"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') { event.stopPropagation(); setAssistantOpen(false); }
+            }}
+          >
+            <div className="vnext-assistant-dock-controls">
+              <span>Você está editando este catálogo</span>
+              <button type="button" aria-label="Fechar painel do assistente" onClick={() => setAssistantOpen(false)}>Fechar ✕</button>
+            </div>
+            <CatalogWorkbenchChat
+              key={document.id}
+              compactMode
+              documentId={document.id}
+              session={session}
+              ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
+              canPublish={Boolean(onRequestPublication) && (!persistence || (!persistence.runtime.workspace.getSnapshot().dirty &&
+                persistence.save.phase === 'idle' && !conflictResolutionBusy))}
+              onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
+              onPublication={() => {
+                if (prepareAuthoringForContextChangeRef.current()) onRequestPublication?.();
+              }}
+              onEditor={() => setAssistantOpen(false)}
+            />
+          </aside>
+        )}
       </div>
       <EditorDiagnosticsProbe
         document={document}

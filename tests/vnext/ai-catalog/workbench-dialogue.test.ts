@@ -40,6 +40,17 @@ describe('persistent per-catalog medium and long conversations', () => {
     expect(() => appendWorkbenchDialogue(storage, documentId, state, makeEntry(501))).toThrow('DIALOGUE_CAP_REACHED_EXPORT_FIRST');
     expect(readWorkbenchDialogue(storage, documentId)).toHaveLength(WORKBENCH_MESSAGE_LIMIT);
   });
+  it('isolates the same document dialogue by authenticated owner scope on shared devices', () => {
+    const store = new Map<string, string>();
+    const storage = { getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); } };
+    const a = 'auth:user-A', b = 'auth:user-B';
+    appendWorkbenchDialogue(storage, documentId, [],
+      { ...makeEntry(12), content: 'Informações comerciais internas do usuário A' }, a);
+    expect(readWorkbenchDialogue(storage, documentId, a)).toHaveLength(1);
+    expect(readWorkbenchDialogue(storage, documentId, b)).toEqual([]);
+    expect(dialogueKey(documentId, a)).not.toBe(dialogueKey(documentId, b));
+  });
   it('redacts pasted API tokens and ignores corrupt local transcripts', () => {
     const store = new Map<string, string>();
     const storage = { getItem: (key: string) => store.get(key) ?? null,

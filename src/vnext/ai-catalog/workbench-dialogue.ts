@@ -29,12 +29,15 @@ export function interpretWorkbenchRequest(request: string): WorkbenchAction {
   if (/^(abrir|abra|mostrar|mostre|editar|edite).*\b(editor|manual|edicao)/.test(normalized)) return 'editor';
   return 'help';
 }
-export function dialogueKey(documentId: string): string {
-  return WORKBENCH_STORAGE_PREFIX + z.string().uuid().parse(documentId);
+export function dialogueKey(documentId: string, ownerScope?: string): string {
+  const id = z.string().uuid().parse(documentId);
+  // A shared device must never display one account's local messages to another.
+  const account = ownerScope ? z.string().min(1).max(256).parse(ownerScope) : null;
+  return WORKBENCH_STORAGE_PREFIX + (account ? encodeURIComponent(account) + ':' : '') + id;
 }
-export function readWorkbenchDialogue(storage: Pick<Storage, 'getItem'>, documentId: string): WorkbenchEntry[] {
+export function readWorkbenchDialogue(storage: Pick<Storage, 'getItem'>, documentId: string, ownerScope?: string): WorkbenchEntry[] {
   try {
-    const raw = storage.getItem(dialogueKey(documentId));
+    const raw = storage.getItem(dialogueKey(documentId, ownerScope));
     if (!raw || raw.length > 1_500_000) return [];
     const record = TranscriptSchema.parse(JSON.parse(raw));
     if (record.documentId !== documentId) return [];
@@ -46,12 +49,13 @@ export function appendWorkbenchDialogue(
   documentId: string,
   previous: readonly WorkbenchEntry[],
   next: WorkbenchEntry,
+  ownerScope?: string,
 ): WorkbenchEntry[] {
   if (previous.length >= WORKBENCH_MESSAGE_LIMIT) throw new Error('DIALOGUE_CAP_REACHED_EXPORT_FIRST');
   const content = redactConversationMessage(next.content);
   const safe = WorkbenchEntrySchema.parse({ ...next, content });
   const entries = [...previous, safe];
-  storage.setItem(dialogueKey(documentId), JSON.stringify(
+  storage.setItem(dialogueKey(documentId, ownerScope), JSON.stringify(
     TranscriptSchema.parse({ version: 1, documentId, entries })));
   return entries;
 }

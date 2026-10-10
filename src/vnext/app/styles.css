@@ -588,3 +588,280 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-translation-center { overflow: auto; }
   .vnext-translation-center .vnext-translation-runs { flex: none; max-height: 45dvh; }
 }
+
+
+/* Everyday catalog assistant — first-class editor dock, scoped to /v2. */
+.vnext-actions .vnext-action-assistant {
+  border-color: #b0cfe8;
+  background: #ebf5ff;
+  color: #06466e;
+  font-weight: 700;
+}
+.vnext-actions .vnext-action-assistant[aria-expanded="true"] {
+  border-color: #17689a;
+  background: #dcefff;
+}
+.vnext-shell[data-assistant-open="true"] .vnext-workspace {
+  grid-template-columns: 150px minmax(440px,1fr) 212px minmax(320px,370px);
+}
+.vnext-assistant-dock, .vnext-assistant-dock * { box-sizing: border-box; }
+.vnext-assistant-dock {
+  grid-column: 4;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #cbd7e4;
+  box-shadow: -8px 0 24px rgb(20 40 66 / .055);
+  overflow: hidden;
+}
+.vnext-assistant-dock-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  flex: none;
+  border-bottom: 1px solid #e1e9f0;
+  background: #f7fafc;
+  font-size: 11px;
+  font-weight: 600;
+  color: #667b8e;
+}
+.vnext-assistant-dock-controls button {
+  padding: 6px 9px;
+  border: 1px solid #c9d5df;
+  background: white;
+  color: #35516e;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.vnext-assistant-dock .ai-workbench-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.vnext-assistant-dock .ai-chat-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 18px 15px;
+  flex: none;
+}
+.vnext-assistant-dock .ai-chat-heading h3 {
+  margin: 0 0 5px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #122c49;
+  letter-spacing: -.035em;
+}
+.vnext-assistant-dock .ai-chat-heading p {
+  margin: 0;
+  color: #65768a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.vnext-assistant-dock .ai-chat-count {
+  background: #e9f2fa;
+  border-radius: 999px;
+  padding: 4px 9px;
+  min-width: 34px;
+  text-align: center;
+  color: #345d7d;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.vnext-assistant-dock .ai-chat-log {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 135px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 15px;
+  background: linear-gradient(#f7f9fb, #f4f7fa);
+}
+.vnext-assistant-dock .ai-chat-welcome {
+  margin: auto 0;
+  color: #41556b;
+  padding: 6px 3px;
+}
+.vnext-assistant-dock .ai-chat-welcome > p {
+  margin: 0 0 13px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.vnext-assistant-dock .ai-chat-welcome small {
+  display: block;
+  margin-top: 16px;
+  line-height: 1.55;
+  color: #65768a;
+}
+.vnext-assistant-dock .ai-chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.vnext-assistant-dock .ai-chat-suggestions button {
+  width: 100%;
+  border: 1px solid #d5e2ec;
+  background: white;
+  border-radius: 9px;
+  text-align: left;
+  padding: 12px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1b476b;
+  cursor: pointer;
+}
+.vnext-assistant-dock .ai-chat-suggestions button:hover {
+  border-color: #8eb9d8;
+  background: #eef7ff;
+}
+.vnext-assistant-dock .ai-chat-turn {
+  max-width: 96%;
+  border: 1px solid #dbe3ea;
+  border-radius: 11px;
+  padding: 11px 12px;
+  background: white;
+  overflow-wrap: anywhere;
+}
+.vnext-assistant-dock .ai-chat-turn.ai-chat-user {
+  align-self: flex-end;
+  border-color: #b6d7eb;
+  background: #eaf5fd;
+}
+.vnext-assistant-dock .ai-chat-turn p {
+  margin: 5px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.vnext-assistant-dock .ai-chat-turn strong,
+.vnext-assistant-dock .ai-chat-turn small {
+  font-size: 10px;
+}
+.vnext-assistant-dock .ai-chat-turn small { color: #73839a; }
+.vnext-assistant-dock .ai-chat-compose {
+  flex: none;
+  max-height: min(56dvh, 460px);
+  overflow-y: auto;
+  border-top: 1px solid #dce5ee;
+  background: white;
+  padding: 14px 16px;
+}
+.vnext-assistant-dock .ai-chat-compose > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #28435e;
+  margin-bottom: 7px;
+}
+.vnext-assistant-dock .ai-chat-compose textarea {
+  display: block;
+  width: 100%;
+  min-height: 74px;
+  max-height: 125px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid #b4c5d5;
+  border-radius: 8px;
+  color: #172b40;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vnext-assistant-dock .ai-chat-compose textarea:focus-visible {
+  outline: 3px solid rgb(27 112 185 / .22);
+  border-color: #2378b1;
+}
+.vnext-assistant-dock .ai-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.vnext-assistant-dock .ai-chat-actions button {
+  border: 1px solid #c9d7e3;
+  background: #fff;
+  color: #2f536f;
+  border-radius: 7px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vnext-assistant-dock .ai-chat-actions .vnext-btn-primary {
+  background: #003f78;
+  color: white;
+  border-color: #003f78;
+}
+.vnext-assistant-dock .ai-chat-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.vnext-assistant-dock .ai-image-reference {
+  display: block;
+  margin: 12px 0;
+  font-size: 11px;
+  color: #58718b;
+}
+.vnext-assistant-dock .ai-image-reference input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  font-size: 11px;
+}
+.vnext-assistant-dock .ai-reference-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px;
+}
+.vnext-assistant-dock .ai-reference-thumbs img {
+  width: 100%;
+  height: 85px;
+  background: #f5f7f9;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.vnext-assistant-dock .ai-reference-thumbs small {
+  display: block;
+  color: #66798b;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.vnext-assistant-dock .ai-boundary {
+  font-size: 10px;
+  color: #6c7d90;
+  line-height: 1.65;
+  border-top: 1px solid #edf1f4;
+  margin: 12px 0 0;
+  padding-top: 11px;
+}
+.vnext-assistant-dock [role="alert"] { font-size: 12px; color: #ad362d; }
+@media (max-width: 1420px) {
+  .vnext-shell[data-assistant-open="true"] .vnext-workspace {
+    grid-template-columns: 176px minmax(560px,1fr) 260px;
+  }
+  .vnext-assistant-dock {
+    position: fixed;
+    top: 68px;
+    right: 0;
+    bottom: 0;
+    width: min(400px,100vw);
+    z-index: 40;
+    box-shadow: -18px 0 42px rgb(20 40 66 / .20);
+  }
+}
+@media (max-width: 920px) {
+  .vnext-actions .vnext-action-assistant { padding: 0 8px; }
+  .vnext-assistant-dock { top: 68px; width: min(100%,400px); }
+}

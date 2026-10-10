@@ -129,6 +129,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Inline assistant UX on the actual VNext editor, desktop and narrow browser
+        run: node tests/vnext/proof/inline-assistant-browser-proof.mjs
+
+      - name: Preserve inline assistant browser UX screenshots and receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inline-assistant-ux-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/inline-assistant-ux-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: BYOK agent conversation to native A4 PDF, mock transport only
         run: node tests/vnext/proof/byok-agent-conversation-browser-proof.mjs
 
