@@ -5415,6 +5415,9 @@ export function EditorWorkspace({
               key={document.id + ':gemini'} session={session} documentId={document.id}
               ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
               client={composerClient}
+              selected={selectedObject?.type === 'text'
+                ? { objectId: selectedObject.id, text: selectedObject.text, locked: selectedObject.locked }
+                : undefined}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
             /> : <CatalogWorkbenchChat
               key={document.id}
