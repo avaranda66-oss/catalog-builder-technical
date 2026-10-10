@@ -219,7 +219,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <ul>{pending.plan.pages.map((page, i) => <li key={i}>
           <strong>Página {i + 1}: {page.heading}</strong>
           <span>{page.type === 'comparison'
-            ? ' · Tabela ' + page.table?.columns.length + ' colunas × ' + (page.table!.rowLabels.length + 1) + ' linhas, dados ainda vazios'
+            ? ' · ' + ({ comparison: 'Comparativo', datasheet: 'Ficha técnica', matrix: 'Matriz compacta' } as const)[page.table?.design ?? 'comparison'] + ': ' + page.table?.columns.length + ' colunas × ' + (page.table!.rowLabels.length + 1) + ' linhas, dados ainda vazios'
             : page.type === 'cover' ? ' · Capa' : ' · Conteúdo editorial'}</span>
         </li>)}</ul>
         <div className="ai-chat-actions">

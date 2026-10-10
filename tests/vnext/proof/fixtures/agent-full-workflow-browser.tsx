@@ -77,13 +77,15 @@ const composer = {functions: {invoke: async (name, {body}) => {
       subtitle:'Estrutura editorial sujeita a validação humana'},
     {type:'comparison', heading:'Famílias de produtos e modelos',
       table:{columns:['Característica','Modelo A','Modelo B','Modelo C'],
-        rowLabels:['Faixa de medição','Exatidão','Conexão','Proteção','Aplicações']}},
+        rowLabels:['Faixa de medição','Exatidão','Conexão','Proteção','Aplicações'],
+        design:'comparison'}},
   ] : [
     {type:'section', heading:'Capítulo editorial '+['','', 'dois','três','quatro'][turn],
       subtitle:'Conteúdo em elaboração sem valores técnicos inventados'},
     {type:'comparison', heading:'Quadro comparativo do capítulo '+turn,
       table:{columns:['Parâmetro','Modelo A','Modelo B','Modelo C'],
-        rowLabels:['Condições','Acessórios','Conectividade','Documentação']}},
+        rowLabels:['Condições','Acessórios','Conectividade','Documentação'],
+        design:turn===2?'datasheet':turn===3?'matrix':'comparison'}},
     {type:'section', heading:'Notas de revisão do capítulo '+turn,
       subtitle:'Rever manual de origem antes de completar especificações'},
   ];

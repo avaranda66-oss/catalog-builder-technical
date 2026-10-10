@@ -12,7 +12,7 @@ type Handler = (request: Request) => Promise<Response>;
 const plan = { status: 'proposal', summary: 'Estrutura de catálogo com seções editáveis.',
   pages: [{ type: 'comparison', heading: 'Comparativo de famílias',
     table: { columns: ['Característica', 'Modelo A', 'Modelo B'],
-      rowLabels: ['Exatidão', 'Faixa de operação'] } }] };
+      rowLabels: ['Exatidão', 'Faixa de operação'], design: 'matrix' } }] };
 type Options = {
   flag?: boolean;
   byok?: boolean;
@@ -185,6 +185,20 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
       const r = await x.request(textEditRequest());
       expect(r.status).toBe(502);
       expect(r.body.code).toBe('INVALID_PROVIDER_RESPONSE');
+    }
+  });
+  it('only permits audited table designs from the model, never CSS or arbitrary styles', async () => {
+    for (const table of [
+      {columns: ['Característica','Modelo A'], rowLabels: ['Tipo'], design: 'neon-futurista'},
+      {columns: ['Característica','Modelo A'], rowLabels: ['Tipo'], design: 'matrix',
+        style: {background: 'url(https://host.invalid/steal)'}},
+    ]) {
+      const x = sandbox({ reply: { ...plan, pages: [
+        {type: 'comparison', heading: 'Ficha técnica', table},
+      ] } });
+      const result = await x.request(scaffoldRequest());
+      expect(result.status).toBe(502);
+      expect(result.body.code).toBe('INVALID_PROVIDER_RESPONSE');
     }
   });
   it('rejects fabricated source facts and executable commands inside page JSON', async () => {

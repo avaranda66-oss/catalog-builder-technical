@@ -20,6 +20,7 @@ const plan: NativeComposePlan = {
     { type: 'cover', heading: 'Catálogo de teste PRESYS', subtitle: 'Criação nativa no catálogo aberto' },
     { type: 'comparison', heading: 'Comparação de modelos', table: {
       columns: ['Característica','Modelo A','Modelo B'], rowLabels: ['Faixa','Exatidão','Alimentação'],
+      design: 'datasheet',
     } },
   ],
 };
@@ -52,6 +53,7 @@ describe('Gemini conversational creation, confirmation and native editor action 
     await connectAndSend();
     expect(f.session.getSnapshot().document).toEqual(baseline);
     expect(screen.getByText(/Comparação de modelos/)).toBeInTheDocument();
+    expect(screen.getByText(/Ficha técnica: 3 colunas/)).toBeInTheDocument();
     expect(f.invoke).toHaveBeenCalledTimes(1);
     const [name, options] = f.invoke.mock.calls[0];
     expect(name).toBe('vnext-catalog-composer');
