@@ -77,11 +77,11 @@ export async function compileCatalog(raw: unknown, rawPlan?: unknown, decisions:
   const pageCount = technicalChunks.length + (institutional ? 3 : 0);
   const technicalPages: PageTemplateDefinition[] = technicalChunks.map((chunk, page) => {
     const id = `generated-${page}`, matrix = matrixFor(input, decisions, chunk), count = input.models.length;
-    // Reserve a full-width engineering conditions column for four-model A4 print.
-    // Previous 30 mm notes width was correctly blocked by Chromium Linux preflight.
-    // Keep >=16 mm model columns and original typography.
+    // Allocate real physical width to all four data columns and wrap notes normally.
+    // Both the old 30 mm notes column and the later 17.25 mm model columns
+    // caused genuine Chromium/Linux publication blockers. Preserve typography.
     let table: TableModel = {
-      id, columns: matrix[0].map((_, col) => ({ id: `${id}-col${col}`, width: col === 0 ? { mode: 'fixed', mm: count === 4 ? 37 : 44 } : col === count + 1 ? { mode: 'fixed', mm: count === 4 ? 18 : 20 } : col === count + 2 ? { mode: 'fixed', mm: count === 4 ? 52 : 38 } : { mode: 'flex', weight: 1 }, minMm: 16 })),
+      id, columns: matrix[0].map((_, col) => ({ id: `${id}-col${col}`, width: col === 0 ? { mode: 'fixed', mm: count === 4 ? 31 : 44 } : col === count + 1 ? { mode: 'fixed', mm: count === 4 ? 20 : 20 } : col === count + 2 ? { mode: 'fixed', mm: count === 4 ? 35 : 38 } : { mode: 'flex', weight: 1 }, minMm: 16 })),
       rows: matrix.map((_, row) => ({ id: `${id}-row${row}`, role: row === 0 ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } })),
       cells: matrix.flatMap((values, row) => values.map((value, col) => ({ id: `${id}-r${row}c${col}`, rowId: `${id}-row${row}`, columnId: `${id}-col${col}`, content: value ? { type: 'richText' as const, value: rich(`${id}-r${row}c${col}`, value) } : { type: 'empty' as const } }))),
       style: { base: {}, rowRoles: {}, annotation: {}, annotationGapMm: 1 }, annotations: [], legend: [],

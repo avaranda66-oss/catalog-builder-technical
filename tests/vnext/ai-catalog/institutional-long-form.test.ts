@@ -20,13 +20,13 @@ describe('Institutional long form: 4-model / 24 A4 pages / hundreds of exact eng
       const table = page.objects.find(object => object.type === 'table');
       if (!table || table.type !== 'table') throw new Error('MISSING_TABLE');
       const matrix = tableMatrix(table.table);
-      // Regression: the earlier 30-mm notes column generated a genuine
-      // publication BLOCKED for the 27-page benchmark on Chromium/Linux.
-      // 37 + 18 + 52 mm fixed leaves 69 mm across 4 flexible model columns,
-      // each above the 16-mm minimum, without shrinking technical fonts.
-      expect(table.table.columns[0].width).toEqual({ mode: 'fixed', mm: 37 });
-      expect(table.table.columns[5].width).toEqual({ mode: 'fixed', mm: 18 });
-      expect(table.table.columns[6].width).toEqual({ mode: 'fixed', mm: 52 });
+      // Regression: notes at 30 mm and later numeric columns at 17.25 mm
+      // both blocked physical A4 publication on Chromium/Linux.
+      // Reserve 31 + 20 + 35 mm for labels, units and conditions, leaving
+      // (176 - 86) / 4 = 22.5 mm per model, without reducing technical fonts.
+      expect(table.table.columns[0].width).toEqual({ mode: 'fixed', mm: 31 });
+      expect(table.table.columns[5].width).toEqual({ mode: 'fixed', mm: 20 });
+      expect(table.table.columns[6].width).toEqual({ mode: 'fixed', mm: 35 });
       expect(table.table.columns.slice(1, 5).every(column => column.width.mode === 'flex' && column.minMm === 16)).toBe(true);
       expect(matrix.length).toBe(9);
       expect(matrix.every(row => row.length === 7)).toBe(true);
