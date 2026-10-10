@@ -32,7 +32,7 @@ function parse(raw: unknown): PlanRequest | null {
       raw.version !== 1 || raw.task !== 'plan_catalog' || typeof raw.message !== 'string' ||
       raw.message.trim().length < 4 || raw.message.length > 800 || !Array.isArray(raw.models) ||
       raw.models.length < 2 || raw.models.length > 4 || raw.models.some(v => typeof v !== 'string' || v.length < 1 || v.length > 100) ||
-      !Array.isArray(raw.sections) || raw.sections.length < 1 || raw.sections.length > 6) return null;
+      !Array.isArray(raw.sections) || raw.sections.length < 1 || raw.sections.length > 16) return null;
   const sections: PlanRequest['sections'] = [];
   for (const value of raw.sections) {
     if (!object(value) || Object.keys(value).sort().join('|') !== 'id|title' ||
@@ -49,8 +49,9 @@ const responseSchema = {
     status: { type: 'STRING', enum: ['proposal', 'clarification'] },
     sectionOrder: { type: 'ARRAY', items: { type: 'STRING' } },
     style: { type: 'STRING', enum: ['comparison', 'technical-specification'] },
+    template: { type: 'STRING', enum: ['comparison-a4-v1', 'institutional-technical-a4-v1'] },
     question: { type: 'STRING' },
-  }, required: ['status', 'sectionOrder', 'style', 'question'],
+  }, required: ['status', 'sectionOrder', 'style', 'template', 'question'],
 };
 
 serve(async request => {
@@ -134,12 +135,13 @@ serve(async request => {
   } else {
     const ids = new Set(input.sections.map(s => s.id));
     if (answer.status !== 'proposal' || !['comparison', 'technical-specification'].includes(String(answer.style)) ||
+      !['comparison-a4-v1', 'institutional-technical-a4-v1'].includes(String(answer.template)) ||
       !Array.isArray(answer.sectionOrder) || answer.sectionOrder.length !== ids.size ||
       new Set(answer.sectionOrder).size !== ids.size ||
       answer.sectionOrder.some(id => typeof id !== 'string' || !ids.has(id))) {
       return json(cors, 502, 'INVALID_PROVIDER_RESPONSE');
     }
-    reply = { status: 'proposal', plan: { version: 1, template: 'comparison-a4-v1',
+    reply = { status: 'proposal', plan: { version: 1, template: answer.template,
       style: answer.style, sectionOrder: answer.sectionOrder, rowsPerPage: 8 } };
   }
   const usage = object(result) && object(result.usageMetadata) ? result.usageMetadata : {};
