@@ -1,6 +1,6 @@
 # Integridade de fatos grounded no PDF real
 
-Status: Ready for Review — bounded integrity correction; industrial extraction remains blocked.
+Status: In Progress — CodeRabbit reproduced ambiguity and hyphen-unit majors; merge blocked until remediation.
 Data: 2026-10-10
 Responsáveis: @po/@sm (story), root/@dev (RED → GREEN), @qa (auditoria), @devops (Git/gates).
 Base: main `a1b11b1fdd0dbe2872884a32da3cb9f077d6485b`, tree `13b7a5a8aa19fe88b6e29abf60c2e6aa817fc9b0`.
@@ -35,6 +35,18 @@ PR #73 merged; PR #74 Draft e PR #68 superseded são contexto separado. Autoriza
 - [x] **AC09 — Fronteira e editorial.** Sem chamada modelo paga, credencial em evidência, deploy, migração, produção ou merge nesta story. Melhor composição em múltiplos blocos e menos branco continuam prioridades futuras; este fix não declara catálogo pronto ou Marc aprovado.
 
 ## Casos comprovados pela QA
+
+### Adição de escopo antes da correção da revisão externa
+
+CodeRabbit da HEAD `46bef546bbc109fbc04e27d1497d3eb66572c4ae` encontrou dois major adicionais, confirmados pela leitura independente de QA. `Pa` não pode justificar a unidade composta `Pa-s`; quote com dois pares modelo/campo iguais e valores divergentes não pode aprovar qualquer um como conhecido. Acrescentar RED/GREEN em arquivo independente, conservar os 45 testes e todos os positivos, revisar o helper e executar gates da nova candidata. Minor `700kPa` permanece formato não suportado que falha fechado; não ampliar a gramática para resolver esse alerta.
+
+- [ ] **AC10 — Unidade composta com hífen.** Rejeitar truncamento `Pa-s` para `Pa`, inclusive separador hífen com whitespace; preservar a unidade completa original sem normalização.
+- [ ] **AC11 — Cláusula atômica única.** Rejeitar quote com modelo/campo alvo repetidos, especialmente valores conhecidos divergentes na mesma citação. Uma única cláusula original continua aceita; não selecionar silenciosamente o primeiro valor ou expandir quote ambígua.
+- [ ] **AC12 — Nova HEAD aprovada.** Preservar review e gates da primeira HEAD como históricos; nova correção recebe testes afetados, quatro gates, browser/PDF afetados e CI no HEAD exato antes de squash merge.
+
+AC12 inclui a corrida reproduzida na prova p1b: a seleção Imagem é renderizada antes do useEffect fechar os detalhes. O diagnóstico registra dois commits, true seguido de false. A prova deve aguardar o MESMO estado aria-expanded=false com timeout de 5s antes das assertions já existentes; não mudar valores esperados, conteúdo, sequência ou controles exigidos. Nenhuma mudança de produto do inspetor é necessária para essa sincronização.
+
+File List adicional autorizado: `tests/vnext/ai-catalog/qa-pdf-literal-ambiguity.test.ts` e atualização do helper já existente. Nenhuma chamada Gemini ou alteração do contrato geométrico integra estes dois fixes.
 
 | ID | Defeito reproduzido antes da correção | Resultado requerido |
 |---|---|---|

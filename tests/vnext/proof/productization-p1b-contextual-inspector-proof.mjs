@@ -50,6 +50,9 @@ async function desktop(browser) {
 
   await page.locator(`[data-editor-object-id="${ids.image}"]`).click();
   assert.equal((await page.locator('.vnext-info h2').textContent())?.trim(), 'Imagem');
+  // Selection renders before its effect resets the contextual details.
+  // Wait for that exact state; retain the assertions and fail on timeout.
+  await page.locator('[data-editor-action="toggle-inspector-details"][aria-expanded="false"]').waitFor({ timeout: 5000 });
   assert.equal(await page.locator('[data-editor-action="toggle-inspector-details"]').getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('[data-inspector-authoring]').count(), 0);
   assert.equal(await page.locator('[data-image-professional-authoring]').count(), 1);

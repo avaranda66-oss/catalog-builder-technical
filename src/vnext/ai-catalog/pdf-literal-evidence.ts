@@ -19,8 +19,8 @@ export function literalEvidencePositions(text: string, literal: string, kind: Li
     const badModelBoundary = kind === 'model' && /[-]/u.test(before + after);
     const lostDegree = kind === 'unit' && word.test(literal[0]) && /[°℃℉]/u.test(before);
     const partialCompoundUnit = kind === 'unit' && (
-      /[/·⋅*^]$/u.test(text.slice(0, index).trimEnd()) ||
-      /^[/·⋅*^]/u.test(text.slice(index + literal.length).trimStart())
+      /[/·⋅*^-]$/u.test(text.slice(0, index).trimEnd()) ||
+      /^[/·⋅*^-]/u.test(text.slice(index + literal.length).trimStart())
     );
     if (!badBefore && !boundary.test(after) && !badModelBoundary && !lostDegree &&
         !separatedSign && !partialCompoundUnit) positions.push(index);
@@ -49,8 +49,12 @@ export interface AtomicPdfEvidence {
  */
 export function hasAtomicPdfEvidence(evidence: AtomicPdfEvidence): boolean {
   const { quote, model, models, label, labels, value, unit, condition } = evidence;
+  const modelPositions = literalEvidencePositions(quote, model, 'model');
+  const labelPositions = literalEvidencePositions(quote, label, 'label');
+  // A repeated target identity can introduce competing values even when no
+  // other declared model or field occurs. Never select one clause silently.
   if (!value.trim() || quote.includes('\n') || quote.includes('\r') ||
-      !hasLiteralEvidence(quote, model, 'model') ||
+      modelPositions.length !== 1 || labelPositions.length !== 1 ||
       models.some(other => other !== model && hasLiteralEvidence(quote, other, 'model')) ||
       labels.some(other => other !== label && hasLiteralEvidence(quote, other, 'label'))) return false;
   const separator = /^[\s|,:;=()[\]]*$/u;
@@ -66,5 +70,5 @@ export function hasAtomicPdfEvidence(evidence: AtomicPdfEvidence): boolean {
       position >= end && separator.test(quote.slice(end, position)) &&
       follows(part + 1, position + next.literal.length));
   };
-  return literalEvidencePositions(quote, model, 'model').some(position => follows(1, position + model.length));
+  return follows(1, modelPositions[0] + model.length);
 }
