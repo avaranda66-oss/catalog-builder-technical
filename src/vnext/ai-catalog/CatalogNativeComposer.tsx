@@ -50,9 +50,17 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
+  // Busy belongs to the current request. Revoking an older response must
+  // also release the controls; its eventual completion cannot release a newer one.
+  const invalidateRequest = React.useCallback(() => {
+    requestSerial.current++;
+    setBusy(false);
+    setPending(undefined);
+    setPendingRewrite(undefined);
+  }, []);
   React.useEffect(() => { input.current?.focus(); }, []);
-  React.useEffect(() => { requestSerial.current++; setPendingRewrite(undefined);
-    setRewriteMode(false); }, [selected?.objectId]);
+  React.useEffect(() => { invalidateRequest();
+    setRewriteMode(false); }, [selected?.objectId, invalidateRequest]);
   React.useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [turns]);
   React.useEffect(() => () => {
     requestSerial.current++;
@@ -183,7 +191,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <small>Texto selecionado na página:</small>
         <p>{editableSelectedText}</p>
         <button type="button" aria-pressed={rewriteMode}
-          onClick={() => { requestSerial.current++; setPending(undefined); setPendingRewrite(undefined);
+          onClick={() => { invalidateRequest();
             setRewriteMode(value => !value); setError(''); input.current?.focus(); }}>
           {rewriteMode ? 'Voltar a criar páginas' : 'Reescrever este texto com Gemini'}
         </button>
@@ -213,7 +221,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <div className="ai-chat-actions">
           <button type="button" className="vnext-btn-primary"
             onClick={approveRewrite}>Confirmar reescrita selecionada</button>
-          <button type="button" onClick={() => { requestSerial.current++; setPendingRewrite(undefined); }}>Rejeitar reescrita</button>
+          <button type="button" onClick={invalidateRequest}>Rejeitar reescrita</button>
         </div>
       </div>}
       {pending && <div className="ai-compose-proposal" role="group" aria-label="Proposta de páginas">
@@ -227,7 +235,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         </li>)}</ul>
         <div className="ai-chat-actions">
           <button className="vnext-btn-primary" type="button" onClick={approve}>Confirmar e inserir no catálogo</button>
-          <button type="button" onClick={() => { requestSerial.current++; setPending(undefined); }}>Rejeitar proposta</button>
+          <button type="button" onClick={invalidateRequest}>Rejeitar proposta</button>
         </div>
       </div>}
     </div>
@@ -236,8 +244,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       <textarea id="gemini-catalog-command" ref={input} value={message} maxLength={1200} rows={3}
         placeholder={rewriteMode ? 'Torne este título mais claro, conciso e profissional…'
           : 'Crie um catálogo técnico com capa, índice e tabelas comparativas…'}
-        onChange={event => { setMessage(event.target.value); setPending(undefined);
-          setPendingRewrite(undefined); requestSerial.current++; }}
+        onChange={event => { setMessage(event.target.value); invalidateRequest(); }}
         onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault(); void send();
         } }} />
@@ -257,10 +264,10 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
             if (provider === 'gemini') { credential.current = key; setUnlocked(true); setSettingsOpen(false); setError(''); }
             else { credential.current = undefined; setUnlocked(false);
               setError('Somente Gemini tem adaptador de composição habilitável nesta etapa.'); }
-            requestSerial.current++; setPending(undefined);
+            invalidateRequest();
           }}
           onLock={() => { credential.current = undefined; setUnlocked(false);
-            requestSerial.current++; setPending(undefined); }}
+            invalidateRequest(); }}
         />
       </div>}
       {selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}

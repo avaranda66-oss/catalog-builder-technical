@@ -28,3 +28,15 @@ Read-only Supabase security advisor reported **15** existing `SECURITY DEFINER` 
 
 ## Automated proof included in PR
 `tests/vnext/ai-catalog/composer-edge-bounded.test.ts` mocks all network/auth/DB and checks disabled-by-default, disallowed Origin, absence of authentication, inactive/viewer profile, disabled BYOK, quota rejection, ordering of quota before Google countTokens/generateContent, valid scaffold, explicit selected text, invalid specs/executable fields, malformed history and truncation. **No real Google call or production DB transaction**.
+
+## Estado operacional posterior — atualização desta continuação
+
+As seções anteriores são um snapshot histórico anterior à implantação, não o estado atual. O recibo externo `SUPABASE_GEMINI_DEPLOY_20261010.md` documenta a migration de orçamento já aplicada e a função `vnext-catalog-composer` ACTIVE versão 1, JWT obrigatório, fonte PR83 `fa2dfa86f490bfec4f0b039b3ebc0cade5ef2fbd`, bundle SHA256 `c7628f2fb4d48cbf7e8087aa8069e491d0d7eecbeaeb510ddf11a16cac3ea87f`. Não repetir esses procedimentos.
+
+Com autorização direta do usuário, esta rodada habilitou somente `VNEXT_CATALOG_COMPOSER_ENABLED=true`, `VNEXT_CATALOG_AGENT_BYOK_ENABLED=true`, `VNEXT_CATALOG_AGENT_BUDGET_MODE=bounded-acceptance` e a lista explícita `VNEXT_CATALOG_ALLOWED_ORIGINS`. O CLI oficial reutilizou a autenticação existente; readback dos quatro digests conferiu e os outros nove permaneceram iguais. Nenhuma credencial aparece nos recibos. Sem nova migration, redeploy ou chamada Google nessa ativação. Quota existente e teto acumulado autorizado R$50 preservados. POST não autenticado continua HTTP401; isso não comprova o fluxo autenticado.
+
+Origens verificadas: `https://catalog-builder-technical.vercel.app`, main imutável `https://catalog-builder-technical-8uxou80uo-gabriels-projects-46d997f6.vercel.app` e preview PR86 `https://catalog-builder-technical-bdtrmdfw9-gabriels-projects-46d997f6.vercel.app`. O alias móvel é a entrada `/v2`; sua associação ao novo HEAD será verificada depois da integração. Uma nova preview precisa entrar na lista explicitamente, sem wildcard.
+
+Limite confirmado na fonte implantada: somente `compose_scaffold` e `revise_selected_text`; ela não recebe PDFs nem interpreta imagens e não tem o campo `design` acrescentado depois pela PR85. A ausência de design usa o comparativo padrão compatível. Habilitar flags não implanta a versão nova nem comprova extração industrial. A próxima operação bounded de extração depende de revisão e autorização separadas de redeploy.
+
+O usuário autorizou a chave temporária já fornecida e R$50 acumulados; não pedir substituição ou novo orçamento como requisito desta prova. Continuam obrigatórios: uso em memória, ausência de credenciais em código/logs, reserva antes da chamada e ledger que mantém as quatro tentativas reais anteriores. O teste autenticado em `/v2`, cloud save/reopen e Gemini real desta versão continuam pendentes. Provas com fixtures e mocks não aprovam Marc.

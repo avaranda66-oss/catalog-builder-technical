@@ -47,6 +47,7 @@ export function VerifiedPdfTableReview({session,target,onBeforeMutation}:Props) 
   const serial=React.useRef(0);
   React.useEffect(()=>{
     serial.current++;
+    setBusy(false);
     setPreview(null);
     setError('');
     setResult('');
@@ -97,12 +98,12 @@ export function VerifiedPdfTableReview({session,target,onBeforeMutation}:Props) 
       Não envia seus arquivos ao Gemini. Tabelas complexas ou digitalizadas exigem inspeção visual.</p>
     <label>PDFs originais (até cinco)
       <input aria-label="PDFs originais para validação" type="file" accept="application/pdf,.pdf"
-        multiple onChange={e=>{serial.current++;setPreview(null);setResult('');
+        multiple onChange={e=>{serial.current++;setBusy(false);setPreview(null);setResult('');setError('');
           setFiles([...e.target.files??[]]);}}/>
     </label>
     <label>Manifesto JSON contendo `sources` e `proposal`
       <input aria-label="Manifesto das fontes PDF" type="file" accept=".json,application/json"
-        onChange={e=>{serial.current++;setPreview(null);setResult('');
+        onChange={e=>{serial.current++;setBusy(false);setPreview(null);setResult('');setError('');
           setManifest(e.target.files?.[0]??null);}}/>
     </label>
     <button type="button" disabled={busy||!manifest||files.length===0}
