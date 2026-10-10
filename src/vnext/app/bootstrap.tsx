@@ -31,6 +31,7 @@ import {
 import { CatalogLibrary, CatalogOpenFailure } from './CatalogLibrary';
 import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-defaults';
 import { VNextApp } from './VNextApp';
+import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { createPresysPageTemplateRegistry } from '../library/presys-ta25n-starter';
 import { DefaultStarterDependencyPreparer, bindPresysPageReuse } from '../library/starter-dependencies';
 import { getSupabase } from '../../services/supabase.service';
@@ -446,6 +447,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
         <VNextApp
           runtime={runtime}
           assetBridge={assetBridge}
+          composerClient={supabase as unknown as NativeComposeFunctionsClient}
           simpleByDefault
           onRequestLibrary={() => { void requestLibrary(); }}
           translation={translation}

@@ -33,6 +33,7 @@ try {
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
   const dock = page.locator('[data-vnext-assistant="open"]');
   await dock.waitFor();
+  await page.getByRole('tab', { name: 'Ferramentas' }).click();
   await page.getByRole('textbox', { name: 'Peça uma alteração' }).waitFor();
   const geometry = await page.evaluate(() => {
     const stage = document.querySelector('.vnext-page-stage')?.getBoundingClientRect();
@@ -68,15 +69,47 @@ try {
   assert(mobile.width > 300 && mobile.width <= 400 && mobile.closeVisible);
   assert(mobile.right <= mobile.viewport + 1);
   await page.getByRole('button', { name: 'Fechar painel do assistente' }).click();
-  await page.getByRole('button', { name: 'Abrir assistente de edição' }).waitFor();
+  await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
+  // A separate acceptance proves the new chat-first creation path, not just
+  // deterministic edit shortcuts. The provider here is a FAKE authenticated
+  // functions adapter; no Google invocation or production catalog is touched.
+  await page.setViewportSize({ width: 1700, height: 920 });
+  await page.getByRole('tab', { name: 'Criar com Gemini' }).click();
+  await page.getByRole('button', { name: 'Conectar Gemini' }).click();
+  await page.getByRole('textbox', { name: 'Chave API do provedor' })
+    .fill('test-only-fake-composer-key-not-real');
+  await page.getByRole('textbox', { name: 'Senha de proteção do cofre' })
+    .fill('local-test-passphrase-no-real-secret');
+  await page.getByRole('button', { name: 'Salvar chave criptografada' }).click();
+  await page.getByRole('textbox', { name: 'Desbloquear cofre' })
+    .fill('local-test-passphrase-no-real-secret');
+  await page.getByRole('button', { name: 'Desbloquear para esta sessão' }).click();
+  await page.getByRole('button', { name: 'Chave desbloqueada' }).waitFor();
+  await page.getByRole('textbox', { name: 'Seu pedido ao Gemini' })
+    .fill('Crie uma nova capa e uma comparação técnica em duas páginas.');
+  await page.getByRole('button', { name: /Enviar ao Gemini/ }).click();
+  await page.getByRole('button', { name: 'Confirmar e inserir no catálogo' }).waitFor();
+  const beforeApproval = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
+  assert.equal(beforeApproval.pages, after.pages, 'Proposal must never modify the editor before approval');
+  await page.screenshot({ path: resolve(evidence, 'gemini-scaffold-proposal-before-approval.png'), fullPage: false });
+  await page.getByRole('button', { name: 'Confirmar e inserir no catálogo' }).click();
+  await page.getByRole('log', { name: 'Histórico de criação do catálogo' })
+    .getByText('Apliquei 2 página(s)', { exact: false }).waitFor();
+  const afterCompose = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
+  assert.equal(afterCompose.pages, after.pages + 2);
+  assert.equal(afterCompose.tables, after.tables + 1);
+  await page.screenshot({ path: resolve(evidence, 'gemini-scaffold-created-native-pages.png'), fullPage: false });
   assert.deepEqual(errors, [], 'No runtime exceptions');
   assert.deepEqual(outbound, [], 'Local proof must send neither documents nor keys to a provider');
-  const receipt = { status: 'PASS', mode: 'LOCAL_EDITOR_NO_REAL_GEMINI',
-    initial, after, desktop: geometry, compactWithEnter: true, reopenHistory: true,
+  const receipt = { status: 'PASS', mode: 'LOCAL_EDITOR_FAKE_COMPOSER_NO_REAL_GEMINI',
+    initial, after, afterCompose, desktop: geometry, compactWithEnter: true, reopenHistory: true,
     mobile, screenshots: [
       'assistant-at-right-of-real-editor-desktop.png',
       'assistant-mobile-overlay-with-close-button.png',
-    ], authorizedProductionSession: false, liveProviderCalls: 0, cloudSaveTested: false, errors, outbound };
+      'gemini-scaffold-proposal-before-approval.png',
+      'gemini-scaffold-created-native-pages.png',
+    ], authorizedProductionSession: false, liveProviderCalls: 0,
+      simulatedComposerCalls: 1, cloudSaveTested: false, errors, outbound };
   await writeFile(resolve(evidence, 'receipt.json'), JSON.stringify(receipt, null, 2));
   console.log('INLINE_ASSISTANT_UX_BROWSER_PASS', JSON.stringify({ desktop: geometry, after, mobile }));
   await context.close();

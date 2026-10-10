@@ -1,5 +1,7 @@
 import React from 'react';
 import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
+import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
+import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
 import {
@@ -334,6 +336,7 @@ const idleConflictResolutionState = () => 'idle' as const;
 export function EditorWorkspace({
   session,
   persistence,
+  composerClient,
   onRequestLibrary,
   onRequestTranslation,
   onRequestPublication,
@@ -341,6 +344,7 @@ export function EditorWorkspace({
   simpleByDefault = false,
 }: {
   session: DocumentSession;
+  composerClient?: NativeComposeFunctionsClient;
   demoAssets?: boolean;
   simpleByDefault?: boolean;
   persistence?: EditorWorkspacePersistenceProps;
@@ -367,6 +371,7 @@ export function EditorWorkspace({
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [assistantOpen, setAssistantOpen] = React.useState(false);
+  const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
   const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
@@ -5400,7 +5405,18 @@ export function EditorWorkspace({
               <span>Você está editando este catálogo</span>
               <button type="button" aria-label="Fechar painel do assistente" onClick={() => setAssistantOpen(false)}>Fechar ✕</button>
             </div>
-            <CatalogWorkbenchChat
+            <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
+              <button role="tab" aria-selected={assistantMode === 'gemini'} type="button"
+                onClick={() => setAssistantMode('gemini')}>Criar com Gemini</button>
+              <button role="tab" aria-selected={assistantMode === 'tools'} type="button"
+                onClick={() => setAssistantMode('tools')}>Ferramentas</button>
+            </div>
+            {assistantMode === 'gemini' ? <CatalogNativeComposer
+              key={document.id + ':gemini'} session={session} documentId={document.id}
+              ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
+              client={composerClient}
+              onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
+            /> : <CatalogWorkbenchChat
               key={document.id}
               compactMode
               documentId={document.id}
@@ -5413,7 +5429,7 @@ export function EditorWorkspace({
                 if (prepareAuthoringForContextChangeRef.current()) onRequestPublication?.();
               }}
               onEditor={() => setAssistantOpen(false)}
-            />
+            />}
           </aside>
         )}
       </div>
