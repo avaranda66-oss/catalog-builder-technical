@@ -123,6 +123,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Browser local PDF upload, indexed source, fail-closed invalid PDF
+        if: always()
+        run: node tests/vnext/proof/real-pdf-local-index-proof.mjs
+
+      - name: Upload local native PDF intake proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-pdf-local-intake-proof
+          path: scratch/real-pdf-local-index/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload AI-first prototype proof receipts
         if: always()
         uses: actions/upload-artifact@v4

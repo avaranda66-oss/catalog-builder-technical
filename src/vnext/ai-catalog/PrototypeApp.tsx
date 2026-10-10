@@ -12,6 +12,7 @@ import { applyRefinement, approveGeneration, assertGeneratedIntegrity, compileCa
 import { LocalGenerationRepository, type SavedGeneration } from './repository';
 import { GeminiPlannerChat } from './GeminiPlannerChat';
 import type { CatalogPlan } from './composition';
+import { extractPdfText, type ExtractedPdf } from './pdf-intake';
 import type { CatalogAgentGateway } from './gemini-plan';
 import '../app/styles.css';
 import './prototype.css';
@@ -101,6 +102,7 @@ export function AiCatalogPrototypeApp({ gateway }: { gateway?: CatalogAgentGatew
   const [repository] = React.useState(() => new LocalGenerationRepository(localStorage));
   const [step, setStep] = React.useState<'library' | 'intake' | 'proposal' | 'review'>('library');
   const [input, setInput] = React.useState<TechnicalInput>(), [candidate, setCandidate] = React.useState<GeneratedCatalog>();
+  const [pdfDocuments, setPdfDocuments] = React.useState<ExtractedPdf[]>([]);
   const [active, setActive] = React.useState<{ value: GeneratedCatalog; saved?: SavedGeneration }>();
   const [savedItems, setSavedItems] = React.useState<{ id: string; title: string }[]>([]), [message, setMessage] = React.useState(''), [busy, setBusy] = React.useState(false);
   const [request, setRequest] = React.useState('Crie uma comparação por seção.');
@@ -121,11 +123,35 @@ export function AiCatalogPrototypeApp({ gateway }: { gateway?: CatalogAgentGatew
   };
   const issues = candidate ? reviewIssues(candidate.input, candidate.decisions) : [];
   return <main className="ai-shell"><header className="ai-header"><div><p>PRESYS · Catalog Builder</p><h1>Criar com IA</h1></div><span className="vnext-badge">Protótipo local · geração simulada</span></header>
-    <p className="ai-boundary">Nesta demonstração, somente especificações sintéticas estruturadas. Extração de PDF e IA real ainda não disponíveis. Materiais permanecem neste navegador.</p>
+    <p className="ai-boundary">{"Demonstra\u00e7\u00e3o local: PDFs podem ser indexados neste navegador, mas extra\u00e7\u00e3o inteligente de tabelas e IA real ainda n\u00e3o est\u00e3o habilitadas. Nenhum PDF \u00e9 enviado ao provedor."}</p>
     {step !== 'library' && <ol className="ai-steps" aria-label="Etapas"><li>Fornecer materiais</li><li>Gerar catálogo</li><li>Revisar e publicar</li></ol>}
     {message && <p role="alert">{message}</p>}
     {step === 'library' && <section className="ai-card"><h2>Library local de demonstração</h2><p>Receba uma primeira versão completa e revise os dados antes do PDF.</p><button className="vnext-btn-primary" onClick={() => { setChosenPlan(undefined); setStep('intake'); setMessage(''); }}>Criar com IA</button>{active && <button onClick={() => setStep('review')}>Voltar ao catálogo em revisão</button>}<ul>{savedItems.map(item => <li key={item.id}>{item.title} <button onClick={() => { void repository.getGeneration(item.id).then(saved => { setActive({ value: saved.generation, saved }); setStep('review'); }).catch(() => setMessage('Registro ou aprovação inválidos; reabertura bloqueada.')); }}>Reabrir catálogo</button></li>)}</ul></section>}
     {step === 'intake' && <section className="ai-card"><h2>1. Fornecer materiais</h2><p>Use o conjunto original de exemplo: três instrumentos fictícios, duas seções técnicas e duas dúvidas para revisar.</p><div className="ai-actions"><button disabled={busy} onClick={() => { void createSyntheticSpecifications().then(setInput); }}>Usar especificações de exemplo</button><label>Arquivo de especificações sintéticas<input type="file" accept=".json,application/json" onChange={event => { const file = event.target.files?.[0]; if (file) { setInput(undefined); void file.text().then(text => validateTechnicalInput(JSON.parse(text))).then(setInput).catch(() => setMessage('Arquivo sintético inválido. Confira conteúdo, origem e hash; nenhum catálogo foi alterado.')); } }} /></label></div>
+      <section className="ai-card" aria-label="Documentos PDF locais"><h3>Seus documentos técnicos</h3>
+        <p>Selecione até cinco PDFs. A leitura é local e indica páginas que precisam de inspeção visual. Esta etapa ainda não gera fichas a partir dos PDFs automaticamente.</p>
+        <label>Adicionar PDFs (leitura local)
+          <input aria-label="Adicionar PDFs" type="file" accept=".pdf,application/pdf" multiple disabled={busy}
+            onChange={event => {
+              const selected = Array.from(event.target.files ?? []);
+              if (!selected.length) return;
+              if (selected.length > 5) { setMessage('Limite de cinco PDFs por análise. Nenhum arquivo foi processado.'); return; }
+              setBusy(true); setMessage('Lendo os PDFs neste navegador, sem envio externo.');
+              void Promise.all(selected.map(async file => extractPdfText(file.name, await file.arrayBuffer()))).then(results => {
+                setPdfDocuments(results);
+                const unreadable = results.reduce((count, pdf) => count + pdf.pages.filter(page => page.needsVisualExtraction).length, 0);
+                setMessage(`${results.length} PDF(s) indexados neste navegador. ${unreadable} página(s) exigem inspeção visual. Extração de especificações por IA ainda não habilitada.`);
+              }).catch(() => {
+                setPdfDocuments([]);
+                setMessage('Não foi possível analisar os arquivos. Confirme PDF válido, sem senha e menor que 50 MB.');
+              }).finally(() => { setBusy(false); });
+            }} />
+        </label>
+        {pdfDocuments.length > 0 && <ul data-pdf-index-summary>{pdfDocuments.map(pdf =>
+          <li key={pdf.sha256}>{pdf.fileName}: {pdf.pageCount} páginas; {pdf.pages.filter(page => !page.needsVisualExtraction).length} com texto disponível; hash {pdf.sha256.slice(0, 12)}…
+            {pdf.truncated ? ' (leitura limitada; revisar antes de usar)' : ''}
+          </li>)}</ul>}
+      </section>
       {input && <p>{input.models.join(' · ')} — {input.sections.reduce((count, section) => count + section.rows.length, 0)} características; {input.sources.length} fontes identificadas.</p>}
       <label>Descreva o catálogo<textarea value={request} onChange={event => { setRequest(event.target.value); setChosenPlan(undefined); }} rows={3} /></label>
       {input && import.meta.env.VITE_VNEXT_CATALOG_AGENT_ENABLED === 'true' && gateway &&
