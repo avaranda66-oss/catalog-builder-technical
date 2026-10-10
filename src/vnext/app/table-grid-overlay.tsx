@@ -97,7 +97,12 @@ export function TableGridOverlay({
   const normalized = normalizeTableSelection(table, selection);
 
   React.useLayoutEffect(() => {
-    rootRef.current?.focus({ preventScroll: true });
+    const root = rootRef.current;
+    const activeElement = root?.ownerDocument.activeElement;
+    // Async layout measurement may remount the grid during inspector edits.
+    // Never take focus away from a field while its value/Enter is committing.
+    if (activeElement?.closest('input, textarea, select, [contenteditable="true"]')) return;
+    root?.focus({ preventScroll: true });
   }, [identity.objectId]);
 
   React.useEffect(() => {

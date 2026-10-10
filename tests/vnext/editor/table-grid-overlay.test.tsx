@@ -66,6 +66,27 @@ function setup(sequence = 0) {
 }
 
 describe('W4.A visible Table grid gesture state', () => {
+  it.each(['input', 'textarea', 'select', 'contenteditable'] as const)(
+    'does not steal focus from inspector %s during an async grid remount',
+    (kind) => {
+      const { rerender, Harness, document: original } = setup();
+      const before = JSON.stringify(original);
+      const control = render(kind === 'contenteditable'
+        ? <div contentEditable suppressContentEditableWarning>Details</div>
+        : kind === 'select' ? <select defaultValue="wrap"><option value="wrap">Wrap</option></select>
+          : kind === 'textarea' ? <textarea defaultValue="Details" /> : <input defaultValue="2.5" />);
+      const field = control.container.firstElementChild as HTMLElement;
+      const blur = vi.fn();
+      field.addEventListener('blur', blur);
+      field.focus();
+      rerender(<React.Fragment />);
+      rerender(<Harness localSequence={1} />);
+      expect(globalThis.document.activeElement).toBe(field);
+      expect(blur).not.toHaveBeenCalled();
+      expect(JSON.stringify(original)).toBe(before);
+    }
+  );
+
   it.each(['pointerCancel', 'lostPointerCapture'] as const)('restores the prior selection on %s without document mutation', (eventName) => {
     const { container, document, changes, initial } = setup();
     const before = JSON.stringify(document);
