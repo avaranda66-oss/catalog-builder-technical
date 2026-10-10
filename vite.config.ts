@@ -15,6 +15,7 @@ if (!commitSha) {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: { rollupOptions: { input: { main: path.resolve(__dirname, 'index.html'), aiPrototype: path.resolve(__dirname, 'ai-catalog-prototype.html') } } },
   define: {
     'import.meta.env.VITE_GIT_COMMIT_SHA': JSON.stringify(commitSha)
   },
