@@ -89,10 +89,10 @@ try {
   await page.locator('[data-prototype-layout="READY"]').waitFor();
   const askEdit = async request => {
     await page.getByRole('textbox', { name: 'Peça uma alteração' }).fill(request);
-    await page.getByRole('button', { name: 'Aplicar pedido seguro' }).click();
+    await page.getByRole('button', { name: /Enviar pedido/ }).click();
   };
   await askEdit('Deixe as tabelas mais compactas');
-  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Apliquei uma alteração reversível', { exact: false }).waitFor();
+  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas no catálogo aberto', { exact: false }).waitFor();
   await page.locator('[data-prototype-layout="READY"]').waitFor();
   await askEdit('desfaça');
   await askEdit('refaça');
