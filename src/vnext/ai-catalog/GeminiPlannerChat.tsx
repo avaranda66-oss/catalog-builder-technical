@@ -2,7 +2,8 @@ import React from 'react';
 import type { TechnicalInput } from './contracts';
 import type { CatalogPlan } from './composition';
 import type { ConversationTurn } from './conversation-evidence';
-import { proposeCatalogPlan, type CatalogAgentGateway, type CatalogAgentReply } from './gemini-plan';
+import { proposeCatalogPlan, type CatalogAgentGateway, type CatalogAgentReply, type CatalogConversationTurn } from './gemini-plan';
+import { redactConversationMessage } from './conversation-evidence';
 
 interface Props {
   input: TechnicalInput;
@@ -54,10 +55,16 @@ export function GeminiPlannerChat({ input, gateway, onApprove, onTranscript }: P
     const serial = ++current.current;
     const submitted = message.trim();
     lastRequest.current = submitted;
+    // Send only bounded, sanitized conversational context from THIS input.
+    // Never re-send the just-submitted message as part of history.
+    const history: CatalogConversationTurn[] = turnsRef.current.slice(-8).map(turn => ({
+      role: turn.role,
+      message: redactConversationMessage(turn.message).slice(0, 800),
+    }));
     recordTurn('user', submitted);
     setReply(undefined); setBusy(true); setError('');
     try {
-      const result = await proposeCatalogPlan(input, submitted, gateway);
+      const result = await proposeCatalogPlan(input, submitted, gateway, history);
       if (serial !== current.current) return;
       responseContext.current = { input, gateway };
       setReply(result);

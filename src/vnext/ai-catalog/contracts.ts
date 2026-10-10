@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { sha256 } from '../asset/integrity';
+import { hasAtomicPdfEvidence } from './pdf-literal-evidence';
 
 const key = z.string().regex(/^[a-z0-9-]{1,40}$/);
 const literal = z.string().max(160).refine(value => ![...value].some(character => {
@@ -59,11 +60,12 @@ export const sourcePayload = (pages: TechnicalInput['sources'][number]['pages'])
 export const factQuote = (model: string, row: TechnicalInput['sections'][number]['rows'][number], value: string) =>
   `${model} | ${row.label} | ${value} | ${row.unit} | ${row.condition}`;
 
-/** Fixture integrity only. This does not attest authenticity or extract real PDFs. */
+/** Checks a sidecar's integrity; only the byte-grounded bridge attests PDF byte hashes. */
 export async function validateTechnicalInput(raw: unknown): Promise<TechnicalInput> {
   const input = TechnicalInputSchema.parse(raw);
   for (const source of input.sources) if (await sha256(sourcePayload(source.pages)) !== source.sha256) throw new Error('SOURCE_HASH_MISMATCH');
   const sources = new Map(input.sources.map(source => [source.id, source]));
+  const labels = input.sections.flatMap(section => section.rows.map(row => row.label));
   for (const section of input.sections) for (const row of section.rows) row.values.forEach((fact, model) => {
     if (fact.status === 'missing') return;
     for (const item of fact.status === 'known' ? [fact.candidate] : fact.candidates) {
@@ -72,25 +74,20 @@ export async function validateTechnicalInput(raw: unknown): Promise<TechnicalInp
       if (input.kind === 'original-synthetic-specifications') {
         if (item.source.quote !== factQuote(input.models[model], row, item.value)) throw new Error('SOURCE_QUOTE_MISMATCH');
       } else {
-        // A PDF excerpt must preserve literal model/label/value/unit in ONE
-        // inspectable reading-order quotation. Dense 2D tables without a
-        // contiguous excerpt require visual extraction and human review.
-        const quote = item.source.quote;
-        const literalPart = (v: string) => {
-          let i = quote.indexOf(v);
-          while (i !== -1) {
-            const before = quote[i - 1] ?? '', after = quote[i + v.length] ?? '';
-            if (!/[0-9.,]/.test(before) && !/[0-9.,]/.test(after)) return true;
-            i = quote.indexOf(v, i + 1);
-          }
-          return false;
-        };
-        if (!quote.includes(input.models[model]) || !quote.includes(row.label) ||
-          !literalPart(item.value) || (row.unit && !quote.includes(row.unit))) throw new Error('PDF_QUOTE_VALUE_UNGROUNDED');
+        if (!hasAtomicPdfEvidence({ quote: item.source.quote, model: input.models[model],
+          models: input.models, label: row.label, labels, value: item.value,
+          unit: row.unit, condition: row.condition })) throw new Error('PDF_QUOTE_VALUE_UNGROUNDED');
       }
     }
   });
   return input;
+}
+
+/** The demo JSON upload cannot self-declare a PDF hash without uploading bytes. */
+export async function validateSyntheticFileInput(raw: unknown): Promise<TechnicalInput> {
+  const input = TechnicalInputSchema.parse(raw);
+  if (input.kind !== 'original-synthetic-specifications') throw new Error('PDF_BYTES_REQUIRED');
+  return validateTechnicalInput(input);
 }
 
 export function reviewIssues(input: TechnicalInput, decisions: Decisions) {
