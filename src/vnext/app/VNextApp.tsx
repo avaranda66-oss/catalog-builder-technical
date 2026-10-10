@@ -1,4 +1,5 @@
 import React from 'react';
+import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { createDocumentSession, createStaticPageTemplateRegistry, type DocumentSession } from '../application';
 import type { VNextPersistenceRuntime } from '../persistence';
 import type { AssetPersistenceBridge } from '../asset';
@@ -20,6 +21,7 @@ function createBrowserId(): string {
 export interface VNextAppProps {
   session?: DocumentSession;
   runtime?: VNextPersistenceRuntime;
+  composerClient?: NativeComposeFunctionsClient;
   assetBridge?: AssetPersistenceBridge;
   simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
@@ -31,6 +33,7 @@ export interface VNextAppProps {
 function RuntimeWorkspace({
   runtime,
   assetBridge,
+  composerClient,
   simpleByDefault,
   onRequestLibrary,
   translation,
@@ -39,6 +42,7 @@ function RuntimeWorkspace({
 }: {
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
+  composerClient?: NativeComposeFunctionsClient;
   simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
@@ -77,6 +81,7 @@ function RuntimeWorkspace({
         <EditorWorkspace
           key={snapshot.binding.openSessionId}
           session={snapshot.session}
+          composerClient={composerClient}
           simpleByDefault={simpleByDefault}
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
@@ -128,8 +133,8 @@ function InMemoryWorkspace({ suppliedSession, simpleByDefault }: { suppliedSessi
   return <EditorWorkspace session={session} demoAssets simpleByDefault={simpleByDefault} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, composerClient, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} composerClient={composerClient} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} simpleByDefault={simpleByDefault} />;
 }
