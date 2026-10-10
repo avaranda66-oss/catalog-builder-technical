@@ -1,4 +1,11 @@
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+
+// Vite does not inject the default PDF.js worker path. Configure only in a
+// real browser; Node-side tests continue using PDF.js's own worker fallback.
+if (typeof Worker !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
+  GlobalWorkerOptions.workerSrc = workerUrl;
+}
 
 export const MAX_PDF_BYTES = 50 * 1024 * 1024;
 export const MAX_PDF_PAGES = 1000;

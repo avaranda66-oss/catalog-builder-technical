@@ -14,13 +14,24 @@ const fact = z.discriminatedUnion('status', [
   z.object({ status: z.literal('missing'), reason: name }).strict(),
   z.object({ status: z.literal('conflict'), candidates: z.array(candidate).min(2).max(4) }).strict(),
 ]);
+const sourcePages = z.array(z.object({
+  number: z.number().int().min(1), text: z.string().max(50000),
+}).strict()).min(1).max(10);
+const indexedSource = {
+  id: key, name, revision: name, pages: sourcePages,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+};
+const sourceSchema = z.discriminatedUnion('kind', [
+  z.object({ ...indexedSource, kind: z.literal('synthetic') }).strict(),
+  z.object({ ...indexedSource, kind: z.literal('pdf'),
+    pdfSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    pdfPageCount: z.number().int().min(1).max(1000),
+  }).strict(),
+]);
 export const TechnicalInputSchema = z.object({
-  version: z.literal(1), kind: z.literal('original-synthetic-specifications'),
+  version: z.literal(1), kind: z.enum(['original-synthetic-specifications', 'grounded-pdf-specifications']),
   title: name, models: z.array(name).min(2).max(4),
-  sources: z.array(z.object({ id: key, name, revision: name, kind: z.literal('synthetic'),
-    pages: z.array(z.object({ number: z.number().int().min(1), text: z.string().max(50000) }).strict()).min(1).max(10),
-    sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  }).strict()).min(1).max(5),
+  sources: z.array(sourceSchema).min(1).max(5),
   sections: z.array(z.object({ id: key, title: name, rows: z.array(z.object({
     id: key, label: name, unit: literal, condition: literal,
     values: z.array(fact).min(2).max(4),
@@ -30,6 +41,9 @@ export const TechnicalInputSchema = z.object({
     if (new Set(values).size !== values.length) ctx.addIssue({ code: 'custom', path: [path], message: 'Duplicate identity' });
   };
   unique(input.models, 'models'); unique(input.sources.map(source => source.id), 'sources'); unique(input.sections.map(section => section.id), 'sections');
+  if (input.sources.some(source => (input.kind === 'grounded-pdf-specifications' ? source.kind !== 'pdf' : source.kind !== 'synthetic'))) {
+    ctx.addIssue({ code: 'custom', path: ['sources'], message: 'Mismatched technical source type' });
+  }
   if (input.sections.reduce((total, section) => total + section.rows.length, 0) > 192) ctx.addIssue({ code: 'custom', message: 'Maximum 192 facts' });
   for (const source of input.sources) unique(source.pages.map(page => String(page.number)), 'sources');
   for (const section of input.sections) {
@@ -54,7 +68,26 @@ export async function validateTechnicalInput(raw: unknown): Promise<TechnicalInp
     if (fact.status === 'missing') return;
     for (const item of fact.status === 'known' ? [fact.candidate] : fact.candidates) {
       const page = sources.get(item.source.sourceId)?.pages.find(page => page.number === item.source.page);
-      if (!page || item.source.quote !== factQuote(input.models[model], row, item.value) || !page.text.includes(item.source.quote)) throw new Error('SOURCE_QUOTE_MISMATCH');
+      if (!page || !page.text.includes(item.source.quote)) throw new Error('SOURCE_QUOTE_MISMATCH');
+      if (input.kind === 'original-synthetic-specifications') {
+        if (item.source.quote !== factQuote(input.models[model], row, item.value)) throw new Error('SOURCE_QUOTE_MISMATCH');
+      } else {
+        // A PDF excerpt must preserve literal model/label/value/unit in ONE
+        // inspectable reading-order quotation. Dense 2D tables without a
+        // contiguous excerpt require visual extraction and human review.
+        const quote = item.source.quote;
+        const literalPart = (v: string) => {
+          let i = quote.indexOf(v);
+          while (i !== -1) {
+            const before = quote[i - 1] ?? '', after = quote[i + v.length] ?? '';
+            if (!/[0-9.,]/.test(before) && !/[0-9.,]/.test(after)) return true;
+            i = quote.indexOf(v, i + 1);
+          }
+          return false;
+        };
+        if (!quote.includes(input.models[model]) || !quote.includes(row.label) ||
+          !literalPart(item.value) || (row.unit && !quote.includes(row.unit))) throw new Error('PDF_QUOTE_VALUE_UNGROUNDED');
+      }
     }
   });
   return input;
