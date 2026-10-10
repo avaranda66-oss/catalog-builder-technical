@@ -49,16 +49,27 @@ export function tableMatrix(table: TableModel): string[][] {
   }));
 }
 function chunks(input: TechnicalInput, plan: CatalogPlan) {
+  // A4 does not physically fit six variant columns at readable font sizes.
+  // Split 5–6 models into balanced 3+2 / 3+3 groups, retaining EVERY value.
+  const groupSize = input.models.length > 4 ? 3 : input.models.length;
   return plan.sectionOrder.flatMap(sectionId => {
     const index = input.sections.findIndex(section => section.id === sectionId), section = input.sections[index];
     const result = [];
-    for (let start = 0; start < section.rows.length; start += plan.rowsPerPage) result.push({ index, section, start, rows: section.rows.slice(start, start + plan.rowsPerPage) });
+    for (let start = 0; start < section.rows.length; start += plan.rowsPerPage) {
+      for (let modelStart = 0; modelStart < input.models.length; modelStart += groupSize) {
+        result.push({ index, section, start,
+          rows: section.rows.slice(start, start + plan.rowsPerPage),
+          modelStart, modelEnd: Math.min(input.models.length, modelStart + groupSize) });
+      }
+    }
     return result;
   });
 }
 function matrixFor(input: TechnicalInput, decisions: Decisions, chunk: ReturnType<typeof chunks>[number]) {
-  return [['Característica', ...input.models, 'Unidade', 'Condição / observação'], ...chunk.rows.map((row, offset) => [
-    row.label, ...input.models.map((_, model) => selectedValue(input, chunk.index, chunk.start + offset, model, decisions).value), row.unit, row.condition,
+  return [['Característica', ...input.models.slice(chunk.modelStart, chunk.modelEnd), 'Unidade', 'Condição / observação'], ...chunk.rows.map((row, offset) => [
+    row.label, ...input.models.slice(chunk.modelStart, chunk.modelEnd)
+      .map((_, model) => selectedValue(input, chunk.index, chunk.start + offset, chunk.modelStart + model, decisions).value),
+    row.unit, row.condition,
   ])];
 }
 
@@ -76,9 +87,9 @@ export async function compileCatalog(raw: unknown, rawPlan?: unknown, decisions:
   const institutional = plan.template === 'institutional-technical-a4-v1';
   const pageCount = technicalChunks.length + (institutional ? 3 : 0);
   const technicalPages: PageTemplateDefinition[] = technicalChunks.map((chunk, page) => {
-    const id = `generated-${page}`, matrix = matrixFor(input, decisions, chunk), count = input.models.length;
+    const id = `generated-${page}`, matrix = matrixFor(input, decisions, chunk), count = chunk.modelEnd - chunk.modelStart;
     let table: TableModel = {
-      id, columns: matrix[0].map((_, col) => ({ id: `${id}-col${col}`, width: col === 0 ? { mode: 'fixed', mm: count === 4 ? 40 : 44 } : col === count + 1 ? { mode: 'fixed', mm: 20 } : col === count + 2 ? { mode: 'fixed', mm: count === 4 ? 30 : 38 } : { mode: 'flex', weight: 1 }, minMm: 16 })),
+      id, columns: matrix[0].map((_, col) => ({ id: `${id}-col${col}`, width: col === 0 ? { mode: 'fixed', mm: count === 4 ? 31 : 44 } : col === count + 1 ? { mode: 'fixed', mm: 20 } : col === count + 2 ? { mode: 'fixed', mm: count === 4 ? 35 : 38 } : { mode: 'flex', weight: 1 }, minMm: 16 })),
       rows: matrix.map((_, row) => ({ id: `${id}-row${row}`, role: row === 0 ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } })),
       cells: matrix.flatMap((values, row) => values.map((value, col) => ({ id: `${id}-r${row}c${col}`, rowId: `${id}-row${row}`, columnId: `${id}-col${col}`, content: value ? { type: 'richText' as const, value: rich(`${id}-r${row}c${col}`, value) } : { type: 'empty' as const } }))),
       style: { base: {}, rowRoles: {}, annotation: {}, annotationGapMm: 1 }, annotations: [], legend: [],
@@ -87,9 +98,11 @@ export async function compileCatalog(raw: unknown, rawPlan?: unknown, decisions:
     const text = (value: string, yMm: number, heightMm: number, size: number, bold = false) => ({ type: 'text' as const, frame: { xMm: 17, yMm, widthMm: 176, heightMm }, zIndex: 0, text: rich(`${id}-text${yMm}`, value), style: { fontFamily: 'Noto Sans', fontSizePt: size, fontWeight: bold ? 700 as const : 400 as const, lineHeight: 1.25, color: bold ? '#003366' : '#172033' } });
     return { id, label: chunk.section.title, safeArea: { topMm: 12, rightMm: 12, bottomMm: 12, leftMm: 12 }, objects: [
       text('PRESYS · Estudo de catálogo', 14, 9, 12, true), text(input.title, 27, 16, 17, true),
-      text(`${chunk.section.title}${chunk.start ? ' · continuação' : ''}`, 46, 10, 12, true),
+      text(`${chunk.section.title}${chunk.start ? ' · continuação' : ''}${input.models.length > 4 ? ` · modelos ${chunk.modelStart + 1}–${chunk.modelEnd}/${input.models.length}` : ''}`, 46, 10, 12, true),
       { type: 'table', frame: { xMm: 17, yMm: 62, widthMm: 176, heightMm: 173 }, zIndex: 1, table },
-      text('Dados sintéticos originais. Não representam especificações de produtos PRESYS.', 247, 13, 9),
+      text(input.kind === 'grounded-pdf-specifications'
+        ? 'Dados transcritos de PDF com fontes identificadas. Valide modelo, unidade, condição e revisão antes de publicar.'
+        : 'Dados sintéticos originais. Não representam especificações de produtos PRESYS.', 247, 13, 9),
       text(`Fontes: ${input.sources.map(source => `${source.id} (rev. ${source.revision})`).join('; ')}.\n${page + (institutional ? 3 : 1)} / ${pageCount} · Conferir dados aprovados antes de publicar.`, 266, 17, 8),
     ] };
   });
@@ -138,9 +151,10 @@ export function assertGeneratedIntegrity(value: GeneratedCatalog): TechnicalCell
     if (objects.length !== 1 || objects[0].type !== 'table') throw new Error('GENERATION_TABLE_COVERAGE');
     const table = objects[0].table;
     if (JSON.stringify(tableMatrix(table)) !== JSON.stringify(matrixFor(value.input, value.decisions, chunk))) throw new Error('GENERATION_VALUE_MISMATCH');
-    chunk.rows.forEach((row, offset) => value.input.models.forEach((model, modelIndex) => {
+    chunk.rows.forEach((row, offset) => value.input.models.slice(chunk.modelStart, chunk.modelEnd).forEach((model, localIndex) => {
+      const modelIndex = chunk.modelStart + localIndex;
       const selected = selectedValue(value.input, chunk.index, chunk.start + offset, modelIndex, value.decisions);
-      const cell = table.cells.find(cell => cell.rowId === table.rows[offset + 1].id && cell.columnId === table.columns[modelIndex + 1].id)!;
+      const cell = table.cells.find(cell => cell.rowId === table.rows[offset + 1].id && cell.columnId === table.columns[localIndex + 1].id)!;
       trace.push({ cellId: cell.id, factId: decisionKey(chunk.section.id, row.id, modelIndex), label: row.label, section: chunk.section.title, model, value: selected.value, unit: row.unit, condition: row.condition, status: selected.status, ...('source' in selected ? { source: selected.source } : {}) });
     }));
   });

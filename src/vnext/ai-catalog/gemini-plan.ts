@@ -13,7 +13,7 @@ export const CatalogAgentRequestSchema = z.object({
   task: z.literal('plan_catalog'),
   message: z.string().trim().min(4).max(800),
   sections: z.array(z.object({ id, title: label }).strict()).min(1).max(16),
-  models: z.array(label).min(2).max(4),
+  models: z.array(label).min(2).max(6),
 }).strict().superRefine((value, ctx) => {
   if (new Set(value.sections.map(section => section.id)).size !== value.sections.length) {
     ctx.addIssue({ code: 'custom', path: ['sections'], message: 'Duplicate section' });

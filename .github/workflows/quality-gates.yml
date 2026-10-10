@@ -105,6 +105,30 @@ jobs:
           node tests/vnext/proof/ai-catalog-prototype-proof.mjs
           AI_PROOF_BROWSER=msedge node tests/vnext/proof/ai-catalog-prototype-proof.mjs
 
+      - name: Six model physically split A4 technical tables, zero lost values
+        run: node tests/vnext/proof/six-model-comparison-browser-proof.mjs
+
+      - name: Upload six-model A4 publication receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: six-model-tables-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/six-model-a4-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: BYOK agent conversation to native A4 PDF, mock transport only
+        run: node tests/vnext/proof/byok-agent-conversation-browser-proof.mjs
+
+      - name: Upload bounded BYOK agent dialogue and A4 PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: byok-agent-dialogue-pdf-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: scratch/byok-agent-conversation-proof/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Institutional 27-page technical catalog, controlled Gemini intent, saved catalog and PDF proof
         env:
           LONG_PROOF_SECTIONS: '12'

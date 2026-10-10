@@ -64,7 +64,7 @@ export function ProviderCredentialsSettings({
       if (!entry) throw new Error('MISSING_RECORD');
       const plaintext = await decryptProviderCredential(entry, unlockPassphrase);
       onUnlock?.(provider, plaintext);
-      setUnlocked(previous => [...new Set([...previous, provider])]);
+      setUnlocked([provider]);
       setStatus('Credencial desbloqueada nesta sessão. O agente real ainda depende da conexão segura com o provedor.');
     } catch {
       setError('Não foi possível desbloquear a credencial. Verifique a senha ou cadastre novamente a chave.');
@@ -117,6 +117,11 @@ export function ProviderCredentialsSettings({
         <button type="button" disabled={busy || !unlockPassphrase} onClick={() => { void unlock(); }}>
           Desbloquear para esta sessão
         </button>
+        {unlocked.includes(provider) && <button type="button" disabled={busy} onClick={() => {
+          setUnlocked(previous => previous.filter(item => item !== provider));
+          onLock?.(provider);
+          setStatus('Chave bloqueada nesta sessão, permanecendo criptografada neste dispositivo.');
+        }}>Bloquear chave nesta sessão</button>}
         <button type="button" disabled={busy} onClick={() => { void remove(); }}>Remover chave do dispositivo</button>
       </div>
     </div>}

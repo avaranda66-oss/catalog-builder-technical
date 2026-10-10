@@ -30,11 +30,11 @@ const sourceSchema = z.discriminatedUnion('kind', [
 ]);
 export const TechnicalInputSchema = z.object({
   version: z.literal(1), kind: z.enum(['original-synthetic-specifications', 'grounded-pdf-specifications']),
-  title: name, models: z.array(name).min(2).max(4),
-  sources: z.array(sourceSchema).min(1).max(5),
+  title: name, models: z.array(name).min(2).max(6),
+  sources: z.array(sourceSchema).min(1).max(6),
   sections: z.array(z.object({ id: key, title: name, rows: z.array(z.object({
     id: key, label: name, unit: literal, condition: literal,
-    values: z.array(fact).min(2).max(4),
+    values: z.array(fact).min(2).max(6),
   }).strict()).min(1).max(16) }).strict()).min(1).max(16),
 }).strict().superRefine((input, ctx) => {
   const unique = (values: string[], path: string) => {
