@@ -10,6 +10,9 @@ import { createSyntheticSpecifications } from './fixture';
 import { reviewIssues, validateTechnicalInput, type TechnicalInput, type Decisions } from './contracts';
 import { applyRefinement, approveGeneration, assertGeneratedIntegrity, compileCatalog, planMockRequest, proposeRefinement, type GeneratedCatalog, type Refinement } from './composition';
 import { LocalGenerationRepository, type SavedGeneration } from './repository';
+import { GeminiPlannerChat } from './GeminiPlannerChat';
+import type { CatalogPlan } from './composition';
+import type { CatalogAgentGateway } from './gemini-plan';
 import '../app/styles.css';
 import './prototype.css';
 
@@ -89,7 +92,7 @@ function Provenance({ value }: { value: GeneratedCatalog }) {
   return <details className="ai-card"><summary>Conferir origem dos {trace.length} valores técnicos</summary><table className="ai-trace"><thead><tr><th>Modelo / campo</th><th>Valor / unidade</th><th>Condição</th><th>Origem</th></tr></thead><tbody>{trace.map(item => <tr key={item.cellId}><td>{item.model} · {item.label}</td><td>{item.value || '(vazio legítimo)'} {item.unit}</td><td>{item.condition}</td><td>{item.source ? `${value.input.sources.find(source => source.id === item.source?.sourceId)?.name} · p. ${item.source.page}` : 'Ausente; não preenchido'}{item.source && <details><summary>Trecho literal</summary><pre>{item.source.quote}</pre></details>}</td></tr>)}</tbody></table></details>;
 }
 
-export function AiCatalogPrototypeApp() {
+export function AiCatalogPrototypeApp({ gateway }: { gateway?: CatalogAgentGateway } = {}) {
   React.useEffect(() => {
     const previous = document.body.getAttribute('data-vnext-print-policy');
     document.body.setAttribute('data-vnext-print-policy', 'ai-original-prototype');
@@ -101,15 +104,16 @@ export function AiCatalogPrototypeApp() {
   const [active, setActive] = React.useState<{ value: GeneratedCatalog; saved?: SavedGeneration }>();
   const [savedItems, setSavedItems] = React.useState<{ id: string; title: string }[]>([]), [message, setMessage] = React.useState(''), [busy, setBusy] = React.useState(false);
   const [request, setRequest] = React.useState('Crie uma comparação por seção.');
+  const [chosenPlan, setChosenPlan] = React.useState<CatalogPlan>();
   const epoch = React.useRef(0);
   const library = React.useCallback(async () => { setStep('library'); const result = await repository.listCatalogs(); if (result.ok) setSavedItems(result.value.map(item => ({ id: item.catalogId, title: item.title }))); else setMessage('Um registro local não pôde ser verificado. Nenhum conteúdo foi substituído.'); }, [repository]);
   React.useEffect(() => { void library(); }, [library]);
-  const generate = async (raw: unknown, decisions: Decisions = {}) => {
+  const generate = async (raw: unknown, decisions: Decisions = {}, explicitPlan?: CatalogPlan) => {
     const generation = ++epoch.current; setBusy(true); setMessage('');
     try {
       if (!request.trim()) throw new Error('EMPTY_REQUEST');
       const parsed = await validateTechnicalInput(raw);
-      const value = await compileCatalog(parsed, planMockRequest(parsed, request), decisions);
+      const value = await compileCatalog(parsed, explicitPlan ?? chosenPlan ?? planMockRequest(parsed, request), decisions);
       if (generation !== epoch.current) return;
       setCandidate(value); setStep('proposal');
     } catch (error) { setMessage(error instanceof Error && error.message === 'REQUEST_NOT_SUPPORTED' ? 'Pedido não suportado neste protótipo. Use “Crie uma comparação por seção” ou “Comece pelas especificações elétricas”. Nenhuma alteração aplicada.' : 'Material inválido ou fora do escopo sintético. Confira o arquivo; o catálogo anterior está preservado.'); }
@@ -120,10 +124,13 @@ export function AiCatalogPrototypeApp() {
     <p className="ai-boundary">Nesta demonstração, somente especificações sintéticas estruturadas. Extração de PDF e IA real ainda não disponíveis. Materiais permanecem neste navegador.</p>
     {step !== 'library' && <ol className="ai-steps" aria-label="Etapas"><li>Fornecer materiais</li><li>Gerar catálogo</li><li>Revisar e publicar</li></ol>}
     {message && <p role="alert">{message}</p>}
-    {step === 'library' && <section className="ai-card"><h2>Library local de demonstração</h2><p>Receba uma primeira versão completa e revise os dados antes do PDF.</p><button className="vnext-btn-primary" onClick={() => { setStep('intake'); setMessage(''); }}>Criar com IA</button>{active && <button onClick={() => setStep('review')}>Voltar ao catálogo em revisão</button>}<ul>{savedItems.map(item => <li key={item.id}>{item.title} <button onClick={() => { void repository.getGeneration(item.id).then(saved => { setActive({ value: saved.generation, saved }); setStep('review'); }).catch(() => setMessage('Registro ou aprovação inválidos; reabertura bloqueada.')); }}>Reabrir catálogo</button></li>)}</ul></section>}
+    {step === 'library' && <section className="ai-card"><h2>Library local de demonstração</h2><p>Receba uma primeira versão completa e revise os dados antes do PDF.</p><button className="vnext-btn-primary" onClick={() => { setChosenPlan(undefined); setStep('intake'); setMessage(''); }}>Criar com IA</button>{active && <button onClick={() => setStep('review')}>Voltar ao catálogo em revisão</button>}<ul>{savedItems.map(item => <li key={item.id}>{item.title} <button onClick={() => { void repository.getGeneration(item.id).then(saved => { setActive({ value: saved.generation, saved }); setStep('review'); }).catch(() => setMessage('Registro ou aprovação inválidos; reabertura bloqueada.')); }}>Reabrir catálogo</button></li>)}</ul></section>}
     {step === 'intake' && <section className="ai-card"><h2>1. Fornecer materiais</h2><p>Use o conjunto original de exemplo: três instrumentos fictícios, duas seções técnicas e duas dúvidas para revisar.</p><div className="ai-actions"><button disabled={busy} onClick={() => { void createSyntheticSpecifications().then(setInput); }}>Usar especificações de exemplo</button><label>Arquivo de especificações sintéticas<input type="file" accept=".json,application/json" onChange={event => { const file = event.target.files?.[0]; if (file) { setInput(undefined); void file.text().then(text => validateTechnicalInput(JSON.parse(text))).then(setInput).catch(() => setMessage('Arquivo sintético inválido. Confira conteúdo, origem e hash; nenhum catálogo foi alterado.')); } }} /></label></div>
       {input && <p>{input.models.join(' · ')} — {input.sections.reduce((count, section) => count + section.rows.length, 0)} características; {input.sources.length} fontes identificadas.</p>}
-      <label>Descreva o catálogo<textarea value={request} onChange={event => setRequest(event.target.value)} rows={3} /></label><p>Pedidos simulados disponíveis: “Crie uma comparação por seção” ou “Comece pelas especificações elétricas”. Os dados vêm somente do material.</p><div className="ai-actions"><button className="vnext-btn-primary" disabled={!input || busy || !request.trim()} onClick={() => { if (input) void generate(input); }}>Gerar catálogo</button><button onClick={() => { epoch.current++; setBusy(false); void library(); }}>Voltar à Library</button></div>
+      <label>Descreva o catálogo<textarea value={request} onChange={event => { setRequest(event.target.value); setChosenPlan(undefined); }} rows={3} /></label>
+      {input && import.meta.env.VITE_VNEXT_CATALOG_AGENT_ENABLED === 'true' && gateway &&
+        <GeminiPlannerChat input={input} gateway={gateway}
+          onApprove={(plan, prompt) => { setChosenPlan(plan); setRequest(prompt); void generate(input, {}, plan); }} />}<p>Pedidos simulados disponíveis: “Crie uma comparação por seção” ou “Comece pelas especificações elétricas”. Os dados vêm somente do material.</p><div className="ai-actions"><button className="vnext-btn-primary" disabled={!input || busy || !request.trim()} onClick={() => { if (input) void generate(input); }}>Gerar catálogo</button><button onClick={() => { epoch.current++; setBusy(false); void library(); }}>Voltar à Library</button></div>
     </section>}
     {step === 'proposal' && candidate && <><h2>2. Gerar catálogo</h2><p>Primeira versão: {candidate.document.pages.length} páginas, comparação de {candidate.input.models.length} modelos. A proposta ainda não substituiu um catálogo salvo.</p>
       <section className="ai-card"><h3>Dados que precisam de sua revisão</h3>{issues.map(issue => <div className="ai-issue" key={issue.id}><strong>{issue.model} · {issue.label}</strong>{issue.fact.status === 'missing' ? <><p>{issue.fact.reason}</p><label><input type="checkbox" disabled={busy} checked={issue.resolved} onChange={event => { const decisions = { ...candidate.decisions }; if (event.target.checked) decisions[issue.id] = 'missing'; else delete decisions[issue.id]; void generate(candidate.input, decisions); }} />Manter “Não informado” e reconhecer a ausência</label></> : <><p>As fontes divergem. Selecione o valor que será aprovado.</p><select aria-label={`Resolver ${issue.model} ${issue.label}`} disabled={busy} value={issue.resolved ? candidate.decisions[issue.id] : ''} onChange={event => { const decisions = { ...candidate.decisions }; if (event.target.value === '') delete decisions[issue.id]; else decisions[issue.id] = Number(event.target.value); void generate(candidate.input, decisions); }}><option value="">Revisar fontes</option>{issue.fact.status === 'conflict' && issue.fact.candidates.map((item, index) => <option key={index} value={index}>{item.value} — {candidate.input.sources.find(source => source.id === item.source.sourceId)?.name}, p. {item.source.page}</option>)}</select></>}</div>)}
