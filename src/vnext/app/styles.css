@@ -865,3 +865,100 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-actions .vnext-action-assistant { padding: 0 8px; }
   .vnext-assistant-dock { top: 68px; width: min(100%,400px); }
 }
+
+/* Gemini chat-first editor composition; the deterministic tools are secondary. */
+.vnext-assistant-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 9px 12px;
+  background: #fff;
+  border-bottom: 1px solid #dce5ee;
+}
+.vnext-assistant-mode button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: #54708b;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vnext-assistant-mode button[aria-selected="true"] {
+  border-color: #b2cfe5;
+  background: #e9f4fc;
+  color: #064a79;
+}
+.vnext-assistant-dock .ai-compose-proposal {
+  padding: 14px;
+  border: 1px solid #a6c7dc;
+  border-radius: 10px;
+  background: #fff;
+  color: #223c53;
+}
+.vnext-assistant-dock .ai-compose-proposal h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.vnext-assistant-dock .ai-compose-proposal p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.vnext-assistant-dock .ai-compose-proposal ul {
+  margin: 0 0 12px;
+  padding-left: 17px;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.vnext-assistant-dock .ai-compose-proposal li { margin: 5px 0; }
+.vnext-assistant-dock .ai-compose-settings {
+  margin: 10px 0;
+  padding: 11px;
+  border: 1px solid #d1dee9;
+  border-radius: 9px;
+  background: #f7fafc;
+}
+.vnext-assistant-dock .ai-compose-settings .ai-card { padding: 0; }
+.vnext-assistant-dock .ai-compose-settings label {
+  display: block;
+  margin: 9px 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.vnext-assistant-dock .ai-compose-settings input,
+.vnext-assistant-dock .ai-compose-settings select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid #b6cbdc;
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 7px 8px;
+  background: white;
+  font: inherit;
+}
+.vnext-assistant-dock .ai-compose-settings button {
+  padding: 9px 11px;
+  border: 1px solid #aac3d5;
+  border-radius: 7px;
+  background: white;
+  color: #22517a;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vnext-assistant-dock .ai-compose-settings p {
+  color: #59728b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.vnext-assistant-dock .ai-compose-settings .ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

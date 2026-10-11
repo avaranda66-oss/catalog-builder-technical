@@ -19,6 +19,10 @@ async function setup({ simpleByDefault = true } = {}) {
 }
 function openAssistant() {
   fireEvent.click(screen.getByRole('button', { name: 'Abrir assistente de edição' }));
+  // The new creation agent is the default, while the existing deterministic
+  // commands remain under the explicitly labeled secondary tools tab.
+  expect(screen.getByRole('tab', { name: 'Criar com Gemini' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Ferramentas' }));
 }
 function send(command: string) {
   fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), {
