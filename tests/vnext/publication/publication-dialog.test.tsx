@@ -18,13 +18,13 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-function setup(saved = true) {
+function setup(saved = true, onLocateDiagnostic?: (diagnostic: import('@/vnext/domain').Diagnostic) => void) {
   let id = 0;
   let source: PublicationSource | undefined = saved ? { document: createW2CDemoDocument(() => `dialog-${++id}`),
     openSessionId: 'open-a', remoteRevision: 1, authLineage: 'a', authorityScopeId: 'a', assetUrls: new Map() } : undefined;
   let listener = () => {};
   const close = vi.fn();
-  const view = render(<PublicationReview getSource={() => source} subscribe={callback => { listener = callback; return () => {}; }} onClose={close} />);
+  const view = render(<PublicationReview getSource={() => source} subscribe={callback => { listener = callback; return () => {}; }} onClose={close} onLocateDiagnostic={onLocateDiagnostic} />);
   return { view, close, invalidate: () => { source = undefined; listener(); } };
 }
 
@@ -48,6 +48,32 @@ describe('W5.C publication dialog guards', () => {
     act(invalidate);
     expect(button).toBeDisabled(); expect(host.dataset.printApproved).toBeUndefined();
     expect(view.getByRole('alert').textContent).toContain('acesso mudou');
+  });
+  it('suggests the catalog filename only while printing and restores the app title afterward', async () => {
+    document.title = 'Editor de catálogos';
+    checks.review.mockImplementation(async (source: PublicationSource) => ({ status: 'READY', document: { ...source.document, title: 'TA-25N: ensaio / técnico.pdf' },
+      plans: new Map(), urls: new Map(), diagnostics: [], snapshot: { facts: [], geometryDiagnostics: [] } }));
+    const { view } = setup();
+    const button = view.getByRole('button', { name: 'Imprimir / salvar PDF' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(window.print).toHaveBeenCalledOnce());
+    expect(document.title).toBe('TA-25N ensaio técnico');
+    fireEvent(window, new Event('afterprint'));
+    expect(document.title).toBe('Editor de catálogos');
+    expect(document.querySelector('[data-publication-host]')).not.toHaveAttribute('data-print-approved');
+    expect(view.getByRole('list', { name: 'Como salvar o PDF' })).toHaveTextContent('Salvar como PDF');
+    expect(view.getByRole('list', { name: 'Como salvar o PDF' })).toHaveTextContent('100%');
+  });
+  it('restores the app title when closing a print review without an afterprint event', async () => {
+    document.title = 'Editor de catálogos';
+    const { view } = setup();
+    const button = view.getByRole('button', { name: 'Imprimir / salvar PDF' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(window.print).toHaveBeenCalledOnce());
+    view.unmount();
+    expect(document.title).toBe('Editor de catálogos');
   });
   it('does not print after the user closes during async final verification', async () => {
     let resume = () => {};
@@ -107,5 +133,21 @@ describe('W5.C publication dialog guards', () => {
     expect(view.getByRole('heading', { name: 'Pontos para revisar' })).toBeInTheDocument();
     expect(view.getByText('Revisar', { exact: true })).toBeInTheDocument();
     expect(document.querySelector('[data-publication-host]')).toHaveAttribute('data-publication-status', 'READY');
+  });
+  it('opens the exact diagnostic location only while its source is current', async () => {
+    checks.review.mockImplementation(async (source: PublicationSource) => ({ status: 'BLOCKED', document: source.document,
+      plans: new Map(), urls: new Map(), diagnostics: [{ code: 'TEXT_OBJECT_OVERFLOW', severity: 'ERROR',
+        details: 'Overflow', pageId: source.document.pages[0].id, objectId: 'overflowing-text-object' }] }));
+    const locate = vi.fn();
+    const { view, close, invalidate } = setup(true, locate);
+    const button = await view.findByRole('button', { name: 'Corrigir este item' });
+    fireEvent.click(button);
+    expect(close).toHaveBeenCalledOnce();
+    expect(locate).toHaveBeenCalledWith(expect.objectContaining({ code: 'TEXT_OBJECT_OVERFLOW', pageId: expect.any(String), objectId: expect.any(String) }));
+    act(invalidate);
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(locate).toHaveBeenCalledOnce();
+    expect(window.print).not.toHaveBeenCalled();
   });
 });

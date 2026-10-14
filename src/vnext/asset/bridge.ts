@@ -109,6 +109,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   private readonly inFlight = new Map<string, Promise<AssetResolutionResult>>();
   private readonly activeBlobUrls = new Set<string>();
   private currentAuthLineage?: string;
+  private resolutionGeneration = 0;
   private pendingFinalization?: PendingFinalizationAttempt;
 
   constructor(repository: AssetRepository, options: DefaultAssetPersistenceBridgeOptions = {}) {
@@ -403,7 +404,23 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       };
     }
 
-    const cacheKey = `${asset.id}:${asset.version}`;
+    const lineageBefore = context ?? this.options.getActiveLineage?.();
+    const generation = this.resolutionGeneration;
+    const isCurrent = () => generation === this.resolutionGeneration
+      && !isLineageStale(lineageBefore, this.options.getActiveLineage?.());
+    const staleResult = (): AssetResolutionResult => ({
+      ok: false,
+      state: { status: 'unavailable', error: 'A sessão mudou. Abra o catálogo novamente.', asset },
+    });
+    if (!isCurrent()) return staleResult();
+
+    // Cached bytes and in-flight work are valid only for the exact reference and authority.
+    const cacheKey = JSON.stringify([
+      generation, lineageBefore?.authLineage, lineageBefore?.authorityScopeId,
+      lineageBefore?.openSessionId, lineageBefore?.catalogId,
+      asset.id, asset.version, asset.sha256, asset.mime, asset.widthPx, asset.heightPx,
+      asset.name, asset.alt,
+    ]);
     const now = Date.now();
 
     // 1. Return cached entry if still valid (TTL > 60s remaining)
@@ -427,12 +444,11 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const activeFlight = this.inFlight.get(cacheKey);
     if (activeFlight) return await activeFlight;
 
-    const lineageBefore = context ?? this.options.getActiveLineage?.();
-
     const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
       try {
         // Fetch durable asset record
         const recordResult = await this.repository.getAsset(asset.id, asset.version);
+        if (!isCurrent()) return staleResult();
         if (!recordResult.ok) {
           return {
             ok: false,
@@ -488,6 +504,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
         // Request ephemeral signed URL (1 hour validity)
         const signedUrlResult = await this.repository.createSignedUrl(record.storagePath, 3600);
+        if (!isCurrent()) return staleResult();
         if (!signedUrlResult.ok || !signedUrlResult.signedUrl) {
           return {
             ok: false,
@@ -544,21 +561,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
         }
 
         // Check for stale completion across lineage
-        const currentLineage = this.options.getActiveLineage?.();
-        if (
-          lineageBefore?.openSessionId &&
-          currentLineage?.openSessionId &&
-          lineageBefore.openSessionId !== currentLineage.openSessionId
-        ) {
-          return {
-            ok: false,
-            state: {
-              status: 'unavailable',
-              error: 'Resolution discarded: editing session changed',
-              asset,
-            },
-          };
-        }
+        if (!isCurrent()) return staleResult();
 
         let blobUrl: string | undefined;
         if (typeof URL !== 'undefined' && typeof Blob !== 'undefined') {
@@ -587,6 +590,15 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
             expiresAt,
             asset,
           },
+        };
+      } catch {
+        // A failed photo transport must not prevent the catalog from reopening.
+        // Keep the canonical reference so the user can retry without uploading again.
+        return {
+          ok: false,
+          state: this.options.isOffline?.()
+            ? { status: 'offline', asset }
+            : { status: 'unavailable', error: 'Não foi possível carregar esta imagem. Tente novamente.', asset },
         };
       } finally {
         this.inFlight.delete(cacheKey);
@@ -662,6 +674,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   }
 
   revokeObjectURLs(): void {
+    this.resolutionGeneration += 1;
     if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
       for (const url of this.activeBlobUrls) {
         try {

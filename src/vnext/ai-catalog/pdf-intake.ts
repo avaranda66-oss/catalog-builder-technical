@@ -16,6 +16,8 @@ export interface ExtractedPdfPage {
   readonly text: string;
   readonly textLength: number;
   readonly needsVisualExtraction: boolean;
+  /** Native text positions for a reviewable layout suggestion, never certification. */
+  readonly runs?: readonly { text: string; x: number; y: number; width: number }[];
 }
 export interface ExtractedPdf {
   readonly fileName: string;
@@ -68,6 +70,11 @@ export async function extractPdfText(
           text: full.slice(0, MAX_PAGE_TEXT),
           textLength: full.length,
           needsVisualExtraction: full.trim().length < 20,
+          runs: page.rotate === 0 ? content.items.flatMap(item => {
+            if (!('str' in item) || !item.str.trim() || item.transform[1] !== 0 ||
+                item.transform[2] !== 0 || ![item.transform[4], item.transform[5], item.width].every(Number.isFinite)) return [];
+            return [{ text: item.str, x: item.transform[4], y: item.transform[5], width: item.width }];
+          }) : [],
         });
       } finally {
         page.cleanup();

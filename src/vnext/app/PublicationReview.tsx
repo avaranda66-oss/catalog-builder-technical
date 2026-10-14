@@ -4,9 +4,17 @@ import { DocumentRenderer } from '../rendering';
 import { releasePublicationResources, reviewPublication, samePublicationSource, verifyPublicationForPrint, type PublicationReviewResult, type PublicationSource } from '../publication/review';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
 import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage } from './publication-diagnostic-presentation';
+import type { Diagnostic } from '../domain';
 
-export function PublicationReview({ getSource, subscribe, onClose }: {
+/** The browser uses the page title as its suggested PDF filename. */
+function pdfFileTitle(title: string): string {
+  return title.replace(/[<>:"/\\|?*]|\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/\.pdf$/i, '').replace(/[. ]+$/, '').slice(0, 120) || 'Catálogo';
+}
+
+export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagnostic }: {
   getSource: () => PublicationSource | undefined; subscribe: (listener: () => void) => () => void; onClose: () => void;
+  onLocateDiagnostic?: (diagnostic: Diagnostic) => void;
 }) {
   const [source] = React.useState(getSource);
   const [preview, setPreview] = React.useState<PublicationReviewResult>();
@@ -15,6 +23,11 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
   const [printMessage, setPrintMessage] = React.useState('');
   const host = React.useRef<HTMLDivElement>(null), dialog = React.useRef<HTMLElement>(null), renderer = React.useRef<HTMLDivElement>(null);
   const generation = React.useRef(0);
+  const printTitle = React.useRef<{ previous: string; suggested: string }>();
+  const restoreTitle = React.useCallback(() => {
+    if (printTitle.current && document.title === printTitle.current.suggested) document.title = printTitle.current.previous;
+    printTitle.current = undefined;
+  }, []);
   const isCurrent = React.useCallback(() => Boolean(source && samePublicationSource(source, getSource())), [source, getSource]);
   const current = React.useSyncExternalStore(subscribe, isCurrent, isCurrent);
   const status = !current ? 'STALE' : running ? 'CHECKING' : result?.status ?? 'BLOCKED';
@@ -40,11 +53,13 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
     const before = () => {
       if (!isCurrent() || result?.status !== 'READY' || host.current?.dataset.printApproved !== 'true') host.current?.removeAttribute('data-print-approved');
     };
-    const after = () => host.current?.removeAttribute('data-print-approved');
+    const after = () => { host.current?.removeAttribute('data-print-approved'); restoreTitle(); };
     window.addEventListener('beforeprint', before); window.addEventListener('afterprint', after);
     if (!current) after();
     return () => { window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); };
-  }, [current, isCurrent, result]);
+  }, [current, isCurrent, result, restoreTitle]);
+
+  React.useEffect(() => restoreTitle, [restoreTitle]);
 
   const print = async () => {
     if (running || !result || !renderer.current) return;
@@ -56,14 +71,19 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
       if (!canPrint()) throw new Error('stale');
       flushSync(() => setRunning(false));
       if (host.current) host.current.dataset.printApproved = 'true';
+      restoreTitle();
+      const suggested = pdfFileTitle(result.document.title);
+      printTitle.current = { previous: document.title, suggested };
+      document.title = suggested;
       window.print();
     } catch {
       host.current?.removeAttribute('data-print-approved');
+      restoreTitle();
       if (printingGeneration === generation.current) setPrintMessage('A versão mudou ou não pôde ser verificada. Feche a revisão e confira o catálogo antes de imprimir.');
     } finally { if (printingGeneration === generation.current) setRunning(false); }
   };
 
-  const close = () => { generation.current++; host.current?.removeAttribute('data-print-approved'); onClose(); };
+  const close = () => { generation.current++; host.current?.removeAttribute('data-print-approved'); restoreTitle(); onClose(); };
 
   return createPortal(<div ref={host} data-publication-host="" data-publication-status={status} className="vnext-publication-backdrop">
     <section ref={dialog} role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="publication-heading" aria-describedby="publication-description" className="vnext-publication-dialog"
@@ -84,6 +104,8 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
             <strong className="vnext-diagnostic-location">{publicationDiagnosticLocation(result.document, item)}</strong>
             <span className="vnext-diagnostic-kind">{item.severity === 'ERROR' ? 'Correção necessária' : 'Revisar'}</span>
             <p className="vnext-diagnostic-message">{publicationDiagnosticMessage(item.code)}</p>
+            {onLocateDiagnostic && item.pageId && <button type="button" className="vnext-btn-secondary" disabled={!current}
+              onClick={() => { if (isCurrent()) { close(); onLocateDiagnostic(item); } }}>Corrigir este item</button>}
             <details className="vnext-technical-details"><summary>Detalhes técnicos</summary>
               <dl>{publicationDiagnosticDetails(item).map(([label, value]) => <React.Fragment key={label}>
                 <dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
@@ -91,7 +113,12 @@ export function PublicationReview({ getSource, subscribe, onClose }: {
           </li>)}</ul>
         </div> : null}
         {printMessage && <p role="alert" className="vnext-status" data-tone="error">{printMessage}</p>}
-        <p className="vnext-dialog-description">Confira o conteúdo de todas as páginas. Na janela de impressão, escolha Salvar como PDF, papel A4, sem cabeçalhos e rodapés.</p>
+        <p className="vnext-dialog-description">O PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas as páginas na prévia abaixo.</p>
+        <ol className="vnext-dialog-description" aria-label="Como salvar o PDF">
+          <li>Clique em <strong>Imprimir / salvar PDF</strong> para abrir a janela de impressão.</li>
+          <li>Em Destino, escolha <strong>Salvar como PDF</strong>. Use papel <strong>A4</strong>, todas as páginas, escala <strong>100%</strong>, sem margens e sem cabeçalhos e rodapés. Ative os gráficos de segundo plano para manter as cores das tabelas.</li>
+          <li>Clique em <strong>Salvar</strong> e escolha uma pasta. {source && <>Nome sugerido: <strong>{pdfFileTitle(source.document.title)}.pdf</strong>.</>}</li>
+        </ol>
         <button type="button" className="vnext-btn-primary" data-publication-action="print" disabled={status !== 'READY' || Boolean(printMessage)} onClick={() => { void print(); }}>Imprimir / salvar PDF</button>
       </div>
       <div ref={renderer} className="vnext-publication-pages" role="region" tabIndex={0} aria-label="Prévia de todas as páginas">

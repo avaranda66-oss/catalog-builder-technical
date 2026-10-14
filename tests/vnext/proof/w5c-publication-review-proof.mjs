@@ -395,11 +395,14 @@ try {
   await fresh.getByRole('button', { name: 'Publicar / PDF', exact: true }).click();
   await fresh.locator('[data-publication-status="READY"]').waitFor();
   const reviewedDocument = JSON.stringify((await state(fresh)).document);
+  const appTitle = await fresh.title();
   await fresh.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
   assert.equal(await fresh.locator('[data-publication-host]').getAttribute('data-print-approved'), null, 'Ctrl+P must not approve');
   await fresh.locator('[data-publication-action="print"]').click();
   await fresh.waitForFunction(() => window.__W5C_PRINT_COUNT__ === 1);
   assert.equal(await fresh.locator('[data-publication-host]').getAttribute('data-print-approved'), 'true');
+  assert.equal(await fresh.title(), (await state(fresh)).document.title, 'PDF filename follows the catalog title');
+  assert.equal(await fresh.getByRole('list', { name: 'Como salvar o PDF' }).count(), 1);
   await fresh.emulateMedia({ media: 'print' });
   const pdfPath = resolve(output, 'translated-catalog.pdf');
   await fresh.pdf({ path: pdfPath, format: 'A4', preferCSSPageSize: true, printBackground: true,
@@ -407,6 +410,8 @@ try {
   assert.equal(JSON.stringify((await state(fresh)).document), reviewedDocument);
   assert.deepEqual(catalogs.get(catalogId), sourceBefore);
   const pdfEvidence = await inspectPdf(pdfPath);
+  await fresh.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  assert.equal(await fresh.title(), appTitle, 'App title restored after printing');
   await fresh.emulateMedia({ media: 'screen' });
   await fresh.screenshot({ path: resolve(output, 'publication-desktop.png'), fullPage: true });
   await fresh.evaluate(() => window.__C1_RUNTIME__.workspace.getSnapshot().session.execute({ type: 'document.rename', title: 'Mutação adversarial após revisão' }));
