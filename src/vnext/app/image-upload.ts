@@ -1,6 +1,7 @@
 import type { DocumentSession, ImageExpectedState } from '../application';
 import type { CellContent, CellContentPresentation } from '../domain/editorial-model';
 import type { AssetLineageContext, AssetPersistenceBridge } from '../asset';
+import { HEIC_PHOTO_MESSAGE } from '../asset/normalize-image';
 import type { VNextPersistenceRuntime } from '../persistence';
 import { createInsertSpec } from './editor-defaults';
 
@@ -36,6 +37,7 @@ export function imageUploadLineage(runtime: VNextPersistenceRuntime): AssetLinea
 
 export function imageUploadErrorMessage(code: string): string {
   switch (code) {
+    case 'UNSUPPORTED_HEIC': return HEIC_PHOTO_MESSAGE;
     case 'UNSUPPORTED_MEDIA': return 'Formato não suportado. Escolha uma imagem PNG, JPEG ou WebP.';
     case 'INVALID_DIMENSIONS': return 'Não foi possível ler as dimensões da imagem. Escolha outra imagem.';
     case 'OFFLINE': return 'Sem conexão. Tente enviar a imagem novamente quando estiver conectado.';

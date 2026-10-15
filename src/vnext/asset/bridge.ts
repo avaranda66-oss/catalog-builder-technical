@@ -11,7 +11,9 @@ import type {
   AssetUploadResult,
 } from './contracts';
 import { sha256, verifyAssetBytes, type AssetIntegrityResult } from './integrity';
-import { sniffImageDimensions, sniffImageMime, type SupportedImageMime } from './sniff';
+import { createBrowserImageReencoder, normalizeImageForUpload, type ImageReencoder } from './normalize-image';
+import { referencedAssetIds } from './referenced-assets';
+import type { SupportedImageMime } from './sniff';
 
 const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -26,6 +28,11 @@ export interface DefaultAssetPersistenceBridgeOptions {
   readonly fetchBytes?: (url: string) => Promise<ArrayBuffer>;
   readonly isOffline?: () => boolean;
   readonly getActiveLineage?: () => AssetLineageContext;
+  /**
+   * Re-encodes rotated (EXIF) or oversized photos before hashing. Omit to use the browser
+   * re-encoder when available; pass null to keep every upload's original bytes.
+   */
+  readonly imageReencoder?: ImageReencoder | null;
 }
 
 interface PendingFinalizationAttempt {
@@ -111,10 +118,14 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   private currentAuthLineage?: string;
   private resolutionGeneration = 0;
   private pendingFinalization?: PendingFinalizationAttempt;
+  private readonly imageReencoder?: ImageReencoder;
 
   constructor(repository: AssetRepository, options: DefaultAssetPersistenceBridgeOptions = {}) {
     this.repository = repository;
     this.options = options;
+    this.imageReencoder = options.imageReencoder === undefined
+      ? createBrowserImageReencoder()
+      : options.imageReencoder ?? undefined;
   }
 
   async finalizeUpload(
@@ -125,27 +136,29 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       return { ok: false, error: { code: 'OFFLINE', message: 'Offline' } };
     }
 
-    const bytes = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
+    const originalBytes = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
+    const lineageBefore = context ?? this.options.getActiveLineage?.();
 
-    // 1. Sniff MIME type
-    const mime = sniffImageMime(bytes);
-    if (!mime) {
+    // 1-2. Sniff MIME, normalize rotated/oversized photos, and measure the final bytes.
+    // HEIC gets its own code so the editor can explain how to send a JPEG instead.
+    const normalized = await normalizeImageForUpload(originalBytes, {
+      reencoder: this.imageReencoder,
+      fileName: input.name,
+    });
+    if (!normalized.ok) {
+      return { ok: false, error: { code: normalized.code, message: normalized.message } };
+    }
+    if (isLineageStale(lineageBefore, this.options.getActiveLineage?.())) {
       return {
         ok: false,
-        error: { code: 'UNSUPPORTED_MEDIA', message: 'Byte sniffing rejected non-supported media format' },
+        error: { code: 'STALE_RESULT', message: 'Lineage or authority changed while preparing the image' },
       };
     }
+    const bytes = normalized.bytes;
+    const mime = normalized.mime;
+    const dimensions = { widthPx: normalized.widthPx, heightPx: normalized.heightPx };
 
-    // 2. Derive dimensions from bytes
-    const dimensions = sniffImageDimensions(bytes);
-    if (!dimensions) {
-      return {
-        ok: false,
-        error: { code: 'INVALID_DIMENSIONS', message: 'Could not extract intrinsic dimensions from image bytes' },
-      };
-    }
-
-    // 3. Compute SHA-256
+    // 3. Compute SHA-256 of the final bytes
     const hash = await sha256(bytes);
 
     if (input.version !== undefined && input.version !== '1') {
@@ -213,8 +226,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg';
     const storagePath = `vnext/${assetId}/1.${extension}`;
 
-    // 5. Check lineage before upload dispatch (Point 10)
-    const lineageBefore = context ?? this.options.getActiveLineage?.();
+    // 5. Lineage was captured before normalization (Point 10)
 
     // 6. Upload binary bytes to immutable storage path
     const uploadResult = await this.repository.uploadBytes(storagePath, bytes, mime);
@@ -619,8 +631,15 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   ): Promise<{ urls: Map<string, string>; states: Map<string, AssetRuntimeState> }> {
     const urls = new Map<string, string>();
     const states = new Map<string, AssetRuntimeState>();
+    // Photos placed on pages or in table cells come first. The others stay resolved too,
+    // because "Imagem do catálogo" can reuse them; their failures never block the PDF.
+    const used = referencedAssetIds(doc);
+    const ordered = [
+      ...doc.assets.filter((asset) => used.has(asset.id)),
+      ...doc.assets.filter((asset) => !used.has(asset.id)),
+    ];
 
-    for (const asset of doc.assets) {
+    for (const asset of ordered) {
       const result = await this.resolve(asset, context);
       states.set(asset.id, result.state);
       if (result.ok && result.state.status === 'resolved') {

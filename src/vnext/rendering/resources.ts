@@ -1,6 +1,7 @@
 import type { AssetRef, CatalogDocument } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { sha256 } from '../asset/integrity';
+import { referencedAssets } from '../asset/referenced-assets';
 
 export { sha256 };
 
@@ -44,10 +45,14 @@ export async function loadFonts(doc:CatalogDocument,root:HTMLElement):Promise<Re
   return loaded;
 }
 
+/**
+ * Fetches and verifies only the photos the pages and table cells actually use (FR-41).
+ * Old photos left in `doc.assets` after a replace or delete never block publication.
+ */
 export async function resolveAssets(doc:CatalogDocument,resolveAssetUrl:AssetUrlResolver):Promise<{urls:Map<string,string>;manifest:ResourceManifest['assets']}> {
   const urls=new Map<string,string>(),manifest:ResourceManifest['assets']=[];
   try {
-    for(const asset of doc.assets) {
+    for(const asset of referencedAssets(doc)) {
       const known=resolveAssetUrl(asset);
       if(!known)throw new VNextError('REQUIRED_ASSET_MISSING',asset.id);
       let response:Response;
