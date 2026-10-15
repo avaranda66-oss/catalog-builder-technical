@@ -1,3 +1,4 @@
+/* global window */
 /**
  * FR-51: provisional text ("A COMPLETAR", "A CONFIRMAR", "TBD", "XXX", "revisar com engenharia") blocks
  * publication. Proofs that need a printable catalog first see it blocked, then fill the provisional fields the way
