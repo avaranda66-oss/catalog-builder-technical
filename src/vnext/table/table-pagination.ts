@@ -33,7 +33,13 @@ export interface TablePaginationMeasurement {
 export interface TablePaginationOptions {
   /** Repeat the leading header rows on every continuation (default true). */
   readonly repeatHeader?: boolean;
-  /** Start a new slice before these rows when possible (Legacy manual breaks). */
+  /**
+   * Start a new slice before these rows when possible (Legacy manual breaks).
+   * A break inside a group that must stay together (a section row and the row
+   * after it, rows joined by a vertical merge) moves to the start of that
+   * group and is reported; a break on a header row or an unknown row is
+   * ignored and reported.
+   */
   readonly breakBeforeRowIds?: readonly string[];
 }
 export interface TablePageSlice {
@@ -56,7 +62,9 @@ export type TablePaginationIssue =
   | { readonly code: 'HEADER_TALLER_THAN_PAGE' }
   | { readonly code: 'ROWS_TALLER_THAN_PAGE'; readonly rowIds: readonly string[] }
   | { readonly code: 'SLICE_OVERFLOW'; readonly sliceIndex: number; readonly overflowU: number }
-  | { readonly code: 'TRAILING_SECTION_ROW'; readonly rowId: string };
+  | { readonly code: 'TRAILING_SECTION_ROW'; readonly rowId: string }
+  | { readonly code: 'BREAK_INSIDE_GROUP'; readonly rowId: string; readonly movedToRowId: string }
+  | { readonly code: 'BREAK_IGNORED'; readonly rowId: string };
 export interface TablePaginationPlan {
   readonly tableId: string;
   readonly slices: readonly TablePageSlice[];
@@ -114,7 +122,16 @@ export function planTablePagination(table: TableModel, measurement: TablePaginat
 
   const groups = atomicGroups(table, firstBody);
   if (!groups.length) issues.push({ code: 'NO_BODY_ROWS' });
-  const breaks = new Set(options.breakBeforeRowIds ?? []);
+  // Manual breaks land on the first row of their group (never splitting it).
+  const groupStart = new Map<string, string>();
+  for (const group of groups) for (const index of group) groupStart.set(table.rows[index].id, table.rows[group[0]].id);
+  const breaks = new Set<string>();
+  for (const rowId of new Set(options.breakBeforeRowIds ?? [])) {
+    const start = groupStart.get(rowId);
+    if (start === undefined) issues.push({ code: 'BREAK_IGNORED', rowId });
+    else if (start !== rowId) issues.push({ code: 'BREAK_INSIDE_GROUP', rowId, movedToRowId: start });
+    if (start !== undefined) breaks.add(start);
+  }
   const slices: { headerRowIds: string[]; bodyRowIds: string[]; heightU: number; availableU: number }[] = [];
   let current = { headerRowIds, bodyRowIds: [] as string[], heightU: add(titleU, headerU), availableU: measurement.firstPageAvailableU };
   groups.forEach((group, position) => {

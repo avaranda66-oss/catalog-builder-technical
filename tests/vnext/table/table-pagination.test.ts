@@ -120,6 +120,22 @@ describe('vNext table paginator (port of the Legacy A4 planner for "Continuar na
     expect(planTablePagination(long, longMeasurement)).toEqual(planTablePagination(long, longMeasurement));
   });
 
+  it('moves a manual break inside a kept-together group to the start of the group and reports it', () => {
+    // r3..r5 share one merged cell; a section row "s" keeps "s-a" with it.
+    const grouped = table([{ id: 'h', role: 'header' }, ...bodyRows(6), { id: 's', role: 'section' }, { id: 's-a' }],
+      [{ rowId: 'r3', rows: 3 }]);
+    const measurement = measure(grouped, { h: 15 }, { firstMm: 250, nextMm: 250 });
+    const plan = planTablePagination(grouped, measurement, { breakBeforeRowIds: ['r4', 's-a', 'h', 'nao-existe'] });
+    expect(plan.slices.map(slice => slice.bodyRowIds)).toEqual([['r1', 'r2'], ['r3', 'r4', 'r5', 'r6'], ['s', 's-a']]);
+    expect(plan.cutBeforeRowIds).toEqual(['r3', 's']);
+    expect(plan.issues).toEqual([
+      { code: 'BREAK_INSIDE_GROUP', rowId: 'r4', movedToRowId: 'r3' },
+      { code: 'BREAK_INSIDE_GROUP', rowId: 's-a', movedToRowId: 's' },
+      { code: 'BREAK_IGNORED', rowId: 'h' },
+      { code: 'BREAK_IGNORED', rowId: 'nao-existe' },
+    ]);
+  });
+
   it('fails closed: rows taller than a page, a header too tall, missing measurements, a trailing section', () => {
     const giant = table([{ id: 'h', role: 'header' }, { id: 'normal' }, { id: 'giant' }]);
     const oversized = planTablePagination(giant, measure(giant, { h: 15, giant: 250 }, { firstMm: 200, nextMm: 200 }));
