@@ -86,6 +86,26 @@ function listItemFromMetadata(metadata: CatalogPersistenceMetadata): CatalogList
   return item;
 }
 
+export const DEFAULT_BLANK_CATALOG_TITLE = 'Novo catálogo';
+export const CATALOG_TITLE_MAX_LENGTH = 180;
+
+/**
+ * Typed names may carry pasted tabs or line breaks, which the canonical document rejects.
+ * They become single spaces; an empty result means "no name given".
+ */
+export function normalizeCatalogTitle(raw: string | undefined): string {
+  if (!raw) return '';
+  const collapsed = [...raw]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? ' ' : character;
+    })
+    .join('')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return [...collapsed].slice(0, CATALOG_TITLE_MAX_LENGTH).join('').trim();
+}
+
 function normalizedText(value: string): string {
   return value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
 }
@@ -190,13 +210,26 @@ export class CatalogLibraryService {
     return { ok: true, value: projectCatalogLibraryItems(result.value, query) };
   }
 
-  async createBlank(title = 'Novo catálogo'): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+  /**
+   * Checks the one create attempt whose outcome is still unknown, replaying that same attempt if
+   * the server never saw it. It never starts a new catalog: `null` means nothing is pending.
+   */
+  async verifyPendingCreate(): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope | null>> {
+    const authority = this.captureAuthority();
+    const continued = await this.continuePendingCreate(authority);
+    return continued ?? { ok: true, value: null };
+  }
+
+  async createBlank(title: string = DEFAULT_BLANK_CATALOG_TITLE): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
     const continued = await this.continuePendingCreate(authority);
     if (continued) return continued;
     let documentSnapshot;
     try {
-      documentSnapshot = createCatalogDocument(this.options.createId, title.trim() || 'Novo catálogo');
+      documentSnapshot = createCatalogDocument(
+        this.options.createId,
+        normalizeCatalogTitle(title) || DEFAULT_BLANK_CATALOG_TITLE
+      );
     } catch (error) {
       return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
     }
@@ -237,19 +270,23 @@ export class CatalogLibraryService {
     return this.createPreparedDocument(authority, documentSnapshot, origin);
   }
 
-  async createFromStarter(starterId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+  /** `title` names the new catalog; without it the catalog keeps the starter's own title. */
+  async createFromStarter(starterId: string, title?: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     if (this.starterCreateInFlight) {
       return this.starterCreateInFlight.starterId === starterId
         ? this.starterCreateInFlight.attempt
         : failure('STALE_RESULT', 'Another starter creation is already in progress');
     }
-    const attempt = this.prepareStarterCreate(starterId);
+    const attempt = this.prepareStarterCreate(starterId, normalizeCatalogTitle(title));
     this.starterCreateInFlight = { starterId, attempt };
     try { return await attempt; }
     finally { if (this.starterCreateInFlight?.attempt === attempt) this.starterCreateInFlight = undefined; }
   }
 
-  private async prepareStarterCreate(starterId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+  private async prepareStarterCreate(
+    starterId: string,
+    title: string
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
     const continued = await this.continuePendingCreate(authority);
     if (continued) return continued;
@@ -264,7 +301,7 @@ export class CatalogLibraryService {
         source = await this.options.starterDependencies.prepare(starter, authority, () => this.authorityIsCurrent(authority));
         if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
       }
-      documentSnapshot = this.cloneService.clone(source);
+      documentSnapshot = this.cloneService.clone(source, title ? { title } : {});
     } catch (error) {
       if (error instanceof StarterDependencyError) return failure(error.code, error.message);
       return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
@@ -302,7 +339,7 @@ export class CatalogLibraryService {
 
   async rename(catalogId: string, rawTitle: string): Promise<CatalogLibraryResult<CatalogListItem>> {
     const authority = this.captureAuthority();
-    const title = rawTitle.trim();
+    const title = normalizeCatalogTitle(rawTitle);
     if (!title) return failure('INVALID_TITLE', 'O nome do catálogo não pode ficar vazio.');
 
     const read = await this.options.repository.getCatalog(catalogId);
