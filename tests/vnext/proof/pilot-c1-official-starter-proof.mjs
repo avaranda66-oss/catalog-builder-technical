@@ -154,7 +154,7 @@ async function saved(page) {
   await page.waitForFunction(() => { const s = window.__C1_STATE__(); return s && !s.dirty && s.save.phase !== 'saving'; });
 }
 async function selectPage(page, index) {
-  await page.locator('.vnext-page-list button').nth(index).click();
+  await page.locator('.vnext-page-list [data-page-nav-id]').nth(index).click();
 }
 let browser;
 let evidence;

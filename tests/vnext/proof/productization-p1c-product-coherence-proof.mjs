@@ -242,7 +242,7 @@ async function save(page) {
   await page.waitForFunction(() => { const value = window.__C1_STATE__(); return value && !value.dirty && value.save.phase !== 'saving'; });
 }
 async function selectPage(page, index) {
-  await page.locator('.vnext-page-list button').nth(index).click();
+  await page.locator('.vnext-page-list [data-page-nav-id]').nth(index).click();
 }
 async function workflow(browser, width, first) {
   const context = await browser.newContext({ viewport: { width, height: 1000 } });

@@ -153,7 +153,7 @@ try {
     const node = document.querySelector(`[data-object-id="${id}"]`);
     return node instanceof HTMLElement && Number.parseFloat(node.style.left) > 120;
   }, imageId);
-  assert.equal(await inspectorX.inputValue(), '33.25');
+  assert.equal(await inspectorX.inputValue(), '33,25', 'FR-10: the committed value is shown in pt-BR');
   const imageAfterInspector = await rect(page.locator(`[data-object-id="${imageId}"]`));
   assert(imageAfterInspector.x > imageBeforeInspector.x + 20, 'Inspector X must commit canonical object.move');
   const inspectorXCommitted = await inspectorX.inputValue();
