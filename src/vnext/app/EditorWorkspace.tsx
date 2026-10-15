@@ -63,9 +63,9 @@ import {
   nextLegendUsageCellId,
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
-import { parseDecimalPtBr } from '../editor/decimal-ptbr';
-import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
-import { isKeyboardOwningTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
+import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
+import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
+import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
 import { PagePanel } from './editor/PagePanel';
 import {
@@ -640,7 +640,13 @@ export function EditorWorkspace({
     return Boolean(target && inspectorDraftIsDirty(inspectorDraftRef.current, target.expectedFrame));
   };
   const [inspectorFieldError, setInspectorFieldError] = React.useState<(InspectorFieldError & { objectId: string }) | null>(null);
+  /** Plain notice about a typed value that was put back, kept until its field leaves the screen. */
+  const settleNoticeRef = React.useRef<string | null>(null);
+  const withSettleNotice = (message: string | null) => (
+    settleNoticeRef.current ? (message ? `${message} ${settleNoticeRef.current}` : settleNoticeRef.current) : message
+  );
   React.useEffect(() => {
+    settleNoticeRef.current = null;
     setInspectorFieldError((current) => (current && current.objectId !== selectedObjectId ? null : current));
   }, [selectedObjectId]);
 
@@ -880,7 +886,7 @@ export function EditorWorkspace({
     setTableSelection(null);
     setMultiSelectArmed(false);
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
-    setStatusMessage(null);
+    setStatusMessage(withSettleNotice(null));
   };
 
   const selectObject = (objectId: string) => {
@@ -2874,25 +2880,32 @@ export function EditorWorkspace({
       }
     }
     setInspectorFieldError(errors[0] ? { objectId: object.id, ...errors[0] } : null);
+    settleNoticeRef.current = errors[0] ? inspectorDiscardedNotice(errors[0]) : null;
     if (errors[0]) setStatusMessage(inspectorErrorStatus(errors[0]));
     resetInspectorDraft();
   };
-  const commitInspector = (field: InspectorFrameField) => {
+  /** Leaving a field settles every typed field at once (one coherent change), so none is silently dropped. */
+  const commitInspector = () => {
     if (!inspectorDraftIsPending()) { resetInspectorDraft(); return; } // "88.0" means 88: just show "88".
     if (!finishCellDraftForContextChange()) return;
     if (textEditRef.current && !commitTextEdit()) return;
     if (!applyTableTitleDraft().ok) return;
-    settleInspectorDraft([field]);
+    settleInspectorDraft();
   };
   const revertInspectorField = (field: InspectorFrameField) => {
     setInspectorFieldError(null);
+    settleNoticeRef.current = null;
     if (!inspectorDraftIsPending()) return;
     resetInspectorDraft();
     setStatusMessage(`${inspectorFieldLabel(field)}: valor anterior restaurado.`);
   };
 
   const runObjectShortcut = (shortcut: Exclude<EditorShortcut, { type: 'save' }>) => {
-    if (shortcut.type === 'duplicate') { duplicateSelected(); return; }
+    if (shortcut.type === 'duplicate') {
+      if (editorState.selectedObjectIds.length !== 1) setStatusMessage('Selecione um só objeto para duplicar.');
+      else duplicateSelected();
+      return;
+    }
     if (!finishTextEditBeforeCommand()) return;
     const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
     if (!page) return;
@@ -2913,14 +2926,17 @@ export function EditorWorkspace({
   };
 
   // Ctrl+S saves the catalog anywhere in the editor and never opens the browser's "Save page as".
-  // When focus fell to the page body (e.g. the deleted object had it), the other shortcuts still work.
+  // When focus fell to the page body (e.g. the deleted object had it), only Ctrl+Z/Ctrl+Y still work:
+  // Delete, arrows and Ctrl+D act only from an object on the page (see cancelOnRootKey).
   const windowShortcutRef = React.useRef<(event: KeyboardEvent) => void>(() => undefined);
   windowShortcutRef.current = (event) => {
     if (resolveEditorShortcut(event, { typingInField: true, mode: 'select', hasSelection: false })?.type === 'save') {
       event.preventDefault();
       if (event.repeat) return;
       if (!persistence) setStatusMessage('Este rascunho fica só nesta aba e não é salvo.');
-      else if (persistence.save.canSave && persistence.save.phase !== 'saving') void persistence.runtime.manualSave();
+      else if (persistence.save.phase === 'saving') setStatusMessage('Salvando… aguarde um instante.');
+      else if (persistence.save.canSave) void persistence.runtime.manualSave();
+      else setStatusMessage(persistence.save.phase === 'idle' ? 'Não é possível salvar agora.' : fatherSaveExplanation(persistence.save));
       return;
     }
     const doc = window.document;
@@ -2929,10 +2945,7 @@ export function EditorWorkspace({
     if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
       event.preventDefault();
       if (key === 'y' || event.shiftKey) redo(); else undo();
-      return;
     }
-    const shortcut = resolveEditorShortcut(event, { typingInField: false, mode: editorState.mode, hasSelection: editorState.selectedObjectIds.length > 0 });
-    if (shortcut && shortcut.type !== 'save') { event.preventDefault(); runObjectShortcut(shortcut); }
   };
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => windowShortcutRef.current(event);
@@ -3047,8 +3060,10 @@ export function EditorWorkspace({
         return;
       }
     }
+    // Only an object on the page (focused by clicking it) takes Delete, arrows and Ctrl+D;
+    // buttons, the page list and the side panels never act on the selection.
     const shortcut = resolveEditorShortcut(event, {
-      typingInField: isKeyboardOwningTarget(target),
+      typingInField: !isCanvasKeyboardTarget(target),
       mode: editorState.mode,
       hasSelection: editorState.selectedObjectIds.length > 0,
     });
@@ -3161,6 +3176,7 @@ export function EditorWorkspace({
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
     if (inspectorFieldError?.field === field) setInspectorFieldError(null);
+    settleNoticeRef.current = null;
     persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
@@ -3217,14 +3233,21 @@ export function EditorWorkspace({
     runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
   };
 
-  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', raw: string) => {
+  const cellPaddingText = (edge: 'top' | 'right' | 'bottom' | 'left') => {
+    const value = commonCellStyleValue('paddingMm')?.[edge];
+    return typeof value === 'number' ? formatDecimalPtBr(value) : '';
+  };
+  /** Accepts "1,5" and "1.5"; an invalid value goes back to the current one with a plain message. */
+  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', input: HTMLInputElement) => {
+    const raw = input.value;
     if (raw.trim() === '') {
       runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
       return;
     }
     const parsed = parseDecimalPtBr(raw);
     if (!parsed.ok || parsed.value < 0) {
-      setStatusMessage('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). Nada foi alterado.');
+      input.value = cellPaddingText(edge);
+      setStatusMessage('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.');
       return;
     }
     runCellPropertyPatch({ paddingMm: { [edge]: parsed.value } } as CellPropertyPatch);
@@ -3759,7 +3782,7 @@ export function EditorWorkspace({
       <div className="vnext-workspace">
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
           prepareForChange={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
-          onSelectPage={setActivePage} onAddPage={addPage} onStatus={setStatusMessage}>
+          onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}>
           {simpleByDefault && (
             <button
               type="button"
@@ -4288,7 +4311,7 @@ export function EditorWorkspace({
                       if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
                     }}
                     onChange={(value) => updateInspectorDraft(field, value)}
-                    onCommit={() => commitInspector(field)}
+                    onCommit={commitInspector}
                     onRevert={() => revertInspectorField(field)}
                   />
                 ))}
@@ -5282,9 +5305,9 @@ export function EditorWorkspace({
                             data-cell-padding={edge}
                             type="text"
                             inputMode="decimal"
-                            defaultValue={String(commonCellStyleValue('paddingMm')?.[edge] ?? '')}
+                            defaultValue={cellPaddingText(edge)}
                             placeholder="Herdado"
-                            onBlur={(event) => commitCellPadding(edge, event.target.value)}
+                            onBlur={(event) => commitCellPadding(edge, event.target)}
                             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
                           />
                         </label>

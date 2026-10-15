@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  isCanvasKeyboardTarget,
   isKeyboardOwningTarget,
   planKeyboardDelete,
   planKeyboardNudge,
@@ -77,6 +78,31 @@ describe('isKeyboardOwningTarget', () => {
     expect(owns('plain')).toBe(false);
     expect(isKeyboardOwningTarget(null)).toBe(false);
     expect(isKeyboardOwningTarget(window)).toBe(false);
+  });
+});
+
+describe('isCanvasKeyboardTarget', () => {
+  afterEach(() => { document.body.innerHTML = ''; });
+
+  it('accepts only an object on the page, never buttons, fields, panels or the page body', () => {
+    document.body.innerHTML = `
+      <div data-vnext-page-stage="">
+        <div id="object" tabindex="-1" data-editor-object-id="shape-a"><span id="inside"></span></div>
+        <div data-text-edit-session=""><textarea id="textarea"></textarea><button id="stage-button">Concluir</button></div>
+      </div>
+      <nav><button id="page-button">Página 2</button></nav>
+      <aside><input id="field" type="text"><div id="panel" tabindex="-1"></div></aside>`;
+    const canvas = (id: string) => isCanvasKeyboardTarget(document.getElementById(id));
+    expect(canvas('object')).toBe(true);
+    expect(canvas('inside')).toBe(true);
+    expect(canvas('textarea')).toBe(false);
+    expect(canvas('stage-button')).toBe(false);
+    expect(canvas('page-button')).toBe(false);
+    expect(canvas('field')).toBe(false);
+    expect(canvas('panel')).toBe(false);
+    expect(isCanvasKeyboardTarget(document.body)).toBe(false);
+    expect(isCanvasKeyboardTarget(window)).toBe(false);
+    expect(isCanvasKeyboardTarget(null)).toBe(false);
   });
 });
 

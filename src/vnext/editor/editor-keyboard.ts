@@ -81,6 +81,21 @@ export function isKeyboardOwningTarget(target: EventTarget | null): boolean {
   return element.closest(KEYBOARD_OWNER_SELECTOR) !== null;
 }
 
+const CANVAS_SELECTOR = '[data-vnext-page-stage], [data-editor-object-id]';
+
+/**
+ * True only when focus is on the page being edited (an object on it, which
+ * clicking focuses). Delete, the arrows and Ctrl+D act on the selection only
+ * there: never from a button, the page list, a side panel or the bare page
+ * body, so a stray Backspace after typing a value never deletes an object.
+ */
+export function isCanvasKeyboardTarget(target: EventTarget | null): boolean {
+  if (!target || typeof (target as Element).closest !== 'function') return false;
+  const element = target as HTMLElement;
+  if (isKeyboardOwningTarget(element) || element.closest('button, a[href], summary') !== null) return false;
+  return element.closest(CANVAS_SELECTOR) !== null;
+}
+
 export type KeyboardObjectPlan =
   | { readonly ok: true; readonly actions: readonly ApplicationAction[] }
   | { readonly ok: false; readonly reason: 'EMPTY' | 'NOT_FOUND' | 'LOCKED' };

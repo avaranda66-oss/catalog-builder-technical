@@ -246,7 +246,7 @@ describe('FR-10 · position and size fields accept a comma and never lock the ed
     expect(frameOf(session, 'shape-target')?.xMm).toBe(88);
   });
 
-  it('changing page with a half-typed value never blocks', () => {
+  it('changing page with a half-typed value never blocks and says the value was not used', () => {
     const { session, container } = renderFather();
     select(container, 'shape-target');
     openDetails();
@@ -254,8 +254,36 @@ describe('FR-10 · position and size fields accept a comma and never lock the ed
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Navegação de páginas' })).getByRole('button', { name: 'Página 2' }));
     expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-active-page-id', 'page-specs');
     expect(frameOf(session, 'shape-target')?.xMm).toBe(88);
+    expect(screen.getByText(DISCARDED_X)).toBeInTheDocument();
+  });
+
+  it('a real click on another page keeps the "value not used" notice instead of clearing it', () => {
+    const { container } = renderFather();
+    select(container, 'shape-target');
+    openDetails();
+    fireEvent.change(field(container, 'width'), { target: { value: 'abc' } });
+    const page2 = within(screen.getByRole('navigation', { name: 'Navegação de páginas' })).getByRole('button', { name: 'Página 2' });
+    fireEvent.pointerDown(page2, { pointerId: 90, button: 0 });
+    fireEvent.click(page2);
+    expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-active-page-id', 'page-specs');
+    expect(screen.getByText('O valor digitado em Largura não era válido e não foi usado; o valor anterior foi mantido.')).toBeInTheDocument();
+  });
+
+  it('leaving one field applies every typed field together (none is dropped)', () => {
+    const { session, container } = renderFather();
+    select(container, 'shape-target');
+    openDetails();
+    fireEvent.change(field(container, 'x'), { target: { value: '10,5' } });
+    fireEvent.change(field(container, 'y'), { target: { value: '20' } });
+    fireEvent.blur(field(container, 'y'));
+    expect(frameOf(session, 'shape-target')).toMatchObject({ xMm: 10.5, yMm: 20 });
+    expect(field(container, 'x').value).toBe('10,5');
+    expect(session.undo().ok).toBe(true);
+    expect(frameOf(session, 'shape-target')).toMatchObject({ xMm: 88, yMm: 30 });
   });
 });
+
+const DISCARDED_X = 'O valor digitado em X não era válido e não foi usado; o valor anterior foi mantido.';
 
 describe('FR-10 · cell inner spacing accepts "1,5"', () => {
   it('applies padding "1,5" to the selected cell', async () => {
@@ -289,12 +317,20 @@ describe('FR-10 · cell inner spacing accepts "1,5"', () => {
       }, { timeout: 5_000 });
       const top = container.querySelector<HTMLInputElement>('[data-cell-padding="top"]');
       if (!top) throw new Error('Missing cell padding field');
-      fireEvent.change(top, { target: { value: '1,5' } });
+      const before = top.value;
+      fireEvent.change(top, { target: { value: 'abc' } });
       fireEvent.blur(top);
+      expect(container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')?.value).toBe(before);
+      expect(screen.getByText('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.')).toBeInTheDocument();
+
+      const again = container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')!;
+      fireEvent.change(again, { target: { value: '1,5' } });
+      fireEvent.blur(again);
       const cell = session.getSnapshot().document.pages[0].objects
         .flatMap((object) => (object.type === 'table' ? object.table.cells : []))
         .find((entry) => entry.rowId === table.table.rows[0].id && entry.columnId === table.table.columns[0].id);
       expect(cell?.style?.paddingMm?.top).toBe(1.5);
+      await waitFor(() => expect(container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')?.value).toBe('1,5'));
     } finally {
       computedStyle.mockRestore();
       HTMLImageElement.prototype.decode = originalDecode;
@@ -386,6 +422,75 @@ describe('FR-19 · Word-like keyboard', () => {
     expect(fireEvent.keyDown(document.body, { key: 's', ctrlKey: true })).toBe(false);
     expect(screen.getByText('Este rascunho fica só nesta aba e não é salvo.')).toBeInTheDocument();
   });
+
+  it('Enter in X applies the value and keeps the field focused, so the next Backspace never deletes the object', async () => {
+    const { session, container } = renderFather();
+    select(container, 'shape-target');
+    openDetails();
+    const x = field(container, 'x');
+    x.focus();
+    fireEvent.change(x, { target: { value: '50' } });
+    fireEvent.keyDown(x, { key: 'Enter' });
+    expect(frameOf(session, 'shape-target')?.xMm).toBe(50);
+    await Promise.resolve();
+    const focused = field(container, 'x');
+    expect(document.activeElement).toBe(focused);
+    expect([focused.selectionStart, focused.selectionEnd]).toEqual([0, focused.value.length]);
+
+    expect(fireEvent.keyDown(focused, { key: 'Backspace' })).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'Backspace' });
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(frameOf(session, 'shape-target')).toMatchObject({ xMm: 50, yMm: 30 });
+  });
+
+  it('after Esc concludes a text box, a stray Backspace does not delete the text box', () => {
+    const session = sessionFor();
+    const { container } = render(<VNextApp session={session} />);
+    select(container, 'text-target');
+    fireEvent.click(screen.getByRole('button', { name: 'Editar texto' }));
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    fireEvent.change(textarea, { target: { value: 'Faixa de medição' } });
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(container.querySelector('[data-editor-object-id]:focus')).toBeNull();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Backspace' });
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    const object = session.getSnapshot().document.pages[0].objects.find((entry) => entry.id === 'text-target');
+    expect(object?.type === 'text' && projectEditableRichText(object.text)).toBe('Faixa de medição');
+  });
+
+  it('keys pressed on page-list or panel buttons never act on the selected object', () => {
+    const session = sessionFor();
+    const execute = vi.spyOn(session, 'execute');
+    const { container } = renderFather(session);
+    select(container, 'shape-target');
+    const pageButton = within(screen.getByRole('navigation', { name: 'Navegação de páginas' })).getByRole('button', { name: 'Página 1' });
+    pageButton.focus();
+    fireEvent.keyDown(pageButton, { key: 'Backspace' });
+    fireEvent.keyDown(pageButton, { key: 'Delete' });
+    fireEvent.keyDown(pageButton, { key: 'd', ctrlKey: true });
+    const addPage = screen.getByRole('button', { name: 'Adicionar nova página após a página atual' });
+    fireEvent.keyDown(addPage, { key: 'ArrowRight' });
+    fireEvent.keyDown(addPage, { key: 'Delete' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(frameOf(session, 'shape-target')).toMatchObject({ xMm: 88, yMm: 30 });
+    expect(isSelected(container, 'shape-target')).toBe(true);
+  });
+
+  it('Ctrl+D with several objects selected explains that only one can be duplicated', () => {
+    const { session, container } = renderFather();
+    select(container, 'shape-target');
+    const other = container.querySelector<HTMLElement>('[data-editor-object-id="shape-other"]')!;
+    fireEvent.pointerDown(other, { pointerId: 91, button: 0, ctrlKey: true, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(other, { pointerId: 91, button: 0, clientX: 100, clientY: 100 });
+    expect(isSelected(container, 'shape-target') && isSelected(container, 'shape-other')).toBe(true);
+    const before = session.getSnapshot().document.pages[0].objects.length;
+    expect(fireEvent.keyDown(other, { key: 'd', ctrlKey: true })).toBe(false);
+    expect(session.getSnapshot().document.pages[0].objects).toHaveLength(before);
+    expect(screen.getByText('Selecione um só objeto para duplicar.')).toBeInTheDocument();
+  });
 });
 
 function envelope(document: CatalogDocument, remoteRevision = 1, lastMutationId = MUTATION_0): CatalogPersistenceEnvelope {
@@ -454,6 +559,19 @@ describe('FR-10 + FR-19 · Save is never blocked by a position/size field', () =
     expect(frameOf(session, 'shape-target')?.xMm).toBe(88);
     expect(container.textContent).not.toContain('Inspector');
   });
+
+  it('Ctrl+S when saving is not possible explains why instead of doing nothing', async () => {
+    const saveCAS = vi.fn(() => Promise.resolve({ ok: false as const, error: { code: 'CONFLICT' as const } }));
+    const { runtime, container } = persistedEditor(saveCAS);
+    const hit = select(container, 'shape-target');
+    fireEvent.keyDown(hit, { key: 'ArrowRight' });
+    expect(fireEvent.keyDown(document.body, { key: 's', ctrlKey: true })).toBe(false);
+    await waitFor(() => expect(runtime.workspace.getSnapshot().save.phase).toBe('conflict'));
+
+    expect(fireEvent.keyDown(document.body, { key: 's', ctrlKey: true })).toBe(false);
+    expect(saveCAS).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('Este catálogo mudou em outro lugar. Abra a versão mais recente ou salve seu trabalho como uma cópia.').length).toBeGreaterThan(0);
+  });
 });
 
 describe('FR-11 · page menu inside the real editor', () => {
@@ -478,6 +596,18 @@ describe('FR-11 · page menu inside the real editor', () => {
     expect(session.getSnapshot().document.pages.map((page) => page.id)).toEqual(['page-specs', 'page-cover', 'page-extra']);
     expect(container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-active-page-id', 'page-cover');
     expect(screen.getByText('Página 1 movida para baixo. Agora ela é a Página 2.')).toBeInTheDocument();
+  });
+
+  it('a page action right after an invalid value keeps the "value not used" notice', () => {
+    const { session, container } = renderFather();
+    select(container, 'shape-target');
+    openDetails();
+    fireEvent.change(field(container, 'x'), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Opções da Página 1' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicar página' }));
+    expect(session.getSnapshot().document.pages).toHaveLength(4);
+    expect(frameOf(session, 'shape-target')?.xMm).toBe(88);
+    expect(screen.getByText(`Página 1 duplicada. A cópia é a Página 2. Para voltar, use Desfazer. ${DISCARDED_X}`)).toBeInTheDocument();
   });
 
   it('duplicating a page first applies a half-typed position value', () => {

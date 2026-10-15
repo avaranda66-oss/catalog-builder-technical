@@ -12,7 +12,7 @@ export type InspectorNumberFieldProps = {
   readonly describedBy?: string;
   readonly onFocus: () => void;
   readonly onChange: (value: string) => void;
-  /** Leaving the field (Tab, Enter or clicking elsewhere) applies the value. */
+  /** Enter, or leaving the field (Tab or clicking elsewhere), applies the value. */
   readonly onCommit: () => void;
   /** Esc puts back the current value without changing the object. */
   readonly onRevert: () => void;
@@ -41,8 +41,14 @@ export function InspectorNumberField({
           onChange={(event) => onChange(event.target.value)}
           onBlur={onCommit}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur();
-            else if (event.key === 'Escape') {
+            if (event.key === 'Enter') {
+              // Like PowerPoint: Enter applies and keeps the field focused with its value selected,
+              // so the next Backspace corrects the number instead of reaching the object.
+              event.preventDefault();
+              const input = event.currentTarget;
+              onCommit();
+              queueMicrotask(() => { if (input.ownerDocument.activeElement === input) input.select(); });
+            } else if (event.key === 'Escape') {
               event.preventDefault();
               event.stopPropagation();
               onRevert();

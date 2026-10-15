@@ -76,6 +76,11 @@ export function inspectorErrorStatus(error: InspectorFieldError): string {
   return `${inspectorFieldLabel(error.field)}: ${detail}. O valor anterior foi mantido.`;
 }
 
+/** Said when the field leaves the screen (another page opens) right after its typed value was put back. */
+export function inspectorDiscardedNotice(error: InspectorFieldError): string {
+  return `O valor digitado em ${inspectorFieldLabel(error.field)} não era válido e não foi usado; o valor anterior foi mantido.`;
+}
+
 export type InspectorDraftPlan = {
   /** Fields whose new value is valid and differs from the live frame. */
   readonly changes: Partial<Record<InspectorFrameField, number>>;
