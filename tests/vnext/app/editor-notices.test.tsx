@@ -1,8 +1,10 @@
 import type React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
-import { classifyEditorNotice, SUCCESS_NOTICE_TIMEOUT_MS } from '@/vnext/editor/editor-notices';
+import { classifyEditorNotice, editorNoticeAutoHides, SUCCESS_NOTICE_TIMEOUT_MS } from '@/vnext/editor/editor-notices';
 import type { ConflictResolutionResult, ConflictResolutionState, SaveProjection } from '@/vnext/persistence';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -21,9 +23,26 @@ describe('FR-12 status message tone', () => {
     ['Altura ajustada. Parte da tabela ficou fora da página; revise a composição.', 'error'],
     ['Toque na célula, linha ou coluna final.', 'error'],
     ['Nenhuma tabela foi criada.', 'error'],
+    // Refusals and instructions that also contain a success word must stay on screen.
+    ['O texto foi bloqueado antes da conclusão; o rascunho não foi aplicado.', 'error'],
+    ['O conteúdo interno copiado não é válido para esta tabela.', 'error'],
+    ['Esta alteração faria uma célula mesclada cruzar cabeçalho e corpo.', 'error'],
+    ['Legenda/caption só pode ser aplicada à tabela.', 'error'],
+    ['Tabela de 4 linhas × 3 colunas adicionada. Confira a altura e os limites A4 antes de publicar.', 'error'],
+    ['Rascunho local recuperado. Confirme ou cancele antes de salvar.', 'error'],
+    ['Largura e altura devem ser maiores que zero.', 'error'],
+    // Words that start or end with an accented letter are matched as whole words.
+    ['Não há alterações para desfazer.', 'error'],
+    ['Página adicionada.', 'success'],
+    ['Objeto desbloqueado.', 'success'],
     ['Modo de grade da tabela.', 'info'],
+    ['Texto sem alterações.', 'info'],
   ] as const)('%s → %s', (message, tone) => {
     expect(classifyEditorNotice(message)).toBe(tone);
+  });
+
+  it('lets only errors and work in progress stay on screen', () => {
+    expect(['progress', 'error', 'success', 'info'].filter((tone) => editorNoticeAutoHides(tone as never))).toEqual(['success', 'info']);
   });
 });
 
@@ -47,6 +66,25 @@ describe('FR-12 editor notices', () => {
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
 
+  it('also hides a neutral message such as "Texto sem alterações." after 4 seconds', () => {
+    vi.useFakeTimers();
+    const { onDismissMessage } = renderNotices({ message: 'Texto sem alterações.' });
+    act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('does not keep a hover pause from a message that was replaced while the pointer was over it', () => {
+    vi.useFakeTimers();
+    const { view, onDismissMessage, onMessage } = renderNotices({ message: 'Objeto movido.' });
+    fireEvent.mouseEnter(screen.getByRole('status'));
+    act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS * 2); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={onDismissMessage} onMessage={onMessage}
+      documentTitle="TA-25N — Ficha técnica" save={idle} />);
+    act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
   it('keeps an error until the person closes it', () => {
     vi.useFakeTimers();
     const { onDismissMessage } = renderNotices({ message: 'Não foi possível excluir o objeto.' });
@@ -64,6 +102,30 @@ describe('FR-12 editor notices', () => {
     view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x" save={idle} />);
     expect(screen.queryByRole('status')).toBeNull();
     expect(document.querySelector('[data-editor-notices]')).toBeEmptyDOMElement();
+  });
+
+  it('floats the message over the workspace, so the page does not move when it appears or leaves', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/EditorNotices.css'), 'utf8');
+    document.head.append(style);
+    try {
+      const { view } = renderNotices({ message: 'Texto atualizado.' });
+      const area = document.querySelector<HTMLElement>('[data-editor-notices]')!;
+      // Nothing else takes room in the layout: no band wrapper, and the notice itself is out of the flow.
+      expect(area.children).toHaveLength(1);
+      expect(document.querySelector('[data-editor-notice-bands]')).toBeNull();
+      expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute');
+      expect(getComputedStyle(area).position).toBe('relative');
+      // A save problem is a band in the flow; the message still floats below it.
+      view.rerender(<EditorNotices message="Texto atualizado." onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x"
+        save={{ phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true }} />);
+      const bands = document.querySelector<HTMLElement>('[data-editor-notice-bands]')!;
+      expect(bands).toContainElement(screen.getByRole('alert'));
+      expect(getComputedStyle(bands).position).not.toBe('absolute');
+      expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute');
+    } finally {
+      style.remove();
+    }
   });
 
   it('turns a save failure and missing local protection into bands', () => {
