@@ -129,7 +129,7 @@ export async function prepareGroundedPdfInput(
     const pages = pageNumbers.map(number => {
       const page = entry.evidence.pages.find(item => item.number === number)!;
       const text = verificationPageText(page);
-      return page.runs && layoutPages.has(pageKey(id, number)) ? { number, text, runs: page.runs } : { number, text };
+      return page.runs && layoutPages.has(pageKey(id, number)) ? { number, text, runs: page.runs.map(run => ({ ...run })) } : { number, text };
     });
     sources.push({
       id, kind: 'pdf', name: entry.material.fileName,
