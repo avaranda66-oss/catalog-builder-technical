@@ -123,6 +123,7 @@ import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 import { TableStyleInspector } from './TableStyleInspector';
+import { ZoomControl } from './editor/ZoomControl';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -3750,6 +3751,7 @@ export function EditorWorkspace({
         <main className="vnext-canvas-area">
           <div className="vnext-canvas-meta">
             <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
+            <ZoomControl pageWidthMm={selectedPage.widthMm} />
             <div className="vnext-canvas-statuses">
               {pageDiagnostics.length > 0 && (
                 <span
