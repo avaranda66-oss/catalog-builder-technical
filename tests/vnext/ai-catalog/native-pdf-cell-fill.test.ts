@@ -102,21 +102,34 @@ describe('Actual PDF bytes -> reviewed preflight -> one atomic native table comm
     expect(f.session.getSnapshot().document).toEqual(next);
   });
 
-  it('rejects substituted figures, changed signs, swapped models and non-atomic quotes',async()=>{
-    for(const action of ['change-value','swap-source','splice-quote','change-unit'] as const){
+  it('never fills substituted figures, values of the other model or a changed unit; the good cells still fill',async()=>{
+    // Per value (FR-67): one bad value is left empty instead of blocking the whole table.
+    const cases=[
+      {action:'change-value',verified:5,row1:['','0...900 kPa']},
+      {action:'swap-source',verified:5,row1:['','0...900 kPa']},
+      {action:'change-unit',verified:4,row1:['','']},
+      // Model and label no longer need to share the line with the value.
+      {action:'quote-without-model',verified:6,row1:['0...700 kPa','0...900 kPa']},
+    ] as const;
+    for(const {action,verified,row1} of cases){
       const f=await make(), p=structuredClone(f.proposal);
       const fact=p.sections[0].rows[0].values[0];
       if(fact.status!=='known')throw new Error('BAD_FIXTURE');
       if(action==='change-value')fact.candidate.value='0...999';
       if(action==='swap-source')fact.candidate.source.sourceId='bx-062';
-      if(action==='splice-quote')fact.candidate.source.quote='PRESSURE RANGE 0...700 kPa';
+      if(action==='quote-without-model')fact.candidate.source.quote='PRESSURE RANGE 0...700 kPa';
       if(action==='change-unit')p.sections[0].rows[0].unit='Pa';
-      await expect(prepareNativePdfCellFill(f.session,f.target,f.materials,p)).rejects.toThrow();
-      expect(tableMatrix(tableOf(f))[1].slice(1)).toEqual(['','']);
+      const before=structuredClone(f.session.getSnapshot().document);
+      const preview=await prepareNativePdfCellFill(f.session,f.target,f.materials,p);
+      expect(f.session.getSnapshot().document).toEqual(before);
+      expect([action,preview.verifiedCells,preview.missingCells]).toEqual([action,verified,6-verified]);
+      approveNativePdfCellFill(f.session,preview);
+      expect(tableMatrix(tableOf(f))[1].slice(1)).toEqual(row1);
+      expect(tableMatrix(tableOf(f))[2].slice(1)).toEqual(['0.001 kPa','0.002 kPa']);
     }
   });
 
-  it('keeps reported missing facts empty; conflicts block entire batch and conditions cannot vanish',async()=>{
+  it('keeps reported missing facts empty; real conflicts block entire batch and conditions cannot vanish',async()=>{
     const f=await make(), p=structuredClone(f.proposal);
     p.sections[0].rows[1].values[1]={status:'missing',reason:'Não informado'};
     const preview=await prepareNativePdfCellFill(f.session,f.target,f.materials,p);
@@ -127,9 +140,19 @@ describe('Actual PDF bytes -> reviewed preflight -> one atomic native table comm
     const other=await make(),conflict=structuredClone(other.proposal);
     const known=conflict.sections[0].rows[0].values[0];
     if(known.status!=='known')throw new Error('BAD_FIXTURE');
+    // Two citations of the same value are not a conflict.
     conflict.sections[0].rows[0].values[0]={status:'conflict',
       candidates:[known.candidate,{...known.candidate}]};
-    await expect(prepareNativePdfCellFill(other.session,other.target,other.materials,conflict))
+    expect((await prepareNativePdfCellFill(other.session,other.target,other.materials,conflict)).verifiedCells).toBe(6);
+    // An older revision of the same model's sheet with another figure is.
+    const older=new jsPDF({format:'a4'});
+    older.text('AX-041 PRESSURE RANGE 0...750 kPa',20,30);
+    const olderBytes=older.output('arraybuffer');
+    const olderQuote=(await extractPdfText('AX-041-rev0.pdf',olderBytes)).pages[0].text.trim();
+    const materials=[...other.materials,{sourceId:'ax-041-rev0',fileName:'AX-041-rev0.pdf',revision:'0',bytes:olderBytes}];
+    conflict.sections[0].rows[0].values[0]={status:'conflict',candidates:[known.candidate,
+      {value:'0...750',source:{sourceId:'ax-041-rev0',page:1,quote:olderQuote}}]};
+    await expect(prepareNativePdfCellFill(other.session,other.target,materials,conflict))
       .rejects.toThrow('PDF_FILL_UNRESOLVED_SOURCE_CONFLICT');
     conflict.sections[0].rows[0].values[0]=known;
     conflict.sections[0].rows[0].condition='at 23 C';

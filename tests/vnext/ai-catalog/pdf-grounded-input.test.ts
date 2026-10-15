@@ -73,19 +73,27 @@ describe('Authentic PDF byte-grounded extraction boundary', () => {
     expect(await approveGeneration(catalog)).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('rejects a real-PDF claim if the PDF page does not show its alleged value', async () => {
+  it('never certifies a real-PDF claim the page does not show, and keeps the other values (per value, not all-or-nothing)', async () => {
     const { materials, proposal } = await fixture();
     proposal.sections[0].rows[0].values[0].candidate.value = '0...999';
-    await expect(prepareGroundedPdfInput(materials, proposal)).rejects.toThrow('PDF_EVIDENCE_VALUE_UNGROUNDED');
+    const result = await prepareGroundedPdfInput(materials, proposal);
+    expect(result.verification.values[0]).toMatchObject({ status: 'UNVERIFIED', candidates: [{ value: '0...999', reason: 'VALUE_NOT_IN_QUOTE' }] });
+    expect(result.input.sections[0].rows[0].values[0]).toMatchObject({ status: 'missing', reason: expect.stringContaining('página 1') });
+    expect(result.verification.counts).toMatchObject({ VERIFIED_TEXT: 5, UNVERIFIED: 1 });
+    expect(result.input.sections[0].rows.flatMap(row => row.values).filter(fact => fact.status === 'known')).toHaveLength(5);
   });
 
-  it('rejects model switching, rounded decimals and misattributed source', async () => {
+  it('never certifies rounded decimals or a value cited from the other model PDF', async () => {
     const data = await fixture();
     data.proposal.sections[0].rows[1].values[0].candidate.value = '0,00';
-    await expect(prepareGroundedPdfInput(data.materials, data.proposal)).rejects.toThrow();
+    const rounded = await prepareGroundedPdfInput(data.materials, data.proposal);
+    expect(rounded.verification.values.find(value => value.id === 'instrument-specs/row-1/0')?.status).toBe('UNVERIFIED');
+    expect(rounded.input.sections[0].rows[1].values[0].status).toBe('missing');
     const swapped = await fixture();
     swapped.proposal.sections[0].rows[0].values[0].candidate.source.sourceId = 'bx-062';
-    await expect(prepareGroundedPdfInput(swapped.materials, swapped.proposal)).rejects.toThrow();
+    const moved = await prepareGroundedPdfInput(swapped.materials, swapped.proposal);
+    expect(moved.verification.values[0].status).toBe('UNVERIFIED');
+    expect(moved.input.sections[0].rows[0].values[0].status).toBe('missing');
   });
 
   it('requires at least one source-backed fact per source rather than declaring unexamined PDFs reviewed', async () => {

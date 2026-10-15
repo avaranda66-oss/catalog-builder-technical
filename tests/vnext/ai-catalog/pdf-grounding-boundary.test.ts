@@ -7,6 +7,7 @@ import { sourcePayload, validateTechnicalInput, type TechnicalInput } from '@/vn
 import { prepareGroundedPdfInput, type RealPdfExtractionProposal } from '@/vnext/ai-catalog/pdf-grounded-input';
 import { extractPdfText } from '@/vnext/ai-catalog/pdf-intake';
 import { verifyPdfFactEvidence } from '@/vnext/ai-catalog/pdf-evidence';
+import { pdfEvidenceSource, verifyFactProposal } from '@/vnext/ai-catalog/fact-verifier';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
 afterAll(() => vi.unstubAllGlobals());
@@ -20,6 +21,8 @@ interface Scenario {
   unit: string;
   condition: string;
   values: string[];
+  /** Model positions whose value is wrong (default: all). */
+  bad?: number[];
 }
 
 const negatives: Scenario[] = [
@@ -56,7 +59,7 @@ const negatives: Scenario[] = [
     label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['700', '900'] },
   { name: 'empty known value inferred from a quote that actually contains filled values',
     lines: ['AX-041 PRESSURE RANGE 700 kPa', 'BX-062 PRESSURE RANGE 900 kPa'],
-    label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['', '900'] },
+    label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['', '900'], bad: [0] },
 ];
 
 async function nativeFixture(scenario: Scenario) {
@@ -88,15 +91,46 @@ async function nativeFixture(scenario: Scenario) {
   return { pdf, input, proposal, materials: [{ sourceId: 'qa-native', fileName: pdf.fileName, revision: '1', bytes }] };
 }
 
+type Fixture = Awaited<ReturnType<typeof nativeFixture>>;
+/** The bridge stamps each kept candidate; it must only keep text-verified known values. */
+function withoutStamps(input: TechnicalInput): TechnicalInput {
+  const copy = structuredClone(input);
+  for (const section of copy.sections) for (const row of section.rows) for (const fact of row.values) {
+    if (fact.status === 'known') {
+      expect(fact.candidate.verification).toBe('VERIFIED_TEXT');
+      delete fact.candidate.verification;
+    }
+  }
+  return copy;
+}
+/**
+ * Per-value verification (FR-67): the bridge never certifies a bad value. It
+ * reports it as UNVERIFIED and leaves it out, keeping the good values; when
+ * nothing is left it refuses the whole proposal.
+ */
+async function expectBridgeNotCertified(fixture: Fixture, badModels: number[]) {
+  const report = verifyFactProposal(fixture.proposal, [pdfEvidenceSource('qa-native', fixture.pdf)]);
+  for (const model of badModels) expect(report.values[model].status).toBe('UNVERIFIED');
+  const prepared = await prepareGroundedPdfInput(fixture.materials, fixture.proposal).then(result => result, (error: Error) => error);
+  if (prepared instanceof Error) {
+    expect(prepared.message).toBe('PDF_EVIDENCE_NONE_VERIFIED');
+    return;
+  }
+  for (const model of badModels) expect(prepared.input.sections[0].rows[0].values[model].status).toBe('missing');
+}
 const entryPoints = [
-  { name: 'actual-byte bridge', check: async (fixture: Awaited<ReturnType<typeof nativeFixture>>) => (await prepareGroundedPdfInput(fixture.materials, fixture.proposal)).input },
-  { name: 'persisted grounded input validation', check: async (fixture: Awaited<ReturnType<typeof nativeFixture>>) => validateTechnicalInput(fixture.input) },
+  { name: 'actual-byte bridge', mode: 'bridge' as const,
+    check: async (fixture: Fixture) => withoutStamps((await prepareGroundedPdfInput(fixture.materials, fixture.proposal)).input),
+    rejects: (fixture: Fixture, badModels: number[]) => expectBridgeNotCertified(fixture, badModels) },
+  { name: 'persisted grounded input validation', mode: 'persisted' as const,
+    check: async (fixture: Fixture) => validateTechnicalInput(fixture.input),
+    rejects: (fixture: Fixture) => expect(validateTechnicalInput(fixture.input)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/) },
 ];
 
-describe.each(entryPoints)('PDF fact association at $name', ({ check }) => {
+describe.each(entryPoints)('PDF fact association at $name', ({ check, rejects, mode }) => {
   it.each(negatives)('rejects $name', async scenario => {
     const fixture = await nativeFixture(scenario);
-    await expect(check(fixture)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/);
+    await rejects(fixture, scenario.bad ?? [0, 1]);
   });
 
   it.each(['-', '+', '±', '- '])('preserves legitimate %s signed values, complete model suffix, kPa and literal degree condition', async sign => {
@@ -134,11 +168,23 @@ describe.each(entryPoints)('PDF fact association at $name', ({ check }) => {
       lines: ['AX-041 ERROR 0,001 kPa at 23 C', 'AX-041 ERROR 0,003 kPa at 99 C', 'BX-062 ERROR 0,002 kPa at 23 C'],
       quotes: ['AX-041 ERROR 0,001 kPa at 23 C', 'BX-062 ERROR 0,002 kPa at 23 C'],
       label: 'ERROR', unit: 'kPa', condition: 'at 23 C', values: ['0,001', '0,002'] });
-    fixture.proposal.sections[0].rows[0].values[0] = { status: 'conflict', candidates: [
+    const conflict = { status: 'conflict' as const, candidates: [
       { value: '0,001', source: { sourceId: 'qa-native', page: 1, quote: 'AX-041 ERROR 0,001 kPa at 23 C' } },
       { value: '0,003', source: { sourceId: 'qa-native', page: 1, quote: 'AX-041 ERROR 0,003 kPa at 99 C' } },
     ] };
-    await expect(check(fixture)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/);
+    fixture.proposal.sections[0].rows[0].values[0] = conflict;
+    fixture.input.sections[0].rows[0].values[0] = conflict;
+    if (mode === 'persisted') {
+      await expect(check(fixture)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/);
+      return;
+    }
+    // The "at 99 C" clause never justifies a value for the "at 23 C" row: that
+    // candidate is UNVERIFIED and only the supported 0,001 is kept.
+    const prepared = await prepareGroundedPdfInput(fixture.materials, fixture.proposal);
+    expect(prepared.verification.values[0].candidates.map(item => [item.value, item.status, item.reason]))
+      .toEqual([['0,001', 'VERIFIED_TEXT', undefined], ['0,003', 'UNVERIFIED', 'CONDITION_MISMATCH']]);
+    const fact = prepared.input.sections[0].rows[0].values[0];
+    expect(fact.status === 'known' && fact.candidate.value).toBe('0,001');
   });
 
   it('preserves explicit missing information while verifying the other native fact', async () => {
