@@ -114,7 +114,10 @@ import {
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
-import { alternateDemoAssetId, createInsertSpec, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
+import { createTableFromPastedText, decidePendingTableFit, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
+import { isTabularClipboardText } from '../editor/table-paste-import';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
@@ -380,8 +383,11 @@ export function EditorWorkspace({
   const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
   const [tableRowsToInsert, setTableRowsToInsert] = React.useState('10');
   const [newTableSizeOpen, setNewTableSizeOpen] = React.useState(false);
-  const [newTableRows, setNewTableRows] = React.useState('1');
-  const [newTableColumns, setNewTableColumns] = React.useState('1');
+  const [newTableRows, setNewTableRows] = React.useState(String(DEFAULT_NEW_TABLE_SIZE.rows));
+  const [newTableColumns, setNewTableColumns] = React.useState(String(DEFAULT_NEW_TABLE_SIZE.columns));
+  const [pasteTableAreaOpen, setPasteTableAreaOpen] = React.useState(false);
+  const [pasteGrowOffer, setPasteGrowOffer] = React.useState<(TablePasteGrowthOffer & { objectId: string; sourceRows: number; sourceColumns: number; source: TablePasteSource }) | null>(null);
+  const [pendingTableFit, setPendingTableFit] = React.useState<PendingTableFit | null>(null);
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
@@ -1655,9 +1661,19 @@ export function EditorWorkspace({
     }
   };
 
+  const describePasteError = (error: unknown): string => {
+    if (error instanceof TableBulkAuthoringError) return tableBulkActionMessage(error.code);
+    if (error instanceof TableTsvError) return error.code === 'TSV_ROW_WIDTH_MISMATCH'
+      ? 'As linhas coladas têm quantidades diferentes de colunas. Copie uma área retangular da planilha, incluindo as células vazias. Nada foi alterado.'
+      : 'O conteúdo colado tem aspas incompletas ou fora de posição. Copie novamente as células da planilha. Nada foi alterado.';
+    if (error instanceof TableClipboardError) return 'O conteúdo interno copiado não é válido para esta tabela.';
+    return 'Não foi possível interpretar o conteúdo colado.';
+  };
+
   const runPreparedPaste = (typedText: string, plainText: string): boolean => {
     const live = currentSelectedTableForStructure();
     if (!live || editorState.mode !== 'table-grid') return false;
+    setPasteGrowOffer(null);
     try {
       const prepared = typedText
         ? prepareTypedTablePaste(live.object.table, live.selection, parseTypedTableClipboard(typedText))
@@ -1668,19 +1684,85 @@ export function EditorWorkspace({
       if (error instanceof TablePasteGeometryError) {
         const source = `${error.sourceRows} linha(s) × ${error.sourceColumns} coluna(s)`;
         const destination = `${error.destinationRows} linha(s) × ${error.destinationColumns} coluna(s)`;
+        // FR-31: a paste larger than the room left offers to grow the table in the same step.
+        const offer = error.destinationKind === 'capacity'
+          ? tablePasteGrowthOffer(live.object.table, live.selection, error.sourceRows, error.sourceColumns)
+          : undefined;
+        if (offer) setPasteGrowOffer({ ...offer, objectId: live.object.id, sourceRows: error.sourceRows, sourceColumns: error.sourceColumns, source: { typedText, plainText } });
         setStatusMessage(error.destinationKind === 'capacity'
-          ? `Os dados têm ${source}, mas a partir desta célula só cabem ${destination}. Adicione linhas ou colunas, ou escolha outra célula inicial. Nada foi alterado.`
+          ? `Os dados têm ${source}, mas a partir desta célula só cabem ${destination}. ${offer ? `Clique em "${offer.label}" ou escolha outra célula inicial.` : 'Adicione linhas ou colunas, ou escolha outra célula inicial.'} Nada foi alterado.`
           : `Os dados têm ${source}, e a seleção tem ${destination}. Selecione uma única célula inicial ou uma área do mesmo tamanho dos dados. Nada foi alterado.`);
-      }
-      else if (error instanceof TableBulkAuthoringError) setStatusMessage(tableBulkActionMessage(error.code));
-      else if (error instanceof TableTsvError) setStatusMessage(error.code === 'TSV_ROW_WIDTH_MISMATCH'
-        ? 'As linhas coladas têm quantidades diferentes de colunas. Copie uma área retangular da planilha, incluindo as células vazias. Nada foi alterado.'
-        : 'O conteúdo colado tem aspas incompletas ou fora de posição. Copie novamente as células da planilha. Nada foi alterado.');
-      else if (error instanceof TableClipboardError) setStatusMessage('O conteúdo interno copiado não é válido para esta tabela.');
-      else setStatusMessage('Não foi possível interpretar o conteúdo colado.');
+      } else setStatusMessage(describePasteError(error));
       return false;
     }
   };
+
+  const runGrowAndPaste = () => {
+    const offer = pasteGrowOffer;
+    const live = currentSelectedTableForStructure();
+    setPasteGrowOffer(null);
+    if (!offer || !live || editorState.mode !== 'table-grid' || live.object.id !== offer.objectId) return;
+    const current = tablePasteGrowthOffer(live.object.table, live.selection, offer.sourceRows, offer.sourceColumns);
+    if (!current) {
+      if (runPreparedPaste(offer.source.typedText, offer.source.plainText)) setTablePasteFallbackOpen(false);
+      return;
+    }
+    const outcome = growTableAndPaste(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, offer.source, current.plan, newTableTransactionId());
+    if (!outcome.ok) {
+      setStatusMessage(outcome.message ?? describePasteError(outcome.error));
+      return;
+    }
+    tableSelectionRef.current = outcome.prepared.selectionAfter;
+    tableHistoryContextRef.current = { table: outcome.table, selection: outcome.prepared.selectionAfter };
+    setTableSelection(outcome.prepared.selectionAfter);
+    setTablePasteFallbackOpen(false);
+    setTablePasteFallbackText('');
+    setStatusMessage(outcome.message);
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+  React.useEffect(() => setPasteGrowOffer(null), [tableSelection]);
+
+  /** FR-31: pasted spreadsheet text becomes a styled table on the open page, in one undoable step. */
+  const createTableFromText = (text: string, header?: boolean): boolean => {
+    if (!prepareAuthoringForContextChangeRef.current()) return false;
+    controller.cancel('superseded');
+    const transactionId = newTableTransactionId();
+    const outcome = createTableFromPastedText(session, editorState.activePageId, text, { header, transactionId });
+    setStatusMessage(outcome.message);
+    if (!outcome.ok) return false;
+    selectObject(outcome.objectId);
+    setPasteTableAreaOpen(false);
+    setPendingTableFit({ objectId: outcome.objectId, transactionId, document: outcome.document });
+    return true;
+  };
+
+  // Ctrl+V of an Excel block on the page (nothing editable focused, no table selected) creates the table.
+  const pagePasteRef = React.useRef<(event: ClipboardEvent) => void>(() => undefined);
+  pagePasteRef.current = (event) => {
+    if (event.defaultPrevented || editorState.mode !== 'select' || !isPageLevelPasteTarget(event.target, globalThis.document.body)) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!isTabularClipboardText(text)) return;
+    event.preventDefault();
+    if (selectedTableObject) {
+      setStatusMessage('Para colar dentro desta tabela, clique em Editar tabela e escolha a primeira célula. Para criar uma tabela nova, clique numa parte vazia da página e cole de novo.');
+      return;
+    }
+    createTableFromText(text);
+  };
+  React.useEffect(() => {
+    const listener = (event: ClipboardEvent) => pagePasteRef.current(event);
+    globalThis.addEventListener('paste', listener);
+    return () => globalThis.removeEventListener('paste', listener);
+  }, []);
+
+  // New tables start with an estimated height; once measured, fit it exactly inside the same undo step.
+  React.useEffect(() => {
+    if (!pendingTableFit) return;
+    const decision = decidePendingTableFit(pendingTableFit, session.getSnapshot().document, selectedTableObject?.id, fitHeightPreparation, inspectorDraftIsPending());
+    if (decision.kind === 'wait') return;
+    setPendingTableFit(null);
+    if (decision.kind === 'fit') session.execute(decision.action, { transactionId: pendingTableFit.transactionId });
+  }, [fitHeightPreparation, pendingTableFit, selectedTableObject?.id, session]);
 
   const handleTablePasteClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (editorState.mode !== 'table-grid') return;
@@ -2361,7 +2443,7 @@ export function EditorWorkspace({
   const insertObject = (tool: InsertTool) => {
     const tableSize = newTableSizeOpen
       ? { rows: Number(newTableRows), columns: Number(newTableColumns) }
-      : { rows: 1, columns: 1 };
+      : DEFAULT_NEW_TABLE_SIZE;
     if (tool === 'table' && !isValidNewTableSize(tableSize)) {
       setStatusMessage(`Informe quantidades inteiras: de 1 a ${MAX_NEW_TABLE_ROWS} linhas e de 1 a ${MAX_NEW_TABLE_COLUMNS} colunas. Nenhuma tabela foi criada.`);
       return;
@@ -2374,14 +2456,18 @@ export function EditorWorkspace({
       requestImageUpload({ type: 'insert', pageId: currentPage.id });
       return;
     }
-    const result = session.execute({ type: 'object.insert', pageId: currentPage.id, object: createInsertSpec(tool, currentPage, tableSize) });
+    const insert = { type: 'object.insert' as const, pageId: currentPage.id, object: createInsertSpec(tool, currentPage, tableSize, session.getSnapshot().document.style) };
+    // A new table and its measured "Ajustar altura" share one transaction, so one Desfazer removes both.
+    const transactionId = tool === 'table' ? newTableTransactionId() : undefined;
+    const result = transactionId ? session.execute(insert, { transactionId }) : session.execute(insert);
     if (!result.ok) { setStatusMessage('Não foi possível inserir o objeto.'); return; }
     const objectId = result.metadata.createdIds[0];
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
     if (tool === 'table') setNewTableSizeOpen(false);
-    setStatusMessage(tool === 'table' && (tableSize.rows > 1 || tableSize.columns > 1)
-      ? `Tabela de ${tableSize.rows} linhas × ${tableSize.columns} colunas adicionada. Confira a altura e os limites A4 antes de publicar.`
+    if (tool === 'table' && objectId && transactionId) setPendingTableFit({ objectId, transactionId, document: result.document });
+    setStatusMessage(tool === 'table'
+      ? `Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`
       : names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
   };
 
@@ -3768,6 +3854,7 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="add-image" onClick={() => insertObject('image')}>{simpleByDefault ? 'Imagem' : 'Adicionar imagem'}</button>
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
               <button type="button" className="vnext-more-options" data-editor-action="new-table-size" aria-expanded={newTableSizeOpen} aria-controls="vnext-new-table-size" onClick={() => setNewTableSizeOpen((open) => !open)}>Tamanho da nova tabela</button>
+              <button type="button" data-editor-action="paste-table-from-excel" aria-expanded={pasteTableAreaOpen} aria-controls="vnext-paste-table-area" onClick={() => setPasteTableAreaOpen((open) => !open)}>Colar tabela do Excel</button>
               {(!simpleByDefault || selectedObject) && (
                 <>
                   <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
@@ -3847,6 +3934,14 @@ export function EditorWorkspace({
             </div>
           )}
 
+          {pasteTableAreaOpen && (
+            <PasteTableArea onCreate={(text, header) => createTableFromText(text, header)} onCancel={() => setPasteTableAreaOpen(false)} />
+          )}
+
+          {pasteGrowOffer && editorState.mode === 'table-grid' && selectedTableObject?.id === pasteGrowOffer.objectId && (
+            <PasteGrowOffer label={pasteGrowOffer.label} onConfirm={runGrowAndPaste} onCancel={() => setPasteGrowOffer(null)} />
+          )}
+
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
             <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
               <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
@@ -3924,7 +4019,7 @@ export function EditorWorkspace({
                   data-table-paste-textarea=""
                   value={tablePasteFallbackText}
                   onChange={(event) => setTablePasteFallbackText(event.target.value)}
-                  placeholder={'Ex.: Produto\\tFaixa\\nTA-25N\\t-25 °C a 140 °C'}
+                  placeholder={'Ex.: Produto\tFaixa\nTA-25N\t-25 °C a 140 °C'}
                 />
               </label>
               <div className="vnext-cell-edit-actions">
@@ -3934,7 +4029,7 @@ export function EditorWorkspace({
             </div>
           )}
 
-          <div className="vnext-document-preview" aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
+          <div className="vnext-document-preview" tabIndex={-1} data-table-auto-fit={pendingTableFit ? 'pending' : undefined} aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
             <div className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
               <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {

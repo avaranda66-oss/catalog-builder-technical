@@ -1283,8 +1283,13 @@ describe('P1.A simple-by-default workspace', () => {
       const after = session.getSnapshot();
       const created = after.document.pages[0].objects.find((object) => !before.document.pages[0].objects.some((existing) => existing.id === object.id));
       if (!created || created.type !== 'table') throw new Error('Missing default table');
-      expect(created.table.rows).toHaveLength(1);
-      expect(created.table.columns).toHaveLength(1);
+      // FR-31: the default is a useful 6 × 3 table with a header row, the house preset and the usable width.
+      expect(created.table.rows).toHaveLength(6);
+      expect(created.table.columns).toHaveLength(3);
+      expect(created.table.rows.map((row) => row.role)).toEqual(['header', 'body', 'body', 'body', 'body', 'body']);
+      expect(created.table.style.rowRoles.header?.fontWeight).toBe(700);
+      expect(created.frame.xMm).toBe(12);
+      expect(created.frame.widthMm).toBe(186);
       expect(after.localSequence).toBe(before.localSequence + 1);
       fireEvent.click(button(container, 'undo'));
       expect(session.getSnapshot().document).toEqual(before.document);

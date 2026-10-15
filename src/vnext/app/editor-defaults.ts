@@ -1,16 +1,22 @@
 import {
   createCatalogDocument,
+  materializeTablePreset,
   type IdGenerator,
   type ObjectInsertSpec,
+  type TablePresetId,
 } from '../application';
 import {
   mmToU,
   plainRichText,
   type AssetRef,
   type CatalogDocument,
+  type DocumentStyle,
   type Page,
   type TableModel,
 } from '../domain';
+import { resolveCellStyle } from '../domain/style-resolution';
+import { orderedAnchors } from '../table/table-model';
+import { estimateTableHeightMm } from '../editor/table-paste-import';
 
 export const W2C_PRIMARY_ASSET_ID = 'w2c-demo-ta25n';
 export const W2C_REPLACEMENT_ASSET_ID = 'w2c-demo-replacement';
@@ -202,7 +208,95 @@ export function createSizedEmptyTable(size: NewTableSize): TableModel {
   };
 }
 
-export function createInsertSpec(tool: InsertTool, page: Page, tableSize: NewTableSize = { rows: 1, columns: 1 }): ObjectInsertSpec {
+/** A useful first table: title row plus five rows, three columns (FR-31). */
+export const DEFAULT_NEW_TABLE_SIZE: NewTableSize = { rows: 6, columns: 3 };
+/** Preset applied to every table the editor creates (new or pasted). */
+export const NEW_TABLE_PRESET_ID: TablePresetId = 'technical-specification';
+
+/** Empty table of the requested size whose first row is a header when there are two or more rows. */
+export function createNewTableModel(size: NewTableSize = DEFAULT_NEW_TABLE_SIZE): TableModel {
+  const table = createSizedEmptyTable(size);
+  if (table.rows.length < 2) return table;
+  return { ...table, rows: table.rows.map((row, index) => index === 0 ? { ...row, role: 'header' as const } : row) };
+}
+
+function fontsDeclared(documentStyle: DocumentStyle, table: TableModel): boolean {
+  try {
+    return orderedAnchors(table).every((cell) => {
+      const style = resolveCellStyle(documentStyle, table, cell);
+      return documentStyle.fonts.some((font) =>
+        font.family === style.fontFamily && font.weight === style.fontWeight && font.style === 'normal');
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Applies the house preset when the document declares the fonts it needs; otherwise keeps the table plain. */
+export function styleNewTable(table: TableModel, documentStyle: DocumentStyle): TableModel {
+  const styled = materializeTablePreset(table, documentStyle, NEW_TABLE_PRESET_ID);
+  return fontsDeclared(documentStyle, styled) ? styled : table;
+}
+
+function contentBox(page: Page) {
+  const leftMm = page.safeArea?.leftMm ?? 20;
+  const rightMm = page.safeArea?.rightMm ?? 20;
+  const topMm = page.safeArea?.topMm ?? 20;
+  const bottomMm = page.safeArea?.bottomMm ?? 20;
+  return {
+    leftMm,
+    topMm,
+    widthMm: Math.max(10, page.widthMm - leftMm - rightMm),
+    bottomMm: page.heightMm - bottomMm,
+  };
+}
+
+/**
+ * New tables span the usable width. They go in the first free horizontal band
+ * (top to bottom) that fits; when none fits they start right below the existing
+ * content (or at the top of a full page) so preflight can report the overflow.
+ */
+function tableInsertFrame(page: Page, heightMm: number): ReturnType<typeof frame> {
+  const box = contentBox(page);
+  const gapMm = 2;
+  const bands = page.objects
+    .map((object) => object.frame)
+    .filter((other) => other.xMm < box.leftMm + box.widthMm && other.xMm + other.widthMm > box.leftMm)
+    .map((other) => ({ startMm: other.yMm - gapMm, endMm: other.yMm + other.heightMm + gapMm }));
+  const fits = (yMm: number) => yMm + heightMm <= box.bottomMm
+    && bands.every((band) => yMm + heightMm <= band.startMm || yMm >= band.endMm);
+  const starts = [box.topMm, ...bands.map((band) => band.endMm)]
+    .filter((yMm) => yMm >= box.topMm)
+    .sort((left, right) => left - right);
+  const free = starts.find(fits);
+  if (free !== undefined) return frame(box.leftMm, free, box.widthMm, heightMm);
+  const afterContent = Math.max(box.topMm, ...bands.map((band) => band.endMm));
+  return frame(box.leftMm, afterContent < box.bottomMm - 10 ? afterContent : box.topMm, box.widthMm, heightMm);
+}
+
+/**
+ * Insert spec for a table the editor creates: house preset, usable-area width
+ * and an estimated height (the editor tightens it with "Ajustar altura" once measured).
+ */
+export function createTableInsertSpec(page: Page, table: TableModel, documentStyle?: DocumentStyle): Extract<ObjectInsertSpec, { type: 'table' }> {
+  const styled = documentStyle ? styleNewTable(table, documentStyle) : table;
+  const box = contentBox(page);
+  const estimated = estimateTableHeightMm(styled, documentStyle?.defaultText, box.widthMm);
+  const heightMm = Math.min(Math.max(10, estimated), Math.max(10, box.bottomMm - box.topMm));
+  return {
+    type: 'table',
+    frameU: tableInsertFrame(page, heightMm),
+    zIndex: nextZIndex(page),
+    table: styled,
+  };
+}
+
+export function createInsertSpec(
+  tool: InsertTool,
+  page: Page,
+  tableSize: NewTableSize = DEFAULT_NEW_TABLE_SIZE,
+  documentStyle?: DocumentStyle
+): ObjectInsertSpec {
   const zIndex = nextZIndex(page);
   switch (tool) {
     case 'text':
@@ -229,19 +323,8 @@ export function createInsertSpec(tool: InsertTool, page: Page, tableSize: NewTab
         fit: 'contain',
         focalPoint: { x: 0.5, y: 0.5 },
       };
-    case 'table': {
-      // Leave room for ordinary empty rows without changing the historical 1×1 default.
-      // Larger content is still measured and checked by the existing A4 preflight.
-      const topMm = Math.max(20, page.safeArea?.topMm ?? 0);
-      const usableHeightMm = Math.max(1, page.heightMm - topMm - Math.max(20, page.safeArea?.bottomMm ?? 0));
-      const heightMm = tableSize.rows === 1 ? 34 : Math.min(usableHeightMm, Math.max(34, tableSize.rows * 10));
-      return {
-        type: 'table',
-        frameU: clearInsertFrame(page, frame(20, heightMm > 34 ? topMm : 122, 118, heightMm)),
-        zIndex,
-        table: createSizedEmptyTable(tableSize),
-      };
-    }
+    case 'table':
+      return createTableInsertSpec(page, createNewTableModel(tableSize), documentStyle);
     case 'shape':
       return {
         type: 'shape',
