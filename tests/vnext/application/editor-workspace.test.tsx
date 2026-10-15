@@ -355,14 +355,10 @@ describe('W2.C visible editor workspace', () => {
     fireEvent.change(width, { target: { value: 'not-a-number' } });
     fireEvent.blur(width);
     expect(session.getSnapshot().document).toBe(beforeInvalid);
+    // FR-10: an invalid value goes back to the current one (pt-BR) with a visible message and never blocks.
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')?.value).toBe('63,75');
+    expect(container.querySelector('[data-inspector-error="width"]')?.textContent).toBe('Use um número, como 12,5.');
 
-    const callsBeforeBlockedDelete = execute.mock.calls.length;
-    fireEvent.click(button(container, 'delete'));
-    expect(execute.mock.calls).toHaveLength(callsBeforeBlockedDelete);
-    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')?.value).toBe('not-a-number');
-
-    fireEvent.change(width, { target: { value: '63.75' } });
-    fireEvent.blur(width);
     fireEvent.click(button(container, 'delete'));
     expect(execute.mock.calls.at(-1)?.[0].type).toBe('object.delete');
 
@@ -611,7 +607,7 @@ describe('W2.G direct Text editing workspace', () => {
     expect(button(groupView.container, 'edit-text')).toBeDisabled();
   });
 
-  it('keeps typing ephemeral, Escape discards it, and one explicit commit preserves frame/style while producing one history step', () => {
+  it('keeps typing ephemeral, Cancelar discards it, and one explicit commit preserves frame/style while producing one history step', () => {
     const session = sessionWithDemo(seedTextDocument());
     const execute = vi.spyOn(session, 'execute');
     const beforeObject = textObject(session.getSnapshot().document);
@@ -624,7 +620,8 @@ describe('W2.G direct Text editing workspace', () => {
     fireEvent.change(textarea, { target: { value: 'Rascunho\n± 0.05 °C' } });
     expect(execute).not.toHaveBeenCalled();
     expect(session.getSnapshot().document).toBe(beforeDocument);
-    fireEvent.keyDown(textarea, { key: 'Escape' });
+    // FR-19: Esc now concludes the text box (like PowerPoint); the explicit Cancelar button discards.
+    fireEvent.click(button(container, 'cancel-text'));
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
     expect(execute).not.toHaveBeenCalled();
     expect(session.getSnapshot().canUndo).toBe(false);
@@ -709,7 +706,7 @@ describe('W2.G direct Text editing workspace', () => {
     selectText(container, 94);
     fireEvent.click(button(container, 'edit-text'));
     fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Commit antes da troca de página' } });
-    const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button')][1];
+    const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list [data-page-nav-id]')][1];
     fireEvent.click(secondPage);
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
     expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit antes da troca de página');
@@ -868,7 +865,7 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     fireEvent.click(button(container, 'distribute-horizontal'));
     expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.distribute', axis: 'horizontal' });
 
-    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list [data-page-nav-id]');
     expect(pages).toHaveLength(2);
     fireEvent.click(pages[1]);
     expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
