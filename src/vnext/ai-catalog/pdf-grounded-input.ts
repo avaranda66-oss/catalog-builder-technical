@@ -5,10 +5,11 @@ import {
   type Fact, type FactCandidate, type TechnicalInput,
 } from './contracts';
 import {
-  pdfEvidenceSource, verificationPageText, verifyFactProposal,
-  type FactVerificationReport, type VerifiedValue,
+  pdfEvidenceSource, verificationMessage, verifyFactProposal,
+  type FactVerificationReport, type PdfEvidenceSource, type VerifiedValue,
 } from './fact-verifier';
-import { extractPdfText, MAX_PDF_PAGES, type ExtractedPdf } from './pdf-intake';
+import { extractPdfText, MAX_PDF_PAGES } from './pdf-intake';
+import { verificationPageText } from './pdf-layout-evidence';
 
 const key = z.string().regex(/^[a-z0-9-]{1,40}$/);
 /** Same fact contract as `contracts.ts` (no parallel schema); kept under its historical name. */
@@ -29,17 +30,31 @@ export interface GroundedPdfPreparation {
   readonly verification: FactVerificationReport;
 }
 
-const plainReason = (text: string) => text.replace(/\s+/gu, ' ').trim().slice(0, 160);
+const REASON_LIMIT = 160;
+/** One line of plain text that fits a stored reason (no control characters, at most 160 characters). */
+function plainReason(text: string): string {
+  const line = [...text.replace(/\s+/gu, ' ')].filter(character => {
+    const code = character.charCodeAt(0);
+    return code >= 32 && code !== 127;
+  }).join('').trim();
+  return line.length <= REASON_LIMIT ? line : `${line.slice(0, REASON_LIMIT - 1).trimEnd()}…`;
+}
 /**
  * Only text-verified values become `known`. Differing evidence becomes a
  * `conflict` for a person to decide. Anything else stays out of the catalog as
- * `missing`, with the reason in plain Portuguese (the report keeps the value).
+ * `missing`, with the verifier's plain-Portuguese reason (naming the file when
+ * it fits; the report keeps the value).
  */
-function technicalFact(value: VerifiedValue): Fact {
+function technicalFact(value: VerifiedValue, names: ReadonlyMap<string, string>): Fact {
   const stamped = (index: number): FactCandidate => ({
     value: value.candidates[index].value, source: value.candidates[index].source, verification: value.candidates[index].status,
   });
-  if (value.status === 'MISSING') return { status: 'missing', reason: plainReason(value.missingReason ?? '') || 'Não informado nas fontes.' };
+  const missing = (): Fact => {
+    const named = plainReason(verificationMessage(value, names));
+    const reason = named.endsWith('…') ? plainReason(verificationMessage(value)) : named;
+    return { status: 'missing', reason: reason || 'Não informado nas fontes.' };
+  };
+  if (value.status === 'MISSING') return missing();
   if (value.status === 'VERIFIED_TEXT' && value.selected !== undefined) return { status: 'known', candidate: stamped(value.selected) };
   if (value.status === 'CONFLICT') {
     const seen = new Set<string>(), options: FactCandidate[] = [];
@@ -51,10 +66,7 @@ function technicalFact(value: VerifiedValue): Fact {
     if (options.length >= 2 && options.length <= 4) return { status: 'conflict', candidates: options };
     return { status: 'missing', reason: 'As fontes trazem valores diferentes demais; confira e preencha à mão.' };
   }
-  const page = value.candidates[0]?.source.page;
-  return { status: 'missing', reason: value.status === 'VISUAL_ONLY'
-    ? `Confira olhando a página ${page} do PDF antes de usar este valor.`
-    : `Valor não confirmado no texto da página ${page} do PDF; confira antes de usar.` };
+  return missing();
 }
 
 /**
@@ -72,7 +84,7 @@ export async function prepareGroundedPdfInput(
 ): Promise<GroundedPdfPreparation> {
   const proposal = RealPdfExtractionProposalSchema.parse(untrustedProposal);
   if (materials.length < 1 || materials.length > 5) throw new Error('PDF_MATERIAL_COUNT_INVALID');
-  const references = new Map<string, { material: LocalPdfMaterial; pdf: ExtractedPdf }>();
+  const references = new Map<string, { material: LocalPdfMaterial; evidence: PdfEvidenceSource }>();
   for (const material of materials) {
     if (!key.safeParse(material.sourceId).success || references.has(material.sourceId) ||
         !material.revision.trim()) throw new Error('PDF_MATERIAL_ID_INVALID');
@@ -80,15 +92,25 @@ export async function prepareGroundedPdfInput(
     // Over-long single pages are handled per value (PAGE_TEXT_INCOMPLETE);
     // a document beyond the page index limit is not indexed at all.
     if (pdf.pageCount > MAX_PDF_PAGES) throw new Error('PDF_TEXT_INDEX_TRUNCATED');
-    references.set(material.sourceId, { material, pdf });
+    references.set(material.sourceId, {
+      material, evidence: pdfEvidenceSource(material.sourceId, pdf, `${material.fileName} (revisão ${material.revision.trim()})`),
+    });
   }
-  const verification = verifyFactProposal(proposal,
-    [...references].map(([sourceId, entry]) => pdfEvidenceSource(sourceId, entry.pdf)));
-  const facts = new Map(verification.values.map(value => [value.id, technicalFact(value)]));
+  const verification = verifyFactProposal(proposal, [...references.values()].map(entry => entry.evidence));
+  const facts = new Map(verification.values.map(value => [value.id, technicalFact(value, verification.sourceNames)]));
   const sections: TechnicalInput['sections'] = proposal.sections.map(section => ({
     ...section,
     rows: section.rows.map(row => ({ ...row, values: row.values.map((_, modelIndex) =>
       facts.get(decisionKey(section.id, row.id, modelIndex))!) })),
+  }));
+  const pageKey = (sourceId: string, page: number) => `${sourceId}#${page}`;
+  // Pages whose kept values rely on text positions (the model's column) store
+  // those positions, so the sidecar re-verifies them exactly.
+  const layoutPages = new Set(verification.values.flatMap(value => {
+    const fact = facts.get(value.id);
+    if (!fact || fact.status === 'missing') return [];
+    return value.candidates.filter(item => item.usedLayout && item.status === 'VERIFIED_TEXT')
+      .map(item => pageKey(item.source.sourceId, item.source.page));
   }));
   const selectedPages = new Map<string, Set<number>>([...references.keys()].map(id => [id, new Set<number>()]));
   for (const fact of facts.values()) {
@@ -103,12 +125,16 @@ export async function prepareGroundedPdfInput(
     // A PDF that supports nothing is not declared as a reviewed source.
     if (!pageNumbers.length) continue;
     if (pageNumbers.length > 10) throw new Error('PDF_EVIDENCE_PAGE_BUDGET');
-    // Same text the verifier used (native text plus lines rebuilt from positions).
-    const pages = pageNumbers.map(number => ({ number, text: verificationPageText(entry.pdf.pages[number - 1]) }));
+    // Same text (and, when used, text positions) the verifier used.
+    const pages = pageNumbers.map(number => {
+      const page = entry.evidence.pages.find(item => item.number === number)!;
+      const text = verificationPageText(page);
+      return page.runs && layoutPages.has(pageKey(id, number)) ? { number, text, runs: page.runs } : { number, text };
+    });
     sources.push({
       id, kind: 'pdf', name: entry.material.fileName,
-      revision: entry.material.revision, pdfSha256: entry.pdf.sha256,
-      pdfPageCount: entry.pdf.pageCount, pages, sha256: await sha256(sourcePayload(pages)),
+      revision: entry.material.revision, pdfSha256: entry.evidence.sha256,
+      pdfPageCount: entry.evidence.pageCount, pages, sha256: await sha256(sourcePayload(pages)),
     });
   }
   if (!sources.length) throw new Error('PDF_EVIDENCE_NONE_VERIFIED');

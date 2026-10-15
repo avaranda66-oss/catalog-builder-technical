@@ -1,5 +1,12 @@
 type LiteralKind = 'model' | 'label' | 'value' | 'unit' | 'condition';
 
+/**
+ * Text right after a unit that continues it into a compound unit ("kPa/s",
+ * "Pa - s"). A minus before a number ("140 °C -35 to 155 °C", the next cell of
+ * a table row) starts another value instead.
+ */
+const continuesCompoundUnit = (rest: string) => /^[/·⋅*^-](?!\s*\p{N})/u.test(rest.trimStart());
+
 /** Literal token boundaries: no sign, decimal, unit prefix or model suffix repair. */
 export function literalEvidencePositions(text: string, literal: string, kind: LiteralKind,
   attachedUnitAt?: (end: number) => boolean): number[] {
@@ -21,7 +28,7 @@ export function literalEvidencePositions(text: string, literal: string, kind: Li
     const lostDegree = kind === 'unit' && word.test(literal[0]) && /[°℃℉]/u.test(before);
     const partialCompoundUnit = kind === 'unit' && (
       /[/·⋅*^-]$/u.test(text.slice(0, index).trimEnd()) ||
-      /^[/·⋅*^-]/u.test(text.slice(index + literal.length).trimStart())
+      continuesCompoundUnit(text.slice(index + literal.length))
     );
     // Brazilian manuals often type the degree as the ordinal indicator: "20ºC".
     const ordinalDegree = kind === 'value' && after === 'º' && /[CFK]/u.test(text[index + literal.length + 1] ?? '');
@@ -76,7 +83,7 @@ function matchUnitAt(text: string, start: number, unit: string): number {
     index++;
   }
   if (/[\p{L}\p{N}_]/u.test(text[index] ?? '')) return -1;
-  if (/^[/·⋅*^-]/u.test(text.slice(index).trimStart())) return -1;
+  if (continuesCompoundUnit(text.slice(index))) return -1;
   return index;
 }
 
@@ -85,6 +92,11 @@ type FollowingUnit = { kind: 'CLAIMED' | 'OTHER' | 'NONE'; end: number };
 function followingUnit(text: string, end: number, unit: string): FollowingUnit {
   let start = end;
   while (start < text.length && /\s/u.test(text[start])) start++;
+  // "0...700 (kPa)": a unit in brackets right after the value is still its unit.
+  if (/[([]/u.test(text[start] ?? '')) {
+    const inside = text.slice(start + 1).match(/^\s*/u)![0].length + start + 1;
+    if ([unit, ...KNOWN_UNITS].some(candidate => matchUnitAt(text, inside, candidate) >= 0)) start = inside;
+  }
   const claimed = canonicalUnit(unit);
   let best = -1, isClaimed = false;
   for (const candidate of [unit, ...KNOWN_UNITS]) {
@@ -101,11 +113,48 @@ export function valueEvidencePositions(text: string, value: string, unit = ''): 
   return literalEvidencePositions(text, value, 'value', end => units.some(candidate => matchUnitAt(text, end, candidate) >= 0));
 }
 
-/** Equivalent unit spellings for a presence check anywhere in a text. */
-function unitPresent(text: string, unit: string): boolean {
+/** Equivalent spellings of one unit (degree vs ordinal indicator, spacing). */
+function unitSpellings(unit: string): string[] {
   const spellings = new Set([unit, unit.replace(/[º˚]/gu, '°'), unit.replace(/°/gu, 'º'), unit.replace(/\s+/gu, '')]);
   for (const spelling of [...spellings]) if (/^%\S/u.test(spelling)) spellings.add('% ' + spelling.slice(1));
-  return [...spellings].some(spelling => hasLiteralEvidence(text, spelling, 'unit'));
+  return [...spellings].filter(spelling => spelling.trim());
+}
+/** Equivalent unit spellings for a presence check anywhere in a text. */
+function unitPresent(text: string, unit: string): boolean {
+  return unitSpellings(unit).some(spelling => hasLiteralEvidence(text, spelling, 'unit'));
+}
+
+/** Accent- and case-folded words of 3+ letters ("Exatidão" -> "exatidao"); shorter words carry no label. */
+export function significantWords(text: string): string[] {
+  const folded = text.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
+  return (folded.match(/\p{L}+/gu) ?? []).filter(word => word.length >= 3);
+}
+const UNIT_WORDS: ReadonlySet<string> = new Set(KNOWN_UNITS.flatMap(unit => significantWords(unit)));
+
+/**
+ * A unit printed as a header before the value ("Faixa (°C) -25 a 140"): the
+ * nearest unit before it that does not close another number ("140 °C") and is
+ * not separated from the value by words. Units of the condition do not count.
+ */
+function headerUnitBefore(text: string, start: number, unit: string, condition: string,
+  ignored: ReadonlySet<string>): 'CLAIMED' | 'OTHER' | 'NONE' {
+  const before = text.slice(0, start);
+  const conditions = condition ? literalEvidencePositions(before, condition, 'condition').map(at => [at, at + condition.length]) : [];
+  const claimed = canonicalUnit(unit);
+  let best: { end: number; length: number; claimed: boolean } | undefined;
+  for (const candidate of [unit, ...KNOWN_UNITS]) for (const spelling of unitSpellings(candidate)) {
+    for (const at of literalEvidencePositions(before, spelling, 'unit')) {
+      const end = at + spelling.length;
+      if (/\p{N}$/u.test(before.slice(0, at).trimEnd())) continue;
+      if (conditions.some(([from, to]) => at >= from && end <= to)) continue;
+      const same = canonicalUnit(candidate) === claimed;
+      if (!best || end > best.end || (end === best.end && (spelling.length > best.length || (spelling.length === best.length && same)))) {
+        best = { end, length: spelling.length, claimed: same };
+      }
+    }
+  }
+  if (!best || significantWords(before.slice(best.end)).some(word => !ignored.has(word))) return 'NONE';
+  return best.claimed ? 'CLAIMED' : 'OTHER';
 }
 
 const NUMBER = /[+\-−±]?\d+(?:[.,]\d+)*/gu;
@@ -136,23 +185,156 @@ export interface ValueTextEvidence {
   label: string;
   labels: readonly string[];
 }
-export type ValueTextCheck = { verified: true } | { verified: false; problem: TextEvidenceProblem };
+/**
+ * What the text alone ties to a value found in its quote. A value the text
+ * does not tie to its row label or unit, or to its model while another model
+ * is on the page, may still be right, but only the page layout or a person can
+ * tell: it must never count as verified by text alone.
+ */
+export interface ValueTextTies {
+  /** The quote names the value's model right before it, not inside a list of models. */
+  readonly modelTied: boolean;
+  /** Another declared model, or the same model name with another number ("TA-35N" for "TA-25N"), is on the page. */
+  readonly otherModelOnPage: boolean;
+  /** The words right before the value, in the quote or around it on its page line, are its row label. */
+  readonly labelTied: boolean;
+  /** The claimed unit is printed right after the value, inside it or as its header; or no unit is claimed. */
+  readonly unitTied: boolean;
+}
+export type ValueTextCheck =
+  | ({ readonly verified: true } & ValueTextTies)
+  | { readonly verified: false; readonly problem: TextEvidenceProblem };
 
 interface Mark { start: number; end: number; target: boolean }
-const marks = (text: string, target: string, others: readonly string[], kind: 'model' | 'label'): Mark[] => [
-  ...literalEvidencePositions(text, target, kind).map(start => ({ start, end: start + target.length, target: true })),
-  ...[...new Set(others)].filter(other => other !== target && other.trim())
-    .flatMap(other => literalEvidencePositions(text, other, kind).map(start => ({ start, end: start + other.length, target: false }))),
-].sort((a, b) => a.start - b.start);
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+/**
+ * The same model name with any other number: "TA-35N" or "TA-50N" for
+ * "TA-25N". It catches models nobody declared (a single-product sheet cut from
+ * a family table). Names without digits or with fewer than two letters have none.
+ */
+function siblingModels(text: string, model: string): Mark[] {
+  const parts = model.split(/(\p{N}+)/u);
+  const letters = parts.filter((_, index) => index % 2 === 0).join('').match(/\p{L}/gu) ?? [];
+  if (parts.length < 2 || letters.length < 2) return [];
+  const body = parts.map((part, index) => (index % 2 ? '\\p{N}+' : escapeRegExp(part))).join('');
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_-])${body}(?![\\p{L}\\p{N}_-])`, 'gu');
+  return [...text.matchAll(pattern)].filter(match => match[0] !== model)
+    .map(match => ({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, target: false }));
+}
+function marks(text: string, target: string, others: readonly string[], kind: 'model' | 'label'): Mark[] {
+  const found: Mark[] = [
+    ...literalEvidencePositions(text, target, kind).map(start => ({ start, end: start + target.length, target: true })),
+    ...[...new Set(others)].filter(other => other !== target && other.trim())
+      .flatMap(other => literalEvidencePositions(text, other, kind).map(start => ({ start, end: start + other.length, target: false }))),
+  ];
+  if (kind === 'model') {
+    for (const sibling of siblingModels(text, target)) if (!found.some(item => item.start === sibling.start)) found.push(sibling);
+  }
+  return found.sort((a, b) => a.start - b.start);
+}
 const nearestBefore = (items: readonly Mark[], position: number) =>
   items.filter(item => item.end <= position).at(-1);
+
+/** Another declared model, or a sibling of the model ("TA-35N" for "TA-25N"), printed in `text`. */
+export function namesOtherModel(text: string, model: string, models: readonly string[]): boolean {
+  return marks(normalizeEvidenceWhitespace(text), model, models, 'model').some(item => !item.target);
+}
+
+/** Folded words of the row label, words of the other declared rows, and words that never name a row. */
+interface LabelWords {
+  readonly label: string;
+  readonly target: ReadonlySet<string>;
+  readonly others: ReadonlySet<string>;
+  readonly ignored: ReadonlySet<string>;
+}
+function labelWords(evidence: ValueTextEvidence): LabelWords {
+  const ignored = new Set([...UNIT_WORDS,
+    ...[evidence.unit, evidence.value, evidence.condition, ...evidence.models].flatMap(significantWords)]);
+  const keep = (text: string) => significantWords(text).filter(word => !ignored.has(word));
+  const target = new Set(keep(evidence.label));
+  const others = new Set(evidence.labels.filter(other => other !== evidence.label).flatMap(keep).filter(word => !target.has(word)));
+  return { label: evidence.label, target, others, ignored };
+}
+const meaningful = (text: string, words: LabelWords) => significantWords(text).filter(word => !words.ignored.has(word));
+
+type LabelTie = 'TIED' | 'PARTIAL' | 'FOREIGN' | 'NONE';
+/** TIED: every label word and no other row's word; PARTIAL: only part of the label; FOREIGN: other words. */
+function classifyLabel(group: ReadonlySet<string>, words: LabelWords): LabelTie {
+  if (!group.size) return 'NONE';
+  if (!words.target.size || [...group].some(word => words.others.has(word))) return 'FOREIGN';
+  if ([...words.target].every(word => group.has(word))) return 'TIED';
+  return [...group].every(word => words.target.has(word)) ? 'PARTIAL' : 'FOREIGN';
+}
+/** Words of the nearest group of words before `end`; tokens with digits (values, models) end a group. */
+function wordsBefore(text: string, end: number, words: LabelWords): Set<string> {
+  const group = new Set<string>();
+  const tokens = text.slice(0, end).split(/\s+/u).filter(Boolean);
+  for (let index = tokens.length - 1; index >= 0; index--) {
+    if (/\p{N}/u.test(tokens[index])) {
+      if (group.size) break;
+      continue;
+    }
+    for (const word of meaningful(tokens[index], words)) group.add(word);
+  }
+  return group;
+}
+/** Does the text right before `end` name the row label? */
+function labelBefore(text: string, end: number, words: LabelWords): LabelTie {
+  if (!words.target.size) {
+    // A label without words ("IP", "Ø") must be the last text before the value.
+    const at = literalEvidencePositions(text.slice(0, end), words.label, 'label').at(-1);
+    if (at !== undefined && !meaningful(text.slice(at + words.label.length, end), words).length) return 'TIED';
+  }
+  return classifyLabel(wordsBefore(text, end, words), words);
+}
+/**
+ * The row label from the value's own line on the page, when the quote does
+ * not show it: the words before the value on that line or, when there are
+ * none, a label printed on the lines right above and below it (Isotech prints
+ * a long row label in two lines around its values). Those neighbour lines may
+ * hold only words of this label, and every place where the quote occurs must agree.
+ */
+function labelAroundValue(pageText: string, quote: string, offset: number, words: LabelWords): boolean {
+  const lines = pageText.split(/\r\n|\r|\n/u).map(normalizeEvidenceWhitespace).filter(Boolean);
+  const starts: number[] = [];
+  let total = 0;
+  for (const line of lines) {
+    starts.push(total);
+    total += line.length + 1;
+  }
+  const joined = lines.join(' ');
+  let tied = false;
+  for (let found = joined.indexOf(quote); found !== -1; found = joined.indexOf(quote, found + 1)) {
+    const position = found + offset;
+    let index = starts.length - 1;
+    while (index > 0 && starts[index] > position) index--;
+    const local = position - starts[index];
+    const own = labelBefore(lines[index], local, words);
+    if (own === 'FOREIGN') return false;
+    if (own === 'TIED') {
+      tied = true;
+      continue;
+    }
+    if (!words.target.size) continue;
+    const label = wordsBefore(lines[index], local, words);
+    for (const near of [lines[index - 1], lines[index + 1]]) {
+      const nearWords = near === undefined ? [] : meaningful(near, words);
+      if (nearWords.some(word => !words.target.has(word))) return false;
+      for (const word of nearWords) label.add(word);
+    }
+    if (classifyLabel(label, words) === 'TIED') tied = true;
+  }
+  return tied;
+}
 
 /**
  * Verification BY VALUE on the native text of one cited page. The literal
  * value (sign, decimals and unit kept exactly) must be inside the cited quote,
  * and the quote must be on the page. Model and label do not need to share the
  * line with the value (2D tables), but the quote must not tie the value to
- * another declared model, another declared field or another condition.
+ * another declared model, another declared field or another condition. The
+ * result says what the text itself ties to the value (`ValueTextTies`); the
+ * caller decides what still needs the page layout or a person.
  * This locates evidence; it does not prove engineering truth.
  */
 export function checkValueTextEvidence(evidence: ValueTextEvidence): ValueTextCheck {
@@ -185,13 +367,16 @@ export function checkValueTextEvidence(evidence: ValueTextEvidence): ValueTextCh
     return fail('CONDITION_NOT_ON_PAGE');
   }
   const skeleton = condition ? conditionSkeleton(condition) : null;
+  const words = labelWords({ ...evidence, value, unit, condition });
   // Several models listed before every value: a header list, so the text alone
-  // cannot tell columns apart (the geometric check in fact-verifier can).
+  // cannot tell columns apart (only the page layout can).
   const headerList = targetModels.length === 1 && otherModels.length > 0 &&
     Math.max(...modelMarks.map(item => item.end)) <= Math.min(...occurrences);
-  let firstProblem: TextEvidenceProblem | undefined;
+  const modelTied = modelMarks.length > 0 && !headerList;
+  const otherModelOnPage = namesOtherModel(page, model, models);
+  let firstProblem: TextEvidenceProblem | undefined, best: ValueTextTies | undefined, bestScore = -1;
   for (const start of occurrences) {
-    const problem = ((): TextEvidenceProblem | undefined => {
+    const result = ((): TextEvidenceProblem | ValueTextTies => {
       if (modelMarks.length && !headerList) {
         const prior = nearestBefore(modelMarks, start);
         if (!prior || !prior.target) return 'MODEL_ATTRIBUTION';
@@ -204,12 +389,21 @@ export function checkValueTextEvidence(evidence: ValueTextEvidence): ValueTextCh
         const prior = nearestBefore(labelMarks, start);
         if (prior ? !prior.target : targetLabels.length > 0) return 'LABEL_ATTRIBUTION';
       }
-      let clauseEnd = start + value.length;
+      let clauseEnd = start + value.length, unitTied = true;
       if (unit) {
         const following = followingUnit(quote, clauseEnd, unit);
         if (following.kind === 'OTHER') return 'UNIT_MISMATCH';
-        if (following.kind === 'NONE' && !unitPresent(quote, unit) && !unitPresent(page, unit)) return 'UNIT_NOT_ON_PAGE';
-        clauseEnd = following.end;
+        if (following.kind === 'CLAIMED') clauseEnd = following.end;
+        else if (!unitPresent(value, unit)) {
+          // "Faixa (psi) 0...100" never supports kPa, and a unit printed only
+          // elsewhere on the page is not tied to this value.
+          const header = headerUnitBefore(quote, start, unit, condition, words.ignored);
+          if (header === 'OTHER') return 'UNIT_MISMATCH';
+          if (header === 'NONE') {
+            if (!unitPresent(quote, unit) && !unitPresent(page, unit)) return 'UNIT_NOT_ON_PAGE';
+            unitTied = false;
+          }
+        }
       }
       // "0,003 kPa at 99 C" for a row declared "at 23 C": same clause, other condition.
       if (skeleton) {
@@ -218,10 +412,20 @@ export function checkValueTextEvidence(evidence: ValueTextEvidence): ValueTextCh
         const match = skeleton.exec(rest);
         if (match && match.index === 0 && match[0] !== condition) return 'CONDITION_MISMATCH';
       }
-      return undefined;
+      const inQuote = labelBefore(quote, start, words);
+      const labelTied = inQuote === 'TIED' ||
+        (inQuote !== 'FOREIGN' && labelAroundValue(evidence.pageText, quote, start, words));
+      return { modelTied, otherModelOnPage, labelTied, unitTied };
     })();
-    if (!problem) return { verified: true };
-    firstProblem ??= problem;
+    if (typeof result === 'string') {
+      firstProblem ??= result;
+      continue;
+    }
+    const score = Number(result.labelTied) + Number(result.unitTied);
+    if (score > bestScore) {
+      best = result;
+      bestScore = score;
+    }
   }
-  return fail(firstProblem ?? 'VALUE_NOT_IN_QUOTE');
+  return best ? { verified: true, ...best } : fail(firstProblem ?? 'VALUE_NOT_IN_QUOTE');
 }

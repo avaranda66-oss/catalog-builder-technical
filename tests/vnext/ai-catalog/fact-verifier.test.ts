@@ -3,7 +3,8 @@ import { webcrypto } from 'node:crypto';
 import { jsPDF } from 'jspdf';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  FactProposalSchema, SourceReferenceSchema, reviewIssues, validateTechnicalInput, type FactProposal, type TechnicalInput,
+  FactProposalSchema, SourceReferenceSchema, reviewIssues, sourcePayload, validateTechnicalInput,
+  type FactProposal, type TechnicalInput,
 } from '@/vnext/ai-catalog/contracts';
 import { approveGeneration, compileCatalog, tableMatrix } from '@/vnext/ai-catalog/composition';
 import {
@@ -13,6 +14,7 @@ import { prepareCatalogAgentRequest } from '@/vnext/ai-catalog/gemini-plan';
 import { prepareGroundedPdfInput } from '@/vnext/ai-catalog/pdf-grounded-input';
 import { extractPdfText } from '@/vnext/ai-catalog/pdf-intake';
 import { checkValueTextEvidence } from '@/vnext/ai-catalog/pdf-literal-evidence';
+import { sha256 } from '@/vnext/asset/integrity';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
 afterAll(() => vi.unstubAllGlobals());
@@ -74,12 +76,17 @@ describe('FR-67 fact verification by value', () => {
   it('verifies a real 2D table value by value, although model and label sit on other lines', async () => {
     const { pdf } = await isotech();
     const report = verifyFactProposal(isotechProposal(pdf.pages[0].text, CORRECT), [pdfEvidenceSource('isotech', pdf)]);
-    expect(report.values.map(value => [value.id, value.status])).toEqual([
-      ['specs/range/0', 'VERIFIED_TEXT'], ['specs/range/1', 'VERIFIED_TEXT'], ['specs/range/2', 'VERIFIED_TEXT'],
-      ['specs/uniformity/0', 'VERIFIED_TEXT'], ['specs/uniformity/1', 'VERIFIED_TEXT'], ['specs/uniformity/2', 'VERIFIED_TEXT'],
-      ['specs/depth/0', 'VERIFIED_TEXT'], ['specs/depth/1', 'VERIFIED_TEXT'], ['specs/depth/2', 'VERIFIED_TEXT'],
+    // The merged "160 mm" cell starts in Europa's column; for the other two
+    // models only a person looking at the page can confirm it.
+    expect(report.values.map(value => [value.id, value.status, value.candidates[0].reason])).toEqual([
+      ['specs/range/0', 'VERIFIED_TEXT', undefined], ['specs/range/1', 'VERIFIED_TEXT', undefined],
+      ['specs/range/2', 'VERIFIED_TEXT', undefined],
+      ['specs/uniformity/0', 'VERIFIED_TEXT', undefined], ['specs/uniformity/1', 'VERIFIED_TEXT', undefined],
+      ['specs/uniformity/2', 'VERIFIED_TEXT', undefined],
+      ['specs/depth/0', 'VERIFIED_TEXT', undefined], ['specs/depth/1', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'],
+      ['specs/depth/2', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'],
     ]);
-    expect(report.counts).toMatchObject({ VERIFIED_TEXT: 9, UNVERIFIED: 0, CONFLICT: 0 });
+    expect(report.counts).toMatchObject({ VERIFIED_TEXT: 7, VISUAL_ONLY: 2, UNVERIFIED: 0, CONFLICT: 0 });
     expect(report.proposal.sections[0].rows[0].values[0]).toMatchObject({ candidate: { verification: 'VERIFIED_TEXT' } });
     expect(verificationMessage(report.values[0])).toBe('Conferido no texto da página 1.');
   });
@@ -92,16 +99,34 @@ describe('FR-67 fact verification by value', () => {
     expect(report.values.slice(0, 3).map(value => [value.status, value.candidates[0].reason])).toEqual([
       ['UNVERIFIED', 'COLUMN_MISMATCH'], ['UNVERIFIED', 'COLUMN_MISMATCH'], ['VERIFIED_TEXT', undefined],
     ]);
-    expect(report.counts).toMatchObject({ VERIFIED_TEXT: 7, UNVERIFIED: 2 });
+    expect(report.counts).toMatchObject({ VERIFIED_TEXT: 5, VISUAL_ONLY: 2, UNVERIFIED: 2 });
     expect(verificationMessage(report.values[0])).toBe('Na página 1, este valor está na coluna de outro modelo, não do Europa 4520.');
 
     const prepared = await prepareGroundedPdfInput([{ sourceId: 'isotech', fileName, revision: '2026', bytes }], proposal);
     const facts = prepared.input.sections[0].rows.flatMap(row => row.values.map(fact => fact.status));
-    expect(facts).toEqual(['missing', 'missing', 'known', 'known', 'known', 'known', 'known', 'known', 'known']);
+    expect(facts).toEqual(['missing', 'missing', 'known', 'known', 'known', 'known', 'known', 'missing', 'missing']);
+    // The plain reason of the verifier, naming the file, travels with the empty value.
     expect(prepared.input.sections[0].rows[0].values[0]).toEqual({ status: 'missing',
-      reason: 'Valor não confirmado no texto da página 1 do PDF; confira antes de usar.' });
-    // The sidecar re-verifies by value on the stored page text.
+      reason: 'Na página 1 de europa-venus-calisto.pdf (revisão 2026), este valor está na coluna de outro modelo, não do Europa 4520.' });
+    // The sidecar keeps the text positions its column check needed and re-verifies the same way.
+    expect(prepared.input.sources[0].pages[0].runs?.length).toBe(pdf.pages[0].runs?.length);
     await expect(validateTechnicalInput(prepared.input)).resolves.toEqual(prepared.input);
+  });
+
+  it('refuses a stored sidecar whose table values lost their text positions or were swapped later', async () => {
+    const { pdf, bytes, fileName } = await isotech();
+    const prepared = await prepareGroundedPdfInput([{ sourceId: 'isotech', fileName, revision: '2026', bytes }],
+      isotechProposal(pdf.pages[0].text, CORRECT));
+    const withoutRuns = structuredClone(prepared.input);
+    const page = withoutRuns.sources[0].pages[0];
+    delete page.runs;
+    withoutRuns.sources[0].sha256 = await sha256(sourcePayload(withoutRuns.sources[0].pages));
+    await expect(validateTechnicalInput(withoutRuns)).rejects.toThrow('PDF_QUOTE_VALUE_UNGROUNDED');
+    const swapped = structuredClone(prepared.input);
+    const [europa, venus] = swapped.sections[0].rows[0].values;
+    if (europa.status !== 'known' || venus.status !== 'known') throw new Error('fixture');
+    [europa.candidate.value, venus.candidate.value] = [venus.candidate.value, europa.candidate.value];
+    await expect(validateTechnicalInput(swapped)).rejects.toThrow('PDF_QUOTE_VALUE_UNGROUNDED');
   });
 
   it('never trusts a status written in the proposal', async () => {
@@ -160,7 +185,14 @@ describe('FR-67 sources that disagree (TA-25N PT vs EN), single product', () => 
     ]);
     expect(report.values[3].candidates.map(item => [item.value, item.status, item.reason]))
       .toEqual([['20', 'VERIFIED_TEXT', undefined], ['25', 'UNVERIFIED', 'VALUE_NOT_IN_QUOTE']]);
-    expect(verificationMessage(report.values[0])).toBe('As fontes divergem: -25 a 140 (página 1) e -25 to 155 (página 1). Escolha o valor certo.');
+    // English labels cannot be matched to the Portuguese rows by text: those
+    // candidates go to a person, never to "verified".
+    expect(report.values[0].candidates.map(item => [item.status, item.reason]))
+      .toEqual([['VERIFIED_TEXT', undefined], ['VISUAL_ONLY', 'LABEL_UNCLEAR']]);
+    expect(verificationMessage(report.values[0]))
+      .toBe('As fontes divergem: -25 a 140 na página 1; -25 to 155 na página 1. Escolha o valor certo.');
+    expect(verificationMessage(report.values[0], report.sourceNames)).toBe('As fontes divergem: -25 a 140 na página 1 de ' +
+      'ta-25n-manual-pt.pdf; -25 to 155 na página 1 de ta-25n-manual-en.pdf. Escolha o valor certo.');
     expect(report.usedSourceIds).toEqual(['ta-en', 'ta-pt']);
   });
 
@@ -217,7 +249,7 @@ describe('FR-67 pages that can only be checked by eye', () => {
 
     const prepared = await prepareGroundedPdfInput([{ sourceId: 'folder', fileName: folder.fileName, revision: '1', bytes: folder.bytes }], proposal);
     expect(prepared.input.sections[0].rows[0].values[0]).toEqual({ status: 'missing',
-      reason: 'Confira olhando a página 2 do PDF antes de usar este valor.' });
+      reason: 'A página 2 de ta-folder.pdf (revisão 1) é uma imagem; confira olhando a página.' });
     const conflict = prepared.input.sections[0].rows[1].values[0];
     expect(conflict.status === 'conflict' && conflict.candidates.map(item => [item.value, item.verification]))
       .toEqual([['-25 a 140', 'VERIFIED_TEXT'], ['-25 a 155', 'VISUAL_ONLY']]);
@@ -427,5 +459,141 @@ describe('FR-67 on real-PDF text layer quirks', () => {
     ]);
     expect(verificationMessage(report.values[2]))
       .toBe('Na página 1, não dá para saber pelo texto se este valor vale para o TA-25N; confira olhando a página.');
+  });
+});
+
+// Review of FR-67 (1H): a wrong value must never come out VERIFIED_TEXT because
+// the quote left out the model, the row label or the unit.
+type Row = { id: string; label: string; unit: string; values: readonly (readonly [value: string, quote: string, page?: number])[] };
+const proposalOf = (models: string[], rows: readonly Row[], sourceId = 'folha') => FactProposalSchema.parse({
+  version: 1, title: 'Revisão', models, sections: [{ id: 'specs', title: 'Especificações', rows: rows.map(row => ({
+    id: row.id, label: row.label, unit: row.unit, condition: '',
+    values: row.values.map(([value, quote, page]) => known(value, sourceId, quote, page)),
+  })) }],
+});
+const statuses = (report: ReturnType<typeof verifyFactProposal>) =>
+  report.values.map(value => [value.id, value.status, value.candidates[0]?.reason]);
+
+describe('FR-67 review: the model must be tied to the value when another model is on the page', () => {
+  const AXBX = ['AX-041', 'BX-062'];
+  const range = (values: readonly (readonly [string, string])[]): Row[] =>
+    [{ id: 'faixa', label: 'PRESSURE RANGE', unit: 'kPa', values }];
+
+  it('does not verify values swapped between models when the quotes leave the model out', async () => {
+    const { pdf } = await pdfOf('ax-bx.pdf', [[['AX-041 PRESSURE RANGE 700 kPa', 40, 100], ['BX-062 PRESSURE RANGE 900 kPa', 40, 115]]]);
+    const swapped = verifyFactProposal(proposalOf(AXBX, range([['900', 'PRESSURE RANGE 900 kPa'], ['700', 'PRESSURE RANGE 700 kPa']])),
+      [pdfEvidenceSource('folha', pdf)]);
+    expect(statuses(swapped)).toEqual([
+      ['specs/faixa/0', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'], ['specs/faixa/1', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'],
+    ]);
+    expect(verificationMessage(swapped.values[0]))
+      .toBe('Na página 1, não dá para saber pelo texto se este valor vale para o AX-041; confira olhando a página.');
+    // Naming the model in the quote ties it, and a swap is then refused outright.
+    const named = verifyFactProposal(proposalOf(AXBX, range([['700', 'AX-041 PRESSURE RANGE 700 kPa'], ['700', 'AX-041 PRESSURE RANGE 700 kPa']])),
+      [pdfEvidenceSource('folha', pdf)]);
+    expect(statuses(named)).toEqual([['specs/faixa/0', 'VERIFIED_TEXT', undefined], ['specs/faixa/1', 'UNVERIFIED', 'MODEL_ATTRIBUTION']]);
+  });
+
+  it('does not verify swapped rows when the models are only in a title line or in one header-list run', async () => {
+    const title = await pdfOf('titulo.pdf', [[
+      ['AX-041 / BX-062 PRESSURE TRANSMITTERS', 40, 80], ['PRESSURE RANGE 700 kPa', 40, 100], ['PRESSURE RANGE 900 kPa', 40, 115],
+    ]]);
+    expect(statuses(verifyFactProposal(proposalOf(AXBX, range([['900', 'PRESSURE RANGE 900 kPa'], ['700', 'PRESSURE RANGE 700 kPa']])),
+      [pdfEvidenceSource('folha', title.pdf)]))).toEqual([
+      ['specs/faixa/0', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'], ['specs/faixa/1', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'],
+    ]);
+    const list = await pdfOf('lista.pdf', [[['Modelos AX-041 BX-062 PRESSURE RANGE 700 kPa 900 kPa', 40, 100]]]);
+    const quote = 'Modelos AX-041 BX-062 PRESSURE RANGE 700 kPa 900 kPa';
+    expect(statuses(verifyFactProposal(proposalOf(AXBX, range([['900', quote], ['700', quote]])), [pdfEvidenceSource('folha', list.pdf)])))
+      .toEqual([['specs/faixa/0', 'VISUAL_ONLY', 'COLUMN_UNCLEAR'], ['specs/faixa/1', 'VISUAL_ONLY', 'COLUMN_UNCLEAR']]);
+    // Nothing is left to use, so the bridge refuses the whole proposal instead of filling cells.
+    await expect(prepareGroundedPdfInput([{ sourceId: 'folha', fileName: list.fileName, revision: '1', bytes: list.bytes }],
+      proposalOf(AXBX, range([['900', quote], ['700', quote]])))).rejects.toThrow('PDF_EVIDENCE_NONE_VERIFIED');
+  });
+
+  it('treats the same name with another number as another model, even when only one model is declared', async () => {
+    const family = await pdfOf('familia.pdf', [[['TA-25N TA-35N', 200, 80], ['Faixa 0...700 kPa 0...900 kPa', 40, 100]]]);
+    expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [{ id: 'faixa', label: 'Faixa', unit: 'kPa',
+      values: [['0...900', 'Faixa 0...700 kPa 0...900 kPa']] }]), [pdfEvidenceSource('folha', family.pdf)])))
+      .toEqual([['specs/faixa/0', 'VISUAL_ONLY', 'COLUMN_UNCLEAR']]);
+    // A single-product sheet that names no other model still verifies by text.
+    const single = await pdfOf('ta-25n.pdf', [[['TA-25N', 40, 80], ['Faixa 0...700 kPa', 40, 100]]]);
+    expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [{ id: 'faixa', label: 'Faixa', unit: 'kPa',
+      values: [['0...700', 'Faixa 0...700 kPa']] }]), [pdfEvidenceSource('folha', single.pdf)])))
+      .toEqual([['specs/faixa/0', 'VERIFIED_TEXT', undefined]]);
+  });
+});
+
+describe('FR-67 review: the row label must be tied to the value', () => {
+  const page = () => pdfOf('ta-25n.pdf', [[
+    ['TA-25N Especificações', 40, 80], ['Faixa -25 a 140 °C', 40, 100], ['Resolução 0,1 °C', 40, 115], ['Exatidão ±0,3 °C', 40, 130],
+  ]]);
+
+  it('does not verify a value printed under another row, quoted with or without that row', async () => {
+    const { pdf } = await page();
+    const report = verifyFactProposal(proposalOf(['TA-25N'], [
+      { id: 'exatidao', label: 'Exatidão', unit: '°C', values: [['0,1', 'Resolução 0,1 °C']] },
+      { id: 'estabilidade', label: 'Estabilidade', unit: '°C', values: [['0,1', '0,1 °C']] },
+    ]), [pdfEvidenceSource('folha', pdf)]);
+    expect(statuses(report)).toEqual([
+      ['specs/exatidao/0', 'VISUAL_ONLY', 'LABEL_UNCLEAR'], ['specs/estabilidade/0', 'VISUAL_ONLY', 'LABEL_UNCLEAR'],
+    ]);
+    expect(verificationMessage(report.values[0]))
+      .toBe('Na página 1, não dá para saber pelo texto se este valor é de "Exatidão"; confira olhando a página.');
+  });
+
+  it('still verifies a value whose own row label is printed before it on its line', async () => {
+    const { pdf } = await page();
+    expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [
+      { id: 'resolucao', label: 'Resolução', unit: '°C', values: [['0,1', '0,1 °C']] },
+      { id: 'faixa', label: 'Faixa', unit: '°C', values: [['-25 a 140', 'Faixa -25 a 140 °C']] },
+    ]), [pdfEvidenceSource('folha', pdf)]))).toEqual([
+      ['specs/resolucao/0', 'VERIFIED_TEXT', undefined], ['specs/faixa/0', 'VERIFIED_TEXT', undefined],
+    ]);
+  });
+});
+
+describe('FR-67 review: the unit must be printed with the value', () => {
+  it('refuses a value printed in another unit and sends a unit printed only elsewhere to a person', async () => {
+    const { pdf } = await pdfOf('ta-25n.pdf', [[
+      ['TA-25N', 40, 80], ['Faixa (psi) 0...100', 40, 100], ['Faixa (kPa) 0...700', 40, 115], ['Pressão máxima 1000', 40, 130],
+    ]]);
+    const report = verifyFactProposal(proposalOf(['TA-25N'], [
+      { id: 'faixa-psi', label: 'Faixa', unit: 'kPa', values: [['0...100', 'Faixa (psi) 0...100']] },
+      { id: 'faixa-kpa', label: 'Faixa', unit: 'kPa', values: [['0...700', 'Faixa (kPa) 0...700']] },
+      { id: 'maxima', label: 'Pressão máxima', unit: 'kPa', values: [['1000', 'Pressão máxima 1000']] },
+    ]), [pdfEvidenceSource('folha', pdf)]);
+    expect(statuses(report)).toEqual([
+      ['specs/faixa-psi/0', 'UNVERIFIED', 'UNIT_MISMATCH'], ['specs/faixa-kpa/0', 'VERIFIED_TEXT', undefined],
+      ['specs/maxima/0', 'VISUAL_ONLY', 'UNIT_UNCLEAR'],
+    ]);
+    expect(verificationMessage(report.values[2]))
+      .toBe('Na página 1, a unidade kPa não aparece junto deste valor; confira olhando a página.');
+  });
+});
+
+describe('FR-67 review: a page too long to store', () => {
+  it('marks its values as not verified instead of failing the whole batch', async () => {
+    const doc = new jsPDF({ format: 'a4', unit: 'pt' });
+    doc.setFontSize(2);
+    doc.text('TA-25N Faixa -25 a 140 °C', 20, 20);
+    for (let line = 0; line < 95; line++) doc.text('x'.repeat(999), 20, 30 + line * 3);
+    doc.addPage();
+    doc.setFontSize(9);
+    doc.text('TA-25N Resolução 0,01 °C', 40, 100);
+    const bytes = doc.output('arraybuffer');
+    const pdf = await extractPdfText('longa.pdf', bytes);
+    expect(pdf.pages[0].text.length).toBeGreaterThan(50_000);
+    const proposal = proposalOf(['TA-25N'], [
+      { id: 'faixa', label: 'Faixa', unit: '°C', values: [['-25 a 140', 'TA-25N Faixa -25 a 140 °C', 1]] },
+      { id: 'resolucao', label: 'Resolução', unit: '°C', values: [['0,01', 'TA-25N Resolução 0,01 °C', 2]] },
+    ]);
+    expect(statuses(verifyFactProposal(proposal, [pdfEvidenceSource('folha', pdf)]))).toEqual([
+      ['specs/faixa/0', 'UNVERIFIED', 'PAGE_TEXT_INCOMPLETE'], ['specs/resolucao/0', 'VERIFIED_TEXT', undefined],
+    ]);
+    const prepared = await prepareGroundedPdfInput([{ sourceId: 'folha', fileName: 'longa.pdf', revision: '1', bytes }], proposal);
+    expect(prepared.input.sections[0].rows[0].values[0]).toEqual({ status: 'missing',
+      reason: 'A página 1 de longa.pdf (revisão 1) tem texto demais para conferir por inteiro.' });
+    expect(prepared.input.sources[0].pages.map(item => item.number)).toEqual([2]);
   });
 });

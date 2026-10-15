@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { sha256 } from '../asset/integrity';
-import { checkValueTextEvidence } from './pdf-literal-evidence';
+import {
+  MAX_EVIDENCE_PAGE_TEXT, MAX_EVIDENCE_RUN_TEXT, MAX_EVIDENCE_RUNS, checkPdfValueOnPage,
+} from './pdf-layout-evidence';
 
 const key = z.string().regex(/^[a-z0-9-]{1,40}$/);
 const literal = z.string().max(160).refine(value => ![...value].some(character => {
@@ -83,8 +85,16 @@ export const FactProposalSchema = z.object({
 }).strict().superRefine(refineFactMatrix);
 export type FactProposal = z.infer<typeof FactProposalSchema>;
 
+/**
+ * Native text positions of a stored PDF page, kept only when a value relies on
+ * them (its model's column in a table), so the sidecar re-verifies it.
+ */
+const textRuns = z.array(z.object({
+  text: z.string().min(1).max(MAX_EVIDENCE_RUN_TEXT),
+  x: z.number().finite(), y: z.number().finite(), width: z.number().finite(),
+}).strict()).min(1).max(MAX_EVIDENCE_RUNS);
 const sourcePages = z.array(z.object({
-  number: z.number().int().min(1), text: z.string().max(50000),
+  number: z.number().int().min(1), text: z.string().max(MAX_EVIDENCE_PAGE_TEXT), runs: textRuns.optional(),
 }).strict()).min(1).max(10);
 const indexedSource = {
   id: key, name, revision: name, pages: sourcePages,
@@ -156,13 +166,14 @@ export async function validateTechnicalInput(raw: unknown): Promise<TechnicalInp
         if (fact.status !== 'conflict') throw new Error('SOURCE_VALUE_UNVERIFIED');
         continue;
       }
-      const check = checkValueTextEvidence({
-        pageText: page.text, quote: item.source.quote, value: item.value,
-        model: input.models[model], models: input.models, label: row.label, labels,
-        unit: row.unit, condition: row.condition,
+      // The same check as the bridge, on the stored text (and text positions,
+      // when the value needed them): a value the text does not tie to its
+      // model, row and unit cannot stand as verified here either.
+      const check = checkPdfValueOnPage(page, { value: item.value, quote: item.source.quote }, {
+        model: input.models[model], models: input.models, label: row.label, labels, unit: row.unit, condition: row.condition,
       });
-      if (!check.verified) {
-        throw new Error(check.problem === 'QUOTE_NOT_ON_PAGE' ? 'SOURCE_QUOTE_MISMATCH' : 'PDF_QUOTE_VALUE_UNGROUNDED');
+      if (check.status !== 'VERIFIED_TEXT') {
+        throw new Error(check.reason === 'QUOTE_NOT_ON_PAGE' ? 'SOURCE_QUOTE_MISMATCH' : 'PDF_QUOTE_VALUE_UNGROUNDED');
       }
     }
   });
