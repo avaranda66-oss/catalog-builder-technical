@@ -108,8 +108,11 @@ describe('Actual PDF bytes -> reviewed preflight -> one atomic native table comm
       {action:'change-value',verified:5,row1:['','0...900 kPa']},
       {action:'swap-source',verified:5,row1:['','0...900 kPa']},
       {action:'change-unit',verified:4,row1:['','']},
-      // Model and label no longer need to share the line with the value.
+      // Model and label no longer need to share the line with the value when
+      // the cited PDF is the model's own and names no other model...
       {action:'quote-without-model',verified:6,row1:['0...700 kPa','0...900 kPa']},
+      // ...but a model-free quote from another model's PDF is never used.
+      {action:'other-file-without-model',verified:5,row1:['','0...900 kPa']},
     ] as const;
     for(const {action,verified,row1} of cases){
       const f=await make(), p=structuredClone(f.proposal);
@@ -118,6 +121,10 @@ describe('Actual PDF bytes -> reviewed preflight -> one atomic native table comm
       if(action==='change-value')fact.candidate.value='0...999';
       if(action==='swap-source')fact.candidate.source.sourceId='bx-062';
       if(action==='quote-without-model')fact.candidate.source.quote='PRESSURE RANGE 0...700 kPa';
+      if(action==='other-file-without-model'){
+        fact.candidate.value='0...900';
+        fact.candidate.source={sourceId:'bx-062',page:1,quote:'PRESSURE RANGE 0...900 kPa'};
+      }
       if(action==='change-unit')p.sections[0].rows[0].unit='Pa';
       const before=structuredClone(f.session.getSnapshot().document);
       const preview=await prepareNativePdfCellFill(f.session,f.target,f.materials,p);

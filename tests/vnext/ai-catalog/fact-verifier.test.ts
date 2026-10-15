@@ -542,6 +542,46 @@ describe('FR-67 review: the row label must be tied to the value', () => {
       .toBe('Na página 1, não dá para saber pelo texto se este valor é de "Exatidão"; confira olhando a página.');
   });
 
+  it('never borrows the label of a neighbour row that prints its own values', async () => {
+    const { pdf } = await pdfOf('ta-25n.pdf', [[['TA-25N', 40, 80], ['Faixa 0...700 kPa', 40, 100], ['Faixa de medição 0...900 kPa', 40, 115]]]);
+    expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [
+      { id: 'vizinha', label: 'Faixa de medição', unit: 'kPa', values: [['0...700', 'Faixa 0...700 kPa']] },
+      { id: 'propria', label: 'Faixa de medição', unit: 'kPa', values: [['0...900', 'Faixa de medição 0...900 kPa']] },
+    ]), [pdfEvidenceSource('folha', pdf)]))).toEqual([
+      ['specs/vizinha/0', 'VISUAL_ONLY', 'LABEL_UNCLEAR'], ['specs/propria/0', 'VERIFIED_TEXT', undefined],
+    ]);
+  });
+
+  it('reads a label split around its values (Isotech) but not a value of the row below it', async () => {
+    const { pdf } = await pdfOf('isotech.pdf', [[
+      ['Europa 4520', 40, 80], ['Uniformity - Between Wells Dry', 40, 100], ['Block Mode (Radial) <0.008 °C', 40, 115],
+      ['Uniformity - Lower 40mm', 40, 130], ['(Axial) Dry Block Mode <0.040 °C', 40, 145],
+      ['Uniformity - Lower 40mm (Axial) As Liquid Bath <0.026 °C', 40, 160],
+    ]]);
+    const RADIAL = 'Uniformity - Between Wells Dry Block Mode (Radial)';
+    expect(statuses(verifyFactProposal(proposalOf(['Europa 4520'], [
+      { id: 'radial', label: RADIAL, unit: '°C', values: [['<0.008', 'Block Mode (Radial) <0.008 °C']] },
+      { id: 'axial', label: 'Uniformity - Lower 40mm (Axial) Dry Block Mode', unit: '°C', values: [['<0.040', '(Axial) Dry Block Mode <0.040 °C']] },
+      { id: 'banho', label: 'Uniformity - Lower 40mm (Axial) As Liquid Bath', unit: '°C',
+        values: [['<0.026', 'Uniformity - Lower 40mm (Axial) As Liquid Bath <0.026 °C']] },
+      { id: 'radial-errado', label: RADIAL, unit: '°C', values: [['<0.040', '<0.040 °C']] },
+    ]), [pdfEvidenceSource('folha', pdf)]))).toEqual([
+      ['specs/radial/0', 'VERIFIED_TEXT', undefined], ['specs/axial/0', 'VERIFIED_TEXT', undefined],
+      ['specs/banho/0', 'VERIFIED_TEXT', undefined], ['specs/radial-errado/0', 'VISUAL_ONLY', 'LABEL_UNCLEAR'],
+    ]);
+  });
+
+  it('ties a value printed among other rows only where its label is printed with it (TA folder p9)', () => {
+    // Native text puts labels and values in separate blocks; the lines rebuilt
+    // from text positions come after a blank line, as in verificationPageText.
+    const native = 'Cooling Time:\nElectric Power:\nWeight:\n11 min 16 min\n200 W 300 W\n10.5 kg 12.5 kg';
+    const check = (pageText: string) => checkValueTextEvidence({ pageText, quote: '200 W 300 W', value: '200', unit: 'W',
+      condition: '', model: 'TA-25N', models: ['TA-25N'], label: 'Electric Power', labels: ['Cooling Time', 'Electric Power', 'Weight'] });
+    expect(check(native)).toMatchObject({ verified: true, labelTied: false });
+    expect(check(`${native}\n\nCooling Time: 11 min 16 min\nElectric Power: 200 W 300 W\nWeight: 10.5 kg 12.5 kg`))
+      .toMatchObject({ verified: true, labelTied: true });
+  });
+
   it('still verifies a value whose own row label is printed before it on its line', async () => {
     const { pdf } = await page();
     expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [
@@ -569,6 +609,18 @@ describe('FR-67 review: the unit must be printed with the value', () => {
     ]);
     expect(verificationMessage(report.values[2]))
       .toBe('Na página 1, a unidade kPa não aparece junto deste valor; confira olhando a página.');
+  });
+
+  it('reads a footnote mark after a unit as a footnote, and a power or product of units as another unit', async () => {
+    const { pdf } = await pdfOf('ta-25n.pdf', [[['TA-25N', 40, 80], ['Faixa -25 a 155 °C*', 40, 100], ['Área 2 m^2', 40, 115], ['Torque 5 N*m', 40, 130]]]);
+    expect(statuses(verifyFactProposal(proposalOf(['TA-25N'], [
+      { id: 'faixa', label: 'Faixa', unit: '°C', values: [['-25 a 155', 'Faixa -25 a 155 °C*']] },
+      { id: 'area', label: 'Área', unit: 'm', values: [['2', 'Área 2 m^2']] },
+      { id: 'torque', label: 'Torque', unit: 'N', values: [['5', 'Torque 5 N*m']] },
+    ]), [pdfEvidenceSource('folha', pdf)]))).toEqual([
+      ['specs/faixa/0', 'VERIFIED_TEXT', undefined], ['specs/area/0', 'UNVERIFIED', 'UNIT_NOT_ON_PAGE'],
+      ['specs/torque/0', 'UNVERIFIED', 'UNIT_NOT_ON_PAGE'],
+    ]);
   });
 });
 

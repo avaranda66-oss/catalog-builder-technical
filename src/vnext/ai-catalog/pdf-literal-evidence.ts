@@ -2,10 +2,12 @@ type LiteralKind = 'model' | 'label' | 'value' | 'unit' | 'condition';
 
 /**
  * Text right after a unit that continues it into a compound unit ("kPa/s",
- * "Pa - s"). A minus before a number ("140 °C -35 to 155 °C", the next cell of
- * a table row) starts another value instead.
+ * "Pa - s", "N*m"). A minus before a number ("140 °C -35 to 155 °C", the next
+ * cell of a table row) starts another value, and a loose asterisk ("155 °C*")
+ * marks a footnote.
  */
-const continuesCompoundUnit = (rest: string) => /^[/·⋅*^-](?!\s*\p{N})/u.test(rest.trimStart());
+const continuesCompoundUnit = (rest: string) =>
+  /^(?:[/·⋅-](?!\s*\p{N})|[*^](?=[\p{L}\p{N}]))/u.test(rest.trimStart());
 
 /** Literal token boundaries: no sign, decimal, unit prefix or model suffix repair. */
 export function literalEvidencePositions(text: string, literal: string, kind: LiteralKind,
@@ -246,16 +248,30 @@ interface LabelWords {
   readonly target: ReadonlySet<string>;
   readonly others: ReadonlySet<string>;
   readonly ignored: ReadonlySet<string>;
+  /** Tokens with digits printed in the row label itself ("Lower 40mm (Axial)"). */
+  readonly labelNumbers: ReadonlySet<string>;
+  /** Tokens with digits that are not a figure of a row: the label's, the condition's and the models'. */
+  readonly ownNumbers: ReadonlySet<string>;
 }
+/** A whitespace token without the brackets and separators around it ("(40mm)," -> "40mm"). */
+const bareToken = (token: string) => token.replace(/^[([{"'“]+|[)\]}"'”,;:]+$/gu, '');
+const numberTokens = (text: string) => text.split(/\s+/u).map(bareToken).filter(token => /\p{N}/u.test(token));
 function labelWords(evidence: ValueTextEvidence): LabelWords {
   const ignored = new Set([...UNIT_WORDS,
     ...[evidence.unit, evidence.value, evidence.condition, ...evidence.models].flatMap(significantWords)]);
   const keep = (text: string) => significantWords(text).filter(word => !ignored.has(word));
   const target = new Set(keep(evidence.label));
   const others = new Set(evidence.labels.filter(other => other !== evidence.label).flatMap(keep).filter(word => !target.has(word)));
-  return { label: evidence.label, target, others, ignored };
+  const labelNumbers = new Set(numberTokens(evidence.label));
+  const ownNumbers = new Set([...labelNumbers, ...[evidence.condition, ...evidence.models].flatMap(numberTokens)]);
+  return { label: evidence.label, target, others, ignored, labelNumbers, ownNumbers };
 }
 const meaningful = (text: string, words: LabelWords) => significantWords(text).filter(word => !words.ignored.has(word));
+/**
+ * A line that prints figures of its own is a row with values ("Faixa de
+ * medição 0...900 kPa"), never the rest of the label of the line next to it.
+ */
+const printsValues = (line: string, words: LabelWords) => numberTokens(line).some(token => !words.ownNumbers.has(token));
 
 type LabelTie = 'TIED' | 'PARTIAL' | 'FOREIGN' | 'NONE';
 /** TIED: every label word and no other row's word; PARTIAL: only part of the label; FOREIGN: other words. */
@@ -265,12 +281,15 @@ function classifyLabel(group: ReadonlySet<string>, words: LabelWords): LabelTie 
   if ([...words.target].every(word => group.has(word))) return 'TIED';
   return [...group].every(word => words.target.has(word)) ? 'PARTIAL' : 'FOREIGN';
 }
-/** Words of the nearest group of words before `end`; tokens with digits (values, models) end a group. */
+/**
+ * Words of the nearest group of words before `end`; tokens with digits
+ * (values, models) end a group, except the label's own ("Lower 40mm (Axial)").
+ */
 function wordsBefore(text: string, end: number, words: LabelWords): Set<string> {
   const group = new Set<string>();
   const tokens = text.slice(0, end).split(/\s+/u).filter(Boolean);
   for (let index = tokens.length - 1; index >= 0; index--) {
-    if (/\p{N}/u.test(tokens[index])) {
+    if (/\p{N}/u.test(tokens[index]) && !words.labelNumbers.has(bareToken(tokens[index]))) {
       if (group.size) break;
       continue;
     }
@@ -292,7 +311,8 @@ function labelBefore(text: string, end: number, words: LabelWords): LabelTie {
  * not show it: the words before the value on that line or, when there are
  * none, a label printed on the lines right above and below it (Isotech prints
  * a long row label in two lines around its values). Those neighbour lines may
- * hold only words of this label, and every place where the quote occurs must agree.
+ * hold only words of this label; no place where the quote occurs may tie the
+ * value to another row, and at least one must tie it to this one.
  */
 function labelAroundValue(pageText: string, quote: string, offset: number, words: LabelWords): boolean {
   const lines = pageText.split(/\r\n|\r|\n/u).map(normalizeEvidenceWhitespace).filter(Boolean);
@@ -316,13 +336,28 @@ function labelAroundValue(pageText: string, quote: string, offset: number, words
       continue;
     }
     if (!words.target.size) continue;
-    const label = wordsBefore(lines[index], local, words);
+    // With part of the label before the value ("Block Mode (Radial) <0.008"),
+    // the rest may come from a neighbour line and the other neighbour may be
+    // the next row; with no label at all on the line, both neighbours must be
+    // label lines, or "0,1" between "Resolução" and "Exatidão" would pass. A
+    // neighbour with figures of its own is another row: it never lends its
+    // words ("Faixa 0...700" next to "Faixa de medição 0...900"), and next to
+    // it a line without a label cannot tell which row it is (another place
+    // of the same quote, such as the line rebuilt from text positions, still can).
+    const label = wordsBefore(lines[index], local, words), partial = own === 'PARTIAL';
+    let undetermined = false;
     for (const near of [lines[index - 1], lines[index + 1]]) {
-      const nearWords = near === undefined ? [] : meaningful(near, words);
-      if (nearWords.some(word => !words.target.has(word))) return false;
-      for (const word of nearWords) label.add(word);
+      if (near === undefined) continue;
+      const nearWords = meaningful(near, words), otherRow = printsValues(near, words);
+      if (!otherRow && nearWords.every(word => words.target.has(word))) {
+        for (const word of nearWords) label.add(word);
+        continue;
+      }
+      if (partial) continue;
+      if (!otherRow) return false;
+      undetermined = true;
     }
-    if (classifyLabel(label, words) === 'TIED') tied = true;
+    if (!undetermined && classifyLabel(label, words) === 'TIED') tied = true;
   }
   return tied;
 }

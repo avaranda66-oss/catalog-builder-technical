@@ -23,6 +23,8 @@ interface Scenario {
   values: string[];
   /** Model positions whose value is wrong (default: all). */
   bad?: number[];
+  /** What the verifier reports for them: refused, or sent to a person (never verified). */
+  status?: 'UNVERIFIED' | 'VISUAL_ONLY';
 }
 
 const negatives: Scenario[] = [
@@ -60,6 +62,34 @@ const negatives: Scenario[] = [
   { name: 'empty known value inferred from a quote that actually contains filled values',
     lines: ['AX-041 PRESSURE RANGE 700 kPa', 'BX-062 PRESSURE RANGE 900 kPa'],
     label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['', '900'], bad: [0] },
+  // FR-67 review: the quote leaves out the model, the row label or the unit.
+  { name: 'values swapped between models whose quotes leave the model out on a shared page',
+    lines: ['AX-041 PRESSURE RANGE 700 kPa', 'BX-062 PRESSURE RANGE 900 kPa'],
+    quotes: ['PRESSURE RANGE 900 kPa', 'PRESSURE RANGE 700 kPa'],
+    label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['900', '700'], status: 'VISUAL_ONLY' },
+  { name: 'models only in a title line and swapped model-free rows',
+    lines: ['AX-041 / BX-062 PRESSURE TRANSMITTERS', 'PRESSURE RANGE 700 kPa', 'PRESSURE RANGE 900 kPa'],
+    quotes: ['PRESSURE RANGE 900 kPa', 'PRESSURE RANGE 700 kPa'],
+    label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['900', '700'], status: 'VISUAL_ONLY' },
+  { name: 'models printed as one header-list text run with swapped values',
+    lines: ['Modelos AX-041 BX-062 PRESSURE RANGE 700 kPa 900 kPa'],
+    quotes: ['Modelos AX-041 BX-062 PRESSURE RANGE 700 kPa 900 kPa', 'Modelos AX-041 BX-062 PRESSURE RANGE 700 kPa 900 kPa'],
+    label: 'PRESSURE RANGE', unit: 'kPa', condition: '', values: ['900', '700'], status: 'VISUAL_ONLY' },
+  { name: 'value of an undeclared row quoted for another row', models: ['TA-25N'],
+    lines: ['TA-25N', 'Faixa -25 a 140 °C', 'Resolução 0,1 °C', 'Exatidão ±0,3 °C'], quotes: ['Resolução 0,1 °C'],
+    label: 'Exatidão', unit: '°C', condition: '', values: ['0,1'], bad: [0], status: 'VISUAL_ONLY' },
+  { name: 'value quoted without any row label for a row the page does not have', models: ['TA-25N'],
+    lines: ['TA-25N', 'Faixa -25 a 140 °C', 'Resolução 0,1 °C', 'Exatidão ±0,3 °C'], quotes: ['0,1 °C'],
+    label: 'Estabilidade', unit: '°C', condition: '', values: ['0,1'], bad: [0], status: 'VISUAL_ONLY' },
+  { name: 'psi range claimed in kPa because kPa is printed elsewhere on the page', models: ['TA-25N'],
+    lines: ['TA-25N', 'Faixa (psi) 0...100', 'Faixa (kPa) 0...700'], quotes: ['Faixa (psi) 0...100'],
+    label: 'Faixa', unit: 'kPa', condition: '', values: ['0...100'], bad: [0] },
+  { name: 'row label completed with the words of the next row, which prints its own values', models: ['TA-25N'],
+    lines: ['TA-25N', 'Faixa 0...700 kPa', 'Faixa de medição 0...900 kPa'], quotes: ['Faixa 0...700 kPa'],
+    label: 'Faixa de medição', unit: 'kPa', condition: '', values: ['0...700'], bad: [0], status: 'VISUAL_ONLY' },
+  { name: 'square metres read as metres', models: ['TA-25N'],
+    lines: ['TA-25N bloco seco de calibração industrial', 'Área 2 m^2'], quotes: ['Área 2 m^2'],
+    label: 'Área', unit: 'm', condition: '', values: ['2'], bad: [0] },
 ];
 
 async function nativeFixture(scenario: Scenario) {
@@ -108,9 +138,9 @@ function withoutStamps(input: TechnicalInput): TechnicalInput {
  * reports it as UNVERIFIED and leaves it out, keeping the good values; when
  * nothing is left it refuses the whole proposal.
  */
-async function expectBridgeNotCertified(fixture: Fixture, badModels: number[]) {
+async function expectBridgeNotCertified(fixture: Fixture, badModels: number[], status: Scenario['status'] = 'UNVERIFIED') {
   const report = verifyFactProposal(fixture.proposal, [pdfEvidenceSource('qa-native', fixture.pdf)]);
-  for (const model of badModels) expect(report.values[model].status).toBe('UNVERIFIED');
+  for (const model of badModels) expect(report.values[model].status).toBe(status);
   const prepared = await prepareGroundedPdfInput(fixture.materials, fixture.proposal).then(result => result, (error: Error) => error);
   if (prepared instanceof Error) {
     expect(prepared.message).toBe('PDF_EVIDENCE_NONE_VERIFIED');
@@ -121,7 +151,7 @@ async function expectBridgeNotCertified(fixture: Fixture, badModels: number[]) {
 const entryPoints = [
   { name: 'actual-byte bridge', mode: 'bridge' as const,
     check: async (fixture: Fixture) => withoutStamps((await prepareGroundedPdfInput(fixture.materials, fixture.proposal)).input),
-    rejects: (fixture: Fixture, badModels: number[]) => expectBridgeNotCertified(fixture, badModels) },
+    rejects: (fixture: Fixture, badModels: number[], status?: Scenario['status']) => expectBridgeNotCertified(fixture, badModels, status) },
   { name: 'persisted grounded input validation', mode: 'persisted' as const,
     check: async (fixture: Fixture) => validateTechnicalInput(fixture.input),
     rejects: (fixture: Fixture) => expect(validateTechnicalInput(fixture.input)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/) },
@@ -130,7 +160,7 @@ const entryPoints = [
 describe.each(entryPoints)('PDF fact association at $name', ({ check, rejects, mode }) => {
   it.each(negatives)('rejects $name', async scenario => {
     const fixture = await nativeFixture(scenario);
-    await rejects(fixture, scenario.bad ?? [0, 1]);
+    await rejects(fixture, scenario.bad ?? [0, 1], scenario.status);
   });
 
   it.each(['-', '+', '±', '- '])('preserves legitimate %s signed values, complete model suffix, kPa and literal degree condition', async sign => {
