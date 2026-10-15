@@ -197,7 +197,8 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
   const mergedSlaves = new Set<string>(), wideMasters = new Set<string>();
   for (const merge of grid.merges) {
     if (merge.right > merge.left) wideMasters.add(`${merge.top}:${merge.left}`);
-    for (let row = merge.top; row <= merge.bottom; row++) for (let column = merge.left; column <= merge.right; column++) {
+    // Only the part inside the chosen box matters (a merge can be huge).
+    for (let row = Math.max(merge.top, box.top); row <= Math.min(merge.bottom, box.bottom); row++) for (let column = Math.max(merge.left, box.left); column <= Math.min(merge.right, box.right); column++) {
       mergeAt.set(`${row}:${column}`, merge);
       if (row !== merge.top || column !== merge.left) mergedSlaves.add(`${row}:${column}`);
     }

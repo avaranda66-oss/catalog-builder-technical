@@ -341,7 +341,7 @@ describe('PDF intake', () => {
   it('flags a scanned page that only has a digital footer as needing visual reading', async () => {
     const intake = await read(scannedPage(), 'folder-escaneado.pdf');
     expect(intake.pdf?.pagesNeedingVisualReading).toEqual([1]);
-    expect(intake.warnings.join(' ')).toContain('Página 1: parece escaneada');
+    expect(intake.warnings.join(' ')).toContain('Página 1: a maior parte da página é uma imagem');
     expect(intake.blocks[0].warnings.join(' ')).toContain('leitura visual');
   });
 
@@ -357,6 +357,26 @@ describe('PDF intake', () => {
     expect(intake.pdf!.pagesNotRead.length).toBeGreaterThan(0);
     expect(intake.pdf!.pagesRead[0]).toBe(1);
     expect(intake.warnings.join(' ')).toMatch(/Não foram lidas: \d+ a 30\. A leitura parou na página \d+/);
+  }, 60000);
+
+  it('stops at the 80-block budget with the unread pages listed instead of failing', async () => {
+    const document = new jsPDF({ unit: 'pt', format: 'a4' });
+    for (let page = 1; page <= 30; page++) {
+      if (page > 1) document.addPage();
+      for (let group = 0; group < 3; group++) {
+        const top = 60 + group * 220;
+        document.text(`Seção ${group + 1} da página ${page}`, 40, top);
+        for (let row = 0; row < 3; row++) {
+          document.text(`TA-${group}${row}N`, 60, top + 60 + row * 20);
+          document.text(`${row + 1}0 a 140 °C`, 260, top + 60 + row * 20);
+        }
+      }
+    }
+    const intake = await read(document.output('arraybuffer'), 'muitas-tabelas.pdf');
+    expect(intake.blocks.length).toBeLessThanOrEqual(SOURCE_LIMITS.blocks);
+    expect(intake.blocks.filter(block => block.kind === 'table').length).toBeGreaterThan(10);
+    expect(intake.pdf!.pagesNotRead.at(-1)).toBe(30);
+    expect(intake.ignored).toContainEqual(expect.objectContaining({ kind: 'pages', reason: 'budget' }));
   }, 60000);
 
   it('reads only the chosen pages and says which were not read', async () => {

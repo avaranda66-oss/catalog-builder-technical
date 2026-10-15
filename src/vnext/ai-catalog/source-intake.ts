@@ -144,19 +144,27 @@ function splitRecords(text: string, delimiter: string, maxRecords = Infinity): D
 }
 
 const isBlankRecord = (cells: readonly string[]) => cells.every(value => value.trim() === '');
+/** Most frequent column count of the non-blank records (larger count wins ties) and how many records have it. */
+function modalWidth(records: readonly (readonly string[])[]): { width: number; hits: number; total: number } {
+  const frequency = new Map<number, number>();
+  let total = 0;
+  for (const cells of records) {
+    if (isBlankRecord(cells)) continue;
+    total++;
+    frequency.set(cells.length, (frequency.get(cells.length) ?? 0) + 1);
+  }
+  const [width, hits] = [...frequency].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0] ?? [0, 0];
+  return { width, hits, total };
+}
 
 /** Picks the separator that splits the first ~20 records most consistently (Brazilian ';' wins ties). */
 export function detectDelimiter(text: string): SourceDelimiter {
   const candidates: SourceDelimiter[] = [';', '\t', ',', '|'];
   let best: { delimiter: SourceDelimiter; tier: number; modal: number; consistency: number } | undefined;
   for (const delimiter of candidates) {
-    const counts = splitRecords(text, delimiter, 20).records.filter(record => !isBlankRecord(record.cells)).map(record => record.cells.length);
-    if (!counts.length) continue;
-    const frequency = new Map<number, number>();
-    for (const count of counts) frequency.set(count, (frequency.get(count) ?? 0) + 1);
-    const [modal, hits] = [...frequency].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0];
+    const { width: modal, hits, total } = modalWidth(splitRecords(text, delimiter, 20).records.map(record => record.cells));
     if (modal < 2) continue;
-    const consistency = hits / counts.length, tier = consistency >= 0.8 ? 1 : 0;
+    const consistency = hits / total, tier = consistency >= 0.8 ? 1 : 0;
     const better = !best || tier > best.tier || (tier === best.tier && (tier === 1
       ? modal > best.modal || (modal === best.modal && consistency > best.consistency)
       : consistency > best.consistency || (consistency === best.consistency && modal > best.modal)));
@@ -185,16 +193,15 @@ export function parseDelimitedText(raw: string, options: { delimiter?: SourceDel
   let rows = parsed.records.map(record => record.cells);
   while (rows.length && isBlankRecord(rows[rows.length - 1])) rows.pop();
   if (!rows.length) fail('SOURCE_TEXT_LIMIT');
-  const counts = rows.filter(row => !isBlankRecord(row)).map(row => row.length);
-  const frequency = new Map<number, number>();
-  for (const count of counts) frequency.set(count, (frequency.get(count) ?? 0) + 1);
-  const width = [...frequency].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  const { width } = modalWidth(rows);
+  const pad = (row: string[]) => row.length < width ? [...row, ...Array<string>(width - row.length).fill('')] : row;
   const irregularRows: number[] = [];
   rows = rows.map((row, index) => {
-    if (isBlankRecord(row)) return Array.from({ length: width }, () => '');
-    const extra = row.slice(width);
-    if (row.length < width || extra.some(value => value.trim() !== '')) irregularRows.push(index + 1);
-    return row.length < width ? [...row, ...Array.from({ length: width - row.length }, () => '')] : extra.some(value => value.trim()) ? row : row.slice(0, width);
+    if (isBlankRecord(row)) return pad([]);
+    // Empty trailing cells ("a;b;") are not an irregular row; data beyond the usual width is kept.
+    const overflow = row.slice(width).some(value => value.trim() !== '');
+    if (row.length < width || overflow) irregularRows.push(index + 1);
+    return overflow ? row : pad(row.slice(0, width));
   });
   const cleanedCells = new Set<string>();
   rows = rows.map((row, ri) => row.map((value, ci) => {
@@ -217,8 +224,8 @@ export function parseDelimitedText(raw: string, options: { delimiter?: SourceDel
 /** RFC-4180 quoting, including escaped quotes and multiline cells; no numeric coercion. Rows are padded to one width. */
 export function parseDelimitedSource(raw: string, options: { delimiter?: SourceDelimiter } = {}): string[][] {
   const { rows } = parseDelimitedText(raw, options);
-  const width = Math.max(...rows.map(row => row.length));
-  return rows.map(row => row.length < width ? [...row, ...Array.from({ length: width - row.length }, () => '')] : row);
+  const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  return rows.map(row => row.length < width ? [...row, ...Array<string>(width - row.length).fill('')] : row);
 }
 
 function decodeText(bytes: ArrayBuffer, warnings: string[]): string {
@@ -439,8 +446,8 @@ function visualPageWarning(page: ExtractedPdfPage): string | undefined {
     return `Página ${page.number}: não tem texto que possa ser lido (parece escaneada ou desenhada). Precisa de leitura visual; nada foi tirado dela.`;
   }
   if (reasons.includes('large-image')) {
-    return `Página ${page.number}: parece escaneada (uma imagem cobre a maior parte da página). Só ${page.textLength} caracteres de texto foram lidos, ` +
-      'como um rodapé; o resto precisa de leitura visual.';
+    return `Página ${page.number}: a maior parte da página é uma imagem (foto ou página escaneada) e só ${page.textLength} caracteres de texto foram lidos. ` +
+      'Se a imagem tiver textos ou tabelas, eles precisam de leitura visual.';
   }
   if (reasons.includes('vector-graphics')) {
     return `Página ${page.number}: tem desenhos ou texto convertido em curvas, que não podem ser lidos como texto. Confira no original.`;
