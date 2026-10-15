@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fillProvisionalContent } from './fixtures/content-placeholders.mjs';
 
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -377,6 +378,17 @@ async function workflow(browser, width, first) {
   await page.keyboard.press('Escape');
   await page.locator('[data-translation-review]').waitFor({ state: 'detached' });
   if (phase !== 'before') assert.equal(await page.locator('[data-editor-action="translate"]').evaluate(node => node === document.activeElement), true);
+  if (phase !== 'before') {
+    // FR-51: the starter's pending fields ("A COMPLETAR") block the PDF with their locations until they are filled.
+    await page.locator('[data-editor-action="publish"]').click();
+    await page.locator('[data-publication-status="BLOCKED"]').waitFor();
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 7);
+    await shot(page, 'publication-provisional-blocked', width);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-publication-host]').waitFor({ state: 'detached' });
+    assert((await fillProvisionalContent(page)).length >= 7);
+    await save(page);
+  }
   await page.locator('[data-editor-action="publish"]').click();
   await page.locator('[data-publication-status="READY"]').waitFor();
   assert.equal(await page.locator('[data-publication-action="print"]').isEnabled(), true);
@@ -400,7 +412,7 @@ async function workflow(browser, width, first) {
       assert(Math.abs((pdfPage.view[3] - pdfPage.view[1]) * 25.4 / 72 - 297) < .5);
       contents += (await pdfPage.getTextContent()).items.filter(item => 'str' in item).map(item => item.str).join(' ');
     }
-    assert(contents.includes('TA-25N')); assert(contents.includes('A COMPLETAR'));
+    assert(contents.includes('TA-25N')); assert(!contents.includes('A COMPLETAR'), 'FR-51: provisional text must not be printed');
     assert(!contents.includes('Revisar e publicar')); assert(!contents.includes('Imprimir / salvar PDF'));
     await pdf.destroy();
     observations.push({ nativePdf: pdfPath, pageCount: 2, a4: true, interfaceExcluded: true });

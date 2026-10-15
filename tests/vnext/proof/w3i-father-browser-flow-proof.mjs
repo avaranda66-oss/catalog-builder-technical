@@ -495,7 +495,10 @@ try {
     ]);
   }
   const conflictedOpenSessionId = conflictOpenLatest.runtime.openSessionId;
+  // FR-43: the copy is offered first; opening the latest version discards this tab's changes and asks first.
+  assert.deepEqual(await conflictActions.getByRole('button').allTextContents(), ['Salvar meu trabalho como cópia', 'Abrir versão mais recente']);
   await conflictActions.getByRole('button', { name: 'Abrir versão mais recente', exact: true }).click();
+  await conflictActions.getByRole('button', { name: 'Sim, descartar minhas alterações', exact: true }).click();
   await pageB.waitForFunction((previous) => {
     const current = window.__W3I_PROOF__.state().runtime;
     return current?.openSessionId !== previous

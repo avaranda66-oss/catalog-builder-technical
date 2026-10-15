@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fillProvisionalContent } from './fixtures/content-placeholders.mjs';
 
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -318,7 +319,7 @@ async function printProof(page, name) {
     assert(Math.abs((pdfPage.view[3] - pdfPage.view[1]) * 25.4 / 72 - 297) < .5);
     content += (await pdfPage.getTextContent()).items.filter(item => 'str' in item).map(item => item.str).join(' ');
   }
-  assert(content.includes('TA-25N')); assert(content.includes('A COMPLETAR'));
+  assert(content.includes('TA-25N')); assert(!content.includes('A COMPLETAR'), 'FR-51: provisional text must not be printed');
   assert(!content.includes('Centro de Tradução')); assert(!content.includes('Imprimir / salvar PDF'));
   await pdf.destroy();
   observations.push({ pdf: path, pages: 2, a4: true, interfaceExcluded: true, text: content });
@@ -463,6 +464,15 @@ async function workflow(browser, width) {
     await page.locator('[data-text-edit-textarea]').waitFor({ state: 'detached' });
     await save(page);
     assert.deepEqual((await state(page)).document.pages[0].objects.find(object => object.id === text.id).frame, frame);
+    // FR-51: the copy still carries the starter's provisional fields; they block the PDF until they are filled.
+    await page.locator('[data-editor-action="publish"]').click();
+    await page.locator('[data-publication-status="BLOCKED"]').waitFor();
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 7);
+    assert.equal(await page.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').count(), 0);
+    await closePublication(page);
+    const provisionalFilled = await fillProvisionalContent(page);
+    assert(provisionalFilled.length >= 7);
+    await save(page);
     assert(catalogs.get(copy.catalogId).remoteRevision >= 2);
     await returnToLibrary(page); await openCatalog(page, copy.catalogId);
     assert.equal((await state(page)).document.locale, targetLocale);
@@ -477,7 +487,8 @@ async function workflow(browser, width) {
     assert.equal(JSON.stringify(catalogs.get(sourceId).documentSnapshot), original);
     result.copies.push({ targetLocale, catalogId: copy.catalogId, sourceRevision: copy.origin.originRevision,
       savedRevision: catalogs.get(copy.catalogId).remoteRevision, originalUnchanged: true,
-      duplicateAcceptCreatedOnce: true, reopenPreserved: true, overflowBlocked: true, manualCorrectionReady: true,
+      duplicateAcceptCreatedOnce: true, reopenPreserved: true, overflowBlocked: true, provisionalBlocked: true,
+      provisionalFilled: provisionalFilled.length, manualCorrectionReady: true,
       manualCorrection: correctedText });
     await returnToLibrary(page); await openCatalog(page, sourceId);
   }

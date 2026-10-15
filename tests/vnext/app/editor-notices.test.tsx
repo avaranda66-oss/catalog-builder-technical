@@ -1,0 +1,122 @@
+import type React from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
+import { classifyEditorNotice, SUCCESS_NOTICE_TIMEOUT_MS } from '@/vnext/editor/editor-notices';
+import type { ConflictResolutionResult, ConflictResolutionState, SaveProjection } from '@/vnext/persistence';
+
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+const idle: SaveProjection = { phase: 'idle', label: 'Saved', dirty: false, canSave: true };
+const conflict: SaveProjection = { phase: 'conflict', label: 'Conflict', dirty: true, canSave: false };
+
+describe('FR-12 status message tone', () => {
+  it.each([
+    ['Enviando imagem…', 'progress'],
+    ['Objeto excluído.', 'success'],
+    ['Conteúdo da célula atualizado.', 'success'],
+    ['3 linhas inseridas. Use Desfazer para remover o lote.', 'success'],
+    ['Não foi possível excluir o objeto.', 'error'],
+    ['Selecione uma única célula para editar o conteúdo.', 'error'],
+    ['Altura ajustada. Parte da tabela ficou fora da página; revise a composição.', 'error'],
+    ['Toque na célula, linha ou coluna final.', 'error'],
+    ['Nenhuma tabela foi criada.', 'error'],
+    ['Modo de grade da tabela.', 'info'],
+  ] as const)('%s → %s', (message, tone) => {
+    expect(classifyEditorNotice(message)).toBe(tone);
+  });
+});
+
+function renderNotices(props: Partial<React.ComponentProps<typeof EditorNotices>> = {}) {
+  const onDismissMessage = vi.fn();
+  const onMessage = vi.fn();
+  const view = render(<EditorNotices message={null} onDismissMessage={onDismissMessage} onMessage={onMessage}
+    documentTitle="TA-25N — Ficha técnica" save={idle} {...props} />);
+  return { view, onDismissMessage, onMessage };
+}
+
+describe('FR-12 editor notices', () => {
+  it('hides a success message after 4 seconds, even when the editor re-renders', () => {
+    vi.useFakeTimers();
+    const { view, onDismissMessage, onMessage } = renderNotices({ message: 'Objeto excluído.' });
+    expect(screen.getByRole('status')).toHaveTextContent('Objeto excluído.');
+    act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS - 100); });
+    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={() => onDismissMessage()} onMessage={onMessage}
+      documentTitle="TA-25N — Ficha técnica" save={idle} />);
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an error until the person closes it', () => {
+    vi.useFakeTimers();
+    const { onDismissMessage } = renderNotices({ message: 'Não foi possível excluir o objeto.' });
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'error');
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('shows progress without a close button and nothing at all without a message', () => {
+    const { view } = renderNotices({ message: 'Enviando imagem…' });
+    expect(screen.getByRole('status')).toHaveTextContent('Enviando imagem…');
+    expect(screen.queryByRole('button', { name: 'Fechar aviso' })).toBeNull();
+    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x" save={idle} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(document.querySelector('[data-editor-notices]')).toBeEmptyDOMElement();
+  });
+
+  it('turns a save failure and missing local protection into bands', () => {
+    renderNotices({ save: { phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true }, localProtectionUnavailable: true });
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts[0].textContent).toBe('Não foi possível proteger as alterações neste computador. Mantenha esta aba aberta e use Salvar antes de sair.');
+    expect(alerts[1]).toHaveTextContent('Não foi possível salvar agora. Confira a conexão e tente Salvar novamente.');
+  });
+});
+
+describe('FR-43 conflict band (safe text)', () => {
+  function conflictSetup(state: ConflictResolutionState = 'idle') {
+    const resolution = {
+      openLatest: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: true, catalogId: 'a', kind: 'latest' })),
+      saveAsCopy: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: false, error: { code: 'OFFLINE' } })),
+    };
+    const rendered = renderNotices({ save: conflict, conflictState: state, conflictResolution: resolution });
+    return { ...rendered, resolution };
+  }
+
+  it('offers the copy first and says exactly what each choice keeps', () => {
+    conflictSetup();
+    const band = screen.getByRole('alert');
+    expect(band).toHaveTextContent('Este catálogo foi salvo em outro lugar enquanto você editava.');
+    expect(band).toHaveTextContent('cria o catálogo “Cópia de TA-25N — Ficha técnica” com tudo o que está nesta tela');
+    expect(band).toHaveTextContent('O catálogo original fica com a versão salva em outro lugar.');
+    expect(band).toHaveTextContent('descarta as alterações desta tela');
+    const buttons = band.querySelectorAll('[data-persistence-conflict-actions] button');
+    expect([...buttons].map((button) => button.textContent)).toEqual(['Salvar meu trabalho como cópia', 'Abrir versão mais recente']);
+  });
+
+  it('asks before discarding and only opens the latest version after confirmation', async () => {
+    const { resolution } = conflictSetup();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir versão mais recente' }));
+    expect(resolution.openLatest).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Tem certeza? As alterações desta tela que ainda não foram salvas serão descartadas.');
+    fireEvent.click(screen.getByRole('button', { name: 'Não, voltar' }));
+    expect(screen.getByRole('button', { name: 'Abrir versão mais recente' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir versão mais recente' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Sim, descartar minhas alterações' })); });
+    expect(resolution.openLatest).toHaveBeenCalledOnce();
+  });
+
+  it('reports a failed copy in plain language and disables both choices while one runs', async () => {
+    const { resolution, onMessage } = conflictSetup();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar meu trabalho como cópia' })); });
+    expect(resolution.saveAsCopy).toHaveBeenCalledOnce();
+    expect(onMessage).toHaveBeenCalledWith('Não foi possível salvar seu trabalho como cópia. Mantenha esta aba aberta e tente novamente.');
+    cleanup();
+    conflictSetup('resolving-save-as-copy');
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-persistence-conflict-actions] button')];
+    expect(buttons.map((button) => [button.textContent, button.disabled])).toEqual([
+      ['Salvando cópia…', true], ['Abrir versão mais recente', true],
+    ]);
+  });
+});
