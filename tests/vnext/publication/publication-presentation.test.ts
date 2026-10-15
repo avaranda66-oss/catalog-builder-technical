@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMinimalW2CTable, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
-import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage } from '@/vnext/app/publication-diagnostic-presentation';
+import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage, publicationDiagnosticText, publicationWaitingMessage } from '@/vnext/app/publication-diagnostic-presentation';
 import type { Diagnostic } from '@/vnext/domain';
 
 describe('P1.C publication diagnostic presentation', () => {
@@ -11,6 +11,9 @@ describe('P1.C publication diagnostic presentation', () => {
     ['RENDER_GEOMETRY_MISMATCH', 'medidas da página', 'abra a revisão novamente'],
     ['ASSET_HASH_MISMATCH', 'imagem', 'envie a imagem novamente'],
     ['FONT_READINESS_TIMEOUT', 'fonte', 'Confira a conexão'],
+    ['UNRESOLVED_PLACEHOLDER', 'texto provisório', 'Troque pela informação correta'],
+    ['EMPTY_TABLE_ROW', 'linhas vazias', 'remova as que sobraram'],
+    ['IMAGE_LOW_RESOLUTION', 'borrada', 'Use uma foto maior'],
   ])('explains %s with a concrete next action', (code, problem, action) => {
     const message = publicationDiagnosticMessage(code);
     expect(message).toContain(problem);
@@ -45,5 +48,22 @@ describe('P1.C publication diagnostic presentation', () => {
       issue.code, issue.severity, issue.details, issue.pageId, issue.objectId, issue.tableId, issue.rowId, issue.cellId, issue.annotationId,
     ]);
     expect(JSON.stringify(issue)).toBe(before);
+  });
+
+  it('FR-51 quotes the provisional text and counts empty rows without exposing engine details', () => {
+    const placeholder: Diagnostic = { code: 'UNRESOLVED_PLACEHOLDER', severity: 'ERROR', details: 'surface=note; token=revisar com engenharia', pageId: 'p' };
+    expect(publicationDiagnosticText(placeholder)).toBe('Ainda está escrito “revisar com engenharia” na nota da tabela. Troque pela informação correta antes de publicar.');
+    expect(publicationDiagnosticText({ ...placeholder, details: 'unknown' })).toBe(publicationDiagnosticMessage('UNRESOLVED_PLACEHOLDER'));
+    expect(publicationDiagnosticText({ code: 'EMPTY_TABLE_ROW', severity: 'WARNING', details: 'emptyRows=1' }))
+      .toBe('Esta tabela tem 1 linha vazia, que sairá em branco no PDF. Preencha a linha ou remova-a.');
+    expect(publicationDiagnosticText({ code: 'TEXT_OBJECT_OVERFLOW', severity: 'ERROR', details: 'x' })).toBe(publicationDiagnosticMessage('TEXT_OBJECT_OVERFLOW'));
+  });
+
+  it('FR-50 explains only the save problems that keep the review waiting', () => {
+    expect(publicationWaitingMessage({ phase: 'saving', label: 'Saving…', dirty: true, canSave: false })).toBeUndefined();
+    expect(publicationWaitingMessage({ phase: 'idle', label: 'Unsaved changes', dirty: true, canSave: true })).toBeUndefined();
+    expect(publicationWaitingMessage({ phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true }))
+      .toBe('Não foi possível salvar agora. Confira a conexão e tente Salvar novamente. A verificação começa sozinha assim que o catálogo for salvo.');
+    expect(publicationWaitingMessage({ phase: 'conflict', label: 'Conflict', dirty: true, canSave: false })).toContain('salve seu trabalho como uma cópia');
   });
 });
