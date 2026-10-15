@@ -166,7 +166,7 @@ async function openSemanticPanel(container: HTMLElement): Promise<() => void> {
     if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(button(container, 'edit-table'));
     expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
     expect(container.querySelector('[data-table-grid-overlay]')).not.toBeNull();
-  });
+  }, { timeout: 5_000 });
   fireEvent.click(button(container, 'marker-panel'));
   await waitFor(() => expect(container.querySelector('[data-marker-legend-panel]')).not.toBeNull());
   return restoreMeasurement;

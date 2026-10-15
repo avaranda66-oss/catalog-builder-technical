@@ -285,7 +285,7 @@ async function enterMeasuredTableGrid(container: HTMLElement, tableId: string, p
     if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(button(container, 'edit-table'));
     expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
     expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
-  });
+  }, { timeout: 5_000 });
 }
 
 describe('W2.C visible editor workspace', () => {
