@@ -155,6 +155,14 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     expect(screen.queryByText(/↗/)).toBeNull();
   });
 
+  it('offers no personal key option where the AI is not available at all', () => {
+    const doc = createCatalogDocument(id, 'Novo catálogo');
+    render(<CatalogNativeComposer documentId={doc.id} session={createDocumentSession(doc, { createId: id })}
+      ownerScope="user:01" onBeforeMutation={() => true} />);
+    expect(screen.getByText('A IA não está disponível nesta tela.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+  });
+
   it('keeps the first suggestions in view and only follows the conversation once it starts', async () => {
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, writable: true, value: scrollTo });

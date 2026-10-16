@@ -71,8 +71,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const [unsent, setUnsent] = React.useState<string>();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [readiness, setReadiness] = React.useState<ComposerReadiness>();
-  // "Avançado (chave própria)" only when the server accepts a personal key (or has not said it does not).
-  const ownKeyOffered = Boolean(ownKey) || readiness?.kind !== 'ready' || readiness.byok;
+  // "Avançado (chave própria)" only when the AI is reachable here and the server accepts a personal key (or has
+  // not said it does not). Without a client a personal key could not be used either.
+  const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind !== 'ready' || readiness.byok);
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { input.current?.focus(); }, []);
