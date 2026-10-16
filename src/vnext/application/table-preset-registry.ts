@@ -422,8 +422,13 @@ export function tablePresetAccents(documentStyle: DocumentStyle, presetId: Table
   const labelBackground = design === 'specification' && isLightReadableTone(paletteTone, readableText(first, paletteTone ?? tinted))
     ? paletteTone
     : tinted;
+  // The band sits behind ordinary text: keep it only when that text stays legible on it (FR-32 rule).
+  const colors = palette(documentStyle);
+  const bodyText = readableText(documentStyle.defaultText.color ?? '#172033', colors.fourth);
+  const band = [mixWithWhite(first, tint.band), SECTION_TINT_FALLBACK, '#F2F2F2']
+    .find((candidate) => contrastRatio(bodyText, candidate) >= MIN_TABLE_TEXT_CONTRAST) ?? colors.fourth;
   return {
-    band: mixWithWhite(first, tint.band),
+    band,
     label: { fontWeight: 700, color: readableText(first, labelBackground), background: labelBackground },
   };
 }
