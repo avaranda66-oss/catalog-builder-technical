@@ -187,3 +187,24 @@ describe('budget settlement arithmetic (FR-62)', () => {
     expect(geminiCostMicrousd('gemini-3.5-flash-lite', -5, Number.NaN)).toBe(0);
   });
 });
+
+describe('the CLI probe runs exactly the contract the Edge Function bundles', () => {
+  it('imports the same composer-contract module (no copy that could drift)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, resolve } = await import('node:path');
+    const contractImport = (file: string) => {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf8');
+      const match = /from '([^']*composer-contract\.ts)'/.exec(source);
+      return match ? resolve(dirname(resolve(process.cwd(), file)), match[1]) : null;
+    };
+    const edge = contractImport('supabase/functions/vnext-catalog-composer/index.ts');
+    const probe = contractImport('scripts/probe-composer.mjs');
+    expect(edge).toBe(resolve(process.cwd(), 'src/vnext/ai-catalog/composer-contract.ts'));
+    expect(probe).toBe(edge);
+    // The probe reads the key only from the environment and never prints it.
+    const probeSource = readFileSync(resolve(process.cwd(), 'scripts/probe-composer.mjs'), 'utf8');
+    expect(probeSource).toContain('process.env.GEMINI_API_KEY');
+    expect(probeSource).not.toMatch(/console\.(log|error)\([^)]*\bkey\b/);
+    expect(probeSource).not.toMatch(/readFileSync\([^)]*key/i);
+  });
+});
