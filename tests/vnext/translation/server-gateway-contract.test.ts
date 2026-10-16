@@ -8,6 +8,9 @@ const gatewaySource = readFileSync(gatewayPath, 'utf8');
 describe('W5.A VNext server gateway contract', () => {
   it('uses a server-managed Gemini secret and never a Father/browser credential field', () => {
     expect(gatewaySource).toContain("Deno.env.get('GEMINI_API_KEY')");
+    // A translation-specific secret wins, so the shared GEMINI_API_KEY never has to be overwritten.
+    expect(gatewaySource).toContain("Deno.env.get('VNEXT_TRANSLATION_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY')");
+    expect(gatewaySource).not.toMatch(/gemini-2\.5/);
     expect(gatewaySource).toContain("'x-goog-api-key': providerSecret");
     expect(gatewaySource).toContain("['apiKey', 'providerSecret', 'geminiKey', 'credential']");
     expect(gatewaySource).toContain('Credenciais de provedor não são aceitas no payload.');
@@ -45,7 +48,9 @@ describe('W5.A VNext server gateway contract', () => {
     expect(gatewaySource).toContain('BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS = 4_096');
     expect(gatewaySource).toContain('PRODUCTION_MAX_OUTPUT_TOKENS = 65_536');
     expect(gatewaySource).toContain('candidateCount: 1');
-    expect(gatewaySource).toContain('thinkingConfig: { thinkingBudget: 0 }');
+    // Gemini 3.x answers HTTP 400 to thinkingBudget 0; minimal is the lowest accepted level (FR-86).
+    expect(gatewaySource).toContain("thinkingConfig: { thinkingLevel: 'minimal' }");
+    expect(gatewaySource).not.toContain('thinkingBudget');
     expect(gatewaySource).toContain('generateContentRequest: { model: modelResource, ...generationRequest }');
     expect(gatewaySource).toContain("candidate.finishReason === 'STOP'");
   });
