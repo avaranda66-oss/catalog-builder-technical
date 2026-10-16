@@ -1,6 +1,6 @@
 # Father-Ready — Onda 1 (vitórias visíveis)
 
-Status: InReview — integração local concluída em 2026-10-16 com os portões verdes. Push, PR e merge aguardam o "OK onda 1" do dono; nada foi enviado.
+Status: InReview — integração local concluída em 2026-10-16; correção final depois da verificação no navegador concluída no mesmo dia, com os portões verdes de novo. Push, PR e merge aguardam o "OK onda 1" do dono; nada foi enviado.
 Plano: [docs/plans/2026-10-15-plano-father-ready.md](../plans/2026-10-15-plano-father-ready.md), §4 "Onda 1".
 Branch de integração: `claude/father-ready-20261014` (só local). Base das fatias: `dad3149`; plano em `66ab275`.
 Substitui: `docs/stories/2026-10-13-father-ai-import.md`, `2026-10-13-father-authoring.md` e `2026-10-13-father-persistence.md`.
@@ -89,6 +89,49 @@ O `ZoomControl` (1I) ficou logo depois de "Página X de Y" em `.vnext-canvas-met
 | `a7e9a7e` | `PublishAction` marca "montado" a cada montagem; grupo da direita da linha de cima com largura reservada; seletores de linha/coluna encolhem abaixo de 100 % | Em StrictMode a revisão nunca abria ("Salvando…" para sempre); a linha de cima quebrava e a folha descia 36 px no meio de um arraste; seletores cobriam a linha vizinha no celular |
 | `ba0365b` | `p2` busca o modelo PRESYS pelo nome exato | Mesmo caso do menu "Mais ações de …" |
 
+## Correção final depois da verificação no navegador (2026-10-16)
+
+A verificação em Chromium (1366 × 768 e 1280 × 720, sobre `3cf3878`) passou em todas as jornadas que rodam sem deploy, mas achou 2 problemas maiores e 8 menores. Correções, com teste para cada uma:
+
+| Commit | O que mudou | Achado |
+|---|---|---|
+| `42f0488` | As mensagens "Tabela criada…", "Tabela aumentada…" e "Tabela de N linhas × M colunas adicionada…" agora são passadas com tom de sucesso explícito (`successNotice` em `editor-notices.ts`). Ficam verdes, somem em 4 s e terminam com "Para voltar, use Desfazer." | **Maior.** O sucesso aparecia como erro vermelho que não sumia. Ele cobria "Página X de Y", o Zoom e o contador de problemas, e o pai podia desfazer o próprio trabalho. |
+| `42f0488` | Depois de "Adicionar N linhas e colar", o "Ajustar altura" medido entra no mesmo passo de Desfazer. Ele só aumenta a altura: uma moldura que já tem espaço fica como está. | **Maior.** A tabela ficava com a altura antiga, aparecia o "!" e o PDF era bloqueado ("A tabela ultrapassa a altura reservada"). |
+| `c9c19bc` | O título do catálogo aparece inteiro quando cabe (`max-width: calc(100% + 14px)`). Um título muito longo ainda termina em "...". | O título era sempre cortado ("Teste X..."). |
+| `ae52eae` | O aviso vermelho de X/Y/Largura/Altura some quando Desfazer ou Refazer muda o valor. | O aviso ficava depois de Desfazer, Refazer e do salvamento. |
+| `2628223` | "Altura necessária: 17,53 mm" (vírgula); "4 linhas × 3 colunas" e "1 linha × 1 coluna"; "Você saiu da edição da tabela."; bordas sem "topologia"; "Herdado da linha ou da coluna"; painel anunciado como "Propriedades do objeto"; cada tabela anunciada pelo título ou como "Tabela". | Jargão e IDs internos na tela e no leitor de tela. |
+| `8428b47` | "Aplicar o estilo em" no lugar de "Estilo do tipo de linha". | Achado na reverificação. |
+| `953f143` | Recuperação: botões azul-marinho e branco com uma escolha recomendada; "Conferir se foi salvo"; "Apagar a cópia deste computador" e "Sim, apagar a cópia". A frase "Não foi possível confirmar o salvamento" não se repete quando a frase de cima já diz isso. As provas `w3d-physical-recovery` e `w3i-father-browser-flow` foram atualizadas e passaram. | Os botões vinham sem estilo e com textos técnicos. |
+| `56b64c8`, `55e63d7` | IA: "Avançado (chave própria)" some com `byok:false` e onde a IA não está disponível; "Enviar ao Gemini" sem "↗"; a conversa vazia não rola para o fim, então a 1ª sugestão não fica escondida sob o cabeçalho. "Novo catálogo": a dica explica que, sem nome, o catálogo fica com o nome do modelo. | Achados menores do painel de IA e da criação. |
+
+`EditorWorkspace.tsx` cresceu +12 linhas líquidas nesta correção, e +130 na onda inteira contra `dad3149`. `contracts.ts` e `execute.ts` não foram tocados.
+
+**Reverificação no navegador** (Vite em 127.0.0.1:5185, mesma página de teste temporária da verificação, removida do repositório no fim):
+- Os 25 roteiros rodaram sem erro: s01–s19 da verificação mais os novos s20–s24. Onze deles também rodaram em 1280 × 720.
+- Nenhum erro de console, erro de página ou diálogo do navegador.
+- Colar 12 × 4: aviso verde (`data-tone=success`). Depois de 5,6 s ele saiu e o botão "100%" ficou livre.
+- Aumentar a tabela de 3 para 6 linhas: altura de 23,29 para 46,58 mm. Um Desfazer volta linhas, valores e altura juntos, e Refazer refaz. A revisão diz "Pronto para imprimir ou salvar PDF." e o botão de imprimir fica ativo.
+- Título: "Teste X e Y", "Zoom 1280x720" e "Termômetros TA-25N — revisão 2" aparecem inteiros (`scrollWidth == clientWidth`).
+- X: depois de "abc", o aviso aparece; depois de Desfazer, não há aviso nem `aria-invalid`.
+- J7: abrir B não mostra nenhum diálogo; abrir A mostra a recuperação com "Conferir se foi salvo" em destaque.
+- J8: a revisão abre depois do salvamento, bloqueia por "A COMPLETAR" e "Corrigir este item" leva à célula.
+- Evidência: `scratchpad/onda1-verify/rerun/` e `scratchpad/onda1-verify/fix-*.json`, mais as capturas `shots/fix-*`.
+
+**Portões depois da correção** (em sequência, sobre ``55e63d7``):
+
+| Portão | Resultado |
+|---|---|
+| `npm run lint` | 0 erros, 268 avisos (igual à integração) |
+| `npm run typecheck` | 0 erros |
+| `npm test` | 372 arquivos, 4462 testes passaram, 1 pulado, 0 falhas (119 s, 6 processos; antes: 4446) |
+| `npm run build` | ok (`dist/ai-catalog-prototype.html` continua fora do build de produção) |
+| Provas Chromium afetadas | `w3d-physical-recovery` PASS, `w3i-father-browser-flow` PASS |
+
+**Ficou de fora desta correção:**
+- "Detalhes técnicos" na revisão de publicação ainda mostra códigos e IDs quando é aberto. Ele vem fechado, e a prova `productization-p1c` e o suporte dependem dele. Esconder isso no modo simples fica para a 2.x.
+- Uma mensagem de sucesso ainda cobre "Página X de Y" e o Zoom por até 4 s (pausa com o mouse em cima). Um erro de verdade continua até ser fechado. O FR-12 manda as mensagens ficarem sob a barra de cima, por isso o lugar não mudou.
+- A mensagem de `PROVIDER_NOT_CONFIGURED` ainda cita "Avançado". Ela só aparece se o servidor estiver sem chave.
+
 ## Evidência de testes
 
 Rodado na integração, em sequência, em `ba0365b` (antes: espaço livre em C: 14 GB; no fim: 13 GB).
@@ -128,11 +171,11 @@ Não feito: jornadas no app real `/v2` com login e Supabase (Preview ou produç�
 
 ## O que fica para depois (achados menores das revisões)
 
-- 1F: tabela aumentada por "Adicionar N linhas e colar" não ajusta a altura sozinha; cabeçalho detectado por engano quando a 1ª linha tem códigos de modelo; Ctrl+V fora da página é ignorado sem aviso; rótulo "… e 1 coluna e colar".
-- 1D: o tom da mensagem ainda é deduzido da frase; a mensagem flutuante pode cobrir "Página X de Y" por 4 s.
+- 1F: ~~tabela aumentada por "Adicionar N linhas e colar" não ajusta a altura sozinha~~ (corrigido em `42f0488`); cabeçalho detectado por engano quando a 1ª linha tem códigos de modelo; Ctrl+V fora da página é ignorado sem aviso; rótulo "… e 1 coluna e colar".
+- 1D: o tom da mensagem ainda é deduzido da frase, exceto onde quem chama já o informa (`successNotice`, usado nas mensagens de tabela desde `42f0488`). A mensagem flutuante pode cobrir "Página X de Y" por 4 s.
 - 1I: zoom não mantém o ponto sob o cursor; barra de texto pode passar da página em colunas da direita (16b/2C).
 - 1A: renomear o botão "Catálogos" para "Meus catálogos" (costura 2.0); `&classico=1` no `ExportPDFModal`.
-- 1B: um pedido novo descarta a proposta anterior antes da resposta; texto digitado some se o painel fechar com pedido em andamento; `aria-label` com jargão em `ProviderCredentialsSettings`; "Avançado" aparece mesmo com `byok:false`; RPCs da 00028 executáveis por editor (rever antes de aplicar).
+- 1B: um pedido novo descarta a proposta anterior antes da resposta; texto digitado some se o painel fechar com pedido em andamento; `aria-label` com jargão em `ProviderCredentialsSettings`; ~~"Avançado" aparece mesmo com `byok:false`~~ (corrigido em `56b64c8`); RPCs da 00028 executáveis por editor (rever antes de aplicar).
 - 1E: fotos de celular enviadas antes desta onda podem precisar de reenvio (medidas); nomes misturados na tela de recuperação.
 - 1G: heurística de colunas de preço; ainda sem tela.
 - 1H: motivos não aparecem na tela (FR-68); `vnext-catalog-agent` ainda exige 2 modelos (2F).
@@ -348,3 +391,8 @@ Todos os arquivos alterados na onda (`git diff --name-status 66ab275 HEAD`), mai
 - `tests/vnext/translation/server-gateway-contract.test.ts` (alterado)
 - `tests/vnext/translation/translation-model-registry.test.ts` (novo)
 - `vite.config.ts` (alterado)
+- `src/vnext/app/TableStyleInspector.tsx` (alterado na correção final)
+- `src/vnext/editor/table-style-authoring.ts` (alterado na correção final)
+- `src/vnext/rendering/TableRenderer.tsx` (alterado na correção final)
+- `tests/vnext/editor/table-style-authoring.test.ts` (alterado na correção final)
+- `tests/vnext/rendering/table-semantic-surfaces.test.tsx` (alterado na correção final)
