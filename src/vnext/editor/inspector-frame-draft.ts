@@ -44,6 +44,11 @@ export function inspectorDraftIsDirty(draft: InspectorFrameDraft, frame: Inspect
   return INSPECTOR_FRAME_FIELDS.some((field) => inspectorFieldIsPending(draft, frame, field));
 }
 
+/** Same position and size. Used to drop a field hint once Desfazer/Refazer puts another value in the field. */
+export function sameInspectorFrame(a: InspectorFrame, b: InspectorFrame): boolean {
+  return INSPECTOR_FRAME_FIELDS.every((field) => inspectorFrameValue(a, field) === inspectorFrameValue(b, field));
+}
+
 export type InspectorFieldResolution =
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'invalid'; readonly message: string }

@@ -8,6 +8,7 @@ import {
   inspectorErrorStatus,
   planInspectorDraft,
   resolveInspectorField,
+  sameInspectorFrame,
 } from '@/vnext/editor/inspector-frame-draft';
 
 const value = (raw: string) => {
@@ -88,6 +89,13 @@ describe('numeric comparison', () => {
 });
 
 describe('inspector frame draft', () => {
+  it('compares position and size only', () => {
+    const frame = { xMm: 12.5, yMm: 30, widthMm: 40, heightMm: 50 };
+    expect(sameInspectorFrame(frame, { ...frame })).toBe(true);
+    expect(sameInspectorFrame(frame, { ...frame, xMm: 12 })).toBe(false);
+    expect(sameInspectorFrame(frame, { ...frame, heightMm: 51 })).toBe(false);
+  });
+
   const frame = { xMm: 88, yMm: 30, widthMm: 40.5, heightMm: 50 };
 
   it('formats the canonical draft in pt-BR and is never dirty for an equivalent number', () => {

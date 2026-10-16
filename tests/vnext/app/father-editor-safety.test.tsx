@@ -193,6 +193,28 @@ describe('FR-10 · position and size fields accept a comma and never lock the ed
     expect(frameOf(session, 'shape-target')).toBeUndefined();
   });
 
+  it('drops the red hint once Desfazer puts another value in the field (browser check: it stayed after undo)', () => {
+    const { session, container } = renderFather();
+    select(container, 'shape-target');
+    openDetails();
+    const x = field(container, 'x');
+    fireEvent.focus(x);
+    fireEvent.change(x, { target: { value: '12,5' } });
+    fireEvent.blur(x);
+    expect(frameOf(session, 'shape-target')?.xMm).toBe(12.5);
+
+    fireEvent.change(field(container, 'x'), { target: { value: 'abc' } });
+    fireEvent.blur(field(container, 'x'));
+    expect(field(container, 'x').value).toBe('12,5');
+    expect(field(container, 'x')).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desfazer última alteração' }));
+    expect(frameOf(session, 'shape-target')?.xMm).toBe(88);
+    expect(field(container, 'x').value).toBe('88');
+    expect(field(container, 'x')).not.toHaveAttribute('aria-invalid');
+    expect(container.querySelector('[data-inspector-error]')).toBeNull();
+  });
+
   it('rejects a zero size with a plain message and keeps the previous value', () => {
     const { session, container } = renderFather();
     select(container, 'shape-target');

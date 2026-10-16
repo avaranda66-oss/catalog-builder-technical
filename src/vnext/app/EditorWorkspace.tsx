@@ -66,7 +66,7 @@ import {
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
 import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
-import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
+import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
 import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
 import { PagePanel } from './editor/PagePanel';
@@ -656,7 +656,8 @@ export function EditorWorkspace({
     const target = inspectorTargetRef.current;
     return Boolean(target && inspectorDraftIsDirty(inspectorDraftRef.current, target.expectedFrame));
   };
-  const [inspectorFieldError, setInspectorFieldError] = React.useState<(InspectorFieldError & { objectId: string }) | null>(null);
+  /** `frame` is the object's frame when the error was shown: once Desfazer/Refazer changes it, the hint is stale. */
+  const [inspectorFieldError, setInspectorFieldError] = React.useState<(InspectorFieldError & { objectId: string; frame?: EditorialObject['frame'] }) | null>(null);
   /** Plain notice about a typed value that was put back, kept until its field leaves the screen. */
   const settleNoticeRef = React.useRef<string | null>(null);
   const withSettleNotice = (message: string | null) => (
@@ -666,6 +667,12 @@ export function EditorWorkspace({
     settleNoticeRef.current = null;
     setInspectorFieldError((current) => (current && current.objectId !== selectedObjectId ? null : current));
   }, [selectedObjectId]);
+  const selectedFrame = selectedObject?.frame;
+  React.useEffect(() => {
+    if (!inspectorFieldError?.frame || !selectedFrame || sameInspectorFrame(inspectorFieldError.frame, selectedFrame)) return;
+    settleNoticeRef.current = null;
+    setInspectorFieldError(null);
+  }, [inspectorFieldError, selectedFrame]);
 
   const tableTitleBaselineText = (title: RichText | null): string | null => (
     title === null ? '' : projectEditableRichText(title)
@@ -2980,7 +2987,7 @@ export function EditorWorkspace({
         }
       }
     }
-    setInspectorFieldError(errors[0] ? { objectId: object.id, ...errors[0] } : null);
+    setInspectorFieldError(errors[0] ? { objectId: object.id, ...errors[0], frame: liveInspectorObject()?.frame ?? object.frame } : null);
     settleNoticeRef.current = errors[0] ? inspectorDiscardedNotice(errors[0]) : null;
     if (errors[0]) setStatusMessage(inspectorErrorStatus(errors[0]));
     resetInspectorDraft();
