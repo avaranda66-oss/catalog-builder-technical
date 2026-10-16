@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
-import { classifyEditorNotice, editorNoticeAutoHides, SUCCESS_NOTICE_TIMEOUT_MS } from '@/vnext/editor/editor-notices';
+import {
+  classifyEditorNotice, editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, successNotice,
+} from '@/vnext/editor/editor-notices';
 import type { ConflictResolutionResult, ConflictResolutionState, SaveProjection } from '@/vnext/persistence';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -36,9 +38,21 @@ describe('FR-12 status message tone', () => {
     ['Página adicionada.', 'success'],
     ['Objeto desbloqueado.', 'success'],
     ['Modo de grade da tabela.', 'info'],
+    // FR-31 table paste results (verified in the browser: they used to show as red errors that never left).
+    ['Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.', 'success'],
+    ['Tabela aumentada em 3 linhas e 12 células coladas. Para voltar, use Desfazer.', 'success'],
     ['Texto sem alterações.', 'info'],
   ] as const)('%s → %s', (message, tone) => {
     expect(classifyEditorNotice(message)).toBe(tone);
+  });
+
+  it('uses the tone the caller passes instead of reading the sentence', () => {
+    const tip = 'Tabela de 6 linhas × 3 colunas adicionada. Para escrever nela, clique em Editar tabela.';
+    expect(classifyEditorNotice(tip)).toBe('error');
+    expect(editorNoticeTone(successNotice(tip))).toBe('success');
+    expect(editorNoticeText(successNotice(tip))).toBe(tip);
+    expect(editorNoticeTone(tip)).toBe('error');
+    expect(editorNoticeText(tip)).toBe(tip);
   });
 
   it('lets only errors and work in progress stay on screen', () => {
@@ -63,6 +77,16 @@ describe('FR-12 editor notices', () => {
     view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={() => onDismissMessage()} onMessage={onMessage}
       documentTitle="TA-25N — Ficha técnica" save={idle} />);
     act(() => { vi.advanceTimersByTime(100); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('hides a success passed with its tone after 4 seconds, even when its words look like an instruction', () => {
+    vi.useFakeTimers();
+    const tip = 'Tabela de 6 linhas × 3 colunas adicionada. Para escrever nela, clique em Editar tabela.';
+    const { onDismissMessage } = renderNotices({ message: successNotice(tip) });
+    expect(screen.getByRole('status')).toHaveTextContent(tip);
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'success');
+    act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
 

@@ -1,14 +1,16 @@
 import React from 'react';
 import type { ConflictResolutionCoordinator, ConflictResolutionState, SaveProjection } from '../../persistence';
-import { classifyEditorNotice, editorNoticeAutoHides, SUCCESS_NOTICE_TIMEOUT_MS } from '../../editor/editor-notices';
+import {
+  editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, type EditorNoticeInput,
+} from '../../editor/editor-notices';
 import { fatherSaveExplanation } from '../save-presentation';
 import './EditorNotices.css';
 
 const SAVE_PROBLEM_PHASES: ReadonlySet<SaveProjection['phase']> = new Set(['ambiguous', 'unavailable', 'unauthorized', 'blocked']);
 
 export interface EditorNoticesProps {
-  /** The editor's latest status sentence. */
-  message: string | null;
+  /** The editor's latest status sentence, optionally with the tone the caller already knows. */
+  message: EditorNoticeInput | null;
   onDismissMessage: () => void;
   /** Reports a new status sentence (used when a conflict choice fails). */
   onMessage: (message: string) => void;
@@ -51,13 +53,14 @@ export function EditorNotices({
         </div>
       )}
       {/* Keyed by the sentence: a new message starts with a fresh timer and is not paused by an old hover. */}
-      {message && <TransientNotice key={message} message={message} onDismiss={onDismissMessage} />}
+      {message && <TransientNotice key={editorNoticeText(message)} notice={message} onDismiss={onDismissMessage} />}
     </div>
   );
 }
 
-function TransientNotice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  const tone = classifyEditorNotice(message);
+function TransientNotice({ notice, onDismiss }: { notice: EditorNoticeInput; onDismiss: () => void }) {
+  const message = editorNoticeText(notice);
+  const tone = editorNoticeTone(notice);
   const [paused, setPaused] = React.useState(false);
   // The editor re-renders often; keep the timer tied to the message, not to the callback identity.
   const dismiss = React.useRef(onDismiss);

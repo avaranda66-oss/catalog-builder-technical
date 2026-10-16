@@ -12,6 +12,7 @@ import {
   type PendingTableFit,
 } from '@/vnext/app/editor/table-paste-actions';
 import type { PreparedTableFitHeight } from '@/vnext/editor/table-fit-height-authoring';
+import { classifyEditorNotice } from '@/vnext/editor/editor-notices';
 import { tableCellSelection, tableSelectionIdentity } from '@/vnext/editor/table-selection';
 
 function ids(prefix: string) {
@@ -43,7 +44,7 @@ describe('FR-31 createTableFromPastedText', () => {
     const outcome = createTableFromPastedText(session, pageId, 'Modelo\tExatidão\nTA-25N\t±0,1 °C\nTA-50N\t±0,15 °C', { transactionId: 'tx-1' });
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.message).toBe('Tabela criada com 3 linhas e 2 colunas. A primeira linha virou o cabeçalho, em destaque. Se não era isso, clique em Desfazer.');
+    expect(outcome.message).toBe('Tabela criada com 3 linhas e 2 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.');
     const created = onlyTable(session.getSnapshot().document);
     expect(created.id).toBe(outcome.objectId);
     expect(created.table.rows[0].role).toBe('header');
@@ -66,6 +67,17 @@ describe('FR-31 createTableFromPastedText', () => {
     const text = ['A\tB\tC', ...Array.from({ length: 9 }, (_, index) => `x${index}`)].join('\n');
     const outcome = createTableFromPastedText(session, pageId, text, { transactionId: 'tx-many' });
     expect(outcome.ok && outcome.message).toContain('As linhas 2, 3, 4, 5, 6 e outras 4 tinham menos colunas');
+  });
+
+  it('words every success like the page messages, so even the sentence alone never reads as a problem', () => {
+    const { session, pageId } = setup();
+    // Header, a short row (padded) and a wide row (more than 7 columns): every note the summary can carry.
+    const text = ['Modelo\tFaixa\tExatidão', 'TA-25N', '1\t2\t3', '4\t5\t6\t7\t8\t9\t10\t11'].join('\n');
+    const outcome = createTableFromPastedText(session, pageId, text, { transactionId: 'tx-tone' });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.message).toMatch(/Para voltar, use Desfazer\.$/);
+    expect(outcome.message).not.toMatch(/não|clique em/i);
+    expect(classifyEditorNotice(outcome.message)).toBe('success');
   });
 
   it('changes nothing for empty or oversized pastes', () => {
@@ -99,6 +111,8 @@ describe('FR-31 growTableAndPaste', () => {
     const before = session.getSnapshot();
     const outcome = growTableAndPaste(session, { pageId, object, selection: at(1, 0) }, source, offer!.plan, 'tx-grow');
     expect(outcome.ok).toBe(true);
+    expect(outcome.ok && outcome.message).toBe('Tabela aumentada em 119 linhas e 240 células coladas. Para voltar, use Desfazer.');
+    expect(outcome.ok && classifyEditorNotice(outcome.message)).toBe('success');
     const grown = onlyTable(session.getSnapshot().document).table;
     expect(grown.rows).toHaveLength(121);
     expect(textAt(grown, 120, 1)).toBe('±0,119 °C');
@@ -179,6 +193,17 @@ describe('FR-31 automatic "Ajustar altura" for new tables', () => {
     expect(decidePendingTableFit(pending, document, 'table-1', { ok: false, reason: 'UNSTABLE', message: '' })).toEqual({ kind: 'cancel' });
     expect(decidePendingTableFit(pending, document, 'table-1', { ok: true, prepared: prepared({ wouldExceedPage: true }) })).toEqual({ kind: 'cancel' });
     expect(decidePendingTableFit(pending, document, 'table-1', { ok: true, prepared: prepared() }, true)).toEqual({ kind: 'cancel' });
+  });
+
+  it('after "Adicionar N linhas e colar" only makes the table taller, never shorter than the person made it', () => {
+    const grown: PendingTableFit = { ...pending, growOnly: true };
+    // Frame 10 U, table needs 20 U: fit.
+    expect(decidePendingTableFit(grown, document, 'table-1', { ok: true, prepared: prepared() }).kind).toBe('fit');
+    // Frame already has room (30 U for 20 U): keep the height the person chose.
+    const roomy = prepared({ expectedFrame: { xU: 1, yU: 1, widthU: 10, heightU: 30 } });
+    expect(decidePendingTableFit(grown, document, 'table-1', { ok: true, prepared: roomy })).toEqual({ kind: 'cancel' });
+    // A new table (not grown) is fitted exactly, both ways.
+    expect(decidePendingTableFit(pending, document, 'table-1', { ok: true, prepared: roomy }).kind).toBe('fit');
   });
 
   it('fits with the exact canonical action when the measured table fits on the page', () => {

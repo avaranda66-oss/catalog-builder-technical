@@ -86,6 +86,8 @@ describe('FR-31 tabela nova útil', () => {
     expect(created.frame.heightMm).toBeGreaterThan(40);
     expect(created.frame.heightMm).toBeLessThan(60);
     expect(status(container)).toHaveTextContent('Tabela de 6 linhas × 3 colunas adicionada, com a primeira linha como cabeçalho.');
+    // A finished change, even with the "clique em Editar tabela" tip: green and it leaves by itself.
+    expect(status(container)).toHaveAttribute('data-tone', 'success');
     // The size panel starts with the same useful default.
     fireEvent.click(button(container, 'new-table-size'));
     expect(screen.getByLabelText('Linhas da nova tabela')).toHaveValue(6);
@@ -118,7 +120,9 @@ describe('FR-31 colar do Excel cria a tabela', () => {
     expect(textAt(created.table, 11, 1)).toBe('-25 °C a 150 °C');
     expect(created.frame.widthMm).toBe(186);
     expect(after.localSequence).toBe(before.localSequence + 1);
-    expect(status(container)).toHaveTextContent('Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque.');
+    expect(status(container)).toHaveTextContent('Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.');
+    // Not a red error that stays: the father must not think the paste failed and undo his own work.
+    expect(status(container)).toHaveAttribute('data-tone', 'success');
     expect(container.querySelector(`[data-editor-object-id="${created.id}"]`)).toHaveAttribute('data-selected', 'true');
     fireEvent.click(button(container, 'undo'));
     expect(session.getSnapshot().document).toEqual(before.document);
@@ -250,7 +254,10 @@ describe('FR-31 colar maior que a grade aumenta a tabela', () => {
       expect(grown.columns).toHaveLength(5);
       expect(textAt(grown, 3, 3)).toBe('±0,1 °C');
       expect(textAt(grown, 5, 4)).toBe('E');
-      expect(status(container)).toHaveTextContent('Tabela aumentada em 2 linhas e 1 coluna e 6 células coladas.');
+      expect(status(container)).toHaveTextContent('Tabela aumentada em 2 linhas e 1 coluna e 6 células coladas. Para voltar, use Desfazer.');
+      expect(status(container)).toHaveAttribute('data-tone', 'success');
+      // The new rows need room: the measured "Ajustar altura" is queued in the same undo step as the paste.
+      expect(preview(container)).toHaveAttribute('data-table-auto-fit', 'pending');
       expect(screen.queryByRole('region', { name: 'Colar dados maiores que a tabela' })).toBeNull();
       expect(container.querySelector('[data-table-paste-textarea]')).toBeNull();
 

@@ -32,6 +32,12 @@ export const COMFORTABLE_A4_COLUMNS = 7;
 const MAX_ROWS_PER_INSERT = 100;
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+/**
+ * Same wording as the page messages ("Página 2 duplicada. … Para voltar, use Desfazer."). The success messages of
+ * this file are always shown with an explicit success tone (FR-12), so they leave by themselves and never look like
+ * a failed paste.
+ */
+const UNDO_HINT = 'Para voltar, use Desfazer.';
 
 let fallbackTransaction = 0;
 /**
@@ -91,6 +97,7 @@ export function pastedTableNotes(table: PastedTable, header: boolean): string[] 
 }
 
 export type CreatePastedTableOutcome =
+  /** `message` reports a finished change: show it with a success tone. */
   | { ok: true; objectId: string; document: CatalogDocument; message: string }
   | { ok: false; message: string };
 
@@ -119,7 +126,7 @@ export function createTableFromPastedText(
     ok: true,
     objectId,
     document: result.document,
-    message: [summary, ...pastedTableNotes(parse.table, header), 'Se não era isso, clique em Desfazer.'].join(' '),
+    message: [summary, ...pastedTableNotes(parse.table, header), UNDO_HINT].join(' '),
   };
 }
 
@@ -157,12 +164,17 @@ export function tablePasteGrowthOffer(
   return { plan, label: `Adicionar ${describeGrowth(plan)} e colar` };
 }
 
-/** A table the editor just created whose height should be fitted once it has been measured. */
+/** A table the editor just created (or grew) whose height should be fitted once it has been measured. */
 export interface PendingTableFit {
   readonly objectId: string;
   readonly transactionId: string;
   /** Document right after the insert; any other change cancels the automatic fit. */
   readonly document: CatalogDocument;
+  /**
+   * A table grown by "Adicionar N linhas e colar" only gets taller: a frame that already has room for the new rows
+   * keeps the height the person gave it.
+   */
+  readonly growOnly?: boolean;
 }
 
 export type PendingTableFitDecision =
@@ -188,6 +200,7 @@ export function decidePendingTableFit(
   if (!preparation.ok) return { kind: 'cancel' };
   const { wouldExceedPage, tallerThanPage, wouldViolateSafeArea: _safeArea, ...prepared } = preparation.prepared;
   if (wouldExceedPage || tallerThanPage || prepared.objectId !== pending.objectId) return { kind: 'cancel' };
+  if (pending.growOnly && prepared.preparedHeightU <= prepared.expectedFrame.heightU) return { kind: 'cancel' };
   return { kind: 'fit', action: { type: 'table.fitHeight', ...prepared } };
 }
 
@@ -197,6 +210,7 @@ function tableObjectIn(document: CatalogDocument, pageId: string, objectId: stri
 }
 
 export type GrowAndPasteOutcome =
+  /** `message` reports a finished change: show it with a success tone. */
   | { ok: true; table: TableModel; prepared: PreparedTableBulkMutation; message: string }
   | { ok: false; error?: unknown; code?: string; message?: string };
 
@@ -269,6 +283,6 @@ export function growTableAndPaste(
     ok: true,
     table: next.table,
     prepared,
-    message: `Tabela aumentada em ${describeGrowth(plan)} e ${plural(prepared.targets.length, 'célula colada', 'células coladas')}. Se não era isso, clique em Desfazer.`,
+    message: `Tabela aumentada em ${describeGrowth(plan)} e ${plural(prepared.targets.length, 'célula colada', 'células coladas')}. ${UNDO_HINT}`,
   };
 }

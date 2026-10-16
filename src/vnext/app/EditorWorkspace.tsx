@@ -125,6 +125,7 @@ import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValid
 import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
 import { createTableFromPastedText, decidePendingTableFit, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
 import { isTabularClipboardText } from '../editor/table-paste-import';
+import { successNotice, type EditorNoticeInput } from '../editor/editor-notices';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
@@ -387,7 +388,7 @@ export function EditorWorkspace({
   const [multiSelectArmed, setMultiSelectArmed] = React.useState(false);
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = React.useState<EditorNoticeInput | null>(null);
   const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
   const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
@@ -1684,7 +1685,8 @@ export function EditorWorkspace({
       if (runPreparedPaste(offer.source.typedText, offer.source.plainText)) setTablePasteFallbackOpen(false);
       return;
     }
-    const outcome = growTableAndPaste(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, offer.source, current.plan, newTableTransactionId());
+    const transactionId = newTableTransactionId();
+    const outcome = growTableAndPaste(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, offer.source, current.plan, transactionId);
     if (!outcome.ok) {
       setStatusMessage(outcome.message ?? describePasteError(outcome.error));
       return;
@@ -1694,7 +1696,9 @@ export function EditorWorkspace({
     setTableSelection(outcome.prepared.selectionAfter);
     setTablePasteFallbackOpen(false);
     setTablePasteFallbackText('');
-    setStatusMessage(outcome.message);
+    setStatusMessage(successNotice(outcome.message));
+    // The new rows need room: fit the frame to the measured table inside the same undo step, as for a new table.
+    setPendingTableFit({ objectId: live.object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
   };
   React.useEffect(() => setPasteGrowOffer(null), [tableSelection]);
@@ -1705,7 +1709,7 @@ export function EditorWorkspace({
     controller.cancel('superseded');
     const transactionId = newTableTransactionId();
     const outcome = createTableFromPastedText(session, editorState.activePageId, text, { header, transactionId });
-    setStatusMessage(outcome.message);
+    setStatusMessage(outcome.ok ? successNotice(outcome.message) : outcome.message);
     if (!outcome.ok) return false;
     selectObject(outcome.objectId);
     setPasteTableAreaOpen(false);
@@ -2443,8 +2447,9 @@ export function EditorWorkspace({
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
     if (tool === 'table') setNewTableSizeOpen(false);
     if (tool === 'table' && objectId && transactionId) setPendingTableFit({ objectId, transactionId, document: result.document });
+    // "clique em Editar tabela" is a tip, not a problem: the new table is a finished change (FR-12).
     setStatusMessage(tool === 'table'
-      ? `Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`
+      ? successNotice(`Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`)
       : names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
   };
 
