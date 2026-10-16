@@ -332,7 +332,7 @@ async function workflow(browser, width) {
   const page = await context.newPage(); watch(page, String(width));
   await page.goto(origin + '/v2', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
-  await page.getByRole('button', { name: /PRESYS.*TA-25N/ }).click();
+  await page.getByRole('button', { name: 'PRESYS · TA-25N — produto e especificações', exact: true }).click();
   await page.locator('[data-vnext-shell]').waitFor();
   await page.locator('[data-editorial-root] img').first().evaluate(node => node.decode());
   const source = (await state(page)).document;
