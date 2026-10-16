@@ -172,10 +172,19 @@ export function judgeValue(value: SourceFactValue, truth: GroundTruth): TruthJud
   const readings = (row: (typeof pool)[number]) => [row.values[value.model], ...row.alsoAccept,
     ...(row.condition ? [`${row.values[value.model]} ${row.condition}`] : [])];
   const match = pool.find(row => readings(row).some(item => signature(item) === wanted));
+  // "6.2 kg (DT Version) / 8.5 kg (RM Version)": every version of the row, named, in one value, as the page prints it.
+  if (!match && named.length > 1 && named.length === entries.length &&
+      named.map(row => signature(row.values[value.model])).join(' ') === wanted) {
+    return { value, verdict: 'CORRECT', row: best.id, note: 'junta as versões num valor só, como a página imprime' };
+  }
   if (!match) return { value, verdict: 'WRONG', row: best.id, expected: expectedOf(pool), note: 'números diferentes do gabarito' };
   if (variants && !named.length) {
     return { value, verdict: 'UNMATCHED', row: best.id, expected: expectedOf(pool), note: 'valor certo, mas não diz de qual versão é' };
   }
+  // "Vac 50/60 Hz": the unit took the printed condition along ("100 to 240 Vac 50/60 Hz").
+  const unitWithCondition = match.condition !== '' && !value.condition &&
+    canonicalUnit(value.unit) === canonicalUnit(`${match.unit}${match.condition}`);
+  if (unitWithCondition) return { value, verdict: 'CORRECT', row: best.id, note: 'a unidade inclui a condição impressa ao lado' };
   if (value.unit && match.unit && canonicalUnit(value.unit) !== canonicalUnit(match.unit)) {
     return { value, verdict: 'WRONG', row: best.id, expected: [`${match.values[value.model]} ${match.unit}`], note: 'unidade diferente do gabarito' };
   }

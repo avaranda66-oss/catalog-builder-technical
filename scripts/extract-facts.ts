@@ -21,7 +21,7 @@ import { extractPdfText, type ExtractedPdf } from '../src/vnext/ai-catalog/pdf-i
 import { pdfEvidenceSource, verificationMessage, verifyFactProposal, type FactVerificationReport } from '../src/vnext/ai-catalog/fact-verifier';
 import {
   FACT_EXTRACTION_PROMPT_VERSION, buildFactExtractionPrompt, divergenceProposal, factSheetResponseSchema,
-  findSourceDivergences, sourceFactValues, toFactProposal,
+  findSourceDivergences, sourceFactValues, toFactProposal, withNormalizedSymbols,
   type ExtractionSource, type SourceDivergence, type SourceFactValue,
 } from '../src/vnext/ai-catalog/fact-extraction';
 import {
@@ -49,7 +49,9 @@ for (const item of plan.sources) {
   const path = isAbsolute(item.path) || !options.pdfRoot ? item.path : resolve(options.pdfRoot, item.path);
   const bytes = await readFile(path);
   const fileName = path.split(/[\\/]/u).pop() ?? item.id;
-  const pdf = await extractPdfText(fileName, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  // The answer's Symbol-font signs are normalized (toFactProposal), so the evidence text is too.
+  const pdf = withNormalizedSymbols(
+    await extractPdfText(fileName, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer));
   if (item.pages[1] > pdf.pageCount) throw new Error(`${item.id}: o arquivo tem ${pdf.pageCount} páginas`);
   if (truth) {
     const expected = truth.sources.find(source => source.sourceId === item.id)?.sha256;

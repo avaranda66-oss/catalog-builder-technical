@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { FactProposalSchema } from '../../../src/vnext/ai-catalog/contracts';
 import {
-  FACT_EXTRACTION_PROMPT_VERSION, MISSING_VALUE_REASON, buildFactExtractionPrompt, divergenceProposal, factSheetResponseSchema,
-  factSlug, findSourceDivergences, numericSignature, sourceFactValues, toFactProposal,
+  FACT_EXTRACTION_PROMPT_VERSION, MISSING_VALUE_REASON, buildFactExtractionPrompt, cleanUnit, divergenceProposal,
+  factSheetResponseSchema, factSlug, findSourceDivergences, normalizeSymbolText, numericSignature, sourceFactValues,
+  toFactProposal, withNormalizedSymbols,
   type ExtractionSource, type SourceFactValue,
 } from '../../../src/vnext/ai-catalog/fact-extraction';
-import { verificationMessage, verifyFactProposal, type PdfEvidenceSource } from '../../../src/vnext/ai-catalog/fact-verifier';
+import {
+  pdfEvidenceSource, verificationMessage, verifyFactProposal, type PdfEvidenceSource,
+} from '../../../src/vnext/ai-catalog/fact-verifier';
+import type { ExtractedPdf } from '../../../src/vnext/ai-catalog/pdf-intake';
 
 const FOLDER: ExtractionSource = {
   sourceId: 'ta-folder', fileName: 'presys-ta-folder.pdf', sha256: 'a'.repeat(64), pageCount: 20, firstPage: 9, lastPage: 13,
@@ -37,6 +41,13 @@ describe('fact extraction prompt and response schema (FR-66a)', () => {
     expect(buildFactExtractionPrompt({ sources: [{ ...FOLDER, lastPage: 9 }] })).toContain('Read ONLY page 9.');
     expect(buildFactExtractionPrompt({ sources: [FOLDER] })).toContain('at most 6');
     expect(FACT_EXTRACTION_PROMPT_VERSION).toMatch(/^fr66a-/);
+  });
+
+  it('asks for the first line of a two-line label in the quote and units without footnote marks', () => {
+    const prompt = buildFactExtractionPrompt({ sources: [FOLDER], models: TA });
+    expect(prompt).toContain('copy the first line of the label cell followed by the value cells');
+    expect(prompt).toContain('Leave out a second line printed under the label');
+    expect(prompt).toContain('without a footnote mark such as "*"');
   });
 
   it('names the file only when several files are sent', () => {
@@ -155,6 +166,60 @@ describe('toFactProposal: the model answer becomes an untrusted FactProposal', (
   it('makes ids with the proposal alphabet', () => {
     expect(factSlug('Exatidão do Display (°C)')).toBe('exatidao-do-display-c');
     expect(factSlug('---')).toBe('');
+  });
+});
+
+describe('Symbol-font signs and footnote marks (PRESYS TA manual)', () => {
+  it('turns Symbol-font private use characters into the signs they print, one for one', () => {
+    const raw = 'Exatidão do Display  0,1 C  25,4 mm 10 M';
+    const clean = normalizeSymbolText(raw);
+    expect(clean).toBe('Exatidão do Display ± 0,1 °C Ø 25,4 mm 10 MΩ');
+    expect(clean).toHaveLength(raw.length);
+    expect(normalizeSymbolText('∅ 25,4 mm e ⌀ 6 mm')).toBe('Ø 25,4 mm e Ø 6 mm');
+    expect(normalizeSymbolText('Congurator ± 0.1 °C')).toBe('Congurator ± 0.1 °C');
+  });
+
+  it('normalizes the page text and the text positions of a read PDF, and nothing else', () => {
+    const read: ExtractedPdf = { fileName: 'manual.pdf', sha256: 'c'.repeat(64), pageCount: 1, truncated: false, pages: [{
+      number: 1, text: ' 0,1 ºC', textLength: 9, needsVisualExtraction: false,
+      runs: [{ text: '', x: 10, y: 20, width: 5 }, { text: '0,1 ºC', x: 16, y: 20, width: 30 }] }] };
+    const clean = withNormalizedSymbols(read);
+    expect(clean.pages[0].text).toBe('± 0,1 ºC');
+    expect(clean.pages[0].runs?.map(run => run.text)).toEqual(['±', '0,1 ºC']);
+    expect(clean.pages[0].runs?.[0]).toMatchObject({ x: 10, y: 20, width: 5 });
+    expect({ ...clean, pages: [] }).toEqual({ ...read, pages: [] });
+    expect(read.pages[0].text).toBe(' 0,1 ºC');
+  });
+
+  it('drops a footnote asterisk from a unit but keeps superscript units', () => {
+    expect(cleanUnit('°C*')).toBe('°C');
+    expect(cleanUnit('% FS **')).toBe('% FS');
+    expect(cleanUnit('m²')).toBe('m²');
+    expect(cleanUnit('')).toBe('');
+  });
+
+  it('verifies "± 0,1" on the manual page only when the page text is normalized the same way', () => {
+    // A single-model sheet: with other models' columns on the page, only text positions could tie the column.
+    const page = 'TA-25N\nFaixa de Operação -25 a 140 °C*\nExatidão do Display  0,1 ºC\n(*) Temperatura Ambiente: 20ºC.';
+    const read: ExtractedPdf = { fileName: 'manual-ta.pdf', sha256: MANUAL.sha256, pageCount: 39, truncated: false,
+      pages: Array.from({ length: 39 }, (_, index) => ({ number: index + 1, text: index === 4 ? page : '',
+        textLength: index === 4 ? page.length : 0, needsVisualExtraction: index !== 4 })) };
+    const normalized = toFactProposal({ title: 'TA', models: ['TA-25N'], sections: [{ title: 'Especificações Técnicas', rows: [
+      { key: 'display-accuracy', label: 'Exatidão do Display', values: [
+        { model: 'TA-25N', literal: ' 0,1', unit: 'ºC', sourceRef: { page: 5, quote: 'Exatidão do Display  0,1 ºC' } }] },
+      { key: 'operating-range', label: 'Faixa de Operação', values: [{ model: 'TA-25N', literal: '-25 a 140', unit: '°C*',
+        condition: '(*) Temperatura Ambiente: 20ºC.',
+        sourceRef: { page: 5, quote: 'Faixa de Operação -25 a 140 °C*' } }] },
+    ] }] }, [MANUAL], { models: ['TA-25N'] });
+    const [accuracy, range] = normalized.proposal.sections[0].rows;
+    expect(accuracy.values[0].status === 'known' && accuracy.values[0].candidate.value).toBe('± 0,1');
+    expect(range.unit).toBe('°C');
+    const verified = verifyFactProposal(normalized.proposal, [pdfEvidenceSource('ta-manual-pt', withNormalizedSymbols(read))]);
+    expect(verified.values.map(item => item.status)).toEqual(['VERIFIED_TEXT', 'VERIFIED_TEXT']);
+    // Without the same normalization the quote is not on the page: never verified by accident.
+    const raw = verifyFactProposal(normalized.proposal, [pdfEvidenceSource('ta-manual-pt', read)]);
+    expect(raw.values[0]).toMatchObject({ status: 'UNVERIFIED' });
+    expect(raw.values[0].candidates[0].reason).toBe('QUOTE_NOT_ON_PAGE');
   });
 });
 

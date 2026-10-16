@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { FactProposalSchema, type Fact, type FactCandidate, type FactProposal, type ValueVerificationStatus } from './contracts';
 import type { FactVerificationReport } from './fact-verifier';
+import type { ExtractedPdf } from './pdf-intake';
 
 /**
  * Fact extraction contract for a model that reads PDFs (FR-66a spike, reused
@@ -15,7 +16,52 @@ import type { FactVerificationReport } from './fact-verifier';
  * to fill (per-row unit, positional values, ids with a strict alphabet).
  */
 
-export const FACT_EXTRACTION_PROMPT_VERSION = 'fr66a-2026-10-15.1';
+export const FACT_EXTRACTION_PROMPT_VERSION = 'fr66a-2026-10-15.2';
+
+/**
+ * Symbol-font characters that PDF text layers (Word manuals) carry in the
+ * Unicode private use area: the PRESYS TA manual prints "±" as U+F0B1 and "°"
+ * as U+F0B0. Copied as they are, they reach the catalog as boxes ("□ 0,1 ºC").
+ * Adobe Symbol encoding, only the signs that occur in specifications.
+ */
+const SYMBOL_FONT_CHARACTERS: Readonly<Record<string, string>> = {
+  '': '±', '': '°', '': '×', '': '÷', '': '≤', '': '≥', '': '≠', '': '≈',
+  '': 'µ', '': 'Ω', '': 'Δ', '': 'σ', '': '•', '': 'Ø',
+};
+/**
+ * Diameter signs. The manual draws the diameter with the Symbol empty-set
+ * glyph (U+F0C6, "∅"); the English folder prints "Ø". Both become "Ø", which
+ * the catalog font (Noto Sans) has; it has no "∅" or "⌀".
+ */
+const DIAMETER_SIGNS: Readonly<Record<string, string>> = { '∅': 'Ø', '⌀': 'Ø' };
+const SYMBOL_PATTERN = /[∅⌀]/gu;
+/**
+ * One character for one character (offsets never move): Symbol-font private
+ * use characters become the signs they print, and every diameter sign becomes
+ * "Ø". Applied alike to the file's text (evidence) and to the model's answer,
+ * so verification still compares exact text.
+ */
+export function normalizeSymbolText(text: string): string {
+  return text.replace(SYMBOL_PATTERN, character => SYMBOL_FONT_CHARACTERS[character] ?? DIAMETER_SIGNS[character] ?? character);
+}
+/** The PDF read by pdf-intake with its page text and text positions passed through `normalizeSymbolText`. */
+export function withNormalizedSymbols(pdf: ExtractedPdf): ExtractedPdf {
+  return {
+    ...pdf,
+    pages: pdf.pages.map(page => ({
+      ...page, text: normalizeSymbolText(page.text),
+      ...(page.runs ? { runs: page.runs.map(run => ({ ...run, text: normalizeSymbolText(run.text) })) } : {}),
+    })),
+  };
+}
+/**
+ * A unit as printed, without the footnote asterisk glued to it ("°C*" -> "°C",
+ * "% FS *" -> "% FS"); the footnote's text belongs in the condition.
+ * Superscript digits stay: "m²" is a unit, not a footnote.
+ */
+export function cleanUnit(unit: string): string {
+  return unit.replace(/\s*\*+$/u, '').trim();
+}
 
 /** One file sent to the model, with the page range it must read. */
 export interface ExtractionSource {
@@ -62,12 +108,12 @@ export function buildFactExtractionPrompt(input: {
     'Rules:',
     '1. Copy every value exactly as printed: same digits, decimal separator (comma or point), signs (-, +, ±), symbols (Ø, <, >) and words. Do not translate, convert units, round or fix typos.',
     '2. literal = a contiguous piece of the printed text holding the value. When the unit follows the number ("200 W"), literal is "200" and unit is "W". When the unit is printed inside a range ("-25 °C to +155 °C"), keep the whole range as the literal.',
-    '3. unit = the unit printed with the value ("°C", "W", "mm", "kg", "% FS"); empty when there is none.',
+    '3. unit = the unit printed with the value ("°C", "W", "mm", "kg", "% FS"), without a footnote mark such as "*"; empty when there is none.',
     '4. condition = a qualifier printed next to the value, under its label or as a footnote that applies to it ("Full range", "25 °C to 140 °C", "ambient temperature: 23 °C"), copied exactly; empty when there is none.',
     '5. Give one entry per model in "values". When one printed cell spans several model columns, repeat the value for each model it covers, with the same quote.',
     '6. When a model has no printed value in a row, leave that model out of the row. Never guess, never copy a value from another model, page or file.',
     '7. sourceRef.page = the physical page number inside the PDF file (the first page of the file is 1), NOT the page number printed on the page.',
-    '8. sourceRef.quote = a short contiguous run of the page text (at most 200 characters), copied character for character, that contains the row label and the value. For a table row, copy the label cell followed by the value cells of that row, left to right. Do not add, drop or reorder words or symbols inside the quote.',
+    '8. sourceRef.quote = a short contiguous run of the page text (at most 200 characters), copied character for character, that contains the row label and the value. For a table row, copy the first line of the label cell followed by the value cells of that row, left to right. Leave out a second line printed under the label (a note or a condition such as "ambient temperature: 23 °C"); it goes in condition. Do not add, drop or reorder words or symbols inside the quote.',
     `9. key = a short lowercase English slug (a-z, 0-9, -) naming the quantity, the same in any language. Use one of these when it fits: ${FACT_ROW_KEYS.join(', ')}. Otherwise create a similar slug.`,
     '10. label = the row label as printed on the page, in the language of the page.',
     '11. box_2d = optional; give it only when the value is inside a picture or a scanned area of the page: [ymin, xmin, ymax, xmax] normalized to 0-1000.',
@@ -171,7 +217,7 @@ export const MISSING_VALUE_REASON = 'Não encontrado nas páginas lidas.';
 const MAX_SECTIONS = 16, MAX_ROWS = 16, MAX_FACTS = 192, MAX_MODELS = 6, MAX_CANDIDATES = 4;
 const MAX_NAME = 160, MAX_QUOTE = 800;
 
-const oneLine = (value: string | undefined) => (value ?? '').replace(/\s+/gu, ' ').trim();
+const oneLine = (value: string | undefined) => normalizeSymbolText(value ?? '').replace(/\s+/gu, ' ').trim();
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
 const validText = (value: string, max: number) => value.length <= max && !CONTROL.test(value);
@@ -202,6 +248,8 @@ interface PendingRow { key: string; label: string; unit: string; condition: stri
  * condition become rows of their own (the proposal has one unit per row);
  * several readings of one position become a conflict; absent positions are
  * "missing". Anything that cannot be represented is listed in `dropped`.
+ * Texts go through `normalizeSymbolText` (so the evidence must too: verify
+ * against `withNormalizedSymbols(pdf)`) and units lose footnote asterisks.
  */
 export function toFactProposal(answer: unknown, sources: readonly ExtractionSource[],
   options: { readonly models?: readonly string[]; readonly title?: string } = {}): NormalizedExtraction {
@@ -238,8 +286,8 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
       const label = oneLine(row.label) || oneLine(row.key);
       const groups = new Map<string, PendingRow>();
       for (const value of row.values) {
-        const literal = oneLine(value.literal), quote = value.sourceRef.quote.trim();
-        const unit = oneLine(value.unit), condition = oneLine(value.condition);
+        const literal = oneLine(value.literal), quote = normalizeSymbolText(value.sourceRef.quote).trim();
+        const unit = cleanUnit(oneLine(value.unit)), condition = oneLine(value.condition);
         const index = modelIndex(value.model);
         if (index < 0) { drop(sectionTitle, label, value.model, literal, 'MODEL_NOT_REQUESTED'); continue; }
         const source = value.sourceRef.file !== undefined ? byId.get(oneLine(value.sourceRef.file))

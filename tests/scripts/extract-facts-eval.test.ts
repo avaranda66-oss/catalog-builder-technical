@@ -19,6 +19,8 @@ const truth: GroundTruth = GroundTruthSchema.parse({
     { sourceId: 'ta-folder', page: 9, row: 'radial-uniformity', labels: ['Radial Uniformity Dry Block'], values: { 'TA-25N': '± 0.01' } },
     { sourceId: 'y17', page: 11, row: 'weight', labels: ['Weight'], unit: 'kg', variant: ['DT'], values: { 'PCON-Y17': '6.2' } },
     { sourceId: 'y17', page: 11, row: 'weight', labels: ['Weight'], unit: 'kg', variant: ['RM'], values: { 'PCON-Y17': '8.5' } },
+    { sourceId: 'y17', page: 11, row: 'power-supply', labels: ['Power Supply'], unit: 'Vac', condition: '50/60 Hz',
+      values: { 'PCON-Y17': '100 to 240' } },
   ],
 });
 const value = (overrides: Partial<SourceFactValue>): SourceFactValue => ({
@@ -62,6 +64,22 @@ describe('extraction spike: answer key comparison', () => {
     expect(judgeValue(value({ ...weight, value: '6.2', condition: 'DT Version' }), truth).verdict).toBe('CORRECT');
     expect(judgeValue(value({ ...weight, value: '6.2', condition: 'RM Version' }), truth).verdict).toBe('WRONG');
     expect(judgeValue(value({ ...weight, value: '6.2' }), truth).note).toBe('valor certo, mas não diz de qual versão é');
+  });
+
+  it('accepts every version printed in one value, in page order, and nothing less', () => {
+    const weight = { sourceId: 'y17', model: 'PCON-Y17', key: 'weight', label: 'Weight', unit: '', page: 11 };
+    expect(judgeValue(value({ ...weight, value: '6.2 kg (DT Version) / 8.5 kg (RM Version)' }), truth))
+      .toMatchObject({ verdict: 'CORRECT', note: 'junta as versões num valor só, como a página imprime' });
+    expect(judgeValue(value({ ...weight, value: '6.2 kg (DT Version) / 9.5 kg (RM Version)' }), truth).verdict).toBe('WRONG');
+    expect(judgeValue(value({ ...weight, value: '8.5 kg (RM Version) / 6.2 kg (DT Version)' }), truth).verdict).toBe('WRONG');
+  });
+
+  it('accepts a unit that took the printed condition along, but not another unit', () => {
+    const power = { sourceId: 'y17', model: 'PCON-Y17', key: 'power-supply', label: 'Power Supply', value: '100 to 240', page: 11 };
+    expect(judgeValue(value({ ...power, unit: 'Vac 50/60 Hz' }), truth))
+      .toMatchObject({ verdict: 'CORRECT', note: 'a unidade inclui a condição impressa ao lado' });
+    expect(judgeValue(value({ ...power, unit: 'Vac', condition: '50/60 Hz' }), truth).verdict).toBe('CORRECT');
+    expect(judgeValue(value({ ...power, unit: 'Vdc 50/60 Hz' }), truth).verdict).toBe('WRONG');
   });
 
   it('counts wrong verified values (the go/no-go number), caught errors and coverage', () => {
