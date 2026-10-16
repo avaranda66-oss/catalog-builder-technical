@@ -1,0 +1,740 @@
+{
+ "version": 1,
+ "checkedOn": "2026-10-15",
+ "method": "Conferido à mão por leitura visual das páginas renderizadas (PyMuPDF, 110-130 dpi) e do texto nativo do pdf.js. Uma posição = linha x modelo (x versão, quando a linha tem versões). Páginas cobertas: toda leitura desses modelos nelas é julgada; fora delas, o valor vai para conferência manual.",
+ "sources": [
+  {
+   "sourceId": "ta-folder",
+   "file": "catalogospdf/presys-ta-folder (4).pdf",
+   "sha256": "9b71f3f7d92fddfdd9a36bbd52f2ae1cba3fb81cb7ecbbe4ad28b2cccb3f33e6",
+   "coveredPages": [
+    9,
+    10,
+    11,
+    12,
+    13
+   ],
+   "models": [
+    "TA-25N",
+    "TA-35N",
+    "TA-50N"
+   ]
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "file": "banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf",
+   "sha256": "cfa15db3a434e31e7a3b16048b46c3288f0526ec50f3be819ff900f8982c6598",
+   "coveredPages": [
+    5,
+    7
+   ],
+   "models": [
+    "TA-25N",
+    "TA-35N",
+    "TA-50N"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "file": "presyspdfs/pressure-controller-pcon-y17-folder.pdf",
+   "sha256": "7fe22a45ea61f66f501b52cbb57c11b1a8912a9d8590aa14e6615395a528bd1d",
+   "coveredPages": [
+    11
+   ],
+   "models": [
+    "PCON-Y17"
+   ]
+  }
+ ],
+ "rows": [
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "operating-range",
+   "labels": [
+    "Operating Range"
+   ],
+   "unit": "°C",
+   "condition": "ambient temperature: 23 °C",
+   "values": {
+    "TA-25N": "-25 °C to +155 °C",
+    "TA-35N": "-35 °C to +155 °C",
+    "TA-50N": "-50 °C to +155 °C"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "display-accuracy",
+   "labels": [
+    "Display Accuracy"
+   ],
+   "unit": "°C",
+   "condition": "Full range",
+   "values": {
+    "TA-25N": "± 0.1",
+    "TA-35N": "± 0.1",
+    "TA-50N": "± 0.1"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "resolution",
+   "labels": [
+    "Resolution"
+   ],
+   "unit": "°C",
+   "condition": "",
+   "values": {
+    "TA-25N": "0.01",
+    "TA-35N": "0.01",
+    "TA-50N": "0.01"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "stability",
+   "labels": [
+    "Stability"
+   ],
+   "unit": "°C",
+   "condition": "",
+   "values": {
+    "TA-25N": "± 0.02",
+    "TA-35N": "± 0.02",
+    "TA-50N": "± 0.02"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "axial-uniformity",
+   "labels": [
+    "Axial Uniformity (40 mm) Dry Block"
+   ],
+   "unit": "°C",
+   "condition": "Full range",
+   "values": {
+    "TA-25N": "± 0.05",
+    "TA-35N": "± 0.06",
+    "TA-50N": "± 0.07"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "radial-uniformity",
+   "labels": [
+    "Radial Uniformity Dry Block"
+   ],
+   "unit": "°C",
+   "condition": "Full range",
+   "values": {
+    "TA-25N": "± 0.01",
+    "TA-35N": "± 0.01",
+    "TA-50N": "± 0.02"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "heating-time",
+   "labels": [
+    "Heating Time"
+   ],
+   "unit": "min",
+   "condition": "25 °C to 140 °C",
+   "values": {
+    "TA-25N": "10",
+    "TA-35N": "16",
+    "TA-50N": "11"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "cooling-time",
+   "labels": [
+    "Cooling Time"
+   ],
+   "unit": "min",
+   "condition": "25 °C to -25 °C",
+   "values": {
+    "TA-25N": "11"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "cooling-time",
+   "labels": [
+    "Cooling Time"
+   ],
+   "unit": "min",
+   "condition": "25 °C to -35 °C",
+   "values": {
+    "TA-35N": "16"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "cooling-time",
+   "labels": [
+    "Cooling Time"
+   ],
+   "unit": "min",
+   "condition": "25 °C to -50 °C",
+   "values": {
+    "TA-50N": "25"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "electric-power",
+   "labels": [
+    "Electric Power"
+   ],
+   "unit": "W",
+   "condition": "",
+   "values": {
+    "TA-25N": "200",
+    "TA-35N": "300",
+    "TA-50N": "400"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "well-dimensions",
+   "labels": [
+    "Well Diameter x Depth"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "TA-25N": "Ø 25.4 mm (1”) x 124 mm",
+    "TA-35N": "Ø 25.4 mm (1”) x 124 mm",
+    "TA-50N": "Ø 25.4 mm (1”) x 124 mm"
+   },
+   "alsoAccept": [
+    "25.4 x 124"
+   ]
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "weight",
+   "labels": [
+    "Weight"
+   ],
+   "unit": "kg",
+   "condition": "",
+   "values": {
+    "TA-25N": "10.5",
+    "TA-35N": "10.5",
+    "TA-50N": "12.5"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-folder",
+   "page": 9,
+   "row": "dimensions",
+   "labels": [
+    "Dimension (HxWxD)"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "TA-25N": "260 x 200 x 305",
+    "TA-35N": "315 x 200 x 305",
+    "TA-50N": "315 x 200 x 305"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "operating-range",
+   "labels": [
+    "Faixa de Operação"
+   ],
+   "unit": "°C",
+   "condition": "Temperatura Ambiente: 20ºC",
+   "values": {
+    "TA-25N": "-25 a 140",
+    "TA-35N": "-35 a 140",
+    "TA-50N": "-50 a 140"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "display-accuracy",
+   "labels": [
+    "Exatidão do Display"
+   ],
+   "unit": "ºC",
+   "condition": "",
+   "values": {
+    "TA-25N": "± 0,1",
+    "TA-35N": "± 0,1",
+    "TA-50N": "± 0,1"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "resolution",
+   "labels": [
+    "Resolução"
+   ],
+   "unit": "ºC",
+   "condition": "",
+   "values": {
+    "TA-25N": "0,01",
+    "TA-35N": "0,01",
+    "TA-50N": "0,01"
+   },
+   "alsoAccept": [
+    "0,01 ºC (0,01 ºF)"
+   ]
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "stability",
+   "labels": [
+    "Estabilidade"
+   ],
+   "unit": "ºC",
+   "condition": "",
+   "values": {
+    "TA-25N": "0,02",
+    "TA-35N": "0,02",
+    "TA-50N": "0,02"
+   },
+   "alsoAccept": [
+    "0,02 ºC ou 0,04 ºF"
+   ]
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "axial-uniformity",
+   "labels": [
+    "Uniformidade Axial (40mm) Bloco Seco"
+   ],
+   "unit": "ºC",
+   "condition": "em toda a faixa",
+   "values": {
+    "TA-25N": "± 0,05",
+    "TA-35N": "± 0,06",
+    "TA-50N": "± 0,07"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "radial-uniformity",
+   "labels": [
+    "Uniformidade Radial Bloco Seco"
+   ],
+   "unit": "ºC",
+   "condition": "em toda a faixa",
+   "values": {
+    "TA-25N": "± 0,01",
+    "TA-35N": "± 0,01",
+    "TA-50N": "± 0,02"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "heating-time",
+   "labels": [
+    "Tempo de Aquecimento"
+   ],
+   "unit": "min",
+   "condition": "25 a 140 °C",
+   "values": {
+    "TA-25N": "10",
+    "TA-35N": "16",
+    "TA-50N": "11"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "cooling-time",
+   "labels": [
+    "Tempo de Resfriamento"
+   ],
+   "unit": "min",
+   "condition": "25 a -25 °C",
+   "values": {
+    "TA-25N": "11"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "cooling-time",
+   "labels": [
+    "Tempo de Resfriamento"
+   ],
+   "unit": "min",
+   "condition": "25 a -35 °C",
+   "values": {
+    "TA-35N": "16"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "cooling-time",
+   "labels": [
+    "Tempo de Resfriamento"
+   ],
+   "unit": "min",
+   "condition": "25 a -50 °C",
+   "values": {
+    "TA-50N": "25"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "electric-power",
+   "labels": [
+    "Potência Elétrica"
+   ],
+   "unit": "W",
+   "condition": "",
+   "values": {
+    "TA-25N": "200",
+    "TA-35N": "300",
+    "TA-50N": "400"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "well-dimensions",
+   "labels": [
+    "Diâmetro Profundidade do Poço",
+    "Diâmetro x Profundidade do Poço"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "TA-25N": "∅ 25,4 mm (1”) x 124 mm",
+    "TA-35N": "∅ 25,4 mm (1”) x 124 mm",
+    "TA-50N": "∅ 25,4 mm (1”) x 124 mm"
+   },
+   "alsoAccept": [
+    "25,4 x 124"
+   ]
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "weight",
+   "labels": [
+    "Peso"
+   ],
+   "unit": "kg",
+   "condition": "",
+   "values": {
+    "TA-25N": "10,5",
+    "TA-35N": "10,5",
+    "TA-50N": "12,5"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "dimensions",
+   "labels": [
+    "Dimensões (AxLxP)"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "TA-25N": "354,5x206x318",
+    "TA-35N": "354,5x206x318",
+    "TA-50N": "354,5x206x318"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "ta-manual-pt",
+   "page": 5,
+   "row": "warranty",
+   "labels": [
+    "Garantia"
+   ],
+   "unit": "",
+   "condition": "",
+   "values": {
+    "TA-25N": "1 ano, exceto para elementos de efeito Peltier",
+    "TA-35N": "1 ano, exceto para elementos de efeito Peltier",
+    "TA-50N": "1 ano, exceto para elementos de efeito Peltier"
+   },
+   "alsoAccept": [
+    "1"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "power-supply",
+   "labels": [
+    "Power Supply"
+   ],
+   "unit": "Vac",
+   "condition": "50/60 Hz",
+   "values": {
+    "PCON-Y17": "100 to 240"
+   },
+   "alsoAccept": [
+    "100 to 240 Vac 50/60 Hz"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "operating-ambient",
+   "labels": [
+    "Operating Ambient",
+    "Operating Ambient Temperature"
+   ],
+   "unit": "°C",
+   "condition": "90 % maximum relative humidity",
+   "values": {
+    "PCON-Y17": "0 to 50"
+   },
+   "alsoAccept": [
+    "0 to 50 °C, 90 % maximum relative humidity"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "dimensions",
+   "labels": [
+    "Dimensions"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "125 mm x 300 mm x 265 mm"
+   },
+   "alsoAccept": [
+    "125 x 300 x 265"
+   ],
+   "variant": [
+    "DT",
+    "Desktop"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "dimensions",
+   "labels": [
+    "Dimensions"
+   ],
+   "unit": "mm",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "132 mm x 483 mm x 300 mm"
+   },
+   "alsoAccept": [
+    "132 x 483 x 300"
+   ],
+   "variant": [
+    "RM",
+    "Rack"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "weight",
+   "labels": [
+    "Weight"
+   ],
+   "unit": "kg",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "6.2"
+   },
+   "alsoAccept": [],
+   "variant": [
+    "DT",
+    "Desktop"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "weight",
+   "labels": [
+    "Weight"
+   ],
+   "unit": "kg",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "8.5"
+   },
+   "alsoAccept": [],
+   "variant": [
+    "RM",
+    "Rack"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "warranty",
+   "labels": [
+    "Warranty"
+   ],
+   "unit": "year",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "1"
+   },
+   "alsoAccept": [
+    "1 year"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "accuracy",
+   "labels": [
+    "Accuracy"
+   ],
+   "unit": "% FS",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "± 0.012"
+   },
+   "alsoAccept": []
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "control-stability",
+   "labels": [
+    "Control Stability",
+    "Control* Stability"
+   ],
+   "unit": "% FS",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "± 0.002"
+   },
+   "alsoAccept": [],
+   "variant": [
+    "(3)",
+    "(4)",
+    "(5)",
+    "(6)",
+    "(7)",
+    "(8)",
+    "3 to 8",
+    "1 bar",
+    "2 bar",
+    "7 bar",
+    "20 bar",
+    "35 bar",
+    "70 bar"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "control-stability",
+   "labels": [
+    "Control Stability",
+    "Control* Stability"
+   ],
+   "unit": "% FS",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "± 0.003"
+   },
+   "alsoAccept": [],
+   "variant": [
+    "(9)",
+    "range 9",
+    "210 bar",
+    "3000 psi",
+    "21 MPa"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "pneumatic-connection",
+   "labels": [
+    "Pneumatic Connections"
+   ],
+   "unit": "",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "1/8\""
+   },
+   "alsoAccept": [
+    "1/8\" Female BSPP"
+   ]
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "row": "barometric-reference",
+   "labels": [
+    "Barometric Reference",
+    "BR - Barometric Reference",
+    "Barometric Reference Accuracy"
+   ],
+   "unit": "",
+   "condition": "",
+   "values": {
+    "PCON-Y17": "0,16 mmHg / 0,2 mbar"
+   },
+   "alsoAccept": [
+    "0,16",
+    "0,2"
+   ]
+  }
+ ]
+}
