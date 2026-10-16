@@ -9,6 +9,27 @@ import { ISSUE_FIXES } from './issue-fixes';
 export interface EditorLocateRequest {
   readonly id: number;
   readonly diagnostic: Diagnostic;
+  /**
+   * Called once the editor has used the request, so the owner can drop it: an editor that mounts again later (for
+   * example after the recovery check) must not jump to an old problem on its own.
+   */
+  readonly onHandled?: (id: number) => void;
+}
+
+/** What should receive keyboard focus once the editor shows the located object. */
+interface PendingFocus {
+  readonly objectId: string;
+  readonly grid: boolean;
+  /** The selection when the request started; any other selection change cancels the pending focus. */
+  readonly from?: string;
+}
+
+function focusTarget(document: CatalogDocument, target: ProjectedLayoutDiagnostic, from?: string): PendingFocus | undefined {
+  if (target.containerGroupId) return target.topLevelObjectId ? { objectId: target.topLevelObjectId, grid: false, from } : undefined;
+  if (!target.objectId) return undefined;
+  const page = document.pages.find((candidate) => candidate.id === target.pageId);
+  const object = page?.objects.find((candidate) => candidate.id === target.objectId);
+  return { objectId: target.objectId, grid: object?.type === 'table' && Boolean(target.cellId || target.rowId), from };
 }
 
 /**
@@ -58,14 +79,16 @@ export function arrivalMessage(diagnostic: Diagnostic): string {
 export function useIssueNavigation(options: IssueNavigationOptions): (diagnostic: Diagnostic) => void {
   const latest = React.useRef(options);
   latest.current = options;
+  const pendingFocus = React.useRef<PendingFocus>();
   const goTo = React.useCallback((diagnostic: Diagnostic) => {
-    const { document, prepare, locate, showPage, openDiagnostics, announce } = latest.current;
+    const { document, prepare, locate, showPage, openDiagnostics, announce, selectedObjectId } = latest.current;
     if (!prepare()) return;
     const listedBeside = W2D_DIAGNOSTIC_CODES.has(diagnostic.code);
     // Announce first: guidance from the locate logic itself (for example, a grouped table) must win.
     if (!listedBeside) announce(arrivalMessage(diagnostic));
     const target = locatableIssue(document, diagnostic);
     if (target) {
+      pendingFocus.current = focusTarget(document, target, selectedObjectId);
       locate(target);
       if (listedBeside) openDiagnostics();
       return;
@@ -74,9 +97,29 @@ export function useIssueNavigation(options: IssueNavigationOptions): (diagnostic
   }, []);
 
   const { request, selectedObjectId, selectedHasProblems } = options;
+  const handledRequest = React.useRef<number>();
   React.useEffect(() => {
-    if (request) goTo(request.diagnostic);
+    if (!request || handledRequest.current === request.id) return;
+    handledRequest.current = request.id;
+    request.onHandled?.(request.id);
+    goTo(request.diagnostic);
   }, [request, goTo]);
+
+  // The locate logic focuses the object right away, but a request from the review changes the page outside a click,
+  // so the new page is drawn later. Focus again once the editor shows the located object.
+  React.useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    if (selectedObjectId !== pending.objectId) {
+      if (selectedObjectId !== pending.from) pendingFocus.current = undefined;
+      return;
+    }
+    pendingFocus.current = undefined;
+    const root = globalThis.document;
+    const element = (pending.grid ? root.querySelector<HTMLElement>('[data-table-grid-overlay]') : null)
+      ?? root.querySelector<HTMLElement>(`[data-editor-object-id="${CSS.escape(pending.objectId)}"]`);
+    if (element && root.activeElement !== element) element.focus();
+  });
 
   const openedFor = React.useRef<string>();
   React.useEffect(() => {

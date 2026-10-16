@@ -5,6 +5,7 @@ import type { FitHeightMeasurement } from '../../editor/table-fit-height-authori
 import { contentDiagnostics } from '../../publication/preflight';
 import { publicationDiagnosticLocation, publicationDiagnosticText } from '../publication-diagnostic-presentation';
 import { issueFixFor } from './issue-fixes';
+import { locatableIssue } from './use-issue-navigation';
 import './IssuesPanel.css';
 
 const MEASURING_CODES = new Set(['RENDER_GEOMETRY_MISMATCH', 'LAYOUT_UNSTABLE']);
@@ -48,6 +49,9 @@ export function IssuesPanel({ document, diagnostics, simple, onLocate, session, 
   const [open, setOpen] = React.useState(false);
   const wrapper = React.useRef<HTMLDivElement>(null);
   const toggle = React.useRef<HTMLButtonElement>(null);
+  const panel = React.useRef<HTMLElement>(null);
+  /** Set by a one-click fix: the object it changed, so focus has somewhere to go if the fixed item disappears. */
+  const fixedObject = React.useRef<{ readonly objectId?: string }>();
   const issues = React.useMemo(() => editorIssues(document, diagnostics), [document, diagnostics]);
   const errors = issues.filter((issue) => issue.severity === 'ERROR').length;
   const warnings = issues.length - errors;
@@ -55,6 +59,21 @@ export function IssuesPanel({ document, diagnostics, simple, onLocate, session, 
   React.useEffect(() => {
     if (issues.length === 0) setOpen(false);
   }, [issues.length]);
+  React.useEffect(() => {
+    const fixed = fixedObject.current;
+    if (!fixed) return;
+    fixedObject.current = undefined;
+    const root = globalThis.document;
+    const active = root.activeElement;
+    // The fix button disappears with the item it fixed; keep the keyboard in the list, or go to the fixed object.
+    if (active && active !== root.body && active.isConnected) return;
+    if (issues.length > 0 && panel.current) {
+      panel.current.focus();
+      return;
+    }
+    const object = fixed.objectId ? root.querySelector<HTMLElement>(`[data-editor-object-id="${CSS.escape(fixed.objectId)}"]`) : null;
+    object?.focus();
+  }, [issues]);
   React.useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -74,7 +93,9 @@ export function IssuesPanel({ document, diagnostics, simple, onLocate, session, 
   }
 
   return (
-    <div className="vnext-issues" ref={wrapper}>
+    // Escape closes the list from anywhere inside it, including the counter that keeps focus after opening it.
+    <div className="vnext-issues" ref={wrapper}
+      onKeyDown={(event) => { if (open && event.key === 'Escape') { event.stopPropagation(); close(); } }}>
       <button
         ref={toggle}
         type="button"
@@ -89,12 +110,13 @@ export function IssuesPanel({ document, diagnostics, simple, onLocate, session, 
       </button>
       {open && (
         <section
+          ref={panel}
           id="vnext-issues-panel"
           className="vnext-issues-panel"
           role="dialog"
           aria-modal="false"
           aria-labelledby="vnext-issues-heading"
-          onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}
+          tabIndex={-1}
         >
           <header>
             <h2 id="vnext-issues-heading">Problemas do catálogo</h2>
@@ -123,6 +145,8 @@ export function IssuesPanel({ document, diagnostics, simple, onLocate, session, 
                           <button type="button" className="vnext-btn-secondary" data-issue-action="fix"
                             onClick={() => {
                               if (!prepare()) return;
+                              const target = locatableIssue(document, issue);
+                              fixedObject.current = { objectId: target?.containerGroupId ? target.topLevelObjectId : target?.objectId };
                               onMessage(fix.run({ document: session.getSnapshot().document, session, diagnostic: issue, measurement }).message);
                             }}>{fix.label}</button>
                         )}

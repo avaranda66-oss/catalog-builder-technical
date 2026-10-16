@@ -56,6 +56,10 @@ function RuntimeWorkspace({
   // "Corrigir este item": the review closes and the editor of the same open session goes to the object.
   const [locateRequest, setLocateRequest] = React.useState<EditorLocateRequest & { readonly openSessionId: string }>();
   const locateSequence = React.useRef(0);
+  // Drop a request once the editor used it, so an editor that mounts again does not jump to an old problem.
+  const dropLocateRequest = React.useCallback((id: number) => {
+    setLocateRequest(current => current?.id === id ? undefined : current);
+  }, []);
   React.useEffect(() => {
     if (!getPublicationSource) return;
     document.body.setAttribute('data-vnext-print-policy', '');
@@ -118,7 +122,7 @@ function RuntimeWorkspace({
         <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)}
           waitingMessage={publicationWaitingMessage(snapshot.save)}
           onLocateDiagnostic={diagnostic => setLocateRequest({
-            id: ++locateSequence.current, diagnostic, openSessionId: snapshot.binding.openSessionId,
+            id: ++locateSequence.current, diagnostic, openSessionId: snapshot.binding.openSessionId, onHandled: dropLocateRequest,
           })} />
       )}
       {runtime.recoveryStartup && (

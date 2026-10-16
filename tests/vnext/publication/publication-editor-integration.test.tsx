@@ -90,6 +90,18 @@ function harness(saveCAS: CatalogRepository['saveCAS'], document = catalog()) {
   return { view, runtime, session };
 }
 
+/** Runs without React's test batching, so updates are scheduled as in a real browser. */
+async function asInBrowser(run: () => Promise<void>): Promise<void> {
+  const environment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = false;
+  try {
+    await run();
+  } finally {
+    environment.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+}
+
 function publishButton(container: HTMLElement): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>('[data-editor-action="publish"]');
   if (!button) throw new Error('Missing Publicar / PDF');
@@ -144,11 +156,18 @@ describe('FR-13 "Corrigir este item" and the issues list reach the object', () =
     await act(async () => { fireEvent.click(publishButton(view.container)); });
     const dialog = await within(document.body).findByRole('dialog', { name: 'Revisar e publicar' });
     expect(within(dialog).getByText('Página 2 · texto 1')).toBeInTheDocument();
-    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Corrigir este item' })); });
-    await waitFor(() => expect(document.querySelector('[data-publication-host]')).toBeNull());
+    // Click as a browser does (outside act), so React schedules the page change the way it really does.
+    await asInBrowser(async () => {
+      within(dialog).getByRole('button', { name: 'Corrigir este item' }).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await waitFor(() => expect(document.querySelector('[data-publication-host]')).toBeNull());
+      await waitFor(() => expect(view.container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-active-page-id', 'page-second'));
+    });
     const shell = view.container.querySelector('[data-vnext-shell]')!;
     await waitFor(() => expect(shell).toHaveAttribute('data-active-page-id', 'page-second'));
-    expect(view.container.querySelector('[data-editor-object-id="second-text"]')).toHaveAttribute('data-selected', 'true');
+    const target = view.container.querySelector<HTMLElement>('[data-editor-object-id="second-text"]')!;
+    expect(target).toHaveAttribute('data-selected', 'true');
+    // Keyboard focus reaches the object on the other page (not "Publicar / PDF", where Enter would reopen the review).
+    await waitFor(() => expect(document.activeElement).toBe(target));
     // The side list only shows layout problems, so the message area says what to fix on arrival.
     const notices = view.container.querySelector<HTMLElement>('[data-editor-notices]')!;
     expect(within(notices).getByRole('status')).toHaveTextContent('Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.');

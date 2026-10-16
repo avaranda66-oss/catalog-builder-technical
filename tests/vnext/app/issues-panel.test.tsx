@@ -4,7 +4,7 @@ import { createDocumentSession, type DocumentSession } from '@/vnext/application
 import { createMinimalW2CTable, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { IssuesPanel, editorIssues } from '@/vnext/app/editor/IssuesPanel';
 import { ISSUE_FIXES, issueFixFor } from '@/vnext/app/editor/issue-fixes';
-import { arrivalMessage, locatableIssue } from '@/vnext/app/editor/use-issue-navigation';
+import { arrivalMessage, locatableIssue, useIssueNavigation, type EditorLocateRequest } from '@/vnext/app/editor/use-issue-navigation';
 import { plainRichText, type CatalogDocument, type Diagnostic, type TableObject } from '@/vnext/domain';
 
 afterEach(cleanup);
@@ -86,6 +86,46 @@ describe('FR-13 issues list', () => {
     expect(document.activeElement).toBe(toggle);
   });
 
+  it('also closes with Escape while focus is still on the counter', () => {
+    setup();
+    const toggle = screen.getByRole('button', { name: /Problemas do catálogo/ });
+    toggle.focus();
+    fireEvent.click(toggle);
+    fireEvent.keyDown(toggle, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('keeps the keyboard in the list when a fix removes its own item', () => {
+    const { rerender } = setup();
+    fireEvent.click(screen.getByRole('button', { name: /Problemas do catálogo/ }));
+    const fix = screen.getByRole('button', { name: 'Remover linhas vazias' });
+    fix.focus();
+    act(() => { fireEvent.click(fix); });
+    rerender();
+    expect(screen.queryByRole('button', { name: 'Remover linhas vazias' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('dialog', { name: 'Problemas do catálogo' }));
+  });
+
+  it('moves the keyboard to the fixed table when the last problem is gone', () => {
+    const only = catalog(specTable('spec', [['Parâmetro', 'Valor'], ['Faixa', '10 a 20 °C'], ['', '']]));
+    const pageObject = document.createElement('button');
+    pageObject.setAttribute('data-editor-object-id', 'spec');
+    document.body.append(pageObject);
+    try {
+      const { view, rerender } = setup(only, []);
+      fireEvent.click(screen.getByRole('button', { name: 'Problemas do catálogo: 0 a corrigir · 1 para revisar' }));
+      const fix = screen.getByRole('button', { name: 'Remover linhas vazias' });
+      fix.focus();
+      act(() => { fireEvent.click(fix); });
+      rerender();
+      expect(view.container).toBeEmptyDOMElement();
+      expect(document.activeElement).toBe(pageObject);
+    } finally {
+      pageObject.remove();
+    }
+  });
+
   it('removes empty rows with one click, as one step that Desfazer reverts', () => {
     const { session, onMessage, rerender } = setup();
     const before = session.getSnapshot().document;
@@ -134,6 +174,27 @@ describe('FR-13 fix registry and locating', () => {
     expect(locatableIssue(grouped, { code: 'UNRESOLVED_PLACEHOLDER', severity: 'ERROR', details: '', pageId: 'page-two', objectId: 'spec', cellId: 'spec-cell-1-1' }))
       .toMatchObject({ containerGroupId: 'group', topLevelObjectId: 'group', groupedChild: true });
     expect(locatableIssue(document, { code: 'X', severity: 'ERROR', details: '', pageId: 'missing-page', objectId: 'spec' })).toBeUndefined();
+  });
+
+  it('uses a request from the publication review once and tells its owner, so it is not repeated later', () => {
+    const document = catalog();
+    const locate = vi.fn();
+    function Probe({ request }: { request?: EditorLocateRequest }) {
+      useIssueNavigation({ document, request, prepare: () => true, locate, showPage: vi.fn(), openDiagnostics: vi.fn(), announce: vi.fn(),
+        selectedHasProblems: false });
+      return null;
+    }
+    const onHandled = vi.fn();
+    const request: EditorLocateRequest = { id: 1, onHandled,
+      diagnostic: { code: 'TABLE_WIDTH_INFEASIBLE', severity: 'ERROR', details: '', pageId: 'page-two', objectId: 'spec' } };
+    const view = render(<Probe request={request} />);
+    expect(locate).toHaveBeenCalledOnce();
+    expect(onHandled).toHaveBeenCalledWith(1);
+    view.rerender(<Probe request={request} />);
+    expect(locate).toHaveBeenCalledOnce();
+    view.rerender(<Probe request={{ ...request, id: 2 }} />);
+    expect(locate).toHaveBeenCalledTimes(2);
+    expect(onHandled).toHaveBeenLastCalledWith(2);
   });
 
   it('tells the person what to do on arrival, pointing to the one-click fix when there is one', () => {
