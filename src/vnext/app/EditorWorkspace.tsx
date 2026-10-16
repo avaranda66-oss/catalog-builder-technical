@@ -131,6 +131,10 @@ import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 import { TableStyleInspector } from './TableStyleInspector';
+import { EditorNotices } from './editor/EditorNotices';
+import { IssuesPanel } from './editor/IssuesPanel';
+import { PublishAction } from './editor/PublishAction';
+import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -348,6 +352,7 @@ export function EditorWorkspace({
   onRequestLibrary,
   onRequestTranslation,
   onRequestPublication,
+  locateRequest,
   demoAssets = false,
   simpleByDefault = false,
 }: {
@@ -359,6 +364,8 @@ export function EditorWorkspace({
   onRequestLibrary?: () => void;
   onRequestTranslation?: () => void;
   onRequestPublication?: () => void;
+  /** "Corrigir este item" from the publication review: go to the page and select the object or cell. */
+  locateRequest?: EditorLocateRequest;
 }) {
   const snapshot = useDocumentSession(session);
   const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
@@ -3794,6 +3801,9 @@ export function EditorWorkspace({
       `[data-editor-object-id="${CSS.escape(object.id)}"]`
     )?.focus());
   };
+  const goToIssue = useIssueNavigation({ document, request: locateRequest, prepare: () => prepareAuthoringForContextChangeRef.current(),
+    locate: locateLayoutDiagnostic, showPage: setActivePage, openDiagnostics: () => setDiagnosticsOpen(true), announce: setStatusMessage,
+    selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
   return (
     <div
@@ -3860,10 +3870,13 @@ export function EditorWorkspace({
           </span>
           {onRequestTranslation && <button type="button" className="vnext-action-translate" data-editor-action="translate" data-authoring-context-transition=""
             onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
-          {onRequestPublication && <button type="button" className="vnext-action-publish" data-editor-action="publish" data-authoring-context-transition=""
-            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestPublication(); }}>Publicar / PDF</button>}
+          {onRequestPublication && <PublishAction prepare={() => prepareAuthoringForContextChangeRef.current()} onOpen={onRequestPublication} onMessage={setStatusMessage}
+            save={persistence && { phase: persistence.save.phase, run: () => persistence.runtime.manualSave() }} />}
         </div>
       </header>
+      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)} onMessage={setStatusMessage} documentTitle={document.title}
+        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'}
+        conflictState={conflictResolutionState} conflictResolution={persistence?.runtime.conflictResolutionCoordinator} />
 
       <div className="vnext-workspace">
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
@@ -3896,14 +3909,8 @@ export function EditorWorkspace({
           <div className="vnext-canvas-meta">
             <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
             <div className="vnext-canvas-statuses">
-              {pageDiagnostics.length > 0 && (
-                <span
-                  className={'vnext-diagnostic-summary ' + (pageDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR') ? 'is-error' : 'is-warning')}
-                  data-page-diagnostic-summary=""
-                >
-                  {simpleByDefault ? `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} a corrigir · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} para revisar` : `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)`}
-                </span>
-              )}
+              <IssuesPanel document={document} diagnostics={canonicalDiagnostics} simple={simpleByDefault} onLocate={goToIssue} session={session}
+                measurement={measuredLayout?.source === document ? measuredLayout : null} prepare={() => prepareAuthoringForContextChangeRef.current()} onMessage={setStatusMessage} />
               {!simpleByDefault && <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>}
             </div>
           </div>
@@ -5487,58 +5494,15 @@ export function EditorWorkspace({
           ) : <p className="vnext-context-help">{simpleByDefault
             ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
             : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>}
-          {(!simpleByDefault || persistence?.save.phase === 'conflict') && <>
+          {!simpleByDefault && <>
           <div className="vnext-divider" />
-          <h3>{persistence?.save.phase === 'conflict' ? 'Atenção ao salvamento' : 'Salvamento'}</h3>
+          <h3>Salvamento</h3>
           <p>
             {persistence
               ? fatherSaveExplanation(persistence.save)
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
-          {persistence?.save.phase === 'conflict' && (
-            <div data-persistence-conflict-actions="">
-              <p>Este catálogo mudou em outro lugar. Seu trabalho continua preservado nesta sessão.</p>
-              <button
-                type="button"
-                className="vnext-inspector-action"
-                disabled={conflictResolutionBusy}
-                onClick={() => {
-                  void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
-                    if (!result.ok) {
-                      setStatusMessage('Não foi possível abrir a versão mais recente. Mantenha esta aba aberta e tente novamente.');
-                    }
-                  });
-                }}
-              >
-                {conflictResolutionState === 'resolving-open-latest'
-                  ? 'Abrindo versão mais recente…'
-                  : 'Abrir versão mais recente'}
-              </button>
-              <button
-                type="button"
-                className="vnext-inspector-action"
-                disabled={conflictResolutionBusy}
-                onClick={() => {
-                  void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
-                    if (!result.ok) {
-                      setStatusMessage('Não foi possível salvar seu trabalho como cópia. Mantenha esta aba aberta e tente novamente.');
-                    }
-                  });
-                }}
-              >
-                {conflictResolutionState === 'resolving-save-as-copy'
-                  ? 'Salvando cópia…'
-                  : 'Salvar meu trabalho como cópia'}
-              </button>
-            </div>
-          )}
           </>}
-          {persistence?.localProtection === 'unavailable' && (
-            <p className="vnext-live-status" role="alert">
-              Não foi possível proteger as alterações neste computador. Mantenha esta aba aberta e use Salvar antes de sair.
-            </p>
-          )}
-          {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
         {assistantOpen && simpleByDefault && (
           <aside

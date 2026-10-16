@@ -1,10 +1,18 @@
 import { walkPageObjects, type CatalogDocument, type Diagnostic } from '@/vnext/domain';
+import type { SaveProjection } from '../persistence';
+import { fatherSaveExplanation } from './save-presentation';
 
 /** Read-only wording for publication review; diagnostic severity and print eligibility stay with the engine. */
 export function publicationDiagnosticMessage(code: string): string {
   switch (code) {
     case 'PUBLICATION_SOURCE_CHANGED':
-      return 'O catálogo ou o acesso mudou. Volte ao editor, salve e abra esta revisão novamente.';
+      return 'O catálogo ou o acesso mudou. Clique em Verificar novamente. Se continuar, volte ao editor e salve.';
+    case 'UNRESOLVED_PLACEHOLDER':
+      return 'Ainda há um texto provisório (como “A COMPLETAR”). Troque pela informação correta antes de publicar.';
+    case 'EMPTY_TABLE_ROW':
+      return 'Esta tabela tem linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram.';
+    case 'IMAGE_LOW_RESOLUTION':
+      return 'Esta imagem tem pouca resolução para o tamanho em que aparece e pode sair borrada na impressão. Use uma foto maior ou diminua a imagem na página.';
     case 'SAFE_AREA_VIOLATION':
       return 'O objeto está próximo demais da borda da página. Revise a posição e deixe espaço para a margem de impressão.';
     case 'OBJECT_OUTSIDE_PAGE':
@@ -67,6 +75,32 @@ export function publicationDiagnosticMessage(code: string): string {
   }
 }
 
+/** Reads one `key=value` pair from the engine detail of a content diagnostic (see publication/preflight.ts). */
+function detailValue(issue: Diagnostic, key: string): string | undefined {
+  for (const part of issue.details.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator > 0 && part.slice(0, separator).trim() === key) return part.slice(separator + 1).trim();
+  }
+  return undefined;
+}
+
+/** Wording that may quote the exact provisional text or count; everything else falls back to the code message. */
+export function publicationDiagnosticText(issue: Diagnostic): string {
+  if (issue.code === 'UNRESOLVED_PLACEHOLDER') {
+    const token = detailValue(issue, 'token');
+    const where = { title: 'no título da tabela', note: 'na nota da tabela', legend: 'na legenda da tabela' }[detailValue(issue, 'surface') ?? ''];
+    return token
+      ? `Ainda está escrito “${token}”${where ? ` ${where}` : ''}. Troque pela informação correta antes de publicar.`
+      : publicationDiagnosticMessage(issue.code);
+  }
+  if (issue.code === 'EMPTY_TABLE_ROW') {
+    const count = Number(detailValue(issue, 'emptyRows'));
+    if (count === 1) return 'Esta tabela tem 1 linha vazia, que sairá em branco no PDF. Preencha a linha ou remova-a.';
+    if (count > 1) return `Esta tabela tem ${count} linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram.`;
+  }
+  return publicationDiagnosticMessage(issue.code);
+}
+
 export function publicationDiagnosticLocation(document: CatalogDocument, issue: Diagnostic): string {
   const pageIndex = document.pages.findIndex(page => page.id === issue.pageId);
   if (pageIndex < 0) return 'Catálogo';
@@ -84,6 +118,11 @@ export function publicationDiagnosticLocation(document: CatalogDocument, issue: 
       const rowIndex = object.table.rows.findIndex(row => row.id === (cell?.rowId ?? issue.rowId));
       const columnIndex = cell ? object.table.columns.findIndex(column => column.id === cell.columnId) : -1;
       if (rowIndex >= 0) parts.push(`linha ${rowIndex + 1}${columnIndex >= 0 ? `, coluna ${columnIndex + 1}` : ''}`);
+      else if (issue.annotationId) {
+        const noteIndex = object.table.annotations.findIndex(note => note.id === issue.annotationId);
+        parts.push(noteIndex >= 0 ? `nota ${noteIndex + 1}` : 'nota');
+      } else if (detailValue(issue, 'surface') === 'title') parts.push('título');
+      else if (detailValue(issue, 'surface') === 'legend') parts.push('legenda');
     }
   }
   return parts.join(' · ');
@@ -101,4 +140,18 @@ export function publicationDiagnosticDetails(issue: Diagnostic): readonly (reado
     if (value !== undefined) fields.push([label, value]);
   }
   return fields;
+}
+
+/**
+ * Shown by the publication review while the saved version is not available yet. A save that is simply running
+ * needs no explanation; a save that cannot finish says why, so the review never looks stuck. A conflict can only be
+ * resolved in the editor (the band above the page is not reachable while the review is open), and the safe choice,
+ * keeping the work as a copy, comes first (FR-43).
+ */
+export function publicationWaitingMessage(save: SaveProjection): string | undefined {
+  if (save.phase === 'idle' || save.phase === 'saving') return undefined;
+  if (save.phase === 'conflict') {
+    return 'Este catálogo foi salvo em outro lugar. Clique em Voltar ao editor e escolha “Salvar meu trabalho como cópia” no aviso acima da página.';
+  }
+  return `${fatherSaveExplanation(save)} A verificação começa sozinha assim que o catálogo for salvo.`;
 }

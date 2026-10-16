@@ -3,7 +3,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { DocumentRenderer } from '../rendering';
 import { releasePublicationResources, reviewPublication, samePublicationSource, verifyPublicationForPrint, type PublicationReviewResult, type PublicationSource } from '../publication/review';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
-import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage } from './publication-diagnostic-presentation';
+import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticText } from './publication-diagnostic-presentation';
 import type { Diagnostic } from '../domain';
 
 /** The browser uses the page title as its suggested PDF filename. */
@@ -12,11 +12,14 @@ function pdfFileTitle(title: string): string {
     .replace(/\.pdf$/i, '').replace(/[. ]+$/, '').slice(0, 120) || 'Catálogo';
 }
 
-export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagnostic }: {
+export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagnostic, waitingMessage }: {
   getSource: () => PublicationSource | undefined; subscribe: (listener: () => void) => () => void; onClose: () => void;
   onLocateDiagnostic?: (diagnostic: Diagnostic) => void;
+  /** Plain explanation shown while the saved version is not available yet (for example, a failed save). */
+  waitingMessage?: string;
 }) {
-  const [source] = React.useState(getSource);
+  const [source, setSource] = React.useState(getSource);
+  const [attempt, setAttempt] = React.useState(0);
   const [preview, setPreview] = React.useState<PublicationReviewResult>();
   const [result, setResult] = React.useState<PublicationReviewResult>();
   const [running, setRunning] = React.useState(true);
@@ -30,8 +33,17 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
   }, []);
   const isCurrent = React.useCallback(() => Boolean(source && samePublicationSource(source, getSource())), [source, getSource]);
   const current = React.useSyncExternalStore(subscribe, isCurrent, isCurrent);
-  const status = !current ? 'STALE' : running ? 'CHECKING' : result?.status ?? 'BLOCKED';
+  const status = !source ? 'WAITING' : !current ? 'STALE' : running ? 'CHECKING' : result?.status ?? 'BLOCKED';
   useReviewDialog(dialog, status);
+
+  // FR-50: opened while the last edit is still being saved. Wait for the saved version instead of getting stuck.
+  React.useEffect(() => {
+    if (source) return;
+    // Running and source change together, so the status never flashes BLOCKED before the check starts.
+    const capture = () => { const next = getSource(); if (next) { setRunning(true); setSource(next); } };
+    capture();
+    return subscribe(capture);
+  }, [source, getSource, subscribe]);
 
   React.useEffect(() => {
     const reviewGeneration = ++generation.current;
@@ -47,7 +59,7 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
     };
     void run();
     return () => { generation.current = reviewGeneration + 1; cancelled = true; if (owned) releasePublicationResources(owned); };
-  }, [source, isCurrent]);
+  }, [source, isCurrent, attempt]);
 
   React.useEffect(() => {
     const before = () => {
@@ -79,8 +91,18 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
     } catch {
       host.current?.removeAttribute('data-print-approved');
       restoreTitle();
-      if (printingGeneration === generation.current) setPrintMessage('A versão mudou ou não pôde ser verificada. Feche a revisão e confira o catálogo antes de imprimir.');
+      if (printingGeneration === generation.current) setPrintMessage('A versão mudou ou não pôde ser verificada. Clique em Verificar novamente antes de imprimir.');
     } finally { if (printingGeneration === generation.current) setRunning(false); }
+  };
+
+  /** Re-reads the saved version and runs every check again, without closing the review. */
+  const recheck = () => {
+    generation.current++;
+    host.current?.removeAttribute('data-print-approved');
+    restoreTitle();
+    setPrintMessage(''); setResult(undefined); setPreview(undefined); setRunning(true);
+    setSource(getSource());
+    setAttempt(value => value + 1);
   };
 
   const close = () => { generation.current++; host.current?.removeAttribute('data-print-approved'); restoreTitle(); onClose(); };
@@ -93,17 +115,19 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
         <button type="button" className="vnext-btn-secondary" onClick={close}>Voltar ao editor</button></header>
       <div className="vnext-publication-controls">
         <p id="publication-description" className="vnext-dialog-description">Confira as páginas e a verificação do catálogo antes de gerar o PDF.</p>
-        {!source ? <p role="alert" className="vnext-status" data-tone="warning">Salve o catálogo e aguarde a confirmação antes de publicar.</p>
-          : !current ? <p role="alert" className="vnext-status" data-tone="warning">O catálogo ou o acesso mudou. Feche a revisão, salve e abra novamente.</p>
+        {!source ? <p role="status" className="vnext-status" data-tone={waitingMessage ? 'warning' : 'pending'} data-publication-waiting="">
+            {waitingMessage ?? 'Salvando o catálogo… A verificação começa sozinha assim que o salvamento terminar.'}</p>
+          : !current ? <p role="alert" className="vnext-status" data-tone="warning">O catálogo ou o acesso mudou depois desta verificação. Clique em Verificar novamente.</p>
           : <p role="status" className="vnext-status" data-tone={running ? 'pending' : result?.status === 'READY' ? 'success' : 'error'}>
-            {running ? 'Verificando páginas, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.' : 'Publicação bloqueada. Corrija os itens abaixo no editor e salve novamente.'}</p>}
+            {running ? 'Verificando páginas, textos, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.' : 'Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.'}</p>}
+        {!running && <button type="button" className="vnext-btn-secondary" data-publication-action="recheck" onClick={recheck}>Verificar novamente</button>}
         {result?.diagnostics.length ? <div>
           <h3>{result.status === 'BLOCKED' ? 'Itens para corrigir' : 'Pontos para revisar'}</h3>
           <ul className="vnext-publication-diagnostics">{result.diagnostics.map((item, i) => <li key={i}
             className="vnext-publication-diagnostic" data-severity={item.severity} data-publication-diagnostic={item.code}>
             <strong className="vnext-diagnostic-location">{publicationDiagnosticLocation(result.document, item)}</strong>
             <span className="vnext-diagnostic-kind">{item.severity === 'ERROR' ? 'Correção necessária' : 'Revisar'}</span>
-            <p className="vnext-diagnostic-message">{publicationDiagnosticMessage(item.code)}</p>
+            <p className="vnext-diagnostic-message">{publicationDiagnosticText(item)}</p>
             {onLocateDiagnostic && item.pageId && <button type="button" className="vnext-btn-secondary" disabled={!current}
               onClick={() => { if (isCurrent()) { close(); onLocateDiagnostic(item); } }}>Corrigir este item</button>}
             <details className="vnext-technical-details"><summary>Detalhes técnicos</summary>
@@ -114,11 +138,7 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
         </div> : null}
         {printMessage && <p role="alert" className="vnext-status" data-tone="error">{printMessage}</p>}
         <p className="vnext-dialog-description">O PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas as páginas na prévia abaixo.</p>
-        <ol className="vnext-dialog-description" aria-label="Como salvar o PDF">
-          <li>Clique em <strong>Imprimir / salvar PDF</strong> para abrir a janela de impressão.</li>
-          <li>Em Destino, escolha <strong>Salvar como PDF</strong>. Use papel <strong>A4</strong>, todas as páginas, escala <strong>100%</strong>, sem margens e sem cabeçalhos e rodapés. Ative os gráficos de segundo plano para manter as cores das tabelas.</li>
-          <li>Clique em <strong>Salvar</strong> e escolha uma pasta. {source && <>Nome sugerido: <strong>{pdfFileTitle(source.document.title)}.pdf</strong>.</>}</li>
-        </ol>
+        <p className="vnext-dialog-description" data-publication-print-instruction="">Na janela que abrir, escolha <strong>Salvar como PDF</strong> (em Destino ou Impressora) e clique em <strong>Salvar</strong>.</p>
         <button type="button" className="vnext-btn-primary" data-publication-action="print" disabled={status !== 'READY' || Boolean(printMessage)} onClick={() => { void print(); }}>Imprimir / salvar PDF</button>
       </div>
       <div ref={renderer} className="vnext-publication-pages" role="region" tabIndex={0} aria-label="Prévia de todas as páginas">

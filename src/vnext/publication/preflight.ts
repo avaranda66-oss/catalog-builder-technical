@@ -1,4 +1,4 @@
-import type { CatalogDocument } from '../domain/editorial-model';
+import type { AssetRef,CatalogDocument,CellContent,RichText,TableModel } from '../domain/editorial-model';
 import type { TablePlan } from '../rendering/render-plan';
 import type { LayoutSnapshot } from '../rendering/measurement';
 import { findElement,intrinsicMetrics } from '../rendering/measurement';
@@ -57,7 +57,7 @@ export function printableContentOverlapDiagnostics(doc:CatalogDocument,root:HTML
   return result;
 }
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
-  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc),...printableContentOverlapDiagnostics(doc,root,plans)];
+  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc),...printableContentOverlapDiagnostics(doc,root,plans),...contentDiagnostics(doc)];
   for(const page of doc.pages) {
     const frames=walkPageObjects(page).map(({object})=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
     for(const frame of frames) {
@@ -86,4 +86,129 @@ export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TableP
     }
   }
   return result;
+}
+
+/**
+ * Content preflight (FR-51). Pure checks over the canonical document: they never read the DOM and never edit.
+ * Provisional text blocks publication with its exact location; empty rows and soft images are review points.
+ */
+export const PLACEHOLDER_DIAGNOSTIC_CODE='UNRESOLVED_PLACEHOLDER';
+export const EMPTY_TABLE_ROW_DIAGNOSTIC_CODE='EMPTY_TABLE_ROW';
+export const IMAGE_LOW_RESOLUTION_DIAGNOSTIC_CODE='IMAGE_LOW_RESOLUTION';
+export const MINIMUM_PRINT_PPI=150;
+type DiagnosticLocation=Partial<Omit<Diagnostic,'code'|'details'>>;
+
+// Letters/digits around a match mean it is part of another word. For "XXX" a hyphen, slash, dot or underscore
+// also counts, so ordering-code masks such as "TA-50N-PB-XXXX" stay legitimate content.
+const PLACEHOLDER_PATTERNS:readonly RegExp[]=[
+  /(?<![\p{L}\p{N}])a\s+completar(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}])a\s+confirmar(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}])tbd(?![\p{L}\p{N}])/iu,
+  /(?<![\p{L}\p{N}\-/._])x{3,}(?![\p{L}\p{N}\-/._])/iu,
+  /(?<![\p{L}\p{N}])revisar\s+com\s+(?:a\s+)?engenharia(?![\p{L}\p{N}])/iu,
+];
+
+/** Returns the provisional marker found in printed text, exactly as written, or undefined. */
+export function findPlaceholder(text:string):string|undefined {
+  let first:{index:number;value:string}|undefined;
+  for(const pattern of PLACEHOLDER_PATTERNS) {
+    const match=pattern.exec(text);
+    if(match&&(!first||match.index<first.index))first={index:match.index,value:match[0].replace(/\s+/g,' ')};
+  }
+  return first?.value;
+}
+
+export function richTextPlainText(rich:RichText):string {
+  return rich.paragraphs.map(paragraph=>paragraph.inlines.map(inline=>inline.kind==='text'?inline.text:'\n').join('')).join('\n');
+}
+
+function cellText(content:CellContent):string|undefined {
+  if(content.type==='richText')return richTextPlainText(content.value);
+  if(content.type==='technicalCode')return content.value;
+  return undefined;
+}
+
+function isEmptyCellContent(content:CellContent):boolean {
+  if(content.type==='empty')return true;
+  const text=cellText(content);
+  return text!==undefined&&text.trim().length===0;
+}
+
+export function placeholderDiagnostics(doc:CatalogDocument):Diagnostic[] {
+  const result:Diagnostic[]=[];
+  const report=(text:string,surface:string,location:DiagnosticLocation)=>{
+    const token=findPlaceholder(text);
+    if(token)result.push(diagnostic(PLACEHOLDER_DIAGNOSTIC_CODE,`surface=${surface}; token=${token}`,location));
+  };
+  for(const page of doc.pages)for(const {object} of walkPageObjects(page)) {
+    const location={pageId:page.id,objectId:object.id};
+    if(object.type==='text') { report(richTextPlainText(object.text),'text',location); continue; }
+    if(object.type!=='table')continue;
+    const table=object.table,tableLocation={...location,tableId:table.id};
+    if(table.title)report(richTextPlainText(table.title),'title',tableLocation);
+    for(const cell of table.cells) {
+      if(cell.coveredBy)continue;
+      const text=cellText(cell.content);
+      if(text!==undefined)report(text,'cell',{...tableLocation,rowId:cell.rowId,cellId:cell.id});
+    }
+    for(const annotation of table.annotations)report(richTextPlainText(annotation.text),'note',{...tableLocation,annotationId:annotation.id});
+    for(const entry of table.legend)report(`${entry.markerCode} ${richTextPlainText(entry.text)}`,'legend',tableLocation);
+  }
+  return result;
+}
+
+/** One review point per table, anchored at its first fully empty row (section rows are visual separators). */
+export function emptyTableRowDiagnostics(doc:CatalogDocument):Diagnostic[] {
+  const result:Diagnostic[]=[];
+  for(const page of doc.pages)for(const {object} of walkPageObjects(page)) {
+    if(object.type!=='table')continue;
+    const rowIds=emptyTableRowIds(object.table);
+    if(rowIds.length===0)continue;
+    result.push(diagnostic(EMPTY_TABLE_ROW_DIAGNOSTIC_CODE,`emptyRows=${rowIds.length}`,
+      {pageId:page.id,objectId:object.id,tableId:object.table.id,rowId:rowIds[0],severity:'WARNING'}));
+  }
+  return result;
+}
+
+export function emptyTableRowIds(table:TableModel):string[] {
+  const byId=new Map(table.cells.map(cell=>[cell.id,cell]));
+  return table.rows.filter(row=>row.role!=='section').filter(row=>{
+    const cells=table.cells.filter(cell=>cell.rowId===row.id);
+    return cells.length>0&&cells.every(cell=>{
+      const owner=cell.coveredBy?byId.get(cell.coveredBy):cell;
+      return !owner||isEmptyCellContent(owner.content);
+    });
+  }).map(row=>row.id);
+}
+
+/** Effective print density of an asset drawn into a box, honouring contain/cover scaling. */
+export function effectivePpi(asset:Pick<AssetRef,'widthPx'|'heightPx'>,boxWidthMm:number,boxHeightMm:number,fit:'contain'|'cover'):number {
+  const horizontal=asset.widthPx/(boxWidthMm/25.4),vertical=asset.heightPx/(boxHeightMm/25.4);
+  return fit==='cover'?Math.min(horizontal,vertical):Math.max(horizontal,vertical);
+}
+
+export function imageResolutionDiagnostics(doc:CatalogDocument):Diagnostic[] {
+  const result:Diagnostic[]=[];
+  const assets=new Map(doc.assets.map(asset=>[asset.id,asset]));
+  const check=(assetId:string,widthMm:number,heightMm:number,fit:'contain'|'cover',location:DiagnosticLocation)=>{
+    const asset=assets.get(assetId);
+    if(!asset)return;
+    const ppi=Math.floor(effectivePpi(asset,widthMm,heightMm,fit));
+    if(ppi<MINIMUM_PRINT_PPI)result.push(diagnostic(IMAGE_LOW_RESOLUTION_DIAGNOSTIC_CODE,
+      `effectivePpi=${ppi}; minimumPpi=${MINIMUM_PRINT_PPI}`,{...location,severity:'WARNING'}));
+  };
+  for(const page of doc.pages)for(const {object} of walkPageObjects(page)) {
+    if(object.type==='image')check(object.assetId,object.frame.widthMm,object.frame.heightMm,object.fit,{pageId:page.id,objectId:object.id});
+    if(object.type!=='table')continue;
+    for(const cell of object.table.cells) {
+      const image=cell.contentPresentation?.image;
+      if(cell.content.type==='image'&&image)check(cell.content.assetId,image.targetWidthMm,image.targetHeightMm,image.fit,
+        {pageId:page.id,objectId:object.id,tableId:object.table.id,rowId:cell.rowId,cellId:cell.id});
+    }
+  }
+  return result;
+}
+
+export function contentDiagnostics(doc:CatalogDocument):Diagnostic[] {
+  return [...placeholderDiagnostics(doc),...emptyTableRowDiagnostics(doc),...imageResolutionDiagnostics(doc)];
 }
