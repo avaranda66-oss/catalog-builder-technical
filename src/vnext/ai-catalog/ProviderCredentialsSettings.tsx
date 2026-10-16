@@ -56,9 +56,9 @@ export function ProviderCredentialsSettings({
       setSaved(previous => [...new Set([...previous, provider])]);
       setUnlocked(previous => previous.filter(item => item !== provider));
       onLock?.(provider);
-      setStatus('Credencial criptografada e salva neste navegador. Use Desbloquear para ativá-la nesta sessão.');
+      setStatus('Chave guardada neste navegador, protegida pela sua senha. Para usá-la, clique em “Desbloquear para esta sessão”.');
     } catch {
-      setError('Não foi possível salvar. Informe uma chave e uma senha de proteção com pelo menos 12 caracteres. Verifique o armazenamento local.');
+      setError('Não foi possível guardar. Informe a chave e uma senha com pelo menos 12 caracteres, e confira se este navegador permite guardar dados.');
     } finally {
       setKey(''); setPassphrase(''); setBusy(false);
     }
@@ -73,7 +73,7 @@ export function ProviderCredentialsSettings({
       setUnlocked([provider]);
       setStatus('Chave liberada nesta aba. Ela deixa de valer quando você fecha a página.');
     } catch {
-      setError('Não foi possível desbloquear a credencial. Verifique a senha ou cadastre novamente a chave.');
+      setError('Não foi possível desbloquear a chave. Confira a senha ou cadastre a chave de novo.');
     } finally {
       setUnlockPassphrase(''); setBusy(false);
     }
@@ -85,9 +85,9 @@ export function ProviderCredentialsSettings({
       setSaved(previous => previous.filter(item => item !== provider));
       setUnlocked(previous => previous.filter(item => item !== provider));
       onLock?.(provider);
-      setStatus('Credencial removida deste navegador. Isso não revoga a chave no provedor.');
+      setStatus('Chave removida deste navegador. Ela continua válida no site do provedor até você cancelá-la lá.');
     } catch {
-      setError('Não foi possível remover o registro. Tente novamente.');
+      setError('Não foi possível remover a chave. Tente de novo.');
     } finally { setBusy(false); }
   };
   return <section className="ai-card" aria-label="Configurações dos provedores de IA">
@@ -101,12 +101,12 @@ export function ProviderCredentialsSettings({
     </label>}
     <p role="status">Status: {unlocked.includes(provider) ? 'Desbloqueado nesta sessão' :
       saved.includes(provider) ? 'Salvo e bloqueado' : 'Sem chave cadastrada'}</p>
-    <label htmlFor="vnext-provider-api-key">Chave API de {PROVIDER_CONFIG[provider].label}
+    <label htmlFor="vnext-provider-api-key">Sua chave do {PROVIDER_CONFIG[provider].label}
       <input id="vnext-provider-api-key" aria-label="Chave API do provedor" type="password"
         autoComplete="off" spellCheck={false} disabled={busy} value={key}
         onChange={event => setKey(event.target.value)} />
     </label>
-    <label htmlFor="vnext-provider-passphrase">Senha para criptografar a chave neste dispositivo
+    <label htmlFor="vnext-provider-passphrase">Crie uma senha para proteger a chave (mínimo 12 caracteres)
       <input id="vnext-provider-passphrase" aria-label="Senha de proteção do cofre" type="password"
         autoComplete="new-password" disabled={busy} value={passphrase}
         onChange={event => setPassphrase(event.target.value)} />
@@ -126,13 +126,13 @@ export function ProviderCredentialsSettings({
         {unlocked.includes(provider) && <button type="button" disabled={busy} onClick={() => {
           setUnlocked(previous => previous.filter(item => item !== provider));
           onLock?.(provider);
-          setStatus('Chave bloqueada nesta sessão, permanecendo criptografada neste dispositivo.');
+          setStatus('Chave bloqueada nesta aba. Ela continua guardada e protegida neste computador.');
         }}>Bloquear chave nesta sessão</button>}
         <button type="button" disabled={busy} onClick={() => { void remove(); }}>Remover chave do dispositivo</button>
       </div>
     </div>}
     {status && <p role="status">{status}</p>}
     {error && <p role="alert">{error}</p>}
-    <p className="ai-boundary">O navegador não é um cofre de hardware: malware, extensões maliciosas ou código injetado podem acessar chaves enquanto estiverem desbloqueadas. Não compartilhe a senha de proteção. Perder essa senha exige recadastrar a chave.</p>
+    <p className="ai-boundary">Enquanto a chave estiver desbloqueada, programas maliciosos ou extensões do navegador podem lê-la. Não compartilhe a senha. Se esquecer a senha, cadastre a chave de novo.</p>
   </section>;
 }
