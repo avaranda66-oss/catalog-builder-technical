@@ -553,12 +553,12 @@ describe('W3.D startup recovery race defense', () => {
     expect(deleteInvalid).not.toHaveBeenCalled();
     expect((await memory.get(key))?.status).toBe('INVALID');
 
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
-    expect(view.getByRole('button', { name: 'Confirmar descarte local' })).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    expect(view.getByRole('button', { name: 'Sim, apagar a cópia' })).toBeTruthy();
     expect(deleteInvalid).not.toHaveBeenCalled();
     expect((await memory.get(key))?.status).toBe('INVALID');
 
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
     await waitForEditor(view.container);
     expect(deleteInvalid).toHaveBeenCalledTimes(1);
     expect(await memory.get(key)).toBeUndefined();
@@ -586,8 +586,8 @@ describe('W3.D startup recovery race defense', () => {
     await waitFor(() => expect(view.getByText(
       'Esta cópia de segurança está danificada e não pode ser aberta.'
     )).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.getByText(
       'Não foi possível descartar a cópia de segurança. Tente novamente.'
@@ -616,10 +616,10 @@ describe('W3.D startup recovery race defense', () => {
     const { runtime } = makeRuntime(memory, cloud);
     const view = render(<VNextApp runtime={runtime} />);
 
-    await waitFor(() => expect(view.getByRole('button', { name: 'Descartar recuperação local' })).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
+    await waitFor(() => expect(view.getByRole('button', { name: 'Apagar a cópia deste computador' })).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
     memory.seedRaw(key, record);
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.getByRole('button', { name: 'Recuperar minhas alterações' })).toBeTruthy());
     expect(view.getByText(

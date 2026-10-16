@@ -67,10 +67,10 @@ async function resolveRecoveryByDiscardingThroughUi(page) {
   const shell = page.locator('[data-vnext-shell]');
   await Promise.race([dialog.waitFor(), shell.waitFor()]);
   for (let attempts = 0; attempts < 8 && await dialog.isVisible().catch(() => false); attempts += 1) {
-    const discard = dialog.getByRole('button', { name: 'Descartar recuperação local', exact: true }).first();
+    const discard = dialog.getByRole('button', { name: 'Apagar a cópia deste computador', exact: true }).first();
     if (!await discard.isVisible().catch(() => false)) break;
     await discard.click();
-    await dialog.getByRole('button', { name: 'Confirmar descarte local', exact: true }).first().click();
+    await dialog.getByRole('button', { name: 'Sim, apagar a cópia', exact: true }).first().click();
   }
   await waitForEditor(page);
 }
@@ -232,7 +232,7 @@ async function assertRecoveryPreviewAtViewport(page, width, minimumButtonHeight)
   const actions = [
     'Recuperar minhas alterações',
     'Ver alterações recuperadas',
-    'Descartar recuperação local',
+    'Apagar a cópia deste computador',
   ];
   const buttonGeometry = {};
   for (const name of actions) {

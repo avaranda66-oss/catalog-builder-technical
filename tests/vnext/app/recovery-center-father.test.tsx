@@ -147,9 +147,16 @@ describe('FR-42 local backup screen only for the open catalog, in plain language
     expect(within(dialog).getByText(/não chegou a ser confirmado/)).toBeInTheDocument();
     expect(runtime.workspace.getSnapshot().save.phase).toBe('ambiguous');
     expect(view.container.querySelector('[data-vnext-shell]')).toBeNull();
+    // One recommended choice in navy, the others plain; no repeated "Não foi possível confirmar o salvamento" line.
+    expect(within(dialog).getByRole('button', { name: 'Conferir se foi salvo' })).toHaveClass('vnext-btn-primary');
+    expect(within(dialog).getByRole('button', { name: 'Abrir versão salva na nuvem' })).toHaveClass('vnext-btn-secondary');
+    expect(within(dialog).getByRole('button', { name: 'Apagar a cópia deste computador' })).toHaveClass('vnext-btn-secondary');
+    expect(dialog.querySelectorAll('.vnext-btn-primary')).toHaveLength(1);
+    expect(within(dialog).queryByText('Não foi possível confirmar o salvamento')).toBeNull();
+    expect(dialog.textContent).not.toMatch(/gravação pendente|recuperação local|descarte local/);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Descartar recuperação local' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.container.querySelector('[data-vnext-shell]')).not.toBeNull());
     expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull();

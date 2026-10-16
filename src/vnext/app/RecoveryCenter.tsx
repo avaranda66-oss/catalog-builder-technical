@@ -249,8 +249,8 @@ export function RecoveryCenter({
           <h2>Não foi possível verificar alterações locais.</h2>
           {message && <p role="status">{message}</p>}
           <div className="vnext-recovery-actions">
-            <button type="button" onClick={() => void refresh()}>Tentar novamente</button>
-            <button type="button" onClick={continueWithoutRecovery}>Continuar sem recuperação local</button>
+            <button type="button" className="vnext-btn-primary" onClick={() => void refresh()}>Tentar novamente</button>
+            <button type="button" className="vnext-btn-secondary" onClick={continueWithoutRecovery}>Continuar sem recuperação local</button>
           </div>
         </div>
       </section>
@@ -273,21 +273,26 @@ export function RecoveryCenter({
             && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
           const canOpenCloud = 'remote' in candidate.decision;
           const summary = recoveryCandidateSummary(candidate);
+          // One recommended choice (navy), the others plain: recover, else check the pending save, else open the saved version.
+          const recommended = canRecover ? 'recover' : pending ? 'check' : canOpenCloud ? 'cloud' : undefined;
+          const style = (action: 'recover' | 'check' | 'cloud') => action === recommended ? 'vnext-btn-primary' : 'vnext-btn-secondary';
+          // This decision sentence already says the last save was not confirmed: do not repeat it in a second line.
+          const decisionMentionsPendingSave = Boolean(pending) && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
           return (
             <article key={candidate.id} className="vnext-recovery-card">
               <h3>{recoveryCandidateTitle(candidate)}</h3>
               {summary && <p data-recovery-summary="">{summary}</p>}
-              <p>{recoveryDecisionMessage(candidate)}</p>
-              {pending && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
+              <p data-recovery-decision="">{recoveryDecisionMessage(candidate)}</p>
+              {pending && !decisionMentionsPendingSave && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
               <div className="vnext-recovery-actions">
-                {canRecover && <button type="button" onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
-                {pending && <button type="button" onClick={() => void reconcile(candidate)}>Verificar gravação pendente</button>}
-                {canOpenCloud && <button type="button" onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>}
-                <button type="button" onClick={() => setInspectionId(
+                {canRecover && <button type="button" className={style('recover')} onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
+                {pending && <button type="button" className={style('check')} onClick={() => void reconcile(candidate)}>Conferir se foi salvo</button>}
+                {canOpenCloud && <button type="button" className={style('cloud')} onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>}
+                <button type="button" className="vnext-btn-secondary" onClick={() => setInspectionId(
                   inspectionId === candidate.id ? undefined : candidate.id
                 )}>Ver alterações recuperadas</button>
-                <button type="button" onClick={() => void discard(candidate)}>
-                  {confirmDiscardId === candidate.id ? 'Confirmar descarte local' : 'Descartar recuperação local'}
+                <button type="button" className="vnext-btn-secondary" onClick={() => void discard(candidate)}>
+                  {confirmDiscardId === candidate.id ? 'Sim, apagar a cópia' : 'Apagar a cópia deste computador'}
                 </button>
               </div>
               {inspectionId === candidate.id && (
