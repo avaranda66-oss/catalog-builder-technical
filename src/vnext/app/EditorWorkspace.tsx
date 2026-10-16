@@ -135,7 +135,7 @@ import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridTool
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
 import { TextEditToolbar } from './editor/TextEditToolbar';
-import { SIDE_PROPERTIES_PANEL_ID, SidePanelTabs } from './editor/SidePanelTabs';
+import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
 import { AssistantDock } from './editor/AssistantDock';
 import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
 
@@ -4161,8 +4161,7 @@ export function EditorWorkspace({
         </main>
 
         {/* FR-17: the right column shows "Propriedades" or "Assistente", chosen by the tabs on top. */}
-        <div className="vnext-side-column" data-side-panel={simpleByDefault && assistantOpen ? 'assistant' : 'properties'}>
-        {simpleByDefault && <SidePanelTabs active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')} />}
+        <SidePanelColumn showTabs={simpleByDefault} active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')}>
         <aside className="vnext-info" id={SIDE_PROPERTIES_PANEL_ID} aria-label="Propriedades do objeto" hidden={simpleByDefault && assistantOpen}>
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
@@ -4641,7 +4640,7 @@ export function EditorWorkspace({
             />}
           </AssistantDock>
         )}
-        </div>
+        </SidePanelColumn>
       </div>
       <EditorDiagnosticsProbe
         document={document}
