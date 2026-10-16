@@ -234,7 +234,7 @@ describe('W3.H deterministic autosave coordinator', () => {
     expect(active.runtime.workspace.getSnapshot().save.label).toBe('Saved');
   });
 
-  it('AUTOSAVE-09 keeps OFFLINE work dirty and locally recoverable without tight-looping', async () => {
+  it('AUTOSAVE-09 keeps OFFLINE work dirty and locally recoverable, retrying only after 5 s (FR-44), never in a tight loop', async () => {
     const document = documentFixture();
     const repository = new StrictCasCatalogRepository(document);
     const recoveryRepository = new InMemoryRecoveryRepository();
@@ -249,13 +249,15 @@ describe('W3.H deterministic autosave coordinator', () => {
     clock.advanceBy(25);
     await settleAsyncWork(2);
     await active.runtime.saveCoordinator.waitForActiveSave();
+    await settleAsyncWork();
 
     expect(repository.saveCAS).toHaveBeenCalledTimes(1);
     expect(active.runtime.workspace.getSnapshot()).toMatchObject({
       dirty: true,
       save: { phase: 'unavailable', label: 'Offline / unavailable' },
     });
-    expect(clock.pendingCount()).toBe(0);
+    // FR-44: exactly one timer waits for the first automatic retry; nothing runs before it.
+    expect(clock.pendingCount()).toBe(1);
     const recovery = await recoveryRepository.listByScope('scope:user-a');
     const valid = recovery.find((item) => item.status === 'VALID');
     expect(valid?.status).toBe('VALID');
@@ -263,9 +265,18 @@ describe('W3.H deterministic autosave coordinator', () => {
       expect(valid.record.documentSnapshot.title).toBe('Offline local');
       expect(valid.record.pendingRemoteMutation).toBeUndefined();
     }
-    clock.advanceBy(5000);
+    clock.advanceBy(4999);
     await settleAsyncWork();
     expect(repository.saveCAS).toHaveBeenCalledTimes(1);
+    clock.advanceBy(1);
+    // The connection is back for the automatic retry (the override answered only once): it saves by itself.
+    await vi.waitFor(() => expect(active.runtime.workspace.getSnapshot()).toMatchObject({
+      dirty: false,
+      save: { phase: 'idle', label: 'Saved' },
+    }));
+    expect(repository.saveCAS).toHaveBeenCalledTimes(2);
+    expect(active.runtime.workspace.getSnapshot().save.retry).toBeUndefined();
+    expect(clock.pendingCount()).toBe(0);
     await active.runtime.dispose();
   });
 

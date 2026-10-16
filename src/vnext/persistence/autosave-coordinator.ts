@@ -1,4 +1,4 @@
-import type { ManualSaveResult, SaveCoordinator, SaveFailureCode } from './save-coordinator';
+import type { ManualSaveResult, SaveCoordinator } from './save-coordinator';
 import type { PersistenceWorkspace, SaveRetryProjection } from './workspace';
 
 export interface AutosaveClock {
@@ -21,6 +21,8 @@ export interface AutosaveCoordinatorOptions {
 const DEFAULT_DEBOUNCE_MS = 1200;
 export const AUTOSAVE_RETRY_DELAYS_MS: readonly number[] = [5_000, 15_000, 60_000];
 export const AUTOSAVE_MAX_RETRIES = 5;
+
+type SaveFailureCode = Extract<ManualSaveResult, { readonly ok: false }>['error']['code'];
 
 /** Failures that may pass by themselves: no connection, a server hiccup, an unconfirmed save. */
 const RETRYABLE_FAILURES: ReadonlySet<SaveFailureCode> = new Set<SaveFailureCode>([

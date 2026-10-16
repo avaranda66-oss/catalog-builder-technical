@@ -1,7 +1,7 @@
 import type React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
 import {
@@ -161,24 +161,26 @@ describe('FR-12 editor notices', () => {
   });
 });
 
-describe('FR-43 conflict band (safe text)', () => {
+describe('FR-43 conflict (blocking dialog, wired through the notices)', () => {
   function conflictSetup(state: ConflictResolutionState = 'idle') {
     const resolution = {
       openLatest: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: true, catalogId: 'a', kind: 'latest' })),
       saveAsCopy: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: false, error: { code: 'OFFLINE' } })),
+      keepsLocalBackup: true,
     };
     const rendered = renderNotices({ save: conflict, conflictState: state, conflictResolution: resolution });
     return { ...rendered, resolution };
   }
 
-  it('offers the copy first and says exactly what each choice keeps', () => {
+  it('opens a dialog instead of a band, offers the copy first and says exactly what each choice keeps', () => {
     conflictSetup();
-    const band = screen.getByRole('alert');
-    expect(band).toHaveTextContent('Este catálogo foi salvo em outro lugar enquanto você editava.');
-    expect(band).toHaveTextContent('cria o catálogo “Cópia de TA-25N — Ficha técnica” com tudo o que está nesta tela');
-    expect(band).toHaveTextContent('O catálogo original fica com a versão salva em outro lugar.');
-    expect(band).toHaveTextContent('descarta as alterações desta tela');
-    const buttons = band.querySelectorAll('[data-persistence-conflict-actions] button');
+    expect(document.querySelector('[data-editor-notice-bands]')).toBeNull();
+    const dialog = screen.getByRole('alertdialog', { name: 'Este catálogo foi salvo em outro lugar enquanto você editava' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveTextContent('cria um catálogo novo, “Cópia de TA-25N — Ficha técnica”, com tudo o que está nesta tela');
+    expect(dialog).toHaveTextContent('O catálogo “TA-25N — Ficha técnica” fica com a versão salva no outro lugar; nada dele é apagado.');
+    expect(dialog).toHaveTextContent('Uma cópia de segurança delas fica guardada neste computador');
+    const buttons = dialog.querySelectorAll('[data-persistence-conflict-actions] button');
     expect([...buttons].map((button) => button.textContent)).toEqual(['Salvar meu trabalho como cópia', 'Abrir versão mais recente']);
   });
 
@@ -186,7 +188,7 @@ describe('FR-43 conflict band (safe text)', () => {
     const { resolution } = conflictSetup();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir versão mais recente' }));
     expect(resolution.openLatest).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Tem certeza? As alterações desta tela que ainda não foram salvas serão descartadas.');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Tem certeza?');
     fireEvent.click(screen.getByRole('button', { name: 'Não, voltar' }));
     expect(screen.getByRole('button', { name: 'Abrir versão mais recente' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir versão mais recente' }));
@@ -194,16 +196,40 @@ describe('FR-43 conflict band (safe text)', () => {
     expect(resolution.openLatest).toHaveBeenCalledOnce();
   });
 
-  it('reports a failed copy in plain language and disables both choices while one runs', async () => {
+  it('reports a failed copy inside the dialog in plain language and disables both choices while one runs', async () => {
     const { resolution, onMessage } = conflictSetup();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar meu trabalho como cópia' })); });
     expect(resolution.saveAsCopy).toHaveBeenCalledOnce();
-    expect(onMessage).toHaveBeenCalledWith('Não foi possível salvar seu trabalho como cópia. Mantenha esta aba aberta e tente novamente.');
+    expect(within(screen.getByRole('alertdialog')).getByRole('alert'))
+      .toHaveTextContent('Não foi possível salvar seu trabalho como cópia. Confira a conexão e tente de novo. Seu trabalho continua nesta tela.');
+    expect(onMessage).not.toHaveBeenCalled();
     cleanup();
     conflictSetup('resolving-save-as-copy');
     const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-persistence-conflict-actions] button')];
     expect(buttons.map((button) => [button.textContent, button.disabled])).toEqual([
       ['Salvando cópia…', true], ['Abrir versão mais recente', true],
     ]);
+  });
+});
+
+describe('FR-44 save explanations in the notices', () => {
+  it('says that the automatic save will try again, and what to do once it gave up', () => {
+    const waiting: SaveProjection = { phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true,
+      retry: { attempt: 1, maxAttempts: 5, nextAttemptAt: 1, exhausted: false } };
+    const { view } = renderNotices({ save: waiting });
+    const band = screen.getByRole('alert');
+    expect(band).toHaveTextContent('Vamos tentar salvar de novo sozinhos em instantes. Você também pode clicar em Salvar.');
+    expect(band).toHaveAttribute('data-tone', 'warning');
+    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x"
+      save={{ ...waiting, retry: { attempt: 5, maxAttempts: 5, exhausted: true } }} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Tentamos salvar várias vezes sem conseguir. Confira a conexão e clique em Salvar.');
+    expect(screen.getByRole('alert')).toHaveAttribute('data-tone', 'error');
+  });
+
+  it('explains an expired session apart from a connection problem', () => {
+    renderNotices({ save: { phase: 'unauthorized', label: 'Session expired', dirty: true, canSave: true } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Sua sessão expirou');
+    expect(screen.getByRole('alert')).toHaveTextContent('Entre novamente com a mesma conta e clique em Salvar.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('conexão');
   });
 });

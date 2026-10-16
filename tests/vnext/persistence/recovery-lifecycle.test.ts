@@ -203,7 +203,8 @@ describe('W3.D Save recovery lifecycle', () => {
       { code: 'OFFLINE' as const, phase: 'unavailable', label: 'Offline / unavailable' },
       { code: 'REMOTE_FAILURE' as const, phase: 'unavailable', label: 'Offline / unavailable' },
       { code: 'CONFLICT' as const, phase: 'conflict', label: 'Conflict' },
-      { code: 'UNAUTHORIZED' as const, phase: 'unauthorized', label: 'Offline / unavailable' },
+      // FR-44: an expired session has its own label, apart from "no connection".
+      { code: 'UNAUTHORIZED' as const, phase: 'unauthorized', label: 'Session expired' },
     ];
 
     for (const expected of cases) {
