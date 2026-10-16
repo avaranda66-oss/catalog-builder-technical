@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  displayLocale, formatExcelBoolean, formatExcelDate, formatExcelNumber, formatGeneralNumber, isDateFormat,
+  displayLocale, excelSerialToDate, formatExcelBoolean, formatExcelDate, formatExcelDateValue, formatExcelNumber, formatGeneralNumber,
+  isCurrencyFormat, isDateFormat,
 } from '../../../src/vnext/ai-catalog/excel-display-format';
 
 const pt = displayLocale('pt-BR');
@@ -42,6 +43,30 @@ describe('Excel display formatting (what the father sees in Excel)', () => {
   it('marks formats it cannot reproduce instead of guessing silently', () => {
     expect(formatExcelNumber(150, '[>100]0;0', pt)).toEqual({ text: '150', exact: false });
     expect(formatExcelNumber(0.5, '# ?/?', pt).exact).toBe(false);
+    // Engineering notation follows Excel's rule (exponent in steps of 3) but stays marked for review.
+    expect(formatExcelNumber(12345, '##0.0E+0', pt)).toEqual({ text: '12,3E+3', exact: false });
+    expect(formatExcelNumber(0.00012345, '##0.0E+0', pt).text).toBe('123,5E-6');
+  });
+
+  it('drops the spaces Excel only uses to align columns ("_)", "?", accounting)', () => {
+    expect(show(0.1, '0.0_)')).toBe('0,1');
+    expect(show(1234.5, '#,##0.00_);(#,##0.00)')).toBe('1.234,50');
+    expect(show(-1234.5, '#,##0.00_);(#,##0.00)')).toBe('(1.234,50)');
+    const accounting = '_-* #,##0.00_-;-* #,##0.00_-;_-* "-"??_-;_-@_-';
+    expect(show(1234.5, accounting)).toBe('1.234,50');
+    expect(show(-1234.5, accounting)).toBe('-1.234,50');
+    expect(show(0, accounting)).toBe('-');
+    expect(show(0.5, '0.0??')).toBe('0,5');
+    expect(show(5, '??0')).toBe('5');
+  });
+
+  it('tells money formats apart from language codes', () => {
+    expect(isCurrencyFormat('"R$" #,##0.00')).toBe(true);
+    expect(isCurrencyFormat('[$€-2] #,##0')).toBe(true);
+    expect(isCurrencyFormat('$#,##0.00')).toBe(true);
+    expect(isCurrencyFormat('[$-416]dd/mm/yyyy')).toBe(false);
+    expect(isCurrencyFormat('0.000 "%FS"')).toBe(false);
+    expect(isCurrencyFormat(undefined)).toBe(false);
   });
 
   it('shows dates as dd/mm/aaaa (time only when the format has it) and booleans as Sim/Não', () => {
@@ -55,6 +80,23 @@ describe('Excel display formatting (what the father sees in Excel)', () => {
     expect(formatExcelBoolean(true, pt)).toBe('Sim');
     expect(formatExcelBoolean(false, pt)).toBe('Não');
     expect(formatExcelBoolean(true, en)).toBe('Yes');
+  });
+
+  it('shows durations past 24 hours as Excel does ([h]:mm)', () => {
+    expect(formatExcelNumber(1.5, '[h]:mm', pt)).toEqual({ text: '36:00', exact: true });
+    expect(formatExcelDateValue(excelSerialToDate(1.5 + 5 / 86_400), '[h]:mm:ss', pt)).toEqual({ text: '36:00:05', exact: true });
+    expect(formatExcelNumber(0.5 / 24, '[mm]:ss', pt).text).toBe('30:00');
+    expect(formatExcelNumber(90 / 86_400, '[ss]', pt).text).toBe('90');
+  });
+
+  it('keeps only the date parts the format shows and marks month names for review', () => {
+    const date = new Date(Date.UTC(2026, 9, 14, 14, 20, 7));
+    expect(formatExcelDateValue(date, 'mmm-yy', pt)).toEqual({ text: '10/2026', exact: false });
+    expect(formatExcelDateValue(date, 'yyyy', pt)).toEqual({ text: '2026', exact: true });
+    expect(formatExcelDateValue(date, 'dd/mm', pt)).toEqual({ text: '14/10', exact: false });
+    expect(formatExcelDateValue(date, 'h:mm', pt)).toEqual({ text: '14:20', exact: true });
+    expect(formatExcelDateValue(date, 'h:mm AM/PM', pt).exact).toBe(false);
+    expect(formatExcelDateValue(date, 'dd/mm/yyyy', pt)).toEqual({ text: '14/10/2026', exact: true });
   });
 
   it('falls back to Brazilian Portuguese for an invalid language tag', () => {

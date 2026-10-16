@@ -17,7 +17,10 @@ export interface DisplayLocale {
 
 export interface FormattedNumber {
   readonly text: string;
-  /** False when the format had parts this formatter does not reproduce (conditions, fractions). */
+  /**
+   * False when the format had parts this formatter does not reproduce (conditions, fractions,
+   * engineering exponents, month names, partial dates): the cell is then marked for review.
+   */
   readonly exact: boolean;
 }
 
@@ -63,11 +66,17 @@ function fixed(value: number, decimals: number): string {
   return decimals ? `${text.slice(0, -decimals)}.${text.slice(-decimals)}` : text;
 }
 
-function scientific(value: number, decimals: number, minExponentDigits: number, showPlus: boolean, locale: DisplayLocale, integerDigits = 1) {
+/**
+ * Scientific notation. With `engineering`, the exponent is a multiple of `integerDigits`
+ * ("##0.0E+0" shows 12345 as 12,3E+3), as Excel does when the mantissa has "#" placeholders.
+ */
+function scientific(value: number, decimals: number, minExponentDigits: number, showPlus: boolean, locale: DisplayLocale, integerDigits = 1, engineering = false) {
   if (value === 0) return `${fixed(0, decimals).replace('.', locale.decimal)}E${showPlus ? '+' : ''}${'0'.repeat(minExponentDigits)}`;
-  let exponent = Math.floor(Math.log10(value)) - (integerDigits - 1);
+  const magnitude = Math.floor(Math.log10(value));
+  const step = engineering ? integerDigits : 1;
+  let exponent = engineering ? Math.floor(magnitude / step) * step : magnitude - (integerDigits - 1);
   let mantissa = fixed(value / 10 ** exponent, decimals);
-  if (Number(mantissa) >= 10 ** integerDigits) { exponent += 1; mantissa = fixed(value / 10 ** exponent, decimals); }
+  if (Number(mantissa) >= 10 ** integerDigits) { exponent += step; mantissa = fixed(value / 10 ** exponent, decimals); }
   const sign = exponent < 0 ? '-' : showPlus ? '+' : '';
   return `${mantissa.replace('.', locale.decimal)}E${sign}${String(Math.abs(exponent)).padStart(minExponentDigits, '0')}`;
 }
@@ -117,7 +126,8 @@ function tokenize(section: string): Token[] {
       tokens.push({ kind: 'literal', value: section.slice(index + 1, end < 0 ? undefined : end) });
       index = end < 0 ? section.length : end;
     } else if (char === '\\') { tokens.push({ kind: 'literal', value: section[index + 1] ?? '' }); index++; }
-    else if (char === '_') { tokens.push({ kind: 'literal', value: ' ' }); index++; }
+    // "_)" only reserves room to align columns in Excel: no character in the catalog text.
+    else if (char === '_') index++;
     else if (char === '*') index++;
     else if (char === '[') {
       const end = section.indexOf(']', index);
@@ -160,7 +170,8 @@ function placeInteger(digits: string, placeholders: readonly ('0' | '#' | '?' | 
     seen++;
     if (seen === count && remaining.length > 1) { output.unshift(remaining); remaining = ''; continue; }
     const digit = remaining.slice(-1); remaining = remaining.slice(0, -1);
-    output.unshift(digit || (placeholder === '0' ? '0' : placeholder === '?' ? ' ' : ''));
+    // "?" pads with a space only to align columns in Excel: nothing in the catalog text.
+    output.unshift(digit || (placeholder === '0' ? '0' : ''));
   }
   return output.join('');
 }
@@ -176,7 +187,7 @@ function formatNumberSection(value: number, tokens: Token[], locale: DisplayLoca
     // Only literals (or "@"): Excel shows the literal text, or General when "@" asks for the value.
     const text = tokens.map(token => token.kind === 'literal' ? token.value : token.kind === 'percent' ? '%'
       : token.kind === 'text' || token.kind === 'general' ? formatGeneralNumber(value, locale) : '').join('');
-    return { text: (negativeSign && value !== 0 ? '-' : '') + text, exact };
+    return { text: ((negativeSign && value !== 0 ? '-' : '') + text).trim(), exact };
   }
   let last = first;
   tokens.forEach((token, index) => { if (token.kind === 'digit') last = index; });
@@ -201,8 +212,12 @@ function formatNumberSection(value: number, tokens: Token[], locale: DisplayLoca
   if (exponentIndex >= 0) {
     const exponentToken = region[exponentIndex] as { kind: 'exponent'; plus: boolean };
     const exponentDigits = region.slice(exponentIndex + 1).filter(token => token.kind === 'digit').length;
+    const mantissaDigits = integerPlaces.filter(place => place === '0' || place === '#' || place === '?');
+    // "##0.0E+0" (engineering): reproduced by Excel's rule, but not checked against Excel itself.
+    const engineering = mantissaDigits.length > 1 && mantissaDigits.some(place => place !== '0');
+    if (engineering) exact = false;
     number = scientific(scaled, fractionPlaces.length, Math.max(1, exponentDigits), exponentToken.plus, locale,
-      Math.max(1, integerPlaces.filter(place => place === '0' || place === '#' || place === '?').length));
+      Math.max(1, mantissaDigits.length), engineering);
     if (fractionPlaces.length === 0 && pointIndex >= 0) number = number.replace('E', `${locale.decimal}E`);
   } else {
     scaled = excelPrecision(scaled);
@@ -211,7 +226,7 @@ function formatNumberSection(value: number, tokens: Token[], locale: DisplayLoca
     const fraction = fractionDigits.split('');
     for (let index = fraction.length - 1; index >= 0; index--) {
       if (fraction[index] !== '0' || fractionPlaces[index] === '0') break;
-      fraction[index] = fractionPlaces[index] === '?' ? ' ' : '';
+      fraction[index] = ''; // "#" drops the digit; "?" only aligns columns in Excel
     }
     let integer: string;
     if (grouping && !integerPlaces.some(place => place !== '0' && place !== '#' && place !== '?')) {
@@ -224,7 +239,8 @@ function formatNumberSection(value: number, tokens: Token[], locale: DisplayLoca
   const render = (part: Token[]) => part.map(token => token.kind === 'literal' ? token.value : token.kind === 'percent' ? '%' : '').join('');
   const isZero = !/[1-9]/.test(number.split('E')[0]);
   const sign = negativeSign && value < 0 && !isZero ? '-' : '';
-  return { text: sign + render(prefix) + number + render(suffix), exact };
+  // Leading or trailing spaces only align columns in Excel; the catalog text is the literal alone.
+  return { text: (sign + render(prefix) + number + render(suffix)).trim(), exact };
 }
 
 /**
@@ -234,7 +250,7 @@ function formatNumberSection(value: number, tokens: Token[], locale: DisplayLoca
 export function formatExcelNumber(value: number, format: string | undefined, locale: DisplayLocale): FormattedNumber {
   if (!Number.isFinite(value)) return { text: String(value), exact: false };
   if (!format || /^general$/i.test(format.trim())) return { text: formatGeneralNumber(value, locale), exact: true };
-  if (isDateFormat(format)) return { text: formatExcelDate(excelSerialToDate(value), format, locale), exact: true };
+  if (isDateFormat(format)) return formatExcelDateValue(excelSerialToDate(value), format, locale);
   const sections = splitSections(format).map(tokenize);
   if (sections.some(tokens => tokens.some(token => token.kind === 'unsupported'))) {
     return { text: formatGeneralNumber(value, locale), exact: false };
@@ -247,21 +263,113 @@ export function formatExcelNumber(value: number, format: string | undefined, loc
   return formatNumberSection(value, sections[2], locale, false);
 }
 
+const serialBase = (date1904: boolean) => date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
+
 export function excelSerialToDate(serial: number, date1904 = false): Date {
-  const base = date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
-  return new Date(base + Math.round(serial * 86_400_000));
+  return new Date(serialBase(date1904) + Math.round(serial * 86_400_000));
+}
+
+/** The Excel serial number (days) behind a Date that ExcelJS made from a date-formatted cell. */
+export function excelSerialFromDate(value: Date, date1904 = false): number {
+  return (value.getTime() - serialBase(date1904)) / 86_400_000;
+}
+
+const pad = (value: number, width = 2) => String(value).padStart(width, '0');
+/** A date format without its quoted text, escaped characters and "_x"/"*x" padding. */
+const visibleDatePart = (section: string) => section.replace(/"[^"]*"|\\.|_.|\*./g, '');
+
+/**
+ * Durations such as "[h]:mm" (1,5 day shows 36:00), "[mm]:ss" and "[ss]": the bracketed unit counts
+ * the whole duration instead of the time of day.
+ */
+function formatElapsed(serial: number, section: string): FormattedNumber {
+  let exact = serial >= 0;
+  // Excel rounds to the second, then cuts the units it does not show.
+  const total = Math.round(Math.abs(serial) * 86_400);
+  const divisor = { h: 3600, m: 60, s: 1 } as const;
+  let text = '', largest: keyof typeof divisor | undefined;
+  for (let index = 0; index < section.length; index++) {
+    const char = section[index], lower = char.toLowerCase();
+    if (char === '"') {
+      const end = section.indexOf('"', index + 1);
+      text += section.slice(index + 1, end < 0 ? undefined : end);
+      index = end < 0 ? section.length : end;
+    } else if (char === '\\') { text += section[index + 1] ?? ''; index++; }
+    else if (char === '_' || char === '*') index++;
+    else if (char === '[') {
+      const end = section.indexOf(']', index);
+      const content = section.slice(index + 1, end < 0 ? undefined : end).toLowerCase();
+      index = end < 0 ? section.length : end;
+      if (/^(h+|m+|s+)$/.test(content)) {
+        largest = content[0] as keyof typeof divisor;
+        text += pad(Math.floor(total / divisor[largest]), content.length);
+      } // colours and language codes add no text
+    } else if (lower === 'h' || lower === 'm' || lower === 's') {
+      let end = index;
+      while (section[end + 1]?.toLowerCase() === lower) end++;
+      const width = end - index + 1;
+      index = end;
+      if (lower === 'm' && largest === 'h') text += pad(Math.floor(total / 60) % 60, width);
+      else if (lower === 's' && (largest === 'h' || largest === 'm')) text += pad(total % 60, width);
+      else exact = false;
+    } else if (/^(am\/pm|a\/p)/i.test(section.slice(index))) { exact = false; index += /^am/i.test(section.slice(index)) ? 4 : 2; }
+    else if (/[dy0#?.]/i.test(char)) exact = false; // days, years or tenths of a second in a duration
+    else text += char;
+  }
+  return { text: (serial < 0 ? '-' : '') + text.trim(), exact };
+}
+
+/**
+ * Dates as dd/mm/aaaa (mm/dd/yyyy for en-US), plus the time when the format shows it.
+ * `exact` is false when Excel shows something else: a duration it cannot reproduce, month
+ * names without a day ("mmm-yy" shows 10/2026 here, "out-26" in Excel), or 12-hour AM/PM.
+ */
+export function formatExcelDateValue(value: Date, format: string | undefined, locale: DisplayLocale, date1904 = false): FormattedNumber {
+  if (Number.isNaN(value.getTime())) return { text: '', exact: false };
+  const section = format ? splitSections(format)[0] : '';
+  if (/\[(h+|m+|s+)\]/i.test(section)) return formatElapsed(excelSerialFromDate(value, date1904), section);
+  const runs = visibleDatePart(section).replace(/\[[^\]]*\]/g, '').match(/am\/pm|a\/p|y+|m+|d+|h+|s+/gi) ?? [];
+  let day = false, weekday = false, month = false, year = false, fullYear = false, hours = 0, minutes = false, seconds = false, twelveHour = false;
+  runs.forEach((run, index) => {
+    const unit = run[0].toLowerCase();
+    if (unit === 'a') twelveHour = true;
+    else if (unit === 'y') { year = true; fullYear ||= run.length > 2; }
+    else if (unit === 'd') { if (run.length <= 2) day = true; else weekday = true; } // "ddd"/"dddd": weekday names
+    else if (unit === 'h') hours = Math.max(hours, run.length);
+    else if (unit === 's') seconds = true;
+    else {
+      // "m" next to hours or seconds is minutes; otherwise it is the month.
+      const before = runs[index - 1]?.[0].toLowerCase(), after = runs[index + 1]?.[0].toLowerCase();
+      if (run.length <= 2 && (before === 'h' || after === 's')) minutes = true; else month = true;
+    }
+  });
+  const dd = pad(value.getUTCDate()), mm = pad(value.getUTCMonth() + 1), yyyy = String(value.getUTCFullYear());
+  const fullDate = locale.dateOrder === 'mdy' ? `${mm}/${dd}/${yyyy}` : `${dd}/${mm}/${yyyy}`;
+  const time = [hours && pad(value.getUTCHours(), hours), minutes && pad(value.getUTCMinutes()), seconds && pad(value.getUTCSeconds())]
+    .filter(Boolean).join(':');
+  let date: string | undefined = fullDate, exact = !twelveHour;
+  if (!day && !month && !year) {
+    date = time ? undefined : fullDate;
+    if (weekday) exact = false; // "dddd" alone shows the weekday name in Excel
+  } else if (!(day && month && year)) {
+    // Only some parts are shown in Excel (out/2026, 14/10, 2026): keep the same parts, as numbers.
+    const parts = locale.dateOrder === 'mdy' ? [month && mm, day && dd, year && yyyy] : [day && dd, month && mm, year && yyyy];
+    date = parts.filter(Boolean).join('/');
+    exact &&= year && !day && !month && fullYear;
+  }
+  const text = date && time ? `${date} ${time}` : date ?? time;
+  return { text, exact };
 }
 
 /** dd/mm/aaaa (or mm/dd/yyyy for en-US), plus hh:mm when the Excel format shows time. */
 export function formatExcelDate(value: Date, format: string | undefined, locale: DisplayLocale): string {
-  if (Number.isNaN(value.getTime())) return '';
-  const pad = (part: number) => String(part).padStart(2, '0');
-  const day = pad(value.getUTCDate()), month = pad(value.getUTCMonth() + 1), year = String(value.getUTCFullYear());
-  const date = locale.dateOrder === 'mdy' ? `${month}/${day}/${year}` : `${day}/${month}/${year}`;
-  const visible = (format ?? '').replace(/"[^"]*"|\[[^\]]*\]/g, '');
-  const hasDate = !format || /[dy]/i.test(visible) || !/[hs]/i.test(visible);
-  const hasTime = /[hs]/i.test(visible);
-  const time = `${pad(value.getUTCHours())}:${pad(value.getUTCMinutes())}${/s/i.test(visible) ? `:${pad(value.getUTCSeconds())}` : ''}`;
-  if (hasDate && hasTime) return `${date} ${time}`;
-  return hasTime ? time : date;
+  return formatExcelDateValue(value, format, locale).text;
+}
+
+/** Number formats that show money: "R$", "US$", "$", "€", "£", "¥" or a currency code such as [$€-2]. */
+export function isCurrencyFormat(format: string | undefined): boolean {
+  if (!format) return false;
+  const section = splitSections(format)[0];
+  if (/\[\$[^\]-]+/.test(section)) return true; // [$-416] is only a language code
+  return /[$€£¥]/.test(section.replace(/\[[^\]]*\]/g, ''));
 }
