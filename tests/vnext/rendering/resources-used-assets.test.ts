@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { referencedAssetIds, referencedAssets } from '@/vnext/asset/referenced-assets';
 import { sha256 } from '@/vnext/asset/integrity';
 import { DefaultAssetPersistenceBridge, type AssetRecord, type AssetRepository } from '@/vnext/asset';
@@ -47,7 +47,7 @@ function documentWith(used: AssetRef, assets: AssetRef[]): CatalogDocument {
 }
 
 const usedBytes = png(8, 6);
-let fetchSpy: ReturnType<typeof vi.spyOn>;
+let fetchSpy: MockInstance<typeof fetch>;
 
 beforeEach(() => {
   vi.resetAllMocks();
