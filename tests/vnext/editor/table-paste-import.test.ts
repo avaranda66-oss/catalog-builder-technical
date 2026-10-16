@@ -63,6 +63,22 @@ describe('FR-31 parsing text copied from Excel', () => {
     expect(detectHeaderRow([['', 'Faixa', 'Exatidão'], ['TA-25N', '1', '2']])).toBe(false);
   });
 
+  it('2D: model codes in the first row are data, unless the row names the columns (Modelo | TA-25N | TA-35N)', () => {
+    // A list without a header: the first row is the first product (1F review).
+    expect(detectHeaderRow([['TA-25N', 'Portátil', 'Pt-100'], ['TA-50N', 'Bancada', '-40 a 155 °C']])).toBe(false);
+    expect(detectHeaderRow([['Calibrador', 'Portátil', 'TA-25N'], ['Banho', 'Bancada', '-40 a 155 °C']])).toBe(false);
+    expect(parsed('TA-25N\tPortátil\tPt-100\nTA-50N\tBancada\t-40 a 155 °C').header).toBe(false);
+    // A comparison: the first cell says what the columns are, the others are the models.
+    expect(parsed('Modelo\tTA-25N\tTA-35N\nFaixa\t-25 a 140 °C\t-35 a 140 °C\nExatidão\t±0,1 °C\t±0,1 °C').header).toBe(true);
+    expect(parsed('Modelo\tTA-25N\tTA-35N\nAplicação\tBancada\tCampo').header).toBe(true);
+    // The same comparison with an empty corner above the row names.
+    expect(parsed('\tTA-25N\tTA-35N\nFaixa\t-25 a 140 °C\t-35 a 140 °C').header).toBe(true);
+    // Numbered column titles above data stay a header.
+    expect(parsed('Faixa 1\tFaixa 2\tFaixa 3\n0 a 10 V\t4 a 20 mA\t0 a 20 mA').header).toBe(true);
+    // A code with a word that is not a title is still data.
+    expect(detectHeaderRow([['Modelo', 'TA-25N', 'Bancada'], ['Faixa', '1', '2']])).toBe(false);
+  });
+
   it('keeps quoted multi-line cells and quotes exactly like the spreadsheet copied them', () => {
     const table = parsed('Item\tObservação\n1\t"Linha 1\nLinha 2"\n2\t"Diz ""olá"""');
     expect(table.rowCount).toBe(3);
