@@ -1,6 +1,6 @@
 # FATHER-AI-IMPORT — Criação guiada por fontes e IA
 
-Status: Ready for Dev
+Status: Superseded (2026-10-16) — substituída pelo plano docs/plans/2026-10-15-plano-father-ready.md e pela story docs/stories/2026-10-15-father-ready-onda-1.md.
 Fonte: pedido humano de 13/10/2026; entradas PDF, planilha e fotos, separadas ou combinadas; gerar catálogos complexos com IA e facilidade.
 
 ## Story

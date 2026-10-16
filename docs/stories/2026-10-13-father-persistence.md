@@ -1,6 +1,6 @@
 # FATHER-PERSISTENCE — Salvamento e imagens confiáveis
 
-Status: Ready for Dev
+Status: Superseded (2026-10-16) — substituída pelo plano docs/plans/2026-10-15-plano-father-ready.md e pela story docs/stories/2026-10-15-father-ready-onda-1.md.
 Fonte: pedido humano de 13/10/2026 para tornar o catálogo utilizável pelo pai, sem dificuldades, com PDF, planilhas e fotos combinados.
 
 ## Story
