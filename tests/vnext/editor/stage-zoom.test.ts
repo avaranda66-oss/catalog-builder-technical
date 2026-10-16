@@ -13,6 +13,8 @@ import {
   isStageZoomMeasured,
   isStageZoomChoice,
   readStoredStageZoomChoice,
+  stageZoomAnchor,
+  stageZoomAnchorShift,
   stageZoomLabel,
   stageZoomPercent,
   stepStageZoom,
@@ -141,5 +143,18 @@ describe('FR-16a stage zoom math', () => {
     // After a pause the partial movement is forgotten.
     expect(idle({ deltaY: -30, deltaMode: 0, timeStamp: 1_000 })).toBe(0);
     expect(idle({ deltaY: -30, deltaMode: 0, timeStamp: 1_010 })).toBe(1);
+  });
+
+  it('FR-16b: works out how far to scroll so a point of the page stays under the mouse', () => {
+    const anchor = stageZoomAnchor({ left: 24, top: -96 }, 1, 300, 400)!;
+    expect(anchor).toEqual({ clientX: 300, clientY: 400, pageX: 276, pageY: 496, zoom: 1 });
+    // Drawn at 1.25 without scrolling, the point would move right and down: scroll by that much.
+    const shift = stageZoomAnchorShift(anchor, { left: 24, top: -96 }, 1.25);
+    expect(shift.dx).toBeCloseTo(69, 6);
+    expect(shift.dy).toBeCloseTo(124, 6);
+    // After scrolling, it is back in place.
+    expect(stageZoomAnchorShift(anchor, { left: 24 - shift.dx, top: -96 - shift.dy }, 1.25)).toEqual({ dx: 0, dy: 0 });
+    expect(stageZoomAnchor({ left: 0, top: 0 }, 0, 10, 10)).toBeUndefined();
+    expect(stageZoomAnchor({ left: Number.NaN, top: 0 }, 1, 10, 10)).toBeUndefined();
   });
 });

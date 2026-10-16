@@ -6,6 +6,7 @@ import {
   STAGE_ZOOM_CSS_VARIABLE,
   readStageZoomSnapshot,
   resetStageZoomStore,
+  setStageZoomChoice,
   useStageZoom,
 } from '@/vnext/app/editor/use-stage-zoom';
 import { STAGE_ZOOM_STORAGE_KEY } from '@/vnext/editor/stage-zoom';
@@ -228,5 +229,77 @@ describe('FR-16a/FR-16b ZoomControl', () => {
     expect(area.style.getPropertyValue(STAGE_ZOOM_CSS_VARIABLE)).toBe('1.07');
     unmount();
     expect(area.style.getPropertyValue(STAGE_ZOOM_CSS_VARIABLE)).toBe('');
+  });
+});
+
+describe('FR-16b the page does not jump when the zoom changes', () => {
+  type Box = { left: number; top: number; width: number; height: number };
+  const box = ({ left, top, width, height }: Box) =>
+    ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  /** Page area at (0, 100), 900 × 600, scrolling; the A4 stage drawn at the published zoom, 24/4 px inside it. */
+  function scrollingCanvas() {
+    previewWidth = 900; // fit width = 1.07
+    render(<Canvas />);
+    const preview = canvas().querySelector<HTMLElement>('.vnext-document-preview')!;
+    preview.style.overflowX = 'auto';
+    preview.style.overflowY = 'auto';
+    const scroll = { x: 0, y: 0 };
+    Object.defineProperty(preview, 'scrollLeft', { configurable: true, get: () => scroll.x, set: (value: number) => { scroll.x = Math.min(2000, Math.max(0, value)); } });
+    Object.defineProperty(preview, 'scrollTop', { configurable: true, get: () => scroll.y, set: (value: number) => { scroll.y = Math.min(4000, Math.max(0, value)); } });
+    const zoom = () => Number(canvas().style.getPropertyValue(STAGE_ZOOM_CSS_VARIABLE)) || 0.62;
+    const stageBox = () => box({ left: 24 - scroll.x, top: 104 - scroll.y, width: 793.7 * zoom(), height: 1122.5 * zoom() });
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect(this: Element) {
+      if (this.classList.contains('vnext-document-preview')) return box({ left: 0, top: 100, width: 900, height: 600 });
+      if (this.hasAttribute('data-vnext-page-stage')) return stageBox();
+      return box({ left: 0, top: 0, width: 0, height: 0 });
+    });
+    /** Point of the page (page CSS px) under a screen point. */
+    const pagePointAt = (clientX: number, clientY: number) => {
+      const stage = stageBox();
+      return { x: (clientX - stage.left) / zoom(), y: (clientY - stage.top) / zoom() };
+    };
+    return { scroll, zoom, pagePointAt, page: canvas().querySelector<HTMLElement>('[data-vnext-page-stage]')! };
+  }
+
+  it('Ctrl + roda keeps the point under the mouse in place', () => {
+    const { scroll, zoom, pagePointAt, page } = scrollingCanvas();
+    choose('100%');
+    scroll.x = 0;
+    scroll.y = 200;
+    const before = pagePointAt(300, 400);
+    fireEvent.wheel(page, { deltaY: -100, ctrlKey: true, clientX: 300, clientY: 400 });
+    expect(zoom()).toBe(1.07);
+    const after = pagePointAt(300, 400);
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.y).toBeCloseTo(before.y, 6);
+    expect(scroll.y).toBeCloseTo(234.72, 2);
+  });
+
+  it('"−", "+" and the list keep the centre of the visible page area in place', () => {
+    const { scroll, zoom, pagePointAt } = scrollingCanvas();
+    choose('100%');
+    scroll.y = 300;
+    // Centre of the page area (0..900 × 100..700).
+    const centre = pagePointAt(450, 400);
+    fireEvent.click(zoomIn());
+    expect(zoom()).toBe(1.07);
+    expect(pagePointAt(450, 400).y).toBeCloseTo(centre.y, 6);
+    expect(pagePointAt(450, 400).x).toBeCloseTo(centre.x, 6);
+    choose('75%');
+    expect(zoom()).toBe(0.75);
+    expect(pagePointAt(450, 400).y).toBeCloseTo(centre.y, 6);
+  });
+
+  it('does not scroll when the zoom does not change, nor later on a change the person did not make', () => {
+    const { scroll, page } = scrollingCanvas();
+    choose('125%');
+    scroll.y = 500;
+    // Already the biggest level: nothing changes and nothing is remembered.
+    fireEvent.wheel(page, { deltaY: -100, ctrlKey: true, clientX: 300, clientY: 400 });
+    expect(shownLevel()).toBe('125%');
+    expect(scroll.y).toBe(500);
+    act(() => setStageZoomChoice('fit-width'));
+    expect(scroll.y).toBe(500);
   });
 });

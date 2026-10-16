@@ -152,6 +152,37 @@ export function writeStoredStageZoomChoice(storage: Pick<Storage, 'setItem'> | u
   }
 }
 
+/**
+ * FR-16b: a point of the page kept still on screen while the zoom changes: under the mouse for
+ * Ctrl + roda, or the centre of the visible page area for "−", "+" and the list of levels.
+ * `pageX`/`pageY` are in page CSS pixels (before the zoom), measured from the page stage corner.
+ */
+export interface StageZoomAnchor {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly pageX: number;
+  readonly pageY: number;
+  /** Zoom when the point was taken. */
+  readonly zoom: number;
+}
+
+/** Takes the anchor at a screen point, from the page stage rectangle drawn at `zoom`. */
+export function stageZoomAnchor(stage: { left: number; top: number }, zoom: number, clientX: number, clientY: number): StageZoomAnchor | undefined {
+  if (![stage.left, stage.top, zoom, clientX, clientY].every(Number.isFinite) || zoom <= 0) return undefined;
+  return { clientX, clientY, pageX: (clientX - stage.left) / zoom, pageY: (clientY - stage.top) / zoom, zoom };
+}
+
+/**
+ * How far to scroll (CSS px, positive = scroll right/down) so the anchored point is back under
+ * `clientX`/`clientY` once the page stage is drawn at `zoom` with its corner at `stage`.
+ */
+export function stageZoomAnchorShift(anchor: StageZoomAnchor, stage: { left: number; top: number }, zoom: number): { dx: number; dy: number } {
+  return {
+    dx: stage.left + anchor.pageX * zoom - anchor.clientX,
+    dy: stage.top + anchor.pageY * zoom - anchor.clientY,
+  };
+}
+
 /** Pixels per wheel "notch" used to turn trackpad pinches and mouse wheels into whole steps. */
 export const STAGE_ZOOM_WHEEL_STEP_PX = 50;
 const WHEEL_IDLE_RESET_MS = 400;

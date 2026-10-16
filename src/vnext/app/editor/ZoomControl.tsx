@@ -1,6 +1,6 @@
 import React from 'react';
 import { STAGE_ZOOM_OPTIONS, isStageZoomChoice, isStageZoomFitChoice, stageZoomPercent, stepStageZoom } from '../../editor/stage-zoom';
-import { useStageZoomHost } from './use-stage-zoom';
+import { STAGE_ZOOM_SCOPE_SELECTOR, rememberStageZoomAnchor, useStageZoomHost } from './use-stage-zoom';
 
 export interface ZoomControlProps {
   /** Width of the page being edited; "Ajustar à largura" fits this width to the canvas. */
@@ -14,7 +14,8 @@ export interface ZoomControlProps {
  * through the levels, the list names them ("Página inteira", "Ajustar à largura", 75%, 100%,
  * 125%) and the measured size shows next to it. Compact on purpose, so the line with
  * "Página N de M" stays one line on a 1280–1366 px laptop with the bigger 60+ text.
- * Only changes how big the page looks on screen; the catalog and the PDF never change.
+ * Only changes how big the page looks on screen; the catalog and the PDF never change. The centre
+ * of the visible page area stays where it is when the zoom changes (the page does not jump).
  */
 export function ZoomControl({ pageWidthMm, pageHeightMm }: ZoomControlProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -23,6 +24,7 @@ export function ZoomControl({ pageWidthMm, pageHeightMm }: ZoomControlProps) {
   const { choice, fitWidthZoom, fitPageZoom } = stageZoom;
   const canZoomOut = stepStageZoom(choice, fitWidthZoom, -1, fitPageZoom) !== choice;
   const canZoomIn = stepStageZoom(choice, fitWidthZoom, 1, fitPageZoom) !== choice;
+  const keepCentre = () => rememberStageZoomAnchor(rootRef.current?.closest<HTMLElement>(STAGE_ZOOM_SCOPE_SELECTOR));
   return (
     <div
       ref={rootRef}
@@ -42,14 +44,18 @@ export function ZoomControl({ pageWidthMm, pageHeightMm }: ZoomControlProps) {
         title="Diminuir o zoom"
         data-stage-zoom-step="out"
         disabled={!canZoomOut}
-        onClick={stageZoom.zoomOut}
+        onClick={() => { keepCentre(); stageZoom.zoomOut(); }}
       ><span aria-hidden="true">−</span></button>
       <select
         id={selectId}
         className="vnext-zoom-select"
         value={choice}
         data-stage-zoom-select=""
-        onChange={(event) => { if (isStageZoomChoice(event.target.value)) stageZoom.setChoice(event.target.value); }}
+        onChange={(event) => {
+          if (!isStageZoomChoice(event.target.value)) return;
+          keepCentre();
+          stageZoom.setChoice(event.target.value);
+        }}
       >
         {STAGE_ZOOM_OPTIONS.map((option) => (
           <option key={option.choice} value={option.choice} data-stage-zoom-option={option.choice}>{option.label}</option>
@@ -62,7 +68,7 @@ export function ZoomControl({ pageWidthMm, pageHeightMm }: ZoomControlProps) {
         title="Aumentar o zoom"
         data-stage-zoom-step="in"
         disabled={!canZoomIn}
-        onClick={stageZoom.zoomIn}
+        onClick={() => { keepCentre(); stageZoom.zoomIn(); }}
       ><span aria-hidden="true">+</span></button>
       {isStageZoomFitChoice(choice) && stageZoom.measured && (
         <span className="vnext-zoom-value" data-stage-zoom-value="">{stageZoomPercent(stageZoom.zoom)}</span>

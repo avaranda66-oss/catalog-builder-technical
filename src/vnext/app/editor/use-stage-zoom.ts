@@ -7,6 +7,8 @@
  * - `useStageZoomHost(anchorRef, pageWidthMm, pageHeightMm?)` is mounted once by the zoom
  *   control. It measures the canvas for "Ajustar à largura" and "Página inteira", writes the
  *   CSS variables on `.vnext-canvas-area` and handles Ctrl + roda do mouse over the canvas.
+ * - `rememberStageZoomAnchor(scope, point?)`, called right before a zoom change, keeps that
+ *   point of the page (or the centre of the visible page area) still on screen.
  *
  * CSS contract (styles.css): `.vnext-page-stage { zoom: var(--vnext-stage-zoom) }`. Controls
  * drawn inside the zoomed page multiply screen sizes by `--vnext-stage-unzoom` (= 1 / zoom)
@@ -24,8 +26,11 @@ import {
   isStageZoomChoice,
   isStageZoomMeasured,
   readStoredStageZoomChoice,
+  stageZoomAnchor,
+  stageZoomAnchorShift,
   stepStageZoom,
   writeStoredStageZoomChoice,
+  type StageZoomAnchor,
   type StageZoomChoice,
 } from '../../editor/stage-zoom';
 
@@ -35,6 +40,8 @@ export const STAGE_UNZOOM_CSS_VARIABLE = '--vnext-stage-unzoom';
 export const STAGE_ZOOM_SCOPE_SELECTOR = '.vnext-canvas-area';
 /** Element whose content box is the width "Ajustar à largura" fills. */
 export const STAGE_ZOOM_VIEWPORT_SELECTOR = '.vnext-document-preview';
+/** The zoomed page stage. */
+export const STAGE_ZOOM_STAGE_SELECTOR = '[data-vnext-page-stage]';
 /** Keeps a hair of room so sub-pixel rounding never creates a horizontal scrollbar. */
 const FIT_SAFETY_PX = 2;
 /** A4 height / width, used when the caller does not give the page height. */
@@ -81,6 +88,8 @@ function buildSnapshot(choice: StageZoomChoice, fitWidthZoom: number | undefined
 
 let snapshot: StageZoomSnapshot | undefined;
 const listeners = new Set<() => void>();
+/** FR-16b: the point to keep still through the next zoom change (see `rememberStageZoomAnchor`). */
+let pendingAnchor: StageZoomAnchor | undefined;
 
 function currentSnapshot(): StageZoomSnapshot {
   if (!snapshot) snapshot = buildSnapshot(readStoredStageZoomChoice(browserStorage()), undefined, undefined);
@@ -101,10 +110,16 @@ function subscribe(listener: () => void): () => void {
 
 /** Changes the zoom and remembers it (storage failures are ignored). */
 export function setStageZoomChoice(choice: StageZoomChoice): void {
-  if (!isStageZoomChoice(choice)) return;
+  if (!isStageZoomChoice(choice)) {
+    pendingAnchor = undefined;
+    return;
+  }
   writeStoredStageZoomChoice(browserStorage(), choice);
   const current = currentSnapshot();
-  publish(buildSnapshot(choice, current.fitWidthZoom, current.fitPageZoom));
+  const next = buildSnapshot(choice, current.fitWidthZoom, current.fitPageZoom);
+  // A remembered point only matters when the drawn size really changes.
+  if (next.zoom === current.zoom) pendingAnchor = undefined;
+  publish(next);
 }
 
 /** One step bigger (1) or smaller (-1) among the offered zoom levels. */
@@ -112,6 +127,7 @@ export function stepStageZoomChoice(direction: 1 | -1): void {
   const current = currentSnapshot();
   const next = stepStageZoom(current.choice, current.fitWidthZoom, direction, current.fitPageZoom);
   if (next !== current.choice) setStageZoomChoice(next);
+  else pendingAnchor = undefined;
 }
 
 function setFitZooms(fitWidthZoom: number | undefined, fitPageZoom: number | undefined): void {
@@ -120,9 +136,55 @@ function setFitZooms(fitWidthZoom: number | undefined, fitPageZoom: number | und
   publish(buildSnapshot(current.choice, fitWidthZoom, fitPageZoom));
 }
 
+/**
+ * FR-16b: call right before changing the zoom so the page does not jump: the point under the
+ * mouse (Ctrl + roda) or, without a point, the centre of the visible page area ("−", "+", the
+ * list) stays where it is on screen. The zoom host applies it once the new zoom is drawn.
+ */
+export function rememberStageZoomAnchor(scope: HTMLElement | null | undefined, point?: { clientX: number; clientY: number }): void {
+  pendingAnchor = undefined;
+  const stage = scope?.querySelector<HTMLElement>(STAGE_ZOOM_STAGE_SELECTOR);
+  if (!scope || !stage) return;
+  let target = point;
+  if (!target) {
+    const viewport = (scope.querySelector<HTMLElement>(STAGE_ZOOM_VIEWPORT_SELECTOR) ?? scope).getBoundingClientRect();
+    const left = Math.max(viewport.left, 0);
+    const right = Math.min(viewport.right, window.innerWidth || viewport.right);
+    const top = Math.max(viewport.top, 0);
+    const bottom = Math.min(viewport.bottom, window.innerHeight || viewport.bottom);
+    if (!(right > left) || !(bottom > top)) return;
+    target = { clientX: (left + right) / 2, clientY: (top + bottom) / 2 };
+  }
+  pendingAnchor = stageZoomAnchor(stage.getBoundingClientRect(), currentSnapshot().zoom, target.clientX, target.clientY);
+}
+
+function isScrollable(element: Element, axis: 'x' | 'y'): boolean {
+  if (element === globalThis.document.scrollingElement) return true;
+  const overflow = window.getComputedStyle(element)[axis === 'x' ? 'overflowX' : 'overflowY'];
+  return overflow === 'auto' || overflow === 'scroll' || overflow === 'overlay';
+}
+
+/** Scrolls the page area (then its scrolling ancestors) so the anchored point is back in place. */
+function keepAnchorInPlace(stage: HTMLElement, anchor: StageZoomAnchor, zoom: number): void {
+  let { dx, dy } = stageZoomAnchorShift(anchor, stage.getBoundingClientRect(), zoom);
+  for (let element = stage.parentElement; element && (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5); element = element.parentElement) {
+    if (Math.abs(dx) >= 0.5 && isScrollable(element, 'x')) {
+      const before = element.scrollLeft;
+      element.scrollLeft = before + dx;
+      dx -= element.scrollLeft - before;
+    }
+    if (Math.abs(dy) >= 0.5 && isScrollable(element, 'y')) {
+      const before = element.scrollTop;
+      element.scrollTop = before + dy;
+      dy -= element.scrollTop - before;
+    }
+  }
+}
+
 /** Test seam: forget the in-memory zoom so the next read comes from storage again. */
 export function resetStageZoomStore(): void {
   snapshot = undefined;
+  pendingAnchor = undefined;
   for (const listener of [...listeners]) listener();
 }
 
@@ -232,12 +294,17 @@ export function useStageZoomHost(anchorRef: RefObject<HTMLElement | null>, pageW
     };
   }, [anchorRef, pageWidthMm, heightMm, choice]);
 
-  // Publish the zoom to CSS. While unmeasured, the stylesheet default stays in charge.
+  // Publish the zoom to CSS. While unmeasured, the stylesheet default stays in charge. Then, before
+  // paint, scroll so the remembered point (under the mouse, or the centre) stays still (FR-16b).
   useLayoutEffect(() => {
     const scope = scopeFor(anchorRef.current);
     if (!scope || !measured) return undefined;
     scope.style.setProperty(STAGE_ZOOM_CSS_VARIABLE, formatCssNumber(zoom));
     scope.style.setProperty(STAGE_UNZOOM_CSS_VARIABLE, formatUnzoom(zoom));
+    const anchor = pendingAnchor;
+    pendingAnchor = undefined;
+    const stage = scope.querySelector<HTMLElement>(STAGE_ZOOM_STAGE_SELECTOR);
+    if (anchor && stage && anchor.zoom !== zoom) keepAnchorInPlace(stage, anchor, zoom);
     return () => {
       scope.style.removeProperty(STAGE_ZOOM_CSS_VARIABLE);
       scope.style.removeProperty(STAGE_UNZOOM_CSS_VARIABLE);
@@ -253,7 +320,9 @@ export function useStageZoomHost(anchorRef: RefObject<HTMLElement | null>, pageW
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const direction = step({ deltaY: event.deltaY, deltaMode: event.deltaMode, timeStamp: event.timeStamp });
-      if (direction !== 0) stepStageZoomChoice(direction);
+      if (direction === 0) return;
+      rememberStageZoomAnchor(scope, { clientX: event.clientX, clientY: event.clientY });
+      stepStageZoomChoice(direction);
     };
     scope.addEventListener('wheel', onWheel, { passive: false });
     return () => scope.removeEventListener('wheel', onWheel);
