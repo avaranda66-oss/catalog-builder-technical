@@ -127,8 +127,12 @@ try {
   // to the fake backend until the author asks to rewrite this selection.
   const textId = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot().editableTextObjectId);
   assert(textId, 'Need plain editorial text on the active A4 page');
+  // FR-16b: selecting an object never changes the height of the toolbar above the page (the sheet does not jump).
+  const toolbarHeight = () => page.locator('.vnext-authoring-toolbar').evaluate(el => el.getBoundingClientRect().height);
+  const toolbarBeforeSelection = await toolbarHeight();
   await page.locator('[data-editor-object-id="' + textId + '"]').click();
   await page.getByRole('button', { name: 'Reescrever este texto com Gemini' }).waitFor();
+  assert(Math.abs(await toolbarHeight() - toolbarBeforeSelection) < 1, 'Selecting a text must not push the page down');
   await page.getByRole('button', { name: 'Reescrever este texto com Gemini' }).click();
   await page.getByRole('textbox', { name: 'Como deseja reescrever o texto selecionado?' })
     .fill('Reescreva o texto de apresentação em linguagem editorial profissional.');

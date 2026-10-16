@@ -148,6 +148,35 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     expect(px(getComputedStyle(container.querySelector('.vnext-info h2')!).fontSize)).toBeGreaterThanOrEqual(15);
   });
 
+  it('keeps the toolbar above the page at one height whether something is selected or not (the sheet does not jump)', () => {
+    const rule = (selector: string) => {
+      const start = STYLES.indexOf(`${selector} {`);
+      expect(start, selector).toBeGreaterThan(-1);
+      return STYLES.slice(start, STYLES.indexOf('}', start));
+    };
+    const primary = `${SIMPLE} .vnext-toolbar-primary`;
+    // "Duplicar", "Excluir" and "Editar …" (children 6+) always go to their own second line…
+    expect(rule(`${primary} > :nth-child(n+6)`)).toMatch(/order:\s*2/);
+    expect(rule(`${primary}::after`)).toMatch(/order:\s*1;\s*flex:\s*1 0 100%;\s*height:\s*0/);
+    // …which holds a plain hint, one button tall, while nothing is selected.
+    const hint = rule(`${primary}:not(:has(> :nth-child(6)))::after`);
+    expect(hint).toContain("content: 'Clique em um objeto da página para duplicar, excluir ou editar.'");
+    expect(hint).toMatch(/height:\s*44px;\s*margin-bottom:\s*6px/);
+    expect(px(hint.match(/font-size:\s*([\d.]+px)/)?.[1] ?? '')).toBeGreaterThanOrEqual(13);
+    // "Mais opções" shares the first line instead of wrapping to a line of its own.
+    expect(rule(`${primary}`)).toMatch(/flex:\s*1 1 0%;\s*min-width:\s*0/);
+
+    const { container } = renderEditor();
+    const buttons = [...container.querySelectorAll('.vnext-toolbar-primary > button')].map((button) => button.textContent);
+    expect(buttons).toEqual(['Texto', 'Imagem', 'Tabela', 'Tamanho da nova tabela', 'Colar tabela do Excel']);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 8, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(hit, { pointerId: 8, button: 0, clientX: 40, clientY: 40 });
+    // The buttons that need a selection come after the first five, so the CSS above puts them on the second line.
+    expect([...container.querySelectorAll('.vnext-toolbar-primary > button')].slice(5).map((button) => button.textContent))
+      .toEqual(['Duplicar', 'Excluir']);
+  });
+
   it('gives the resize handles and the table selectors 24 px on screen at every zoom', () => {
     const handle = STYLES.match(/\.vnext-resize-handle\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(handle).toMatch(/width:\s*calc\(24px \* var\(--vnext-stage-unzoom, 1\)\)/);

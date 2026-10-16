@@ -1141,3 +1141,17 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-shell[data-simple-by-default="true"] .vnext-workspace { grid-template-columns: 200px minmax(0,1fr) 360px; }
 }
 /* FR-16b:escala-60:fim */
+/* FR-16b: a folha não pula ao selecionar. In the simple mode "Duplicar", "Excluir" and "Editar texto/tabela" only appear
+   with an object selected; with the 60+ buttons they used to wrap the toolbar into more lines and push the page down by
+   about 100 px on every click. Now the first five buttons and "Mais opções" share the first line and the selection
+   buttons always get their own second line, which shows a short hint while nothing is selected, so the toolbar keeps
+   the same height and the page stays still. */
+.vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar { align-items: flex-start; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary { flex: 1 1 0%; min-width: 0; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary > :nth-child(n+6) { order: 2; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary::after { content: ''; order: 1; flex: 1 0 100%; height: 0; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary:not(:has(> :nth-child(6)))::after {
+  content: 'Clique em um objeto da página para duplicar, excluir ou editar.';
+  height: 44px; margin-bottom: 6px; overflow: hidden; color: #5c6c80; font-size: 13px; line-height: 44px; text-overflow: ellipsis; white-space: nowrap;
+}
+.vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar > [data-editor-action="toggle-advanced-tools"] { flex: none; }
