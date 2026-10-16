@@ -44,6 +44,14 @@ try {
   let selected = page.locator('[data-editor-object-id][data-selected="true"]');
   await selected.waitFor();
   assert.equal(await page.locator('[data-resize-handle]').count(), 8);
+  // FR-16b: every resize handle is at least 24 x 24 px on screen at the editor zoom (counter-scaled inside the page).
+  const handleSizes = await page.locator('[data-resize-handle]').evaluateAll((handles) => handles.map((handle) => {
+    const box = handle.getBoundingClientRect();
+    return { handle: handle.getAttribute('data-resize-handle'), width: box.width, height: box.height };
+  }));
+  for (const size of handleSizes) {
+    assert(size.width >= 23.5 && size.height >= 23.5, `Handle ${size.handle} must be >= 24 px on screen, got ${size.width} x ${size.height}`);
+  }
   const textId = await selected.getAttribute('data-editor-object-id');
   assert(textId);
   const textCanonical = page.locator(`[data-object-id="${textId}"]`);
