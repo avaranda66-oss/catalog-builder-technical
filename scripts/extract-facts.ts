@@ -142,13 +142,20 @@ async function callGemini(llm: SpikePlan['llms'][number], source: LoadedSource, 
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       });
       const ms = Math.round(performance.now() - started);
-      const json = await response.json() as {
-        error?: { message?: string }; modelVersion?: string; usageMetadata?: CallRecord['usage'];
-        candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[];
-      };
+      // Read the body as text first: a 429/5xx may come with an HTML or empty body and must still be retried.
+      const answer = await response.text();
       if ((response.status === 429 || response.status >= 500) && attempt < 3) {
         await new Promise(wait => setTimeout(wait, 8000 * attempt));
         continue;
+      }
+      let json: {
+        error?: { message?: string }; modelVersion?: string; usageMetadata?: CallRecord['usage'];
+        candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[];
+      };
+      try {
+        json = JSON.parse(answer) as typeof json;
+      } catch {
+        json = { error: { message: `resposta sem JSON (HTTP ${response.status}): ${answer.slice(0, 200)}` } };
       }
       const candidate = json.candidates?.[0];
       const text = candidate?.content?.parts?.filter(part => !part.thought).map(part => part.text ?? '').join('') ?? '';
