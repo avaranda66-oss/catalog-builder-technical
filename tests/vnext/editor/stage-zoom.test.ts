@@ -8,7 +8,9 @@ import {
   STAGE_ZOOM_STORAGE_KEY,
   createStageZoomWheelStepper,
   effectiveStageZoom,
+  fitPageStageZoom,
   fitWidthStageZoom,
+  isStageZoomMeasured,
   isStageZoomChoice,
   readStoredStageZoomChoice,
   stageZoomLabel,
@@ -18,12 +20,15 @@ import {
 } from '@/vnext/editor/stage-zoom';
 
 const A4_WIDTH_PX = 210 * 96 / 25.4; // 793.7 CSS px
+const A4_HEIGHT_PX = 297 * 96 / 25.4; // 1122.5 CSS px
 
 describe('FR-16a stage zoom math', () => {
-  it('offers "Ajustar à largura" by default plus 75%, 100% and 125% in plain Portuguese', () => {
+  it('offers "Ajustar à largura" by default plus "Página inteira", 75%, 100% and 125% in plain Portuguese', () => {
     expect(STAGE_ZOOM_DEFAULT_CHOICE).toBe('fit-width');
-    expect(STAGE_ZOOM_OPTIONS.map((option) => option.label)).toEqual(['Ajustar à largura', '75%', '100%', '125%']);
+    expect(STAGE_ZOOM_OPTIONS.map((option) => option.label)).toEqual(['Página inteira', 'Ajustar à largura', '75%', '100%', '125%']);
     expect(stageZoomLabel('fit-width')).toBe('Ajustar à largura');
+    expect(stageZoomLabel('fit-page')).toBe('Página inteira');
+    expect(isStageZoomChoice('fit-page')).toBe(true);
     expect(isStageZoomChoice('125')).toBe(true);
     expect(isStageZoomChoice('150')).toBe(false);
     expect(isStageZoomChoice(undefined)).toBe(false);
@@ -53,6 +58,34 @@ describe('FR-16a stage zoom math', () => {
     expect(effectiveStageZoom('fit-width', 1.07)).toBe(1.07);
     expect(effectiveStageZoom('fit-width', undefined)).toBe(STAGE_ZOOM_FALLBACK);
     expect(stageZoomPercent(1.07)).toBe('107%');
+  });
+
+  it('FR-16b: "Página inteira" shows the whole page, limited by the width or by the height', () => {
+    // 1366 x 768 laptop: about 826 px wide and 470 px high are left for the page.
+    expect(fitPageStageZoom(826, 470, 210, 297)).toBe(0.41);
+    expect(fitPageStageZoom(826, 470, 210, 297)! * A4_HEIGHT_PX).toBeLessThanOrEqual(470);
+    // A tall window: the width decides, exactly like "Ajustar à largura".
+    expect(fitPageStageZoom(A4_WIDTH_PX, 5000, 210, 297)).toBe(fitWidthStageZoom(A4_WIDTH_PX, 210));
+    // Cannot be measured (hidden canvas, jsdom): no value, so the fallback stays.
+    expect(fitPageStageZoom(826, 0, 210, 297)).toBeUndefined();
+    expect(fitPageStageZoom(0, 470, 210, 297)).toBeUndefined();
+    expect(effectiveStageZoom('fit-page', 1.04, 0.41)).toBe(0.41);
+    expect(effectiveStageZoom('fit-page', 1.04, undefined)).toBe(STAGE_ZOOM_FALLBACK);
+    expect(effectiveStageZoom('fit-width', 1.04, 0.41)).toBe(1.04);
+    expect(isStageZoomMeasured('fit-page', 1.04, undefined)).toBe(false);
+    expect(isStageZoomMeasured('fit-page', undefined, 0.41)).toBe(true);
+    expect(isStageZoomMeasured('75', undefined, undefined)).toBe(true);
+  });
+
+  it('FR-16b: steps through "Página inteira" too, smallest to biggest', () => {
+    expect(stepStageZoom('75', 1.04, -1, 0.41)).toBe('fit-page');
+    expect(stepStageZoom('fit-page', 1.04, -1, 0.41)).toBe('fit-page');
+    expect(stepStageZoom('fit-page', 1.04, 1, 0.41)).toBe('75');
+    expect(stepStageZoom('fit-width', 1.04, -1, 0.41)).toBe('100');
+    // On a tall window both fits are the same level: "Ajustar à largura" is the one kept.
+    expect(stepStageZoom('100', 0.9, -1, 0.9)).toBe('fit-width');
+    // Unmeasured "Página inteira" is not a candidate.
+    expect(stepStageZoom('75', 1.04, -1, undefined)).toBe('75');
   });
 
   it('steps to the nearest visibly different level, including the measured fit', () => {

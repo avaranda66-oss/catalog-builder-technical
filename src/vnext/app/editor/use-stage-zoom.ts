@@ -1,12 +1,12 @@
 /**
- * FR-16a — zoom of the editor page stage.
+ * FR-16a/FR-16b — zoom of the editor page stage.
  *
  * Stable API (consumed by later slices, e.g. 2A's inline cell editor and 2C's scale work):
  * - `useStageZoom()` reads the current zoom from anywhere inside the editor and offers
  *   `setChoice`, `zoomIn` and `zoomOut`. It needs no provider.
- * - `useStageZoomHost(anchorRef, pageWidthMm)` is mounted once by the zoom control. It
- *   measures the canvas for "Ajustar à largura", writes the CSS variables on
- *   `.vnext-canvas-area` and handles Ctrl + roda do mouse over the canvas.
+ * - `useStageZoomHost(anchorRef, pageWidthMm, pageHeightMm?)` is mounted once by the zoom
+ *   control. It measures the canvas for "Ajustar à largura" and "Página inteira", writes the
+ *   CSS variables on `.vnext-canvas-area` and handles Ctrl + roda do mouse over the canvas.
  *
  * CSS contract (styles.css): `.vnext-page-stage { zoom: var(--vnext-stage-zoom) }`. Controls
  * drawn inside the zoomed page multiply screen sizes by `--vnext-stage-unzoom` (= 1 / zoom)
@@ -19,9 +19,10 @@ import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore, type RefObje
 import {
   createStageZoomWheelStepper,
   effectiveStageZoom,
+  fitPageStageZoom,
   fitWidthStageZoom,
   isStageZoomChoice,
-  presetStageZoom,
+  isStageZoomMeasured,
   readStoredStageZoomChoice,
   stepStageZoom,
   writeStoredStageZoomChoice,
@@ -36,15 +37,19 @@ export const STAGE_ZOOM_SCOPE_SELECTOR = '.vnext-canvas-area';
 export const STAGE_ZOOM_VIEWPORT_SELECTOR = '.vnext-document-preview';
 /** Keeps a hair of room so sub-pixel rounding never creates a horizontal scrollbar. */
 const FIT_SAFETY_PX = 2;
+/** A4 height / width, used when the caller does not give the page height. */
+const A4_HEIGHT_PER_WIDTH = 297 / 210;
 
 export interface StageZoomSnapshot {
   /** What the person chose (remembered on this computer). */
   readonly choice: StageZoomChoice;
   /** Zoom that fills the canvas width, or `undefined` until the canvas is measured. */
   readonly fitWidthZoom: number | undefined;
+  /** FR-16b: zoom that shows the whole page in the visible canvas, or `undefined` until measured. */
+  readonly fitPageZoom: number | undefined;
   /** Zoom factor applied to `.vnext-page-stage` (screen px per page CSS px). */
   readonly zoom: number;
-  /** False only while "Ajustar à largura" waits for the first measurement. */
+  /** False only while "Ajustar à largura" or "Página inteira" waits for the first measurement. */
   readonly measured: boolean;
 }
 
@@ -64,12 +69,13 @@ function browserStorage(): Storage | undefined {
   }
 }
 
-function buildSnapshot(choice: StageZoomChoice, fitWidthZoom: number | undefined): StageZoomSnapshot {
+function buildSnapshot(choice: StageZoomChoice, fitWidthZoom: number | undefined, fitPageZoom: number | undefined): StageZoomSnapshot {
   return {
     choice,
     fitWidthZoom,
-    zoom: effectiveStageZoom(choice, fitWidthZoom),
-    measured: presetStageZoom(choice) !== undefined || fitWidthZoom !== undefined,
+    fitPageZoom,
+    zoom: effectiveStageZoom(choice, fitWidthZoom, fitPageZoom),
+    measured: isStageZoomMeasured(choice, fitWidthZoom, fitPageZoom),
   };
 }
 
@@ -77,13 +83,13 @@ let snapshot: StageZoomSnapshot | undefined;
 const listeners = new Set<() => void>();
 
 function currentSnapshot(): StageZoomSnapshot {
-  if (!snapshot) snapshot = buildSnapshot(readStoredStageZoomChoice(browserStorage()), undefined);
+  if (!snapshot) snapshot = buildSnapshot(readStoredStageZoomChoice(browserStorage()), undefined, undefined);
   return snapshot;
 }
 
 function publish(next: StageZoomSnapshot): void {
   const previous = currentSnapshot();
-  if (previous.choice === next.choice && previous.fitWidthZoom === next.fitWidthZoom) return;
+  if (previous.choice === next.choice && previous.fitWidthZoom === next.fitWidthZoom && previous.fitPageZoom === next.fitPageZoom) return;
   snapshot = next;
   for (const listener of [...listeners]) listener();
 }
@@ -97,20 +103,21 @@ function subscribe(listener: () => void): () => void {
 export function setStageZoomChoice(choice: StageZoomChoice): void {
   if (!isStageZoomChoice(choice)) return;
   writeStoredStageZoomChoice(browserStorage(), choice);
-  publish(buildSnapshot(choice, currentSnapshot().fitWidthZoom));
+  const current = currentSnapshot();
+  publish(buildSnapshot(choice, current.fitWidthZoom, current.fitPageZoom));
 }
 
 /** One step bigger (1) or smaller (-1) among the offered zoom levels. */
 export function stepStageZoomChoice(direction: 1 | -1): void {
   const current = currentSnapshot();
-  const next = stepStageZoom(current.choice, current.fitWidthZoom, direction);
+  const next = stepStageZoom(current.choice, current.fitWidthZoom, direction, current.fitPageZoom);
   if (next !== current.choice) setStageZoomChoice(next);
 }
 
-function setFitWidthZoom(fitWidthZoom: number | undefined): void {
+function setFitZooms(fitWidthZoom: number | undefined, fitPageZoom: number | undefined): void {
   const current = currentSnapshot();
-  if (current.fitWidthZoom === fitWidthZoom) return;
-  publish(buildSnapshot(current.choice, fitWidthZoom));
+  if (current.fitWidthZoom === fitWidthZoom && current.fitPageZoom === fitPageZoom) return;
+  publish(buildSnapshot(current.choice, fitWidthZoom, fitPageZoom));
 }
 
 /** Test seam: forget the in-memory zoom so the next read comes from storage again. */
@@ -146,6 +153,19 @@ export function stageZoomAvailableWidth(scope: HTMLElement): number {
   return viewport.clientWidth - padding - FIT_SAFETY_PX;
 }
 
+/**
+ * FR-16b: visible height available to the page. On a computer screen the page scrolls inside
+ * `.vnext-document-preview` (the toolbars stay fixed above it), so its client height is what the
+ * person sees; on a phone the whole screen scrolls, so the window height also limits it.
+ */
+export function stageZoomAvailableHeight(scope: HTMLElement): number {
+  const viewport = scope.querySelector<HTMLElement>(STAGE_ZOOM_VIEWPORT_SELECTOR) ?? scope;
+  const style = window.getComputedStyle(viewport);
+  const padding = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+  const visible = Math.min(viewport.clientHeight, window.innerHeight || viewport.clientHeight);
+  return visible - padding - FIT_SAFETY_PX;
+}
+
 function nextFrame(callback: () => void): number {
   return typeof window.requestAnimationFrame === 'function'
     ? window.requestAnimationFrame(callback)
@@ -170,17 +190,26 @@ function formatUnzoom(zoom: number): string {
  * Mounted once, by the zoom control inside `.vnext-canvas-area`. Without that ancestor it
  * does nothing, so the control can be rendered in isolation (tests, previews).
  */
-export function useStageZoomHost(anchorRef: RefObject<HTMLElement | null>, pageWidthMm: number): StageZoom {
+export function useStageZoomHost(anchorRef: RefObject<HTMLElement | null>, pageWidthMm: number, pageHeightMm?: number): StageZoom {
   const stageZoom = useStageZoom();
-  const { measured, zoom } = stageZoom;
+  const { measured, zoom, choice } = stageZoom;
+  const heightMm = pageHeightMm !== undefined && pageHeightMm > 0 ? pageHeightMm : pageWidthMm * A4_HEIGHT_PER_WIDTH;
 
-  // "Ajustar à largura": measure now (before paint) and again after the canvas changes size.
-  // Re-measuring is deferred to the next frame so a zoom change never happens inside a
-  // ResizeObserver delivery (that would log "ResizeObserver loop" errors).
+  // "Ajustar à largura" and "Página inteira": measure now (before paint), again after the canvas
+  // changes size, and again when the person picks a choice (so "Página inteira" uses the toolbars
+  // shown right now). A toolbar opening or closing does not re-measure: the page never changes
+  // size by itself while the person works. Re-measuring is deferred to the next frame so a zoom
+  // change never happens inside a ResizeObserver delivery ("ResizeObserver loop" errors).
   useLayoutEffect(() => {
     const scope = scopeFor(anchorRef.current);
     if (!scope) return undefined;
-    const measure = () => setFitWidthZoom(fitWidthStageZoom(stageZoomAvailableWidth(scope), pageWidthMm));
+    const measure = () => {
+      const width = stageZoomAvailableWidth(scope);
+      setFitZooms(
+        fitWidthStageZoom(width, pageWidthMm),
+        fitPageStageZoom(width, stageZoomAvailableHeight(scope), pageWidthMm, heightMm),
+      );
+    };
     measure();
     let pending = false;
     let frame: number | undefined;
@@ -201,7 +230,7 @@ export function useStageZoomHost(anchorRef: RefObject<HTMLElement | null>, pageW
       window.removeEventListener('resize', scheduleMeasure);
       if (pending && frame !== undefined) cancelFrame(frame);
     };
-  }, [anchorRef, pageWidthMm]);
+  }, [anchorRef, pageWidthMm, heightMm, choice]);
 
   // Publish the zoom to CSS. While unmeasured, the stylesheet default stays in charge.
   useLayoutEffect(() => {

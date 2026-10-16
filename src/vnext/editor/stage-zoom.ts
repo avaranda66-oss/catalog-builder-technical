@@ -1,12 +1,14 @@
 /**
- * FR-16a — pure zoom math for the editor page stage (no DOM, no React).
+ * FR-16a/FR-16b — pure zoom math for the editor page stage (no DOM, no React).
  *
- * The zoom is a *view* setting only: it never reaches the CatalogDocument, the
- * measurement root or the PDF. Gestures already convert pointer deltas with the
- * rendered page rectangle, so any zoom value keeps the authored geometry exact.
+ * The zoom is a *view* setting only: it never reaches the CatalogDocument, the measurement
+ * root or the PDF. Gestures already convert pointer deltas with the rendered page rectangle,
+ * so any zoom value keeps the authored geometry exact.
  */
 
-export type StageZoomChoice = 'fit-width' | '75' | '100' | '125';
+export type StageZoomChoice = 'fit-page' | 'fit-width' | '75' | '100' | '125';
+/** The two choices whose value depends on the measured canvas. */
+export type StageZoomFitChoice = Extract<StageZoomChoice, 'fit-page' | 'fit-width'>;
 
 export interface StageZoomOption {
   choice: StageZoomChoice;
@@ -15,6 +17,7 @@ export interface StageZoomOption {
 }
 
 export const STAGE_ZOOM_OPTIONS: readonly StageZoomOption[] = [
+  { choice: 'fit-page', label: 'Página inteira' },
   { choice: 'fit-width', label: 'Ajustar à largura' },
   { choice: '75', label: '75%' },
   { choice: '100', label: '100%' },
@@ -29,19 +32,37 @@ export const STAGE_ZOOM_MAX = 2;
 export const STAGE_ZOOM_STORAGE_KEY = 'vnext.editor.stageZoom';
 
 const CSS_PX_PER_MM = 96 / 25.4;
-const PRESET_ZOOM: Readonly<Record<Exclude<StageZoomChoice, 'fit-width'>, number>> = { '75': 0.75, '100': 1, '125': 1.25 };
+const PRESET_ZOOM: Readonly<Record<Exclude<StageZoomChoice, StageZoomFitChoice>, number>> = { '75': 0.75, '100': 1, '125': 1.25 };
 const SAME_ZOOM_EPSILON = 0.005;
+
+/** Measured values for the two "fit" choices; `undefined` while the canvas cannot be measured. */
+export interface StageZoomFits {
+  readonly fitWidthZoom: number | undefined;
+  readonly fitPageZoom?: number | undefined;
+}
 
 export function isStageZoomChoice(value: unknown): value is StageZoomChoice {
   return typeof value === 'string' && STAGE_ZOOM_OPTIONS.some((option) => option.choice === value);
 }
 
+export function isStageZoomFitChoice(choice: StageZoomChoice): choice is StageZoomFitChoice {
+  return choice === 'fit-page' || choice === 'fit-width';
+}
+
 export function presetStageZoom(choice: StageZoomChoice): number | undefined {
-  return choice === 'fit-width' ? undefined : PRESET_ZOOM[choice];
+  return isStageZoomFitChoice(choice) ? undefined : PRESET_ZOOM[choice];
 }
 
 export function clampStageZoom(zoom: number): number {
   return Math.min(STAGE_ZOOM_MAX, Math.max(STAGE_ZOOM_MIN, zoom));
+}
+
+function fitStageZoom(availablePx: number, pageMm: number): number | undefined {
+  if (!Number.isFinite(availablePx) || !Number.isFinite(pageMm)) return undefined;
+  if (availablePx <= 0 || pageMm <= 0) return undefined;
+  const raw = availablePx / (pageMm * CSS_PX_PER_MM);
+  // The tiny epsilon keeps an exact fit (raw 0.99999999…) from flooring one step down.
+  return clampStageZoom(Math.floor(raw * 100 + 1e-9) / 100);
 }
 
 /**
@@ -50,32 +71,55 @@ export function clampStageZoom(zoom: number): number {
  * Returns `undefined` when the canvas cannot be measured (hidden, jsdom, invalid page).
  */
 export function fitWidthStageZoom(availableWidthPx: number, pageWidthMm: number): number | undefined {
-  if (!Number.isFinite(availableWidthPx) || !Number.isFinite(pageWidthMm)) return undefined;
-  if (availableWidthPx <= 0 || pageWidthMm <= 0) return undefined;
-  const raw = availableWidthPx / (pageWidthMm * CSS_PX_PER_MM);
-  // The tiny epsilon keeps an exact fit (raw 0.99999999…) from flooring one step down.
-  return clampStageZoom(Math.floor(raw * 100 + 1e-9) / 100);
-}
-
-/** The zoom actually applied to `.vnext-page-stage` for a choice. */
-export function effectiveStageZoom(choice: StageZoomChoice, fitWidthZoom: number | undefined): number {
-  return presetStageZoom(choice) ?? fitWidthZoom ?? STAGE_ZOOM_FALLBACK;
+  return fitStageZoom(availableWidthPx, pageWidthMm);
 }
 
 /**
- * Next choice for a zoom step (Ctrl + roda do mouse). The candidates are the fixed
- * percentages plus the measured "Ajustar à largura" value; the step always moves to
- * the nearest candidate that is visibly larger (direction 1) or smaller (direction -1).
- * When nothing is larger/smaller the current choice is kept.
+ * FR-16b "Página inteira": the biggest zoom that shows the whole page (width and height) in
+ * the visible canvas. `undefined` when either side cannot be measured.
  */
-export function stepStageZoom(choice: StageZoomChoice, fitWidthZoom: number | undefined, direction: 1 | -1): StageZoomChoice {
-  const current = effectiveStageZoom(choice, fitWidthZoom);
+export function fitPageStageZoom(
+  availableWidthPx: number, availableHeightPx: number, pageWidthMm: number, pageHeightMm: number,
+): number | undefined {
+  const byWidth = fitStageZoom(availableWidthPx, pageWidthMm);
+  const byHeight = fitStageZoom(availableHeightPx, pageHeightMm);
+  if (byWidth === undefined || byHeight === undefined) return undefined;
+  return Math.min(byWidth, byHeight);
+}
+
+function fitZoomFor(choice: StageZoomFitChoice, fits: StageZoomFits): number | undefined {
+  return choice === 'fit-page' ? fits.fitPageZoom : fits.fitWidthZoom;
+}
+
+/** The zoom actually applied to `.vnext-page-stage` for a choice. */
+export function effectiveStageZoom(choice: StageZoomChoice, fitWidthZoom: number | undefined, fitPageZoom?: number): number {
+  if (!isStageZoomFitChoice(choice)) return PRESET_ZOOM[choice];
+  return fitZoomFor(choice, { fitWidthZoom, fitPageZoom }) ?? STAGE_ZOOM_FALLBACK;
+}
+
+/** True when the choice already has its value (a fixed percentage, or a measured fit). */
+export function isStageZoomMeasured(choice: StageZoomChoice, fitWidthZoom: number | undefined, fitPageZoom?: number): boolean {
+  return !isStageZoomFitChoice(choice) || fitZoomFor(choice, { fitWidthZoom, fitPageZoom }) !== undefined;
+}
+
+/**
+ * Next choice for a zoom step (Ctrl + roda do mouse, or the − / + buttons). The candidates are
+ * the fixed percentages plus the measured "Página inteira" and "Ajustar à largura" values; the
+ * step always moves to the nearest candidate that is visibly larger (direction 1) or smaller
+ * (direction -1). When nothing is larger/smaller the current choice is kept.
+ */
+export function stepStageZoom(
+  choice: StageZoomChoice, fitWidthZoom: number | undefined, direction: 1 | -1, fitPageZoom?: number,
+): StageZoomChoice {
+  const current = effectiveStageZoom(choice, fitWidthZoom, fitPageZoom);
+  const fits: StageZoomFits = { fitWidthZoom, fitPageZoom };
+  const rank = (candidate: StageZoomChoice) => (candidate === 'fit-width' ? 1 : candidate === 'fit-page' ? 2 : 0);
   const candidates = STAGE_ZOOM_OPTIONS
-    .map((option) => ({ choice: option.choice, zoom: option.choice === 'fit-width' ? fitWidthZoom : presetStageZoom(option.choice) }))
+    .map((option) => ({ choice: option.choice, zoom: isStageZoomFitChoice(option.choice) ? fitZoomFor(option.choice, fits) : presetStageZoom(option.choice) }))
     .filter((candidate): candidate is { choice: StageZoomChoice; zoom: number } => candidate.zoom !== undefined)
     .filter((candidate) => direction === 1 ? candidate.zoom > current + SAME_ZOOM_EPSILON : candidate.zoom < current - SAME_ZOOM_EPSILON)
-    // Nearest first; on a tie a fixed percentage wins over "Ajustar à largura".
-    .sort((a, b) => Math.abs(a.zoom - current) - Math.abs(b.zoom - current) || (a.choice === 'fit-width' ? 1 : 0) - (b.choice === 'fit-width' ? 1 : 0));
+    // Nearest first; on a tie a fixed percentage wins, then "Ajustar à largura", then "Página inteira".
+    .sort((a, b) => Math.abs(a.zoom - current) - Math.abs(b.zoom - current) || rank(a.choice) - rank(b.choice));
   return candidates[0]?.choice ?? choice;
 }
 

@@ -71,9 +71,10 @@ describe('FR-16a zoom inside the editor', () => {
     const header = container.querySelector<HTMLElement>('.vnext-canvas-meta')!;
     const zoom = within(header).getByRole('group', { name: 'Zoom da página' });
     expect(within(header).getByText('Página 1 de 1')).toBeInTheDocument();
-    expect(within(zoom).getByRole('button', { name: 'Ajustar à largura' })).toHaveAttribute('aria-pressed', 'true');
+    const levels = within(zoom).getByRole('combobox', { name: 'Zoom' }) as HTMLSelectElement;
+    expect(levels.selectedOptions[0]?.textContent).toBe('Ajustar à largura');
 
-    fireEvent.click(within(zoom).getByRole('button', { name: '125%' }));
+    fireEvent.change(levels, { target: { value: '125' } });
     const canvasArea = container.querySelector<HTMLElement>('main.vnext-canvas-area')!;
     expect(canvasArea.style.getPropertyValue(STAGE_ZOOM_CSS_VARIABLE)).toBe('1.25');
     expect(canvasArea.querySelector('[data-vnext-page-stage]')).toBeTruthy();
@@ -91,7 +92,10 @@ describe('FR-16a zoom inside the editor', () => {
     const session = shapeSession();
     const execute = vi.spyOn(session, 'execute');
     const { container } = render(<VNextApp session={session} />);
-    fireEvent.click(within(container.querySelector<HTMLElement>('.vnext-canvas-meta')!).getByRole('button', { name: label }));
+    const levels = within(container.querySelector<HTMLElement>('.vnext-canvas-meta')!).getByRole('combobox', { name: 'Zoom' });
+    fireEvent.change(levels, { target: { value: within(levels).getByRole<HTMLOptionElement>('option', { name: label }).value } });
+    // The zoom really reached the page stage (jsdom has no layout, so the drawn size is simulated below).
+    expect(container.querySelector<HTMLElement>('main.vnext-canvas-area')!.style.getPropertyValue(STAGE_ZOOM_CSS_VARIABLE)).toBe(String(scale));
     setRenderedPageScale(container, scale);
     const pxPerMm = CSS_PX_PER_MM * scale;
     const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;

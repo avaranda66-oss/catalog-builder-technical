@@ -134,6 +134,9 @@ import { TableCellEditorSection } from './editor/TableCellEditorSection';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
+import { TextEditToolbar } from './editor/TextEditToolbar';
+import { SIDE_PROPERTIES_PANEL_ID, SidePanelTabs } from './editor/SidePanelTabs';
+import { AssistantDock } from './editor/AssistantDock';
 import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
@@ -4005,17 +4008,9 @@ export function EditorWorkspace({
                         persistence?.runtime.workspace.notifyDraftStateChanged();
                       }}
                     />
-                    <div className="vnext-text-edit-toolbar" aria-label="Ferramentas da edição de texto">
-                      <div className="vnext-text-symbols">
-                        {technicalSymbols.map((symbol, index) => (
-                          <button key={symbol} type="button" data-editor-symbol-index={index} onClick={() => insertTechnicalSymbol(symbol)}>
-                            {symbol}
-                          </button>
-                        ))}
-                      </div>
-                      <button type="button" data-editor-action="cancel-text" onClick={() => cancelTextEdit()}>Cancelar</button>
-                      <button type="button" data-editor-action="commit-text" onClick={() => commitTextEdit()}>Concluir</button>
-                    </div>
+                    {/* FR-16b: the bar is drawn outside the zoomed page, at its real size. */}
+                    <TextEditToolbar symbols={technicalSymbols} onSymbol={insertTechnicalSymbol}
+                      onCancel={() => cancelTextEdit()} onCommit={() => commitTextEdit()} />
                   </div>
                 )}
                 {safeAreaU && (
@@ -4165,7 +4160,10 @@ export function EditorWorkspace({
           </div>
         </main>
 
-        <aside className="vnext-info" aria-label="Propriedades do objeto">
+        {/* FR-17: the right column shows "Propriedades" or "Assistente", chosen by the tabs on top. */}
+        <div className="vnext-side-column" data-side-panel={simpleByDefault && assistantOpen ? 'assistant' : 'properties'}>
+        {simpleByDefault && <SidePanelTabs active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')} />}
+        <aside className="vnext-info" id={SIDE_PROPERTIES_PANEL_ID} aria-label="Propriedades do objeto" hidden={simpleByDefault && assistantOpen}>
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
@@ -4613,26 +4611,9 @@ export function EditorWorkspace({
           </p>
           </>}
         </aside>
-        {assistantOpen && simpleByDefault && (
-          <aside
-            id="vnext-assistant-chat"
-            className="vnext-assistant-dock"
-            aria-label="Assistente do catálogo atual"
-            data-vnext-assistant="open"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') { event.stopPropagation(); setAssistantOpen(false); }
-            }}
-          >
-            <div className="vnext-assistant-dock-controls">
-              <span>Você está editando este catálogo</span>
-              <button type="button" aria-label="Fechar painel do assistente" onClick={() => setAssistantOpen(false)}>Fechar ✕</button>
-            </div>
-            <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
-              <button role="tab" aria-selected={assistantMode === 'gemini'} type="button"
-                onClick={() => setAssistantMode('gemini')}>Criar com Gemini</button>
-              <button role="tab" aria-selected={assistantMode === 'tools'} type="button"
-                onClick={() => setAssistantMode('tools')}>Ferramentas</button>
-            </div>
+        {simpleByDefault && (
+          <AssistantDock open={assistantOpen} onClose={() => setAssistantOpen(false)} mode={assistantMode} onModeChange={setAssistantMode}
+            selection={{ count: editorState.selectedObjectIds.length, type: selectedObject?.type }}>
             {assistantMode === 'gemini' ? <CatalogNativeComposer
               key={document.id + ':gemini'} session={session} documentId={document.id}
               ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
@@ -4658,8 +4639,9 @@ export function EditorWorkspace({
               }}
               onEditor={() => setAssistantOpen(false)}
             />}
-          </aside>
+          </AssistantDock>
         )}
+        </div>
       </div>
       <EditorDiagnosticsProbe
         document={document}
