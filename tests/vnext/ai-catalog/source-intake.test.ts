@@ -62,6 +62,12 @@ describe('CSV, TSV and TXT intake', () => {
     expect(detectDelimiter(`Code,Notes\n${Array.from({ length: 20 }, (_, index) => `C${index},red;blue`).join('\n')}\n`)).toBe(',');
   });
 
+  it('keeps ";" when the header has as many commas as each row has decimal commas', () => {
+    const text = `Modelo;Faixa (mín, máx, bar)\n${Array.from({ length: 10 }, (_, index) => `A${index};0,5 a 1,5`).join('\n')}\n`;
+    expect(detectDelimiter(text)).toBe(';');
+    expect(parseDelimitedSource(text)[1]).toEqual(['A0', '0,5 a 1,5']);
+  });
+
   it('keeps a Brazilian CSV with ";" and "0,01 %FS" exactly as typed', async () => {
     const intake = await read('Modelo;Exatidão\nPCON-Y17;0,01 %FS\nPCON-Y18;0,025 %FS\n', 'sensores.csv');
     expect(table(intake).rows).toEqual([['Modelo', 'Exatidão'], ['PCON-Y17', '0,01 %FS'], ['PCON-Y18', '0,025 %FS']]);
@@ -325,6 +331,46 @@ describe('XLSX intake with real-world workbooks', () => {
     expect(missing.warnings).toContain('A aba “Precos” não existe nesta planilha. Confira o nome da aba no Excel.');
   });
 
+  it('says when a chosen range is empty or not valid, and where the data is', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = specsSheet(book, 'S');
+      sheet.addRow(['PCON-Y18', '0 a 70 bar', '0,05 %FS']);
+    });
+    const empty = await read(bytes, 'intervalo.xlsx', { ranges: { S: 'Z99:ZZ100' } });
+    expect(empty.blocks).toEqual([]);
+    expect(empty.rangeRequests).toEqual([{ sheet: 'S', usedRange: 'A1:C3', suggestedRange: 'A1:C3', rows: 3, columns: 3,
+      message: 'O intervalo Z99:ZZ100 da aba “S” está vazio. Os dados ficam em A1:C3.' }]);
+    expect(empty.ignored).toEqual([]);
+    const invalid = await read(bytes, 'intervalo.xlsx', { ranges: { S: 'linha 2 a 3' } });
+    expect(invalid.rangeRequests[0]).toMatchObject({ usedRange: 'A1:C3',
+      message: 'O intervalo “linha 2 a 3” da aba “S” não é válido. Use o formato A1:J150. Os dados ficam em A1:C3.' });
+  });
+
+  it('shows where the data is when a sheet is too big to read whole', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Larga');
+      sheet.getCell(1, 1).value = 'Modelo'; sheet.getCell(1, 2).value = 'Faixa';
+      sheet.getCell(2, 1).value = 'PCON-Y17'; sheet.getCell(2, 2).value = '0 a 20 bar';
+      sheet.getCell(2, 1001).value = 'nota perdida';
+    });
+    const intake = await read(bytes, 'larga.xlsx');
+    expect(intake.rangeRequests).toEqual([{ sheet: 'Larga', usedRange: 'A1:ALM2', suggestedRange: 'A1:J2', rows: 2, columns: 1001,
+      message: 'A aba “Larga” é grande demais para ler inteira: os dados ficam em A1:ALM2. ' +
+        'Escolha um intervalo de até 150 linhas e 10 colunas, por exemplo A1:J2.' }]);
+    expect(table(await read(bytes, 'larga.xlsx', { ranges: { Larga: 'A1:J2' } })).rows).toEqual([['Modelo', 'Faixa'], ['PCON-Y17', '0 a 20 bar']]);
+  });
+
+  it('applies sheet choices to the file they were made for in a batch', async () => {
+    const first = await workbookBytes(book => { specsSheet(book, 'Specs'); specsSheet(book, 'Rascunho'); });
+    const second = await workbookBytes(book => { specsSheet(book, 'Linha A'); specsSheet(book, 'Linha B'); });
+    const results = await readSources([fileOf(first, 'a.xlsx'), fileOf(second, 'b.xlsx')],
+      file => file.name === 'a.xlsx' ? { sheets: ['Specs'] } : {});
+    expect(results[0].intake!.blocks.map(block => block.title)).toEqual(['a.xlsx · Specs']);
+    expect(results[1].intake!.blocks.map(block => block.title)).toEqual(['b.xlsx · Linha A', 'b.xlsx · Linha B']);
+    expect(results[1].intake!.warnings).toEqual([]);
+    expect(results[1].intake!.ignored).toEqual([]);
+  });
+
   it('reads a sheet too big to read whole once a range is chosen, keeping a merge that starts before it', async () => {
     const { buildGridTable, gridFromWorksheet } = await import('../../../src/vnext/ai-catalog/source-grid');
     const { displayLocale } = await import('../../../src/vnext/ai-catalog/excel-display-format');
@@ -366,6 +412,84 @@ describe('XLSX intake with real-world workbooks', () => {
       'A coluna C (“Y17”) da aba “Lista” não foi importada: está no grupo “Preços”, que parece ser preço ou dado interno.',
       'A coluna D (“Y18”) da aba “Lista” não foi importada: está no grupo “Preços”, que parece ser preço ou dado interno.',
     ]);
+  });
+
+  it('leaves out every column under a price header merged across the header row', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Lista');
+      sheet.getCell('A1').value = 'Modelo'; sheet.getCell('B1').value = 'Faixa';
+      sheet.getCell('C1').value = 'Preço (R$)'; sheet.mergeCells('C1:D1');
+      sheet.addRow(['PCON-Y17', '0 a 20 bar', 1000, 1300]);
+      sheet.addRow(['PCON-Y18', '0 a 70 bar', 2000, 2300]);
+    });
+    const intake = await read(bytes, 'precos-largos.xlsx');
+    expect(table(intake).rows).toEqual([['Modelo', 'Faixa'], ['PCON-Y17', '0 a 20 bar'], ['PCON-Y18', '0 a 70 bar']]);
+    expect(intake.ignored.map(item => item.message)).toEqual([
+      'A coluna C (“Preço (R$)”) da aba “Lista” não foi importada: parece ser preço ou dado interno.',
+      'A coluna D (“Preço (R$)”) da aba “Lista” não foi importada: parece ser preço ou dado interno.',
+    ]);
+  });
+
+  it('leaves out a price column merged down a two-row header', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Lista');
+      sheet.getCell('A3').value = 'Modelo'; sheet.mergeCells('A3:A4');
+      sheet.getCell('B3').value = 'Faixa'; sheet.mergeCells('B3:C3');
+      sheet.getCell('D3').value = 'Exatidão'; sheet.mergeCells('D3:E3');
+      sheet.getCell('F3').value = 'Preço'; sheet.mergeCells('F3:F4');
+      ['mín', 'máx', '% FS', 'bar'].forEach((value, index) => { sheet.getCell(4, 2 + index).value = value; });
+      sheet.getRow(5).values = ['PCON-Y17', 0, 20, 0.025, 0.005, 1000];
+      sheet.getRow(6).values = ['PCON-Y18', 0, 70, 0.05, 0.035, 2000];
+    });
+    const intake = await read(bytes, 'cabecalho-duplo.xlsx');
+    const block = table(intake);
+    expect(block.headerRow).toBe(1);
+    expect(block.rows[0]).toEqual(['Modelo', 'Faixa', '', 'Exatidão', '']);
+    expect(block.rows.flat()).not.toContain('1000');
+    expect(block.rows.flat()).not.toContain('2000');
+    expect(intake.ignored.map(item => item.message)).toEqual([
+      'A coluna F (“Preço”) da aba “Lista” não foi importada: parece ser preço ou dado interno.',
+    ]);
+  });
+
+  it('keeps technical columns under a title that mentions prices', async () => {
+    const partial = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Lista');
+      sheet.getCell('A1').value = 'Tabela de preços 2026'; sheet.mergeCells('A1:C1');
+      sheet.addRow(['Modelo', 'Faixa', 'Exatidão', 'Observações']);
+      sheet.addRow(['PCON-Y17', '0 a 20 bar', '0,025 %FS', 'Com certificado']);
+    });
+    const kept = await read(partial, 'titulo-precos.xlsx');
+    expect(table(kept).rows[1]).toEqual(['Modelo', 'Faixa', 'Exatidão', 'Observações']);
+    expect(kept.ignored).toEqual([]);
+
+    const long = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Catalogo');
+      sheet.getCell('A1').value = 'Catálogo PRESYS – especificações e preços'; sheet.mergeCells('A1:D1');
+      sheet.addRow(['Modelo', 'Faixa', 'Exatidão', 'Observações', 'Preço']);
+      sheet.addRow(['PCON-Y17', '0 a 20 bar', '0,025 %FS', 'Com certificado', 1000]);
+    });
+    const intake = await read(long, 'catalogo.xlsx');
+    expect(table(intake).rows[2]).toEqual(['PCON-Y17', '0 a 20 bar', '0,025 %FS', 'Com certificado']);
+    expect(intake.ignored.map(item => item.label)).toEqual(['E']);
+  });
+
+  it('leaves out a column shown as money whatever its header, but keeps "Custo-benefício"', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Lista');
+      sheet.addRow(['Modelo', 'Custo-benefício', 'Valor']);
+      for (const [model, value] of [['PCON-Y17', 1000], ['PCON-Y18', 1300]] as const) {
+        sheet.addRow([model, 'Ótimo', value]).getCell(3).numFmt = '"R$" #,##0.00';
+      }
+    });
+    const intake = await read(bytes, 'valores.xlsx');
+    expect(table(intake).rows).toEqual([['Modelo', 'Custo-benefício'], ['PCON-Y17', 'Ótimo'], ['PCON-Y18', 'Ótimo']]);
+    expect(intake.ignored.map(item => item.message)).toEqual([
+      'A coluna C (“Valor”) da aba “Lista” não foi importada: os valores estão em dinheiro (como R$ ou US$) e parecem ser preço.',
+    ]);
+    // Money typed in a CSV counts too.
+    const csv = await read('Modelo;Lista\nPCON-Y17;R$ 1.000,00\nPCON-Y18;R$ 1.300,00\n', 'lista.csv');
+    expect(table(csv).rows).toEqual([['Modelo'], ['PCON-Y17'], ['PCON-Y18']]);
   });
 
   it('uses the first filled cell as the header of a column when the sheet has no clear header row', async () => {

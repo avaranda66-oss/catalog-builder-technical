@@ -6,7 +6,7 @@
  */
 import type { Cell, CellValue, Worksheet } from 'exceljs';
 import {
-  excelSerialToDate, formatExcelBoolean, formatExcelDate, formatExcelNumber, isDateFormat, type DisplayLocale,
+  excelSerialToDate, formatExcelBoolean, formatExcelDateValue, formatExcelNumber, isCurrencyFormat, isDateFormat, type DisplayLocale,
 } from './excel-display-format';
 
 export const TABLE_LIMITS = { rows: 150, columns: 10, cell: 1200, characters: 120_000 } as const;
@@ -38,14 +38,25 @@ export interface SourceIgnored {
 export interface SourceRangeRequest {
   /** Sheet name, or the file name for CSV. Pass the chosen range in `ranges[sheet]`. */
   readonly sheet: string;
+  /** Where the data is, e.g. "A1:L74" ('' when unknown). */
   readonly usedRange: string;
+  /** A range that fits one table, to offer first ('' when unknown). */
   readonly suggestedRange: string;
+  /** Rows and columns with data (after exclusions for a big table; the used range otherwise; 0 when unknown). */
   readonly rows: number;
   readonly columns: number;
   readonly message: string;
 }
 
-export interface GridCell { readonly text: string; readonly raw: string; readonly flag?: SourceCellFlagKind }
+export interface GridCell {
+  readonly text: string;
+  readonly raw: string;
+  readonly flag?: SourceCellFlagKind;
+  /** A number in Excel (not a date). */
+  readonly numeric?: boolean;
+  /** A number Excel shows as money (R$, US$, €…). */
+  readonly currency?: boolean;
+}
 export interface GridMergeBox { top: number; left: number; bottom: number; right: number }
 export interface SourceGrid {
   /** Sheet name, or file name for CSV. */
@@ -99,7 +110,35 @@ export function parseA1Range(range: string): GridMergeBox | null {
   if (a.row < 1 || b.row < 1) return null;
   return { top: Math.min(a.row, b.row), bottom: Math.max(a.row, b.row), left: Math.min(a.col, b.col), right: Math.max(a.col, b.col) };
 }
-const rangeLabel = (box: GridMergeBox) => `${columnLabel(box.left - 1)}${box.top}:${columnLabel(box.right - 1)}${box.bottom}`;
+export const rangeLabel = (box: GridMergeBox) => `${columnLabel(box.left - 1)}${box.top}:${columnLabel(box.right - 1)}${box.bottom}`;
+/** The top-left part of `box` that fits one table. */
+export const fitBox = (box: GridMergeBox): GridMergeBox => ({ top: box.top, left: box.left,
+  bottom: Math.min(box.bottom, box.top + TABLE_LIMITS.rows - 1), right: Math.min(box.right, box.left + TABLE_LIMITS.columns - 1) });
+const areaOf = (name: string, kind: SourceGrid['kind']) => kind === 'sheet' ? `da aba “${name}”` : `do arquivo “${name}”`;
+
+/**
+ * A range the person chose that cannot be read, because it is not valid or has no data,
+ * with where the data actually is (`used`) so the range picker can offer it.
+ */
+export function chosenRangeProblem(name: string, kind: SourceGrid['kind'], range: string, problem: 'invalid' | 'empty', used?: GridMergeBox): SourceRangeRequest {
+  const area = areaOf(name, kind);
+  const where = used ? ` Os dados ficam em ${rangeLabel(used)}.` : '';
+  return { sheet: name, usedRange: used ? rangeLabel(used) : '', suggestedRange: used ? rangeLabel(fitBox(used)) : '',
+    rows: used ? used.bottom - used.top + 1 : 0, columns: used ? used.right - used.left + 1 : 0,
+    message: problem === 'invalid' ? `O intervalo “${range}” ${area} não é válido. Use o formato A1:J150.${where}`
+      : `O intervalo ${range} ${area} está vazio.${where}` };
+}
+
+/** Where a worksheet has values (style-only cells do not count), from ExcelJS's own dimensions. */
+export function worksheetUsedBox(sheet: Pick<Worksheet, 'dimensions'>): GridMergeBox | undefined {
+  try {
+    const model = (sheet.dimensions as unknown as { model?: Partial<GridMergeBox> } | undefined)?.model;
+    if (!model?.top || !model.left || !model.bottom || !model.right) return undefined;
+    return { top: model.top, left: model.left, bottom: model.bottom, right: model.right };
+  } catch {
+    return undefined;
+  }
+}
 
 /** "5, 7 a 9" — row or page numbers the way a person reads them. */
 export function formatNumberList(values: readonly number[], max = 12): string {
@@ -114,23 +153,32 @@ export function formatNumberList(values: readonly number[], max = 12): string {
   return parts.length > max ? `${parts.slice(0, max).join(', ')} e outras` : parts.join(', ');
 }
 
-const SHEET_AREA = (grid: SourceGrid) => grid.kind === 'sheet' ? `da aba “${grid.name}”` : `do arquivo “${grid.name}”`;
+const SHEET_AREA = (grid: SourceGrid) => areaOf(grid.name, grid.kind);
 const normalizeLabel = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036F]/g, '').toLowerCase().trim();
 
 /** Sheets that hold logs, helper lists, price configurators or drafts, never catalog content. */
 export const INTERNAL_SHEET_PATTERN = /^(access[ _-]?logs?|helper|configurador|original_.*|pending[ _-]?items)$/i;
 /** Column headers for prices, currencies, margins, contacts and browser data. */
 export const INTERNAL_COLUMN_PATTERN =
-  /(^|[^a-z0-9])(prices?|precos?|usd|eur|euros?|mark-?up|e-?mails?|user[ _-]?agent|custos?|costs?)([^a-z0-9]|$)/;
-/** Longest first cell treated as a column header when a sheet has no clear header row. */
+  /(^|[^a-z0-9])(prices?|precos?|usd|eur|euros?|brl|r\$|us\$|valor(es)? unitarios?|mark-?up|e-?mails?|user[ _-]?agent)([^a-z0-9]|$)/;
+/** Costs only as the whole header ("Custo", "Custo interno (R$)"), so "Custo-benefício" stays. */
+const COST_HEADER_PATTERN =
+  /^((custos?|costs?)( (internos?|internal|unitarios?|unit|totais|total|de compra|medios?))?|(unit|internal|total) costs?)( ?\([^)]*\))?$/;
+/** Longest label treated as a column or group header (a title or a sentence is longer). */
 const MAX_FALLBACK_HEADER = 30;
 export const isInternalSheetName = (name: string) => INTERNAL_SHEET_PATTERN.test(name.trim());
-export const isInternalColumnHeader = (header: string) => INTERNAL_COLUMN_PATTERN.test(normalizeLabel(header));
+export const isInternalColumnHeader = (header: string) => {
+  const label = normalizeLabel(header).replace(/\s+/g, ' ');
+  return INTERNAL_COLUMN_PATTERN.test(label) || COST_HEADER_PATTERN.test(label);
+};
+/** Money typed as text (CSV, or a text cell): "R$ 1.000,00", "US$ 250", "1.300 €". */
+const MONEY_TEXT = /^\s*((r\$|us\$|u\$s|\$|€|£|¥|brl|usd|eur)\s?-?\d[\d.,]*|-?\d[\d.,]*\s?(€|r\$|brl|usd|eur))\s*$/i;
+const NUMBER_TEXT = /^\s*[-+]?\d[\d.,]*\s*%?\s*$/;
 
 const FLAG_SUMMARY: Record<SourceCellFlagKind, (count: number) => string> = {
   'formula-error': count => count === 1 ? '1 célula com erro de fórmula' : `${count} células com erro de fórmula`,
   'formula-no-result': count => count === 1 ? '1 fórmula sem resultado salvo' : `${count} fórmulas sem resultado salvo`,
-  'format-approximate': count => count === 1 ? '1 número com formato especial' : `${count} números com formato especial`,
+  'format-approximate': count => count === 1 ? '1 valor com formato especial' : `${count} valores com formato especial`,
   truncated: count => count === 1 ? '1 célula com texto longo demais (cortado em 1.200 caracteres)' : `${count} células com texto longo demais (cortado em 1.200 caracteres)`,
   'control-characters': count => count === 1 ? '1 célula com caracteres invisíveis removidos' : `${count} células com caracteres invisíveis removidos`,
   'unsupported-value': count => count === 1 ? '1 célula com conteúdo não reconhecido' : `${count} células com conteúdo não reconhecido`,
@@ -138,7 +186,7 @@ const FLAG_SUMMARY: Record<SourceCellFlagKind, (count: number) => string> = {
 const FLAG_ADVICE: Record<SourceCellFlagKind, string> = {
   'formula-error': 'corrija no Excel ou confirme o valor antes de usar.',
   'formula-no-result': 'abra no Excel, salve e envie de novo.',
-  'format-approximate': 'confira se o número aparece igual no Excel.',
+  'format-approximate': 'confira se o valor aparece igual no Excel.',
   truncated: 'confira o texto completo no original.',
   'control-characters': 'confira o texto no original.',
   'unsupported-value': 'confira no original.',
@@ -147,7 +195,7 @@ function flagMessage(kind: SourceCellFlagKind, cell: string, area: string, raw: 
   const where = `${cell} ${area}`;
   if (kind === 'formula-error') return `Erro de fórmula (${raw || 'erro'}) na célula ${where}.`;
   if (kind === 'formula-no-result') return `A fórmula da célula ${where} não tem resultado salvo.`;
-  if (kind === 'format-approximate') return `O número da célula ${where} usa um formato especial; confira o valor no Excel.`;
+  if (kind === 'format-approximate') return `O valor da célula ${where} usa um formato especial; confira como ele aparece no Excel.`;
   if (kind === 'truncated') return `O texto da célula ${where} passa de 1.200 caracteres e foi cortado.`;
   if (kind === 'control-characters') return `Caracteres invisíveis foram removidos da célula ${where}.`;
   return `O conteúdo da célula ${where} não foi reconhecido.`;
@@ -184,14 +232,12 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
   let box: GridMergeBox = bounds;
   if (options.range !== undefined) {
     const chosen = parseA1Range(options.range);
-    const request = (message: string): GridTableResult => ({ ignored, empty: false,
-      rangeRequest: { sheet: grid.name, usedRange: rangeLabel(box), suggestedRange: rangeLabel(box), rows: 0, columns: 0, message } });
-    if (!chosen) return request(`O intervalo “${options.range}” ${area} não é válido. Use o formato A1:J150.`);
+    const request = (problem: 'invalid' | 'empty'): GridTableResult => ({ ignored, empty: false,
+      rangeRequest: chosenRangeProblem(grid.name, grid.kind, options.range!, problem, box) });
+    if (!chosen) return request('invalid');
     const inside = { top: Math.max(box.top, chosen.top), left: Math.max(box.left, chosen.left),
       bottom: Math.min(box.bottom, chosen.bottom), right: Math.min(box.right, chosen.right) };
-    if (inside.top > inside.bottom || inside.left > inside.right) {
-      return request(`O intervalo ${options.range} ${area} está vazio. Os dados ficam em ${rangeLabel(box)}.`);
-    }
+    if (inside.top > inside.bottom || inside.left > inside.right) return request('empty');
     box = inside;
   }
   // 2. Merge lookups.
@@ -226,7 +272,15 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
   };
   trim();
   const headerIndex = detectHeaderRow(grid, rows, columns, mergedSlaves, wideMasters);
-  const headerOf = (column: number) => headerIndex === undefined ? '' : cellAt(rows[headerIndex], column)?.text.trim() ?? '';
+  /** The header text of a column; a header cell covered by a merge ("Preço" over C1:D1, or down F3:F4) takes the merge's text. */
+  const headerOf = (column: number) => {
+    if (headerIndex === undefined) return '';
+    const row = rows[headerIndex];
+    const own = cellAt(row, column)?.text.trim();
+    if (own) return own;
+    const merge = mergeAt.get(`${row}:${column}`);
+    return merge ? cellAt(merge.top, merge.left)?.text.trim() ?? '' : '';
+  };
   const describe = (column: number) => {
     const header = headerOf(column);
     return header ? `A coluna ${columnLabel(column - 1)} (“${header}”)` : `A coluna ${columnLabel(column - 1)}`;
@@ -242,37 +296,55 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
     ignored.push({ kind: 'column', sheet: grid.name, label: columnLabel(column - 1), reason: 'hidden',
       message: `${describe(column)} ${area} não foi importada: estava oculta no Excel.` });
   }
-  // 4. Internal columns (prices, currencies, e-mail…), judged by the column's header labels.
+  // 4. Internal columns (prices, currencies, e-mail…), judged by the column's header labels and by money formats.
   const headerRowNumber = headerIndex === undefined ? undefined : rows[headerIndex];
   if (!options.includeInternal) {
-    /** The label that marks the column as internal, and whether it is a group header above the header row. */
-    const internalLabelOf = (column: number): { label: string; group: boolean } | undefined => {
+    type Internal = { label?: string; why: 'header' | 'group' | 'money' };
+    const firstColumn = columns[0];
+    // Group headers are merges over some columns (never the first one, Modelo or Código, which a title covers),
+    // ending in the two filled rows right above the header row ("Preços" over Y17 | Y18).
+    const groupRows = headerIndex === undefined ? [] : rows.slice(0, headerIndex).filter(row => columns.some(column => occupied(row, column))).slice(-2);
+    const groupMerges = grid.merges.filter(merge => merge.right > merge.left && merge.left > firstColumn && groupRows.includes(merge.bottom));
+    // The first 200 data rows are enough to tell a money column (and keep a huge sheet fast).
+    const dataRows = (headerIndex === undefined ? rows : rows.slice(headerIndex + 1)).slice(0, 200);
+    /** Most numbers of the column are shown as money (R$, US$, €…): a price column whatever its header says. */
+    const showsMoney = (column: number) => {
+      let money = 0, numbers = 0;
+      for (const row of dataRows) {
+        const cell = cellAt(row, column);
+        if (!cell?.text.trim()) continue;
+        const isMoney = !!cell.currency || MONEY_TEXT.test(cell.text);
+        if (isMoney) money++;
+        if (isMoney || cell.numeric || NUMBER_TEXT.test(cell.text)) numbers++;
+      }
+      return money > 0 && money * 2 > numbers;
+    };
+    const internalOf = (column: number): Internal | undefined => {
       if (headerIndex === undefined) {
         // No clear header row: the first filled cell of the column (in the first 10 rows) acts as its header
         // when it is short like a header ("Preço"), not a title or a sentence that mentions prices.
         const first = rows.slice(0, 10).find(row => !mergedSlaves.has(`${row}:${column}`) && !wideMasters.has(`${row}:${column}`) &&
           hasContent(cellAt(row, column)));
         const label = first === undefined ? '' : cellAt(first, column)?.text.trim() ?? '';
-        return label && label.length <= MAX_FALLBACK_HEADER && isInternalColumnHeader(label) ? { label, group: false } : undefined;
+        if (label && label.length <= MAX_FALLBACK_HEADER && isInternalColumnHeader(label)) return { label, why: 'header' };
+        return showsMoney(column) ? { why: 'money' } : undefined;
       }
       const header = headerOf(column);
-      if (header && isInternalColumnHeader(header)) return { label: header, group: false };
-      // Group headers merged over some (not all) columns, in the two rows right above the header ("Preços" over Y17 | Y18).
-      const groupTop = rows[Math.max(0, headerIndex - 2)];
-      for (const merge of grid.merges) {
-        if (merge.left > column || merge.right < column || merge.right === merge.left) continue;
-        if (merge.bottom >= headerRowNumber! || merge.bottom < groupTop) continue;
-        if (columns.every(other => other >= merge.left && other <= merge.right)) continue; // a title over the whole table
+      if (header && isInternalColumnHeader(header)) return { label: header, why: 'header' };
+      for (const merge of groupMerges) {
+        if (merge.left > column || merge.right < column) continue;
         const label = cellAt(merge.top, merge.left)?.text.trim() ?? '';
-        if (label && isInternalColumnHeader(label)) return { label, group: true };
+        if (label && label.length <= MAX_FALLBACK_HEADER && isInternalColumnHeader(label)) return { label, why: 'group' };
       }
-      return undefined;
+      return showsMoney(column) ? { why: 'money' } : undefined;
     };
     columns = columns.filter(column => {
-      const internal = internalLabelOf(column);
+      const internal = internalOf(column);
       if (!internal) return true;
-      const reason = internal.group ? `está no grupo “${internal.label}”, que parece ser preço ou dado interno` : 'parece ser preço ou dado interno';
-      const subject = headerOf(column) || internal.group ? describe(column) : `A coluna ${columnLabel(column - 1)} (“${internal.label}”)`;
+      const reason = internal.why === 'group' ? `está no grupo “${internal.label}”, que parece ser preço ou dado interno`
+        : internal.why === 'money' ? 'os valores estão em dinheiro (como R$ ou US$) e parecem ser preço'
+          : 'parece ser preço ou dado interno';
+      const subject = headerOf(column) || internal.why !== 'header' ? describe(column) : `A coluna ${columnLabel(column - 1)} (“${internal.label}”)`;
       ignored.push({ kind: 'column', sheet: grid.name, label: columnLabel(column - 1), reason: 'internal',
         message: `${subject} ${area} não foi importada: ${reason}.` });
       return false;
@@ -372,13 +444,18 @@ export function gridCellFromExcel(cell: Pick<Cell, 'value' | 'numFmt'>, locale: 
   if (value === null || value === undefined) return { text: '', raw: '', formula };
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return { text: '', raw: '', flag: 'unsupported-value', formula };
-    return { text: formatExcelDate(value, format, locale), raw: value.toISOString(), formula };
+    const shown = formatExcelDateValue(value, format, locale, date1904);
+    return { text: shown.text, raw: value.toISOString(), flag: shown.exact ? undefined : 'format-approximate', formula };
   }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return { text: '', raw: String(value), flag: 'unsupported-value', formula };
-    if (isDateFormat(format)) return { text: formatExcelDate(excelSerialToDate(value, date1904), format, locale), raw: String(value), formula };
+    if (isDateFormat(format)) {
+      const shown = formatExcelDateValue(excelSerialToDate(value, date1904), format, locale, date1904);
+      return { text: shown.text, raw: String(value), flag: shown.exact ? undefined : 'format-approximate', formula };
+    }
     const shown = formatExcelNumber(value, format, locale);
-    return { text: shown.text, raw: String(value), flag: shown.exact ? undefined : 'format-approximate', formula };
+    return { text: shown.text, raw: String(value), flag: shown.exact ? undefined : 'format-approximate', formula,
+      numeric: true, currency: isCurrencyFormat(format) || undefined };
   }
   if (typeof value === 'boolean') return { text: formatExcelBoolean(value, locale), raw: String(value), formula };
   if (isObject(value) && typeof value.error === 'string') return { text: value.error, raw: value.error, flag: 'formula-error', formula };
@@ -406,7 +483,7 @@ export function gridFromWorksheet(sheet: Worksheet, locale: DisplayLocale, date1
     if (!converted.text.trim() && !converted.flag) return;
     let columns = cells.get(rowNumber);
     if (!columns) { columns = new Map(); cells.set(rowNumber, columns); }
-    columns.set(column, { text: converted.text, raw: converted.raw, flag: converted.flag });
+    columns.set(column, { text: converted.text, raw: converted.raw, flag: converted.flag, numeric: converted.numeric, currency: converted.currency });
   };
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (window && (rowNumber < window.top || rowNumber > window.bottom)) return;

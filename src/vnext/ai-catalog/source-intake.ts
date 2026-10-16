@@ -8,8 +8,9 @@ import { sniffImageDimensions, sniffImageMime, type SupportedImageMime } from '.
 import { displayLocale } from './excel-display-format';
 import { extractPdfText, MAX_PDF_BYTES, type ExtractedPdfPage } from './pdf-intake';
 import {
-  buildGridTable, columnLabel, formatNumberList, gridFromRows, gridFromWorksheet, isInternalSheetName, parseA1Range, stripControlCharacters,
-  TABLE_LIMITS, type SourceCellFlag, type SourceIgnored, type SourceMerge, type SourceRangeRequest,
+  buildGridTable, chosenRangeProblem, columnLabel, fitBox, formatNumberList, gridFromRows, gridFromWorksheet, isInternalSheetName,
+  parseA1Range, rangeLabel, stripControlCharacters, TABLE_LIMITS, worksheetUsedBox, type GridMergeBox, type SourceCellFlag,
+  type SourceIgnored, type SourceMerge, type SourceRangeRequest,
 } from './source-grid';
 
 export { columnLabel };
@@ -160,7 +161,9 @@ function modalWidth(records: readonly (readonly string[])[]): { width: number; h
 /**
  * Picks the separator that splits the first ~20 records most consistently. A split that breaks the
  * header (first filled record) loses: "Modelo;Faixa" over rows of "0,5 a 1,5 bar" stays ';'.
- * Ranking: consistent (>= 80%), header fits the usual width, consistency, width; Brazilian ';' wins ties.
+ * Ranking: consistent (>= 80%), header fits the usual width, consistency. The number of columns never
+ * decides: on a tie the first candidate wins, so Brazilian ';' beats ',' when a header such as
+ * "Faixa (mín, máx, bar)" has as many commas as rows like "0,5 a 1,5" (',' would cut the decimals).
  */
 export function detectDelimiter(text: string): SourceDelimiter {
   const candidates: SourceDelimiter[] = [';', '\t', ',', '|'];
@@ -170,7 +173,7 @@ export function detectDelimiter(text: string): SourceDelimiter {
     const { width: modal, hits, total } = modalWidth(records);
     if (modal < 2) continue;
     const consistency = hits / total;
-    const key = [consistency >= 0.8 ? 1 : 0, records[0]?.length === modal ? 1 : 0, consistency, modal];
+    const key = [consistency >= 0.8 ? 1 : 0, records[0]?.length === modal ? 1 : 0, consistency];
     if (!best || compareKeys(key, best.key) > 0) best = { delimiter, key };
   }
   return best?.delimiter ?? ';';
@@ -324,6 +327,16 @@ interface ReadContext {
   options: SourceReadOptions;
 }
 
+/** A sheet with more cells than can be read at once: ask for a range, showing where the data is when known. */
+function tooBigToRead(name: string, used?: GridMergeBox): SourceRangeRequest {
+  const suggested = used ? fitBox(used) : { top: 1, left: 1, bottom: SOURCE_LIMITS.rows, right: SOURCE_LIMITS.columns };
+  const where = used ? `: os dados ficam em ${rangeLabel(used)}` : '';
+  return { sheet: name, usedRange: used ? rangeLabel(used) : '', suggestedRange: rangeLabel(suggested),
+    rows: used ? used.bottom - used.top + 1 : 0, columns: used ? used.right - used.left + 1 : 0,
+    message: `A aba “${name}” é grande demais para ler inteira${where}. ` +
+      `Escolha um intervalo de até ${SOURCE_LIMITS.rows} linhas e ${SOURCE_LIMITS.columns} colunas, por exemplo ${rangeLabel(suggested)}.` };
+}
+
 async function readWorkbook(bytes: ArrayBuffer, context: ReadContext): Promise<SourceIntake> {
   verifyWorkbookArchive(bytes);
   const Workbook = resolveWorkbookConstructor(await import('exceljs'));
@@ -351,21 +364,33 @@ async function readWorkbook(bytes: ArrayBuffer, context: ReadContext): Promise<S
     }
     let result;
     const range = options.ranges?.[name];
+    const window = range === undefined ? undefined : parseA1Range(range);
+    if (window === null) {
+      // Not a valid range: say so before reading, a sheet too big to read whole would hide the reason.
+      intake.rangeRequests.push(chosenRangeProblem(name, 'sheet', range!, 'invalid', worksheetUsedBox(sheet)));
+      included++;
+      continue;
+    }
     try {
       // A chosen range is also applied while reading, so a huge sheet can still be read in parts.
-      result = buildGridTable(gridFromWorksheet(sheet, locale, date1904, range === undefined ? undefined : parseA1Range(range) ?? undefined), {
+      result = buildGridTable(gridFromWorksheet(sheet, locale, date1904, window), {
         includeHidden: options.includeHidden || (chosen && sheet.state !== 'visible'), includeInternal: options.includeInternal, range,
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'SOURCE_TABLE_LIMIT') {
-        intake.rangeRequests.push({ sheet: name, usedRange: '', suggestedRange: 'A1:J150', rows: 0, columns: 0,
-          message: `A aba “${name}” é grande demais para ler inteira. Escolha um intervalo de até ${SOURCE_LIMITS.rows} linhas e ${SOURCE_LIMITS.columns} colunas.` });
+        intake.rangeRequests.push(tooBigToRead(name, worksheetUsedBox(sheet)));
         included++;
         continue;
       }
       throw error;
     }
     intake.ignored.push(...result.ignored);
+    if (result.empty && range !== undefined && !result.ignored.length) {
+      // Nothing at all inside the chosen range: ask for another one and show where the data is.
+      intake.rangeRequests.push(chosenRangeProblem(name, 'sheet', range, 'empty', worksheetUsedBox(sheet)));
+      included++;
+      continue;
+    }
     if (result.empty) {
       skip('empty', result.ignored.length
         ? `A aba “${name}” não tem outros dados para importar além do que foi deixado de fora.`
@@ -619,10 +644,17 @@ export function needsHelp(intake: SourceIntake): boolean {
 }
 
 /**
+ * Options for a batch: the same for every file, or chosen per file. Sheet names, ranges and PDF pages
+ * belong to one file, so pass a function when the person chose them for one file of the batch.
+ */
+export type SourceBatchOptions = SourceReadOptions | ((file: File, index: number) => SourceReadOptions);
+
+/**
  * Reads a batch one file at a time: a bad file becomes an error entry and never stops the others;
  * identical files (same SHA-256) are read once; at most {@link SOURCE_LIMITS.files} files.
  */
-export async function readSources(files: readonly File[], options: SourceReadOptions = {}): Promise<SourceFileResult[]> {
+export async function readSources(files: readonly File[], options: SourceBatchOptions = {}): Promise<SourceFileResult[]> {
+  const optionsFor = typeof options === 'function' ? options : () => options;
   const results: SourceFileResult[] = [];
   const seen = new Map<string, string>();
   for (const [index, file] of files.entries()) {
@@ -642,7 +674,7 @@ export async function readSources(files: readonly File[], options: SourceReadOpt
         continue;
       }
       seen.set(sha256, file.name);
-      const intake = await readSourceBytes(file, bytes, sha256, index, options);
+      const intake = await readSourceBytes(file, bytes, sha256, index, optionsFor(file, index));
       results.push({ fileName: file.name, status: needsHelp(intake) ? 'needs-help' : 'ready', sha256, intake });
     } catch (error) {
       results.push({ fileName: file.name, status: 'error',
