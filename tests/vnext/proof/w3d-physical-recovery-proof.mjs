@@ -524,7 +524,7 @@ async function runJ() {
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
   assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
   assert.equal(
-    await page.getByText('O registro local é inválido ou incompatível e não será aberto.').count(),
+    await page.getByText('Esta cópia de segurança está danificada e não pode ser aberta.').count(),
     1
   );
   const beforeDiscard = await committedRecordsFromFreshConnection(page);
@@ -533,7 +533,7 @@ async function runJ() {
   assert.deepEqual(beforeDiscard[0].key, seeded.invalidKey);
 
   await page.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
-  assert.equal(await page.getByText('Registro local inválido preservado').count(), 1);
+  assert.equal(await page.getByText('Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.').count(), 1);
   await page.getByRole('button', { name: 'Descartar recuperação local' }).click();
   await page.getByRole('button', { name: 'Confirmar descarte local' }).waitFor();
   const afterFirstClick = await committedRecordsFromFreshConnection(page);

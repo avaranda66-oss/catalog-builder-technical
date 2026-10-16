@@ -545,10 +545,10 @@ describe('W3.D startup recovery race defense', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByText(
-      'O registro local é inválido ou incompatível e não será aberto.'
+      'Esta cópia de segurança está danificada e não pode ser aberta.'
     )).toBeTruthy());
     fireEvent.click(view.getByRole('button', { name: 'Ver alterações recuperadas' }));
-    expect(view.getByText('Registro local inválido preservado')).toBeTruthy();
+    expect(view.getByText('Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.')).toBeTruthy();
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect(deleteInvalid).not.toHaveBeenCalled();
     expect((await memory.get(key))?.status).toBe('INVALID');
@@ -584,13 +584,13 @@ describe('W3.D startup recovery race defense', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByText(
-      'O registro local é inválido ou incompatível e não será aberto.'
+      'Esta cópia de segurança está danificada e não pode ser aberta.'
     )).toBeTruthy());
     fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
     fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
 
     await waitFor(() => expect(view.getByText(
-      'Não foi possível descartar a recuperação local. Tente novamente.'
+      'Não foi possível descartar a cópia de segurança. Tente novamente.'
     )).toBeTruthy());
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect(view.container.textContent).not.toContain('storage details');
@@ -623,7 +623,7 @@ describe('W3.D startup recovery race defense', () => {
 
     await waitFor(() => expect(view.getByRole('button', { name: 'Recuperar minhas alterações' })).toBeTruthy());
     expect(view.getByText(
-      'O registro mudou e foi verificado novamente. Escolha uma opção segura para continuar.'
+      'A cópia de segurança mudou e foi verificada novamente. Escolha uma opção para continuar.'
     )).toBeTruthy();
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect((await memory.get(key))?.status).toBe('VALID');
