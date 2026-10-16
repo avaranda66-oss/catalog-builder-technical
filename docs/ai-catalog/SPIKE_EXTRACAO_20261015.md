@@ -1,8 +1,8 @@
 # Spike de extração de fatos com Gemini (FR-66a) — 15/10/2026
 
-## Decisão: GO para a 2F, com 4 condições
+## Decisão: GO para a 2F, com 6 condições
 
-- **Critério do plano (§3 FR-66a): zero valor errado marcado como VERIFIED.** Atendido na rodada final.
+- **Critério do plano (§3 FR-66a): zero valor errado marcado como VERIFIED.** Atendido na rodada final, para o que foi extraído.
   - Foram 18 chamadas reais: 3 modelos × 3 PDFs × 2 repetições.
   - Saíram 360 valores VERIFIED_TEXT, e todos conferem com o gabarito.
   - O gabarito tem 87 posições por rodada, conferidas à mão nas páginas renderizadas.
@@ -13,7 +13,12 @@
   - A correção está na seção 4.
 - **Modelo recomendado: `gemini-3.8-flash`** (seção 7).
 - **Divergências conhecidas do TA-25N (155 x 140 °C e as outras):** detectadas nas 6 rodadas finais, nos 3 modelos (seção 5).
-- **As 4 condições para a 2F estão na seção 8.**
+- **Lacuna: a p. 6 do manual não deu nenhum valor.**
+  - O plano pede o manual TA-PT p. 5–6. A p. 6 é a tabela "1.1.1 - Especificações Técnicas da Entrada" (mV, mA, resistência, Pt-100, termopares; colunas Resolução e Exatidão).
+  - Nas 36 respostas salvas (v1 e v2), essa página teve 0 valores. O motivo provável é o formato pedido: um valor por modelo e por linha. Essa tabela vale para os três modelos e não tem coluna de modelo, então não cabe nesse formato (seção 9).
+  - Ela some sem aviso: não aparece como "não encontrado" nem como valor descartado.
+  - O GO vale para as p. 9 do folder, 5 do manual e 11 do Y17. A p. 6 é a condição 5.
+- **As 6 condições para a 2F estão na seção 8.**
 
 ## 1. O que foi rodado
 
@@ -29,11 +34,13 @@
 
 **PDFs (reais, do disco):**
 
-| Id | Arquivo | Páginas lidas | sha256 (início) |
-|---|---|---|---|
-| ta-folder | `catalogospdf/presys-ta-folder (4).pdf` (20 p., 3,2 MB, inglês) | 9–13 (especificação na p. 9) | `9b71f3f7d92f` |
-| ta-manual-pt | `banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf` (39 p., 2,7 MB) | 5–8 (especificação na p. 5) | `cfa15db3a434` |
-| y17-folder | `presyspdfs/pressure-controller-pcon-y17-folder.pdf` (12 p., 23 MB) | 11 | `7fe22a45ea61` |
+| Id | Arquivo | Páginas enviadas | Páginas que deram valores | sha256 (início) |
+|---|---|---|---|---|
+| ta-folder | `catalogospdf/presys-ta-folder (4).pdf` (20 p., 3,2 MB, inglês) | 9–13 | só a 9. As p. 10–13 são de outros modelos (TA-25NL, TA-35NLL, TA-350PL, TA-350P…) e foram ignoradas, como pedido | `9b71f3f7d92f` |
+| ta-manual-pt | `banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf` (39 p., 2,7 MB) | 5–8 | só a 5. **A p. 6 (tabela de entradas) deu 0 valores** (seção 9). A p. 7 traz o código de encomenda como imagem e a p. 8, acessórios | `cfa15db3a434` |
+| y17-folder | `presyspdfs/pressure-controller-pcon-y17-folder.pdf` (12 p., 23 MB) | 11 | 11 | `7fe22a45ea61` |
+
+São 10 páginas enviadas; os valores vieram de 3 delas. Contagem nas 36 respostas: 432 leituras na p. 9 do folder, 468 na p. 5 do manual, 114 na p. 11 do Y17 e nenhuma em outra página.
 
 **Caminho de cada valor (o mesmo que a 2F deve usar):**
 1. `pdf-intake` lê o texto nativo.
@@ -98,6 +105,11 @@ A conferência à mão dos 7 alertas:
    - Os sinais de diâmetro (U+F0C6, ∅, ⌀) viram "Ø", que a Noto Sans do catálogo tem; ∅ e ⌀ ela não tem.
    - Cada caractere vira um só, então as posições do texto não mudam.
    - A troca vale igual para a evidência (texto do PDF) e para a resposta do modelo. A verificação continua comparando texto exato.
+   - **Limite: a troca não olha a fonte.** Wingdings e Wingdings 2 usam a mesma faixa de caracteres privados para marcadores e desenhos. Lá, U+F0B7, U+F06D e U+F057 não são sinais.
+     - No manual TA, todos os caracteres trocados vêm da fonte Symbol. Conferi isso pelo nome da fonte no pdf.js, nas p. 5 a 8 e 32.
+     - As marcas da Wingdings 2 na p. 32 (U+F050 x11 e U+F04F x4) não estão na tabela de troca.
+     - No spike isso é inofensivo: um desenho trocado por engano só deixa de conferir.
+     - No `pdf-intake`, a troca mudaria o texto do catálogo. Por isso, lá ela precisa valer só para trechos com fonte Symbol (condição 1). Hoje os trechos do `pdf-intake` não guardam o nome da fonte.
 2. **Marcas de nota.** `°C*` vira `°C` na unidade, e `(*) Temperatura Ambiente: 20ºC.` vira `Temperatura Ambiente: 20ºC.` na condição. Expoentes continuam: `m²` não é nota.
 3. **Prompt v2:**
    - pede só a primeira linha de um rótulo de duas linhas no trecho, e unidade sem asterisco;
@@ -209,10 +221,11 @@ O pai veria a mensagem assim (texto real do script, gemini-3.8-flash):
 ## 8. Condições para a 2F (FR-66)
 
 1. **Reusar o mesmo caminho do spike.**
-   - Mesmo prompt `fr66a-2026-10-15.2` e mesmo `responseSchema`, usando `toFactProposal` e `fitQuotesToPages`.
+   - Mesmo prompt `fr66a-2026-10-15.2` e mesmo `responseSchema`, usando `toFactProposal` e `fitQuotesToPages`, **com a extensão da condição 5** para tabelas que valem para todos os modelos.
    - Verificar contra `withNormalizedSymbols(pdf)`.
    - O ideal é que a normalização dos sinais da fonte Symbol entre no próprio `pdf-intake` (dono: 1G). Assim o navegador, o sidecar e o servidor veem o mesmo texto.
-   - Sem isso, a prova da seção 4 mostra que um "±" vira VERIFIED com o caractere errado, ou deixa de verificar.
+   - **Antes de mover para o `pdf-intake`:** limitar a troca aos trechos cuja fonte no pdf.js tenha "Symbol" no nome. Hoje `normalizeSymbolText` não olha a fonte (seção 4, item 1), e um marcador da Wingdings viraria "≤", "Ω" ou "µ" no catálogo.
+   - Sem a normalização, a prova da seção 4 mostra que um "±" vira VERIFIED com o caractere errado, ou deixa de verificar.
 2. **Mandar só o intervalo de páginas.**
    - Hoje o Gemini cobra o PDF inteiro: o folder (20 p.) custa cerca de 10,6 mil tokens de imagem para ler 5 páginas; o manual (39 p.) custa 21 mil para ler 4.
    - Cortar o PDF antes de enviar reduz a entrada várias vezes.
@@ -221,12 +234,35 @@ O pai veria a mensagem assim (texto real do script, gemini-3.8-flash):
    - Exemplo: "Accuracy" do opcional BR (0,16 mmHg) contra "Accuracy" do controlador (± 0.012 % FS).
 4. **Divergências entre arquivos vão para a revisão (FR-68), nunca são resolvidas em silêncio.**
    - Use `findSourceDivergences` e `divergenceMessage`; cada leitura mantém o status do próprio arquivo.
+5. **Ler as tabelas que valem para todos os modelos, e provar isso no manual p. 6.**
+   - Hoje o prompt (regras 5 e 6) e o `responseSchema` pedem um valor por modelo e por linha. Uma tabela comum aos três modelos, organizada por tipo de entrada (mV, mA, Pt-100, termopares) e com colunas Resolução e Exatidão, não tem onde entrar. Ela some sem aviso.
+   - A 2F deve estender o schema ou o prompt. Por exemplo: uma posição "todos os modelos", ou um tipo de tabela próprio (linha x coluna).
+   - Antes de reusar o prompt, a 2F deve provar isso no manual p. 6:
+     - pôr as linhas da p. 6 no gabarito;
+     - zero valor errado marcado como VERIFIED;
+     - "±", "Ω" e "°" corretos. É a página com mais sinais da fonte Symbol: 39 "±", 6 "Ω" e 100 "°".
+   - Enquanto isso não existir, uma página lida que não deu nenhum valor deve aparecer na revisão do pai. Ela nunca pode sumir em silêncio.
+   - Sem isso, o intervalo padrão do FR-66 (TA-PT p. 5–8) deixa a tabela de entradas de todo manual de calibrador PRESYS fora do rascunho do pai.
+6. **Mostrar a unidade uma vez só, sem editar o literal (FR-68 e FR-69).**
+   - Muitas leituras já trazem a unidade dentro do valor. Na v2 são 31: 30 VERIFIED do lite e 1 do 3.8-flash, que ficou UNVERIFIED.
+   - Exemplos: "260 x 200 x 305 mm" com unidade "mm"; "11 min (25 °C to -25 °C)" com "min"; "Ø 25.4 mm (1”) x 124 mm" com "mm".
+   - Numa célula de valor ao lado de uma coluna de unidade, sairia "mm mm".
+   - Regra: quando `literalHasUnit(literal, unidade)` for verdadeiro, a unidade não é repetida, e o literal fica como está.
+   - O `toFactProposal` já põe na mesma linha uma leitura sem unidade cujo valor já traz a unidade da linha. Antes, a linha se dividia em duas, cada uma com posições "não encontrado". Nas respostas salvas, isso não mudou nada: o replay da v1 e da v2 deu valores idênticos.
 
 ## 9. O que não foi verificado (limites honestos)
 
-- São só 3 PDFs e 9 páginas lidas, todas com texto nativo.
+- São só 3 PDFs. Foram enviadas 10 páginas, todas com texto nativo, mas os valores vieram só de 3: p. 9 do folder, p. 5 do manual e p. 11 do Y17 (seção 1).
   - Páginas escaneadas (caminho VISUAL_ONLY) não foram testadas.
   - A tabela de faixas do PCON-Y17 (bar / psi / Pa por faixa) quase não foi coberta, e o gabarito não a inclui.
+- **A p. 6 do manual, pedida pelo plano (TA-PT p. 5–6), deu 0 valores nas 36 respostas** (v1 e v2, 3 modelos, 2 repetições).
+  - É a tabela "1.1.1 - Especificações Técnicas da Entrada": entradas mV, mA, resistência, Pt-100, Pt-1000, Cu-10, Ni-100 e termopares J, K, T, E, N, L, com colunas Resolução, Exatidão e Remarks.
+  - É também a página com mais sinais da fonte Symbol no texto nativo: 39 "±" (U+F0B1), 6 "Ω" (U+F057) e 100 "°" (U+F0B0). A p. 5 tem 7 "±". Ou seja, é justamente o caso que o spike achou com erro, e a correção da seção 4 não foi provada nessa página.
+  - Causa provável: o prompt (regras 5 e 6) e o `responseSchema` pedem um valor por modelo e por linha. Essa tabela vale para os três modelos e é organizada por tipo de entrada, sem coluna de modelo.
+  - Os modelos simplesmente não a devolveram. Nada foi descartado na normalização: `dropped` ficou vazio em todas as rodadas.
+  - Como a tabela não entra na proposta, ela também não aparece como "não encontrado". Some sem aviso.
+  - **O gabarito também não cobre a p. 6** (`coveredPages` 5 e 7). Os números deste relatório não dizem nada sobre ela.
+  - Não incluí a p. 6 no gabarito agora. Sem as linhas dela, uma leitura certa da p. 6 seria julgada errada, com a nota "esta linha está na página 5" (`judgeValue`, em `scripts/extract-facts-eval.ts`). Ela deve entrar no gabarito junto com as linhas, quando a 2F estender o schema (condição 5).
 - Foram 2 repetições por modelo. Mesmo com temperatura 0, houve variação (lite no Y17).
 - **A conferência à mão foi feita por um revisor só (o agente)**, lendo as imagens renderizadas. Vale o Gabriel conferir por amostragem as linhas 19–33.
 - **Os preços** são os da tabela em `scripts/extract-facts-eval.ts`, lidos na página de preços do Gemini em 15/10/2026 por uma sessão anterior. **Não foram reconferidos nesta sessão.** O custo vem do `usageMetadata` de cada resposta.
@@ -249,5 +285,7 @@ Outras opções:
 - `--only gemini-3.8-flash` roda só um modelo;
 - `--concurrency 1..6` controla quantas chamadas correm ao mesmo tempo;
 - `--dry-run` só lê os PDFs.
+
+O script lê a resposta como texto antes de interpretar o JSON. Assim, um 429 ou 5xx com corpo em HTML, ou vazio, ainda ganha as 2 novas tentativas. O cliente da 2F deve seguir a mesma ordem.
 
 Testes: `npx vitest run tests/vnext/ai-catalog/fact-extraction.test.ts tests/scripts/extract-facts-eval.test.ts`.
