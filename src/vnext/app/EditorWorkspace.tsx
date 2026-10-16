@@ -898,9 +898,12 @@ export function EditorWorkspace({
     return true;
   };
 
+  // FR-22: an open text box is an unsaved change only once its text differs (or an accent is being composed).
+  const textEditIsDirty = (edit: TextEditSession) => compositionRef.current
+    || edit.draft !== (projectEditableRichText(edit.expectedText) ?? '');
   const prepareTextDraftForSave = (): AuthoringBarrierResult => {
     const edit = textEditRef.current;
-    if (!edit) return { ok: true };
+    if (!edit || !textEditIsDirty(edit)) return { ok: true };
     if (compositionRef.current) {
       return {
         ok: false,
@@ -1019,7 +1022,7 @@ export function EditorWorkspace({
       };
     }
     const edit = textEditRef.current;
-    if (edit) {
+    if (edit && textEditIsDirty(edit)) {
       return {
         kind: 'TEXT_DRAFT_V1',
         pageId: edit.pageId,
@@ -1095,7 +1098,7 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      // FR-22: opening a cell without changing it is not an unsaved change (the draft is dirty only when it differs).
+      // FR-22: opening a cell or a text box without changing it is not an unsaved change (dirty only when it differs).
       hasPendingDraft: () => Boolean(cellDraftRef.current?.dirty) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });

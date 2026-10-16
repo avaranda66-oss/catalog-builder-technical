@@ -2,10 +2,16 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocumentSession, projectEditableRichText, type DocumentSession } from '@/vnext/application';
 import { VNextApp } from '@/vnext/app/VNextApp';
-import type { CatalogDocument, CellContent, TableModel, TableObject } from '@/vnext/domain';
+import { plainRichText, type CatalogDocument, type CellContent, type TableModel, type TableObject } from '@/vnext/domain';
 import type { VNextPersistenceRuntime } from '@/vnext/persistence';
 import { createW4BTableDocument, W4B_OBJECT_ID } from '../proof/fixtures/w4b-table-document';
-import { StrictCasCatalogRepository, runtimeFixture } from '../persistence/w3h-fixtures';
+import {
+  ManualAutosaveClock,
+  StrictCasCatalogRepository,
+  documentFixture,
+  runtimeFixture,
+  settleAsyncWork,
+} from '../persistence/w3h-fixtures';
 import { emptyTable } from '../proof/test-data';
 
 /**
@@ -271,12 +277,63 @@ describe('FR-22 · opening a cell without typing is not an unsaved change', () =
     fireEvent.change(cellEditor(), { target: { value: 'Texto inicial 2' } });
     expect(barrier.hasPendingDraft()).toBe(true);
     expect(active.runtime.workspace.getSnapshot().dirty).toBe(true);
+    expect(await screen.findAllByText('Alterações não salvas')).not.toHaveLength(0);
 
     fireEvent.change(cellEditor(), { target: { value: 'Texto inicial' } });
     expect(barrier.hasPendingDraft()).toBe(false);
     expect(active.runtime.workspace.getSnapshot().dirty).toBe(false);
 
     fireEvent.keyDown(cellEditor(), { key: 'Escape' });
+    await dispose(active.runtime);
+  });
+
+  it('opening a text box without typing is not an unsaved change and autosave does not close it', async () => {
+    const base = documentFixture();
+    const document: CatalogDocument = {
+      ...base,
+      pages: [{
+        ...base.pages[0],
+        objects: [{
+          id: 'text-target', type: 'text', frame: { xMm: 20, yMm: 30, widthMm: 72, heightMm: 20 }, zIndex: 0,
+          text: plainRichText('text-local', 'Modelo'),
+          style: { fontFamily: 'Noto Sans', fontSizePt: 12, lineHeight: 1.2, fontWeight: 700, color: '#172033', textAlign: 'left' },
+        }],
+      }],
+    };
+    const repository = new StrictCasCatalogRepository(document);
+    const clock = new ManualAutosaveClock();
+    const active = runtimeFixture(repository, document, 14300, { autosaveClock: clock, debounceMs: 25 });
+    const { container } = render(<VNextApp runtime={active.runtime} simpleByDefault />);
+    const page = container.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]')!;
+    page.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 420, bottom: 594, width: 420, height: 594, toJSON: () => ({}) });
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="text-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 44, button: 0, clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(hit, { pointerId: 44, button: 0, clientX: 80, clientY: 80 });
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="edit-text"]')!);
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-text-edit-textarea]')!;
+    expect(textarea).toHaveValue('Modelo');
+    const barrier = active.runtime.workspace.getAuthoringBarrier();
+    expect(barrier.hasPendingDraft()).toBe(false);
+    expect(barrier.captureRecoveryOverlay?.()).toBeUndefined();
+    expect(active.runtime.workspace.getSnapshot().dirty).toBe(false);
+    expect(screen.queryByText('Alterações não salvas')).not.toBeInTheDocument();
+
+    // A change made before (here, the title) is saved while the text box stays open and untouched.
+    act(() => { expect(active.session.execute({ type: 'document.rename', title: 'Catálogo novo' }).ok).toBe(true); });
+    await act(async () => {
+      clock.advanceBy(100);
+      await settleAsyncWork(4);
+      await active.runtime.saveCoordinator.waitForActiveSave();
+    });
+    expect(repository.saveCAS).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-text-edit-textarea]')).not.toBeNull();
+
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Modelo TA-25N' } });
+    expect(barrier.hasPendingDraft()).toBe(true);
+    expect(active.runtime.workspace.getSnapshot().dirty).toBe(true);
+    expect(await screen.findAllByText('Alterações não salvas')).not.toHaveLength(0);
+    fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Modelo' } });
+    expect(barrier.hasPendingDraft()).toBe(false);
     await dispose(active.runtime);
   });
 });
