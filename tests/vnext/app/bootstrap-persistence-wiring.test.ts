@@ -42,7 +42,7 @@ describe('FR-45 the photo bridge knows about the connection and lost access', ()
     const resolution = bridge.resolve(asset, { authLineage: 'user-a:0', authorityScopeId: 'scope-a' });
     active = INVALIDATED_ASSET_LINEAGE;
     bridge.invalidateAuth(INVALIDATED_ASSET_LINEAGE.authLineage!);
-    metadata.resolve({ ok: true, record: { ...asset, storageBucket: 'product-assets', storagePath: 'vnext/x/1.png', fileSize: 1, createdAt: '2026-10-16T00:00:00.000Z' } });
+    metadata.resolve({ ok: true, record: { ...asset, version: '1' as const, storageBucket: 'product-assets', storagePath: 'vnext/x/1.png', fileSize: 1, createdAt: '2026-10-16T00:00:00.000Z' } });
 
     expect(await resolution).toMatchObject({ ok: false, state: { status: 'unavailable', error: 'A sessão mudou. Abra o catálogo novamente.' } });
     expect(repository.createSignedUrl).not.toHaveBeenCalled();

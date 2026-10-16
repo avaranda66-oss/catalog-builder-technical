@@ -45,7 +45,7 @@ function resolved(asset: AssetRef, url = `blob:${asset.id}`): AssetResolutionRes
 
 function failed(asset: AssetRef, status: 'offline' | 'unavailable' = 'unavailable'): AssetResolutionResult {
   return status === 'offline'
-    ? { ok: false, state: { status, error: 'Sem conexão', asset } }
+    ? { ok: false, state: { status, asset } }
     : { ok: false, state: { status, error: 'Foto não carregou', asset } };
 }
 

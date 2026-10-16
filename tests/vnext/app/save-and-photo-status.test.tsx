@@ -69,7 +69,7 @@ describe('FR-41 photo mark on the page', () => {
   });
 
   it('asks for the photo again when the file itself is damaged (trying again cannot fix it)', () => {
-    render(<ImageRepairIndicator objectId="photo" loading={false} state={{ status: 'integrity-failed', error: 'x', asset }} onRetry={vi.fn()} />);
+    render(<ImageRepairIndicator objectId="photo" loading={false} state={{ status: 'integrity-failed', code: 'HASH_MISMATCH', message: 'x', asset }} onRetry={vi.fn()} />);
     expect(screen.getByText('Foto com problema')).toBeInTheDocument();
     expect(screen.getByText('Envie a foto de novo.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tentar novamente' })).not.toBeInTheDocument();
