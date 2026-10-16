@@ -135,6 +135,7 @@ import { EditorNotices } from './editor/EditorNotices';
 import { IssuesPanel } from './editor/IssuesPanel';
 import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
+import { ZoomControl } from './editor/ZoomControl';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -3908,6 +3909,7 @@ export function EditorWorkspace({
         <main className="vnext-canvas-area">
           <div className="vnext-canvas-meta">
             <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
+            <ZoomControl pageWidthMm={selectedPage.widthMm} />
             <div className="vnext-canvas-statuses">
               <IssuesPanel document={document} diagnostics={canonicalDiagnostics} simple={simpleByDefault} onLocate={goToIssue} session={session}
                 measurement={measuredLayout?.source === document ? measuredLayout : null} prepare={() => prepareAuthoringForContextChangeRef.current()} onMessage={setStatusMessage} />

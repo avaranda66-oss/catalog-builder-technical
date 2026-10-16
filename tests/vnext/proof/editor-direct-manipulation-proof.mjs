@@ -49,7 +49,8 @@ try {
   const textCanonical = page.locator(`[data-object-id="${textId}"]`);
 
   const scale = await page.locator('[data-vnext-page-stage]').evaluate((element) => Number.parseFloat(getComputedStyle(element).zoom));
-  assert(scale > 0 && scale < 1, `Expected non-1 editor scale, got ${scale}`);
+  // FR-16a: the default zoom is "Ajustar à largura" (about 1.2 at this viewport), so only require a non-1 scale.
+  assert(scale > 0 && Math.abs(scale - 1) > 0.01, `Expected non-1 editor scale, got ${scale}`);
   const initialCanonical = await rect(textCanonical);
   const initialOverlay = await rect(selected);
   sameRect(initialCanonical, initialOverlay);
