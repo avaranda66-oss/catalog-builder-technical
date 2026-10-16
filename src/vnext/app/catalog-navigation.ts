@@ -1,10 +1,16 @@
-import type { SaveProjection, VNextPersistenceRuntime } from '../persistence';
+import type { PersistenceWorkspaceSnapshot, SaveProjection, VNextPersistenceRuntime } from '../persistence';
 import { fatherSaveExplanation } from './save-presentation';
+
+/**
+ * Visible label of the editor button that goes back to the Library. The button itself is outside
+ * this slice; rename both together when the button becomes "Meus catálogos".
+ */
+export const LIBRARY_BUTTON_LABEL = 'Catálogos';
 
 /** Plain-language reasons shown when "Catálogos" cannot leave the editor yet. */
 export const LIBRARY_NAVIGATION_MESSAGES = {
-  stillSaving: 'Ainda estamos salvando. Aguarde aparecer “Salvo” e clique em Catálogos de novo.',
-  catalogChanged: 'O catálogo aberto mudou enquanto salvávamos. Confira seu trabalho e clique em Catálogos de novo.',
+  stillSaving: `Ainda estamos salvando. Aguarde aparecer “Salvo” e clique em ${LIBRARY_BUTTON_LABEL} de novo.`,
+  catalogChanged: `O catálogo aberto mudou enquanto salvávamos. Confira seu trabalho e clique em ${LIBRARY_BUTTON_LABEL} de novo.`,
   accessChanged: 'Sua sessão mudou. Entre novamente para continuar; seu trabalho fica protegido neste computador.',
   unexpected: 'Não foi possível salvar antes de sair. Mantenha esta aba aberta e tente novamente.',
 } as const;
@@ -56,6 +62,11 @@ export interface SaveBeforeLibraryNavigationOptions {
 }
 
 const DEFAULT_MAX_SAVE_ROUNDS = 3;
+
+/** Clean and idle: the top bar shows "Salvo", so an earlier "not saved yet" reason is out of date. */
+function isSavedAndIdle(snapshot: PersistenceWorkspaceSnapshot): boolean {
+  return !snapshot.dirty && snapshot.save.phase === 'idle';
+}
 /** Save results that only mean "another save is still settling": wait and look again. */
 const SETTLING_SAVE_CODES = new Set(['SAVE_IN_FLIGHT_NEWER_WORK', 'STALE_RESULT']);
 
@@ -73,9 +84,32 @@ export function createSaveBeforeLibraryNavigation(
   const maxSaveRounds = Math.max(1, options.maxSaveRounds ?? DEFAULT_MAX_SAVE_ROUNDS);
   let pending: Promise<boolean> | undefined;
   let navigated = false;
+  let stopWatchingSave: (() => void) | undefined;
+
+  const stopClearingWhenSaved = () => {
+    stopWatchingSave?.();
+    stopWatchingSave = undefined;
+  };
+
+  /** The reason disappears by itself once a later save finishes (autosave or "Salvar"). */
+  const clearWhenSaved = () => {
+    stopClearingWhenSaved();
+    let wasSaved = isSavedAndIdle(runtime.workspace.getSnapshot());
+    const unsubscribe = runtime.workspace.subscribe(() => {
+      const saved = isSavedAndIdle(runtime.workspace.getSnapshot());
+      if (saved && !wasSaved) {
+        stopClearingWhenSaved();
+        notify(undefined);
+        return;
+      }
+      wasSaved = saved;
+    });
+    stopWatchingSave = () => { unsubscribe(); };
+  };
 
   const stay = (message: string): false => {
     notify(message);
+    clearWhenSaved();
     return false;
   };
 
@@ -83,6 +117,7 @@ export function createSaveBeforeLibraryNavigation(
     if (pending) return pending;
     if (navigated) return Promise.resolve(false);
     if (!hasAuthority()) return Promise.resolve(stay(LIBRARY_NAVIGATION_MESSAGES.accessChanged));
+    stopClearingWhenSaved();
     notify(undefined);
     const before = runtime.workspace.getSnapshot();
     const leave = async (): Promise<boolean> => {

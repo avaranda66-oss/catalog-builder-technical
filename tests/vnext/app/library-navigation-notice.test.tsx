@@ -34,10 +34,29 @@ describe('FR-06 the editor shows why "Catálogos" stayed', () => {
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('Seu trabalho ainda não foi salvo, por isso você continua neste catálogo.');
     expect(navigate).not.toHaveBeenCalled();
+    // On document.body, above the page stage overlay that would otherwise take its clicks.
+    expect(alert.parentElement).toBe(document.body);
 
     fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(libraryNavigationNotice(runtime).get()).toBeUndefined();
+    await runtime.dispose();
+  });
+
+  it('disappears by itself when a later save shows "Salvo"', async () => {
+    const { repository, runtime, session } = setup();
+    repository.saveOverride = async () => ({ ok: false, error: { code: 'OFFLINE' } });
+    session.execute({ type: 'document.rename', title: 'Conexão voltou' });
+    render(<LibraryNavigationNotice runtime={runtime} />);
+    await act(async () => {
+      expect(await createSaveBeforeLibraryNavigation(runtime, vi.fn())()).toBe(false);
+    });
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    await act(async () => {
+      expect((await runtime.manualSave()).ok).toBe(true);
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await runtime.dispose();
   });
 

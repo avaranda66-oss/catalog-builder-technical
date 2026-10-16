@@ -104,6 +104,38 @@ describe('FR-06 "Catálogos" never fails silently', () => {
     await runtime.dispose();
   });
 
+  it('clears an out-of-date reason by itself once a later save finishes', async () => {
+    const { repository, runtime, session, navigate } = setup();
+    repository.saveOverride = async () => ({ ok: false, error: { code: 'OFFLINE' } });
+    session.execute({ type: 'document.rename', title: 'Volta a conexão' });
+    expect(await createSaveBeforeLibraryNavigation(runtime, navigate)()).toBe(false);
+    const notice = libraryNavigationNotice(runtime);
+    expect(notice.get()).toMatch(/^Seu trabalho ainda não foi salvo/);
+
+    // The one-shot failure is gone: "Salvar" (or autosave) now works and the top bar shows "Salvo".
+    expect((await runtime.manualSave()).ok).toBe(true);
+    expect(runtime.workspace.getSnapshot().dirty).toBe(false);
+    expect(notice.get()).toBeUndefined();
+    expect(navigate).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  it('keeps a newer reason when an older one would have been cleared', async () => {
+    const { repository, runtime, session, navigate } = setup();
+    const notify = vi.fn();
+    const requestLibrary = createSaveBeforeLibraryNavigation(runtime, navigate, () => true, { notify });
+    repository.saveOverride = async () => ({ ok: false, error: { code: 'OFFLINE' } });
+    session.execute({ type: 'document.rename', title: 'Primeira tentativa' });
+    expect(await requestLibrary()).toBe(false);
+    repository.saveOverride = async () => ({ ok: false, error: { code: 'OFFLINE' } });
+    expect(await requestLibrary()).toBe(false);
+    notify.mockClear();
+    expect((await runtime.manualSave()).ok).toBe(true);
+    // Only the latest blocked click is watched, so the reason is cleared exactly once.
+    expect(notify.mock.calls).toEqual([[undefined]]);
+    await runtime.dispose();
+  });
+
   it('leaves a clean catalog whose save state is not idle after settling it (it used to do nothing)', async () => {
     const { runtime, navigate } = setup();
     runtime.workspace.setPhase('unavailable', 'Rede caiu antes');
