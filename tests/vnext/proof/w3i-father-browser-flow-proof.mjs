@@ -283,7 +283,7 @@ try {
   // W3I-01: Father enters the real Library component and creates from a registered Starter.
   await father.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
   await father.getByRole('dialog', { name: 'Novo catálogo' }).waitFor();
-  await father.getByRole('button', { name: /Ficha técnica essencial/ }).click();
+  await father.getByRole('button', { name: 'Ficha técnica essencial', exact: true }).click();
   await waitForEditor(father);
   const created = await state(father);
   assert(created.runtime);
@@ -603,7 +603,7 @@ try {
     }
     assert.equal(await activeRow.getByRole('button', { name: /^Mais ações de / }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
-    assert.equal(await pageB.getByRole('button', { name: /Ficha técnica essencial/ }).isVisible(), true);
+    assert.equal(await pageB.getByRole('button', { name: 'Ficha técnica essencial', exact: true }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
   await assertNoFatherJargon(pageB, 'Library');
