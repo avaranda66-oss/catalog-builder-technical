@@ -71,13 +71,19 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const [unsent, setUnsent] = React.useState<string>();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [readiness, setReadiness] = React.useState<ComposerReadiness>();
+  // "Avançado (chave própria)" only when the server accepts a personal key (or has not said it does not).
+  const ownKeyOffered = Boolean(ownKey) || readiness?.kind !== 'ready' || readiness.byok;
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { input.current?.focus(); }, []);
   // Selecting something else on the page only leaves rewrite mode. A paid
   // proposal or a request in flight is kept (it carries its own target).
   React.useEffect(() => { setRewriteMode(false); }, [selected?.objectId]);
-  React.useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [turns, unsent]);
+  // Follow the conversation, but leave the first suggestions in view while there is none yet.
+  React.useEffect(() => {
+    if (turns.length === 0 && !unsent) return;
+    log.current?.scrollTo?.({ top: log.current.scrollHeight });
+  }, [turns, unsent]);
   // Late answers after the panel closes are ignored and never stored.
   React.useEffect(() => () => { requestSerial.current++; }, []);
   React.useEffect(() => {
@@ -293,15 +299,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       <div className="ai-chat-actions">
         <button className="vnext-btn-primary" type="button" onClick={() => { void send(); }}
           disabled={!message.trim() || !!busy || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
-          {busy ? 'Preparando…' : rewriteMode ? 'Pedir reescrita ao Gemini ↗' : 'Enviar ao Gemini ↗'}
+          {busy ? 'Preparando…' : rewriteMode ? 'Pedir reescrita ao Gemini' : 'Enviar ao Gemini'}
         </button>
         {busy && <button type="button" onClick={cancel}>Cancelar pedido</button>}
-        <button type="button" onClick={() => setAdvancedOpen(value => !value)}
-          aria-expanded={advancedOpen} aria-controls="catalog-gemini-settings">Avançado (chave própria)</button>
+        {ownKeyOffered && <button type="button" onClick={() => setAdvancedOpen(value => !value)}
+          aria-expanded={advancedOpen} aria-controls="catalog-gemini-settings">Avançado (chave própria)</button>}
         {ownKey && <button type="button" onClick={() => { clearByokCredential(); setError(''); }}>
           Voltar a usar a IA do servidor</button>}
       </div>
-      {advancedOpen && <div id="catalog-gemini-settings" className="ai-compose-settings">
+      {advancedOpen && ownKeyOffered && <div id="catalog-gemini-settings" className="ai-compose-settings">
         <ProviderCredentialsSettings onlyProvider="gemini" initiallyUnlocked={ownKey ? ['gemini'] : []}
           onUnlock={(provider, key) => {
             if (provider !== 'gemini') {

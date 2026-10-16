@@ -69,6 +69,8 @@ describe('FR-02 create dialog asks the name first and stays safe', () => {
     const dialog = await openCreateDialog(view);
     const name = within(dialog).getByRole('textbox', { name: 'Nome do catálogo' });
     await waitFor(() => expect(document.activeElement).toBe(name));
+    // Says what happens without a name, so a starter click never renames the catalog by surprise.
+    expect(name).toHaveAccessibleDescription(/Sem nome, o catálogo fica com o nome do modelo escolhido\. O nome muda depois clicando no título\./);
 
     fireEvent.change(name, { target: { value: 'TA-25N — Ficha técnica 2026' } });
     fireEvent.keyDown(name, { key: 'Enter' });

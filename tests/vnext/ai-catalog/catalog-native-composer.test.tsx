@@ -144,6 +144,32 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
   });
 
+  it('offers "Avançado (chave própria)" only when the server accepts a personal key, and no "↗" on the send button', async () => {
+    makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
+    // Before the status answer the choice is still offered (older composers need it)…
+    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
+    // …then the server says byok: false, so the father never sees a key option he cannot use.
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeInTheDocument();
+    expect(screen.queryByText(/↗/)).toBeNull();
+  });
+
+  it('keeps the first suggestions in view and only follows the conversation once it starts', async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, writable: true, value: scrollTo });
+    try {
+      makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
+      await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
+      expect(screen.getByRole('button', { name: /Crie uma capa e uma apresentação/ })).toBeInTheDocument();
+      expect(scrollTo).not.toHaveBeenCalled();
+      await sendAndWaitProposal();
+      expect(scrollTo).toHaveBeenCalled();
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
   it('turns PROVIDER_NOT_CONFIGURED into Portuguese with an action and keeps the message as not sent', async () => {
     const f = makeWith(async (_name, options) => options.body.task === 'status'
       ? statusOk : httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED', detail: 'secret text from the server' }));

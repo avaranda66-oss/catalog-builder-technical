@@ -615,7 +615,7 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
                 aria-describedby="create-name-help"
               />
             </label>
-            <p id="create-name-help">Depois escolha como começar. O nome e todo o conteúdo podem ser mudados depois.</p>
+            <p id="create-name-help">Depois escolha como começar. Sem nome, o catálogo fica com o nome do modelo escolhido. O nome muda depois clicando no título.</p>
             <div className="vnext-library-create-options">
               <button
                 type="button"
