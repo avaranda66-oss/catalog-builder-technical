@@ -133,6 +133,7 @@ import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue
 import { CanvasHeader } from './editor/CanvasHeader';
 import { TableCellEditorSection } from './editor/TableCellEditorSection';
 import { CellInlineEditor } from './editor/CellInlineEditor';
+import { useStableGridPlan } from './editor/use-stable-grid-plan';
 import { runTableGridAxisCommand, type TableGridOutcome } from './editor/table-grid-actions';
 import type { TableGridCommand } from '../editor/table-grid-commands';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
@@ -1344,6 +1345,9 @@ export function EditorWorkspace({
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
     return true;
   };
+
+  // FR-30: the grid (and its focus) stays on screen while a saved cell is being measured again.
+  const gridPlan = useStableGridPlan(selectedTableObject?.table, selectedTableObject && plans.get(selectedTableObject.table.id));
 
   const applyGridSelection = (table: TableModel, selection: TableSelection) => {
     tableSelectionRef.current = selection;
@@ -4150,12 +4154,12 @@ export function EditorWorkspace({
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
                             && !object.locked
                             && tableSelection
-                            && plans.get(object.table.id)?.rowQ
-                            && plans.get(object.table.id)?.gridOffsetYQ !== undefined
+                            && object.id === selectedTableObject?.id
+                            && gridPlan
                             && (
                               <TableGridOverlay
                                 table={object.table}
-                                plan={plans.get(object.table.id)!}
+                                plan={gridPlan}
                                 identity={tableSelection.identity}
                                 selection={tableSelection}
                                 localSequence={snapshot.localSequence}
