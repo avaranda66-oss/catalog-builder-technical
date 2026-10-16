@@ -2,18 +2,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
 // Bundle this pure local dependency with the Edge Function; VM tests resolve the same source.
-import { VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
+import { VNEXT_TRANSLATION_MODEL_ID, VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
 
 const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion;
 
 // Server-only bridge for the canonical P1 client while P2 rolls out. Never a client profile.
+// Same model as every profile (single registry, no 2.5 family: FR-86).
 const CANONICAL_SPANISH_PROFILE = Object.freeze({
   contractVersion: 'w5a-v1',
   profileVersion: 'w5-ptbr-eses-v1',
   sourceLocale: 'pt-BR',
   targetLocale: 'es-ES',
   providerId: 'gemini',
-  modelId: 'gemini-2.5-flash',
+  modelId: VNEXT_TRANSLATION_MODEL_ID,
   promptVersion: 'w5-technical-es-v1',
   tokenPolicyVersion: 'w5-tech-tokens-v1',
 } as const);
@@ -327,7 +328,8 @@ serve(async (request: Request) => {
     }
     const boundedAcceptance = budgetMode === 'bounded-acceptance';
 
-    const providerSecret = Deno.env.get('GEMINI_API_KEY') ?? '';
+    // Translation-specific secret first, so the shared GEMINI_API_KEY never has to be overwritten.
+    const providerSecret = Deno.env.get('VNEXT_TRANSLATION_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '';
     if (!providerSecret) {
       return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
     }
@@ -373,7 +375,8 @@ serve(async (request: Request) => {
         temperature: 0.1,
         candidateCount: 1,
         maxOutputTokens: boundedAcceptance ? BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS : PRODUCTION_MAX_OUTPUT_TOKENS,
-        ...(boundedAcceptance ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        // Gemini 3.x rejects a zero thinking budget (HTTP 400, verified live 2026-10-15); minimal is the floor.
+        ...(boundedAcceptance ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}),
       },
     };
     const generationBody = JSON.stringify(generationRequest);

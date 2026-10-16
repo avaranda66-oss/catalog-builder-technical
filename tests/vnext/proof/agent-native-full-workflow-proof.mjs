@@ -42,16 +42,8 @@ try{
   assert.equal(baseline.pageCount,1);
   await page.getByRole('button',{name:'Abrir assistente de edição'}).click();
   await page.getByRole('tab',{name:'Criar com Gemini'}).waitFor();
-  await page.getByRole('button',{name:'Conectar Gemini'}).click();
-  await page.getByRole('textbox',{name:'Chave API do provedor'})
-    .fill('FAKE_TEST_ONLY_GEMINI_KEY_NO_EXTERNAL_CALL');
-  await page.getByRole('textbox',{name:'Senha de proteção do cofre'})
-    .fill('FAKE_TEST_ONLY_ENCRYPTION_PASSWORD');
-  await page.getByRole('button',{name:'Salvar chave criptografada'}).click();
-  await page.getByRole('textbox',{name:'Desbloquear cofre'})
-    .fill('FAKE_TEST_ONLY_ENCRYPTION_PASSWORD');
-  await page.getByRole('button',{name:'Desbloquear para esta sessão'}).click();
-  await page.getByRole('button',{name:'Chave desbloqueada'}).waitFor();
+  // Server key by default (FR-60): no personal key, password or vault step.
+  await page.getByText('IA pronta.',{exact:true}).waitFor();
 
   for(let turn=1;turn<=4;turn++){
     const prompt=turn===1?

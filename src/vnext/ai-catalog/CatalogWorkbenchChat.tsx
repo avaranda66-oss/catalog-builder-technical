@@ -17,6 +17,10 @@ interface Props {
   onBeforeMutation?: () => boolean;
 }
 interface ReferenceImage { id: string; name: string; url: string }
+const clock = (timestamp: string) => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
 /**
  * Local review assistant, intentionally NOT an LLM general editing tool:
  * executes only bounded/reversible native document actions in the existing
@@ -66,7 +70,7 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     setMessage(''); setWarning('');
     const user = writeEntry('user', submitted);
     const action = interpretWorkbenchRequest(submitted);
-    let response = '';
+    let response: string;
     try {
       if (['compact', 'undo', 'redo'].includes(action) && onBeforeMutation && !onBeforeMutation()) {
         response = 'Conclua ou cancele a edição em andamento antes de pedir outra alteração. O catálogo não foi modificado.';
@@ -96,7 +100,7 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
           response = 'Abri a edição manual com as ferramentas avançadas do Catalog Builder.';
           break;
         default:
-          response = 'Ainda não consigo executar essa alteração automaticamente com segurança. Posso compactar tabelas, desfazer, refazer, abrir o editor ou revisar o PDF. Alterações de valores, fotos, capa e títulos exigem revisão no editor. Não alterei o catálogo.';
+          response = 'Ainda não consigo fazer esse ajuste por aqui. Posso compactar tabelas, desfazer, refazer, abrir o editor ou a revisão do PDF. Para criar páginas, use a aba “Criar com Gemini”; valores, fotos, capa e títulos se ajustam no editor. Não alterei o catálogo.';
       }
     } catch {
       response = 'Essa operação não pôde ser concluída com segurança. O documento anterior foi preservado. Abra o editor para verificar os detalhes.';
@@ -121,7 +125,7 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     }));
     setReferences(previous => [...previous, ...next]);
     persist(writeEntry('assistant',
-      `${next.length} imagem(ns) anexada(s) somente para consulta visual nesta sessão. Elas ainda NÃO foram interpretadas pelo Gemini, tratadas, recortadas ou inseridas no PDF.`,
+      `${next.length} imagem(ns) anexada(s) somente para consulta visual nesta sessão. Elas não são lidas pela IA, não são tratadas nem entram no PDF.`,
       'reference'));
   };
   const exportHistory = () => {
@@ -139,16 +143,16 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
 
   return <section className="ai-workbench-chat" aria-label="Chat de edição do catálogo">
     <div className="ai-chat-heading">
-      <div><h3>Como posso ajudar?</h3>
-        <p>Peça uma mudança neste catálogo. A página é atualizada quando a ação for suportada.</p></div>
+      <div><h3>Ajustes rápidos</h3>
+        <p>Peça um ajuste simples neste catálogo. A página muda na hora quando o ajuste é possível.</p></div>
       <span aria-label="Quantidade de mensagens" className="ai-chat-count">{entries.length}</span>
     </div>
     <div ref={logRef} className="ai-chat-log" role="log" aria-label="Histórico do catálogo" aria-live="polite">
-      {entries.length === 0 && <div className="ai-chat-welcome"><p>O que você quer ajustar primeiro?</p><div className="ai-chat-suggestions">{['Deixe as tabelas mais compactas', 'Desfaça a última alteração', canPublish ? 'Abra a revisão do PDF' : 'Abra o editor'].map(suggestion => <button key={suggestion} type="button" onClick={() => { setMessage(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}</div><small>Por enquanto, só comandos seguros do editor. O Gemini ainda não controla este catálogo.</small></div>}
+      {entries.length === 0 && <div className="ai-chat-welcome"><p>O que você quer ajustar primeiro?</p><div className="ai-chat-suggestions">{['Deixe as tabelas mais compactas', 'Desfaça a última alteração', canPublish ? 'Abra a revisão do PDF' : 'Abra o editor'].map(suggestion => <button key={suggestion} type="button" onClick={() => { setMessage(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}</div><small>Estes ajustes não usam IA. Para criar páginas com IA, use a aba “Criar com Gemini”.</small></div>}
       {entries.map(entry => <article key={entry.id} className={'ai-chat-turn ai-chat-' + entry.role}>
         <strong>{entry.role === 'user' ? 'Você' : 'Assistente'}</strong>
         <p>{entry.content}</p>
-        <small>Revisão local {entry.revision}</small>
+        <small>{clock(entry.timestamp)}</small>
       </article>)}
     </div>
     <div className="ai-chat-compose">
@@ -176,8 +180,8 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
       </div>}
       {warning && <p role="alert">{warning}</p>}
       <p className="ai-boundary">{compactMode
-        ? 'Este painel executa somente alterações guiadas disponíveis. Gemini ainda não edita este catálogo. Histórico local neste navegador.'
-        : `Seu histórico fica neste navegador, separado por conta e catálogo (até ${WORKBENCH_MESSAGE_LIMIT} mensagens). Gemini, tratamento de imagens e edição livre por IA ainda não estão conectados nesta tela.`}</p>
+        ? 'Ajustes rápidos sem IA: compactar tabelas, desfazer, refazer, abrir o editor ou a revisão do PDF. Para criar páginas com IA, use a aba “Criar com Gemini”. A conversa fica salva neste navegador.'
+        : `A conversa fica salva neste navegador, separada por conta e catálogo (até ${WORKBENCH_MESSAGE_LIMIT} mensagens). Esta tela faz só ajustes rápidos, sem IA; fotos anexadas servem apenas como referência visual.`}</p>
     </div>
   </section>;
 }

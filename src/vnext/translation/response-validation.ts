@@ -6,7 +6,7 @@ import {
   type TranslationProviderRequest,
   type TranslationProviderResponse,
 } from './contracts';
-import { VNEXT_TRANSLATION_PROFILES } from './language-registry';
+import { VNEXT_TRANSLATION_PROFILES, isAcceptedTranslationModelId } from './language-registry';
 import {
   assertProtectedTokenIntegrity,
   type ProtectedText,
@@ -74,7 +74,7 @@ export function validateProviderResponse(
   if (response.profileVersion !== request.profileVersion) invalid('profileVersion mismatch');
   if (
     response.provider.providerId !== profile.providerId ||
-    response.provider.modelId !== profile.modelId
+    !isAcceptedTranslationModelId(profile, response.provider.modelId)
   ) {
     invalid('provider profile metadata mismatch');
   }

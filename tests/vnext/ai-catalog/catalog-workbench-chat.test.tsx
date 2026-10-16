@@ -72,7 +72,7 @@ describe('side-by-side live A4 editing with an extended persistent chat', () => 
     await act(async () => { fireEvent.change(upload, { target: { files: [image] } }); });
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(screen.getByAltText('Referência: modelo-referencia.png')).toBeInTheDocument();
-    expect(screen.getByRole('log').textContent).toContain('ainda NÃO foram interpretadas pelo Gemini');
+    expect(screen.getByRole('log').textContent).toContain('não são lidas pela IA');
     expect(revokeObjectURL).not.toHaveBeenCalled();
   });
 });

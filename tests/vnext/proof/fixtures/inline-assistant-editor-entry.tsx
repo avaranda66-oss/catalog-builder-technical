@@ -29,9 +29,13 @@ window.__INLINE_ASSISTANT_PROOF__ = {
   }),
 };
 const client = { functions: { invoke: async (name, { body }) => {
+  if (name === 'vnext-catalog-composer' && body.task === 'status') {
+    return { data: { code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true, byok: false,
+      remainingMicrousd: null, callReserveMicrousd: 7800 } }, error: null };
+  }
+  // Server key by default (FR-60): no credential travels with the request.
   if (name !== 'vnext-catalog-composer' ||
-      !['compose_scaffold', 'revise_selected_text'].includes(body.task) ||
-      body.credential?.provider !== 'gemini' || !body.credential.apiKey) {
+      !['compose_scaffold', 'revise_selected_text'].includes(body.task) || 'credential' in body) {
     return { data: null, error: { message: 'TEST_REJECTED' } };
   }
   if (body.task === 'revise_selected_text') return { data: {

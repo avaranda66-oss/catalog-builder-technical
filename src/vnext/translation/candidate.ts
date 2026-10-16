@@ -3,6 +3,7 @@ import { findObjectInTree, type CatalogDocument, type RichText } from '../domain
 import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult, type TranslationLocator, type TranslationSemanticLeaf } from './contracts';
 import { extractSemanticTranslationCoverage, stableSerialize } from './semantic-leaves';
 import { protectTechnicalTokens } from './technical-token-protector';
+import { isAcceptedTranslationModelId } from './language-registry';
 
 export interface TranslationReviewRun {
   readonly unitId: string;
@@ -59,7 +60,7 @@ export async function materializeTranslationCandidate(
   corrections: ReadonlyMap<string, string> = new Map()
 ): Promise<{ document: CatalogDocument; runs: readonly TranslationReviewRun[] }> {
   const profile = resolveTranslationProfile(source.locale, result.targetLocale, result.profileVersion);
-  if (result.provider.providerId !== profile.providerId || result.provider.modelId !== profile.modelId) invalid('Wrong candidate provider profile');
+  if (result.provider.providerId !== profile.providerId || !isAcceptedTranslationModelId(profile, result.provider.modelId)) invalid('Wrong candidate provider profile');
   if (result.sourceCatalogId !== source.id || result.sourceLocale !== source.locale) invalid('Wrong translation source');
   const coverage = await extractSemanticTranslationCoverage(source);
   const units = new Map(result.units.map(unit => [unit.unitId, unit]));

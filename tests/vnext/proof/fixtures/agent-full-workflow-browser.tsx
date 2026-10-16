@@ -62,9 +62,12 @@ const getSource = (): PublicationSource | undefined => {
   };
 };
 const composer = {functions: {invoke: async (name, {body}) => {
-  if (name !== 'vnext-catalog-composer' || body.task !== 'compose_scaffold' ||
-      body.credential?.provider !== 'gemini' ||
-      body.credential.apiKey !== 'FAKE_TEST_ONLY_GEMINI_KEY_NO_EXTERNAL_CALL') {
+  if (name === 'vnext-catalog-composer' && body.task === 'status') {
+    return {data: {code: 'OK', status: {enabled: true, mode: 'bounded-acceptance', serverKey: true, byok: false,
+      remainingMicrousd: null, callReserveMicrousd: 7800}}, error: null};
+  }
+  // Server key by default (FR-60): the author never types a key, so no credential travels.
+  if (name !== 'vnext-catalog-composer' || body.task !== 'compose_scaffold' || 'credential' in body) {
     return {data: null,error:{code:'FAKE_PROVIDER_REJECTED'}};
   }
   modelRequests++;

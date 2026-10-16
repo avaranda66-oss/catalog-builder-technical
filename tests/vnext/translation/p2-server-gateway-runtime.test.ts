@@ -6,13 +6,17 @@ import * as ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { VNEXT_TRANSLATION_PROFILES, type RegisteredTranslationProfile } from '@/vnext/translation/language-registry';
 import type { TranslationProviderRequest } from '@/vnext/translation/contracts';
+import { GEMINI_TRANSLATION_MODEL } from '@/vnext/ai-catalog/gemini-models';
+
+// FR-86: every profile, including the server-only canonical Spanish bridge, uses the registry model.
+const MODEL = GEMINI_TRANSLATION_MODEL;
 
 interface ProviderPayload { units: Array<{ unitId: string; runs: Array<{ runId: string; translatedText: string }> }> }
 interface Prompt { sourceLocale: string; targetLocale: string; profileVersion: string; promptVersion: string; tokenPolicyVersion: string;
   rules: string[]; units: TranslationProviderRequest['units'] }
 interface GenerationRequest { contents: Array<{ role: string; parts: Array<{ text: string }> }>;
   generationConfig: { responseMimeType: string; temperature: number; candidateCount: number; maxOutputTokens: number;
-    thinkingConfig?: { thinkingBudget: number } } }
+    thinkingConfig?: { thinkingLevel: string } } }
 
 /** Executes the actual Deno handler and actual local registry. All external modules, env and fetch are fixtures. */
 function gateway() {
@@ -21,8 +25,15 @@ function gateway() {
   const transpile = (path: string) => ts.transpileModule(readFileSync(path, 'utf8'), {
     fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
+  // The registry imports the single Gemini model registry (pure, no further imports).
+  const modelsPath = resolve(dirname(registryPath), '../ai-catalog/gemini-models.ts');
+  const modelsExports: Record<string, unknown> = {};
+  runInContext(transpile(modelsPath), createContext({ exports: modelsExports }), { filename: modelsPath });
   const registryExports: Record<string, unknown> = {};
-  runInContext(transpile(registryPath), createContext({ exports: registryExports }), { filename: registryPath });
+  runInContext(transpile(registryPath), createContext({ exports: registryExports, require: (moduleId: string) => {
+    if (resolve(dirname(registryPath), moduleId) === modelsPath) return modelsExports;
+    throw new Error(`Unexpected registry dependency: ${moduleId}`);
+  } }), { filename: registryPath });
   let handler: ((request: Request) => Promise<Response>) | undefined;
   const state = { authenticated: true, active: true, role: 'editor', profileError: false, providerStatus: 200,
     providerThrows: false, malformedEnvelope: false, missingEnvironment: '',
@@ -51,10 +62,10 @@ function gateway() {
   const fakeProvider = vi.fn(async (url: string, options: RequestInit) => {
     expect(options.method).toBe('POST');
     expect((options.headers as Record<string, string>)['x-goog-api-key']).toBe('fixture-server-key');
-    if (url === 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:countTokens') {
+    if (url === `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:countTokens`) {
       return countProvider(options);
     }
-    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+    expect(url).toBe(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`);
     return generateProvider(options);
   });
   const createClient = vi.fn((_url: string, _key: string, options: { global: { headers: { Authorization: string } } }) => {
@@ -228,7 +239,7 @@ describe('P2 server-first compatibility with the canonical Spanish client', () =
     expect(response.status).toBe(200);
     expect(Object.keys(output).sort()).toEqual(['contractVersion', 'profileVersion', 'requestId', 'targetLocale', 'units', 'provider'].sort());
     expect(output).toMatchObject({ contractVersion: 'w5a-v1', profileVersion: 'w5-ptbr-eses-v1', requestId: body.requestId,
-      targetLocale: 'es-ES', provider: { providerId: 'gemini', modelId: 'gemini-2.5-flash' } });
+      targetLocale: 'es-ES', provider: { providerId: 'gemini', modelId: MODEL } });
     expect(output.units.map((unit: { unitId: string }) => unit.unitId)).toEqual(body.units.map(unit => unit.unitId));
     const input = JSON.parse(g.fakeProvider.mock.calls[0][1].body as string) as { contents: Array<{ parts: Array<{ text: string }> }> };
     const prompt = JSON.parse(input.contents[0].parts[0].text) as Prompt;
@@ -308,7 +319,7 @@ describe.each(budgetProfiles)('P2 server-owned token budget $label', item => {
     const counted = JSON.parse(g.countProvider.mock.calls[0][0].body as string) as { generateContentRequest: GenerationRequest & { model: string } };
     const generated = JSON.parse(g.generateProvider.mock.calls[0][0].body as string) as GenerationRequest;
     expect(Object.keys(counted)).toEqual(['generateContentRequest']);
-    expect(counted.generateContentRequest).toEqual({ model: 'models/gemini-2.5-flash', ...generated });
+    expect(counted.generateContentRequest).toEqual({ model: `models/${MODEL}`, ...generated });
     expect(counted.generateContentRequest.contents).toEqual(generated.contents);
     const prompt = JSON.parse(generated.contents[0].parts[0].text) as Prompt;
     expect(prompt.units[0].context).toBe(input.units[0].context);
@@ -316,7 +327,7 @@ describe.each(budgetProfiles)('P2 server-owned token budget $label', item => {
     expect(prompt.units[0].runs).toEqual(input.units[0].runs);
     expect(prompt.rules).toContain('Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.');
     expect(generated.generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0.1,
-      candidateCount: 1, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } });
+      candidateCount: 1, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'minimal' } });
     expect(JSON.stringify(output)).not.toContain('fixture-server-key');
   });
 

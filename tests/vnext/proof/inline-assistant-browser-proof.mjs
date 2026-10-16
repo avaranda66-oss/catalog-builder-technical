@@ -75,16 +75,8 @@ try {
   // functions adapter; no Google invocation or production catalog is touched.
   await page.setViewportSize({ width: 1700, height: 920 });
   await page.getByRole('tab', { name: 'Criar com Gemini' }).click();
-  await page.getByRole('button', { name: 'Conectar Gemini' }).click();
-  await page.getByRole('textbox', { name: 'Chave API do provedor' })
-    .fill('test-only-fake-composer-key-not-real');
-  await page.getByRole('textbox', { name: 'Senha de proteção do cofre' })
-    .fill('local-test-passphrase-no-real-secret');
-  await page.getByRole('button', { name: 'Salvar chave criptografada' }).click();
-  await page.getByRole('textbox', { name: 'Desbloquear cofre' })
-    .fill('local-test-passphrase-no-real-secret');
-  await page.getByRole('button', { name: 'Desbloquear para esta sessão' }).click();
-  await page.getByRole('button', { name: 'Chave desbloqueada' }).waitFor();
+  // Server key by default (FR-60): no personal key, password or vault step.
+  await page.getByText('IA pronta.', { exact: true }).waitFor();
   await page.getByRole('textbox', { name: 'Seu pedido ao Gemini' })
     .fill('Crie uma nova capa e uma comparação técnica em duas páginas.');
   await page.getByRole('button', { name: /Enviar ao Gemini/ }).click();

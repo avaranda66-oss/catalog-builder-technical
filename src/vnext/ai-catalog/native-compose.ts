@@ -3,6 +3,7 @@ import { createDocumentSession, type DocumentSession } from '../application';
 import { mmToU, plainRichText, type CatalogDocument, type TableModel } from '../domain';
 import { createSizedEmptyTable } from '../app/editor-defaults';
 import { applyNativeTableDesign, NativeTableDesignSchema } from './native-table-design';
+import { frameShortComposerMessage } from './composer-framing';
 
 /**
  * A creative, bounded editorial draft, not an AI-authored engineering record.
@@ -59,8 +60,10 @@ export function prepareNativeComposeRequest(
   const headings: string[] = [];
   // No engineering values, PDF quotes, images, assets or credentials are
   // automatically sent as document context in this route.
+  // Short answers ('Sim', '3') are framed so both the current and the older
+  // deployed composer accept them (the older one requires 8 characters).
   return NativeComposeRequestSchema.parse({
-    version: 1, task: 'compose_scaffold', message,
+    version: 1, task: 'compose_scaffold', message: frameShortComposerMessage(message, history.length > 0),
     history: history.slice(-8), document: {
       title: document.title.slice(0, 150), pages: document.pages.length,
       currentPageHeadings: headings,
