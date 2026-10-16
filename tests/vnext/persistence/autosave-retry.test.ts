@@ -54,7 +54,7 @@ describe('FR-44 automatic save retries', () => {
     }));
     expect(state.save().retry?.nextAttemptAt).toEqual(expect.any(Number));
     expect(fatherSaveExplanation(state.save())).toBe(
-      'Não foi possível falar com o servidor agora: suas alterações continuam nesta tela, mas ainda não foram salvas. '
+      'Não foi possível falar com o servidor agora. Confira a conexão. Suas alterações continuam nesta tela, mas ainda não foram salvas. '
       + 'Vamos tentar salvar de novo sozinhos em instantes. Você também pode clicar em Salvar.'
     );
 
@@ -73,7 +73,7 @@ describe('FR-44 automatic save retries', () => {
     state.clock.advanceBy(10 * 60_000);
     await settleAsyncWork();
     expect(state.repository.saveCAS).toHaveBeenCalledTimes(6);
-    expect(fatherSaveExplanation(state.save())).toContain('Tentamos salvar várias vezes sem conseguir. Confira a conexão e clique em Salvar.');
+    expect(fatherSaveExplanation(state.save())).toContain('Tentamos salvar várias vezes sem conseguir. Quando a conexão voltar, clique em Salvar.');
     await state.active.runtime.dispose();
   });
 

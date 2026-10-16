@@ -222,7 +222,7 @@ describe('FR-44 save explanations in the notices', () => {
     expect(band).toHaveAttribute('data-tone', 'warning');
     view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x"
       save={{ ...waiting, retry: { attempt: 5, maxAttempts: 5, exhausted: true } }} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Tentamos salvar várias vezes sem conseguir. Confira a conexão e clique em Salvar.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Tentamos salvar várias vezes sem conseguir. Quando a conexão voltar, clique em Salvar.');
     expect(screen.getByRole('alert')).toHaveAttribute('data-tone', 'error');
   });
 

@@ -41,7 +41,7 @@ export function fatherSavedTime(save: SaveProjection): string | undefined {
 function automaticRetrySentence(save: SaveProjection): string {
   if (!save.retry) return '';
   return save.retry.exhausted
-    ? ' Tentamos salvar várias vezes sem conseguir. Confira a conexão e clique em Salvar.'
+    ? ' Tentamos salvar várias vezes sem conseguir. Quando a conexão voltar, clique em Salvar.'
     : ' Vamos tentar salvar de novo sozinhos em instantes. Você também pode clicar em Salvar.';
 }
 
@@ -53,7 +53,7 @@ export function fatherSaveExplanation(save: SaveProjection): string {
       ? `O salvamento ainda não foi confirmado. Mantenha esta aba aberta.${automaticRetrySentence(save)}`
       : 'O salvamento ainda não foi confirmado. Mantenha esta aba aberta e use Salvar para verificar novamente.';
     case 'unavailable': return save.retry
-      ? `Não foi possível falar com o servidor agora: suas alterações continuam nesta tela, mas ainda não foram salvas.${automaticRetrySentence(save)}`
+      ? `Não foi possível falar com o servidor agora. Confira a conexão. Suas alterações continuam nesta tela, mas ainda não foram salvas.${automaticRetrySentence(save)}`
       : 'Não foi possível salvar agora. Confira a conexão e tente Salvar novamente.';
     case 'unauthorized': return 'Sua sessão expirou ou sua permissão de edição mudou. Não feche esta aba: suas alterações continuam nesta tela. Entre novamente com a mesma conta e clique em Salvar.';
     case 'blocked': return save.message === 'Conclua a composição de texto antes de salvar.'
