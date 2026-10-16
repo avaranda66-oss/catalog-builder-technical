@@ -2,9 +2,12 @@ import React from 'react';
 import { pxToQ, qCss, uToQ, type TableModel } from '../domain';
 import { pointerAxisDeltaU } from './editor-interaction';
 import type { TablePlan } from '../rendering';
+import { resolveGridTypingKey } from '../editor/editor-keyboard';
+import { tableGridMenuModel, type TableGridCommand } from '../editor/table-grid-commands';
 import {
   createTablePointResolver,
   normalizeTableSelection,
+  tableCellSelection,
   tableColumnSelection,
   tableRangeSelection,
   tableRowSelection,
@@ -13,6 +16,8 @@ import {
   type TableSelectionIdentity,
   type TableSelectionPoint,
 } from '../editor/table-selection';
+import type { CellInlineEditorCell } from './editor/CellInlineEditor';
+import { TableGridContextMenu } from './editor/TableGridContextMenu';
 
 interface DragState {
   pointerId: number;
@@ -56,6 +61,14 @@ export interface TableGridOverlayProps {
   pageHeightU: number;
   onRowBoundaryCommit?(rowIndex: number, deltaU: number): void;
   onColumnBoundaryCommit?(leftColumnIndex: number, deltaU: number): void;
+  /** FR-30: draws the editor over the cell being edited (`editingCellId`). */
+  renderCellEditor?(cell: CellInlineEditorCell): React.ReactNode;
+  /** FR-30: a printable key on the selected cell starts the edit and replaces the content ('' for a dead key). */
+  onTypeToEdit?(text: string): void;
+  /** FR-30: pressing another cell while one is being edited saves it and selects the pressed cell. */
+  onCellPressWhileEditing?(point: TableSelectionPoint): void;
+  /** FR-34: "+" buttons between rows/columns and the right-click menu. */
+  onGridCommand?(command: TableGridCommand): void;
 }
 
 function cumulative(values: readonly number[]): number[] {
@@ -83,6 +96,10 @@ export function TableGridOverlay({
   pageHeightU,
   onRowBoundaryCommit,
   onColumnBoundaryCommit,
+  renderCellEditor,
+  onTypeToEdit,
+  onCellPressWhileEditing,
+  onGridCommand,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -90,6 +107,11 @@ export function TableGridOverlay({
   const lastTouchTapRef = React.useRef<(TableSelectionPoint & { completedAt: number }) | null>(null);
   const dimensionDragRef = React.useRef<DimensionDragState | null>(null);
   const [dimensionPreview, setDimensionPreview] = React.useState<DimensionDragState | null>(null);
+  const [menu, setMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const closeMenu = React.useCallback((restoreFocus: boolean) => {
+    setMenu(null);
+    if (restoreFocus) rootRef.current?.focus({ preventScroll: true });
+  }, []);
   const resolvePoint = React.useMemo(() => createTablePointResolver(table), [table]);
   const rows = plan.rowQ ?? [];
   const columns = plan.trackQ;
@@ -160,6 +182,12 @@ export function TableGridOverlay({
     event.stopPropagation();
     const canonical = resolvePoint(point);
     if (!canonical) return;
+    if (editingCellId && onCellPressWhileEditing) {
+      // Like Excel: clicking another cell saves the one being typed in and moves there.
+      event.preventDefault();
+      onCellPressWhileEditing(canonical);
+      return;
+    }
     const anchor = event.shiftKey && (selection.kind === 'cell' || selection.kind === 'range')
       ? selection.anchor
       : canonical;
@@ -306,6 +334,69 @@ export function TableGridOverlay({
     setDimensionPreview(null);
   };
 
+  const insideSelection = (rowIndex: number, columnIndex: number) => rowIndex >= normalized.rowStart
+    && rowIndex <= normalized.rowEnd && columnIndex >= normalized.columnStart && columnIndex <= normalized.columnEnd;
+
+  // FR-34: right-click on a cell, a row number or a column number opens the grid menu for that place.
+  const openMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onGridCommand || editingCellId || !(event.target instanceof Element)) return;
+    if (event.target.closest('[data-cell-inline-editor], [data-table-grid-menu]')) return;
+    event.preventDefault();
+    const target = event.target.closest<HTMLElement>('[data-table-cell], [data-table-row-selector], [data-table-column-selector]');
+    if (target?.dataset.tableCell) {
+      const [rowIndex, columnIndex] = target.dataset.tableCell.split(':').map(Number);
+      const canonical = resolvePoint({ rowId: table.rows[rowIndex].id, columnId: table.columns[columnIndex].id });
+      if (canonical && !insideSelection(rowIndex, columnIndex)) onSelectionChange(tableCellSelection(identity, canonical));
+    } else if (target?.dataset.tableRowSelector) {
+      const rowIndex = Number(target.dataset.tableRowSelector);
+      if (selection.kind !== 'rows' || !insideSelection(rowIndex, 0)) onSelectionChange(tableRowSelection(identity, table.rows[rowIndex].id));
+    } else if (target?.dataset.tableColumnSelector) {
+      const columnIndex = Number(target.dataset.tableColumnSelector);
+      if (selection.kind !== 'columns' || !insideSelection(0, columnIndex)) {
+        onSelectionChange(tableColumnSelection(identity, table.columns[columnIndex].id));
+      }
+    }
+    setMenu({ x: event.clientX, y: event.clientY });
+  };
+
+  // FR-30: typing on the selected cell starts the edit; the menu key opens the grid menu (FR-34).
+  const onGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (editingCellId || !(event.target instanceof Element)) return;
+    if (event.target.closest('[data-cell-inline-editor], [data-table-grid-menu]')) return;
+    if (onGridCommand && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = rootRef.current?.querySelector('[data-table-selection-highlight]')?.getBoundingClientRect();
+      setMenu({ x: rect ? rect.left + Math.min(rect.width, 24) : 0, y: rect ? rect.bottom : 0 });
+      return;
+    }
+    if (!onTypeToEdit || selection.kind !== 'cell') return;
+    const typing = resolveGridTypingKey({
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+      isComposing: event.nativeEvent.isComposing,
+    });
+    if (!typing) return;
+    // A dead key is left to the browser, so the accent lands on the next letter inside the editor.
+    if (typing.kind === 'character') event.preventDefault();
+    event.stopPropagation();
+    onTypeToEdit(typing.kind === 'character' ? typing.text : '');
+  };
+
+  const editingAnchor = editingCellId ? table.cells.find((cell) => cell.id === editingCellId && !cell.coveredBy) : undefined;
+  const editingRow = editingAnchor ? table.rows.findIndex((row) => row.id === editingAnchor.rowId) : -1;
+  const editingColumn = editingAnchor ? table.columns.findIndex((column) => column.id === editingAnchor.columnId) : -1;
+  const editingRect = editingAnchor && editingRow >= 0 && editingColumn >= 0 ? {
+    leftQ: x[editingColumn],
+    topQ: gridOffsetYQ + y[editingRow],
+    widthQ: x[Math.min(editingColumn + (editingAnchor.span?.columns ?? 1), columns.length)] - x[editingColumn],
+    heightQ: y[Math.min(editingRow + (editingAnchor.span?.rows ?? 1), rows.length)] - y[editingRow],
+  } : undefined;
+  const showInsertButtons = Boolean(onGridCommand) && dimensionEditingEnabled && !editingCellId;
+
   const highlightStyle: React.CSSProperties = {
     left: qCss(x[normalized.columnStart]),
     top: qCss(gridOffsetYQ + y[normalized.rowStart]),
@@ -325,6 +416,8 @@ export function TableGridOverlay({
       tabIndex={0}
       onCopy={onCopyClipboard}
       onPaste={onPasteClipboard}
+      onKeyDown={onGridKeyDown}
+      onContextMenu={openMenu}
       onBlurCapture={(event) => {
         if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
         lastTouchTapRef.current = null;
@@ -366,8 +459,8 @@ export function TableGridOverlay({
         T
       </button>
       {table.columns.map((column, columnIndex) => (
+        <React.Fragment key={column.id}>
         <button
-          key={column.id}
           type="button"
           className="vnext-table-column-selector"
           data-table-column-selector={columnIndex}
@@ -384,10 +477,25 @@ export function TableGridOverlay({
         >
           {columnIndex + 1}
         </button>
+        {showInsertButtons && (
+          <button
+            type="button"
+            tabIndex={-1}
+            className="vnext-table-axis-insert is-column"
+            data-table-insert-column-after={columnIndex}
+            aria-label={`Inserir coluna à direita da coluna ${columnIndex + 1}`}
+            title="Inserir coluna"
+            style={{ left: qCss(x[columnIndex + 1]), top: qCss(gridOffsetYQ) }}
+            onClick={() => onGridCommand?.({ type: 'insert', axis: 'column', position: 'after', referenceAxisId: column.id })}
+          >
+            +
+          </button>
+        )}
+        </React.Fragment>
       ))}
       {table.rows.map((row, rowIndex) => (
+        <React.Fragment key={row.id}>
         <button
-          key={row.id}
           type="button"
           className="vnext-table-row-selector"
           data-table-row-selector={rowIndex}
@@ -404,6 +512,21 @@ export function TableGridOverlay({
         >
           {rowIndex + 1}
         </button>
+        {showInsertButtons && (
+          <button
+            type="button"
+            tabIndex={-1}
+            className="vnext-table-axis-insert is-row"
+            data-table-insert-row-after={rowIndex}
+            aria-label={`Inserir linha abaixo da linha ${rowIndex + 1}`}
+            title="Inserir linha"
+            style={{ top: qCss(gridOffsetYQ + y[rowIndex + 1]) }}
+            onClick={() => onGridCommand?.({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: row.id })}
+          >
+            +
+          </button>
+        )}
+        </React.Fragment>
       ))}
       {dimensionEditingEnabled && table.columns.slice(0, -1).map((column, columnIndex) => (
         <button
@@ -485,6 +608,34 @@ export function TableGridOverlay({
           />
         );
       }))}
+      {editingRect && renderCellEditor && (
+        <div
+          className="vnext-cell-inline-anchor"
+          data-cell-inline-anchor=""
+          style={{
+            left: qCss(editingRect.leftQ),
+            top: qCss(editingRect.topQ),
+            width: qCss(editingRect.widthQ),
+            height: qCss(editingRect.heightQ),
+          }}
+        >
+          {renderCellEditor({
+            widthPx: editingRect.widthQ / 64,
+            heightPx: editingRect.heightQ / 64,
+            rowIndex: editingRow,
+            columnIndex: editingColumn,
+          })}
+        </div>
+      )}
+      {menu && onGridCommand && !editingCellId && (
+        <TableGridContextMenu
+          x={menu.x}
+          y={menu.y}
+          model={tableGridMenuModel(table, selection)}
+          onCommand={onGridCommand}
+          onClose={closeMenu}
+        />
+      )}
     </div>
   );
 }

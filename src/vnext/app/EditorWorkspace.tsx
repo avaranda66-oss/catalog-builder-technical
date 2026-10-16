@@ -65,7 +65,7 @@ import {
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
 import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
 import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
-import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
+import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type CellEditorMove, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
 import { PagePanel } from './editor/PagePanel';
 import {
@@ -92,6 +92,7 @@ import {
 } from '../editor/table-style-authoring';
 import {
   createTableCellDraft,
+  startTableCellDraftByTyping,
   tableCellDraftRecoveryFields,
   validateTableCellDraft,
   type EditableCellType,
@@ -131,6 +132,9 @@ import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 import { CanvasHeader } from './editor/CanvasHeader';
 import { TableCellEditorSection } from './editor/TableCellEditorSection';
+import { CellInlineEditor } from './editor/CellInlineEditor';
+import { runTableGridAxisCommand, type TableGridOutcome } from './editor/table-grid-actions';
+import type { TableGridCommand } from '../editor/table-grid-commands';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
@@ -1090,7 +1094,8 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
+      // FR-22: opening a cell without changing it is not an unsaved change (the draft is dirty only when it differs).
+      hasPendingDraft: () => Boolean(cellDraftRef.current?.dirty) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
@@ -1262,7 +1267,8 @@ export function EditorWorkspace({
     return ids.length === 1 ? object.table.cells.find((cell) => cell.id === ids[0]) : undefined;
   };
 
-  const startCellEdit = (point?: { rowId: string; columnId: string }): boolean => {
+  /** `typed` (FR-30): the key that started the edit replaces the content, as in Excel. */
+  const startCellEdit = (point?: { rowId: string; columnId: string }, typed?: string): boolean => {
     const object = selectedTableObject;
     if (!object || object.locked) {
       setStatusMessage('Tabela bloqueada não pode ser editada.');
@@ -1279,13 +1285,13 @@ export function EditorWorkspace({
     tableSelectionRef.current = selection;
     tableHistoryContextRef.current = { table: object.table, selection };
     setTableSelection(selection);
-    const draft = createTableCellDraft({
+    const opened = createTableCellDraft({
       pageId: selectedPage.id,
       objectId: object.id,
       tableId: object.table.id,
       cellId: cell.id,
     }, cell.content);
-    notifyCellDraftChanged(draft);
+    notifyCellDraftChanged(typed === undefined ? opened : startTableCellDraftByTyping(opened, typed));
     setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'cell-edit' });
     setStatusMessage(cell.content.type === 'marker' || cell.content.type === 'image'
@@ -1337,6 +1343,48 @@ export function EditorWorkspace({
     setStatusMessage(applied.result.metadata.changed ? 'Conteúdo da célula atualizado.' : 'Conteúdo da célula sem alterações.');
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
     return true;
+  };
+
+  const applyGridSelection = (table: TableModel, selection: TableSelection) => {
+    tableSelectionRef.current = selection;
+    tableHistoryContextRef.current = { table, selection };
+    setTableSelection(selection);
+  };
+
+  /** FR-34: "+" and the grid menu compose the existing axis actions; rows inserted grow the frame in the same step. */
+  const applyGridOutcome = (outcome: TableGridOutcome, objectId: string, transactionId: string) => {
+    if (!outcome.ok) {
+      setStatusMessage(outcome.message);
+      return;
+    }
+    applyGridSelection(outcome.table, outcome.selection);
+    if (outcome.fitHeight) setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(outcome.message));
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+
+  const runGridCommand = (command: TableGridCommand) => {
+    if (command.type === 'merge') return runTableMerge();
+    if (command.type === 'unmerge') return runTableUnmerge();
+    const live = cellDraftRef.current ? undefined : currentSelectedTableForStructure();
+    if (!live || live.object.locked) return;
+    const transactionId = newTableTransactionId();
+    applyGridOutcome(runTableGridAxisCommand(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, command, transactionId), live.object.id, transactionId);
+  };
+
+  /** FR-30: Enter saves and goes down, Tab goes right (a new row after the last cell); a click elsewhere selects it. */
+  const commitCellEditAndMove = (move?: CellEditorMove, point?: { rowId: string; columnId: string }) => {
+    if (!commitCellEdit()) return;
+    const live = currentSelectedTableForStructure();
+    if (!live) return;
+    if (point) return applyGridSelection(live.object.table, tableCellSelection(live.selection.identity, point));
+    if (!move) return;
+    const navigation = navigateTableSelection(live.object.table, live.selection,
+      move === 'down' ? 'ArrowDown' : move === 'up' ? 'ArrowUp' : 'Tab', { backwards: move === 'left' });
+    if (!navigation.exited) return applyGridSelection(live.object.table, navigation.selection);
+    if (move === 'right') {
+      runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: live.object.table.rows[live.object.table.rows.length - 1].id, selectFirstCell: true });
+    }
   };
 
   const runCellPropertyPatch = (patch: CellPropertyPatch) => {
@@ -4121,6 +4169,17 @@ export function EditorWorkspace({
                                 onActivateCell={(point) => {
                                   if (editorState.mode === 'table-grid') startCellEdit(point);
                                 }}
+                                onTypeToEdit={(text) => {
+                                  if (editorState.mode === 'table-grid') startCellEdit(undefined, text);
+                                }}
+                                onCellPressWhileEditing={(point) => commitCellEditAndMove(undefined, point)}
+                                onGridCommand={(command) => {
+                                  if (editorState.mode === 'table-grid') runGridCommand(command);
+                                }}
+                                renderCellEditor={(cell) => cellDraft && (
+                                  <CellInlineEditor draft={cellDraft} draftRef={cellDraftRef} fieldRef={cellEditorFieldRef} cell={cell}
+                                    onDraftChange={notifyCellDraftChanged} onCommit={commitCellEditAndMove} onCancel={() => cancelCellEdit()} />
+                                )}
                                 onCopyClipboard={handleTableCopyClipboard}
                                 onPasteClipboard={handleTablePasteClipboard}
                                 rangeExtensionArmed={tableRangeExtensionArmed}
