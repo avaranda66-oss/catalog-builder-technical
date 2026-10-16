@@ -122,6 +122,8 @@ export const INTERNAL_SHEET_PATTERN = /^(access[ _-]?logs?|helper|configurador|o
 /** Column headers for prices, currencies, margins, contacts and browser data. */
 export const INTERNAL_COLUMN_PATTERN =
   /(^|[^a-z0-9])(prices?|precos?|usd|eur|euros?|mark-?up|e-?mails?|user[ _-]?agent|custos?|costs?)([^a-z0-9]|$)/;
+/** Longest first cell treated as a column header when a sheet has no clear header row. */
+const MAX_FALLBACK_HEADER = 30;
 export const isInternalSheetName = (name: string) => INTERNAL_SHEET_PATTERN.test(name.trim());
 export const isInternalColumnHeader = (header: string) => INTERNAL_COLUMN_PATTERN.test(normalizeLabel(header));
 
@@ -246,11 +248,12 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
     /** The label that marks the column as internal, and whether it is a group header above the header row. */
     const internalLabelOf = (column: number): { label: string; group: boolean } | undefined => {
       if (headerIndex === undefined) {
-        // No clear header row: the first filled cell of the column (in the first 10 rows) acts as its header.
+        // No clear header row: the first filled cell of the column (in the first 10 rows) acts as its header
+        // when it is short like a header ("Preço"), not a title or a sentence that mentions prices.
         const first = rows.slice(0, 10).find(row => !mergedSlaves.has(`${row}:${column}`) && !wideMasters.has(`${row}:${column}`) &&
           hasContent(cellAt(row, column)));
         const label = first === undefined ? '' : cellAt(first, column)?.text.trim() ?? '';
-        return label && isInternalColumnHeader(label) ? { label, group: false } : undefined;
+        return label && label.length <= MAX_FALLBACK_HEADER && isInternalColumnHeader(label) ? { label, group: false } : undefined;
       }
       const header = headerOf(column);
       if (header && isInternalColumnHeader(header)) return { label: header, group: false };

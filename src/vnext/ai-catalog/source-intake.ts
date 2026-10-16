@@ -366,7 +366,12 @@ async function readWorkbook(bytes: ArrayBuffer, context: ReadContext): Promise<S
       throw error;
     }
     intake.ignored.push(...result.ignored);
-    if (result.empty) { skip('empty', `A aba “${name}” está vazia.`); continue; }
+    if (result.empty) {
+      skip('empty', result.ignored.length
+        ? `A aba “${name}” não tem outros dados para importar além do que foi deixado de fora.`
+        : `A aba “${name}” está vazia.`);
+      continue;
+    }
     included++;
     if (result.rangeRequest) { intake.rangeRequests.push(result.rangeRequest); continue; }
     const table = result.table!;

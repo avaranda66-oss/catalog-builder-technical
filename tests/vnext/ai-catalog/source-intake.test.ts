@@ -372,6 +372,10 @@ describe('XLSX intake with real-world workbooks', () => {
     const intake = await read('Lista de itens;;\nA1;;\n;Preço;\n;10;\n;;nota\n', 'solta.csv');
     expect(table(intake).rows).toEqual([['Lista de itens', ''], ['A1', ''], ['', 'nota']]);
     expect(intake.ignored[0].message).toBe('A coluna B (“Preço”) do arquivo “solta.csv” não foi importada: parece ser preço ou dado interno.');
+    // A title that mentions prices (PSV-MASTER's guide sheet) is not a price column.
+    const guide = await read('PRESYS PSV STATION PRICE SIMULATOR — USER GUIDE;\n;\n1. Choose the station;\n2. Choose the options;\n', 'guia.csv');
+    expect(table(guide).rows.map(row => row[0])).toEqual(['PRESYS PSV STATION PRICE SIMULATOR — USER GUIDE', '', '1. Choose the station', '2. Choose the options']);
+    expect(guide.ignored).toEqual([]);
   });
 
   it('counts the 10-sheet limit after the default exclusions and lists the extra sheets', async () => {
