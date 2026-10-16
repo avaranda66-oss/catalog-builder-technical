@@ -19,6 +19,7 @@
   padding: 6px 8px;
 }
 .vnext-cell-inline-editor textarea { resize: none; overflow: auto; white-space: pre-wrap; outline: none; }
+.vnext-cell-inline-editor textarea.is-single-line { overflow: hidden; white-space: nowrap; }
 .vnext-cell-inline-editor textarea:focus-visible { box-shadow: 0 0 0 3px rgba(0, 114, 206, .28), 0 6px 18px rgba(23, 32, 51, .22); }
 .vnext-cell-inline-note { color: #31445b; font-size: 14px; }
 

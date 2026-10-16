@@ -163,6 +163,8 @@ export function resolveGridTypingKey(input: EditorKeyInput): GridTypingKey | nul
   // One visible character (a letter with accent, a digit, a symbol or a space); never "Enter", "Tab", "F2"…
   if ([...input.key].length !== 1) return null;
   if (/\p{Cc}/u.test(input.key)) return null;
+  // Ctrl+Alt+letter or digit is a shortcut, not an AltGr symbol.
+  if (altGr && /^[a-z0-9]$/i.test(input.key)) return null;
   return { kind: 'character', text: input.key };
 }
 

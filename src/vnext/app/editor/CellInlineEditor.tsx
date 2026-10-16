@@ -38,14 +38,59 @@ export interface CellInlineEditorProps {
 const MIN_EDITOR_WIDTH_PX = 220;
 const MIN_EDITOR_HEIGHT_PX = 40;
 const MAX_VISIBLE_LINES = 8;
+const HELP_ID = 'vnext-cell-inline-help';
 
-function readOnlyNote(draft: TableCellDraft, editable: boolean): string | null {
+/** The one value typed in the cell: the text, a technical code or the number of a measurement. */
+interface InlineField {
+  readonly kind: 'richText' | 'technicalCode' | 'measurement';
+  readonly value: string;
+  /** Only text keeps line breaks (Alt+Enter) and offers the technical symbols. */
+  readonly multiline: boolean;
+  readonly label: string;
+  readonly help: string;
+  update(draft: TableCellDraft, value: string): TableCellDraft;
+}
+
+function inlineField(draft: TableCellDraft): InlineField | null {
+  const original = draft.originalContent;
+  if (original.type === 'marker' || original.type === 'image') return null;
   if (draft.activeType === 'richText') {
-    return editable ? null : 'Este texto tem formatação especial e não pode ser editado aqui.';
+    if (original.type === 'richText' && projectEditableRichText(original.value) === null) return null;
+    return {
+      kind: 'richText',
+      value: draft.richText,
+      multiline: true,
+      label: 'Conteúdo da célula',
+      help: 'Enter salva e desce · Tab vai para a direita · Alt+Enter quebra a linha · Esc cancela',
+      update: (current, value) => updateTableCellDraft(current, { richText: value.replace(/\r\n?/g, '\n') }),
+    };
   }
-  if (draft.activeType === 'technicalCode' || draft.activeType === 'measurement') {
-    return 'Edite este valor no painel ao lado, em Avançado.';
+  if (draft.activeType === 'technicalCode') {
+    return {
+      kind: 'technicalCode',
+      value: draft.technicalCode,
+      multiline: false,
+      label: 'Código técnico da célula',
+      help: 'Enter salva e desce · Tab vai para a direita · Esc cancela',
+      update: (current, value) => updateTableCellDraft(current, { technicalCode: value.replace(/[\r\n]+/g, '') }),
+    };
   }
+  if (draft.activeType === 'measurement') {
+    const unit = draft.measurement.unit.trim();
+    return {
+      kind: 'measurement',
+      value: draft.measurement.valueText,
+      multiline: false,
+      label: 'Valor da medição da célula',
+      help: `${unit ? `Unidade: ${unit}. ` : ''}Para mudar a unidade, use Avançado no painel ao lado. Enter salva e desce · Esc cancela`,
+      update: (current, value) => updateTableCellDraft(current, { measurement: { valueText: value.replace(/[\r\n]+/g, '') } }),
+    };
+  }
+  return null;
+}
+
+function readOnlyNote(draft: TableCellDraft): string {
+  if (draft.activeType === 'richText') return 'Este texto tem formatação especial e não pode ser editado aqui.';
   if (draft.activeType === 'empty') return 'A célula ficará vazia. Para confirmar, clique em ✓.';
   return 'Este conteúdo não é editado aqui. Veja o painel ao lado.';
 }
@@ -63,10 +108,9 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const pendingCaretRef = React.useRef<number | null>(null);
   const original = draft.originalContent;
-  const editable = draft.activeType === 'richText'
-    && (original.type !== 'richText' || projectEditableRichText(original.value) !== null);
-  const note = readOnlyNote(draft, editable);
+  const field = inlineField(draft);
   const position = `linha ${cell.rowIndex + 1}, coluna ${cell.columnIndex + 1}`;
+  const latest = () => draftRef.current ?? draft;
 
   // Like Excel: the caret starts at the end of what is already there (or of the key that started the edit).
   React.useLayoutEffect(() => {
@@ -75,7 +119,7 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
     textarea.focus({ preventScroll: true });
     const end = textarea.value.length;
     textarea.setSelectionRange(end, end);
-  }, [editable]);
+  }, [field?.kind]);
 
   React.useLayoutEffect(() => {
     const caret = pendingCaretRef.current;
@@ -88,10 +132,12 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
 
   const insertText = (insert: string) => {
     const textarea = textareaRef.current;
-    const current = draftRef.current ?? draft;
-    const next = insertIntoCellText(current.richText, textarea?.selectionStart, textarea?.selectionEnd, insert);
+    const current = latest();
+    const currentField = inlineField(current);
+    if (!currentField) return;
+    const next = insertIntoCellText(currentField.value, textarea?.selectionStart, textarea?.selectionEnd, insert);
     pendingCaretRef.current = next.caret;
-    onDraftChange(updateTableCellDraft(current, { richText: next.text }));
+    onDraftChange(currentField.update(current, next.text));
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -106,14 +152,15 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
     if (!command) return;
     event.preventDefault();
     event.stopPropagation();
-    if (command.type === 'newline') insertText('\n');
-    else if (command.type === 'cancel') onCancel();
+    if (command.type === 'newline') {
+      if (field?.multiline) insertText('\n');
+    } else if (command.type === 'cancel') onCancel();
     else onCommit(command.move);
   };
 
   const widthPx = Math.max(cell.widthPx * zoom, MIN_EDITOR_WIDTH_PX);
   const heightPx = Math.max(cell.heightPx * zoom, MIN_EDITOR_HEIGHT_PX);
-  const lines = Math.min(Math.max(draft.richText.split('\n').length, 1), MAX_VISIBLE_LINES);
+  const lines = field?.multiline ? Math.min(Math.max(field.value.split('\n').length, 1), MAX_VISIBLE_LINES) : 1;
   const keepCaret = (event: React.MouseEvent) => event.preventDefault();
 
   return (
@@ -125,7 +172,7 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
       style={{ zoom: unzoom }}
     >
       <div className="vnext-cell-inline-toolbar" role="toolbar" aria-label="Símbolos técnicos e ações da célula">
-        {editable && CELL_TECHNICAL_SYMBOLS.map((symbol) => (
+        {field?.multiline && CELL_TECHNICAL_SYMBOLS.map((symbol) => (
           <button
             key={symbol}
             type="button"
@@ -138,7 +185,7 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
             {symbol}
           </button>
         ))}
-        <span className="vnext-cell-inline-toolbar-gap" aria-hidden="true" />
+        {field?.multiline && <span className="vnext-cell-inline-toolbar-gap" aria-hidden="true" />}
         <button type="button" className="is-icon" aria-label="Salvar esta célula" title="Salvar (Enter)"
           disabled={original.type === 'marker' || original.type === 'image'}
           onMouseDown={keepCaret} onClick={() => onCommit()}>
@@ -149,7 +196,7 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
           <X size={16} aria-hidden="true" />
         </button>
       </div>
-      {editable ? (
+      {field ? (
         <textarea
           ref={(node) => {
             if (node) {
@@ -160,28 +207,24 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
             if (fieldRef.current === textareaRef.current) fieldRef.current = null;
             textareaRef.current = null;
           }}
-          data-cell-rich-text=""
-          aria-label={`Conteúdo da célula, ${position}`}
-          aria-describedby="vnext-cell-inline-help"
+          data-cell-rich-text={field.kind === 'richText' ? '' : undefined}
+          data-cell-inline-field={field.kind}
+          aria-label={`${field.label}, ${position}`}
+          aria-describedby={HELP_ID}
           rows={lines}
           spellCheck={false}
-          value={draft.richText}
+          value={field.value}
+          className={field.multiline ? undefined : 'is-single-line'}
           style={{ width: widthPx, minHeight: heightPx }}
-          onChange={(event) => onDraftChange(updateTableCellDraft(draftRef.current ?? draft, {
-            richText: event.target.value.replace(/\r\n?/g, '\n'),
-          }))}
+          onChange={(event) => onDraftChange(field.update(latest(), event.target.value))}
           onKeyDown={onKeyDown}
-          onCompositionStart={() => onDraftChange(setTableCellDraftComposition(draftRef.current ?? draft, true))}
-          onCompositionEnd={() => onDraftChange(setTableCellDraftComposition(draftRef.current ?? draft, false))}
+          onCompositionStart={() => onDraftChange(setTableCellDraftComposition(latest(), true))}
+          onCompositionEnd={() => onDraftChange(setTableCellDraftComposition(latest(), false))}
         />
       ) : (
-        <p className="vnext-cell-inline-note" role="note" style={{ width: widthPx, minHeight: heightPx }}>{note}</p>
+        <p className="vnext-cell-inline-note" role="note" style={{ width: widthPx, minHeight: heightPx }}>{readOnlyNote(draft)}</p>
       )}
-      {editable && (
-        <p id="vnext-cell-inline-help" className="vnext-cell-inline-help">
-          Enter salva e desce · Tab vai para a direita · Alt+Enter quebra a linha · Esc cancela
-        </p>
-      )}
+      {field && <p id={HELP_ID} className="vnext-cell-inline-help">{field.help}</p>}
     </div>
   );
 }

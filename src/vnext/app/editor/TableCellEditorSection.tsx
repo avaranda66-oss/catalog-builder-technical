@@ -26,10 +26,11 @@ export interface TableCellEditorSectionProps {
 const advancedType = (type: TableCellDraft['activeType']) => type === 'technicalCode' || type === 'measurement';
 
 /**
- * Side-panel part of the cell edit. Since FR-30 the text itself is typed inside the cell (CellInlineEditor); this
- * section keeps the buttons and, under "Avançado", the content type with "Código técnico" and "Medição". In the
- * simple mode "Avançado" starts closed, unless the cell already holds a code or a measurement. The draft and the
- * commit/cancel decisions stay in EditorWorkspace; this file only shows the fields and reports each change.
+ * Side-panel part of the cell edit. Since FR-30 the value is typed inside the cell (CellInlineEditor); this
+ * section keeps the buttons and, under "Avançado", the content type with "Código técnico" and "Medição" (unit and
+ * qualifier included). In the simple mode "Avançado" starts closed, unless the cell already holds a code or a
+ * measurement. The draft and the commit/cancel decisions stay in EditorWorkspace; this file only shows the fields
+ * and reports each change.
  */
 export function TableCellEditorSection({
   cellDraft,
@@ -41,13 +42,16 @@ export function TableCellEditorSection({
   cancelCellEdit,
 }: TableCellEditorSectionProps) {
   const [advancedOpen, setAdvancedOpen] = React.useState(!simple || advancedType(cellDraft.activeType));
-  const showAdvanced = advancedOpen || advancedType(cellDraft.activeType);
   const readOnly = cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image';
   const advancedId = React.useId();
+  // The editor inside the cell owns the focus; a panel field takes it only when that editor is not on screen.
+  const claimFocusField = (node: HTMLInputElement | null) => {
+    if (node && !cellEditorFieldRef.current?.isConnected) cellEditorFieldRef.current = node;
+  };
 
   return (
     <div data-cell-edit-session="">
-      {cellDraft.activeType === 'richText' && (
+      {!readOnly && cellDraft.activeType !== 'empty' && (
         <p className="vnext-disclosure-help" data-cell-inline-hint="">
           Digite direto na célula da tabela. Enter salva e desce; Tab vai para a direita; Esc cancela.
         </p>
@@ -68,15 +72,14 @@ export function TableCellEditorSection({
           type="button"
           className="vnext-inspector-action vnext-inspector-disclosure"
           data-editor-action="toggle-cell-advanced"
-          aria-expanded={showAdvanced}
+          aria-expanded={advancedOpen}
           aria-controls={advancedId}
-          disabled={advancedType(cellDraft.activeType)}
           onClick={() => setAdvancedOpen((open) => !open)}
         >
-          {showAdvanced ? 'Ocultar Avançado' : 'Avançado'}
+          {advancedOpen ? 'Ocultar Avançado' : 'Avançado'}
         </button>
       )}
-      {(showAdvanced || readOnly) && (
+      {(advancedOpen || readOnly) && (
         <div id={advancedId} data-cell-advanced="">
           <label>
             <span>Tipo de conteúdo</span>
@@ -101,7 +104,7 @@ export function TableCellEditorSection({
             <label>
               <span>Código</span>
               <input
-                ref={(node) => { cellEditorFieldRef.current = node; }}
+                ref={claimFocusField}
                 data-cell-technical-code=""
                 type="text"
                 value={cellDraft.technicalCode}
@@ -123,7 +126,7 @@ export function TableCellEditorSection({
               <label>
                 <span>Valor</span>
                 <input
-                  ref={(node) => { cellEditorFieldRef.current = node; }}
+                  ref={claimFocusField}
                   data-cell-measurement-value=""
                   type="text"
                   value={cellDraft.measurement.valueText}
