@@ -53,12 +53,42 @@ describe('FR-01 where a signed-in person lands from "/"', () => {
     expect(resolveSignedInEntry({ location: at('/', '?classico=1') })).toEqual({ kind: 'stay', reason: 'classic' });
   });
 
-  it('leaves print, lab and other routes on their own screens', () => {
+  it('leaves print pages and development labs on their own screens', () => {
     expect(isDefaultEntryLocation(at('/print'))).toBe(false);
     expect(isDefaultEntryLocation(at('/', '?print=1'))).toBe(false);
-    expect(isDefaultEntryLocation(at('/', '?lab=product-workspace'))).toBe(false);
+    expect(isDefaultEntryLocation(at('/', `?print=1&catalog=${CATALOG_ID}&version=3`))).toBe(false);
+    expect(isDefaultEntryLocation(at('/', '?lab=product-workspace'), { labsAvailable: true })).toBe(false);
+    expect(isDefaultEntryLocation(at('/__lab/product-workspace'), { labsAvailable: true })).toBe(false);
     expect(isDefaultEntryLocation(at('/index.html'))).toBe(true);
     expect(resolveSignedInEntry({ location: at('/print') })).toEqual({ kind: 'stay', reason: 'other-route' });
+    expect(resolveSignedInEntry({ location: at('/', '?print=1') })).toEqual({ kind: 'stay', reason: 'other-route' });
+  });
+
+  it('opens /v2 from every other address the old app serves, old links included', () => {
+    for (const [pathname, search] of [
+      ['/ai-catalog-prototype.html', ''],
+      ['/qualquer-coisa', ''],
+      ['/v2/x', ''],
+      ['/index.html', '?catalog=abc'],
+      ['/ai-catalog-prototype.html', `?catalog=${CATALOG_ID}&version=3`],
+    ] as const) {
+      sessionStorage.clear();
+      expect(resolveSignedInEntry({ location: at(pathname, search), now: () => 1_000 }))
+        .toEqual({ kind: 'redirect', target: '/v2', reason: 'default' });
+    }
+  });
+
+  it('never keeps a signed-in person in a lab address in production', () => {
+    expect(isDefaultEntryLocation(at('/', '?lab=product-workspace'), { labsAvailable: false })).toBe(true);
+    expect(isDefaultEntryLocation(at('/__lab/product-workspace'), { labsAvailable: false })).toBe(true);
+  });
+
+  it('keeps the classic print round trip ("Voltar ao editor") in the classic app', () => {
+    expect(resolveSignedInEntry({ location: at('/', `?catalog=${CATALOG_ID}&version=3`) }))
+      .toEqual({ kind: 'stay', reason: 'classic' });
+    expect(resolveSignedInEntry({ location: at('/', `?template=${CATALOG_ID}&version=1`) }))
+      .toEqual({ kind: 'stay', reason: 'classic' });
+    expect(sessionStorage.getItem(ROOT_REDIRECT_GUARD_STORAGE_KEY)).toBeNull();
   });
 
   it('refuses a second automatic redirect right after the first one (no loop)', () => {
@@ -129,6 +159,14 @@ describe('FR-01 App entry for a signed-in person', () => {
     expect(loadWorkspace).not.toHaveBeenCalled();
     expect(loadLatestCatalog).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: /Abrir editor de catálogos/ })).not.toBeInTheDocument();
+  });
+
+  it('opens /v2 from the old AI prototype address instead of the classic editor', async () => {
+    window.history.replaceState(null, '', '/ai-catalog-prototype.html');
+    render(<App />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/v2'));
+    expect(loadLatestCatalog).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Abrindo seus catálogos…');
   });
 
   it('keeps the classic app with ?classico=1 and offers the way back to the catalogs', async () => {

@@ -1,11 +1,11 @@
 import { consumeTrustedV2ReturnTarget } from './return-target';
 
 /**
- * Where a signed-in person goes from "/".
+ * Where a signed-in person goes from any address the old app serves ("/" and everything except /v2).
  *
  * Everyone lands on "Meus catálogos" (/v2). The classic editor is an administrator mode reached only
- * with "/?classico=1". A return target saved by /v2 (e.g. /v2?catalog=<id>) still wins, so deep links
- * keep working. If /v2 sends the person straight back here, the second automatic redirect is refused
+ * with "/?classico=1" (and its own print round trip). A return target saved by /v2
+ * (e.g. /v2?catalog=<id>) still wins, so deep links keep working. If /v2 sends the person straight back here, the second automatic redirect is refused
  * instead of looping.
  */
 export const CLASSIC_MODE_QUERY_PARAM = 'classico';
@@ -34,14 +34,47 @@ export function wantsClassicApp(search: string): boolean {
   return new URLSearchParams(search).get(CLASSIC_MODE_QUERY_PARAM) === '1';
 }
 
+/** Print pages open from the classic editor and keep their own screen. */
+function isPrintLocation(location: EntryLocation, params: URLSearchParams): boolean {
+  return location.pathname === '/print' || params.get('print') === '1';
+}
+
+/** Development labs only exist in the dev server; in production they are just another address. */
+function isLabLocation(location: EntryLocation, params: URLSearchParams): boolean {
+  return location.pathname.startsWith('/__lab/') || params.has('lab');
+}
+
 const ROOT_PATHS = new Set(['', '/', '/index.html']);
 
-/** Only the plain site address defaults to /v2; print, labs and other routes keep their own screens. */
-export function isDefaultEntryLocation(location: EntryLocation): boolean {
-  if (!ROOT_PATHS.has(location.pathname)) return false;
+/**
+ * "Voltar ao editor" on a classic print page returns to "/?catalog=…&version=…" (or template=…),
+ * an address only the classic editor creates (the new editor uses /v2?catalog=…).
+ */
+function isClassicPrintReturn(location: EntryLocation, params: URLSearchParams): boolean {
+  return ROOT_PATHS.has(location.pathname)
+    && (params.has('catalog') || params.has('template'))
+    && params.has('version');
+}
+
+function isClassicLocation(location: EntryLocation, params: URLSearchParams): boolean {
+  return params.get(CLASSIC_MODE_QUERY_PARAM) === '1' || isClassicPrintReturn(location, params);
+}
+
+export interface EntryLocationOptions {
+  /** Defaults to the dev server flag: labs never keep a signed-in person outside /v2 in production. */
+  readonly labsAvailable?: boolean;
+}
+
+/**
+ * Every address served by the old app opens "Meus catálogos" (/v2), including old links such as
+ * /ai-catalog-prototype.html or a mistyped path. Only print pages, development labs, the classic
+ * print round trip and "?classico=1" stay.
+ */
+export function isDefaultEntryLocation(location: EntryLocation, options: EntryLocationOptions = {}): boolean {
   const params = new URLSearchParams(location.search);
-  if (params.get('print') === '1' || params.has('lab')) return false;
-  return !wantsClassicApp(location.search);
+  if (isPrintLocation(location, params)) return false;
+  if ((options.labsAvailable ?? import.meta.env.DEV === true) && isLabLocation(location, params)) return false;
+  return !isClassicLocation(location, params);
 }
 
 function sessionStore(storage?: Storage): Storage | undefined {
@@ -82,7 +115,7 @@ export function clearRootRedirectGuard(storage?: Storage): void {
   }
 }
 
-export interface ResolveSignedInEntryOptions {
+export interface ResolveSignedInEntryOptions extends EntryLocationOptions {
   readonly location?: EntryLocation;
   readonly storage?: Storage;
   readonly now?: () => number;
@@ -94,9 +127,11 @@ export function resolveSignedInEntry(options: ResolveSignedInEntryOptions = {}):
   const storage = sessionStore(options.storage);
   const now = (options.now ?? Date.now)();
   const returnTarget = consumeTrustedV2ReturnTarget(storage);
-  const target = returnTarget ?? (isDefaultEntryLocation(location) ? DEFAULT_SIGNED_IN_TARGET : null);
+  const target = returnTarget ?? (isDefaultEntryLocation(location, options) ? DEFAULT_SIGNED_IN_TARGET : null);
   if (!target) {
-    return { kind: 'stay', reason: wantsClassicApp(location.search) ? 'classic' : 'other-route' };
+    const params = new URLSearchParams(location.search);
+    const classic = !isPrintLocation(location, params) && isClassicLocation(location, params);
+    return { kind: 'stay', reason: classic ? 'classic' : 'other-route' };
   }
   const previous = lastAutomaticRedirectAt(storage);
   if (previous !== undefined && now >= previous && now - previous < ROOT_REDIRECT_LOOP_WINDOW_MS) {
