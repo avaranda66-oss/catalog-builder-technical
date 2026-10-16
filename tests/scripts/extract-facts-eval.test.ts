@@ -82,6 +82,18 @@ describe('extraction spike: answer key comparison', () => {
     expect(judgeValue(value({ ...power, unit: 'Vdc 50/60 Hz' }), truth).verdict).toBe('WRONG');
   });
 
+  it('uses a hand check for a reading the key cannot place, matched on label, value and condition words', () => {
+    const checked = GroundTruthSchema.parse({ ...truth, adjudications: [{
+      sourceId: 'y17', page: 11, model: 'PCON-Y17', label: 'Accuracy', value: '0,16 mmHg / 0,2 mbar',
+      conditionIncludes: 'barometric', verdict: 'CORRECT', note: 'exatidão do opcional BR' }] });
+    const reading = { sourceId: 'y17', model: 'PCON-Y17', key: 'accuracy', label: 'Accuracy ', value: '0,16 mmHg / 0,2  mbar', unit: '',
+      page: 11, condition: 'BR - Barometric Reference' };
+    expect(judgeValue(value(reading), checked)).toMatchObject({ verdict: 'CORRECT', note: 'conferido à mão: exatidão do opcional BR' });
+    expect(judgeValue(value({ ...reading, condition: '' }), checked).note).not.toContain('conferido à mão');
+    expect(judgeValue(value({ ...reading, page: 10 }), checked).note).not.toContain('conferido à mão');
+    expect(truth.adjudications).toEqual([]);
+  });
+
   it('counts wrong verified values (the go/no-go number), caught errors and coverage', () => {
     const summary = summarizeAgainstTruth([
       value({}), value({ model: 'TA-35N', value: '200' }), value({ model: 'TA-35N', value: '300', status: 'UNVERIFIED' }),

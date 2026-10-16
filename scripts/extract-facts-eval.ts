@@ -110,6 +110,21 @@ export const GroundTruthSchema = z.object({
     /** Other complete readings of the same printed value ("25.4 x 124" for "Ø 25.4 mm (1”) x 124 mm"). */
     alsoAccept: z.array(z.string()).default([]),
   }).strict()).min(1),
+  /**
+   * Readings a person checked on the page image because the key cannot place
+   * them (a label printed twice for two things, a quantity split in two rows).
+   * Matched on file, page, model, label and value (and words of the condition).
+   */
+  adjudications: z.array(z.object({
+    sourceId,
+    page: z.number().int().min(1),
+    model: z.string().min(1),
+    label: z.string().min(1),
+    value: z.string().min(1),
+    conditionIncludes: z.string().optional(),
+    verdict: z.enum(['CORRECT', 'WRONG']),
+    note: z.string().min(1),
+  }).strict()).default([]),
 }).strict();
 export type GroundTruth = z.infer<typeof GroundTruthSchema>;
 
@@ -144,6 +159,11 @@ const signature = (text: string) => numericSignature(text).join(' ');
  * be checked by a person.
  */
 export function judgeValue(value: SourceFactValue, truth: GroundTruth): TruthJudgment {
+  const same = (a: string, b: string) => fold(a).replace(/\s+/gu, ' ').trim() === fold(b).replace(/\s+/gu, ' ').trim();
+  const checked = truth.adjudications.find(item => item.sourceId === value.sourceId && item.page === value.page &&
+    item.model === value.model && same(item.label, value.label) && same(item.value, value.value) &&
+    (!item.conditionIncludes || fold(value.condition).includes(fold(item.conditionIncludes))));
+  if (checked) return { value, verdict: checked.verdict, row: 'conferido-a-mao', note: `conferido à mão: ${checked.note}` };
   const source = truth.sources.find(item => item.sourceId === value.sourceId);
   if (!source) return { value, verdict: 'UNMATCHED', note: 'arquivo sem gabarito' };
   if (!source.models.includes(value.model)) return { value, verdict: 'UNMATCHED', note: 'modelo fora do gabarito' };

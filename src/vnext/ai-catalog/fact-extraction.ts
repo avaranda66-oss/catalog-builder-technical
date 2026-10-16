@@ -1,7 +1,11 @@
 import { z } from 'zod';
-import { FactProposalSchema, type Fact, type FactCandidate, type FactProposal, type ValueVerificationStatus } from './contracts';
-import type { FactVerificationReport } from './fact-verifier';
+import {
+  FactProposalSchema, type CandidateVerification, type Fact, type FactCandidate, type FactProposal, type ValueVerificationStatus,
+} from './contracts';
+import { verificationMessage, type FactVerificationReport, type PdfEvidenceSource } from './fact-verifier';
 import type { ExtractedPdf } from './pdf-intake';
+import { verificationPageText } from './pdf-layout-evidence';
+import { normalizeEvidenceWhitespace } from './pdf-literal-evidence';
 
 /**
  * Fact extraction contract for a model that reads PDFs (FR-66a spike, reused
@@ -61,6 +65,10 @@ export function withNormalizedSymbols(pdf: ExtractedPdf): ExtractedPdf {
  */
 export function cleanUnit(unit: string): string {
   return unit.replace(/\s*\*+$/u, '').trim();
+}
+/** A footnote's text without the mark that opens it ("(*) Temperatura Ambiente: 20ºC." -> "Temperatura Ambiente: 20ºC."). */
+export function cleanCondition(condition: string): string {
+  return condition.replace(/^(?:\(\*+\)|\*+)\s*/u, '').trim();
 }
 
 /** One file sent to the model, with the page range it must read. */
@@ -249,7 +257,7 @@ interface PendingRow { key: string; label: string; unit: string; condition: stri
  * several readings of one position become a conflict; absent positions are
  * "missing". Anything that cannot be represented is listed in `dropped`.
  * Texts go through `normalizeSymbolText` (so the evidence must too: verify
- * against `withNormalizedSymbols(pdf)`) and units lose footnote asterisks.
+ * against `withNormalizedSymbols(pdf)`); units and conditions lose footnote marks.
  */
 export function toFactProposal(answer: unknown, sources: readonly ExtractionSource[],
   options: { readonly models?: readonly string[]; readonly title?: string } = {}): NormalizedExtraction {
@@ -287,7 +295,7 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
       const groups = new Map<string, PendingRow>();
       for (const value of row.values) {
         const literal = oneLine(value.literal), quote = normalizeSymbolText(value.sourceRef.quote).trim();
-        const unit = cleanUnit(oneLine(value.unit)), condition = oneLine(value.condition);
+        const unit = cleanUnit(oneLine(value.unit)), condition = cleanCondition(oneLine(value.condition));
         const index = modelIndex(value.model);
         if (index < 0) { drop(sectionTitle, label, value.model, literal, 'MODEL_NOT_REQUESTED'); continue; }
         const source = value.sourceRef.file !== undefined ? byId.get(oneLine(value.sourceRef.file))
@@ -365,6 +373,51 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
   return { proposal, dropped, rowKeys };
 }
 
+/** The quote with `condition` taken out when the condition sits between the label and the value. */
+function quoteWithoutLeadingCondition(quote: string, value: string, condition: string): string | undefined {
+  const text = normalizeEvidenceWhitespace(quote), wanted = normalizeEvidenceWhitespace(condition);
+  if (!wanted) return undefined;
+  const at = text.indexOf(wanted), valueAt = text.indexOf(normalizeEvidenceWhitespace(value), at + wanted.length);
+  // Only a condition printed under the label: some label text before it, the value after it.
+  if (at <= 0 || valueAt < 0 || !/\p{L}/u.test(text.slice(0, at))) return undefined;
+  return normalizeEvidenceWhitespace(`${text.slice(0, at)} ${text.slice(at + wanted.length)}`);
+}
+/**
+ * A table label printed in two lines ("Operating Range" over "ambient
+ * temperature: 23 °C") reads label, values, note in the PDF text, but models
+ * quote it as they see it: label, note, values, which is nowhere in the text.
+ * When a quote is not on its page and its row's condition sits between the
+ * label and the value, the quote without that condition is used, but only if
+ * that shorter quote is on the page. Values, units and conditions never
+ * change, and the verifier still checks everything; a quote already on its
+ * page is never touched. Returns how many quotes were fitted.
+ */
+export function fitQuotesToPages(normalized: NormalizedExtraction, sources: readonly PdfEvidenceSource[]):
+  { readonly extraction: NormalizedExtraction; readonly fitted: number } {
+  const pages = new Map<string, string>();
+  for (const source of sources) for (const page of source.pages) {
+    pages.set(`${source.sourceId}\u0000${page.number}`, normalizeEvidenceWhitespace(verificationPageText(page)));
+  }
+  let fitted = 0;
+  const fit = (candidate: FactCandidate, condition: string): FactCandidate => {
+    const page = pages.get(`${candidate.source.sourceId}\u0000${candidate.source.page}`);
+    if (page === undefined || candidate.source.cell || page.includes(normalizeEvidenceWhitespace(candidate.source.quote))) return candidate;
+    const shorter = quoteWithoutLeadingCondition(candidate.source.quote, candidate.value, condition);
+    if (!shorter || !page.includes(shorter)) return candidate;
+    fitted++;
+    return { ...candidate, source: { ...candidate.source, quote: shorter } };
+  };
+  const proposal: FactProposal = {
+    ...normalized.proposal,
+    sections: normalized.proposal.sections.map(section => ({ ...section, rows: section.rows.map(row => ({
+      ...row,
+      values: row.values.map((fact): Fact => fact.status === 'known' ? { ...fact, candidate: fit(fact.candidate, row.condition) }
+        : fact.status === 'conflict' ? { ...fact, candidates: fact.candidates.map(item => fit(item, row.condition)) } : fact),
+    })) })),
+  };
+  return { extraction: { ...normalized, proposal: FactProposalSchema.parse(proposal) }, fitted };
+}
+
 /**
  * The figures of a value, for comparing readings of the same quantity: signs
  * kept ("-25", "±0.02"), a leading "+" dropped, decimal comma read as a point,
@@ -418,10 +471,29 @@ export interface SourceDivergence {
   readonly readings: readonly SourceFactValue[];
 }
 const HAS_EVIDENCE: ReadonlySet<string> = new Set(['VERIFIED_TEXT', 'VERIFIED_CELL', 'VISUAL_ONLY']);
+const ALTERNATIVE = /\s(?:ou|or)\s.*$/su;
+/**
+ * The figures of a value split in two: the main ones, and those of what one
+ * file adds and the other may leave out (a bracket such as "(0,01 ºF)" or
+ * "(25 °C to 140 °C)", an alternative after "ou"/"or").
+ */
+function valueFigures(text: string): { readonly main: string; readonly extra: string } {
+  const extras: string[] = [];
+  const main = text.replace(/\([^()]*\)/gu, group => { extras.push(group); return ' '; })
+    .replace(ALTERNATIVE, rest => { extras.push(rest); return ''; });
+  return { main: numericSignature(main).join(' '), extra: numericSignature(extras.join(' ')).join(' ') };
+}
+/** Two readings disagree when their main figures differ, or when both add figures and those differ. */
+function figuresDiffer(a: string, b: string): boolean {
+  const left = valueFigures(a), right = valueFigures(b);
+  return left.main !== right.main || (left.extra !== '' && right.extra !== '' && left.extra !== right.extra);
+}
 /**
  * Finds the places where the files disagree, so nothing is chosen in silence.
  * Only readings with evidence in their own file count (verified or to be
  * checked on the page); unsupported readings are noise, not a divergence.
+ * What only one file adds ("0,01 ºC (0,01 ºF)" next to "0.01 °C", "10 min
+ * (25 °C to 140 °C)" next to "10" with that condition) is not a divergence.
  */
 export function findSourceDivergences(values: readonly SourceFactValue[]): SourceDivergence[] {
   const groups = new Map<string, SourceFactValue[]>();
@@ -433,10 +505,11 @@ export function findSourceDivergences(values: readonly SourceFactValue[]): Sourc
   const found: SourceDivergence[] = [];
   for (const readings of groups.values()) {
     if (new Set(readings.map(item => item.sourceId)).size < 2) continue;
-    const signature = (item: SourceFactValue) => numericSignature(item.value).join(' ');
     const conditionSignature = (item: SourceFactValue) => numericSignature(item.condition).join(' ');
     const { model, key } = readings[0];
-    if (new Set(readings.map(signature)).size > 1) found.push({ model, key, field: 'value', readings });
+    const differ = readings.some((item, index) => readings.slice(index + 1)
+      .some(other => other.sourceId !== item.sourceId && figuresDiffer(item.value, other.value)));
+    if (differ) found.push({ model, key, field: 'value', readings });
     // Checked even when the figures differ too: "até 155 °C a 23 °C" x "até 140 °C a 20 °C" are two differences.
     const withCondition = readings.filter(item => conditionSignature(item));
     if (new Set(withCondition.map(item => item.sourceId)).size > 1 && new Set(withCondition.map(conditionSignature)).size > 1) {
@@ -447,38 +520,31 @@ export function findSourceDivergences(values: readonly SourceFactValue[]): Sourc
 }
 
 /**
- * A proposal in which every value divergence is a conflict between the files,
- * for the verifier to report as "As fontes divergem: ...". Readings are taken
- * as they are; the verifier decides again what each file supports.
+ * The plain-Portuguese message for one divergence, in the verifier's own
+ * words ("As fontes divergem: ... Escolha o valor certo."). Each reading keeps
+ * the status it got in its own file, with its own label and language: the
+ * readings are never verified again under one row, because "Faixa de
+ * Operação" is not on the English folder and "ambient temperature: 23 °C" is
+ * not on the Portuguese manual. A reading shows its unit and its condition,
+ * so a value divergence and a condition divergence read as one choice.
  */
-export function divergenceProposal(divergences: readonly SourceDivergence[], sources: readonly ExtractionSource[],
-  title: string): FactProposal | undefined {
-  const byId = new Map(sources.map(source => [source.sourceId, source]));
-  const rows = divergences.filter(item => item.field === 'value').flatMap(item => {
-    const candidates: FactCandidate[] = [];
-    for (const reading of item.readings) {
-      if (candidates.some(candidate => candidate.value === reading.value) || candidates.length >= MAX_CANDIDATES) continue;
-      const sha256 = byId.get(reading.sourceId)?.sha256;
-      candidates.push({ value: reading.value, source: {
-        sourceId: reading.sourceId, page: reading.page, quote: reading.quote, ...(sha256 ? { sha256 } : {}),
-      } });
-    }
-    if (candidates.length < 2) return [];
-    const first = item.readings[0];
-    return [{ model: item.model, row: { label: first.label, unit: first.unit, condition: first.condition, key: item.key }, candidates }];
+export function divergenceMessage(divergence: SourceDivergence, sourceNames: ReadonlyMap<string, string>): string {
+  const shown = (reading: SourceFactValue) => {
+    const unit = reading.unit && !reading.value.includes(reading.unit) ? ` ${reading.unit}` : '';
+    return `${reading.value}${unit}${reading.condition ? ` (${reading.condition})` : ''}`;
+  };
+  const seen = new Set<string>();
+  const candidates = divergence.readings.flatMap(reading => {
+    const text = shown(reading), id = `${reading.sourceId}\u0000${text}`;
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return [{ value: text, status: reading.status as CandidateVerification,
+      source: { sourceId: reading.sourceId, page: reading.page, quote: reading.quote } }];
   });
-  if (!rows.length) return undefined;
-  const models = [...new Set(rows.map(item => item.model))].slice(0, MAX_MODELS);
-  const ids = new Set<string>();
-  const proposalRows = rows.filter(item => models.includes(item.model)).slice(0, MAX_ROWS).map(item => ({
-    id: uniqueId(`${item.row.key}-${item.model}`, ids, 'linha'), label: item.row.label, unit: item.row.unit,
-    condition: item.row.condition,
-    values: models.map((model): Fact => model === item.model
-      ? { status: 'conflict', candidates: item.candidates }
-      : { status: 'missing', reason: 'Sem divergência para este modelo.' }),
-  }));
-  return FactProposalSchema.parse({
-    version: 1, title: oneLine(title).slice(0, MAX_NAME) || 'Divergências', models,
-    sections: [{ id: 'divergencias', title: 'Divergências entre arquivos', rows: proposalRows }],
-  });
+  const first = divergence.readings[0];
+  return verificationMessage({
+    id: `${divergence.model}/${divergence.key}`, sectionId: 'divergencias', sectionTitle: 'Divergências entre arquivos',
+    rowId: divergence.key, label: first.label, unit: first.unit, condition: first.condition,
+    modelIndex: 0, model: divergence.model, status: 'CONFLICT', candidates,
+  }, sourceNames);
 }

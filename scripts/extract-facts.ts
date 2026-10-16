@@ -20,8 +20,8 @@ import { performance } from 'node:perf_hooks';
 import { extractPdfText, type ExtractedPdf } from '../src/vnext/ai-catalog/pdf-intake';
 import { pdfEvidenceSource, verificationMessage, verifyFactProposal, type FactVerificationReport } from '../src/vnext/ai-catalog/fact-verifier';
 import {
-  FACT_EXTRACTION_PROMPT_VERSION, buildFactExtractionPrompt, divergenceProposal, factSheetResponseSchema,
-  findSourceDivergences, sourceFactValues, toFactProposal, withNormalizedSymbols,
+  FACT_EXTRACTION_PROMPT_VERSION, buildFactExtractionPrompt, divergenceMessage, factSheetResponseSchema,
+  findSourceDivergences, fitQuotesToPages, sourceFactValues, toFactProposal, withNormalizedSymbols,
   type ExtractionSource, type SourceDivergence, type SourceFactValue,
 } from '../src/vnext/ai-catalog/fact-extraction';
 import {
@@ -221,6 +221,8 @@ interface RunResult {
   readonly costUsd?: number;
   readonly counts?: FactVerificationReport['counts'];
   readonly dropped?: Readonly<Record<string, number>>;
+  /** Quotes that read label, note, values and were fitted to the page text (label, values). */
+  readonly fittedQuotes?: number;
   readonly truth?: TruthSummary;
   readonly values?: readonly (SourceFactValue & { readonly message: string })[];
 }
@@ -236,7 +238,8 @@ const results: RunResult[] = records.map(record => {
   }
   const source = bySource.get(record.sourceId)!;
   try {
-    const normalized = toFactProposal(JSON.parse(record.text), [source.info], { models: source.models });
+    const { extraction: normalized, fitted } = fitQuotesToPages(
+      toFactProposal(JSON.parse(record.text), [source.info], { models: source.models }), [evidence.get(record.sourceId)!]);
     const report = verifyFactProposal(normalized.proposal, [evidence.get(record.sourceId)!]);
     const values = sourceFactValues(normalized, report);
     const messages = new Map(report.values.map(value => [`${value.model}\u0000${value.label}\u0000${value.candidates[value.selected ?? 0]?.value}`,
@@ -244,7 +247,7 @@ const results: RunResult[] = records.map(record => {
     const dropped: Record<string, number> = {};
     for (const item of normalized.dropped) dropped[item.reason] = (dropped[item.reason] ?? 0) + 1;
     return {
-      ...common, ok: true, counts: report.counts, dropped,
+      ...common, ok: true, counts: report.counts, dropped, fittedQuotes: fitted,
       ...(truth ? { truth: summarizeAgainstTruth(values, truth, [record.sourceId]) } : {}),
       values: values.map(value => ({ ...value, message: messages.get(`${value.model}\u0000${value.label}\u0000${value.value}`) ?? '' })),
     };
@@ -266,11 +269,15 @@ for (const llm of llms) for (let run = 1; run <= plan.runs; run++) {
   const runResults = results.filter(item => item.llm === llm.id && item.run === run && item.ok);
   if (runResults.length < 2) continue;
   const divergences = findSourceDivergences(runResults.flatMap(item => item.values ?? []));
-  const proposal = divergenceProposal(divergences, sources.map(item => item.info), 'Divergências');
-  const conflictMessages = proposal
-    ? verifyFactProposal(proposal, [...evidence.values()]).values.filter(value => value.status !== 'MISSING')
-      .map(value => `${value.model} · ${value.label}: [${value.status}] ${verificationMessage(value, new Map(sources.map(item => [item.info.sourceId, item.info.fileName])))}`)
-    : [];
+  // One message per model and quantity: a value divergence already shows each file's condition.
+  const names = new Map(sources.map(item => [item.info.sourceId, item.info.fileName]));
+  const byQuantity = new Map<string, SourceDivergence>();
+  for (const item of divergences) {
+    const id = `${item.model}/${item.key}`;
+    if (!byQuantity.has(id) || item.field === 'value') byQuantity.set(id, item);
+  }
+  const conflictMessages = [...byQuantity.values()]
+    .map(item => `${item.model} · ${item.readings[0].label.replace(/:$/u, '')}: ${divergenceMessage(item, names)}`);
   divergenceResults.push({ llm: llm.id, run, divergences, conflictMessages,
     known: plan.knownDivergences.map(item => ({ ...item, found: divergences.some(found => found.model === item.model && found.key === item.key) })) });
 }
@@ -289,7 +296,7 @@ const perLlm = llms.map(llm => {
     msMax: ok.length ? Math.max(...ok.map(item => item.ms ?? 0)) : undefined,
     inputTokens: total(list, item => item.usage?.promptTokenCount), outputTokens: total(list, item => item.usage?.candidatesTokenCount),
     thoughtTokens: total(list, item => item.usage?.thoughtsTokenCount), costUsd: Number(total(list, item => item.costUsd).toFixed(5)),
-    counts,
+    counts, fittedQuotes: total(ok, item => item.fittedQuotes),
     wrongVerified: total(ok, item => item.truth?.wrongVerified.length),
     unmatchedVerified: total(ok, item => item.truth?.unmatchedVerified.length),
     wrongCaught: total(ok, item => item.truth?.wrongCaught.length),

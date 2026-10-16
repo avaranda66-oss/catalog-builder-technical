@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { FactProposalSchema } from '../../../src/vnext/ai-catalog/contracts';
 import {
-  FACT_EXTRACTION_PROMPT_VERSION, MISSING_VALUE_REASON, buildFactExtractionPrompt, cleanUnit, divergenceProposal,
+  FACT_EXTRACTION_PROMPT_VERSION, MISSING_VALUE_REASON, buildFactExtractionPrompt, cleanCondition, cleanUnit, divergenceMessage,
   factSheetResponseSchema, factSlug, findSourceDivergences, normalizeSymbolText, numericSignature, sourceFactValues,
-  toFactProposal, withNormalizedSymbols,
+  fitQuotesToPages, toFactProposal, withNormalizedSymbols,
   type ExtractionSource, type SourceFactValue,
 } from '../../../src/vnext/ai-catalog/fact-extraction';
 import {
-  pdfEvidenceSource, verificationMessage, verifyFactProposal, type PdfEvidenceSource,
+  pdfEvidenceSource, verifyFactProposal, type PdfEvidenceSource,
 } from '../../../src/vnext/ai-catalog/fact-verifier';
 import type { ExtractedPdf } from '../../../src/vnext/ai-catalog/pdf-intake';
 
@@ -196,6 +196,9 @@ describe('Symbol-font signs and footnote marks (PRESYS TA manual)', () => {
     expect(cleanUnit('% FS **')).toBe('% FS');
     expect(cleanUnit('m²')).toBe('m²');
     expect(cleanUnit('')).toBe('');
+    expect(cleanCondition('(*) Temperatura Ambiente: 20ºC.')).toBe('Temperatura Ambiente: 20ºC.');
+    expect(cleanCondition('** using 2 σ method')).toBe('using 2 σ method');
+    expect(cleanCondition('(25 a 140 °C)')).toBe('(25 a 140 °C)');
   });
 
   it('verifies "± 0,1" on the manual page only when the page text is normalized the same way', () => {
@@ -213,7 +216,7 @@ describe('Symbol-font signs and footnote marks (PRESYS TA manual)', () => {
     ] }] }, [MANUAL], { models: ['TA-25N'] });
     const [accuracy, range] = normalized.proposal.sections[0].rows;
     expect(accuracy.values[0].status === 'known' && accuracy.values[0].candidate.value).toBe('± 0,1');
-    expect(range.unit).toBe('°C');
+    expect([range.unit, range.condition]).toEqual(['°C', 'Temperatura Ambiente: 20ºC.']);
     const verified = verifyFactProposal(normalized.proposal, [pdfEvidenceSource('ta-manual-pt', withNormalizedSymbols(read))]);
     expect(verified.values.map(item => item.status)).toEqual(['VERIFIED_TEXT', 'VERIFIED_TEXT']);
     // Without the same normalization the quote is not on the page: never verified by accident.
@@ -250,6 +253,21 @@ describe('findSourceDivergences: files that disagree are never resolved in silen
       ['TA-25N', 'operating-range', 'value'], ['TA-25N', 'operating-range', 'condition']]);
   });
 
+  it('ignores what only one file adds (a bracket, an "ou" alternative) but not a lost sign or other added figures', () => {
+    const manual = (overrides: Partial<SourceFactValue>) => reading({ sourceId: 'ta-manual-pt', condition: '', page: 5, ...overrides });
+    expect(findSourceDivergences([
+      reading({ key: 'resolution', value: '0.01', condition: '' }), manual({ key: 'resolution', value: '0,01 ºC (0,01 ºF)' }),
+      reading({ key: 'heating-time', value: '10 min (25 °C to 140 °C)', condition: '' }),
+      manual({ key: 'heating-time', value: '10', condition: '25 a 140 °C' }),
+    ])).toEqual([]);
+    const found = findSourceDivergences([
+      reading({ key: 'stability', value: '± 0.02', condition: '' }), manual({ key: 'stability', value: '0,02 ºC ou 0,04 ºF' }),
+      reading({ key: 'cooling-time', value: '11 min (25 °C to -25 °C)', condition: '' }),
+      manual({ key: 'cooling-time', value: '11 min (25 a -35 °C)' }),
+    ]);
+    expect(found.map(item => [item.key, item.field])).toEqual([['stability', 'value'], ['cooling-time', 'value']]);
+  });
+
   it('ignores the same figures written in another language, a single file and unsupported readings', () => {
     expect(findSourceDivergences([
       reading({ key: 'weight', value: '10.5', condition: '' }),
@@ -269,7 +287,6 @@ const pdf = (source: ExtractionSource, pages: Record<number, string>): PdfEviden
 
 describe('extraction + verifier on a single-product page', () => {
   const folderText = 'Technical Specifications TA-25N\nOperating Range -25 °C to +155 °C\nElectric Power: 200 W\nWeight: 10.5 kg';
-  const manualText = 'Especificações Técnicas TA-25N\nFaixa de Operação -25 a 140 °C\nPotência Elétrica 200 W';
 
   it('verifies what the page prints and stops a wrong figure', () => {
     const normalized = toFactProposal(sheet([
@@ -283,20 +300,59 @@ describe('extraction + verifier on a single-product page', () => {
       ['electric-power', '200', 'VERIFIED_TEXT'], ['weight', '12.5', 'UNVERIFIED']]);
   });
 
-  it('shows a divergence between two files as a conflict the person must decide', () => {
-    const divergences = findSourceDivergences([
-      reading({ quote: 'Operating Range -25 °C to +155 °C', condition: '' }),
-      reading({ sourceId: 'ta-manual-pt', label: 'Faixa de Operação', value: '-25 a 140', condition: '', page: 5,
-        quote: 'Faixa de Operação -25 a 140 °C' }),
-    ]);
-    const proposal = divergenceProposal(divergences, [FOLDER, MANUAL], 'TA-25N');
-    expect(proposal?.sections[0].rows[0].values[0].status).toBe('conflict');
-    const report = verifyFactProposal(proposal, [pdf(FOLDER, { 9: folderText }), pdf(MANUAL, { 5: manualText })]);
-    expect(report.values[0].status).toBe('CONFLICT');
-    const message = verificationMessage(report.values[0], report.sourceNames);
-    expect(message).toContain('As fontes divergem');
-    expect(message).toContain('presys-ta-folder.pdf');
-    expect(message).toContain('manual-ta.pdf');
-    expect(divergenceProposal([], [FOLDER], 'x')).toBeUndefined();
+  it('reads each file in its own language and shows the divergence as one choice for the person', () => {
+    const folderPage = 'Technical Specifications TA-25N\nOperating Range -25 °C to +155 °C\nambient temperature: 23 °C';
+    const manualPage = 'Especificações Técnicas TA-25N\nFaixa de Operação -25 a 140 °C*\n(*) Temperatura Ambiente: 20ºC.';
+    const read = (source: ExtractionSource, label: string, literal: string, condition: string, page: number, quote: string, text: string) => {
+      const normalized = toFactProposal(sheet([{ key: 'operating-range', label, values: [
+        { model: 'TA-25N', literal, unit: '°C', condition, page, quote }] }], ['TA-25N']), [source], { models: ['TA-25N'] });
+      return sourceFactValues(normalized, verifyFactProposal(normalized.proposal, [pdf(source, { [page]: text })]));
+    };
+    const values = [
+      ...read(FOLDER, 'Operating Range', '-25 °C to +155 °C', 'ambient temperature: 23 °C', 9, 'Operating Range -25 °C to +155 °C', folderPage),
+      ...read(MANUAL, 'Faixa de Operação', '-25 a 140', 'Temperatura Ambiente: 20ºC.', 5, 'Faixa de Operação -25 a 140 °C*', manualPage),
+    ];
+    expect(values.map(item => item.status)).toEqual(['VERIFIED_TEXT', 'VERIFIED_TEXT']);
+    const divergences = findSourceDivergences(values);
+    expect(divergences.map(item => item.field)).toEqual(['value', 'condition']);
+    const names = new Map([[FOLDER.sourceId, FOLDER.fileName], [MANUAL.sourceId, MANUAL.fileName]]);
+    expect(divergenceMessage(divergences[0], names)).toBe('As fontes divergem: ' +
+      '-25 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder.pdf; ' +
+      '-25 a 140 °C (Temperatura Ambiente: 20ºC.) na página 5 de manual-ta.pdf. Escolha o valor certo.');
+  });
+});
+
+describe('fitQuotesToPages: a two-line label quoted as the model sees it', () => {
+  // The folder prints "Operating Range" over "ambient temperature: 23 °C"; its text reads label, values, note.
+  const folderPage = 'Models TA-25N TA-35N TA-50N\nOperating Range\n-25 °C to +155 °C -35 °C to +155 °C -50 °C to +155 °C\n' +
+    'ambient temperature: 23 °C\nElectric Power: 200 W 300 W 400 W';
+  const range = (quote: string, condition = 'ambient temperature: 23 °C') => sheet([{ key: 'operating-range', label: 'Operating Range',
+    values: [{ model: 'TA-25N', literal: '-25 °C to +155 °C', condition, quote }] }]);
+  const evidence = pdf(FOLDER, { 9: folderPage });
+
+  it('takes the note out of a quote that is not on the page, when the shorter quote is', () => {
+    const normalized = toFactProposal(range('Operating Range\nambient temperature: 23 °C\n-25 °C to +155 °C -35 °C to +155 °C'),
+      [FOLDER], { models: TA });
+    const { extraction, fitted } = fitQuotesToPages(normalized, [evidence]);
+    expect(fitted).toBe(1);
+    const fact = extraction.proposal.sections[0].rows[0].values[0];
+    expect(fact.status === 'known' && fact.candidate.source.quote).toBe('Operating Range -25 °C to +155 °C -35 °C to +155 °C');
+    expect(fact.status === 'known' && fact.candidate.value).toBe('-25 °C to +155 °C');
+    expect(extraction.proposal.sections[0].rows[0].condition).toBe('ambient temperature: 23 °C');
+    const before = verifyFactProposal(normalized.proposal, [evidence]).values[0];
+    expect(before.candidates[0].reason).toBe('QUOTE_NOT_ON_PAGE');
+    expect(verifyFactProposal(extraction.proposal, [evidence]).values[0].candidates[0].reason).not.toBe('QUOTE_NOT_ON_PAGE');
+  });
+
+  it('never touches a quote on the page, a note after the value or a shorter quote that is not on the page either', () => {
+    const onPage = toFactProposal(range('Operating Range -25 °C to +155 °C'), [FOLDER], { models: TA });
+    expect(fitQuotesToPages(onPage, [evidence]).fitted).toBe(0);
+    const after = toFactProposal(range('Operating Range -25 °C to +155 °C ambient temperature: 23 °C (x)'), [FOLDER], { models: TA });
+    expect(fitQuotesToPages(after, [evidence]).fitted).toBe(0);
+    const elsewhere = toFactProposal(range('Operating Ranges ambient temperature: 23 °C -25 °C to +155 °C'), [FOLDER], { models: TA });
+    const result = fitQuotesToPages(elsewhere, [evidence]);
+    expect(result.fitted).toBe(0);
+    expect(result.extraction).toEqual(elsewhere);
+    expect(fitQuotesToPages(onPage, []).fitted).toBe(0);
   });
 });
