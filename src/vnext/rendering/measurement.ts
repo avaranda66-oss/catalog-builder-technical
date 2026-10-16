@@ -92,7 +92,7 @@ interface Bounds {xQ:number;yQ:number;widthQ:number;heightQ:number}
 type Identity={pageId:string};
 export type PhysicalLayoutFact=
  | ({kind:'page';authoredWidthU:number;authoredHeightU:number;widthQ:number;heightQ:number}&Identity)
- | ({kind:'object';objectId:string;authoredXU:number;authoredYU:number;authoredWidthU:number;authoredHeightU:number;textFlowSignature?:string}&Bounds&Identity)
+ | ({kind:'object';objectId:string;authoredXU:number;authoredYU:number;authoredWidthU:number;authoredHeightU:number;textFlowSignature?:string;intrinsicContentWidthQ?:number;intrinsicContentHeightQ?:number}&Bounds&Identity)
  | ({kind:'table';objectId:string;tableId:string;frameWidthU:number;columnWidthsU:number[];frameQ:number;trackQ:number[];gridOffsetYQ?:number;renderedIntrinsicHeightQ:number}&Identity)
  | ({kind:'row';tableId:string;rowId:string;resolvedHeightU:number;yQ:number;heightQ:number}&Identity)
  | ({kind:'cell';tableId:string;cellId:string;intrinsicContentWidthQ:number;intrinsicContentHeightQ:number;textFlowSignature?:string}&Bounds&Identity)
@@ -136,8 +136,12 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
       const node=findElement(element,'data-object-id',object.id),b=bounds(node,rect);
       const {xU:authoredXU,yU:authoredYU,widthU:authoredWidthU,heightU:authoredHeightU}=entry.resolvedFrameU;
       const location={pageId:page.id,objectId:object.id};
-      const textFlowSignature=object.type==='text'?await sha256(JSON.stringify(textFlowRecords(node.querySelector<HTMLElement>('[data-flow-root]')!,object.text))):undefined;
-      facts.push({kind:'object',...location,authoredXU,authoredYU,authoredWidthU,authoredHeightU,...b,...(textFlowSignature?{textFlowSignature}:{})});
+      // Text boxes also record the measured size of their text (the same measure as TEXT_OBJECT_OVERFLOW), so the
+      // editor can fit the box height to it (FR-15) without a second measuring pass.
+      const textMetrics=object.type==='text'?intrinsicMetrics(node.querySelector<HTMLElement>('[data-flow-root]')!,object.text):undefined;
+      const textFlowSignature=textMetrics?await sha256(JSON.stringify(textMetrics.records)):undefined;
+      facts.push({kind:'object',...location,authoredXU,authoredYU,authoredWidthU,authoredHeightU,...b,
+        ...(textMetrics&&textFlowSignature?{textFlowSignature,intrinsicContentWidthQ:textMetrics.widthQ,intrinsicContentHeightQ:textMetrics.heightQ}:{})});
       check(b.xQ,uToQ(authoredXU),'object x',location);check(b.yQ,uToQ(authoredYU),'object y',location);
       check(b.widthQ,uToQ(authoredWidthU),'object width',location);check(b.heightQ,uToQ(authoredHeightU),'object height',location);
       if(object.type!=='table')continue;

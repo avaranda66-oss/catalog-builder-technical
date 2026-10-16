@@ -363,18 +363,20 @@ describe('FR-92 TableInspectorPanel', () => {
 });
 
 describe('FR-92 TextInspectorSection', () => {
-  it('adds nothing visible yet: it only reserves the text place of the side panel', () => {
+  // The place reserved by the costura is now filled by the 2B "Básico" block (FR-14/15, tested in text-inspector-section).
+  it('fills the text place of the side panel with the "Básico" block', () => {
     const document = createW4BTableDocument();
     const session = createDocumentSession(document, { createId: () => 'id' });
     const text: TextObject = {
       id: 'text-1', type: 'text', frame: { xMm: 10, yMm: 10, widthMm: 50, heightMm: 10 }, zIndex: 0,
       text: plainRichText('text-1-content', 'TA-25N'), style: {},
     };
-    const { container } = render(
+    render(
       <TextInspectorSection object={text} simple disabled={false} session={session} measurement={null}
         prepare={() => true} onMessage={vi.fn()} />
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole('region', { name: 'Básico' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ajustar altura ao texto' })).toBeDisabled();
   });
 });
 
