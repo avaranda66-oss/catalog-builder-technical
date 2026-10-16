@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FactProposalSchema } from '../../../src/vnext/ai-catalog/contracts';
 import {
   FACT_EXTRACTION_PROMPT_VERSION, MISSING_VALUE_REASON, buildFactExtractionPrompt, cleanCondition, cleanUnit, divergenceMessage,
-  factSheetResponseSchema, factSlug, findSourceDivergences, normalizeSymbolText, numericSignature, sourceFactValues,
+  factSheetResponseSchema, factSlug, findSourceDivergences, literalHasUnit, normalizeSymbolText, numericSignature, sourceFactValues,
   fitQuotesToPages, toFactProposal, withNormalizedSymbols,
   type ExtractionSource, type SourceFactValue,
 } from '../../../src/vnext/ai-catalog/fact-extraction';
@@ -106,6 +106,47 @@ describe('toFactProposal: the model answer becomes an untrusted FactProposal', (
     expect(rows.map(row => [row.id, row.condition])).toEqual([['cooling-time', '25 °C to -25 °C'], ['cooling-time-2', '25 °C to -35 °C']]);
     expect(rows[0].values.map(fact => fact.status)).toEqual(['known', 'missing', 'missing']);
     expect(rowKeys['technical-specifications/cooling-time-2']).toBe('cooling-time');
+  });
+
+  it('keeps a reading whose literal already prints the unit in the row of that unit, literal untouched', () => {
+    const quote = 'Dimension (HxWxD): 260 x 200 x 305 mm 315 x 200 x 305 mm';
+    const { proposal } = toFactProposal(sheet([{ key: 'dimensions', label: 'Dimension (HxWxD):', values: [
+      { model: 'TA-25N', literal: '260 x 200 x 305 mm', unit: 'mm', quote },
+      { model: 'TA-35N', literal: '315 x 200 x 305 mm', unit: '', quote },
+      { model: 'TA-50N', literal: '315 x 200 x 305', quote },
+    ] }]), [FOLDER], { models: TA });
+    const rows = proposal.sections[0].rows;
+    expect(rows.map(row => row.unit)).toEqual(['mm', '']);
+    expect(rows[0].values.map(fact => fact.status === 'known' ? fact.candidate.value : fact.status))
+      .toEqual(['260 x 200 x 305 mm', '315 x 200 x 305 mm', 'missing']);
+    expect(rows[1].values.map(fact => fact.status)).toEqual(['missing', 'missing', 'known']);
+  });
+
+  it('reads a unit in a literal only as a whole word, and merges only under one unit and the same condition', () => {
+    expect(literalHasUnit('260 x 200 x 305 mm', 'mm')).toBe(true);
+    expect(literalHasUnit('11 min (25 °C to -25 °C)', 'min')).toBe(true);
+    expect(literalHasUnit('14kg', 'kg')).toBe(true);
+    expect(literalHasUnit('305 mm', 'm')).toBe(false);
+    expect(literalHasUnit('2 m²', 'm')).toBe(false);
+    expect(literalHasUnit('200', 'W')).toBe(false);
+    expect(literalHasUnit('200 W', '')).toBe(false);
+    const { proposal } = toFactProposal(sheet([{ key: 'cooling-time', label: 'Cooling Time', values: [
+      { model: 'TA-25N', literal: '11 min', unit: 'min', condition: '25 °C to -25 °C' },
+      { model: 'TA-35N', literal: '16 min', unit: '', condition: '25 °C to -35 °C' },
+    ] }]), [FOLDER], { models: TA });
+    expect(proposal.sections[0].rows.map(row => [row.unit, row.condition]))
+      .toEqual([['min', '25 °C to -25 °C'], ['', '25 °C to -35 °C']]);
+  });
+
+  it('falls back to plain titles when the model writes a control character in a title, and keeps the values', () => {
+    const answer = { title: 'TA\u0007', models: TA, sections: [{ title: 'Technical\u0007 Specifications', rows: [
+      { key: 'weight', label: 'Weight', values: [value({ model: 'TA-25N', literal: '10.5', unit: 'kg' })] }] }] };
+    const { proposal, dropped } = toFactProposal(answer, [FOLDER], { models: TA });
+    expect(dropped).toEqual([]);
+    expect(proposal.title).toBe('TA-25N / TA-35N / TA-50N');
+    expect(proposal.sections[0].title).toBe('Especificações');
+    expect(proposal.sections[0].rows[0].values[0].status).toBe('known');
+    expect(toFactProposal(answer, [FOLDER], { models: TA, title: 'Banhos TA' }).proposal.title).toBe('Banhos TA');
   });
 
   it('turns two different readings of one position into a conflict and repeats into one value', () => {

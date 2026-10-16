@@ -27,6 +27,15 @@ export const FACT_EXTRACTION_PROMPT_VERSION = 'fr66a-2026-10-15.2';
  * Unicode private use area: the PRESYS TA manual prints "±" as U+F0B1 and "°"
  * as U+F0B0. Copied as they are, they reach the catalog as boxes ("□ 0,1 ºC").
  * Adobe Symbol encoding, only the signs that occur in specifications.
+ *
+ * Limit: the mapping does not look at the font. Wingdings and Wingdings 2 use
+ * the same private use range for bullets and pictograms (U+F0B7, U+F06D and
+ * U+F057 are not signs there), and pdf-intake runs carry no font name today.
+ * In the TA manual every mapped character comes from the Symbol font (the
+ * Wingdings 2 marks of p. 32, U+F050 and U+F04F, are not mapped), so the spike
+ * is safe; a mapped pictogram could only fail to match. Before this moves into
+ * pdf-intake, where it would change catalog text, it must be limited to text
+ * runs whose pdf.js font name contains "Symbol".
  */
 const SYMBOL_FONT_CHARACTERS: Readonly<Record<string, string>> = {
   '': '±', '': '°', '': '×', '': '÷', '': '≤', '': '≥', '': '≠', '': '≈',
@@ -229,6 +238,27 @@ const oneLine = (value: string | undefined) => normalizeSymbolText(value ?? '').
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
 const validText = (value: string, max: number) => value.length <= max && !CONTROL.test(value);
+/** A one-line name of at most MAX_NAME characters, or `fallback` when it is empty or holds a control character. */
+const safeName = (value: string | undefined, fallback: string) => {
+  const clean = oneLine(value).slice(0, MAX_NAME).trim();
+  return clean && validText(clean, MAX_NAME) ? clean : fallback;
+};
+/**
+ * True when the literal already prints its unit as a whole word ("260 x 200 x
+ * 305 mm" with "mm", "11 min (25 °C to -25 °C)" with "min"), so whoever shows
+ * the value must show the unit once and never edit the literal. A figure may
+ * touch the unit ("14kg"); a letter may not ("305 mm" does not hold "m"), and
+ * no letter or figure may follow it ("m²" does not hold "m").
+ */
+export function literalHasUnit(literal: string, unit: string): boolean {
+  const wanted = unit.trim();
+  if (!wanted) return false;
+  for (let at = literal.indexOf(wanted); at >= 0; at = literal.indexOf(wanted, at + 1)) {
+    const before = literal[at - 1] ?? '', after = literal[at + wanted.length] ?? '';
+    if (!/\p{L}/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
+  }
+  return false;
+}
 /** Lowercase a-z0-9 slug with hyphens, at most `max` characters ("Exatidão do Display" -> "exatidao-do-display"). */
 export function factSlug(value: string, max = 36): string {
   return value.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[^a-z0-9]+/gu, '-')
@@ -253,9 +283,12 @@ interface PendingRow { key: string; label: string; unit: string; condition: stri
  * Turns the model's ProductFactSheet into a FactProposal (one value position
  * per model and row) without judging any value: sources, sha256 and page
  * bounds come from the files themselves; values with a different unit or
- * condition become rows of their own (the proposal has one unit per row);
+ * condition become rows of their own (the proposal has one unit per row),
+ * except a reading without a unit whose literal already prints the row's unit;
  * several readings of one position become a conflict; absent positions are
  * "missing". Anything that cannot be represented is listed in `dropped`.
+ * A section or file title the model wrote with a control character falls back
+ * to "Especificações" or to the model names; it never discards the answer.
  * Texts go through `normalizeSymbolText` (so the evidence must too: verify
  * against `withNormalizedSymbols(pdf)`); units and conditions lose footnote marks.
  */
@@ -288,11 +321,11 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
 
   const sections: { title: string; rows: PendingRow[] }[] = [];
   for (const section of sheet.sections) {
-    const sectionTitle = oneLine(section.title) || 'Especificações';
+    const sectionTitle = safeName(section.title, 'Especificações');
     const rows: PendingRow[] = [];
     for (const row of section.rows) {
       const label = oneLine(row.label) || oneLine(row.key);
-      const groups = new Map<string, PendingRow>();
+      const accepted: { index: number; model: string; unit: string; condition: string; candidate: FactCandidate }[] = [];
       for (const value of row.values) {
         const literal = oneLine(value.literal), quote = normalizeSymbolText(value.sourceRef.quote).trim();
         const unit = cleanUnit(oneLine(value.unit)), condition = cleanCondition(oneLine(value.condition));
@@ -311,22 +344,36 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
             !validText(condition, MAX_NAME) || !validText(quote, MAX_QUOTE)) {
           drop(sectionTitle, label, value.model, literal, 'INVALID_TEXT'); continue;
         }
-        const groupKey = `${unit}\u0000${condition}`;
-        let group = groups.get(groupKey);
-        if (!group) {
-          group = { key: oneLine(row.key), label, unit, condition, byModel: new Map() };
-          groups.set(groupKey, group);
-        }
         const box = validBox(value.sourceRef.box_2d);
-        const candidate: FactCandidate = {
+        accepted.push({ index, model: value.model, unit, condition, candidate: {
           value: literal,
           source: { sourceId: source.sourceId, page, quote, sha256: source.sha256, ...(box ? { box_2d: box } : {}) },
-        };
-        const list = group.byModel.get(index) ?? [];
-        if (list.some(item => item.value === literal)) continue; // same reading twice: one candidate
-        if (list.length >= MAX_CANDIDATES) { drop(sectionTitle, label, value.model, literal, 'LIMIT_REACHED'); continue; }
-        list.push(candidate);
-        group.byModel.set(index, list);
+        } });
+      }
+      // A reading without a unit whose literal already prints the unit of other
+      // readings of the row ("315 x 200 x 305 mm" next to "260 x 200 x 305 mm"
+      // with "mm") joins their row instead of splitting it in two half-empty rows.
+      // Only one such unit, under the same condition; the verifier checks it again.
+      const unitOf = (item: (typeof accepted)[number]) => {
+        if (item.unit) return item.unit;
+        const units = [...new Set(accepted.filter(other => other.unit && other.condition === item.condition &&
+          literalHasUnit(item.candidate.value, other.unit)).map(other => other.unit))];
+        return units.length === 1 ? units[0] : '';
+      };
+      const groups = new Map<string, PendingRow>();
+      for (const item of accepted) {
+        const unit = unitOf(item), literal = item.candidate.value;
+        const groupKey = `${unit}\u0000${item.condition}`;
+        let group = groups.get(groupKey);
+        if (!group) {
+          group = { key: oneLine(row.key), label, unit, condition: item.condition, byModel: new Map() };
+          groups.set(groupKey, group);
+        }
+        const list = group.byModel.get(item.index) ?? [];
+        if (list.some(other => other.value === literal)) continue; // same reading twice: one candidate
+        if (list.length >= MAX_CANDIDATES) { drop(sectionTitle, label, item.model, literal, 'LIMIT_REACHED'); continue; }
+        list.push(item.candidate);
+        group.byModel.set(item.index, list);
       }
       rows.push(...groups.values());
     }
@@ -368,7 +415,7 @@ export function toFactProposal(answer: unknown, sources: readonly ExtractionSour
   }
   if (!models.length) throw new Error('FACT_EXTRACTION_NO_MODEL');
   if (!out.length) throw new Error('FACT_EXTRACTION_EMPTY');
-  const title = (oneLine(options.title) || oneLine(sheet.title) || models.join(' / ')).slice(0, MAX_NAME);
+  const title = safeName(options.title, safeName(sheet.title, models.join(' / ').slice(0, MAX_NAME)));
   const proposal = FactProposalSchema.parse({ version: 1, title, models, sections: out });
   return { proposal, dropped, rowKeys };
 }
