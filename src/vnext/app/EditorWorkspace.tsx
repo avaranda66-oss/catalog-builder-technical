@@ -3990,7 +3990,7 @@ export function EditorWorkspace({
               type="file"
               ref={fileInputRef}
               data-editor-action="upload-image-input"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif"
               style={{ display: 'none' }}
               onChange={handleImageFileChange}
               aria-hidden="true"
