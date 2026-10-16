@@ -33,6 +33,7 @@
     { "model": "TA-25N", "key": "operating-range", "note": "faixa: até 155 °C no folder x até 140 °C no manual PT (e temperatura ambiente 23 °C x 20 °C)" },
     { "model": "TA-25N", "key": "dimensions", "note": "dimensões: 260 x 200 x 305 mm no folder x 354,5 x 206 x 318 mm no manual PT" },
     { "model": "TA-35N", "key": "operating-range", "note": "faixa: até 155 °C x até 140 °C" },
-    { "model": "TA-50N", "key": "operating-range", "note": "faixa: até 155 °C x até 140 °C" }
+    { "model": "TA-50N", "key": "operating-range", "note": "faixa: até 155 °C x até 140 °C" },
+    { "model": "TA-25N", "key": "stability", "note": "estabilidade: ± 0.02 °C no folder x 0,02 ºC (sem ±) no manual PT (achado do spike)" }
   ]
 }
