@@ -225,7 +225,7 @@ describe('PILOT.A Table Title authorship trust', () => {
     const input = await selectTableTitle(container);
 
     fireEvent.change(input, { target: { value: 'Título antes da página' } });
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     expect(pages).toHaveLength(2);
     fireEvent.click(pages[1]);
 
@@ -252,7 +252,7 @@ describe('PILOT.A Table Title authorship trust', () => {
       });
       expect(result.ok).toBe(true);
     });
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     fireEvent.click(pages[1]);
     expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe(document.pages[0].id);
     expect(tableTitleText(session.getSnapshot().document)).toBe('Título externo');
@@ -271,7 +271,7 @@ describe('PILOT.A Table Title authorship trust', () => {
 
     fireEvent.change(input, { target: { value: 'Título em composição' } });
     fireEvent.compositionStart(input);
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     fireEvent.click(pages[1]);
 
     expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe(document.pages[0].id);
@@ -347,24 +347,26 @@ describe('PILOT.A Table Title authorship trust', () => {
     expect(recovered.runtime.workspace.getAuthoringBarrier().hasPendingDraft()).toBe(true);
     expect(tableTitleText(recovered.session.getSnapshot().document)).toBe(tableTitleText(document));
   });
-  it('preserves an invalid Inspector frame draft when page replacement is attempted', async () => {
+  it('FR-10: puts back an invalid position value and never blocks a page change', async () => {
     const document = twoPageTableDocument();
     const { runtime, session } = runtimeFor(repositoryBase(), document);
     const { container } = render(<VNextApp runtime={runtime} />);
     await selectTableTitle(container);
     const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]');
     if (!x) throw new Error('Missing Inspector x field');
+    const frameBefore = session.getSnapshot().document.pages[0].objects.find((object) => object.id === W4F3_OBJECT_ID)?.frame;
 
     fireEvent.change(x, { target: { value: 'not-a-number' } });
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
-    fireEvent.click(pages[1]);
-    expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe(document.pages[0].id);
-    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')?.value).toBe('not-a-number');
     expect(runtime.workspace.captureRecoveryOverlay()).toMatchObject({
       kind: 'INSPECTOR_FRAME_DRAFT_V1',
       draft: { x: 'not-a-number' },
     });
-    expect(session.getSnapshot().document.pages[0].objects.some((object) => object.id === W4F3_OBJECT_ID)).toBe(true);
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
+    fireEvent.click(pages[1]);
+    expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe(document.pages[1].id);
+    expect(runtime.workspace.captureRecoveryOverlay()).toBeUndefined();
+    expect(runtime.workspace.getAuthoringBarrier().hasPendingDraft()).toBe(false);
+    expect(session.getSnapshot().document.pages[0].objects.find((object) => object.id === W4F3_OBJECT_ID)?.frame).toEqual(frameBefore);
   });
 
   it('uses the title apply primitive for explicit Save and keeps Remove title canonical', async () => {
@@ -401,7 +403,7 @@ describe('PILOT.A Table Title authorship trust', () => {
       const result = session.execute({ type: 'object.delete', objectId: W4F3_OBJECT_ID });
       expect(result.ok).toBe(true);
     });
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     fireEvent.click(pages[1]);
 
     expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe(document.pages[0].id);
@@ -433,13 +435,14 @@ describe('PILOT.A Table Title authorship trust', () => {
     });
   });
 
-  it('blocks invalid Inspector draft from replacing the selected object', async () => {
+  it('FR-10: an invalid position value never blocks selecting another object', async () => {
     const document = createW4F3Document();
-    const { runtime } = runtimeFor(repositoryBase(), document);
+    const { runtime, session } = runtimeFor(repositoryBase(), document);
     const { container } = render(<VNextApp runtime={runtime} />);
     await selectTableTitle(container);
     const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]');
     if (!x) throw new Error('Missing Inspector x field');
+    const frameBefore = session.getSnapshot().document.pages[0].objects.find((object) => object.id === W4F3_OBJECT_ID)?.frame;
     fireEvent.change(x, { target: { value: 'not-a-number' } });
 
     const other = [...container.querySelectorAll<HTMLElement>('[data-editor-object-id]')]
@@ -448,8 +451,10 @@ describe('PILOT.A Table Title authorship trust', () => {
     fireEvent.pointerDown(other, { pointerId: 92, button: 0, clientX: 100, clientY: 150 });
     fireEvent.pointerUp(other, { pointerId: 92, button: 0, clientX: 100, clientY: 150 });
 
-    expect(container.querySelector<HTMLElement>('[data-editor-object-id="' + W4F3_OBJECT_ID + '"]')?.getAttribute('data-selected')).toBe('true');
-    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')?.value).toBe('not-a-number');
+    expect(other.getAttribute('data-selected')).toBe('true');
+    expect(container.querySelector<HTMLElement>('[data-editor-object-id="' + W4F3_OBJECT_ID + '"]')?.getAttribute('data-selected')).toBe('false');
+    expect(runtime.workspace.getAuthoringBarrier().hasPendingDraft()).toBe(false);
+    expect(session.getSnapshot().document.pages[0].objects.find((object) => object.id === W4F3_OBJECT_ID)?.frame).toEqual(frameBefore);
   });
 
   it('bounded annotation check preserves visible input and surfaces stale failure before context change', async () => {
@@ -471,7 +476,7 @@ describe('PILOT.A Table Title authorship trust', () => {
     expect(note.value).toBe('Nota local preservada');
     expect(container.textContent).toContain('A anotação mudou. Revise antes de editar.');
     execute.mockRestore();
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     fireEvent.click(pages[1]);
     expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe('pilot-a-second-page');
     restoreMeasurement();
@@ -500,7 +505,7 @@ describe('PILOT.A Table Title authorship trust', () => {
     expect(legend.value).toBe('Legenda local preservada');
     expect(container.textContent).toContain('A tabela mudou. A operação foi cancelada sem alterações parciais.');
     execute.mockRestore();
-    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     fireEvent.click(pages[1]);
     expect(container.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id')).toBe('pilot-a-second-page');
     restoreMeasurement();

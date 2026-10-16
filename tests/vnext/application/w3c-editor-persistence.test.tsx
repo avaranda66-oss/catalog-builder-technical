@@ -429,7 +429,7 @@ describe('W3.C Father-visible Save integration', () => {
     expect(runtime.workspace.getSnapshot().dirty).toBe(true);
     expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
 
-    const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     expect(pageButtons).toHaveLength(2);
     fireEvent.click(pageButtons[1]);
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
-import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
 import {
   mmToU,
@@ -63,6 +63,11 @@ import {
   nextLegendUsageCellId,
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
+import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
+import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
+import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
+import { InspectorNumberField } from './editor/InspectorNumberField';
+import { PagePanel } from './editor/PagePanel';
 import {
   prepareAxisReorder,
   prepareColumnBoundaryDrag,
@@ -629,15 +634,21 @@ export function EditorWorkspace({
   inspectorTargetRef.current = selectedObject
     ? { pageId: selectedPage.id, objectId: selectedObject.id, expectedFrame: selectedObject.frame }
     : null;
+  /** Numbers, not text: "88.0" and "88,0" are not a pending edit when X is 88. */
   const inspectorDraftIsPending = (): boolean => {
     const target = inspectorTargetRef.current;
-    if (!target) return false;
-    const draft = inspectorDraftRef.current;
-    return draft.x !== String(target.expectedFrame.xMm)
-      || draft.y !== String(target.expectedFrame.yMm)
-      || draft.width !== String(target.expectedFrame.widthMm)
-      || draft.height !== String(target.expectedFrame.heightMm);
+    return Boolean(target && inspectorDraftIsDirty(inspectorDraftRef.current, target.expectedFrame));
   };
+  const [inspectorFieldError, setInspectorFieldError] = React.useState<(InspectorFieldError & { objectId: string }) | null>(null);
+  /** Plain notice about a typed value that was put back, kept until its field leaves the screen. */
+  const settleNoticeRef = React.useRef<string | null>(null);
+  const withSettleNotice = (message: string | null) => (
+    settleNoticeRef.current ? (message ? `${message} ${settleNoticeRef.current}` : settleNoticeRef.current) : message
+  );
+  React.useEffect(() => {
+    settleNoticeRef.current = null;
+    setInspectorFieldError((current) => (current && current.objectId !== selectedObjectId ? null : current));
+  }, [selectedObjectId]);
 
   const tableTitleBaselineText = (title: RichText | null): string | null => (
     title === null ? '' : projectEditableRichText(title)
@@ -665,10 +676,7 @@ export function EditorWorkspace({
     : selectedTableTitleProjected ?? '';
   const updateTableTitleDraft = (value: string) => {
     if (!selectedTableObject) return;
-    if (inspectorDraftIsPending()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
-      return;
-    }
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     const normalized = value.replace(/\r\n?/g, '\n');
     const current = tableTitleDraftRef.current;
     const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
@@ -685,10 +693,7 @@ export function EditorWorkspace({
   };
   const setTableTitleComposition = (composing: boolean, value: string) => {
     if (!selectedTableObject) return;
-    if (inspectorDraftIsPending()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
-      return;
-    }
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     const normalized = value.replace(/\r\n?/g, '\n');
     const current = tableTitleDraftRef.current;
     const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
@@ -814,7 +819,7 @@ export function EditorWorkspace({
       setInspectorDraft(empty);
       return;
     }
-    const next = { x: String(selectedObject.frame.xMm), y: String(selectedObject.frame.yMm), width: String(selectedObject.frame.widthMm), height: String(selectedObject.frame.heightMm) };
+    const next = inspectorDraftFromFrame(selectedObject.frame);
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
   }, [selectedObject]);
@@ -881,7 +886,7 @@ export function EditorWorkspace({
     setTableSelection(null);
     setMultiSelectArmed(false);
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
-    setStatusMessage(null);
+    setStatusMessage(withSettleNotice(null));
   };
 
   const selectObject = (objectId: string) => {
@@ -1018,22 +1023,13 @@ export function EditorWorkspace({
   };
   const captureInspectorRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
     const target = inspectorTargetRef.current;
-    if (!target) return undefined;
-    const draft = inspectorDraftRef.current;
-    const canonical = {
-      x: String(target.expectedFrame.xMm),
-      y: String(target.expectedFrame.yMm),
-      width: String(target.expectedFrame.widthMm),
-      height: String(target.expectedFrame.heightMm),
-    };
-    if (draft.x === canonical.x && draft.y === canonical.y
-      && draft.width === canonical.width && draft.height === canonical.height) return undefined;
+    if (!target || !inspectorDraftIsPending()) return undefined;
     return {
       kind: 'INSPECTOR_FRAME_DRAFT_V1',
       pageId: target.pageId,
       objectId: target.objectId,
       expectedFrame: target.expectedFrame,
-      draft,
+      draft: inspectorDraftRef.current,
     };
   };
   const prepareAuthoringForContextChange = (): boolean => {
@@ -1041,10 +1037,8 @@ export function EditorWorkspace({
     if (textEditRef.current && !commitTextEdit()) return false;
     const titleResult = applyTableTitleDraft();
     if (!titleResult.ok) return false;
-    if (captureInspectorRecoveryOverlay()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
-      return false;
-    }
+    // Position/size fields never block: valid values are applied, invalid ones go back with a message.
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     return true;
   };
   prepareAuthoringForContextChangeRef.current = prepareAuthoringForContextChange;
@@ -1089,28 +1083,7 @@ export function EditorWorkspace({
         compositionWasActive: title.composing,
       };
     }
-    const target = inspectorTargetRef.current;
-    if (!target) return undefined;
-    const draft = inspectorDraftRef.current;
-    const canonical = {
-      x: String(target.expectedFrame.xMm),
-      y: String(target.expectedFrame.yMm),
-      width: String(target.expectedFrame.widthMm),
-      height: String(target.expectedFrame.heightMm),
-    };
-    if (
-      draft.x === canonical.x
-      && draft.y === canonical.y
-      && draft.width === canonical.width
-      && draft.height === canonical.height
-    ) return undefined;
-    return {
-      kind: 'INSPECTOR_FRAME_DRAFT_V1',
-      pageId: target.pageId,
-      objectId: target.objectId,
-      expectedFrame: target.expectedFrame,
-      draft,
-    };
+    return captureInspectorRecoveryOverlay();
   };
   const captureRecoveryOverlayRef = React.useRef(captureRecoveryOverlay);
   captureRecoveryOverlayRef.current = captureRecoveryOverlay;
@@ -1152,14 +1125,8 @@ export function EditorWorkspace({
     if (!textResult.ok) return textResult;
     const titleResult = applyTableTitleDraft();
     if (!titleResult.ok) return titleResult;
-    if (captureRecoveryOverlayRef.current()?.kind === 'INSPECTOR_FRAME_DRAFT_V1') {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de salvar.');
-      return {
-        ok: false,
-        reason: 'INVALID_DRAFT',
-        message: 'O rascunho do Inspector foi preservado e precisa ser concluído antes de salvar.',
-      };
-    }
+    // A typed position/size is applied (or put back if invalid) before saving; it never blocks Save.
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     return { ok: true };
   };
   const prepareAuthoringForSaveRef = React.useRef(prepareAuthoringForSave);
@@ -2872,37 +2839,119 @@ export function EditorWorkspace({
   const cancelPointerGesture = () => { if (controller.cancel('pointercancel')) setStatusMessage('Gesto cancelado.'); };
   const cancelCaptureLoss = () => { if (controller.cancel('capture-loss')) setStatusMessage('Gesto cancelado.'); };
 
-  const commitInspector = (field: keyof InspectorDraft) => {
-    if (!selectedObject) return;
-    if (selectedMutationLocked) {
-      setStatusMessage(groupHasLockedDescendant(selectedObject)
-        ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
-        : 'Objeto bloqueado. Desbloqueie para alterar a geometria.');
-      return;
+  const liveInspectorObject = (): EditorialObject | undefined => {
+    const target = inspectorTargetRef.current;
+    if (!target) return undefined;
+    return session.getSnapshot().document.pages.find((page) => page.id === target.pageId)
+      ?.objects.find((object) => object.id === target.objectId);
+  };
+  const resetInspectorDraft = () => {
+    const frame = liveInspectorObject()?.frame ?? inspectorTargetRef.current?.expectedFrame;
+    if (!frame) return;
+    inspectorDraftRef.current = inspectorDraftFromFrame(frame);
+    setInspectorDraft(inspectorDraftRef.current);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+  };
+  /** Applies valid typed values ("12,5" or "12.5") and puts back invalid ones. Never leaves a blocking draft. */
+  const settleInspectorDraft = (fields: readonly InspectorFrameField[] = INSPECTOR_FRAME_FIELDS) => {
+    const object = liveInspectorObject();
+    if (!object) { resetInspectorDraft(); return; }
+    const plan = planInspectorDraft(inspectorDraftRef.current, object.frame, fields, { sizeLocked: object.type === 'group' });
+    const errors = [...plan.errors];
+    const { x, y, width, height } = plan.changes;
+    if (x !== undefined || y !== undefined || width !== undefined || height !== undefined) {
+      if (objectClosureLockedId(object)) {
+        setStatusMessage('Objeto bloqueado. Desbloqueie para alterar a posição ou o tamanho.');
+      } else {
+        controller.cancel('superseded');
+        const current = frameToU(object.frame);
+        let action: ApplicationAction | undefined;
+        try {
+          action = width !== undefined || height !== undefined
+            ? { type: 'object.resize', objectId: object.id, xU: x === undefined ? current.xU : mmToU(x), yU: y === undefined ? current.yU : mmToU(y), widthU: width === undefined ? current.widthU : mmToU(width), heightU: height === undefined ? current.heightU : mmToU(height) }
+            : { type: 'object.move', objectId: object.id, xU: x === undefined ? current.xU : mmToU(x), yU: y === undefined ? current.yU : mmToU(y) };
+        } catch {
+          errors.push({ field: fields.find((field) => plan.changes[field] !== undefined) ?? 'x', message: INSPECTOR_INVALID_NUMBER_MESSAGE });
+        }
+        if (action) {
+          const result = session.execute(action);
+          setStatusMessage(result.ok ? 'Posição e tamanho atualizados.' : 'Não foi possível alterar a posição ou o tamanho. O valor anterior foi mantido.');
+        }
+      }
     }
+    setInspectorFieldError(errors[0] ? { objectId: object.id, ...errors[0] } : null);
+    settleNoticeRef.current = errors[0] ? inspectorDiscardedNotice(errors[0]) : null;
+    if (errors[0]) setStatusMessage(inspectorErrorStatus(errors[0]));
+    resetInspectorDraft();
+  };
+  /** Leaving a field settles every typed field at once (one coherent change), so none is silently dropped. */
+  const commitInspector = () => {
+    if (!inspectorDraftIsPending()) { resetInspectorDraft(); return; } // "88.0" means 88: just show "88".
     if (!finishCellDraftForContextChange()) return;
     if (textEditRef.current && !commitTextEdit()) return;
-    const titleResult = applyTableTitleDraft();
-    if (!titleResult.ok) return;
-    if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
-    controller.cancel('superseded');
-    const raw = inspectorDraft[field].trim();
-    const numeric = Number(raw);
-    if (raw.length === 0 || !Number.isFinite(numeric)) { setStatusMessage('Informe um valor numérico válido em milímetros.'); return; }
-    let valueU: number;
-    try { valueU = mmToU(numeric); }
-    catch { setStatusMessage('Informe um valor numérico válido em milímetros.'); return; }
-    const current = frameToU(selectedObject.frame);
-    let action: ApplicationAction;
-    if (field === 'x' || field === 'y') {
-      action = { type: 'object.move', objectId: selectedObject.id, xU: field === 'x' ? valueU : current.xU, yU: field === 'y' ? valueU : current.yU };
-    } else {
-      if (valueU < 1) { setStatusMessage('Largura e altura devem ser maiores que zero.'); return; }
-      action = { type: 'object.resize', objectId: selectedObject.id, xU: current.xU, yU: current.yU, widthU: field === 'width' ? valueU : current.widthU, heightU: field === 'height' ? valueU : current.heightU };
-    }
-    const result = session.execute(action);
-    setStatusMessage(result.ok ? 'Geometria atualizada.' : 'Não foi possível atualizar a geometria.');
+    if (!applyTableTitleDraft().ok) return;
+    settleInspectorDraft();
   };
+  const revertInspectorField = (field: InspectorFrameField) => {
+    setInspectorFieldError(null);
+    settleNoticeRef.current = null;
+    if (!inspectorDraftIsPending()) return;
+    resetInspectorDraft();
+    setStatusMessage(`${inspectorFieldLabel(field)}: valor anterior restaurado.`);
+  };
+
+  const runObjectShortcut = (shortcut: Exclude<EditorShortcut, { type: 'save' }>) => {
+    if (shortcut.type === 'duplicate') {
+      if (editorState.selectedObjectIds.length !== 1) setStatusMessage('Selecione um só objeto para duplicar.');
+      else duplicateSelected();
+      return;
+    }
+    if (!finishTextEditBeforeCommand()) return;
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
+    if (!page) return;
+    const ids = editorState.selectedObjectIds;
+    const plan = shortcut.type === 'delete' ? planKeyboardDelete(page, ids) : planKeyboardNudge(page, ids, shortcut.dxMm, shortcut.dyMm);
+    if (!plan.ok) {
+      if (plan.reason === 'LOCKED') setStatusMessage(`Objeto bloqueado. Desbloqueie para ${shortcut.type === 'delete' ? 'excluir' : 'mover'}.`);
+      return;
+    }
+    controller.cancel('superseded');
+    const transactionId = `teclado:${shortcut.type}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const ok = plan.actions.every((action) => session.execute(action, { transactionId }).ok);
+    if (shortcut.type === 'delete' && ok) setEditorState((current) => ({ ...current, selectedObjectIds: [] }));
+    const many = plan.actions.length > 1;
+    setStatusMessage(!ok
+      ? `Não foi possível ${shortcut.type === 'delete' ? 'excluir' : 'mover'} ${many ? 'todos os objetos' : 'o objeto'}.`
+      : shortcut.type === 'delete' ? `${many ? 'Objetos excluídos' : 'Objeto excluído'}. Para recuperar, use Desfazer.` : (many ? 'Objetos movidos.' : 'Objeto movido.'));
+  };
+
+  // Ctrl+S saves the catalog anywhere in the editor and never opens the browser's "Save page as".
+  // When focus fell to the page body (e.g. the deleted object had it), only Ctrl+Z/Ctrl+Y still work:
+  // Delete, arrows and Ctrl+D act only from an object on the page (see cancelOnRootKey).
+  const windowShortcutRef = React.useRef<(event: KeyboardEvent) => void>(() => undefined);
+  windowShortcutRef.current = (event) => {
+    if (resolveEditorShortcut(event, { typingInField: true, mode: 'select', hasSelection: false })?.type === 'save') {
+      event.preventDefault();
+      if (event.repeat) return;
+      if (!persistence) setStatusMessage('Este rascunho fica só nesta aba e não é salvo.');
+      else if (persistence.save.phase === 'saving') setStatusMessage('Salvando… aguarde um instante.');
+      else if (persistence.save.canSave) void persistence.runtime.manualSave();
+      else setStatusMessage(persistence.save.phase === 'idle' ? 'Não é possível salvar agora.' : fatherSaveExplanation(persistence.save));
+      return;
+    }
+    const doc = window.document;
+    if ((event.target !== doc.body && event.target !== doc.documentElement) || doc.querySelector('[aria-modal="true"]')) return;
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
+      event.preventDefault();
+      if (key === 'y' || event.shiftKey) redo(); else undo();
+    }
+  };
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => windowShortcutRef.current(event);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
 
   const objectPreviewFrame = (object: EditorialObject): FrameU => {
     if (preview?.objectId === object.id && preview.pageId === selectedPage.id) return preview.frameU;
@@ -2955,9 +3004,10 @@ export function EditorWorkspace({
     if (textEditRef.current) {
       if (compositionRef.current) return;
       if (event.key === 'Escape') {
+        // Like PowerPoint: Esc leaves the text box keeping what was typed ("Cancelar" discards).
         event.preventDefault();
         event.stopPropagation();
-        cancelTextEdit();
+        commitTextEdit();
         return;
       }
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -3009,6 +3059,18 @@ export function EditorWorkspace({
         }
         return;
       }
+    }
+    // Only an object on the page (focused by clicking it) takes Delete, arrows and Ctrl+D;
+    // buttons, the page list and the side panels never act on the selection.
+    const shortcut = resolveEditorShortcut(event, {
+      typingInField: !isCanvasKeyboardTarget(target),
+      mode: editorState.mode,
+      hasSelection: editorState.selectedObjectIds.length > 0,
+    });
+    if (shortcut && shortcut.type !== 'save') {
+      event.preventDefault();
+      runObjectShortcut(shortcut);
+      return;
     }
     if (event.key === 'Enter' && selectedObject?.type === 'text') {
       if (!['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target.tagName)) {
@@ -3070,14 +3132,9 @@ export function EditorWorkspace({
         return;
       }
     }
-    if (captureInspectorRecoveryOverlay()) {
-      if (target.closest('[data-inspector-authoring]')) return;
-      if (target.closest('[data-persistence-save-action]')) return;
-      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    // Clicking away from a position/size field applies a valid value and puts
+    // back an invalid one (with a visible message). It never blocks the click.
+    if (inspectorDraftIsPending() && !target.closest('[data-inspector-authoring]')) settleInspectorDraft();
   };
 
   const updateTextDraft = (value: string) => {
@@ -3118,6 +3175,8 @@ export function EditorWorkspace({
     const next = { ...inspectorDraftRef.current, [field]: value };
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
+    if (inspectorFieldError?.field === field) setInspectorFieldError(null);
+    settleNoticeRef.current = null;
     persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
@@ -3174,17 +3233,24 @@ export function EditorWorkspace({
     runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
   };
 
-  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', raw: string) => {
+  const cellPaddingText = (edge: 'top' | 'right' | 'bottom' | 'left') => {
+    const value = commonCellStyleValue('paddingMm')?.[edge];
+    return typeof value === 'number' ? formatDecimalPtBr(value) : '';
+  };
+  /** Accepts "1,5" and "1.5"; an invalid value goes back to the current one with a plain message. */
+  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', input: HTMLInputElement) => {
+    const raw = input.value;
     if (raw.trim() === '') {
       runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
       return;
     }
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value < 0) {
-      setStatusMessage('Informe um padding válido em milímetros, igual ou maior que zero.');
+    const parsed = parseDecimalPtBr(raw);
+    if (!parsed.ok || parsed.value < 0) {
+      input.value = cellPaddingText(edge);
+      setStatusMessage('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.');
       return;
     }
-    runCellPropertyPatch({ paddingMm: { [edge]: value } } as CellPropertyPatch);
+    runCellPropertyPatch({ paddingMm: { [edge]: parsed.value } } as CellPropertyPatch);
   };
 
   const tableStyleScope: TableStyleScope | undefined = selectedTableObject
@@ -3714,16 +3780,9 @@ export function EditorWorkspace({
       </header>
 
       <div className="vnext-workspace">
-        <aside className="vnext-pages" aria-label="Páginas do catálogo">
-          <div className="vnext-panel-heading"><span>Páginas</span><span>{document.pages.length}</span></div>
-          <nav className="vnext-page-list" aria-label="Navegação de páginas">
-            {document.pages.map((page, index) => (
-              <button key={page.id} type="button" data-authoring-context-transition="" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
-                <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span><span>Página {index + 1}</span>
-              </button>
-            ))}
-          </nav>
-          <button type="button" className="vnext-add-page" data-authoring-context-transition="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
+        <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
+          prepareForChange={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+          onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}>
           {simpleByDefault && (
             <button
               type="button"
@@ -3745,7 +3804,7 @@ export function EditorWorkspace({
               <button type="button" className="vnext-page-reuse-action" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
             </div>
           )}
-        </aside>
+        </PagePanel>
 
         <main className="vnext-canvas-area">
           <div className="vnext-canvas-meta">
@@ -4240,26 +4299,21 @@ export function EditorWorkspace({
               <div className="vnext-divider" />
               <p>Posição e tamanho em milímetros.</p>
               <div className="vnext-inspector-grid" data-inspector-authoring="">
-                {([['x', 'X'], ['y', 'Y'], ['width', 'Largura'], ['height', 'Altura']] as const).map(([field, label]) => (
-                  <label key={field}>
-                    <span>{label}</span>
-                    <div>
-                      <input type="text" inputMode="decimal" data-inspector-field={field} value={inspectorDraft[field]}
-                        disabled={selectedMutationLocked}
-                        aria-describedby={selectedMutationLocked
-                          ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
-                          : undefined}
-                        readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
-                        onFocus={() => {
-                          if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
-                        }}
-                        onChange={(event) => updateInspectorDraft(field, event.target.value)}
-                        onBlur={() => commitInspector(field)}
-                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                      />
-                      <span>mm</span>
-                    </div>
-                  </label>
+                {INSPECTOR_FRAME_FIELDS.map((field) => (
+                  <InspectorNumberField key={field} field={field} label={inspectorFieldLabel(field)} value={inspectorDraft[field]}
+                    error={inspectorFieldError?.objectId === selectedObject.id && inspectorFieldError.field === field ? inspectorFieldError.message : undefined}
+                    disabled={selectedMutationLocked}
+                    describedBy={selectedMutationLocked
+                      ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
+                      : undefined}
+                    readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
+                    onFocus={() => {
+                      if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
+                    }}
+                    onChange={(value) => updateInspectorDraft(field, value)}
+                    onCommit={commitInspector}
+                    onRevert={() => revertInspectorField(field)}
+                  />
                 ))}
               </div>
               </div>}
@@ -5251,9 +5305,9 @@ export function EditorWorkspace({
                             data-cell-padding={edge}
                             type="text"
                             inputMode="decimal"
-                            defaultValue={String(commonCellStyleValue('paddingMm')?.[edge] ?? '')}
+                            defaultValue={cellPaddingText(edge)}
                             placeholder="Herdado"
-                            onBlur={(event) => commitCellPadding(edge, event.target.value)}
+                            onBlur={(event) => commitCellPadding(edge, event.target)}
                             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
                           />
                         </label>

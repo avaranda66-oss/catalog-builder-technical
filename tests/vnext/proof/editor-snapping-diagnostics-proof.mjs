@@ -23,7 +23,8 @@ const server = await createServer({
 let browser;
 
 const numberInput = (page, field) => page.locator(`[data-inspector-field="${field}"]`);
-const readMm = async (page, field) => Number.parseFloat(await numberInput(page, field).inputValue());
+// FR-10: the panel shows millimetres in pt-BR ("12,5").
+const readMm = async (page, field) => Number.parseFloat((await numberInput(page, field).inputValue()).replace(',', '.'));
 const near = (actual, expected, tolerance = 0.001, label = 'value') => {
   assert(Math.abs(actual - expected) <= tolerance, `${label}: expected ${expected}, got ${actual}`);
 };
@@ -32,7 +33,7 @@ const waitMm = async (page, field, expected, tolerance = 0.001) => {
     ({ selector, expectedValue, toleranceValue }) => {
       const input = document.querySelector(selector);
       return input instanceof HTMLInputElement
-        && Math.abs(Number.parseFloat(input.value) - expectedValue) <= toleranceValue;
+        && Math.abs(Number.parseFloat(input.value.replace(',', '.')) - expectedValue) <= toleranceValue;
     },
     { selector: `[data-inspector-field="${field}"]`, expectedValue: expected, toleranceValue: tolerance }
   );
