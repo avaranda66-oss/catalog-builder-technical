@@ -2,12 +2,12 @@ import type { PersistenceWorkspaceSnapshot, SaveProjection, VNextPersistenceRunt
 import { fatherSaveExplanation } from './save-presentation';
 
 /**
- * Visible label of the editor button that goes back to the Library. The button itself is outside
- * this slice; rename both together when the button becomes "Meus catálogos".
+ * Visible label of the editor button that goes back to the Library (same name as the Library
+ * heading). The editor top bar renders this constant, so the button and these messages never drift.
  */
-export const LIBRARY_BUTTON_LABEL = 'Catálogos';
+export const LIBRARY_BUTTON_LABEL = 'Meus catálogos';
 
-/** Plain-language reasons shown when "Catálogos" cannot leave the editor yet. */
+/** Plain-language reasons shown when "Meus catálogos" cannot leave the editor yet. */
 export const LIBRARY_NAVIGATION_MESSAGES = {
   stillSaving: `Ainda estamos salvando. Aguarde aparecer “Salvo” e clique em ${LIBRARY_BUTTON_LABEL} de novo.`,
   catalogChanged: `O catálogo aberto mudou enquanto salvávamos. Confira seu trabalho e clique em ${LIBRARY_BUTTON_LABEL} de novo.`,

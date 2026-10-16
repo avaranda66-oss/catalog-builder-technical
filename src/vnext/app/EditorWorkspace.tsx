@@ -54,11 +54,9 @@ import {
   TABLE_CLIPBOARD_MIME,
   TableClipboardError,
 } from '../editor/table-clipboard';
-import { legendUsageCount } from '../editor/table-marker-authoring';
 import {
   annotationTargetForCell,
   annotationTargetForTable,
-  annotationUsageCount,
   DEFAULT_IMAGE_CELL_HEIGHT_U,
   DEFAULT_IMAGE_CELL_WIDTH_U,
   moveId,
@@ -93,13 +91,8 @@ import {
   type TableStyleScope,
 } from '../editor/table-style-authoring';
 import {
-  changeTableCellDraftType,
-  clearTableCellDraft,
-  confirmTableCellDraftTypeChange,
   createTableCellDraft,
-  setTableCellDraftComposition,
   tableCellDraftRecoveryFields,
-  updateTableCellDraft,
   validateTableCellDraft,
   type EditableCellType,
   type TableCellDraft,
@@ -133,12 +126,15 @@ import { PRESYS_PRESENTATION_PAGE_ID, PRESYS_SPECIFICATIONS_PAGE_ID } from '../l
 import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
-import { TableStyleInspector } from './TableStyleInspector';
 import { EditorNotices } from './editor/EditorNotices';
-import { IssuesPanel } from './editor/IssuesPanel';
 import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
-import { ZoomControl } from './editor/ZoomControl';
+import { CanvasHeader } from './editor/CanvasHeader';
+import { TableCellEditorSection } from './editor/TableCellEditorSection';
+import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
+import { TableInspectorPanel } from './editor/TableInspectorPanel';
+import { TextInspectorSection } from './editor/TextInspectorSection';
+import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -277,73 +273,6 @@ export interface EditorWorkspacePersistenceProps {
   readonly localProtection: 'available' | 'unavailable';
   readonly localProtectionMessage?: string;
   readonly assetBridge?: AssetPersistenceBridge;
-}
-
-function LegendEditorRow({
-  entry,
-  usageCount,
-  canMoveUp,
-  canMoveDown,
-  mutationDisabled,
-  onUpdate,
-  onRemove,
-  onMoveUp,
-  onMoveDown,
-  onLocate,
-}: {
-  entry: TableLegendEntry;
-  usageCount: number;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  mutationDisabled: boolean;
-  onUpdate(markerCode: string, plainText?: string): void;
-  onRemove(): void;
-  onMoveUp(): void;
-  onMoveDown(): void;
-  onLocate(): void;
-}) {
-  const editableText = projectEditableRichText(entry.text);
-  const [markerCode, setMarkerCode] = React.useState(entry.markerCode);
-  const [plainText, setPlainText] = React.useState(editableText ?? '');
-  React.useEffect(() => {
-    setMarkerCode(entry.markerCode);
-    setPlainText(projectEditableRichText(entry.text) ?? '');
-  }, [entry]);
-  return (
-    <div className="vnext-legend-entry-editor" data-legend-entry-id={entry.id}>
-      <div className="vnext-legend-entry-heading">
-        <strong>{entry.markerCode}</strong>
-        <span>{usageCount} uso(s)</span>
-      </div>
-      <label>
-        <span>Código do marcador</span>
-        <input data-legend-marker-code={entry.id} value={markerCode} onChange={(event) => setMarkerCode(event.target.value)} />
-      </label>
-      <label>
-        <span>Descrição</span>
-        <textarea
-          data-legend-text={entry.id}
-          value={plainText}
-          disabled={editableText === null}
-          onChange={(event) => setPlainText(event.target.value.replace(/\r\n?/g, '\n'))}
-        />
-      </label>
-      {editableText === null && <p>Texto avançado preservado; edição simples bloqueada.</p>}
-      <div className="vnext-cell-edit-actions">
-        <button type="button" data-editor-action="update-legend" disabled={mutationDisabled} onClick={() => onUpdate(markerCode, editableText === null ? undefined : plainText)}>
-          Atualizar legenda
-        </button>
-        <button type="button" data-editor-action="move-legend-up" disabled={mutationDisabled || !canMoveUp} onClick={onMoveUp}>Mover para cima</button>
-        <button type="button" data-editor-action="move-legend-down" disabled={mutationDisabled || !canMoveDown} onClick={onMoveDown}>Mover para baixo</button>
-        <button type="button" data-editor-action="locate-legend-usage" disabled={usageCount === 0} onClick={onLocate}>
-          Localizar usos
-        </button>
-        <button type="button" data-editor-action="remove-legend" disabled={mutationDisabled || usageCount > 0} title={usageCount > 0 ? `Usado por ${usageCount} célula(s).` : undefined} onClick={onRemove}>
-          Excluir legenda
-        </button>
-      </div>
-    </div>
-  );
 }
 
 const subscribeToNothing = (_listener: () => void): (() => void) => () => undefined;
@@ -3863,7 +3792,7 @@ export function EditorWorkspace({
               aria-label="Voltar aos catálogos"
             >
               <FolderOpen size={17} aria-hidden="true" />
-              <span>Catálogos</span>
+              <span>{LIBRARY_BUTTON_LABEL}</span>
             </button>
           )}
           {persistence && (
@@ -3922,15 +3851,11 @@ export function EditorWorkspace({
         </PagePanel>
 
         <main className="vnext-canvas-area">
-          <div className="vnext-canvas-meta">
-            <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
-            <ZoomControl pageWidthMm={selectedPage.widthMm} />
-            <div className="vnext-canvas-statuses">
-              <IssuesPanel document={document} diagnostics={canonicalDiagnostics} simple={simpleByDefault} onLocate={goToIssue} session={session}
-                measurement={measuredLayout?.source === document ? measuredLayout : null} prepare={() => prepareAuthoringForContextChangeRef.current()} onMessage={setStatusMessage} />
-              {!simpleByDefault && <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>}
-            </div>
-          </div>
+          <CanvasHeader pageNumber={selectedPageIndex + 1} pageCount={document.pages.length} pageWidthMm={selectedPage.widthMm}
+            issues={{ document, diagnostics: canonicalDiagnostics, simple: simpleByDefault, onLocate: goToIssue, session,
+              measurement: measuredLayout?.source === document ? measuredLayout : null,
+              prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
+            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'} />
           <div className="vnext-authoring-toolbar" aria-label="Ferramentas de edição">
             <div className="vnext-tool-group vnext-toolbar-primary" aria-label="Adicionar conteúdo">
               <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
@@ -4026,90 +3951,23 @@ export function EditorWorkspace({
           )}
 
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
-            <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
-              <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
-              {simpleByDefault && <p className="vnext-disclosure-help">Clique em uma célula para selecionar. Dê dois cliques ou pressione Enter para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
-              {simpleByDefault && (
-                <button
-                  type="button"
-                  className="vnext-table-options-toggle"
-                  data-editor-action="toggle-table-options"
-                  aria-expanded={tableOptionsOpen}
-                  onClick={() => setTableOptionsOpen((open) => !open)}
-                >
-                  {tableOptionsOpen ? 'Ocultar opções da tabela' : 'Opções da tabela'}
-                </button>
-              )}
-              {(!simpleByDefault || tableOptionsOpen) && <>
-              <div className="vnext-tool-group" aria-label="Ações de linha">
-                <button type="button" data-editor-action="insert-row-before" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
-                <button type="button" data-editor-action="insert-row-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
-                <button type="button" data-editor-action="remove-row" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Adicionar várias linhas">
-                <label>Quantidade de linhas <input type="number" min="1" max="100" step="1" aria-label="Quantidade de linhas para adicionar" data-table-row-count="" value={tableRowsToInsert} onChange={event => setTableRowsToInsert(event.target.value)} style={{ width: '64px' }} /></label>
-                <button type="button" data-editor-action="insert-rows-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas depois</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Ações de coluna">
-                <button type="button" data-editor-action="insert-column-before" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
-                <button type="button" data-editor-action="insert-column-after" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
-                <button type="button" data-editor-action="remove-column" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Mesclagem de células">
-                <button
-                  type="button"
-                  data-editor-action="merge-cells"
-                  disabled={!currentMergeEligibility.enabled}
-                  title={currentMergeEligibility.reason}
-                  onClick={runTableMerge}
-                >Mesclar células</button>
-                <button
-                  type="button"
-                  data-editor-action="unmerge-cell"
-                  disabled={!currentUnmergeEligibility.enabled}
-                  title={currentUnmergeEligibility.reason}
-                  onClick={runTableUnmerge}
-                >Desmesclar células</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Conteúdo em lote">
-                <button
-                  type="button"
-                  data-editor-action="extend-table-selection"
-                  aria-pressed={tableRangeExtensionArmed}
-                  className={tableRangeExtensionArmed ? 'is-active' : undefined}
-                  disabled={editorState.mode !== 'table-grid' || !tableSelection || tableSelection.kind === 'table'}
-                  onClick={toggleTableRangeExtension}
-                >Estender seleção</button>
-                <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
-                <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
-                <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
-              </div>
-              </>}
-              <div className="vnext-tool-group" aria-label="Copiar e colar dados">
-                <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
-                <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
-              </div>
-              <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
-            </div>
+            <TableGridToolbar
+              simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
+              tableOptionsOpen={tableOptionsOpen} setTableOptionsOpen={setTableOptionsOpen}
+              rowAxisReason={rowAxisReason} columnAxisReason={columnAxisReason}
+              runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
+              tableRowsToInsert={tableRowsToInsert} setTableRowsToInsert={setTableRowsToInsert}
+              currentMergeEligibility={currentMergeEligibility} currentUnmergeEligibility={currentUnmergeEligibility}
+              runTableMerge={runTableMerge} runTableUnmerge={runTableUnmerge}
+              tableRangeExtensionArmed={tableRangeExtensionArmed} toggleTableRangeExtension={toggleTableRangeExtension}
+              runTableBulkClear={runTableBulkClear} setMarkerPanelOpen={setMarkerPanelOpen} runVisibleTableCopy={runVisibleTableCopy}
+              setTablePasteFallbackOpen={setTablePasteFallbackOpen} leaveTableGrid={leaveTableGrid}
+            />
           )}
 
           {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && !selectedTableObject.locked && (
-            <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
-              <p className="vnext-disclosure-help">Selecione uma célula inicial para colar uma área da planilha. Os dados devem caber nas linhas e colunas existentes. Use Desfazer para recuperar o conteúdo anterior.</p>
-              <label>
-                <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
-                <textarea
-                  data-table-paste-textarea=""
-                  value={tablePasteFallbackText}
-                  onChange={(event) => setTablePasteFallbackText(event.target.value)}
-                  placeholder={'Ex.: Produto\tFaixa\nTA-25N\t-25 °C a 140 °C'}
-                />
-              </label>
-              <div className="vnext-cell-edit-actions">
-                <button type="button" data-editor-action="apply-native-table-paste" onClick={applyNativePasteFallback}>Aplicar conteúdo colado</button>
-                <button type="button" data-editor-action="cancel-native-table-paste" onClick={() => { setTablePasteFallbackOpen(false); setTablePasteFallbackText(''); }}>Cancelar</button>
-              </div>
-            </div>
+            <TableGridPasteFallback tablePasteFallbackText={tablePasteFallbackText} setTablePasteFallbackText={setTablePasteFallbackText}
+              setTablePasteFallbackOpen={setTablePasteFallbackOpen} applyNativePasteFallback={applyNativePasteFallback} />
           )}
 
           <div className="vnext-document-preview" tabIndex={-1} data-table-auto-fit={pendingTableFit ? 'pending' : undefined} aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
@@ -4436,6 +4294,12 @@ export function EditorWorkspace({
                 ))}
               </div>
               </div>}
+              {selectedObject.type === 'text' && (
+                <TextInspectorSection object={selectedObject} simple={simpleByDefault} disabled={selectedMutationLocked} session={session}
+                  measurement={measuredLayout?.source === document ? measuredLayout : null}
+                  prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                  onMessage={setStatusMessage} />
+              )}
               {selectedObject.type === 'image' && (
                 <>
                   <div className="vnext-divider" />
@@ -4617,828 +4481,56 @@ export function EditorWorkspace({
                 </>
               )}
               {selectedObject.type === 'table' && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-semantic-title" data-table-semantic-title="" data-table-title-session="">
-                    <h3>Título da tabela</h3>
-                    {selectedObject.table.title && projectEditableRichText(selectedObject.table.title) === null ? (
-                      <p data-table-title-readonly="">
-                        Este título possui RichText avançado e foi preservado sem achatamento. A edição avançada pertence à etapa profissional de RichText.
-                      </p>
-                    ) : (
-                      <label>
-                        <span>Título</span>
-                        <textarea
-                          data-table-title-input=""
-                          value={selectedTableTitleValue}
-                          disabled={tableSemanticDisabled}
-                          aria-describedby={tableSemanticDisabledReasonId}
-                          onChange={(event) => updateTableTitleDraft(event.target.value)}
-                          onCompositionStart={(event) => setTableTitleComposition(true, event.currentTarget.value)}
-                          onCompositionEnd={(event) => setTableTitleComposition(false, event.currentTarget.value)}
-                        />
-                      </label>
-                    )}
-                    {tableSemanticDisabledReason && tableSemanticDisabledReasonId && (
-                      <p id={tableSemanticDisabledReasonId} data-table-semantic-disabled-reason="">
-                        {tableSemanticDisabledReason}
-                      </p>
-                    )}
-                    <div className="vnext-cell-edit-actions">
-                      <button
-                        type="button"
-                        data-editor-action="set-table-title"
-                        disabled={tableSemanticDisabled || (selectedObject.table.title !== undefined && projectEditableRichText(selectedObject.table.title) === null)}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => { applyTableTitleDraft(); }}
-                      >
-                        Salvar título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="cancel-table-title-draft"
-                        disabled={!tableTitleDraft}
-                        onClick={cancelTableTitleDraft}
-                      >
-                        Cancelar alterações do título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="clear-table-title"
-                        disabled={tableSemanticDisabled || !selectedObject.table.title}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => runTableTitleSet(null)}
-                      >
-                        Remover título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="open-table-semantics"
-                        disabled={tableSemanticDisabled}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => {
-                          if (editorState.mode === 'select') startTableGrid(selectedObject);
-                          setMarkerPanelOpen(true);
-                        }}
-                      >
-                        Notas e legenda
-                      </button>
-                    </div>
-                  </section>
-                  {simpleByDefault && (
-                    <>
-                    <button
-                      type="button"
-                      className="vnext-inspector-action vnext-inspector-disclosure"
-                      data-editor-action="toggle-table-inspector-advanced"
-                      aria-expanded={tableInspectorAdvancedOpen}
-                      aria-controls="vnext-table-advanced-details"
-                      onClick={() => setTableInspectorAdvancedOpen((open) => !open)}
-                    >
-                      {tableInspectorAdvancedOpen ? 'Ocultar detalhes da tabela' : 'Detalhes da tabela'}
-                    </button>
-                    <p className="vnext-disclosure-help">Altura, dimensões, cores e bordas.</p>
-                    </>
+                <TableInspectorPanel
+                  tableObject={selectedObject} documentStyle={document.style} assets={document.assets}
+                  simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
+                  tableInspectorAdvancedOpen={tableInspectorAdvancedOpen} setTableInspectorAdvancedOpen={setTableInspectorAdvancedOpen}
+                  tableSemanticDisabled={tableSemanticDisabled} tableSemanticDisabledReason={tableSemanticDisabledReason}
+                  tableSemanticDisabledReasonId={tableSemanticDisabledReasonId}
+                  selectedTableTitleValue={selectedTableTitleValue} hasTableTitleDraft={Boolean(tableTitleDraft)}
+                  updateTableTitleDraft={updateTableTitleDraft} setTableTitleComposition={setTableTitleComposition}
+                  applyTableTitleDraft={applyTableTitleDraft} cancelTableTitleDraft={cancelTableTitleDraft} runTableTitleSet={runTableTitleSet}
+                  startTableGrid={startTableGrid} markerPanelOpen={markerPanelOpen} setMarkerPanelOpen={setMarkerPanelOpen}
+                  fitHeightPreparation={fitHeightPreparation} runFitHeight={runFitHeight}
+                  tableStyleScope={tableStyleScope} tableStyleRoleScope={tableStyleRoleScope} tableStyleDisabled={tableStyleDisabled}
+                  tableStyleDisabledReasonId={tableStyleDisabledReasonId} tableStyleDisabledReason={tableStyleDisabledReason}
+                  tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}
+                  setTableStyleRoleScope={setTableStyleRoleScope} setTableStyleAdvancedOpen={setTableStyleAdvancedOpen}
+                  setTableStylePaddingLinked={setTableStylePaddingLinked} runTableStylePatch={runTableStylePatch}
+                  runTableBorderPreset={runTableBorderPreset} runTablePreset={runTablePreset} runAnnotationGap={runAnnotationGap}
+                  rowDimensionProjection={rowDimensionProjection} effectiveRowHeightMode={effectiveRowHeightMode}
+                  selectedRowAxisIds={selectedRowAxisIds} runRowProperties={runRowProperties} runRowHeightMode={runRowHeightMode}
+                  runRowHeightValue={runRowHeightValue} runAxisReorder={runAxisReorder}
+                  columnDimensionProjection={columnDimensionProjection} selectedColumnAxisIds={selectedColumnAxisIds}
+                  columnDimensionsAdvancedOpen={columnDimensionsAdvancedOpen} setColumnDimensionsAdvancedOpen={setColumnDimensionsAdvancedOpen}
+                  runColumnMode={runColumnMode} runColumnNumber={runColumnNumber} runEqualizeColumns={runEqualizeColumns}
+                  selectedAnchorCells={selectedAnchorCells} selectedSemanticCell={selectedSemanticCell}
+                  cellEditing={Boolean(cellDraft)} startCellEdit={startCellEdit}
+                  cellEditor={cellDraft && (
+                    <TableCellEditorSection cellDraft={cellDraft} cellDraftRef={cellDraftRef} cellEditorFieldRef={cellEditorFieldRef}
+                      simple={simpleByDefault} notifyCellDraftChanged={notifyCellDraftChanged} commitCellEdit={commitCellEdit} cancelCellEdit={cancelCellEdit} />
                   )}
-                  {(!simpleByDefault || tableInspectorAdvancedOpen) && <div id="vnext-table-advanced-details" data-table-advanced-details="">
-                  <div className="vnext-divider" />
-                  <section
-                    className="vnext-fit-height-section"
-                    data-table-fit-height=""
-                    data-fit-height-measured-q={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.measuredIntrinsicHeightQ : undefined}
-                    data-fit-height-prepared-u={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.preparedHeightU : undefined}
-                  >
-                    <h3>Altura da tabela</h3>
-                    {fitHeightPreparation?.ok && (
-                      <p data-fit-height-measurement="">
-                        Altura necessária: {formatDecimalPtBr(fitHeightPreparation.prepared.preparedHeightU / 10_000, 2)} mm
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="vnext-inspector-action"
-                      data-editor-action="fit-table-height"
-                      disabled={!fitHeightPreparation?.ok}
-                      aria-describedby={!fitHeightPreparation?.ok ? `fit-height-reason-${selectedObject.id}` : undefined}
-                      onClick={runFitHeight}
-                    >
-                      Ajustar altura
-                    </button>
-                    {!fitHeightPreparation?.ok && (
-                      <p id={`fit-height-reason-${selectedObject.id}`} data-fit-height-disabled-reason="">
-                        {fitHeightPreparation?.message ?? 'Medindo tabela…'}
-                      </p>
-                    )}
-                    {fitHeightPreparation?.ok && fitHeightPreparation.prepared.tallerThanPage && (
-                      <p className="vnext-fit-height-advisory" data-fit-height-page-advisory="">
-                        A tabela é mais alta que uma página A4. Ajustar altura iguala o quadro ao conteúdo, mas não resolve a publicação em uma única página.
-                      </p>
-                    )}
-                  </section>
-                  </div>}
-                </>
-              )}
-              {selectedObject.type === 'table' && tableStyleScope && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <TableStyleInspector
-                    table={selectedObject.table}
-                    documentStyle={document.style}
-                    scope={tableStyleScope}
-                    roleScope={tableStyleRoleScope}
-                    disabled={tableStyleDisabled}
-                    disabledReasonId={tableStyleDisabledReasonId}
-                    disabledReason={tableStyleDisabledReason}
-                    advancedOpen={tableStyleAdvancedOpen}
-                    paddingLinked={tableStylePaddingLinked}
-                    onRoleScopeChange={setTableStyleRoleScope}
-                    onAdvancedOpenChange={setTableStyleAdvancedOpen}
-                    onPaddingLinkedChange={setTableStylePaddingLinked}
-                    onPatch={runTableStylePatch}
-                    onBorderPreset={runTableBorderPreset}
-                    onPreset={runTablePreset}
-                    onAnnotationGap={runAnnotationGap}
-                  />
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
-                    <h3>{rowDimensionProjection.rowIds.length === 1 ? 'Linha' : `${rowDimensionProjection.rowIds.length} linhas`}</h3>
-                    {editorState.mode === 'cell-edit' && (
-                      <p id={`table-row-dimension-disabled-${selectedObject.id}`}>
-                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
-                      </p>
-                    )}
-                    <label>
-                      <span>Tipo da linha</span>
-                      <select
-                        data-row-property="role"
-                        value={rowDimensionProjection.role}
-                        disabled={editorState.mode !== 'table-grid'}
-                        aria-describedby={editorState.mode !== 'table-grid' ? `table-row-dimension-disabled-${selectedObject.id}` : undefined}
-                        onChange={(event) => runRowProperties(
-                          { role: event.target.value as 'header' | 'body' | 'section' },
-                          'Tipo da linha atualizado.'
-                        )}
-                      >
-                        {rowDimensionProjection.role === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="header">Cabeçalho</option>
-                        <option value="body">Corpo</option>
-                        <option value="section">Seção</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Altura</span>
-                      <select
-                        data-row-property="height-mode"
-                        value={effectiveRowHeightMode ?? rowDimensionProjection.heightMode}
-                        disabled={editorState.mode !== 'table-grid'}
-                        onChange={(event) => runRowHeightMode(event.target.value as 'AUTO' | 'MIN_MM' | 'FIXED_MM')}
-                      >
-                        {rowDimensionProjection.heightMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="AUTO">Automática</option>
-                        <option value="MIN_MM">Mínima</option>
-                        <option value="FIXED_MM">Exata</option>
-                      </select>
-                    </label>
-                    {(effectiveRowHeightMode === 'MIN_MM' || effectiveRowHeightMode === 'FIXED_MM') && (
-                      <label>
-                        <span>Valor</span>
-                        <div className="vnext-dimension-value">
-                          <input
-                            key={rowDimensionProjection.rowIds.join(':') + ':' + String(rowDimensionProjection.valueU)}
-                            data-row-property="height-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof rowDimensionProjection.valueU === 'number' ? String(rowDimensionProjection.valueU / 10_000) : ''}
-                            placeholder={rowDimensionProjection.valueU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runRowHeightValue(event.target.value)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                          <span>mm</span>
-                        </div>
-                      </label>
-                    )}
-                    <div className="vnext-dimension-actions">
-                      <button type="button" data-editor-action="row-height-auto"
-                        disabled={editorState.mode !== 'table-grid'} onClick={() => runRowHeightMode('AUTO')}>
-                        Voltar para automática
-                      </button>
-                      <button type="button" data-editor-action="move-row-up"
-                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows[0]?.id === selectedRowAxisIds[0]}
-                        onClick={() => runAxisReorder('row', -1)}>Mover para cima</button>
-                      <button type="button" data-editor-action="move-row-down"
-                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows.at(-1)?.id === selectedRowAxisIds[0]}
-                        onClick={() => runAxisReorder('row', 1)}>Mover para baixo</button>
-                    </div>
-                  </section>
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
-                    <h3>{columnDimensionProjection.columnIds.length === 1 ? 'Coluna' : `${columnDimensionProjection.columnIds.length} colunas`}</h3>
-                    {editorState.mode === 'cell-edit' && (
-                      <p id={`table-column-dimension-disabled-${selectedObject.id}`}>
-                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
-                      </p>
-                    )}
-                    <label>
-                      <span>Largura</span>
-                      <select
-                        data-column-property="width-mode"
-                        value={columnDimensionProjection.widthMode}
-                        disabled={editorState.mode !== 'table-grid'}
-                        onChange={(event) => runColumnMode(event.target.value as 'fixed' | 'flex')}
-                      >
-                        {columnDimensionProjection.widthMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="flex">Flexível</option>
-                        <option value="fixed">Fixa</option>
-                      </select>
-                    </label>
-                    {columnDimensionProjection.widthMode === 'fixed' && (
-                      <label>
-                        <span>Largura fixa</span>
-                        <div className="vnext-dimension-value">
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':' + String(columnDimensionProjection.fixedWidthU)}
-                            data-column-property="fixed-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.fixedWidthU === 'number' ? String(columnDimensionProjection.fixedWidthU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.fixedWidthU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('fixed', event.target.value)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                          <span>mm</span>
-                        </div>
-                      </label>
-                    )}
-                    <button
-                      type="button"
-                      className="vnext-inspector-action"
-                      data-editor-action="toggle-column-dimension-advanced"
-                      aria-expanded={columnDimensionsAdvancedOpen}
-                      onClick={() => setColumnDimensionsAdvancedOpen((open) => !open)}
-                    >
-                      {columnDimensionsAdvancedOpen ? 'Ocultar avançado' : 'Avançado'}
-                    </button>
-                    {columnDimensionsAdvancedOpen && (
-                      <div className="vnext-dimension-advanced" data-column-dimension-advanced="">
-                        {columnDimensionProjection.widthMode === 'flex' && (
-                          <label>
-                            <span>Peso flexível</span>
-                            <input
-                              key={columnDimensionProjection.columnIds.join(':') + ':weight:' + String(columnDimensionProjection.flexWeight)}
-                              data-column-property="weight"
-                              type="number"
-                              min="1"
-                              step="1"
-                              defaultValue={typeof columnDimensionProjection.flexWeight === 'number' ? columnDimensionProjection.flexWeight : ''}
-                              placeholder={columnDimensionProjection.flexWeight === 'mixed' ? 'Misto' : undefined}
-                              disabled={editorState.mode !== 'table-grid'}
-                              onBlur={(event) => runColumnNumber('weight', event.target.value)}
-                            />
-                          </label>
-                        )}
-                        <label>
-                          <span>Mínimo (mm)</span>
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':min:' + String(columnDimensionProjection.minU)}
-                            data-column-property="min-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.minU === 'number' ? String(columnDimensionProjection.minU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.minU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('min', event.target.value)}
-                          />
-                        </label>
-                        <label>
-                          <span>Máximo (mm)</span>
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':max:' + String(columnDimensionProjection.maxU)}
-                            data-column-property="max-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.maxU === 'number' ? String(columnDimensionProjection.maxU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.maxU === 'mixed' ? 'Misto' : 'Sem limite'}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('max', event.target.value)}
-                          />
-                        </label>
-                      </div>
-                    )}
-                    <div className="vnext-dimension-actions">
-                      <button type="button" data-editor-action="equalize-columns"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length < 2}
-                        onClick={runEqualizeColumns}>Igualar larguras</button>
-                      <button type="button" data-editor-action="move-column-left"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns[0]?.id === selectedColumnAxisIds[0]}
-                        onClick={() => runAxisReorder('column', -1)}>Mover para esquerda</button>
-                      <button type="button" data-editor-action="move-column-right"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns.at(-1)?.id === selectedColumnAxisIds[0]}
-                        onClick={() => runAxisReorder('column', 1)}>Mover para direita</button>
-                    </div>
-                  </section>
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-cell-inspector" data-table-cell-inspector="">
-                    <h3>Células da tabela</h3>
-                    <p>{selectedAnchorCells.length} célula(s) selecionada(s).</p>
-                    {!cellDraft && (
-                      <button type="button" className="vnext-inspector-action" data-editor-action="edit-cell-content"
-                        disabled={selectedAnchorCells.length !== 1} onClick={() => startCellEdit()}>
-                        Editar conteúdo
-                      </button>
-                    )}
-                    {cellDraft && (
-                      <div data-cell-edit-session="">
-                        <label>
-                          <span>Tipo de conteúdo</span>
-                          <select
-                            data-cell-content-type=""
-                            value={cellDraft.activeType}
-                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
-                            onChange={(event) => {
-                              const next = changeTableCellDraftType(cellDraft, event.target.value as EditableCellType);
-                              notifyCellDraftChanged(next);
-                            }}
-                          >
-                            <option value="empty">Vazio</option>
-                            <option value="richText">Texto</option>
-                            <option value="technicalCode">Código técnico</option>
-                            <option value="measurement">Medição</option>
-                            {cellDraft.originalContent.type === 'marker' && <option value="marker">Marcador</option>}
-                            {cellDraft.originalContent.type === 'image' && <option value="image">Imagem</option>}
-                          </select>
-                        </label>
-                        {cellDraft.requiresTypeChangeConfirmation && (
-                          <div role="alert" data-cell-type-confirmation="">
-                            <p>Trocar o tipo substituirá o conteúdo atual desta célula.</p>
-                            <button type="button" onClick={() => notifyCellDraftChanged(confirmTableCellDraftTypeChange(cellDraft))}>
-                              Confirmar substituição
-                            </button>
-                            <button type="button" onClick={() => notifyCellDraftChanged(createTableCellDraft(cellDraft.identity, cellDraft.originalContent))}>
-                              Manter conteúdo atual
-                            </button>
-                          </div>
-                        )}
-                        {cellDraft.activeType === 'richText' && (
-                          <label>
-                            <span>Texto</span>
-                            <textarea
-                              ref={(node) => { cellEditorFieldRef.current = node; }}
-                              data-cell-rich-text=""
-                              value={cellDraft.richText}
-                              disabled={projectEditableRichText(cellDraft.originalContent.type === 'richText'
-                                ? cellDraft.originalContent.value
-                                : { paragraphs: [] }) === null}
-                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                richText: event.target.value.replace(/\r\n?/g, '\n'),
-                              }))}
-                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                            />
-                          </label>
-                        )}
-                        {cellDraft.activeType === 'technicalCode' && (
-                          <label>
-                            <span>Código</span>
-                            <input
-                              ref={(node) => { cellEditorFieldRef.current = node; }}
-                              data-cell-technical-code=""
-                              type="text"
-                              value={cellDraft.technicalCode}
-                              style={{ fontFamily: 'monospace' }}
-                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, { technicalCode: event.target.value }))}
-                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !cellDraftRef.current?.composing) {
-                                  event.preventDefault();
-                                  commitCellEdit();
-                                }
-                              }}
-                            />
-                          </label>
-                        )}
-                        {cellDraft.activeType === 'measurement' && (
-                          <div className="vnext-cell-measurement" data-cell-measurement="">
-                            <label>
-                              <span>Valor</span>
-                              <input
-                                ref={(node) => { cellEditorFieldRef.current = node; }}
-                                data-cell-measurement-value=""
-                                type="text"
-                                value={cellDraft.measurement.valueText}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { valueText: event.target.value },
-                                }))}
-                                onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                                onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                              />
-                            </label>
-                            <label>
-                              <span>Unidade</span>
-                              <input
-                                data-cell-measurement-unit=""
-                                type="text"
-                                value={cellDraft.measurement.unit}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { unit: event.target.value },
-                                }))}
-                              />
-                            </label>
-                            <label>
-                              <span>Qualificador</span>
-                              <select
-                                data-cell-measurement-qualifier=""
-                                value={cellDraft.measurement.qualifier}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { qualifier: event.target.value as TableCellDraft['measurement']['qualifier'] },
-                                }))}
-                              >
-                                <option value="">Nenhum</option>
-                                <option value="approx">Aproximadamente</option>
-                                <option value="min">Mínimo</option>
-                                <option value="max">Máximo</option>
-                              </select>
-                            </label>
-                          </div>
-                        )}
-                        {cellDraft.activeType === 'empty' && <p data-cell-empty-content="">A célula ficará vazia.</p>}
-                        {cellDraft.activeType === 'marker' && <p data-cell-readonly-content="">{simpleByDefault ? 'Marcador existente. Use Notas e legenda para revisar as notas e os símbolos da tabela.' : 'Marcador existente. A edição de marcadores será disponibilizada em uma etapa posterior.'}</p>}
-                        {cellDraft.activeType === 'image' && <p data-cell-readonly-content="">{simpleByDefault ? 'Para ajustar esta imagem, abra Detalhes da tabela e use Imagem da célula.' : 'Imagem existente. A edição de imagem da célula não faz parte desta etapa.'}</p>}
-                        {cellDraft.originalContent.type !== 'marker' && cellDraft.originalContent.type !== 'image' && (
-                          <button type="button" data-editor-action="clear-cell-content"
-                            onClick={() => notifyCellDraftChanged(clearTableCellDraft(cellDraft))}>
-                            Limpar conteúdo
-                          </button>
-                        )}
-                        <div className="vnext-cell-edit-actions">
-                          <button type="button" data-editor-action="cancel-cell-content" onClick={() => cancelCellEdit()}>Cancelar</button>
-                          <button type="button" data-editor-action="commit-cell-content"
-                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
-                            onClick={() => commitCellEdit()}>
-                            Concluir
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
-                    <div className="vnext-divider" />
-                    <section className="vnext-image-cell-panel" data-image-cell-authoring="">
-                      <h3>Imagem da célula</h3>
-                      {!selectedSemanticCell ? (
-                        <p>Selecione exatamente uma célula para inserir ou editar uma imagem.</p>
-                      ) : (
-                        <>
-                          <label>
-                            <span>Imagem do catálogo</span>
-                            <select
-                              data-image-cell-asset=""
-                              value={imageCellAssetChoice}
-                              disabled={tableSemanticDisabled}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onChange={(event) => setImageCellAssetChoice(event.target.value)}
-                            >
-                              <option value="">Escolha uma imagem</option>
-                              {document.assets.map((asset) => (
-                                <option key={asset.id} value={asset.id}>{asset.name} — {asset.alt}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Ajuste</span>
-                            <select
-                              data-image-cell-fit=""
-                              value={imageCellFit}
-                              disabled={tableSemanticDisabled}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onChange={(event) => setImageCellFit(event.target.value as 'contain' | 'cover')}
-                            >
-                              <option value="contain">Conter</option>
-                              <option value="cover">Preencher</option>
-                            </select>
-                          </label>
-                          <label>
-                            <span>Largura</span>
-                            <div>
-                              <input
-                                data-image-cell-width=""
-                                type="text"
-                                inputMode="decimal"
-                                value={imageCellWidthMm}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setImageCellWidthMm(event.target.value)}
-                              />
-                              <span>mm</span>
-                            </div>
-                          </label>
-                          <label>
-                            <span>Altura</span>
-                            <div>
-                              <input
-                                data-image-cell-height=""
-                                type="text"
-                                inputMode="decimal"
-                                value={imageCellHeightMm}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setImageCellHeightMm(event.target.value)}
-                              />
-                              <span>mm</span>
-                            </div>
-                          </label>
-                          <div className="vnext-cell-edit-actions">
-                            <button
-                              type="button"
-                              data-editor-action="set-cell-image"
-                              disabled={tableSemanticDisabled || !imageCellAssetChoice}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellSet}
-                            >
-                              {selectedSemanticCell.content.type === 'image' ? 'Substituir imagem' : 'Inserir imagem'}
-                            </button>
-                            <button
-                              type="button"
-                              data-editor-action="upload-cell-image"
-                              disabled={tableSemanticDisabled || !persistence?.assetBridge}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellUpload}
-                            >
-                              Upload
-                            </button>
-                            <button
-                              type="button"
-                              data-editor-action="clear-cell-image"
-                              disabled={tableSemanticDisabled || selectedSemanticCell.content.type !== 'image'}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellClear}
-                            >
-                              Remover imagem
-                            </button>
-                          </div>
-                          {tableSemanticDisabledReason && <p>{tableSemanticDisabledReason}</p>}
-                        </>
-                      )}
-                    </section>
-                    </>}
-
-                    {markerPanelOpen && selectedTableObject && !selectedTableObject.locked && (
-                      <>
-                        <div className="vnext-divider" />
-                        <section className="vnext-marker-legend-panel" data-marker-legend-panel="">
-                          <div className="vnext-legend-entry-heading">
-                            <h3>Notas, marcadores e legenda</h3>
-                            <button type="button" data-editor-action="close-marker-panel" onClick={() => setMarkerPanelOpen(false)}>Fechar</button>
-                          </div>
-                          <p>Notas, legendas e marcadores usam as superfícies semânticas canônicas desta tabela.</p>
-                          <fieldset className="vnext-marker-create" data-annotation-create="">
-                            <legend>Adicionar anotação</legend>
-                            <label>
-                              <span>Tipo</span>
-                              <select
-                                data-annotation-kind=""
-                                value={newAnnotationKind}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => {
-                                  const kind = event.target.value as 'caption' | 'note' | 'footnote';
-                                  setNewAnnotationKind(kind);
-                                  if (kind === 'caption') setNewAnnotationTarget('TABLE');
-                                }}
-                              >
-                                <option value="caption">Legenda da tabela</option>
-                                <option value="note">Nota</option>
-                                <option value="footnote">Nota de rodapé</option>
-                              </select>
-                            </label>
-                            <label>
-                              <span>Aplicar a</span>
-                              <select
-                                data-annotation-target=""
-                                value={newAnnotationKind === 'caption' ? 'TABLE' : newAnnotationTarget}
-                                disabled={tableSemanticDisabled || newAnnotationKind === 'caption'}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setNewAnnotationTarget(event.target.value as 'TABLE' | 'CELL')}
-                              >
-                                <option value="TABLE">Tabela</option>
-                                <option value="CELL" disabled={!selectedSemanticCell}>Célula selecionada</option>
-                              </select>
-                            </label>
-                            <label>
-                              <span>Texto</span>
-                              <textarea
-                                data-new-annotation-text=""
-                                value={newAnnotationText}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setNewAnnotationText(event.target.value.replace(/\r\n?/g, '\n'))}
-                                placeholder="Texto técnico da anotação"
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              data-editor-action="create-annotation"
-                              disabled={Boolean(cellDraft) || !newAnnotationText.trim() || (newAnnotationTarget === 'CELL' && newAnnotationKind !== 'caption' && !selectedSemanticCell)}
-                              onClick={runAnnotationCreate}
-                            >
-                              Criar e aplicar
-                            </button>
-                          </fieldset>
-                          <div className="vnext-legend-list" data-annotation-list="">
-                            {selectedTableObject.table.annotations.length === 0 ? (
-                              <p>Nenhuma anotação criada.</p>
-                            ) : selectedTableObject.table.annotations.map((annotation, annotationIndex) => {
-                              const editable = projectEditableRichText(annotation.text);
-                              const tableAttached = (selectedTableObject.table.annotationIds ?? []).includes(annotation.id);
-                              const cellAttached = Boolean(selectedSemanticCell?.annotationIds?.includes(annotation.id));
-                              const usageCount = annotationUsageCount(selectedTableObject.table, annotation.id);
-                              return (
-                                <div key={annotation.id} className="vnext-legend-entry-editor" data-annotation-entry-id={annotation.id}>
-                                  <div className="vnext-legend-entry-heading">
-                                    <strong>{annotation.kind === 'caption' ? 'Legenda' : annotation.kind === 'note' ? 'Nota' : 'Nota de rodapé'}</strong>
-                                    <span>{usageCount} referência(s)</span>
-                                  </div>
-                                  <label>
-                                    <span>Texto</span>
-                                    <textarea
-                                      key={annotation.id + ':' + JSON.stringify(annotation.text)}
-                                      data-annotation-text={annotation.id}
-                                      defaultValue={editable ?? ''}
-                                      disabled={editable === null || Boolean(cellDraft)}
-                                      onBlur={(event) => {
-                                        if (editable !== null && event.target.value !== editable) runAnnotationUpdate(annotation, event.target.value);
-                                      }}
-                                    />
-                                  </label>
-                                  {editable === null && (
-                                    <p>RichText avançado preservado; edição simples indisponível nesta etapa.</p>
-                                  )}
-                                  <div className="vnext-cell-edit-actions">
-                                    <button type="button" data-editor-action="annotation-table-reference"
-                                      disabled={Boolean(cellDraft)}
-                                      onClick={() => runAnnotationReference(annotation, 'TABLE', tableAttached ? 'detach' : 'attach')}>
-                                      {tableAttached ? 'Remover da tabela' : 'Aplicar à tabela'}
-                                    </button>
-                                    {annotation.kind !== 'caption' && (
-                                      <button type="button" data-editor-action="annotation-cell-reference"
-                                        disabled={Boolean(cellDraft) || !selectedSemanticCell}
-                                        onClick={() => runAnnotationReference(annotation, 'CELL', cellAttached ? 'detach' : 'attach')}>
-                                        {cellAttached ? 'Remover da célula' : 'Aplicar à célula'}
-                                      </button>
-                                    )}
-                                    <button type="button" data-editor-action="move-annotation-up"
-                                      disabled={Boolean(cellDraft) || annotationIndex === 0}
-                                      onClick={() => runAnnotationReorder(annotation.id, 'up')}>Mover para cima</button>
-                                    <button type="button" data-editor-action="move-annotation-down"
-                                      disabled={Boolean(cellDraft) || annotationIndex === selectedTableObject.table.annotations.length - 1}
-                                      onClick={() => runAnnotationReorder(annotation.id, 'down')}>Mover para baixo</button>
-                                    <button type="button" data-editor-action="remove-annotation"
-                                      disabled={Boolean(cellDraft) || usageCount > 0}
-                                      title={usageCount > 0 ? 'Remova as referências antes de excluir.' : undefined}
-                                      onClick={() => runAnnotationRemove(annotation)}>Excluir</button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="vnext-divider" />
-                          <p>O marcador referencia uma entrada da legenda desta tabela.</p>
-                          <label>
-                            <span>Marcador existente</span>
-                            <select data-marker-picker="" value={markerLegendChoice} onChange={(event) => setMarkerLegendChoice(event.target.value)}>
-                              <option value="">Selecione um marcador</option>
-                              {selectedTableObject.table.legend.map((entry) => {
-                                const text = projectEditableRichText(entry.text) ?? 'Descrição avançada';
-                                const usage = legendUsageCount(selectedTableObject.table, entry.id);
-                                return <option key={entry.id} value={entry.id}>{entry.markerCode} — {text} ({usage} uso(s))</option>;
-                              })}
-                            </select>
-                          </label>
-                          <div className="vnext-cell-edit-actions">
-                            <button type="button" data-editor-action="apply-existing-marker" disabled={!markerLegendChoice || editorState.mode !== 'table-grid'} onClick={runExistingMarkerAssignment}>Aplicar marcador</button>
-                            <button type="button" data-editor-action="detach-marker" disabled={editorState.mode !== 'table-grid' || selectedAnchorCells.length === 0 || selectedAnchorCells.some((cell) => cell.content.type !== 'marker')} onClick={runMarkerDetach}>Remover marcador da célula</button>
-                          </div>
-                          <fieldset className="vnext-marker-create">
-                            <legend>Novo marcador</legend>
-                            <label>
-                              <span>Código</span>
-                              <input data-new-marker-code="" value={newMarkerCode} onChange={(event) => setNewMarkerCode(event.target.value)} placeholder="Ex.: *, †, A, 1" />
-                            </label>
-                            <label>
-                              <span>Descrição</span>
-                              <textarea data-new-marker-text="" value={newMarkerText} onChange={(event) => setNewMarkerText(event.target.value.replace(/\r\n?/g, '\n'))} placeholder="Descrição técnica da legenda" />
-                            </label>
-                            <div className="vnext-cell-edit-actions">
-                              <button type="button" data-editor-action="create-and-assign-marker" disabled={editorState.mode !== 'table-grid'} onClick={runNewMarkerAssignment}>Criar e aplicar</button>
-                              <button type="button" data-editor-action="create-legend" disabled={editorState.mode !== 'table-grid'} onClick={runLegendCreateOnly}>Criar legenda</button>
-                            </div>
-                          </fieldset>
-                          <div className="vnext-legend-list" data-legend-list="">
-                            {selectedTableObject.table.legend.length === 0 ? (
-                              <p>Nenhuma legenda criada.</p>
-                            ) : selectedTableObject.table.legend.map((entry, legendIndex) => (
-                              <LegendEditorRow
-                                key={entry.id}
-                                entry={entry}
-                                usageCount={legendUsageCount(selectedTableObject.table, entry.id)}
-                                canMoveUp={!cellDraft && legendIndex > 0}
-                                canMoveDown={!cellDraft && legendIndex < selectedTableObject.table.legend.length - 1}
-                                mutationDisabled={Boolean(cellDraft)}
-                                onUpdate={(markerCode, plainText) => runLegendUpdate(entry, markerCode, plainText)}
-                                onRemove={() => runLegendRemove(entry)}
-                                onMoveUp={() => runLegendReorder(entry.id, 'up')}
-                                onMoveDown={() => runLegendReorder(entry.id, 'down')}
-                                onLocate={() => locateLegendUsage(entry.id)}
-                              />
-                            ))}
-                          </div>
-                        </section>
-                      </>
-                    )}
-
-                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
-                    <div className="vnext-divider" />
-                    <h3>Propriedades da seleção</h3>
-                    <label>
-                      <span>Alinhamento</span>
-                      <select data-cell-property="textAlign" value={String(commonCellStyleValue('textAlign') ?? '')}
-                        onChange={(event) => runCellPropertyPatch({
-                          textAlign: event.target.value === '' ? null : event.target.value as 'left' | 'center' | 'right',
-                        })}>
-                        <option value="">Herdado</option><option value="left">Esquerda</option>
-                        <option value="center">Centro</option><option value="right">Direita</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Peso</span>
-                      <select data-cell-property="fontWeight" value={String(commonCellStyleValue('fontWeight') ?? '')}
-                        onChange={(event) => runCellPropertyPatch({
-                          fontWeight: event.target.value === '' ? null : Number(event.target.value) as 400 | 700,
-                        })}>
-                        <option value="">Herdado</option><option value="400">Normal</option><option value="700">Negrito</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Quebra</span>
-                      <select data-cell-property="wrapPolicy" value={commonWrapPolicy ?? ''}
-                        onChange={(event) => runCellPropertyPatch({
-                          wrapPolicy: event.target.value === '' ? null : event.target.value as 'wrap' | 'nowrap',
-                        })}>
-                        <option value="">Automático · Herdado</option><option value="wrap">Quebrar</option>
-                        <option value="nowrap">Não quebrar</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Cor do texto</span>
-                      <input key={propertySelectionKey + ':color'} data-cell-property="color" type="text"
-                        defaultValue={String(commonCellStyleValue('color') ?? '')} placeholder="Herdado"
-                        onBlur={(event) => commitCellColor('color', event.target.value)} />
-                    </label>
-                    <label>
-                      <span>Fundo</span>
-                      <input key={propertySelectionKey + ':background'} data-cell-property="background" type="text"
-                        defaultValue={String(commonCellStyleValue('background') ?? '')} placeholder="Herdado"
-                        onBlur={(event) => commitCellColor('background', event.target.value)} />
-                    </label>
-                    <fieldset>
-                      <legend>Padding (mm)</legend>
-                      {(['top', 'right', 'bottom', 'left'] as const).map((edge) => (
-                        <label key={edge}>
-                          <span>{{ top: 'Superior', right: 'Direita', bottom: 'Inferior', left: 'Esquerda' }[edge]}</span>
-                          <input
-                            key={propertySelectionKey + ':padding:' + edge}
-                            data-cell-padding={edge}
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={cellPaddingText(edge)}
-                            placeholder="Herdado"
-                            onBlur={(event) => commitCellPadding(edge, event.target)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                        </label>
-                      ))}
-                      <button type="button" data-editor-action="reset-cell-padding"
-                        onClick={() => runCellPropertyPatch({ paddingMm: null })}>
-                        Redefinir todo padding
-                      </button>
-                    </fieldset>
-                    </>}
-                  </section>
-                </>
+                  imageCellAssetChoice={imageCellAssetChoice} setImageCellAssetChoice={setImageCellAssetChoice}
+                  imageCellFit={imageCellFit} setImageCellFit={setImageCellFit}
+                  imageCellWidthMm={imageCellWidthMm} setImageCellWidthMm={setImageCellWidthMm}
+                  imageCellHeightMm={imageCellHeightMm} setImageCellHeightMm={setImageCellHeightMm}
+                  canUploadCellImage={Boolean(persistence?.assetBridge)} runImageCellSet={runImageCellSet}
+                  runImageCellUpload={runImageCellUpload} runImageCellClear={runImageCellClear}
+                  newAnnotationKind={newAnnotationKind} setNewAnnotationKind={setNewAnnotationKind}
+                  newAnnotationTarget={newAnnotationTarget} setNewAnnotationTarget={setNewAnnotationTarget}
+                  newAnnotationText={newAnnotationText} setNewAnnotationText={setNewAnnotationText}
+                  runAnnotationCreate={runAnnotationCreate} runAnnotationUpdate={runAnnotationUpdate}
+                  runAnnotationReference={runAnnotationReference} runAnnotationReorder={runAnnotationReorder} runAnnotationRemove={runAnnotationRemove}
+                  markerLegendChoice={markerLegendChoice} setMarkerLegendChoice={setMarkerLegendChoice}
+                  runExistingMarkerAssignment={runExistingMarkerAssignment} runMarkerDetach={runMarkerDetach}
+                  newMarkerCode={newMarkerCode} setNewMarkerCode={setNewMarkerCode} newMarkerText={newMarkerText} setNewMarkerText={setNewMarkerText}
+                  runNewMarkerAssignment={runNewMarkerAssignment} runLegendCreateOnly={runLegendCreateOnly}
+                  runLegendUpdate={runLegendUpdate} runLegendRemove={runLegendRemove} runLegendReorder={runLegendReorder}
+                  locateLegendUsage={locateLegendUsage}
+                  commonCellStyleValue={commonCellStyleValue} commonWrapPolicy={commonWrapPolicy} propertySelectionKey={propertySelectionKey}
+                  runCellPropertyPatch={runCellPropertyPatch} commitCellColor={commitCellColor} cellPaddingText={cellPaddingText}
+                  commitCellPadding={commitCellPadding}
+                />
               )}
               <div className="vnext-divider" />
               <div className="vnext-diagnostics-section" data-editor-diagnostics="">
