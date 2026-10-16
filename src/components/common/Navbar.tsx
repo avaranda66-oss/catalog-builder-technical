@@ -10,7 +10,8 @@ import {
   Image as ImageIcon,
   Globe,
   AlertTriangle,
-  LogOut
+  LogOut,
+  FolderOpen
 } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import { useCatalogStore } from '../../stores/useCatalogStore';
@@ -152,6 +153,16 @@ export const Navbar: React.FC = () => {
         <span className="hidden md:inline text-[11px] font-mono text-slate-600 border border-slate-200 bg-slate-50 px-2 py-1">
           {role === 'admin' ? 'Administrador' : 'Colaborador limitado'}
         </span>
+
+        {/* Saída do modo clássico: o editor de catálogos (/v2) é o caminho principal */}
+        <a
+          href="/v2"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-white bg-[#003366] hover:bg-[#002244] rounded-none border border-[#002244] shadow-xs transition-colors"
+          title="Voltar para Meus catálogos, no editor de catálogos"
+        >
+          <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>Abrir editor de catálogos</span>
+        </a>
 
         {/* AI Translation Center Trigger */}
         <button

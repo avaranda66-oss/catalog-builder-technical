@@ -119,6 +119,8 @@ describe('C2.3 physical keyboard save composition', () => {
     vi.spyOn(useAssetStore.getState(), 'loadWorkspaceAssets').mockResolvedValue(undefined);
     vi.spyOn(useAssetStore.getState(), 'initRealtimeSubscription').mockReturnValue(() => undefined);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // Signed-in visits to "/" now open /v2; this suite exercises the classic app, reached only with ?classico=1.
+    window.history.replaceState(null, '', '/?classico=1');
 
     useAuthStore.setState({
       status: 'authenticated',
@@ -138,6 +140,7 @@ describe('C2.3 physical keyboard save composition', () => {
     cleanup();
     activeEditingContext.release();
     useWorkbookDraftStore.getState().resetForTests();
+    window.history.replaceState(null, '', '/');
   });
 
   it.each([
