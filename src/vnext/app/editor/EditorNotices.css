@@ -7,11 +7,11 @@
 .vnext-editor-notice-bands { display: grid; gap: 6px; padding: 8px 20px; }
 .vnext-editor-notices .vnext-editor-notice-band { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
 .vnext-editor-notice {
-  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
   display: flex; width: min(720px, calc(100% - 40px)); align-items: center; gap: 12px; overflow-wrap: anywhere;
   border: 1px solid #c8dcec; border-left: 4px solid var(--vnext-focus, #0072ce); border-radius: var(--vnext-radius-control, 7px);
   background: var(--vnext-accent-surface, #eef6fc); box-shadow: 0 6px 18px rgb(23 32 51 / .14);
-  color: var(--vnext-text-secondary, #41546b); font-size: 14px; line-height: 1.5; padding: 8px 12px;
+  color: var(--vnext-text-secondary, #41546b); font-size: 14px; line-height: 1.5; padding: 6px 12px;
 }
 .vnext-editor-notice[data-tone="success"] { border-color: #bdddc9; border-left-color: var(--vnext-success, #246344); background: var(--vnext-success-surface, #eff8f3); color: var(--vnext-success, #246344); }
 .vnext-editor-notice[data-tone="error"] { border-color: #e2b8b8; border-left-color: var(--vnext-error, #8f3030); background: var(--vnext-error-surface, #fff3f3); color: var(--vnext-error, #8f3030); }
