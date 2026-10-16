@@ -689,6 +689,8 @@ export function CatalogOpenFailure({
   readonly onRetry?: () => void;
 }) {
   const retryable = code === 'OFFLINE' || code === 'REMOTE_FAILURE';
+  // When trying again can work, it is the main action; going back stays one click away.
+  const retryIsPrimary = retryable && Boolean(onRetry);
   return (
     <main className="vnext-library-shell vnext-open-failure" data-catalog-open-failure={code}>
       <section>
@@ -696,8 +698,8 @@ export function CatalogOpenFailure({
         <h1>Não foi possível abrir o catálogo</h1>
         <p>{retryable ? 'Não foi possível abrir este catálogo agora. Tente novamente.' : failureMessage(code, 'load')}</p>
         <div className="vnext-open-failure-actions">
-          {retryable && onRetry && <button type="button" onClick={onRetry}>Tentar novamente</button>}
-          <button type="button" className="vnext-library-create" onClick={onBack}>Voltar aos catálogos</button>
+          {retryIsPrimary && <button type="button" className="vnext-library-create" onClick={onRetry}>Tentar novamente</button>}
+          <button type="button" className={retryIsPrimary ? undefined : 'vnext-library-create'} onClick={onBack}>Voltar aos catálogos</button>
         </div>
       </section>
     </main>
