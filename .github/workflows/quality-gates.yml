@@ -44,6 +44,17 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Production bundle does not ship the AI prototype page
+        run: test ! -e dist/ai-catalog-prototype.html
+
+      - name: Build E2E bundle for proofs (AI prototype page included, never deployed)
+        env:
+          VITE_E2E_BUILD: 'true'
+          BUILD_OUT_DIR: dist/e2e
+        run: |
+          npx vite build
+          test -e dist/e2e/ai-catalog-prototype.html
+
       - name: Install Playwright Chromium and Microsoft Edge
         run: npx playwright install --with-deps chromium msedge
 
@@ -97,10 +108,12 @@ jobs:
       - name: Father translation batching and partial failure proof
         run: node tests/vnext/proof/father-translation-batching-proof.mjs
 
-      - name: AI-first prototype production Chromium, Edge and PDF proof
+      - name: AI-first prototype on the E2E build, Chromium, Edge and PDF proof
         env:
           AI_PROOF_PRODUCTION: '1'
           AI_PROOF_OUTPUT: scratch/ai-catalog-production
+          VITE_E2E_BUILD: 'true'
+          BUILD_OUT_DIR: dist/e2e
         run: |
           node tests/vnext/proof/ai-catalog-prototype-proof.mjs
           AI_PROOF_BROWSER=msedge node tests/vnext/proof/ai-catalog-prototype-proof.mjs
@@ -187,6 +200,8 @@ jobs:
           LONG_PROOF_REFINE: '1'
           LONG_PROOF_PRODUCTION: '1'
           LONG_PROOF_PORT: '5364'
+          VITE_E2E_BUILD: 'true'
+          BUILD_OUT_DIR: dist/e2e
         run: node tests/vnext/proof/long-institutional-catalog-proof.mjs
 
       - name: Upload institutional PDF and cell geometry receipts
@@ -223,7 +238,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload AI-first prototype proof receipts
+      - name: Upload AI-first prototype (E2E build) proof receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
