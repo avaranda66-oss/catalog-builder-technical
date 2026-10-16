@@ -38,6 +38,7 @@ describe('FR-12 status message tone', () => {
     ['Página adicionada.', 'success'],
     ['Objeto desbloqueado.', 'success'],
     ['Modo de grade da tabela.', 'info'],
+    ['Você saiu da edição da tabela.', 'info'],
     // FR-31 table paste results (verified in the browser: they used to show as red errors that never left).
     ['Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.', 'success'],
     ['Tabela aumentada em 3 linhas e 12 células coladas. Para voltar, use Desfazer.', 'success'],

@@ -1326,7 +1326,7 @@ describe('P1.A simple-by-default workspace', () => {
   });
 
   it.each([
-    ['00017\t±0,01%\n°C\tμA', '2 linha(s) × 2 coluna(s)', '1 linha(s) × 1 coluna(s)'],
+    ['00017\t±0,01%\n°C\tμA', '2 linhas × 2 colunas', '1 linha × 1 coluna'],
     ['A\tB\nC', 'quantidades diferentes de colunas', 'incluindo as células vazias'],
     ['"sem fechamento', 'aspas incompletas', 'Copie novamente'],
   ])('keeps paste discoverable and explains rejected input without changing the table: %s', async (input, diagnosis, recovery) => {

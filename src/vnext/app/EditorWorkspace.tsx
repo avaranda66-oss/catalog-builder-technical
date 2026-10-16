@@ -123,7 +123,7 @@ import {
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
 import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
-import { createTableFromPastedText, decidePendingTableFit, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
+import { createTableFromPastedText, decidePendingTableFit, describeRowsByColumns, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
 import { isTabularClipboardText } from '../editor/table-paste-import';
 import { successNotice, type EditorNoticeInput } from '../editor/editor-notices';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
@@ -1438,7 +1438,7 @@ export function EditorWorkspace({
         : 'Não foi possível aplicar as propriedades da célula.');
   };
 
-  const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
+  const leaveTableGrid = (message = 'Você saiu da edição da tabela.') => {
     setTableRangeExtensionArmed(false);
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
@@ -1667,8 +1667,8 @@ export function EditorWorkspace({
       return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
     } catch (error) {
       if (error instanceof TablePasteGeometryError) {
-        const source = `${error.sourceRows} linha(s) × ${error.sourceColumns} coluna(s)`;
-        const destination = `${error.destinationRows} linha(s) × ${error.destinationColumns} coluna(s)`;
+        const source = describeRowsByColumns(error.sourceRows, error.sourceColumns);
+        const destination = describeRowsByColumns(error.destinationRows, error.destinationColumns);
         // FR-31: a paste larger than the room left offers to grow the table in the same step.
         const offer = error.destinationKind === 'capacity'
           ? tablePasteGrowthOffer(live.object.table, live.selection, error.sourceRows, error.sourceColumns)
@@ -4307,7 +4307,7 @@ export function EditorWorkspace({
           </div>
         </main>
 
-        <aside className="vnext-info" aria-label="Inspector do objeto">
+        <aside className="vnext-info" aria-label="Propriedades do objeto">
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
@@ -4711,7 +4711,7 @@ export function EditorWorkspace({
                     <h3>Altura da tabela</h3>
                     {fitHeightPreparation?.ok && (
                       <p data-fit-height-measurement="">
-                        Altura necessária: {(fitHeightPreparation.prepared.preparedHeightU / 10_000).toFixed(2)} mm
+                        Altura necessária: {formatDecimalPtBr(fitHeightPreparation.prepared.preparedHeightU / 10_000, 2)} mm
                       </p>
                     )}
                     <button

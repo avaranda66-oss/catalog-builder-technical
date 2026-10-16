@@ -398,14 +398,14 @@ export function TableStyleInspector({
               key={preset}
               data-style-border-preset={preset}
               disabled={disabled || ((preset === 'outer' || preset === 'inner') && borderCellOnly)}
-              title={(preset === 'outer' || preset === 'inner') && borderCellOnly ? 'Selecione células para aplicar esta topologia de borda.' : undefined}
+              title={(preset === 'outer' || preset === 'inner') && borderCellOnly ? 'Selecione células na tabela para usar esta borda.' : undefined}
               onClick={() => onBorderPreset(preset)}
             >
               {label}
             </button>
           ))}
         </div>
-        {borderCellOnly && <small>Externas e Internas ficam disponíveis em seleção de células, onde a topologia é explícita.</small>}
+        {borderCellOnly && <small>Externas e Internas funcionam quando você seleciona células na tabela.</small>}
       </div>
 
       <div className="vnext-style-presets">

@@ -5,6 +5,7 @@ import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import {
   createTableFromPastedText,
   decidePendingTableFit,
+  describeRowsByColumns,
   growTableAndPaste,
   isPageLevelPasteTarget,
   newTableTransactionId,
@@ -118,6 +119,12 @@ describe('FR-31 growTableAndPaste', () => {
     expect(textAt(grown, 120, 1)).toBe('±0,119 °C');
     session.undo();
     expect(session.getSnapshot().document).toEqual(before.document);
+  });
+
+  it('describes paste sizes with singular and plural, never "linha(s)"', () => {
+    expect(describeRowsByColumns(1, 1)).toBe('1 linha × 1 coluna');
+    expect(describeRowsByColumns(4, 3)).toBe('4 linhas × 3 colunas');
+    expect(describeRowsByColumns(2, 1)).toBe('2 linhas × 1 coluna');
   });
 
   it('does not offer growth beyond 10 columns', () => {

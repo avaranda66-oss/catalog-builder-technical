@@ -130,6 +130,8 @@ describe('FR-10 · position and size fields accept a comma and never lock the ed
     const { session, container } = renderFather();
     select(container, 'shape-target');
     openDetails();
+    // Screen readers announce the panel in plain Portuguese, not "Inspector".
+    expect(screen.getByRole('complementary', { name: 'Propriedades do objeto' })).toContainElement(field(container, 'x'));
     const x = field(container, 'x');
     expect(x.value).toBe('88');
 

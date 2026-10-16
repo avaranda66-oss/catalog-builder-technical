@@ -39,6 +39,11 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
  */
 const UNDO_HINT = 'Para voltar, use Desfazer.';
 
+/** "2 linhas × 1 coluna", with singular and plural (never "linha(s)"). */
+export function describeRowsByColumns(rows: number, columns: number): string {
+  return `${plural(rows, 'linha', 'linhas')} × ${plural(columns, 'coluna', 'colunas')}`;
+}
+
 let fallbackTransaction = 0;
 /**
  * Transaction id for one table creation/paste. Only needs to be unique in this
