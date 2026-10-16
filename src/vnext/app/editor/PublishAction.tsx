@@ -22,7 +22,8 @@ export function PublishAction({ prepare, save, onOpen, onMessage }: PublishActio
   const [saving, setSaving] = React.useState(false);
   const busy = React.useRef(false);
   const mounted = React.useRef(true);
-  React.useEffect(() => () => { mounted.current = false; }, []);
+  // Set on every mount: React.StrictMode (dev and the browser proofs) mounts, unmounts and mounts again.
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const publish = async () => {
     if (busy.current || !prepare()) return;

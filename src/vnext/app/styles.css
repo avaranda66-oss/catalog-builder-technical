@@ -55,6 +55,10 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-canvas-meta strong { color: #2a394d; font-size: 12px; }
 .vnext-canvas-meta div span { color: #7b899b; font-size: 11px; }
 .vnext-canvas-statuses { justify-content: flex-end; }
+/* Integração Onda 1: com o zoom (1I) e o contador de problemas (1D) na mesma linha, o texto do contador ou do "Salvo" mudando fazia a linha quebrar e a folha pular durante um arraste. O grupo da direita tem largura reservada: a quebra de linha passa a depender só da largura da janela. */
+.vnext-canvas-meta > .vnext-canvas-statuses { flex: 0 1 300px; min-width: 0; flex-wrap: nowrap; white-space: nowrap; }
+.vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta > .vnext-canvas-statuses { flex-basis: 200px; }
+.vnext-canvas-statuses .vnext-memory-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vnext-canvas-meta .vnext-zoom-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .vnext-canvas-meta .vnext-zoom-label { margin-right: 2px; color: #526176; font-size: 12px; font-weight: 600; }
 .vnext-zoom-control button { min-height: 32px; border: 1px solid #ccd5e1; border-radius: 6px; background: #fff; color: #26374d; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 0 10px; }
@@ -108,7 +112,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-table-selection-highlight { position: absolute; z-index: 1; border: 2px solid #0072ce; background: rgb(0 114 206 / .14); pointer-events: none; }
 .vnext-table-cell-target { position: absolute; z-index: 2; margin: 0; border: 0; background: transparent; cursor: cell; padding: 0; touch-action: pan-x pan-y; }
 .vnext-table-column-resize-handle, .vnext-table-row-resize-handle { position: absolute; z-index: 7; margin: 0; border: 0; background: transparent; padding: 0; touch-action: none; }
-/* Integração Onda 1: a área de pegar a borda tem 12 px na tela a partir de 100% e encolhe junto com a página abaixo disso (no máximo 12 px da página), para nunca cobrir o meio de uma linha curta em 75% ou no celular. FR-16b (2C) decide o tamanho final. */
+/* Integração Onda 1: as áreas de pegar a borda (12 px) e os seletores de linha/coluna (24 px) têm esse tamanho na tela a partir de 100% e encolhem junto com a página abaixo disso (no máximo o mesmo valor em px da página), para nunca cobrir a linha vizinha em 75% ou no celular. FR-16b (2C) decide o tamanho final. */
 .vnext-table-column-resize-handle { width: min(calc(12px * var(--vnext-stage-unzoom, 1)), 12px); cursor: col-resize; transform: translateX(-50%); }
 .vnext-table-row-resize-handle { height: min(calc(12px * var(--vnext-stage-unzoom, 1)), 12px); cursor: row-resize; transform: translateY(-50%); }
 .vnext-table-column-resize-handle:hover::after, .vnext-table-column-resize-handle:focus-visible::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: calc(2px * var(--vnext-stage-unzoom, 1)); transform: translateX(-50%); background: #0072ce; }
@@ -116,7 +120,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-table-dimension-preview { position: absolute; z-index: 8; pointer-events: none; background: #0072ce; }
 .vnext-table-dimension-preview.is-column { width: calc(2px * var(--vnext-stage-unzoom, 1)); transform: translateX(-50%); }
 .vnext-table-dimension-preview.is-row { height: calc(2px * var(--vnext-stage-unzoom, 1)); transform: translateY(-50%); }
-.vnext-table-row-selector, .vnext-table-column-selector, .vnext-table-whole-selector { position: absolute; z-index: 5; display: grid; min-width: calc(24px * var(--vnext-stage-unzoom, 1)); min-height: calc(24px * var(--vnext-stage-unzoom, 1)); place-items: center; border: calc(1px * var(--vnext-stage-unzoom, 1)) solid #8fa8c2; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: calc(11px * var(--vnext-stage-unzoom, 1)); font-weight: 700; padding: 0; touch-action: manipulation; }
+.vnext-table-row-selector, .vnext-table-column-selector, .vnext-table-whole-selector { position: absolute; z-index: 5; display: grid; min-width: min(calc(24px * var(--vnext-stage-unzoom, 1)), 24px); min-height: min(calc(24px * var(--vnext-stage-unzoom, 1)), 24px); place-items: center; border: calc(1px * var(--vnext-stage-unzoom, 1)) solid #8fa8c2; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: min(calc(11px * var(--vnext-stage-unzoom, 1)), 11px); font-weight: 700; padding: 0; touch-action: manipulation; }
 .vnext-table-row-selector { right: 100%; transform: translateX(calc(-3px * var(--vnext-stage-unzoom, 1))); }
 .vnext-table-column-selector { transform: translateY(calc(-100% - 3px * var(--vnext-stage-unzoom, 1))); }
 .vnext-table-whole-selector { right: 100%; transform: translate(calc(-3px * var(--vnext-stage-unzoom, 1)), calc(-100% - 3px * var(--vnext-stage-unzoom, 1))); }

@@ -1,3 +1,4 @@
+import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublishAction } from '@/vnext/app/editor/PublishAction';
@@ -13,6 +14,17 @@ function setup(save?: { phase: 'idle' | 'conflict' | 'saving'; result?: ManualSa
 }
 
 describe('FR-50 Publicar / PDF', () => {
+  it('saves and opens the review under React.StrictMode (mount, unmount, mount)', async () => {
+    const onOpen = vi.fn(), onMessage = vi.fn();
+    const run = vi.fn(async () => ({ ok: true as const, acknowledged: true }));
+    render(<React.StrictMode><PublishAction prepare={() => true} onOpen={onOpen} onMessage={onMessage} save={{ phase: 'idle', run }} /></React.StrictMode>);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Publicar / PDF' })); });
+    expect(run).toHaveBeenCalledOnce();
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Publicar / PDF' }).getAttribute('aria-busy')).toBeNull();
+  });
+
+
   it('opens directly when there is nothing to save (in-memory catalog)', async () => {
     const { onOpen, button } = setup();
     await act(async () => { fireEvent.click(button); });
