@@ -594,7 +594,7 @@ describe('FR-10 + FR-19 · Save is never blocked by a position/size field', () =
 
     expect(fireEvent.keyDown(document.body, { key: 's', ctrlKey: true })).toBe(false);
     expect(saveCAS).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByText('Este catálogo mudou em outro lugar. Abra a versão mais recente ou salve seu trabalho como uma cópia.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Este catálogo mudou em outro lugar. Salve seu trabalho como uma cópia ou abra a versão mais recente.').length).toBeGreaterThan(0);
   });
 });
 
