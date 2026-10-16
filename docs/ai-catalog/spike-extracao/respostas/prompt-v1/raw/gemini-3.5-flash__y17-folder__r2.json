@@ -1,0 +1,41 @@
+{
+  "llm": "gemini-3.5-flash",
+  "sourceId": "y17-folder",
+  "run": 2,
+  "promptVersion": "fr66a-2026-10-15.1",
+  "transport": "files-api",
+  "ok": true,
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "modelVersion": "gemini-3.6-flash",
+  "usage": {
+    "promptTokenCount": 7136,
+    "candidatesTokenCount": 1655,
+    "totalTokenCount": 8791,
+    "cachedContentTokenCount": 6269,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 752
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 6384
+      }
+    ],
+    "cacheTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 660
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 5609
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "ms": 10945,
+  "uploadMs": 20540,
+  "text": "{\n  \"title\": \"PCON-Y17 Pressure Controller / Calibrator\",\n  \"models\": [\n    \"PCON-Y17\"\n  ],\n  \"sections\": [\n    {\n      \"title\": \"Technical Specifications\",\n      \"rows\": [\n        {\n          \"key\": \"control-stability\",\n          \"label\": \"Control* Stability\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"± 0.002\",\n              \"unit\": \"% FS\",\n              \"condition\": \"using 2 σ method, Range (3) to (8)\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"\n              }\n            },\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"± 0.003\",\n              \"unit\": \"% FS\",\n              \"condition\": \"using 2 σ method, Range (9)\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"(9) 210 bar 0-3000 psi 21 MPa ± 0.003 % FS ± 0.012 % FS\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"accuracy\",\n          \"label\": \"Accuracy\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"± 0.012\",\n              \"unit\": \"% FS\",\n              \"condition\": \"Ranges (3) to (9)\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"pneumatic-connection\",\n          \"label\": \"Pneumatic Connections (Pressure Control Module - C1)\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference)\",\n              \"unit\": \"\",\n              \"condition\": \"\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Pneumatic Connections (Pressure Control Module - C1): 1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference).\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"power-supply\",\n          \"label\": \"Power Supply\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"100 to 240 Vac 50/60 Hz\",\n              \"unit\": \"\",\n              \"condition\": \"\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Power Supply: 100 to 240 Vac 50/60 Hz.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"ambient-temperature\",\n          \"label\": \"Operating Ambient\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"0 to 50\",\n              \"unit\": \"°C\",\n              \"condition\": \"\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"operating-humidity\",\n          \"label\": \"Operating Ambient\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"90 % maximum\",\n              \"unit\": \"\",\n              \"condition\": \"relative humidity\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"dimensions\",\n          \"label\": \"Dimensions\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"125 mm x 300 mm x 265 mm\",\n              \"unit\": \"\",\n              \"condition\": \"DT Version\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"\n              }\n            },\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"132 mm x 483 mm x 300 mm\",\n              \"unit\": \"\",\n              \"condition\": \"RM Version\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"weight\",\n          \"label\": \"Weight\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"6.2\",\n              \"unit\": \"kg\",\n              \"condition\": \"DT Version, nominal\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"\n              }\n            },\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"8.5\",\n              \"unit\": \"kg\",\n              \"condition\": \"RM Version, nominal\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"warranty\",\n          \"label\": \"Warranty\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"1\",\n              \"unit\": \"year\",\n              \"condition\": \"\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Warranty: 1 year\"\n              }\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+}

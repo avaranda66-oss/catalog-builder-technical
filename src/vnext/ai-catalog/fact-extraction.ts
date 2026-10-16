@@ -1,0 +1,597 @@
+import { z } from 'zod';
+import {
+  FactProposalSchema, type CandidateVerification, type Fact, type FactCandidate, type FactProposal, type ValueVerificationStatus,
+} from './contracts';
+import { verificationMessage, type FactVerificationReport, type PdfEvidenceSource } from './fact-verifier';
+import type { ExtractedPdf } from './pdf-intake';
+import { verificationPageText } from './pdf-layout-evidence';
+import { normalizeEvidenceWhitespace } from './pdf-literal-evidence';
+
+/**
+ * Fact extraction contract for a model that reads PDFs (FR-66a spike, reused
+ * by the FR-66 server task): the prompt, the Gemini response schema
+ * ("ProductFactSheet") and the deterministic normalization of the model's
+ * answer into the untrusted FactProposal that fact-verifier.ts checks.
+ * Nothing here trusts the model: every value still goes through
+ * verifyFactProposal against the file's own text.
+ *
+ * Why this module exists (IDS: CREATE): no code sent a PDF to a model, and the
+ * FactProposal contract (FR-67) is shaped for verification, not for a model
+ * to fill (per-row unit, positional values, ids with a strict alphabet).
+ */
+
+export const FACT_EXTRACTION_PROMPT_VERSION = 'fr66a-2026-10-15.2';
+
+/**
+ * Symbol-font characters that PDF text layers (Word manuals) carry in the
+ * Unicode private use area: the PRESYS TA manual prints "±" as U+F0B1 and "°"
+ * as U+F0B0. Copied as they are, they reach the catalog as boxes ("□ 0,1 ºC").
+ * Adobe Symbol encoding, only the signs that occur in specifications.
+ *
+ * Limit: the mapping does not look at the font. Wingdings and Wingdings 2 use
+ * the same private use range for bullets and pictograms (U+F0B7, U+F06D and
+ * U+F057 are not signs there), and pdf-intake runs carry no font name today.
+ * In the TA manual every mapped character comes from the Symbol font (the
+ * Wingdings 2 marks of p. 32, U+F050 and U+F04F, are not mapped), so the spike
+ * is safe; a mapped pictogram could only fail to match. Before this moves into
+ * pdf-intake, where it would change catalog text, it must be limited to text
+ * runs whose pdf.js font name contains "Symbol".
+ */
+const SYMBOL_FONT_CHARACTERS: Readonly<Record<string, string>> = {
+  '': '±', '': '°', '': '×', '': '÷', '': '≤', '': '≥', '': '≠', '': '≈',
+  '': 'µ', '': 'Ω', '': 'Δ', '': 'σ', '': '•', '': 'Ø',
+};
+/**
+ * Diameter signs. The manual draws the diameter with the Symbol empty-set
+ * glyph (U+F0C6, "∅"); the English folder prints "Ø". Both become "Ø", which
+ * the catalog font (Noto Sans) has; it has no "∅" or "⌀".
+ */
+const DIAMETER_SIGNS: Readonly<Record<string, string>> = { '∅': 'Ø', '⌀': 'Ø' };
+const SYMBOL_PATTERN = /[∅⌀]/gu;
+/**
+ * One character for one character (offsets never move): Symbol-font private
+ * use characters become the signs they print, and every diameter sign becomes
+ * "Ø". Applied alike to the file's text (evidence) and to the model's answer,
+ * so verification still compares exact text.
+ */
+export function normalizeSymbolText(text: string): string {
+  return text.replace(SYMBOL_PATTERN, character => SYMBOL_FONT_CHARACTERS[character] ?? DIAMETER_SIGNS[character] ?? character);
+}
+/** The PDF read by pdf-intake with its page text and text positions passed through `normalizeSymbolText`. */
+export function withNormalizedSymbols(pdf: ExtractedPdf): ExtractedPdf {
+  return {
+    ...pdf,
+    pages: pdf.pages.map(page => ({
+      ...page, text: normalizeSymbolText(page.text),
+      ...(page.runs ? { runs: page.runs.map(run => ({ ...run, text: normalizeSymbolText(run.text) })) } : {}),
+    })),
+  };
+}
+/**
+ * A unit as printed, without the footnote asterisk glued to it ("°C*" -> "°C",
+ * "% FS *" -> "% FS"); the footnote's text belongs in the condition.
+ * Superscript digits stay: "m²" is a unit, not a footnote.
+ */
+export function cleanUnit(unit: string): string {
+  return unit.replace(/\s*\*+$/u, '').trim();
+}
+/** A footnote's text without the mark that opens it ("(*) Temperatura Ambiente: 20ºC." -> "Temperatura Ambiente: 20ºC."). */
+export function cleanCondition(condition: string): string {
+  return condition.replace(/^(?:\(\*+\)|\*+)\s*/u, '').trim();
+}
+
+/** One file sent to the model, with the page range it must read. */
+export interface ExtractionSource {
+  readonly sourceId: string;
+  readonly fileName: string;
+  readonly sha256: string;
+  readonly pageCount: number;
+  readonly firstPage: number;
+  readonly lastPage: number;
+}
+
+/** Keys the model should reuse, so the same quantity lines up across files and languages. */
+export const FACT_ROW_KEYS = [
+  'operating-range', 'ambient-temperature', 'display-accuracy', 'accuracy', 'resolution', 'stability',
+  'control-stability', 'axial-uniformity', 'radial-uniformity', 'heating-time', 'cooling-time', 'electric-power',
+  'power-supply', 'well-dimensions', 'weight', 'dimensions', 'warranty', 'pressure-range', 'pressure-type',
+  'pneumatic-connection', 'communication', 'operating-humidity',
+] as const;
+
+const pageRange = (source: ExtractionSource) =>
+  source.firstPage === source.lastPage ? `page ${source.firstPage}` : `pages ${source.firstPage} to ${source.lastPage}`;
+
+/**
+ * Instructions for the model. Values must be literal copies of the page so
+ * that the local verifier can find them; a wrong value is worse than a gap.
+ */
+export function buildFactExtractionPrompt(input: {
+  readonly sources: readonly ExtractionSource[];
+  readonly models?: readonly string[];
+}): string {
+  const files = input.sources.map(source => `- file "${source.sourceId}": "${source.fileName}", ${source.pageCount} pages. ` +
+    `Read ONLY ${pageRange(source)}.`);
+  const models = input.models?.length
+    ? `Products: extract values only for these models, written exactly like this: ${input.models.join(', ')}. ` +
+      'Ignore every other model, even one with a similar name (a name with an extra letter or number is another model).'
+    : 'Products: extract the models of the product described on those pages (at most 6), with their names exactly as printed.';
+  return [
+    'You extract technical specification values from the attached PDF file(s) for a product catalog.',
+    'Accuracy matters more than coverage: a wrong value is far worse than a missing one.',
+    '',
+    'Files:', ...files,
+    models,
+    '',
+    'Rules:',
+    '1. Copy every value exactly as printed: same digits, decimal separator (comma or point), signs (-, +, ±), symbols (Ø, <, >) and words. Do not translate, convert units, round or fix typos.',
+    '2. literal = a contiguous piece of the printed text holding the value. When the unit follows the number ("200 W"), literal is "200" and unit is "W". When the unit is printed inside a range ("-25 °C to +155 °C"), keep the whole range as the literal.',
+    '3. unit = the unit printed with the value ("°C", "W", "mm", "kg", "% FS"), without a footnote mark such as "*"; empty when there is none.',
+    '4. condition = a qualifier printed next to the value, under its label or as a footnote that applies to it ("Full range", "25 °C to 140 °C", "ambient temperature: 23 °C"), copied exactly; empty when there is none.',
+    '5. Give one entry per model in "values". When one printed cell spans several model columns, repeat the value for each model it covers, with the same quote.',
+    '6. When a model has no printed value in a row, leave that model out of the row. Never guess, never copy a value from another model, page or file.',
+    '7. sourceRef.page = the physical page number inside the PDF file (the first page of the file is 1), NOT the page number printed on the page.',
+    '8. sourceRef.quote = a short contiguous run of the page text (at most 200 characters), copied character for character, that contains the row label and the value. For a table row, copy the first line of the label cell followed by the value cells of that row, left to right. Leave out a second line printed under the label (a note or a condition such as "ambient temperature: 23 °C"); it goes in condition. Do not add, drop or reorder words or symbols inside the quote.',
+    `9. key = a short lowercase English slug (a-z, 0-9, -) naming the quantity, the same in any language. Use one of these when it fits: ${FACT_ROW_KEYS.join(', ')}. Otherwise create a similar slug.`,
+    '10. label = the row label as printed on the page, in the language of the page.',
+    '11. box_2d = optional; give it only when the value is inside a picture or a scanned area of the page: [ymin, xmin, ymax, xmax] normalized to 0-1000.',
+    '12. title = the product family name as printed; models = the models that have at least one value. Keep the document order of sections and rows.',
+  ].join('\n');
+}
+
+type GeminiSchema = Readonly<Record<string, unknown>>;
+const text = (maxLength: number, description?: string): GeminiSchema =>
+  ({ type: 'STRING', maxLength, ...(description ? { description } : {}) });
+/**
+ * Gemini `responseSchema` (OpenAPI subset) for the ProductFactSheet answer.
+ * Array limits only on models, rows and box_2d: Gemini answers 400 "invalid
+ * argument" when every nested array has min/max items (checked 2026-10-15);
+ * the other limits are enforced by `toFactProposal`.
+ */
+export function factSheetResponseSchema(sourceIds: readonly string[]): GeminiSchema {
+  const multi = sourceIds.length > 1;
+  const sourceRef = {
+    type: 'OBJECT',
+    properties: {
+      ...(multi ? { file: { type: 'STRING', enum: [...sourceIds] } } : {}),
+      page: { type: 'INTEGER', description: 'Physical page number in the PDF file, first page = 1' },
+      quote: text(300, 'Verbatim text of the page holding the row label and the value'),
+      box_2d: { type: 'ARRAY', minItems: 4, maxItems: 4, items: { type: 'INTEGER' } },
+    },
+    required: [...(multi ? ['file'] : []), 'page', 'quote'],
+    propertyOrdering: [...(multi ? ['file'] : []), 'page', 'quote', 'box_2d'],
+  };
+  const value = {
+    type: 'OBJECT',
+    properties: { model: text(60), literal: text(120), unit: text(24), condition: text(120), sourceRef },
+    required: ['model', 'literal', 'sourceRef'],
+    propertyOrdering: ['model', 'literal', 'unit', 'condition', 'sourceRef'],
+  };
+  const row = {
+    type: 'OBJECT',
+    properties: { key: text(40), label: text(120), values: { type: 'ARRAY', items: value } },
+    required: ['key', 'label', 'values'], propertyOrdering: ['key', 'label', 'values'],
+  };
+  const section = {
+    type: 'OBJECT',
+    properties: { title: text(80), rows: { type: 'ARRAY', minItems: 1, maxItems: 16, items: row } },
+    required: ['title', 'rows'], propertyOrdering: ['title', 'rows'],
+  };
+  return {
+    type: 'OBJECT',
+    properties: {
+      title: text(120), models: { type: 'ARRAY', minItems: 1, maxItems: 6, items: text(60) },
+      sections: { type: 'ARRAY', items: section },
+    },
+    required: ['title', 'models', 'sections'], propertyOrdering: ['title', 'models', 'sections'],
+  };
+}
+
+/** The model's answer, parsed leniently: limits are enforced by the normalization, not by a throw. */
+export const ProductFactSheetSchema = z.object({
+  title: z.string().default(''),
+  models: z.array(z.string()).default([]),
+  sections: z.array(z.object({
+    title: z.string().default(''),
+    rows: z.array(z.object({
+      key: z.string().default(''),
+      label: z.string().default(''),
+      values: z.array(z.object({
+        model: z.string(),
+        literal: z.string(),
+        unit: z.string().optional(),
+        condition: z.string().optional(),
+        sourceRef: z.object({
+          file: z.string().optional(),
+          page: z.number(),
+          quote: z.string(),
+          box_2d: z.array(z.number()).optional(),
+        }),
+      })).default([]),
+    })).default([]),
+  })).default([]),
+});
+export type ProductFactSheet = z.infer<typeof ProductFactSheetSchema>;
+
+export type DropReason =
+  | 'MODEL_NOT_REQUESTED' | 'UNKNOWN_FILE' | 'PAGE_NOT_IN_FILE' | 'EMPTY_LITERAL' | 'EMPTY_QUOTE'
+  | 'INVALID_TEXT' | 'LIMIT_REACHED';
+/** A value of the answer that never reaches the proposal, and why (counted, never silent). */
+export interface DroppedValue {
+  readonly section: string;
+  readonly label: string;
+  readonly model: string;
+  readonly literal: string;
+  readonly reason: DropReason;
+}
+export interface NormalizedExtraction {
+  readonly proposal: FactProposal;
+  readonly dropped: readonly DroppedValue[];
+  /** `sectionId/rowId` -> the model's quantity key, to line the same quantity up across files. */
+  readonly rowKeys: Readonly<Record<string, string>>;
+}
+
+export const MISSING_VALUE_REASON = 'Não encontrado nas páginas lidas.';
+const MAX_SECTIONS = 16, MAX_ROWS = 16, MAX_FACTS = 192, MAX_MODELS = 6, MAX_CANDIDATES = 4;
+const MAX_NAME = 160, MAX_QUOTE = 800;
+
+const oneLine = (value: string | undefined) => normalizeSymbolText(value ?? '').replace(/\s+/gu, ' ').trim();
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
+const validText = (value: string, max: number) => value.length <= max && !CONTROL.test(value);
+/** A one-line name of at most MAX_NAME characters, or `fallback` when it is empty or holds a control character. */
+const safeName = (value: string | undefined, fallback: string) => {
+  const clean = oneLine(value).slice(0, MAX_NAME).trim();
+  return clean && validText(clean, MAX_NAME) ? clean : fallback;
+};
+/**
+ * True when the literal already prints its unit as a whole word ("260 x 200 x
+ * 305 mm" with "mm", "11 min (25 °C to -25 °C)" with "min"), so whoever shows
+ * the value must show the unit once and never edit the literal. A figure may
+ * touch the unit ("14kg"); a letter may not ("305 mm" does not hold "m"), and
+ * no letter or figure may follow it ("m²" does not hold "m").
+ */
+export function literalHasUnit(literal: string, unit: string): boolean {
+  const wanted = unit.trim();
+  if (!wanted) return false;
+  for (let at = literal.indexOf(wanted); at >= 0; at = literal.indexOf(wanted, at + 1)) {
+    const before = literal[at - 1] ?? '', after = literal[at + wanted.length] ?? '';
+    if (!/\p{L}/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
+  }
+  return false;
+}
+/** Lowercase a-z0-9 slug with hyphens, at most `max` characters ("Exatidão do Display" -> "exatidao-do-display"). */
+export function factSlug(value: string, max = 36): string {
+  return value.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, '').slice(0, max).replace(/-+$/u, '');
+}
+function uniqueId(base: string, used: Set<string>, fallback: string): string {
+  const root = factSlug(base) || fallback;
+  let id = root;
+  for (let index = 2; used.has(id); index++) id = `${root}-${index}`;
+  used.add(id);
+  return id;
+}
+function validBox(box: readonly number[] | undefined): [number, number, number, number] | undefined {
+  if (!box || box.length !== 4 || !box.every(item => Number.isInteger(item) && item >= 0 && item <= 1000)) return undefined;
+  const [ymin, xmin, ymax, xmax] = box;
+  return ymin < ymax && xmin < xmax ? [ymin, xmin, ymax, xmax] : undefined;
+}
+
+interface PendingRow { key: string; label: string; unit: string; condition: string; byModel: Map<number, FactCandidate[]> }
+
+/**
+ * Turns the model's ProductFactSheet into a FactProposal (one value position
+ * per model and row) without judging any value: sources, sha256 and page
+ * bounds come from the files themselves; values with a different unit or
+ * condition become rows of their own (the proposal has one unit per row),
+ * except a reading without a unit whose literal already prints the row's unit;
+ * several readings of one position become a conflict; absent positions are
+ * "missing". Anything that cannot be represented is listed in `dropped`.
+ * A section or file title the model wrote with a control character falls back
+ * to "Especificações" or to the model names; it never discards the answer.
+ * Texts go through `normalizeSymbolText` (so the evidence must too: verify
+ * against `withNormalizedSymbols(pdf)`); units and conditions lose footnote marks.
+ */
+export function toFactProposal(answer: unknown, sources: readonly ExtractionSource[],
+  options: { readonly models?: readonly string[]; readonly title?: string } = {}): NormalizedExtraction {
+  if (!sources.length) throw new Error('FACT_EXTRACTION_NO_SOURCE');
+  const sheet = ProductFactSheetSchema.parse(answer);
+  const dropped: DroppedValue[] = [];
+  const drop = (section: string, label: string, model: string, literal: string, reason: DropReason) =>
+    dropped.push({ section, label, model: oneLine(model), literal: oneLine(literal).slice(0, MAX_NAME), reason });
+
+  // Models: the requested list (exact names) or the answer's own list.
+  const requested = (options.models ?? []).map(oneLine).filter(Boolean);
+  const models: string[] = [];
+  const addModel = (name: string) => {
+    const clean = oneLine(name);
+    if (clean && validText(clean, MAX_NAME) && !models.includes(clean) && models.length < MAX_MODELS) models.push(clean);
+  };
+  (requested.length ? requested : sheet.models).forEach(addModel);
+  const modelIndex = (name: string): number => {
+    const clean = oneLine(name);
+    const exact = models.indexOf(clean);
+    if (exact >= 0) return exact;
+    const folded = models.findIndex(model => model.toLowerCase() === clean.toLowerCase());
+    if (folded >= 0 || requested.length) return folded;
+    addModel(clean);
+    return models.indexOf(clean);
+  };
+  const byId = new Map(sources.map(source => [source.sourceId, source]));
+
+  const sections: { title: string; rows: PendingRow[] }[] = [];
+  for (const section of sheet.sections) {
+    const sectionTitle = safeName(section.title, 'Especificações');
+    const rows: PendingRow[] = [];
+    for (const row of section.rows) {
+      const label = oneLine(row.label) || oneLine(row.key);
+      const accepted: { index: number; model: string; unit: string; condition: string; candidate: FactCandidate }[] = [];
+      for (const value of row.values) {
+        const literal = oneLine(value.literal), quote = normalizeSymbolText(value.sourceRef.quote).trim();
+        const unit = cleanUnit(oneLine(value.unit)), condition = cleanCondition(oneLine(value.condition));
+        const index = modelIndex(value.model);
+        if (index < 0) { drop(sectionTitle, label, value.model, literal, 'MODEL_NOT_REQUESTED'); continue; }
+        const source = value.sourceRef.file !== undefined ? byId.get(oneLine(value.sourceRef.file))
+          : sources.length === 1 ? sources[0] : undefined;
+        if (!source) { drop(sectionTitle, label, value.model, literal, 'UNKNOWN_FILE'); continue; }
+        const page = value.sourceRef.page;
+        if (!Number.isInteger(page) || page < 1 || page > source.pageCount) {
+          drop(sectionTitle, label, value.model, literal, 'PAGE_NOT_IN_FILE'); continue;
+        }
+        if (!literal) { drop(sectionTitle, label, value.model, literal, 'EMPTY_LITERAL'); continue; }
+        if (!quote) { drop(sectionTitle, label, value.model, literal, 'EMPTY_QUOTE'); continue; }
+        if (!label || !validText(label, MAX_NAME) || !validText(literal, MAX_NAME) || !validText(unit, MAX_NAME) ||
+            !validText(condition, MAX_NAME) || !validText(quote, MAX_QUOTE)) {
+          drop(sectionTitle, label, value.model, literal, 'INVALID_TEXT'); continue;
+        }
+        const box = validBox(value.sourceRef.box_2d);
+        accepted.push({ index, model: value.model, unit, condition, candidate: {
+          value: literal,
+          source: { sourceId: source.sourceId, page, quote, sha256: source.sha256, ...(box ? { box_2d: box } : {}) },
+        } });
+      }
+      // A reading without a unit whose literal already prints the unit of other
+      // readings of the row ("315 x 200 x 305 mm" next to "260 x 200 x 305 mm"
+      // with "mm") joins their row instead of splitting it in two half-empty rows.
+      // Only one such unit, under the same condition; the verifier checks it again.
+      const unitOf = (item: (typeof accepted)[number]) => {
+        if (item.unit) return item.unit;
+        const units = [...new Set(accepted.filter(other => other.unit && other.condition === item.condition &&
+          literalHasUnit(item.candidate.value, other.unit)).map(other => other.unit))];
+        return units.length === 1 ? units[0] : '';
+      };
+      const groups = new Map<string, PendingRow>();
+      for (const item of accepted) {
+        const unit = unitOf(item), literal = item.candidate.value;
+        const groupKey = `${unit}\u0000${item.condition}`;
+        let group = groups.get(groupKey);
+        if (!group) {
+          group = { key: oneLine(row.key), label, unit, condition: item.condition, byModel: new Map() };
+          groups.set(groupKey, group);
+        }
+        const list = group.byModel.get(item.index) ?? [];
+        if (list.some(other => other.value === literal)) continue; // same reading twice: one candidate
+        if (list.length >= MAX_CANDIDATES) { drop(sectionTitle, label, item.model, literal, 'LIMIT_REACHED'); continue; }
+        list.push(item.candidate);
+        group.byModel.set(item.index, list);
+      }
+      rows.push(...groups.values());
+    }
+    if (rows.length) sections.push({ title: sectionTitle, rows });
+  }
+
+  // Limits of the proposal: at most 16 rows per section, 16 sections, 192 facts.
+  const sectionIds = new Set<string>();
+  const rowKeys: Record<string, string> = {};
+  const out: FactProposal['sections'] = [];
+  let facts = 0;
+  const factOf = (row: PendingRow, index: number): Fact => {
+    const list = row.byModel.get(index) ?? [];
+    if (!list.length) return { status: 'missing', reason: MISSING_VALUE_REASON };
+    return list.length === 1 ? { status: 'known', candidate: list[0] } : { status: 'conflict', candidates: list };
+  };
+  for (const section of sections) {
+    for (let start = 0; start < section.rows.length; start += MAX_ROWS) {
+      const chunk = section.rows.slice(start, start + MAX_ROWS);
+      const title = start ? `${section.title} (continuação)` : section.title;
+      const room = out.length < MAX_SECTIONS ? MAX_FACTS - facts : 0;
+      for (const row of chunk.slice(room)) for (const [index, list] of row.byModel) {
+        for (const item of list) drop(section.title, row.label, models[index], item.value, 'LIMIT_REACHED');
+      }
+      const kept = chunk.slice(0, Math.max(0, room));
+      if (!kept.length) continue;
+      const sectionId = uniqueId(title, sectionIds, 'secao');
+      const rowIds = new Set<string>();
+      out.push({
+        id: sectionId, title: title.slice(0, MAX_NAME),
+        rows: kept.map(row => {
+          const id = uniqueId(row.key || row.label, rowIds, 'linha');
+          rowKeys[`${sectionId}/${id}`] = factSlug(row.key || row.label, 40) || id;
+          return { id, label: row.label, unit: row.unit, condition: row.condition, values: models.map((_, index) => factOf(row, index)) };
+        }),
+      });
+      facts += kept.length;
+    }
+  }
+  if (!models.length) throw new Error('FACT_EXTRACTION_NO_MODEL');
+  if (!out.length) throw new Error('FACT_EXTRACTION_EMPTY');
+  const title = safeName(options.title, safeName(sheet.title, models.join(' / ').slice(0, MAX_NAME)));
+  const proposal = FactProposalSchema.parse({ version: 1, title, models, sections: out });
+  return { proposal, dropped, rowKeys };
+}
+
+/** The quote with `condition` taken out when the condition sits between the label and the value. */
+function quoteWithoutLeadingCondition(quote: string, value: string, condition: string): string | undefined {
+  const text = normalizeEvidenceWhitespace(quote), wanted = normalizeEvidenceWhitespace(condition);
+  if (!wanted) return undefined;
+  const at = text.indexOf(wanted), valueAt = text.indexOf(normalizeEvidenceWhitespace(value), at + wanted.length);
+  // Only a condition printed under the label: some label text before it, the value after it.
+  if (at <= 0 || valueAt < 0 || !/\p{L}/u.test(text.slice(0, at))) return undefined;
+  return normalizeEvidenceWhitespace(`${text.slice(0, at)} ${text.slice(at + wanted.length)}`);
+}
+/**
+ * A table label printed in two lines ("Operating Range" over "ambient
+ * temperature: 23 °C") reads label, values, note in the PDF text, but models
+ * quote it as they see it: label, note, values, which is nowhere in the text.
+ * When a quote is not on its page and its row's condition sits between the
+ * label and the value, the quote without that condition is used, but only if
+ * that shorter quote is on the page. Values, units and conditions never
+ * change, and the verifier still checks everything; a quote already on its
+ * page is never touched. Returns how many quotes were fitted.
+ */
+export function fitQuotesToPages(normalized: NormalizedExtraction, sources: readonly PdfEvidenceSource[]):
+  { readonly extraction: NormalizedExtraction; readonly fitted: number } {
+  const pages = new Map<string, string>();
+  for (const source of sources) for (const page of source.pages) {
+    pages.set(`${source.sourceId}\u0000${page.number}`, normalizeEvidenceWhitespace(verificationPageText(page)));
+  }
+  let fitted = 0;
+  const fit = (candidate: FactCandidate, condition: string): FactCandidate => {
+    const page = pages.get(`${candidate.source.sourceId}\u0000${candidate.source.page}`);
+    if (page === undefined || candidate.source.cell || page.includes(normalizeEvidenceWhitespace(candidate.source.quote))) return candidate;
+    const shorter = quoteWithoutLeadingCondition(candidate.source.quote, candidate.value, condition);
+    if (!shorter || !page.includes(shorter)) return candidate;
+    fitted++;
+    return { ...candidate, source: { ...candidate.source, quote: shorter } };
+  };
+  const proposal: FactProposal = {
+    ...normalized.proposal,
+    sections: normalized.proposal.sections.map(section => ({ ...section, rows: section.rows.map(row => ({
+      ...row,
+      values: row.values.map((fact): Fact => fact.status === 'known' ? { ...fact, candidate: fit(fact.candidate, row.condition) }
+        : fact.status === 'conflict' ? { ...fact, candidates: fact.candidates.map(item => fit(item, row.condition)) } : fact),
+    })) })),
+  };
+  return { extraction: { ...normalized, proposal: FactProposalSchema.parse(proposal) }, fitted };
+}
+
+/**
+ * The figures of a value, for comparing readings of the same quantity: signs
+ * kept ("-25", "±0.02"), a leading "+" dropped, decimal comma read as a point,
+ * a hyphen between two figures read as a range ("0-15" -> 0, 15).
+ * "-25 °C to +155 °C" and "-25 a 155" have the same figures.
+ */
+export function numericSignature(text: string): string[] {
+  const normalized = text.replace(/[−–—]/gu, '-');
+  const figures: string[] = [];
+  const pattern = /(?:(^|[\s([:;/=])([±+-])\s?)?(\d+(?:[.,]\d+)*)/gu;
+  for (const match of normalized.matchAll(pattern)) {
+    const sign = match[2] === '+' ? '' : match[2] ?? '';
+    figures.push(sign + match[3].replace(/,/gu, '.'));
+  }
+  return figures;
+}
+
+/** One value of one file, with the quantity key it was filed under. */
+export interface SourceFactValue {
+  readonly sourceId: string;
+  readonly model: string;
+  readonly key: string;
+  readonly label: string;
+  readonly value: string;
+  readonly unit: string;
+  readonly condition: string;
+  readonly page: number;
+  readonly quote: string;
+  readonly status: ValueVerificationStatus | 'MISSING';
+}
+/** Flattens a verified extraction into one entry per value position that has a reading. */
+export function sourceFactValues(normalized: NormalizedExtraction, report: FactVerificationReport): SourceFactValue[] {
+  return report.values.flatMap(value => {
+    if (value.status === 'MISSING' || !value.candidates.length) return [];
+    const chosen = value.candidates[value.selected ?? 0];
+    return [{
+      sourceId: chosen.source.sourceId, model: value.model,
+      key: normalized.rowKeys[`${value.sectionId}/${value.rowId}`] ?? value.rowId,
+      label: value.label, value: chosen.value, unit: value.unit, condition: value.condition,
+      page: chosen.source.page, quote: chosen.source.quote, status: value.status,
+    }];
+  });
+}
+
+/** Same model and quantity, read with different figures in different files. */
+export interface SourceDivergence {
+  readonly model: string;
+  readonly key: string;
+  /** "value": the figures differ; "condition": same figures, but the printed condition differs ("23 °C" vs "20 °C"). */
+  readonly field: 'value' | 'condition';
+  readonly readings: readonly SourceFactValue[];
+}
+const HAS_EVIDENCE: ReadonlySet<string> = new Set(['VERIFIED_TEXT', 'VERIFIED_CELL', 'VISUAL_ONLY']);
+const ALTERNATIVE = /\s(?:ou|or)\s.*$/su;
+/**
+ * The figures of a value split in two: the main ones, and those of what one
+ * file adds and the other may leave out (a bracket such as "(0,01 ºF)" or
+ * "(25 °C to 140 °C)", an alternative after "ou"/"or").
+ */
+function valueFigures(text: string): { readonly main: string; readonly extra: string } {
+  const extras: string[] = [];
+  const main = text.replace(/\([^()]*\)/gu, group => { extras.push(group); return ' '; })
+    .replace(ALTERNATIVE, rest => { extras.push(rest); return ''; });
+  return { main: numericSignature(main).join(' '), extra: numericSignature(extras.join(' ')).join(' ') };
+}
+/** Two readings disagree when their main figures differ, or when both add figures and those differ. */
+function figuresDiffer(a: string, b: string): boolean {
+  const left = valueFigures(a), right = valueFigures(b);
+  return left.main !== right.main || (left.extra !== '' && right.extra !== '' && left.extra !== right.extra);
+}
+/**
+ * Finds the places where the files disagree, so nothing is chosen in silence.
+ * Only readings with evidence in their own file count (verified or to be
+ * checked on the page); unsupported readings are noise, not a divergence.
+ * What only one file adds ("0,01 ºC (0,01 ºF)" next to "0.01 °C", "10 min
+ * (25 °C to 140 °C)" next to "10" with that condition) is not a divergence.
+ */
+export function findSourceDivergences(values: readonly SourceFactValue[]): SourceDivergence[] {
+  const groups = new Map<string, SourceFactValue[]>();
+  for (const value of values) {
+    if (!HAS_EVIDENCE.has(value.status)) continue;
+    const id = `${value.model}\u0000${value.key}`;
+    groups.set(id, [...(groups.get(id) ?? []), value]);
+  }
+  const found: SourceDivergence[] = [];
+  for (const readings of groups.values()) {
+    if (new Set(readings.map(item => item.sourceId)).size < 2) continue;
+    const conditionSignature = (item: SourceFactValue) => numericSignature(item.condition).join(' ');
+    const { model, key } = readings[0];
+    const differ = readings.some((item, index) => readings.slice(index + 1)
+      .some(other => other.sourceId !== item.sourceId && figuresDiffer(item.value, other.value)));
+    if (differ) found.push({ model, key, field: 'value', readings });
+    // Checked even when the figures differ too: "até 155 °C a 23 °C" x "até 140 °C a 20 °C" are two differences.
+    const withCondition = readings.filter(item => conditionSignature(item));
+    if (new Set(withCondition.map(item => item.sourceId)).size > 1 && new Set(withCondition.map(conditionSignature)).size > 1) {
+      found.push({ model, key, field: 'condition', readings: withCondition });
+    }
+  }
+  return found;
+}
+
+/**
+ * The plain-Portuguese message for one divergence, in the verifier's own
+ * words ("As fontes divergem: ... Escolha o valor certo."). Each reading keeps
+ * the status it got in its own file, with its own label and language: the
+ * readings are never verified again under one row, because "Faixa de
+ * Operação" is not on the English folder and "ambient temperature: 23 °C" is
+ * not on the Portuguese manual. A reading shows its unit and its condition,
+ * so a value divergence and a condition divergence read as one choice.
+ */
+export function divergenceMessage(divergence: SourceDivergence, sourceNames: ReadonlyMap<string, string>): string {
+  const shown = (reading: SourceFactValue) => {
+    const unit = reading.unit && !reading.value.includes(reading.unit) ? ` ${reading.unit}` : '';
+    return `${reading.value}${unit}${reading.condition ? ` (${reading.condition})` : ''}`;
+  };
+  const seen = new Set<string>();
+  const candidates = divergence.readings.flatMap(reading => {
+    const text = shown(reading), id = `${reading.sourceId}\u0000${text}`;
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return [{ value: text, status: reading.status as CandidateVerification,
+      source: { sourceId: reading.sourceId, page: reading.page, quote: reading.quote } }];
+  });
+  const first = divergence.readings[0];
+  return verificationMessage({
+    id: `${divergence.model}/${divergence.key}`, sectionId: 'divergencias', sectionTitle: 'Divergências entre arquivos',
+    rowId: divergence.key, label: first.label, unit: first.unit, condition: first.condition,
+    modelIndex: 0, model: divergence.model, status: 'CONFLICT', candidates,
+  }, sourceNames);
+}

@@ -1,0 +1,41 @@
+{
+  "llm": "gemini-3.8-flash",
+  "sourceId": "y17-folder",
+  "run": 2,
+  "promptVersion": "fr66a-2026-10-15.2",
+  "transport": "files-api",
+  "ok": true,
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "modelVersion": "gemini-3.8-flash",
+  "usage": {
+    "promptTokenCount": 7180,
+    "candidatesTokenCount": 812,
+    "totalTokenCount": 7992,
+    "cachedContentTokenCount": 6310,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 796
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 6384
+      }
+    ],
+    "cacheTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 699
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 5611
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "ms": 7018,
+  "uploadMs": 14378,
+  "text": "{\"title\":\"PCON-Y17\",\"models\":[\"PCON-Y17\"],\"sections\":[{\"title\":\"Technical Specifications\",\"rows\":[{\"key\":\"pneumatic-connection\",\"label\":\"Pneumatic Connections (Pressure Control Module - C1)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference)\",\"unit\":\"\",\"condition\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Pneumatic Connections (Pressure Control Module - C1): 1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference).\"}}]},{\"key\":\"power-supply\",\"label\":\"Power Supply\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"100 to 240\",\"unit\":\"Vac\",\"condition\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Power Supply: 100 to 240 Vac 50/60 Hz.\"}}]},{\"key\":\"ambient-temperature\",\"label\":\"Operating Ambient\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0 to 50\",\"unit\":\"°C\",\"condition\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"}}]},{\"key\":\"operating-humidity\",\"label\":\"Operating Ambient\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"90\",\"unit\":\"% maximum relative humidity\",\"condition\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"}}]},{\"key\":\"dimensions\",\"label\":\"Dimensions\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"125 mm x 300 mm x 265 mm\",\"unit\":\"\",\"condition\":\"DT Version\",\"sourceRef\":{\"page\":11,\"quote\":\"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"}},{\"model\":\"PCON-Y17\",\"literal\":\"132 mm x 483 mm x 300 mm\",\"unit\":\"\",\"condition\":\"RM Version\",\"sourceRef\":{\"page\":11,\"quote\":\"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"}}]},{\"key\":\"weight\",\"label\":\"Weight\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"6.2\",\"unit\":\"kg\",\"condition\":\"DT Version, nominal\",\"sourceRef\":{\"page\":11,\"quote\":\"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"}},{\"model\":\"PCON-Y17\",\"literal\":\"8.5\",\"unit\":\"kg\",\"condition\":\"RM Version, nominal\",\"sourceRef\":{\"page\":11,\"quote\":\"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"}}]},{\"key\":\"warranty\",\"label\":\"Warranty\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"1\",\"unit\":\"year\",\"condition\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Warranty: 1 year\"}}]},{\"key\":\"accuracy\",\"label\":\"Accuracy\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0,16 mmHg / 0,2 mbar\",\"unit\":\"\",\"condition\":\"BR - Barometric Reference\",\"sourceRef\":{\"page\":11,\"quote\":\"BR - Barometric Reference to measure and emulate absolute pressure\\n Accuracy 0,16 mmHg / 0,2 mbar\"}}]}]}]}"
+}
