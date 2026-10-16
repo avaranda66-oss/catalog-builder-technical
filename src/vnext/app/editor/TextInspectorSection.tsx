@@ -74,9 +74,11 @@ export function TextInspectorSection({
     diagnostic.code === 'TEXT_OBJECT_OVERFLOW' && diagnostic.objectId === object.id));
   const lockedReason = disabled ? `${idBase}-locked` : undefined;
 
+  // The patch is chosen from the style on screen, so that style is the one the change expects.
+  const shownStyle = current.style;
   const change = (patch: TextStylePatch) => {
     if (disabled || !prepare()) return;
-    const outcome = applyTextStyle(session, object.id, patch, createTransactionId());
+    const outcome = applyTextStyle(session, object.id, patch, createTransactionId(), shownStyle);
     if (outcome.message) onMessage(outcome.message);
   };
 

@@ -91,6 +91,20 @@ describe('FR-14 applyTextStyle', () => {
     expect(textOf(session.getSnapshot().document).style).toEqual({});
   });
 
+  it('refuses a choice made from a style that is no longer on the box', () => {
+    const document = textDocument({ fontSizePt: 10, fontWeight: 700 });
+    const session = createDocumentSession(document, { createId: ids() });
+    const shown = textOf(document).style;
+    // Someone else turned bold off after the screen showed it; "Negrito" (off) must not run on the new style.
+    expect(applyTextStyle(session, 'text', { fontWeight: 400 }, 'other', shown).ok).toBe(true);
+    expect(applyTextStyle(session, 'text', { fontWeight: 400 }, 'late', shown))
+      .toEqual({ ok: false, message: 'O texto mudou enquanto você escolhia. Tente de novo.' });
+    expect(textOf(session.getSnapshot().document).style).toEqual({ fontSizePt: 10, fontWeight: 400 });
+    session.undo();
+    expect(textOf(session.getSnapshot().document).style).toEqual({ fontSizePt: 10, fontWeight: 700 });
+    expect(session.getSnapshot().canUndo).toBe(false);
+  });
+
   it('explains in plain words when the change cannot be made', () => {
     const locked = createDocumentSession(textDocument({}, true), { createId: ids() });
     expect(applyTextStyle(locked, 'text', { fontWeight: 700 }, 'x'))

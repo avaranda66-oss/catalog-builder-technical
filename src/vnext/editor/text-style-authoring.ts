@@ -97,8 +97,12 @@ function topLevelText(document: CatalogDocument, objectId: string): TextObject |
   return undefined;
 }
 
-export function textStyleAction(object: TextObject, patch: TextStylePatch): ApplicationAction {
-  return { type: 'text.setStyle', objectId: object.id, expectedStyle: object.style, patch };
+export function textStyleAction(
+  object: TextObject,
+  patch: TextStylePatch,
+  expectedStyle: TextStyle = object.style
+): ApplicationAction {
+  return { type: 'text.setStyle', objectId: object.id, expectedStyle, patch };
 }
 
 export interface TextStyleOutcome {
@@ -107,17 +111,21 @@ export interface TextStyleOutcome {
   message: string;
 }
 
-/** Runs one style change on the box as it is now in the session. */
+/**
+ * Runs one style change. `expectedStyle` is the style the screen showed when the button was pressed (the
+ * patch was chosen from it); without it, the box as it is now in the session is used.
+ */
 export function applyTextStyle(
   session: DocumentSession,
   objectId: string,
   patch: TextStylePatch,
-  transactionId: string
+  transactionId: string,
+  expectedStyle?: TextStyle
 ): TextStyleOutcome {
   const object = topLevelText(session.getSnapshot().document, objectId);
   if (!object) return { ok: false, message: 'Selecione uma caixa de texto para mudar o estilo.' };
   if (object.locked) return { ok: false, message: 'A caixa de texto está bloqueada. Desbloqueie para mudar o estilo.' };
-  const result = session.execute(textStyleAction(object, patch), { transactionId });
+  const result = session.execute(textStyleAction(object, patch, expectedStyle), { transactionId });
   if (result.ok) return { ok: true, message: '' };
   return {
     ok: false,
