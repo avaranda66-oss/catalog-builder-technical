@@ -84,6 +84,7 @@ describe('Independent UI cancellation preserves document and permits another req
   });
 });
 
+type ComposerInvoke = { body: { task: string } };
 async function startComposerRequest() {
   const session = makeSession();
   const page = session.getSnapshot().document.pages[0];
@@ -93,35 +94,63 @@ async function startComposerRequest() {
   const selected = { objectId: object.id, text: object.text };
   const before = structuredClone(session.getSnapshot().document);
   const held = deferred<{ data: { reply: unknown }; error: null }>();
-  const invoke = vi.fn(() => held.promise);
-  const client = { functions: { invoke } } as NativeComposeFunctionsClient;
+  let generation = () => held.promise;
+  // The free readiness check (task "status") answers at once; generations are held.
+  const invoke = vi.fn((_name: string, options: ComposerInvoke) => options.body.task === 'status'
+    ? Promise.resolve({ data: { code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true,
+      byok: false, remainingMicrousd: null, callReserveMicrousd: 7800 } }, error: null })
+    : generation());
+  const nextGeneration = (promise: Promise<{ data: { reply: unknown }; error: null }>) => { generation = () => promise; };
+  const generationCalls = () => invoke.mock.calls.filter(([, options]) => options.body.task !== 'status');
+  const client = { functions: { invoke } } as unknown as NativeComposeFunctionsClient;
   const props = { session, documentId: before.id, ownerScope: 'qa-local', client, selected };
   const ui = render(<CatalogNativeComposer {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Conectar Gemini' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Autorizar teste local' }));
+  // Server key by default: no "connect your key" step before the first request.
   fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), {
     target: { value: 'Organize uma apresentação editorial do catálogo.' },
   });
   fireEvent.click(screen.getByRole('button', { name: /Enviar ao Gemini/ }));
-  await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(generationCalls()).toHaveLength(1));
   expect(screen.getByRole('status')).toHaveTextContent('Gemini está preparando');
-  return { session, before, held, invoke, ui, props };
+  return { session, before, held, invoke, ui, props, nextGeneration, generationCalls };
 }
 const clarification = { data: { reply: { status: 'clarification' as const, question: 'Qual seção editorial devemos organizar?' } }, error: null };
 
 describe('Independent delayed composer cancellation', () => {
-  it.each(['selected-object', 'rewrite-mode', 'next-draft'] as const)('recovers after %s changes while a valid request is pending', async change => {
+  // Typing the next message or clicking elsewhere on the page must not throw
+  // away a request that is already being answered (and paid for).
+  it.each(['selected-object', 'next-draft'] as const)('keeps a valid pending request when %s changes and shows its answer', async change => {
     const f = await startComposerRequest();
     if (change === 'selected-object') f.ui.rerender(<CatalogNativeComposer {...f.props} selected={undefined} />);
-    else if (change === 'rewrite-mode') fireEvent.click(screen.getByRole('button', { name: 'Reescrever este texto com Gemini' }));
     else fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Próximo pedido editorial.' } });
     await act(async () => { f.held.resolve(clarification); });
     expect(f.session.getSnapshot().document).toEqual(f.before);
-    expect(f.invoke).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(clarification.data.reply.question)).not.toBeInTheDocument();
+    expect(f.generationCalls()).toHaveLength(1);
+    expect(screen.getByRole('log')).toHaveTextContent(clarification.data.reply.question);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    if (change === 'next-draft') expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Próximo pedido editorial.');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Peça uma nova apresentação editorial.' } });
-    expect(screen.getByRole('button', { name: /(?:Enviar|Pedir reescrita) ao Gemini/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Enviar ao Gemini/ })).toBeEnabled();
+  });
+
+  it('does not switch to rewrite mode while a request is being answered', async () => {
+    const f = await startComposerRequest();
+    expect(screen.getByRole('button', { name: 'Reescrever este texto com Gemini' })).toBeDisabled();
+    await act(async () => { f.held.resolve(clarification); });
+    expect(screen.getByRole('button', { name: 'Reescrever este texto com Gemini' })).toBeEnabled();
+    expect(f.session.getSnapshot().document).toEqual(f.before);
+  });
+
+  it('"Cancelar pedido" drops the request, keeps the text as not sent and ignores the late answer', async () => {
+    const f = await startComposerRequest();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar pedido' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Organize uma apresentação editorial do catálogo.');
+    expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Você · não enviado');
+    await act(async () => { f.held.resolve(clarification); });
+    expect(screen.queryByText(clarification.data.reply.question)).not.toBeInTheDocument();
+    expect(f.session.getSnapshot().document).toEqual(f.before);
+    expect(screen.getByRole('button', { name: /Enviar ao Gemini/ })).toBeEnabled();
   });
 
   it('finishes an unchanged request and shows its clarification without document edits', async () => {
@@ -130,7 +159,7 @@ describe('Independent delayed composer cancellation', () => {
     expect(screen.getByRole('log')).toHaveTextContent(clarification.data.reply.question);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(f.session.getSnapshot().document).toEqual(f.before);
-    expect(f.invoke).toHaveBeenCalledTimes(1);
+    expect(f.generationCalls()).toHaveLength(1);
   });
 });
 
@@ -236,10 +265,12 @@ describe('Independent ownership of overlapping composer requests', () => {
   it.each(obsoleteCompletions)('ignores obsolete %s %s; only the current proposal can be approved', async (outcome, order) => {
     const f = await startComposerRequest();
     const next = deferred<{ data: { reply: unknown }; error: null }>();
-    f.invoke.mockReturnValue(next.promise);
+    f.nextGeneration(next.promise);
+    // A new request while one is in flight requires cancelling the first one.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar pedido' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Crie a capa editorial atual.' } });
     fireEvent.click(screen.getByRole('button', { name: /Enviar ao Gemini/ }));
-    await waitFor(() => expect(f.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(f.generationCalls()).toHaveLength(2));
     if (order === 'after-current-preview') await act(async () => { next.resolve(editorialReply('atual')); });
     await act(async () => {
       if (outcome === 'resolve') f.held.resolve(editorialReply('obsoleto'));
@@ -273,13 +304,18 @@ describe('Independent ownership of overlapping composer requests', () => {
   it('shows a current provider failure and allows retry with explicit approval still required', async () => {
     const f = await startComposerRequest();
     await act(async () => { f.held.reject(new Error('current provider request failed')); });
-    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível consultar o Gemini');
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível consultar a IA agora');
+    expect(screen.getByRole('alert')).toHaveTextContent('O catálogo não foi alterado.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('current provider request failed');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    // The failed message is not stored as sent: it is back in the text box.
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Organize uma apresentação editorial do catálogo.');
+    expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toBeInTheDocument();
     const next = deferred<{ data: { reply: unknown }; error: null }>();
-    f.invoke.mockReturnValue(next.promise);
+    f.nextGeneration(next.promise);
     fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Tente a capa editorial novamente.' } });
     fireEvent.click(screen.getByRole('button', { name: /Enviar ao Gemini/ }));
-    await waitFor(() => expect(f.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(f.generationCalls()).toHaveLength(2));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await act(async () => { next.resolve(editorialReply('atual')); });
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument();
@@ -296,6 +332,6 @@ describe('Independent ownership of overlapping composer requests', () => {
     });
     expect({ ...localStorage }).toEqual(historyBefore);
     expect(f.session.getSnapshot().document).toEqual(f.before);
-    expect(f.invoke).toHaveBeenCalledTimes(1);
+    expect(f.generationCalls()).toHaveLength(1);
   });
 });

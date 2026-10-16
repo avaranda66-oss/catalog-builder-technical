@@ -1,7 +1,10 @@
 import React from 'react';
 import type { DocumentSession } from '../application';
 import { ProviderCredentialsSettings } from './ProviderCredentialsSettings';
-import { nativeComposeGateway, nativeTextEditGateway, type NativeComposeFunctionsClient } from './native-compose-client';
+import {
+  nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
+  type ComposerReadiness, type NativeComposeFunctionsClient,
+} from './native-compose-client';
 import { applyNativeTextEdit, plainSelectedEditorialText, proposeNativeTextEdit,
   type NativeTextEditReply, type SelectedEditorialText } from './native-text-edit';
 import {
@@ -13,6 +16,8 @@ import {
   type WorkbenchEntry,
 } from './workbench-dialogue';
 import { redactConversationMessage } from './conversation-evidence';
+import { composerErrorMessage, composerReadinessText } from './composer-messages';
+import { clearByokCredential, setByokCredential, useByokCredential } from './byok-session';
 import { VerifiedPdfTableReview } from './VerifiedPdfTableReview';
 import type { NativePdfCellFillTarget } from './native-pdf-cell-fill';
 
@@ -32,40 +37,55 @@ interface Pending {
   requestSequence: number;
 }
 
+/** One free readiness check per client per minute; reopening the panel reuses it. */
+const readinessCache = new WeakMap<NativeComposeFunctionsClient, { at: number; value: Promise<ComposerReadiness> }>();
+function cachedReadiness(client: NativeComposeFunctionsClient): Promise<ComposerReadiness> {
+  const hit = readinessCache.get(client);
+  if (hit && Date.now() - hit.at < 60_000) return hit.value;
+  const value = readComposerReadiness(client).catch((): ComposerReadiness => ({ kind: 'available' }));
+  readinessCache.set(client, { at: Date.now(), value });
+  return value;
+}
+const clock = (timestamp: string) => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable }: Props) {
   const [message, setMessage] = React.useState('');
   const [turns, setTurns] = React.useState<WorkbenchEntry[]>(() =>
     readWorkbenchDialogue(localStorage, documentId, ownerScope));
   const turnsRef = React.useRef(turns);
-  const [unlocked, setUnlocked] = React.useState(false);
-  const credential = React.useRef<string>();
+  // The server key is the default. A personal key unlocked in "Avançado" lives
+  // outside this panel (byok-session), so closing the panel does not lock it.
+  const ownKey = useByokCredential(ownerScope);
   const requestSerial = React.useRef(0);
-  const [busy, setBusy] = React.useState(false);
+  const inFlightText = React.useRef('');
+  const [busy, setBusy] = React.useState<false | 'compose' | 'rewrite'>(false);
   const [pending, setPending] = React.useState<Pending>();
   const [rewriteMode, setRewriteMode] = React.useState(false);
   const [pendingRewrite, setPendingRewrite] = React.useState<{ reply: NativeTextEditReply;
     target: SelectedEditorialText; revision: number; serial: number }>();
   const editableSelectedText = selected ? plainSelectedEditorialText(selected) : null;
   const [error, setError] = React.useState('');
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [unsent, setUnsent] = React.useState<string>();
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [readiness, setReadiness] = React.useState<ComposerReadiness>();
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
-  // Busy belongs to the current request. Revoking an older response must
-  // also release the controls; its eventual completion cannot release a newer one.
-  const invalidateRequest = React.useCallback(() => {
-    requestSerial.current++;
-    setBusy(false);
-    setPending(undefined);
-    setPendingRewrite(undefined);
-  }, []);
   React.useEffect(() => { input.current?.focus(); }, []);
-  React.useEffect(() => { invalidateRequest();
-    setRewriteMode(false); }, [selected?.objectId, invalidateRequest]);
-  React.useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [turns]);
-  React.useEffect(() => () => {
-    requestSerial.current++;
-    credential.current = undefined;
-  }, []);
+  // Selecting something else on the page only leaves rewrite mode. A paid
+  // proposal or a request in flight is kept (it carries its own target).
+  React.useEffect(() => { setRewriteMode(false); }, [selected?.objectId]);
+  React.useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [turns, unsent]);
+  // Late answers after the panel closes are ignored and never stored.
+  React.useEffect(() => () => { requestSerial.current++; }, []);
+  React.useEffect(() => {
+    if (!client) return;
+    let alive = true;
+    void cachedReadiness(client).then(value => { if (alive) setReadiness(value); });
+    return () => { alive = false; };
+  }, [client]);
   const saveTurn = (role: WorkbenchEntry['role'], content: string) => {
     try {
       const record: WorkbenchEntry = {
@@ -79,46 +99,52 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setTurns(next);
       return true;
     } catch {
-      setError('Não foi possível proteger o histórico local. Exporte a conversa e tente novamente.');
+      setError('Não foi possível guardar a conversa neste navegador. Exporte a conversa e tente novamente.');
       return false;
     }
+  };
+  /** A failed or cancelled message is never stored as sent: it returns to the text box. */
+  const restoreUnsent = (text: string) => {
+    setUnsent(text);
+    setMessage(current => current || text);
   };
   const send = async () => {
     const text = message.trim();
     if (!text || text.length > 1200 || busy || turnsRef.current.length > WORKBENCH_MESSAGE_LIMIT - 2) return;
-    // Never ask a provider to mutate. Only request a typed proposal; approval
-    // will execute canonical document commands after a CAS revision check.
-    if (!client || !unlocked || !credential.current) {
-      setSettingsOpen(true);
-      setError('Primeiro conecte e desbloqueie sua chave Gemini neste dispositivo.');
+    if (!client) {
+      setError('A IA não está disponível nesta tela. Continue editando manualmente.');
       return;
     }
+    // Never ask a provider to mutate. Only request a typed proposal; approval
+    // will execute canonical document commands after a CAS revision check.
+    const isRewriting = rewriteMode && !!selected;
+    const target = selected;
     const snapshot = session.getSnapshot();
     const history: NativeComposeRequest['history'] = turnsRef.current.slice(-8).map(turn => ({
       role: turn.role, message: redactConversationMessage(turn.content).slice(0, 800),
     }));
     const sequence = ++requestSerial.current;
-    setBusy(true); setError(''); setPending(undefined); setPendingRewrite(undefined);
+    inFlightText.current = text;
+    setBusy(isRewriting ? 'rewrite' : 'compose'); setError(''); setUnsent(undefined);
+    setPending(undefined); setPendingRewrite(undefined);
     setMessage('');
-    if (!saveTurn('user', text)) { setBusy(false); return; }
     try {
-      const isRewriting = rewriteMode && !!selected;
-      const reply = isRewriting
-        ? await proposeNativeTextEdit(selected, text,
-          nativeTextEditGateway(client, credential.current), history)
-        : await requestNativeCompose(snapshot.document, text,
-          nativeComposeGateway(client, credential.current), history);
+      const reply = isRewriting && target
+        ? await proposeNativeTextEdit(target, text, nativeTextEditGateway(client, ownKey), history)
+        : await requestNativeCompose(snapshot.document, text, nativeComposeGateway(client, ownKey), history);
       if (sequence !== requestSerial.current) return;
       if (session.getSnapshot().localSequence !== snapshot.localSequence ||
           session.getSnapshot().document.id !== snapshot.document.id) {
-        setError('O catálogo mudou durante a análise. Peça outra proposta para a versão atual.');
+        restoreUnsent(text);
+        setError('O catálogo mudou enquanto a IA respondia. Envie o pedido de novo para a versão atual.');
         return;
       }
+      if (!saveTurn('user', text)) return;
       if (reply.status === 'clarification') {
         saveTurn('assistant', reply.question);
       } else if ('revisedText' in reply) {
-        if (!isRewriting || !selected) throw new Error('TEXT_EDIT_CONTEXT_LOST');
-        setPendingRewrite({ reply, target: selected, revision: snapshot.localSequence, serial: sequence });
+        if (!isRewriting || !target) throw new Error('TEXT_EDIT_CONTEXT_LOST');
+        setPendingRewrite({ reply, target, revision: snapshot.localSequence, serial: sequence });
         saveTurn('assistant', 'Preparei uma reescrita do texto selecionado. Confira o antes e depois antes de aplicar.');
       } else {
         setPending({ plan: reply, revision: snapshot.localSequence,
@@ -126,20 +152,28 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         saveTurn('assistant', reply.summary +
           ' Revise a proposta de ' + reply.pages.length + ' página(s) antes de aplicar. Nenhum valor técnico será inventado.');
       }
-    } catch {
+    } catch (failure) {
       if (sequence === requestSerial.current) {
-        setError('Não foi possível consultar o Gemini com segurança. Verifique a conexão, a autorização e o limite de uso. O catálogo não foi alterado.');
+        restoreUnsent(text);
+        setError(composerErrorMessage(failure, { usingOwnKey: !!ownKey }));
       }
     } finally {
       if (sequence === requestSerial.current) setBusy(false);
     }
+  };
+  const cancel = () => {
+    if (!busy) return;
+    requestSerial.current++;
+    setBusy(false);
+    restoreUnsent(inFlightText.current);
+    setError('');
   };
   const approve = () => {
     if (!pending || busy || requestSerial.current !== pending.requestSequence) return;
     if (session.getSnapshot().document.id !== pending.documentId ||
         session.getSnapshot().localSequence !== pending.revision) {
       setPending(undefined);
-      setError('A proposta ficou desatualizada. Converse novamente com o Gemini.');
+      setError('A proposta ficou desatualizada porque o catálogo mudou. Peça de novo à IA.');
       return;
     }
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -149,7 +183,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     try {
       const result = applyNativeCompose(session, pending.plan, pending.revision);
       saveTurn('assistant', 'Apliquei ' + result.pagesAdded + ' página(s) e ' +
-        result.tablesAdded + ' tabela(s) editáveis no documento. Campos técnicos permanecem vazios; revise, depois salve.');
+        result.tablesAdded + ' tabela(s) editáveis no catálogo. Os campos técnicos ficam vazios; revise e depois salve.');
       setPending(undefined);
       setError('');
     } catch {
@@ -183,21 +217,22 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   return <section className="ai-workbench-chat" aria-label="Chat de criação com Gemini">
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>
-        <p>Descreva o que deseja. O assistente propõe páginas A4 editáveis, que você confirma antes de inserir.</p></div>
+        <p>Descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
+        <p className="ai-readiness" data-ai-readiness={ownKey ? 'own-key' : readiness?.kind ?? (client ? 'checking' : 'none')}>
+          {client ? composerReadinessText(readiness, !!ownKey) : 'A IA não está disponível nesta tela.'}</p></div>
       <span className="ai-chat-count" aria-label="Quantidade de mensagens">{turns.length}</span>
     </div>
     <div className="ai-chat-log" ref={log} role="log" aria-label="Histórico de criação do catálogo" aria-live="polite">
       {editableSelectedText && <div className="ai-selection-context">
         <small>Texto selecionado na página:</small>
         <p>{editableSelectedText}</p>
-        <button type="button" aria-pressed={rewriteMode}
-          onClick={() => { invalidateRequest();
-            setRewriteMode(value => !value); setError(''); input.current?.focus(); }}>
+        <button type="button" aria-pressed={rewriteMode} disabled={!!busy}
+          onClick={() => { setRewriteMode(value => !value); setError(''); input.current?.focus(); }}>
           {rewriteMode ? 'Voltar a criar páginas' : 'Reescrever este texto com Gemini'}
         </button>
-        {rewriteMode && <small>Ao enviar, este trecho será transmitido ao provedor para propor uma revisão. Você confirma antes de alterar o catálogo.</small>}
+        {rewriteMode && <small>Ao enviar, este trecho vai para a IA propor uma revisão. Você confirma antes de alterar o catálogo.</small>}
       </div>}
-      {turns.length === 0 && <div className="ai-chat-welcome">
+      {turns.length === 0 && !unsent && <div className="ai-chat-welcome">
         <p>O que vamos criar?</p>
         <div className="ai-chat-suggestions">
           {['Crie uma capa e uma apresentação profissional para este catálogo.',
@@ -205,14 +240,21 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
             'Organize quatro novas páginas com capa, índice e tabelas de especificações.'].map(text =>
               <button key={text} type="button" onClick={() => { setMessage(text); input.current?.focus(); }}>{text}</button>)}
         </div>
-        <small>A criação é incremental. Os números técnicos só serão preenchidos após conferência das fontes.</small>
+        <small>A IA cria até 4 páginas por pedido. As tabelas chegam vazias: os números técnicos você preenche a partir das fontes.</small>
       </div>}
       {turns.map(turn => <article key={turn.id} className={'ai-chat-turn ai-chat-' + turn.role}>
-        <strong>{turn.role === 'user' ? 'Você' : 'Gemini / Assistente'}</strong>
+        <strong>{turn.role === 'user' ? 'Você' : 'Assistente'}</strong>
         <p>{turn.content}</p>
-        <small>Revisão {turn.revision}</small>
+        <small>{clock(turn.timestamp)}</small>
       </article>)}
-      {busy && <p role="status">Gemini está preparando uma proposta de páginas…</p>}
+      {unsent && <article className="ai-chat-turn ai-chat-user ai-chat-unsent" aria-label="Mensagem não enviada">
+        <strong>Você · não enviado</strong>
+        <p>{unsent}</p>
+        <small>A mensagem voltou para a caixa de texto. Ajuste se quiser e envie de novo.</small>
+      </article>}
+      {busy && <p role="status">{busy === 'rewrite'
+        ? 'Gemini está preparando uma reescrita do texto…'
+        : 'Gemini está preparando uma proposta de páginas…'}</p>}
       {pendingRewrite?.reply.status === 'proposal' && <div className="ai-compose-proposal"
         role="group" aria-label="Revisão de texto selecionado">
         <h4>Antes de alterar, confira</h4>
@@ -221,7 +263,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <div className="ai-chat-actions">
           <button type="button" className="vnext-btn-primary"
             onClick={approveRewrite}>Confirmar reescrita selecionada</button>
-          <button type="button" onClick={invalidateRequest}>Rejeitar reescrita</button>
+          <button type="button" onClick={() => setPendingRewrite(undefined)}>Rejeitar reescrita</button>
         </div>
       </div>}
       {pending && <div className="ai-compose-proposal" role="group" aria-label="Proposta de páginas">
@@ -235,7 +277,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         </li>)}</ul>
         <div className="ai-chat-actions">
           <button className="vnext-btn-primary" type="button" onClick={approve}>Confirmar e inserir no catálogo</button>
-          <button type="button" onClick={invalidateRequest}>Rejeitar proposta</button>
+          <button type="button" onClick={() => setPending(undefined)}>Rejeitar proposta</button>
         </div>
       </div>}
     </div>
@@ -244,38 +286,44 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       <textarea id="gemini-catalog-command" ref={input} value={message} maxLength={1200} rows={3}
         placeholder={rewriteMode ? 'Torne este título mais claro, conciso e profissional…'
           : 'Crie um catálogo técnico com capa, índice e tabelas comparativas…'}
-        onChange={event => { setMessage(event.target.value); invalidateRequest(); }}
+        onChange={event => setMessage(event.target.value)}
         onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault(); void send();
         } }} />
       <div className="ai-chat-actions">
         <button className="vnext-btn-primary" type="button" onClick={() => { void send(); }}
-          disabled={!message.trim() || busy || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
+          disabled={!message.trim() || !!busy || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
           {busy ? 'Preparando…' : rewriteMode ? 'Pedir reescrita ao Gemini ↗' : 'Enviar ao Gemini ↗'}
         </button>
-        <button type="button" onClick={() => setSettingsOpen(v => !v)}
-          aria-expanded={settingsOpen} aria-controls="catalog-gemini-settings">
-          {unlocked ? 'Chave desbloqueada' : 'Conectar Gemini'}
-        </button>
+        {busy && <button type="button" onClick={cancel}>Cancelar pedido</button>}
+        <button type="button" onClick={() => setAdvancedOpen(value => !value)}
+          aria-expanded={advancedOpen} aria-controls="catalog-gemini-settings">Avançado (chave própria)</button>
+        {ownKey && <button type="button" onClick={() => { clearByokCredential(); setError(''); }}>
+          Voltar a usar a IA do servidor</button>}
       </div>
-      {settingsOpen && <div id="catalog-gemini-settings" className="ai-compose-settings">
-        <ProviderCredentialsSettings
+      {advancedOpen && <div id="catalog-gemini-settings" className="ai-compose-settings">
+        <ProviderCredentialsSettings onlyProvider="gemini" initiallyUnlocked={ownKey ? ['gemini'] : []}
           onUnlock={(provider, key) => {
-            if (provider === 'gemini') { credential.current = key; setUnlocked(true); setSettingsOpen(false); setError(''); }
-            else { credential.current = undefined; setUnlocked(false);
-              setError('Somente Gemini tem adaptador de composição habilitável nesta etapa.'); }
-            invalidateRequest();
+            if (provider !== 'gemini') {
+              setError('Somente uma chave do Gemini funciona nesta tela.');
+              return;
+            }
+            try {
+              setByokCredential(key, ownerScope);
+              setAdvancedOpen(false);
+              setError('');
+            } catch {
+              setError('Essa chave não parece válida. Confira e tente de novo.');
+            }
           }}
-          onLock={() => { credential.current = undefined; setUnlocked(false);
-            invalidateRequest(); }}
+          onLock={() => clearByokCredential()}
         />
       </div>}
       {selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}
         session={session} target={selectedTable} onBeforeMutation={onBeforeMutation}/>}
       {error && <p role="alert">{error}</p>}
-      <p className="ai-boundary">Gemini propõe estruturas para o motor do catálogo; você aprova antes de inserir.
-        O serviço depende de ativação segura do gateway e limite de gastos. Não interpreta PDFs,
-        não remove fundos e não cria especificações técnicas sem conferência.</p>
+      <p className="ai-boundary">A IA propõe a estrutura das páginas e você confere antes de inserir.
+        Ela não lê PDFs, não trata fotos e não inventa valores técnicos: as tabelas chegam vazias para você preencher.</p>
     </div>
   </section>;
 }
