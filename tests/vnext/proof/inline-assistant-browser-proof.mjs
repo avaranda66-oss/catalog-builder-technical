@@ -59,13 +59,45 @@ try {
   assert.equal(await page.locator('[data-vnext-assistant="open"]').count(), 0);
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
   await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
-  await page.setViewportSize({ width: 1180, height: 800 });
+  // FR-17: on a laptop (1366 and 1440 px) the assistant is the "Assistente" tab of the right column, in the place of
+  // "Propriedades". It no longer covers the page panel, the properties or the A4 sheet.
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(200);
+    const layout = await page.evaluate(() => {
+      const rect = (selector) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect();
+        return box && { left: box.left, right: box.right, width: box.width };
+      };
+      const dock = document.querySelector('.vnext-assistant-dock');
+      return { dock: rect('.vnext-assistant-dock'), column: rect('.vnext-side-column'), pages: rect('.vnext-pages'),
+        stage: rect('.vnext-page-stage'), fixed: dock ? getComputedStyle(dock).position === 'fixed' : null,
+        viewport: window.innerWidth };
+    });
+    assert(layout.dock && layout.column && layout.pages && layout.stage, `Editor parts missing at ${viewport.width} px`);
+    assert.equal(layout.fixed, false, `At ${viewport.width} px the assistant must sit in the right column, not over the screen`);
+    assert(layout.dock.left >= layout.column.left - 1 && layout.dock.right <= layout.column.right + 1,
+      `At ${viewport.width} px the assistant must fill the right column only`);
+    assert(layout.dock.left >= layout.stage.right - 3, `At ${viewport.width} px the assistant must not cover the A4 sheet`);
+    assert(layout.dock.left >= layout.pages.right, `At ${viewport.width} px the assistant must not cover the page panel`);
+    assert(layout.dock.right <= layout.viewport + 1);
+    await page.screenshot({ path: resolve(evidence, `assistant-tab-${viewport.width}.png`), fullPage: false });
+  }
+  // "Propriedades" comes back in the same place; the conversation is still there in "Assistente".
+  await page.getByRole('tab', { name: 'Propriedades', exact: true }).click();
+  assert.equal(await page.locator('[data-vnext-assistant="open"]').count(), 0);
+  await page.getByRole('complementary', { name: 'Propriedades do objeto' }).waitFor();
+  await page.getByRole('tab', { name: 'Assistente', exact: true }).click();
+  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
+  // Only below 900 px the assistant covers the screen, with its own "Fechar".
+  await page.setViewportSize({ width: 860, height: 800 });
   await page.screenshot({ path: resolve(evidence, 'assistant-mobile-overlay-with-close-button.png'), fullPage: false });
   const mobile = await page.locator('.vnext-assistant-dock').evaluate(el => {
     const box = el.getBoundingClientRect();
-    return { right: box.right, width: box.width, viewport: window.innerWidth,
+    return { right: box.right, width: box.width, viewport: window.innerWidth, fixed: getComputedStyle(el).position === 'fixed',
       closeVisible: !!el.querySelector('[aria-label="Fechar painel do assistente"]') };
   });
+  assert(mobile.fixed, 'Below 900 px the assistant must be a panel over the screen');
   assert(mobile.width > 300 && mobile.width <= 400 && mobile.closeVisible);
   assert(mobile.right <= mobile.viewport + 1);
   await page.getByRole('button', { name: 'Fechar painel do assistente' }).click();
