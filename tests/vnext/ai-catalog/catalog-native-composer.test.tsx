@@ -113,3 +113,96 @@ describe('Gemini conversational creation, confirmation and native editor action 
     expect(f.generationCalls()[1][1].body).not.toHaveProperty('credential');
   });
 });
+
+/** supabase-js functions.invoke failure: FunctionsHttpError whose context is the Response. */
+const httpFailure = (status: number, body: unknown) => {
+  const response = { status, clone() { return this; }, json: async () => body };
+  return { data: null, error: Object.assign(new Error('Edge Function returned a non-2xx status code'),
+    { name: 'FunctionsHttpError', context: response }), response };
+};
+type Invoke = (name: string, options: { body: Body & { message?: string; history?: unknown[] } }) => Promise<unknown>;
+const makeWith = (handler: Invoke) => {
+  const doc = createCatalogDocument(id, 'Novo catálogo');
+  const session = createDocumentSession(doc, { createId: id });
+  const invoke = vi.fn(handler);
+  const client = { functions: { invoke } } as unknown as NativeComposeFunctionsClient;
+  const ui = render(<CatalogNativeComposer documentId={doc.id} session={session}
+    ownerScope="user:01" client={client} onBeforeMutation={() => true} />);
+  const generationCalls = () => invoke.mock.calls.filter(([, options]) => options.body.task !== 'status');
+  return { doc, session, invoke, ui, generationCalls };
+};
+const statusOk = { data: { code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true, byok: false,
+  remainingMicrousd: null, callReserveMicrousd: 7800 } }, error: null };
+
+describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, FR-61)', () => {
+  it('tolerates the composer deployed before the status task: shows "IA disponível" and still sends without a key', async () => {
+    // The older composer answers the unknown status task with 400 INVALID_REQUEST.
+    const f = makeWith(async (_name, options) => options.body.task === 'status'
+      ? httpFailure(400, { code: 'INVALID_REQUEST' }) : { data: { reply: plan }, error: null });
+    await waitFor(() => expect(screen.getByText('IA disponível.')).toBeInTheDocument());
+    await sendAndWaitProposal();
+    expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
+  });
+
+  it('turns PROVIDER_NOT_CONFIGURED into Portuguese with an action and keeps the message as not sent', async () => {
+    const f = makeWith(async (_name, options) => options.body.task === 'status'
+      ? statusOk : httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED', detail: 'secret text from the server' }));
+    await send('Crie uma capa para o catálogo de calibradores.');
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('A IA do servidor ainda não foi configurada. Fale com o administrador.'));
+    expect(screen.getByRole('alert')).toHaveTextContent('O catálogo não foi alterado.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/secret|PROVIDER_NOT_CONFIGURED/);
+    expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Crie uma capa para o catálogo de calibradores.');
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Crie uma capa para o catálogo de calibradores.');
+    // Nothing was stored as sent.
+    expect(screen.getByLabelText('Quantidade de mensagens')).toHaveTextContent('0');
+    expect(f.session.getSnapshot().document).toEqual(f.doc);
+  });
+
+  it.each([
+    [{ code: 'AGENT_DAILY_BUDGET_EXCEEDED' }, 429, 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje'],
+    [{ code: 'INVALID_PROVIDER_RESPONSE', reason: 'MAX_TOKENS' }, 502, 'Peça menos páginas de cada vez'],
+    [{ code: 'FORBIDDEN' }, 403, 'Sua conta não tem permissão para usar a IA. Fale com o administrador.'],
+    [{ code: 'SOMETHING_NEW', message: 'raw provider text' }, 500, 'Não foi possível consultar a IA agora.'],
+  ])('maps %o to a message with what to do next', async (body, status, expected) => {
+    makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : httpFailure(status, body));
+    await send();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(expected));
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/raw provider text|SOMETHING_NEW|_/);
+  });
+
+  it('shows why the AI cannot answer before the first request (status says the composer is off)', async () => {
+    makeWith(async (_name, options) => options.body.task === 'status'
+      ? httpFailure(503, { code: 'COMPOSER_DISABLED' }) : { data: { reply: plan }, error: null });
+    await waitFor(() => expect(screen.getByText(/A IA está desligada no servidor neste momento/)).toBeInTheDocument());
+  });
+
+  it('accepts a one-word answer ("Sim") to a clarification and sends the conversation with it', async () => {
+    let turn = 0;
+    const f = makeWith(async (_name, options) => {
+      if (options.body.task === 'status') return statusOk;
+      turn++;
+      return { data: { reply: turn === 1
+        ? { status: 'clarification', question: 'Deseja incluir uma tabela comparativa dos modelos?' } : plan }, error: null };
+    });
+    await send('Crie uma capa e uma apresentação para o catálogo de manômetros.');
+    await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('Deseja incluir uma tabela comparativa'));
+    await send('Sim');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' })).toBeInTheDocument());
+    const second = f.generationCalls()[1][1].body;
+    expect(second.message).toBe('Resposta do usuário à pergunta anterior: Sim');
+    expect(second.history).toHaveLength(2);
+    // The author sees their own words, not the framing.
+    expect(screen.getByRole('log')).toHaveTextContent('Sim');
+    expect(screen.getByRole('log')).not.toHaveTextContent('Resposta do usuário à pergunta anterior');
+  });
+
+  it('keeps a paid proposal while the author types the next message, and still applies it', async () => {
+    const f = make();
+    await sendAndWaitProposal();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Depois quero uma página de contato.' } });
+    expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    await waitFor(() => expect(f.session.getSnapshot().document.pages).toHaveLength(2));
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Depois quero uma página de contato.');
+  });
+});
