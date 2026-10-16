@@ -7,7 +7,9 @@
    the name aligned with "PRESYS · Catalog Builder" above it. */
 .vnext-shell .vnext-title-row h1.vnext-catalog-title,
 .vnext-shell[data-simple-by-default="true"] .vnext-title-row h1.vnext-catalog-title { overflow: visible; }
-.vnext-catalog-title-button { display: inline-flex; max-width: 100%; min-width: 0; min-height: 28px; align-items: center; gap: 6px; margin: -3px -7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font: inherit; letter-spacing: inherit; padding: 2px 6px; text-align: left; }
+/* The -7px side margins make the h1 shrink to the button's width minus 14px; the extra 14px of max-width gives
+   them back, so a short name is never cut with "..." when there is room (verified at 1366 and 1280 px). */
+.vnext-catalog-title-button { display: inline-flex; max-width: calc(100% + 14px); min-width: 0; min-height: 28px; align-items: center; gap: 6px; margin: -3px -7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font: inherit; letter-spacing: inherit; padding: 2px 6px; text-align: left; }
 .vnext-catalog-title-button:hover:not(:disabled) { border-color: #b9c5d3; background: #f6f8fb; }
 .vnext-catalog-title-button:focus-visible { outline: 2px solid #0072ce; outline-offset: 1px; }
 .vnext-catalog-title-button:disabled { cursor: default; }

@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession, type DocumentSession } from '@/vnext/application';
@@ -123,5 +125,21 @@ describe('FR-02 editor title renames the open catalog in place', () => {
     expect(titleButton()).toBeDisabled();
     fireEvent.click(titleButton());
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+  it('gives back the negative side margins in max-width, so a short name is not cut with "..."', () => {
+    // The browser check (1366 and 1280 px) showed "Teste X e Y" as "Teste X...": the h1 shrinks to the button's
+    // margin box (14 px narrower than the button) and max-width: 100% then cut the button by those 14 px.
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/entry-and-title.css'), 'utf8');
+    document.head.append(style);
+    try {
+      render(<LiveTitle session={newSession('Teste X e Y')} />);
+      const computed = getComputedStyle(screen.getByRole('button', { name: /Teste X e Y/ }));
+      const sideMargins = -parseFloat(computed.marginLeft) - parseFloat(computed.marginRight);
+      expect(sideMargins).toBe(14);
+      expect(computed.maxWidth.replace(/\s+/g, '')).toBe(`calc(100%+${sideMargins}px)`);
+    } finally {
+      style.remove();
+    }
   });
 });
