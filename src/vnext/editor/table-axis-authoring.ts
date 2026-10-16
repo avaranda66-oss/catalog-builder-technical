@@ -1,6 +1,7 @@
 import { VNextError } from '../domain/diagnostics';
 import type { TableModel } from '../domain/editorial-model';
 import { deleteAxis } from '../table/table-model';
+import { tableSelectionAxisIds, type TableSelection } from './table-selection';
 
 /**
  * FR-34: inserting and removing rows and columns from the cell or range the person selected. Pure checks and
@@ -74,4 +75,48 @@ export function tableAxisRefusalMessage(code: string, axis: 'row' | 'column'): s
   if (code === 'TARGET_STALE') return 'A tabela mudou. A ação foi descartada sem alterar o documento.';
   if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
   return 'Não foi possível alterar a estrutura da tabela.';
+}
+
+/** What the row and column buttons can do for the current selection, with the plain reason when they cannot. */
+export interface TableStructureAvailability {
+  readonly rowIds: readonly string[];
+  readonly columnIds: readonly string[];
+  /** Why "Linha acima/abaixo" (and every row button) cannot run; undefined when they can. */
+  readonly rowReason?: string;
+  readonly columnReason?: string;
+  /** Why the selected rows cannot be removed (the table keeps one); falls back to `rowReason`. */
+  readonly removeRowReason?: string;
+  readonly removeColumnReason?: string;
+}
+
+/** Shown on the row and column buttons while a cell is being edited. */
+export const EDITING_STRUCTURE_REASON = 'Conclua a edição da célula antes de mudar linhas e colunas.';
+
+/**
+ * FR-34: one rule for the "Estrutura" part of the panel and for the bar above the page. Any cell or range gives its
+ * rows and columns; a side selection gives its rows (or columns); a cell being edited is finished first.
+ */
+export function tableStructureAvailability(
+  table: TableModel,
+  selection: TableSelection | null,
+  editingCell: boolean
+): TableStructureAvailability {
+  const rowIds = selection ? tableSelectionAxisIds(table, selection, 'row') : [];
+  const columnIds = selection ? tableSelectionAxisIds(table, selection, 'column') : [];
+  const rowReason = editingCell ? EDITING_STRUCTURE_REASON : rowIds.length === 0 ? tableAxisRefusalMessage('NO_AXIS', 'row') : undefined;
+  const columnReason = editingCell ? EDITING_STRUCTURE_REASON : columnIds.length === 0 ? tableAxisRefusalMessage('NO_AXIS', 'column') : undefined;
+  return {
+    rowIds,
+    columnIds,
+    ...(rowReason ? { rowReason } : {}),
+    ...(columnReason ? { columnReason } : {}),
+    ...(() => {
+      const reason = rowReason ?? (rowIds.length >= table.rows.length ? 'A tabela precisa de pelo menos uma linha.' : undefined);
+      return reason ? { removeRowReason: reason } : {};
+    })(),
+    ...(() => {
+      const reason = columnReason ?? (columnIds.length >= table.columns.length ? 'A tabela precisa de pelo menos uma coluna.' : undefined);
+      return reason ? { removeColumnReason: reason } : {};
+    })(),
+  };
 }

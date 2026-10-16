@@ -1,8 +1,5 @@
-import type { CellStylePatch, TablePresetId } from '../application';
+import type { CellStylePatch } from '../application';
 import type { DocumentStyle, TableModel } from '../domain/editorial-model';
-import {
-  TABLE_PRESETS,
-} from '../application';
 import {
   declaredFontOptions,
   inheritedLabel,
@@ -14,17 +11,13 @@ import {
   type BorderQuickPreset,
   type TableStyleScope,
 } from '../editor/table-style-authoring';
+import { TableColorField } from './editor/TableColorField';
+import { TableDecimalField } from './editor/TableDecimalField';
 
 const sides = ['top', 'right', 'bottom', 'left'] as const;
 const sideLabels = { top: 'Superior', right: 'Direita', bottom: 'Inferior', left: 'Esquerda' } as const;
 
 type ScalarField = 'fontFamily' | 'fontSizePt' | 'lineHeight' | 'fontWeight' | 'color' | 'background' | 'textAlign' | 'verticalAlign';
-
-function displayValue(value: unknown): string {
-  if (value === 'mixed') return 'Misto';
-  if (value === undefined) return '';
-  return String(value);
-}
 
 function scopeLabel(scope: TableStyleScope): string {
   if (scope.kind === 'table') return 'Tabela';
@@ -41,10 +34,13 @@ function ownershipText(
   field: ScalarField
 ): string {
   const projection = projectResolvedStyleField(documentStyle, table, scope, field);
-  if (projection.ownership === 'mixed') return 'Misto';
-  if (projection.ownership === 'local') return 'Local';
+  if (projection.ownership === 'mixed') return 'Vários valores';
+  if (projection.ownership === 'local') return 'Ajustado aqui';
   return inheritedLabel(scope);
 }
+
+const numberOrMixed = (value: unknown): number | 'mixed' | undefined =>
+  value === 'mixed' ? 'mixed' : typeof value === 'number' ? value : undefined;
 
 export function TableStyleInspector({
   table,
@@ -61,8 +57,9 @@ export function TableStyleInspector({
   onPaddingLinkedChange,
   onPatch,
   onBorderPreset,
-  onPreset,
   onAnnotationGap,
+  wrapPolicy,
+  onWrapPolicy,
 }: {
   table: TableModel;
   documentStyle: DocumentStyle;
@@ -78,8 +75,10 @@ export function TableStyleInspector({
   onPaddingLinkedChange(linked: boolean): void;
   onPatch(patch: CellStylePatch): void;
   onBorderPreset(preset: BorderQuickPreset): void;
-  onPreset(presetId: TablePresetId): void;
   onAnnotationGap(value: number): void;
+  /** Line breaks of the selected cells (shown only for a cell selection). */
+  wrapPolicy?: 'wrap' | 'nowrap' | 'mixed';
+  onWrapPolicy?(value: 'wrap' | 'nowrap' | null): void;
 }) {
   const fonts = declaredFontOptions(documentStyle);
   const palette = paletteOptions(documentStyle);
@@ -109,31 +108,12 @@ export function TableStyleInspector({
   const effectiveFamily = typeof font.effective === 'string' && font.effective !== 'mixed' ? font.effective : undefined;
   const weightOptions = fonts.find((option) => option.family === effectiveFamily)?.weights ?? [400, 700];
 
-  const commitNumber = (field: 'fontSizePt' | 'lineHeight', raw: string) => {
-    if (raw.trim() === '') {
-      onPatch({ [field]: null });
-      return;
-    }
-    const value = Number(raw.replace(',', '.'));
-    if (Number.isFinite(value) && value > 0) onPatch({ [field]: value });
-  };
-
-  const commitHex = (field: 'color' | 'background', raw: string) => {
-    if (raw.trim() === '') {
-      onPatch({ [field]: null });
-      return;
-    }
-    const value = raw.trim().toUpperCase();
-    if (/^#[0-9A-F]{6}$/.test(value)) onPatch({ [field]: value });
-  };
-
-  const commitPadding = (side: typeof sides[number], raw: string) => {
-    if (raw.trim() === '') {
+  // FR-10 (2D): the number fields accept "1,5" and show their own message when a value is refused.
+  const commitPadding = (side: typeof sides[number], value: number | null) => {
+    if (value === null) {
       onPatch({ paddingMm: { [side]: null } });
       return;
     }
-    const value = Number(raw.replace(',', '.'));
-    if (!Number.isFinite(value) || value < 0) return;
     onPatch(paddingLinked ? linkedPaddingPatch(value) : { paddingMm: { [side]: value } });
   };
 
@@ -152,9 +132,7 @@ export function TableStyleInspector({
     });
   };
 
-  const commitBorderNumber = (side: typeof sides[number], raw: string) => {
-    const value = Number(raw.replace(',', '.'));
-    if (!Number.isFinite(value) || value <= 0) return;
+  const commitBorderNumber = (side: typeof sides[number], value: number) => {
     const current = localBorders !== 'mixed' ? localBorders?.[side] : undefined;
     onPatch({
       borders: {
@@ -167,9 +145,7 @@ export function TableStyleInspector({
     });
   };
 
-  const commitBorderColor = (side: typeof sides[number], raw: string) => {
-    const value = raw.trim().toUpperCase();
-    if (!/^#[0-9A-F]{6}$/.test(value)) return;
+  const commitBorderColor = (side: typeof sides[number], value: string) => {
     const current = localBorders !== 'mixed' ? localBorders?.[side] : undefined;
     onPatch({
       borders: {
@@ -186,7 +162,7 @@ export function TableStyleInspector({
     <section className="vnext-table-style-inspector" data-table-style-inspector="">
       <div className="vnext-style-heading">
         <div>
-          <h3>Apresentação da tabela</h3>
+          <h3>Texto, cores e bordas</h3>
           <p data-style-scope="">{scopeLabel(scope)}</p>
         </div>
       </div>
@@ -232,7 +208,7 @@ export function TableStyleInspector({
               });
             }}
           >
-            {font.effective === 'mixed' && <option value="mixed" disabled>Misto</option>}
+            {font.effective === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
             {fonts.map((option) => <option key={option.family} value={option.family}>{option.family}</option>)}
           </select>
           {font.ownership === 'local' && <button type="button" data-style-reset="fontFamily" disabled={disabled} onClick={() => onPatch({ fontFamily: null })}>Herdar</button>}
@@ -240,21 +216,18 @@ export function TableStyleInspector({
 
         <label>
           <span>Tamanho <small>{size.ownershipLabel}</small></span>
-          <div className="vnext-style-number">
-            <input
-              key={scopeLabel(scope) + ':size:' + displayValue(size.local)}
-              data-style-property="fontSizePt"
-              type="text"
-              inputMode="decimal"
-              defaultValue={size.effective === 'mixed' ? '' : displayValue(size.effective)}
-              placeholder={size.effective === 'mixed' ? 'Misto' : undefined}
-              disabled={disabled}
-              aria-describedby={describedBy}
-              onBlur={(event) => commitNumber('fontSizePt', event.currentTarget.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-            />
-            <span>pt</span>
-          </div>
+          <TableDecimalField
+            name="Tamanho"
+            unit="pt"
+            example="9"
+            allowEmpty
+            className="vnext-style-number"
+            value={numberOrMixed(size.effective)}
+            disabled={disabled}
+            describedBy={describedBy}
+            inputProps={{ 'data-style-property': 'fontSizePt' }}
+            onCommit={(value) => onPatch({ fontSizePt: value })}
+          />
           {size.ownership === 'local' && <button type="button" data-style-reset="fontSizePt" disabled={disabled} onClick={() => onPatch({ fontSizePt: null })}>Herdar</button>}
         </label>
 
@@ -267,7 +240,7 @@ export function TableStyleInspector({
             aria-describedby={describedBy}
             onChange={(event) => onPatch({ fontWeight: Number(event.target.value) as 400 | 700 })}
           >
-            {weight.effective === 'mixed' && <option value="mixed" disabled>Misto</option>}
+            {weight.effective === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
             {weightOptions.map((value) => <option key={value} value={value}>{value === 700 ? 'Negrito' : 'Normal'}</option>)}
           </select>
           {weight.ownership === 'local' && <button type="button" data-style-reset="fontWeight" disabled={disabled} onClick={() => onPatch({ fontWeight: null })}>Herdar</button>}
@@ -282,7 +255,7 @@ export function TableStyleInspector({
             aria-describedby={describedBy}
             onChange={(event) => onPatch({ textAlign: event.target.value as 'left' | 'center' | 'right' })}
           >
-            {horizontal.effective === 'mixed' && <option value="mixed" disabled>Misto</option>}
+            {horizontal.effective === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
             <option value="left">Esquerda</option>
             <option value="center">Centro</option>
             <option value="right">Direita</option>
@@ -299,7 +272,7 @@ export function TableStyleInspector({
             aria-describedby={describedBy}
             onChange={(event) => onPatch({ verticalAlign: event.target.value as 'top' | 'middle' | 'bottom' })}
           >
-            {vertical.effective === 'mixed' && <option value="mixed" disabled>Misto</option>}
+            {vertical.effective === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
             <option value="top">Superior</option>
             <option value="middle">Meio</option>
             <option value="bottom">Inferior</option>
@@ -309,59 +282,54 @@ export function TableStyleInspector({
 
         <div className="vnext-style-color-field">
           <span>Cor do texto <small>{color.ownershipLabel}</small></span>
-          <div className="vnext-style-palette" data-style-palette="color">
-            {palette.map((value) => (
-              <button
-                type="button"
-                key={value}
-                aria-label={`Cor do texto ${value}`}
-                title={value}
-                disabled={disabled}
-                style={{ background: value }}
-                onClick={() => onPatch({ color: value })}
-              />
-            ))}
-          </div>
-          <input
-            key={scopeLabel(scope) + ':color:' + displayValue(color.local)}
-            data-style-property="color"
-            aria-label="Cor do texto HEX"
-            defaultValue={color.effective === 'mixed' ? '' : displayValue(color.effective)}
-            placeholder={color.effective === 'mixed' ? 'Misto' : '#RRGGBB'}
+          <TableColorField
+            swatchLabel="Cor do texto"
+            pickerLabel="Outra cor do texto"
+            value={color.effective === 'mixed' ? 'mixed' : typeof color.effective === 'string' ? color.effective : undefined}
+            palette={palette}
             disabled={disabled}
-            aria-describedby={describedBy}
-            onBlur={(event) => commitHex('color', event.currentTarget.value)}
+            describedBy={describedBy}
+            pickerProps={{ 'data-style-property': 'color' }}
+            onPick={(value) => onPatch({ color: value })}
           />
           {color.ownership === 'local' && <button type="button" data-style-reset="color" disabled={disabled} onClick={() => onPatch({ color: null })}>Herdar</button>}
         </div>
 
         <div className="vnext-style-color-field">
           <span>Fundo <small>{background.ownershipLabel}</small></span>
-          <div className="vnext-style-palette" data-style-palette="background">
-            {palette.map((value) => (
-              <button
-                type="button"
-                key={value}
-                aria-label={`Cor de fundo ${value}`}
-                title={value}
-                disabled={disabled}
-                style={{ background: value }}
-                onClick={() => onPatch({ background: value })}
-              />
-            ))}
-          </div>
-          <input
-            key={scopeLabel(scope) + ':background:' + displayValue(background.local)}
-            data-style-property="background"
-            aria-label="Cor de fundo HEX"
-            defaultValue={background.effective === 'mixed' ? '' : displayValue(background.effective)}
-            placeholder={background.effective === 'mixed' ? 'Misto' : '#RRGGBB'}
+          <TableColorField
+            swatchLabel="Cor de fundo"
+            pickerLabel="Outra cor de fundo"
+            value={background.effective === 'mixed' ? 'mixed' : typeof background.effective === 'string' ? background.effective : undefined}
+            palette={palette}
             disabled={disabled}
-            aria-describedby={describedBy}
-            onBlur={(event) => commitHex('background', event.currentTarget.value)}
+            describedBy={describedBy}
+            pickerProps={{ 'data-style-property': 'background' }}
+            onPick={(value) => onPatch({ background: value })}
           />
           {background.ownership === 'local' && <button type="button" data-style-reset="background" disabled={disabled} onClick={() => onPatch({ background: null })}>Herdar</button>}
         </div>
+
+        {scope.kind === 'cells' && onWrapPolicy && (
+          <label>
+            <span>Quebra do texto</span>
+            <select
+              data-cell-property="wrapPolicy"
+              value={wrapPolicy === 'mixed' ? 'mixed' : wrapPolicy ?? ''}
+              disabled={disabled}
+              aria-describedby={describedBy}
+              onChange={(event) => {
+                if (event.target.value === 'mixed') return;
+                onWrapPolicy(event.target.value === '' ? null : event.target.value as 'wrap' | 'nowrap');
+              }}
+            >
+              {wrapPolicy === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
+              <option value="">Automática</option>
+              <option value="wrap">Quebrar em várias linhas</option>
+              <option value="nowrap">Manter numa linha só</option>
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="vnext-style-quick-section">
@@ -408,24 +376,6 @@ export function TableStyleInspector({
         {borderCellOnly && <small>Externas e Internas funcionam quando você seleciona células na tabela.</small>}
       </div>
 
-      <div className="vnext-style-presets">
-        <strong>Estilos prontos</strong>
-        <div className="vnext-style-preset-grid">
-          {TABLE_PRESETS.map((preset) => (
-            <button
-              type="button"
-              key={preset.id}
-              data-table-preset={preset.id}
-              disabled={disabled}
-              onClick={() => onPreset(preset.id)}
-            >
-              <strong>{preset.label}</strong>
-              <span>{preset.description}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       <button
         type="button"
         className="vnext-inspector-action"
@@ -435,28 +385,27 @@ export function TableStyleInspector({
         aria-describedby={describedBy}
         onClick={() => onAdvancedOpenChange(!advancedOpen)}
       >
-        {advancedOpen ? 'Ocultar avançado' : 'Avançado'}
+        {advancedOpen ? 'Ocultar ajustes por lado' : 'Ajustes por lado e altura da linha'}
       </button>
 
       {advancedOpen && (
         <div className="vnext-style-advanced" data-style-advanced="">
           <label>
-            <span>Altura da linha <small>{lineHeight.ownershipLabel}</small></span>
-            <input
-              key={scopeLabel(scope) + ':lineHeight:' + displayValue(lineHeight.local)}
-              data-style-property="lineHeight"
-              type="text"
-              inputMode="decimal"
-              defaultValue={lineHeight.effective === 'mixed' ? '' : displayValue(lineHeight.effective)}
-              placeholder={lineHeight.effective === 'mixed' ? 'Misto' : undefined}
+            <span>Altura da linha do texto <small>{lineHeight.ownershipLabel}</small></span>
+            <TableDecimalField
+              name="Altura da linha do texto"
+              example="1,2"
+              allowEmpty
+              value={numberOrMixed(lineHeight.effective)}
               disabled={disabled}
-              onBlur={(event) => commitNumber('lineHeight', event.currentTarget.value)}
+              inputProps={{ 'data-style-property': 'lineHeight' }}
+              onCommit={(value) => onPatch({ lineHeight: value })}
             />
             {lineHeight.ownership === 'local' && <button type="button" data-style-reset="lineHeight" disabled={disabled} onClick={() => onPatch({ lineHeight: null })}>Herdar</button>}
           </label>
 
           <div className="vnext-style-subheading">
-            <strong>Padding por lado</strong>
+            <strong>Espaço interno por lado (mm)</strong>
             <button
               type="button"
               data-style-padding-link=""
@@ -473,21 +422,31 @@ export function TableStyleInspector({
               return (
                 <label key={side}>
                   <span>{sideLabels[side]}</span>
-                  <input
-                    key={scopeLabel(scope) + ':padding:' + side + ':' + displayValue(value)}
-                    data-style-padding-side={side}
-                    type="text"
-                    inputMode="decimal"
-                    defaultValue={value === 'mixed' || value === undefined ? '' : String(value)}
-                    placeholder={value === 'mixed' ? 'Misto' : 'Herdado'}
+                  <TableDecimalField
+                    name="Espaço interno"
+                    unit="mm"
+                    range="zeroOrMore"
+                    example="1,5"
+                    allowEmpty
+                    value={numberOrMixed(value)}
+                    placeholder="Herdado"
                     disabled={disabled}
-                    onBlur={(event) => commitPadding(side, event.currentTarget.value)}
+                    inputProps={{ 'data-style-padding-side': side }}
+                    onCommit={(next) => commitPadding(side, next)}
                   />
                   <button type="button" data-style-padding-reset={side} disabled={disabled || value === undefined} onClick={() => onPatch({ paddingMm: { [side]: null } })}>Herdar</button>
                 </label>
               );
             })}
           </div>
+          <button
+            type="button"
+            data-style-padding-reset-all=""
+            disabled={disabled || localPadding === undefined}
+            onClick={() => onPatch({ paddingMm: null })}
+          >
+            Redefinir todo o espaço interno
+          </button>
 
           <div className="vnext-style-border-advanced">
             <strong>Bordas por lado</strong>
@@ -506,7 +465,7 @@ export function TableStyleInspector({
                         else if (event.target.value !== 'mixed') commitBorderPattern(side, event.target.value as 'none' | 'solid');
                       }}
                     >
-                      {border === 'mixed' && <option value="mixed" disabled>Misto</option>}
+                      {border === 'mixed' && <option value="mixed" disabled>Vários valores</option>}
                       <option value="">Herdado</option>
                       <option value="none">Nenhuma</option>
                       <option value="solid">Sólida</option>
@@ -515,24 +474,25 @@ export function TableStyleInspector({
                   {border !== 'mixed' && border?.pattern === 'solid' && (
                     <>
                       <label>
-                        <span>Espessura pt</span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          defaultValue={String(border.thicknessPt)}
+                        <span>Espessura (pt)</span>
+                        <TableDecimalField
+                          name="Espessura da borda"
+                          unit="pt"
+                          example="0,5"
+                          value={border.thicknessPt}
                           disabled={disabled}
-                          onBlur={(event) => commitBorderNumber(side, event.currentTarget.value)}
+                          onCommit={(next) => { if (next !== null) commitBorderNumber(side, next); }}
                         />
                       </label>
-                      <label>
-                        <span>Cor</span>
-                        <input
-                          type="text"
-                          defaultValue={border.color}
-                          disabled={disabled}
-                          onBlur={(event) => commitBorderColor(side, event.currentTarget.value)}
-                        />
-                      </label>
+                      <TableColorField
+                        swatchLabel="Cor da borda"
+                        pickerLabel="Cor da borda"
+                        value={border.color}
+                        palette={palette}
+                        showSwatches={false}
+                        disabled={disabled}
+                        onPick={(next) => commitBorderColor(side, next)}
+                      />
                     </>
                   )}
                 </fieldset>
@@ -542,21 +502,18 @@ export function TableStyleInspector({
 
           {scope.kind === 'table' && (
             <label>
-              <span>Espaçamento das notas/legenda</span>
-              <div className="vnext-style-number">
-                <input
-                  data-style-property="annotationGapMm"
-                  type="text"
-                  inputMode="decimal"
-                  defaultValue={String(table.style.annotationGapMm)}
-                  disabled={disabled}
-                  onBlur={(event) => {
-                    const value = Number(event.currentTarget.value.replace(',', '.'));
-                    if (Number.isFinite(value) && value >= 0) onAnnotationGap(value);
-                  }}
-                />
-                <span>mm</span>
-              </div>
+              <span>Espaço entre a tabela e as notas</span>
+              <TableDecimalField
+                name="Espaço entre a tabela e as notas"
+                unit="mm"
+                range="zeroOrMore"
+                example="1,5"
+                className="vnext-style-number"
+                value={table.style.annotationGapMm}
+                disabled={disabled}
+                inputProps={{ 'data-style-property': 'annotationGapMm' }}
+                onCommit={(value) => { if (value !== null) onAnnotationGap(value); }}
+              />
             </label>
           )}
         </div>
