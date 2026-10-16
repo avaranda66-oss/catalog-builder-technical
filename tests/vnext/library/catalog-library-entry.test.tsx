@@ -75,7 +75,27 @@ describe('FR-02 create dialog asks the name first and stays safe', () => {
     expect(service.createBlank).not.toHaveBeenCalled();
     expect(service.createFromStarter).not.toHaveBeenCalled();
     expect(view.getByRole('dialog', { name: 'Novo catálogo' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Em branco' })).toHaveAccessibleDescription('Comece com uma página vazia.');
+    const blank = within(dialog).getByRole('button', { name: 'Em branco' });
+    expect(blank).toHaveAccessibleDescription('Comece com uma página vazia.');
+    // Enter shows the next step: the first way to start gets the focus.
+    expect(document.activeElement).toBe(blank);
+  });
+
+  it('Enter in "Nome do catálogo" moves to the recommended way to start, without creating', async () => {
+    const service = serviceMock({
+      listStarters: () => [
+        ...starters,
+        { starterId: 'essential-technical-sheet', revision: 1, label: 'Ficha técnica essencial', description: 'Uma página A4.', category: 'PRESYS' },
+      ],
+    });
+    const view = render(<CatalogLibrary service={service} onOpen={vi.fn()} />);
+    const dialog = await openCreateDialog(view);
+    const name = within(dialog).getByRole('textbox', { name: 'Nome do catálogo' });
+    fireEvent.change(name, { target: { value: 'PCON-Y18' } });
+    fireEvent.keyDown(name, { key: 'Enter' });
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Ficha técnica essencial' }));
+    expect(service.createBlank).not.toHaveBeenCalled();
+    expect(service.createFromStarter).not.toHaveBeenCalled();
   });
 
   it('creates a blank catalog with the typed name and shows "Criando…" inside the dialog', async () => {

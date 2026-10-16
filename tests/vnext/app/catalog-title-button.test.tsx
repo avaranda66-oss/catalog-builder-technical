@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession, type DocumentSession } from '@/vnext/application';
 import { CATALOG_TITLE_MESSAGES, CatalogTitleButton } from '@/vnext/app/editor/CatalogTitleButton';
@@ -50,7 +50,9 @@ describe('FR-02 editor title renames the open catalog in place', () => {
     expect(execute).toHaveBeenCalledWith({ type: 'document.rename', title: 'PCON-Y18 Ficha técnica' });
     expect(session.getSnapshot().document.title).toBe('PCON-Y18 Ficha técnica');
     expect(screen.getByRole('heading', { level: 1, name: 'PCON-Y18 Ficha técnica' })).toBeInTheDocument();
-    expect(session.undo().ok).toBe(true);
+    act(() => {
+      expect(session.undo().ok).toBe(true);
+    });
     expect(session.getSnapshot().document.title).toBe('TA-25N — Ficha técnica');
   });
 

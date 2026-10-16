@@ -601,8 +601,13 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
                 value={createTitle}
                 onChange={(event) => setCreateTitle(event.target.value)}
                 onKeyDown={(event) => {
-                  // Enter never creates by itself: the person still chooses how to start.
-                  if (event.key === 'Enter') event.preventDefault();
+                  // Enter never creates by itself: it moves to the next step, choosing how to start.
+                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  const options = createDialog.current?.querySelector('.vnext-library-create-options');
+                  const next = options?.querySelector<HTMLButtonElement>('button.is-recommended:not(:disabled)')
+                    ?? options?.querySelector<HTMLButtonElement>('button:not(:disabled)');
+                  next?.focus();
                 }}
                 maxLength={CATALOG_TITLE_MAX_LENGTH}
                 placeholder="Ex.: TA-25N — Ficha técnica 2026"
