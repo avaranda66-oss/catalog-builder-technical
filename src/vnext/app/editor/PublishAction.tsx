@@ -11,6 +11,9 @@ export interface PublishActionProps {
   onMessage: (message: string) => void;
 }
 
+const SAVE_NEEDED_MESSAGE = 'Para publicar, o catálogo precisa estar salvo, e não foi possível salvar agora. '
+  + 'Confira o aviso de salvamento e clique em Publicar / PDF novamente.';
+
 /**
  * FR-50: "Publicar / PDF" saves before opening the review. The button keeps focus while saving (it is never
  * `disabled`), so closing the review returns the person to it.
@@ -34,10 +37,13 @@ export function PublishAction({ prepare, save, onOpen, onMessage }: PublishActio
       const result = await save.run();
       if (!mounted.current) return;
       if (!result.ok && result.error.code !== 'SAVE_IN_FLIGHT_NEWER_WORK') {
-        onMessage('Para publicar, o catálogo precisa estar salvo, e não foi possível salvar agora. Confira o aviso de salvamento e clique em Publicar / PDF novamente.');
+        onMessage(SAVE_NEEDED_MESSAGE);
         return;
       }
       onOpen();
+    } catch {
+      // The save itself threw (for example, the browser storage failed): explain instead of failing silently.
+      if (mounted.current) onMessage(SAVE_NEEDED_MESSAGE);
     } finally {
       busy.current = false;
       if (mounted.current) setSaving(false);

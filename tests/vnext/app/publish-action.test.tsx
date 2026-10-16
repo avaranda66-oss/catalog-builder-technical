@@ -41,6 +41,20 @@ describe('FR-50 Publicar / PDF', () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
+  it('explains instead of failing silently when the save itself throws', async () => {
+    const onOpen = vi.fn(), onMessage = vi.fn();
+    const run = vi.fn(() => Promise.reject(new Error('storage failed')));
+    render(<PublishAction prepare={() => true} onOpen={onOpen} onMessage={onMessage} save={{ phase: 'idle', run }} />);
+    const button = screen.getByRole('button', { name: 'Publicar / PDF' });
+    await act(async () => { fireEvent.click(button); });
+    expect(run).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onMessage).toHaveBeenCalledWith('Para publicar, o catálogo precisa estar salvo, e não foi possível salvar agora. '
+      + 'Confira o aviso de salvamento e clique em Publicar / PDF novamente.');
+    expect(button).toHaveTextContent('Publicar / PDF');
+    expect(button).not.toHaveAttribute('aria-busy');
+  });
+
   it('ignores repeated clicks while saving', async () => {
     let finish!: (value: ManualSaveResult) => void;
     const onOpen = vi.fn();

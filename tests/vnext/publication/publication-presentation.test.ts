@@ -64,6 +64,7 @@ describe('P1.C publication diagnostic presentation', () => {
     expect(publicationWaitingMessage({ phase: 'idle', label: 'Unsaved changes', dirty: true, canSave: true })).toBeUndefined();
     expect(publicationWaitingMessage({ phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true }))
       .toBe('Não foi possível salvar agora. Confira a conexão e tente Salvar novamente. A verificação começa sozinha assim que o catálogo for salvo.');
-    expect(publicationWaitingMessage({ phase: 'conflict', label: 'Conflict', dirty: true, canSave: false })).toContain('salve seu trabalho como uma cópia');
+    expect(publicationWaitingMessage({ phase: 'conflict', label: 'Conflict', dirty: true, canSave: false })).toBe(
+      'Este catálogo foi salvo em outro lugar. Clique em Voltar ao editor e escolha “Salvar meu trabalho como cópia” no aviso acima da página.');
   });
 });

@@ -144,9 +144,14 @@ export function publicationDiagnosticDetails(issue: Diagnostic): readonly (reado
 
 /**
  * Shown by the publication review while the saved version is not available yet. A save that is simply running
- * needs no explanation; a save that cannot finish says why, so the review never looks stuck.
+ * needs no explanation; a save that cannot finish says why, so the review never looks stuck. A conflict can only be
+ * resolved in the editor (the band above the page is not reachable while the review is open), and the safe choice,
+ * keeping the work as a copy, comes first (FR-43).
  */
 export function publicationWaitingMessage(save: SaveProjection): string | undefined {
   if (save.phase === 'idle' || save.phase === 'saving') return undefined;
+  if (save.phase === 'conflict') {
+    return 'Este catálogo foi salvo em outro lugar. Clique em Voltar ao editor e escolha “Salvar meu trabalho como cópia” no aviso acima da página.';
+  }
   return `${fatherSaveExplanation(save)} A verificação começa sozinha assim que o catálogo for salvo.`;
 }
