@@ -1,6 +1,8 @@
 import React from 'react';
 import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
+import { CatalogTitleButton } from './editor/CatalogTitleButton';
+import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
@@ -3823,12 +3825,13 @@ export function EditorWorkspace({
           <div className="vnext-brand-mark" aria-hidden="true">P</div>
           <div>
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
-            <div className="vnext-title-row"><h1>{document.title}</h1></div>
+            <div className="vnext-title-row"><CatalogTitleButton session={session} title={document.title} /></div>
             {simpleByDefault && persistence && (
               <span className="vnext-save-summary" role="status" data-save-state="" data-save-phase={persistence.save.phase}>
                 {fatherSaveLabel(persistence.save.label)}
               </span>
             )}
+            {persistence && <LibraryNavigationNotice runtime={persistence.runtime} />}
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">

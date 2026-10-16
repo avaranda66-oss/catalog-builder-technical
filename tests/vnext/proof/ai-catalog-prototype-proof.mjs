@@ -16,7 +16,8 @@ const production = process.env.AI_PROOF_PRODUCTION === '1';
 const server = production ? await previewBuild({ root, preview: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'error' }) : await createServer({ root, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'error' });
 if (!production) await server.listen();
 let browser;
-const sourceFiles = ['contracts.ts', 'composition.ts', 'fixture.ts', 'repository.ts', 'PrototypeApp.tsx', 'prototype.css', 'prototype-entry.tsx'].map(file => `src/vnext/ai-catalog/${file}`);
+// The page entry is src/entrypoints/ai-catalog-gemini-entry.tsx (the old prototype-entry.tsx was dead code and is gone).
+const sourceFiles = [...['contracts.ts', 'composition.ts', 'fixture.ts', 'repository.ts', 'PrototypeApp.tsx', 'prototype.css'].map(file => `src/vnext/ai-catalog/${file}`), 'src/entrypoints/ai-catalog-gemini-entry.tsx'];
 const hashes = async () => Object.fromEntries(await Promise.all(sourceFiles.map(async path => [path, createHash('sha256').update(await readFile(resolve(root, path))).digest('hex')])));
 const beforeHashes = await hashes();
 const driverSha256 = createHash('sha256').update(await readFile(fileURLToPath(import.meta.url))).digest('hex');

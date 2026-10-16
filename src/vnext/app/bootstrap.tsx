@@ -138,8 +138,8 @@ export function VNextServerAccessUnavailable({
         <h1>Acesso não disponível</h1>
         <p>Não foi possível confirmar seu acesso com o servidor. Tente novamente.</p>
         <div className="vnext-access-actions">
-          <button type="button" onClick={onRetry}>Tentar novamente</button>
-          <button type="button" className="is-primary" onClick={onSignOut}>Sair</button>
+          <button type="button" className="is-primary" onClick={onRetry}>Tentar novamente</button>
+          <button type="button" onClick={onSignOut}>Sair</button>
         </div>
       </section>
     </main>
