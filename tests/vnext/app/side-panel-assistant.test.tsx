@@ -200,6 +200,7 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
     expect(assistantSelectionLabel({ count: 0 })).toBe('Nada selecionado na página');
     expect(assistantSelectionLabel({ count: 1, type: 'table' })).toBe('Selecionado na página: tabela');
     expect(assistantSelectionLabel({ count: 1, type: 'image' })).toBe('Selecionado na página: imagem');
+    expect(assistantSelectionLabel({ count: 1, type: 'icon' })).toBe('Selecionado na página: ícone');
     expect(assistantSelectionLabel({ count: 3 })).toBe('3 objetos selecionados na página');
   });
 });
