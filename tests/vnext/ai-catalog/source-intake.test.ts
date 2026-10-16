@@ -54,6 +54,14 @@ describe('CSV, TSV and TXT intake', () => {
     expect(parseDelimitedSource('Model,Range\nA,0.1\nB,0.2\n')).toEqual([['Model', 'Range'], ['A', '0.1'], ['B', '0.2']]);
   });
 
+  it('keeps ";" when every row has Brazilian decimal ranges such as "0,5 a 1,5 bar"', () => {
+    const text = `Modelo;Faixa\n${Array.from({ length: 20 }, (_, index) => `A${index};0,5 a 1,5 bar`).join('\n')}\n`;
+    expect(detectDelimiter(text)).toBe(';');
+    expect(parseDelimitedSource(text)[1]).toEqual(['A0', '0,5 a 1,5 bar']);
+    // A comma file with a ";" inside some text cells stays a comma file.
+    expect(detectDelimiter(`Code,Notes\n${Array.from({ length: 20 }, (_, index) => `C${index},red;blue`).join('\n')}\n`)).toBe(',');
+  });
+
   it('keeps a Brazilian CSV with ";" and "0,01 %FS" exactly as typed', async () => {
     const intake = await read('Modelo;Exatidão\nPCON-Y17;0,01 %FS\nPCON-Y18;0,025 %FS\n', 'sensores.csv');
     expect(table(intake).rows).toEqual([['Modelo', 'Exatidão'], ['PCON-Y17', '0,01 %FS'], ['PCON-Y18', '0,025 %FS']]);
@@ -90,7 +98,8 @@ describe('CSV, TSV and TXT intake', () => {
   it('decodes Windows-1252 and UTF-16 files', async () => {
     const legacy = await read(latin1('Modelo;Exatidão\nTA-25N;±0,1 °C\n'), 'antigo.csv');
     expect(table(legacy).rows[1]).toEqual(['TA-25N', '±0,1 °C']);
-    expect(legacy.warnings.join(' ')).toContain('Windows-1252');
+    expect(legacy.warnings.join(' ')).toContain('formato antigo do Excel e os acentos foram convertidos');
+    expect(legacy.warnings.join(' ')).not.toMatch(/UTF-8|Windows-1252/);
     const unicode = await read(utf16le('Modelo;Exatidão\nTA-25N;±0,1 °C\n'), 'unicode.csv');
     expect(table(unicode).rows[1]).toEqual(['TA-25N', '±0,1 °C']);
   });
@@ -158,6 +167,16 @@ describe('XLSX archive pre-check', () => {
     const error = await expectCode(read(cfb, 'protegida.xlsx'), 'SOURCE_PASSWORD_PROTECTED');
     expect(sourceErrorMessage(error)).toContain('remova a senha');
     expect(sourceErrorMessage(await expectCode(read(cfb, 'antiga.xls'), 'SOURCE_LEGACY_SPREADSHEET'))).toContain('.xlsx');
+  });
+
+  it('tells an old .xls renamed to .xlsx apart from an encrypted workbook', async () => {
+    const compound = (stream: string) => {
+      const bytes = new Uint8Array(4096); bytes.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+      bytes.set(Uint8Array.from([...stream].flatMap(char => [char.charCodeAt(0), 0])), 1024);
+      return bytes;
+    };
+    await expectCode(read(compound('Workbook'), 'renomeada.xlsx'), 'SOURCE_LEGACY_SPREADSHEET');
+    await expectCode(read(compound('EncryptionInfo'), 'com-senha.xlsx'), 'SOURCE_PASSWORD_PROTECTED');
   });
 });
 
@@ -302,6 +321,57 @@ describe('XLSX intake with real-world workbooks', () => {
       'Cada tabela aceita até 150 linhas e 10 colunas: escolha um intervalo menor, por exemplo A1:B150.');
     const chosen = await read(bytes, 'misto.xlsx', { ranges: { Historico: 'A1:B150' } });
     expect(chosen.blocks).toHaveLength(2);
+    const missing = await read(bytes, 'misto.xlsx', { sheets: ['Specs', 'Precos'] });
+    expect(missing.warnings).toContain('A aba “Precos” não existe nesta planilha. Confira o nome da aba no Excel.');
+  });
+
+  it('reads a sheet too big to read whole once a range is chosen, keeping a merge that starts before it', async () => {
+    const { buildGridTable, gridFromWorksheet } = await import('../../../src/vnext/ai-catalog/source-grid');
+    const { displayLocale } = await import('../../../src/vnext/ai-catalog/excel-display-format');
+    type Visit = (cell: { value: unknown; numFmt: string; isMerged: boolean }, column: number) => void;
+    const huge = {
+      name: 'Historico', getColumn: () => ({ hidden: false }),
+      eachRow: (_options: unknown, visit: (row: { hidden: boolean; eachCell: (o: unknown, cell: Visit) => void }, rowNumber: number) => void) => {
+        for (let row = 1; row <= 100_001; row++) visit({ hidden: false, eachCell: (_o, cell) => { cell({ value: `L${row}`, numFmt: '', isMerged: false }, 1); } }, row);
+      },
+    };
+    expect(() => gridFromWorksheet(huge as never, displayLocale('pt-BR'))).toThrow('SOURCE_TABLE_LIMIT');
+    const part = buildGridTable(gridFromWorksheet(huge as never, displayLocale('pt-BR'), false, { top: 1, bottom: 150, left: 1, right: 10 }));
+    expect(part.table?.rows).toHaveLength(150);
+
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Specs');
+      sheet.getCell('A1').value = 'Título'; sheet.mergeCells('A1:C3');
+      sheet.getCell('B4').value = 'Modelo'; sheet.getCell('C4').value = 'Faixa'; sheet.getCell('D4').value = 'Exatidão';
+      sheet.getCell('B5').value = 'PCON-Y17'; sheet.getCell('C5').value = '0 a 20 bar'; sheet.getCell('D5').value = '0,025 %FS';
+    });
+    const block = table(await read(bytes, 'parte.xlsx', { ranges: { Specs: 'B2:D5' } }));
+    expect(block.rows[0][0]).toBe('Título');
+    expect(block.merges[0]).toEqual({ row: 0, column: 0, rowSpan: 2, columnSpan: 2 });
+    expect(block.rows[3]).toEqual(['PCON-Y17', '0 a 20 bar', '0,025 %FS']);
+  });
+
+  it('leaves out price columns under a merged group header, but not a title over the whole table', async () => {
+    const bytes = await workbookBytes(book => {
+      const sheet = book.addWorksheet('Lista');
+      sheet.getCell('A1').value = 'Tabela de preços 2026'; sheet.mergeCells('A1:D1');
+      sheet.getCell('C2').value = 'Preços'; sheet.mergeCells('C2:D2');
+      sheet.addRow(['Modelo', 'Faixa', 'Y17', 'Y18']);
+      sheet.addRow(['PCON-Y17', '0 a 20 bar', 1000, 1300]);
+    });
+    const intake = await read(bytes, 'precos.xlsx');
+    const block = table(intake);
+    expect(block.rows.map(row => row.join('|'))).toEqual(['Tabela de preços 2026|', 'Modelo|Faixa', 'PCON-Y17|0 a 20 bar']);
+    expect(intake.ignored.filter(item => item.kind === 'column').map(item => item.message)).toEqual([
+      'A coluna C (“Y17”) da aba “Lista” não foi importada: está no grupo “Preços”, que parece ser preço ou dado interno.',
+      'A coluna D (“Y18”) da aba “Lista” não foi importada: está no grupo “Preços”, que parece ser preço ou dado interno.',
+    ]);
+  });
+
+  it('uses the first filled cell as the header of a column when the sheet has no clear header row', async () => {
+    const intake = await read('Lista de itens;;\nA1;;\n;Preço;\n;10;\n;;nota\n', 'solta.csv');
+    expect(table(intake).rows).toEqual([['Lista de itens', ''], ['A1', ''], ['', 'nota']]);
+    expect(intake.ignored[0].message).toBe('A coluna B (“Preço”) do arquivo “solta.csv” não foi importada: parece ser preço ou dado interno.');
   });
 
   it('counts the 10-sheet limit after the default exclusions and lists the extra sheets', async () => {

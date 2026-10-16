@@ -8,7 +8,7 @@ import { sniffImageDimensions, sniffImageMime, type SupportedImageMime } from '.
 import { displayLocale } from './excel-display-format';
 import { extractPdfText, MAX_PDF_BYTES, type ExtractedPdfPage } from './pdf-intake';
 import {
-  buildGridTable, columnLabel, formatNumberList, gridFromRows, gridFromWorksheet, isInternalSheetName, stripControlCharacters,
+  buildGridTable, columnLabel, formatNumberList, gridFromRows, gridFromWorksheet, isInternalSheetName, parseA1Range, stripControlCharacters,
   TABLE_LIMITS, type SourceCellFlag, type SourceIgnored, type SourceMerge, type SourceRangeRequest,
 } from './source-grid';
 
@@ -157,20 +157,28 @@ function modalWidth(records: readonly (readonly string[])[]): { width: number; h
   return { width, hits, total };
 }
 
-/** Picks the separator that splits the first ~20 records most consistently (Brazilian ';' wins ties). */
+/**
+ * Picks the separator that splits the first ~20 records most consistently. A split that breaks the
+ * header (first filled record) loses: "Modelo;Faixa" over rows of "0,5 a 1,5 bar" stays ';'.
+ * Ranking: consistent (>= 80%), header fits the usual width, consistency, width; Brazilian ';' wins ties.
+ */
 export function detectDelimiter(text: string): SourceDelimiter {
   const candidates: SourceDelimiter[] = [';', '\t', ',', '|'];
-  let best: { delimiter: SourceDelimiter; tier: number; modal: number; consistency: number } | undefined;
+  let best: { delimiter: SourceDelimiter; key: number[] } | undefined;
   for (const delimiter of candidates) {
-    const { width: modal, hits, total } = modalWidth(splitRecords(text, delimiter, 20).records.map(record => record.cells));
+    const records = splitRecords(text, delimiter, 20).records.map(record => record.cells).filter(cells => !isBlankRecord(cells));
+    const { width: modal, hits, total } = modalWidth(records);
     if (modal < 2) continue;
-    const consistency = hits / total, tier = consistency >= 0.8 ? 1 : 0;
-    const better = !best || tier > best.tier || (tier === best.tier && (tier === 1
-      ? modal > best.modal || (modal === best.modal && consistency > best.consistency)
-      : consistency > best.consistency || (consistency === best.consistency && modal > best.modal)));
-    if (better) best = { delimiter, tier, modal, consistency };
+    const consistency = hits / total;
+    const key = [consistency >= 0.8 ? 1 : 0, records[0]?.length === modal ? 1 : 0, consistency, modal];
+    if (!best || compareKeys(key, best.key) > 0) best = { delimiter, key };
   }
   return best?.delimiter ?? ';';
+}
+/** Lexicographic comparison of equal-length number tuples. */
+function compareKeys(a: readonly number[], b: readonly number[]): number {
+  const index = a.findIndex((value, position) => value !== b[position]);
+  return index < 0 ? 0 : a[index] - b[index];
 }
 
 export interface DelimitedParse {
@@ -241,7 +249,8 @@ function decodeText(bytes: ArrayBuffer, warnings: string[]): string {
   if (evenZeros > sample.length / 4) return new TextDecoder('utf-16be').decode(view);
   try { return new TextDecoder('utf-8', { fatal: true }).decode(view); }
   catch {
-    warnings.push('O arquivo não estava em UTF-8 e foi lido como Windows-1252 (padrão antigo do Excel): confira acentos e símbolos como ± e °.');
+    // Windows-1252, the encoding older Excel versions use for CSV.
+    warnings.push('O arquivo foi salvo num formato antigo do Excel e os acentos foram convertidos: confira acentos e símbolos como ± e °.');
     return new TextDecoder('windows-1252').decode(view);
   }
 }
@@ -256,11 +265,30 @@ const startsWith = (bytes: ArrayBuffer, signature: readonly number[]) => {
   return view.length === signature.length && signature.every((value, index) => view[index] === value);
 };
 const isCompoundFile = (bytes: ArrayBuffer) => startsWith(bytes, CFB_SIGNATURE);
+/** Stream names inside an OLE compound file are stored as UTF-16LE. */
+const utf16Name = (name: string) => Uint8Array.from([...name].flatMap(char => [char.charCodeAt(0), 0]));
+function containsBytes(haystack: Uint8Array, needle: Uint8Array): boolean {
+  for (let index = haystack.indexOf(needle[0]); index >= 0 && index <= haystack.length - needle.length; index = haystack.indexOf(needle[0], index + 1)) {
+    let match = true;
+    for (let offset = 1; offset < needle.length && match; offset++) match = haystack[index + offset] === needle[offset];
+    if (match) return true;
+  }
+  return false;
+}
+/**
+ * An OLE compound file named .xlsx is either an encrypted workbook (EncryptionInfo stream) or an old
+ * binary .xls renamed (Workbook stream). Anything else is treated as protected, the common case.
+ */
+function compoundWorkbookError(bytes: ArrayBuffer): SourceErrorCode {
+  const view = new Uint8Array(bytes);
+  if (containsBytes(view, utf16Name('EncryptionInfo'))) return 'SOURCE_PASSWORD_PROTECTED';
+  return containsBytes(view, utf16Name('Workbook')) ? 'SOURCE_LEGACY_SPREADSHEET' : 'SOURCE_PASSWORD_PROTECTED';
+}
 
 /** Bound declared expansion before ExcelJS allocates XML from an XLSX ZIP. */
 export function verifyWorkbookArchive(bytes: ArrayBuffer) {
-  // Password-protected Office files are not ZIPs but OLE compound files.
-  if (isCompoundFile(bytes)) fail('SOURCE_PASSWORD_PROTECTED');
+  // Password-protected Office files and old .xls files are not ZIPs but OLE compound files.
+  if (isCompoundFile(bytes)) fail(compoundWorkbookError(bytes));
   const data = new DataView(bytes); let end = -1;
   for (let offset = bytes.byteLength - 22; offset >= Math.max(0, bytes.byteLength - 65557); offset--) {
     if (data.getUint32(offset, true) === 0x06054b50 && offset + 22 + data.getUint16(offset + 20, true) === bytes.byteLength) { end = offset; break; }
@@ -322,9 +350,11 @@ async function readWorkbook(bytes: ArrayBuffer, context: ReadContext): Promise<S
       continue;
     }
     let result;
+    const range = options.ranges?.[name];
     try {
-      result = buildGridTable(gridFromWorksheet(sheet, locale, date1904), {
-        includeHidden: options.includeHidden || (chosen && sheet.state !== 'visible'), includeInternal: options.includeInternal, range: options.ranges?.[name],
+      // A chosen range is also applied while reading, so a huge sheet can still be read in parts.
+      result = buildGridTable(gridFromWorksheet(sheet, locale, date1904, range === undefined ? undefined : parseA1Range(range) ?? undefined), {
+        includeHidden: options.includeHidden || (chosen && sheet.state !== 'visible'), includeInternal: options.includeInternal, range,
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'SOURCE_TABLE_LIMIT') {
@@ -351,6 +381,9 @@ async function readWorkbook(bytes: ArrayBuffer, context: ReadContext): Promise<S
       warnings: table.warnings, rows: table.rows, addresses: table.addresses, raw: table.raw, flags: table.flags,
       merges: table.merges, headerRow: table.headerRow, range: table.range,
     });
+  }
+  for (const missing of options.sheets?.filter(name => !book.worksheets.some(sheet => sheet.name === name)) ?? []) {
+    intake.warnings.push(`A aba “${missing}” não existe nesta planilha. Confira o nome da aba no Excel.`);
   }
   if (!intake.blocks.length && !intake.rangeRequests.length) {
     intake.warnings.push('Nenhuma tabela foi importada desta planilha. Veja abaixo as abas ignoradas e por quê.');

@@ -217,6 +217,8 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
   const trim = () => {
     columns = columns.filter(column => rows.some(row => occupied(row, column)));
     const rowUsed = (row: number) => columns.some(column => occupied(row, column));
+    // Rows whose data was only in left-out columns go too; rows already blank in Excel keep the spacing.
+    rows = rows.filter(row => rowUsed(row) || !allColumns.some(column => occupied(row, column)));
     while (rows.length && !rowUsed(rows[0])) rows.shift();
     while (rows.length && !rowUsed(rows[rows.length - 1])) rows.pop();
   };
@@ -238,14 +240,38 @@ export function buildGridTable(grid: SourceGrid, options: GridTableOptions = {})
     ignored.push({ kind: 'column', sheet: grid.name, label: columnLabel(column - 1), reason: 'hidden',
       message: `${describe(column)} ${area} não foi importada: estava oculta no Excel.` });
   }
-  // 4. Internal columns (prices, currencies, e-mail…), judged by the header row only.
+  // 4. Internal columns (prices, currencies, e-mail…), judged by the column's header labels.
   const headerRowNumber = headerIndex === undefined ? undefined : rows[headerIndex];
-  if (!options.includeInternal && headerIndex !== undefined) {
-    columns = columns.filter(column => {
+  if (!options.includeInternal) {
+    /** The label that marks the column as internal, and whether it is a group header above the header row. */
+    const internalLabelOf = (column: number): { label: string; group: boolean } | undefined => {
+      if (headerIndex === undefined) {
+        // No clear header row: the first filled cell of the column (in the first 10 rows) acts as its header.
+        const first = rows.slice(0, 10).find(row => !mergedSlaves.has(`${row}:${column}`) && !wideMasters.has(`${row}:${column}`) &&
+          hasContent(cellAt(row, column)));
+        const label = first === undefined ? '' : cellAt(first, column)?.text.trim() ?? '';
+        return label && isInternalColumnHeader(label) ? { label, group: false } : undefined;
+      }
       const header = headerOf(column);
-      if (!header || !isInternalColumnHeader(header)) return true;
+      if (header && isInternalColumnHeader(header)) return { label: header, group: false };
+      // Group headers merged over some (not all) columns, in the two rows right above the header ("Preços" over Y17 | Y18).
+      const groupTop = rows[Math.max(0, headerIndex - 2)];
+      for (const merge of grid.merges) {
+        if (merge.left > column || merge.right < column || merge.right === merge.left) continue;
+        if (merge.bottom >= headerRowNumber! || merge.bottom < groupTop) continue;
+        if (columns.every(other => other >= merge.left && other <= merge.right)) continue; // a title over the whole table
+        const label = cellAt(merge.top, merge.left)?.text.trim() ?? '';
+        if (label && isInternalColumnHeader(label)) return { label, group: true };
+      }
+      return undefined;
+    };
+    columns = columns.filter(column => {
+      const internal = internalLabelOf(column);
+      if (!internal) return true;
+      const reason = internal.group ? `está no grupo “${internal.label}”, que parece ser preço ou dado interno` : 'parece ser preço ou dado interno';
+      const subject = headerOf(column) || internal.group ? describe(column) : `A coluna ${columnLabel(column - 1)} (“${internal.label}”)`;
       ignored.push({ kind: 'column', sheet: grid.name, label: columnLabel(column - 1), reason: 'internal',
-        message: `${describe(column)} ${area} não foi importada: parece ser preço ou dado interno.` });
+        message: `${subject} ${area} não foi importada: ${reason}.` });
       return false;
     });
     trim();
@@ -359,16 +385,32 @@ export function gridCellFromExcel(cell: Pick<Cell, 'value' | 'numFmt'>, locale: 
   return { text: cleaned.text, raw: text, flag: cleaned.removed ? 'control-characters' : undefined, formula };
 }
 
-/** Reads one ExcelJS worksheet into a grid (values only; style-only cells are skipped). */
-export function gridFromWorksheet(sheet: Worksheet, locale: DisplayLocale, date1904 = false): SourceGrid {
+/**
+ * Reads one ExcelJS worksheet into a grid (values only; style-only cells are skipped).
+ * With `window` (a range the person chose), only that area is read and counted against
+ * {@link GRID_PARSE_LIMITS}, so a sheet too big to read whole can still be read in parts.
+ */
+export function gridFromWorksheet(sheet: Worksheet, locale: DisplayLocale, date1904 = false, window?: GridMergeBox): SourceGrid {
   const cells = new Map<number, Map<number, GridCell>>();
   const merges = new Map<string, GridMergeBox>();
   const hiddenRows = new Set<number>(), hiddenColumns = new Set<number>();
   let usesFormulas = false, maxColumn = 0, rowsSeen = 0;
+  const inWindow = (row: number, column: number) => !window ||
+    (row >= window.top && row <= window.bottom && column >= window.left && column <= window.right);
+  const store = (rowNumber: number, column: number, cell: Pick<Cell, 'value' | 'numFmt'>) => {
+    const converted = gridCellFromExcel(cell, locale, date1904);
+    usesFormulas ||= converted.formula;
+    if (!converted.text.trim() && !converted.flag) return;
+    let columns = cells.get(rowNumber);
+    if (!columns) { columns = new Map(); cells.set(rowNumber, columns); }
+    columns.set(column, { text: converted.text, raw: converted.raw, flag: converted.flag });
+  };
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (window && (rowNumber < window.top || rowNumber > window.bottom)) return;
     if (++rowsSeen > GRID_PARSE_LIMITS.rows) throw new Error('SOURCE_TABLE_LIMIT');
     if (row.hidden) hiddenRows.add(rowNumber);
     row.eachCell({ includeEmpty: false }, (cell, column) => {
+      if (!inWindow(rowNumber, column)) return;
       if (column > GRID_PARSE_LIMITS.columns) throw new Error('SOURCE_TABLE_LIMIT');
       maxColumn = Math.max(maxColumn, column);
       const master = cell.isMerged ? cell.master : undefined;
@@ -378,14 +420,11 @@ export function gridFromWorksheet(sheet: Worksheet, locale: DisplayLocale, date1
         const merge = merges.get(address) ?? { top, left, bottom: top, right: left };
         merge.bottom = Math.max(merge.bottom, rowNumber); merge.right = Math.max(merge.right, column);
         merges.set(address, merge);
+        // A merge that starts before the chosen range still shows its value inside it.
+        if (!inWindow(top, left) && !cells.get(top)?.has(left)) store(top, left, master);
         return;
       }
-      const converted = gridCellFromExcel(cell, locale, date1904);
-      usesFormulas ||= converted.formula;
-      if (!converted.text.trim() && !converted.flag) return;
-      let columns = cells.get(rowNumber);
-      if (!columns) { columns = new Map(); cells.set(rowNumber, columns); }
-      columns.set(column, { text: converted.text, raw: converted.raw, flag: converted.flag });
+      store(rowNumber, column, cell);
     });
   });
   for (let column = 1; column <= maxColumn; column++) if (sheet.getColumn(column).hidden) hiddenColumns.add(column);
