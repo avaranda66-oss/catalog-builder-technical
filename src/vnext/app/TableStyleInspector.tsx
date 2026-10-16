@@ -198,7 +198,7 @@ export function TableStyleInspector({
       )}
 
       <label className="vnext-style-role-mode">
-        <span>Estilo do tipo de linha</span>
+        <span>Aplicar o estilo em</span>
         <select
           data-style-role-scope=""
           value={roleScope ?? ''}

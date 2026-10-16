@@ -1248,6 +1248,12 @@ describe('W4.F.2 F1 disabled Table style guidance', () => {
     expect(view.container.textContent).not.toContain('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
   });
 
+  it('speaks plain Portuguese in the table style panel (no "tipo de linha", no "topologia")', () => {
+    const view = renderTableStyleGuidance(false, false);
+    expect(view.getByRole('combobox', { name: 'Aplicar o estilo em' })).toBeInTheDocument();
+    expect(view.container.textContent).not.toMatch(/tipo de linha|topologia|linha\/coluna/);
+  });
+
   it('keeps an editable Table enabled with no stale reason or aria reference', () => {
     const view = renderTableStyleGuidance(false, false);
     expect(view.control).not.toBeDisabled();
