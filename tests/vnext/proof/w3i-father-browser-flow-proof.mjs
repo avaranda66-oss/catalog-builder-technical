@@ -59,7 +59,7 @@ async function waitForEditor(page) {
 
 async function waitForLibrary(page) {
   await page.locator('[data-catalog-library]').waitFor();
-  await page.getByRole('heading', { name: 'Catálogos', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Meus catálogos', exact: true }).waitFor();
 }
 
 async function resolveRecoveryByDiscardingThroughUi(page) {
@@ -568,7 +568,9 @@ try {
   assert.equal((await catalog(pageB, conflictCopyId)).title, 'Fechamento Pai W3.I');
   await pageB.getByRole('button', { name: 'Voltar aos catálogos', exact: true }).click();
   await waitForLibrary(pageB);
-  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('button', { name: 'Arquivar', exact: true }).click();
+  // FR-04: Arquivar lives in the row's "Mais" menu.
+  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('button', { name: /^Mais ações de / }).click();
+  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('menuitem', { name: 'Arquivar', exact: true }).click();
   await pageB.getByRole('dialog', { name: /Arquivar/ }).getByRole('button', { name: 'Arquivar catálogo', exact: true }).click();
   await pageB.getByRole('tab', { name: 'Arquivados', exact: true }).click();
   await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).waitFor();
@@ -593,9 +595,10 @@ try {
   for (const width of [320, 360, 390]) {
     await assertNoHorizontalOverflow(pageB, width, ['Novo catálogo']);
     const activeRow = pageB.locator(`[data-library-catalog-id="${sourceCatalogId}"]`);
-    for (const action of ['Abrir', 'Duplicar', 'Renomear', 'Arquivar']) {
+    for (const action of ['Abrir', 'Duplicar', 'Renomear']) {
       assert.equal(await activeRow.getByRole('button', { name: action, exact: true }).isVisible(), true);
     }
+    assert.equal(await activeRow.getByRole('button', { name: /^Mais ações de / }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
     assert.equal(await pageB.getByRole('button', { name: /Ficha técnica essencial/ }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Fechar', exact: true }).click();

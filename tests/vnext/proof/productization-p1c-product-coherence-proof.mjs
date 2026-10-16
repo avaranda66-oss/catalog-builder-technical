@@ -470,7 +470,9 @@ async function workflow(browser, width, first) {
   await shot(page, 'rename-dialog', width);
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
-  await row.getByRole('button', { name: 'Arquivar', exact: true }).click();
+  // FR-04: Arquivar lives in the row's "Mais" menu.
+  await row.getByRole('button', { name: /^Mais ações de / }).click();
+  await row.getByRole('menuitem', { name: 'Arquivar', exact: true }).click();
   await page.getByRole('dialog').waitFor();
   await shot(page, 'archive-confirmation', width);
   await page.keyboard.press('Escape');
