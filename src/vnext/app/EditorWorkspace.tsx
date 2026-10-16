@@ -127,6 +127,8 @@ import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 import { EditorNotices } from './editor/EditorNotices';
+import { SaveSummary } from './editor/SaveSummary';
+import { PhotoStatusMark } from './editor/ImageRepairIndicator';
 import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 import { CanvasHeader } from './editor/CanvasHeader';
@@ -3767,11 +3769,7 @@ export function EditorWorkspace({
           <div>
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
             <div className="vnext-title-row"><CatalogTitleButton session={session} title={document.title} /></div>
-            {simpleByDefault && persistence && (
-              <span className="vnext-save-summary" role="status" data-save-state="" data-save-phase={persistence.save.phase}>
-                {fatherSaveLabel(persistence.save.label)}
-              </span>
-            )}
+            {simpleByDefault && persistence && <SaveSummary save={persistence.save} />}
             {persistence && <LibraryNavigationNotice runtime={persistence.runtime} />}
           </div>
         </div>
@@ -4074,26 +4072,10 @@ export function EditorWorkspace({
                           {issueSeverity === 'ERROR' ? '!' : '⚠'}
                         </span>
                       )}
-                      {object.type === 'image' && (() => {
-                        const assetState = persistence?.assetRuntimeStates?.get(object.assetId);
-                        if (!assetState || assetState.status === 'resolved') return null;
-                        const isIntegrity = assetState.status === 'integrity-failed';
-                        return (
-                          <div
-                            className="vnext-image-repair-indicator"
-                            data-editor-image-repair={object.id}
-                            data-asset-status={assetState.status}
-                          >
-                            <span className="repair-icon">⚠️</span>
-                            <span className="repair-title">
-                              {isIntegrity ? 'Falha de integridade' : 'Imagem indisponível'}
-                            </span>
-                            <span className="repair-hint">
-                              Substitua ou envie nova imagem
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      {object.type === 'image' && persistence && (
+                        <PhotoStatusMark objectId={object.id} assetId={object.assetId} runtime={persistence.runtime}
+                          state={persistence.assetRuntimeStates?.get(object.assetId)} bridge={persistence.assetBridge} />
+                      )}
                       {selected && (
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />

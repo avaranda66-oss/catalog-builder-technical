@@ -21,7 +21,10 @@ export type ConflictResolutionFailureCode =
   | 'REMOTE_FAILURE'
   | 'AMBIGUOUS_COMMIT_OUTCOME'
   | 'ENVELOPE_MISMATCH'
-  | 'CONFLICT';
+  | 'CONFLICT'
+  // Passed on from reopening: work typed while it loaded, or the server answered for another catalog.
+  | 'UNSAVED_CHANGES'
+  | 'REQUESTED_ID_MISMATCH';
 
 export type ConflictResolutionResult =
   | { readonly ok: true; readonly catalogId: string; readonly kind: 'latest' | 'copy' }
@@ -74,6 +77,14 @@ export class ConflictResolutionCoordinator {
   private activeResolution: ActiveResolution | undefined;
 
   constructor(private readonly options: ConflictResolutionCoordinatorOptions) {}
+
+  /**
+   * FR-43: true when "Abrir versão mais recente" first stores this tab's work as a backup on this
+   * computer (offered again the next time this catalog opens). The dialog says so only then.
+   */
+  get keepsLocalBackup(): boolean {
+    return Boolean(this.options.recoveryManager);
+  }
 
   readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -168,12 +179,44 @@ export class ConflictResolutionCoordinator {
     return undefined;
   }
 
+  /**
+   * FR-43: "Abrir versão mais recente" replaces this tab's work, so it goes on only when the backup
+   * on this computer holds exactly that work (this session and this document).
+   */
+  private backupHolds(expected: ConflictGuard): boolean {
+    const manager = this.options.recoveryManager;
+    if (!manager) return true;
+    const record = manager.getLastWrittenRecord();
+    return Boolean(
+      record
+      && record.openSessionId === expected.openSessionId
+      && record.catalogId === expected.catalogId
+      && canonicalDocumentEquivalence(record.documentSnapshot) === expected.equivalence
+    );
+  }
+
+  /**
+   * FR-43: once the copy is open, the backup of the replaced session belongs to another catalog.
+   * Writing the new session's state removes it now, so the original catalog does not offer, the
+   * next time it opens, work that is already saved in the copy.
+   */
+  private async releaseReplacedBackup(): Promise<void> {
+    try {
+      await this.options.recoveryManager?.flush();
+    } catch {
+      // The copy is already saved. The old backup is removed by the next local write.
+    }
+  }
+
   private async openLatestOnce(): Promise<ConflictResolutionResult> {
     const guard = this.capture();
     if (!guard) return failure('NOT_IN_CONFLICT');
     const protectionFailure = await this.protectLocal(guard);
     if (protectionFailure) return protectionFailure;
     if (!this.isCurrent(guard)) return failure('STALE_RESULT');
+    if (!this.backupHolds(guard)) {
+      return failure('LOCAL_PROTECTION_UNAVAILABLE', 'A cópia de segurança neste computador não foi confirmada.');
+    }
 
     const opened = await this.options.reopenCoordinator.open(
       guard.catalogId,
@@ -209,6 +252,7 @@ export class ConflictResolutionCoordinator {
       if (!openedPending.ok) {
         return failure(openedPending.error.code as ConflictResolutionFailureCode, openedPending.error.message);
       }
+      await this.releaseReplacedBackup();
       return { ok: true, catalogId: continued.value.catalogId, kind: 'copy' };
     }
 
@@ -237,6 +281,7 @@ export class ConflictResolutionCoordinator {
     if (!opened.ok) {
       return failure(opened.error.code as ConflictResolutionFailureCode, opened.error.message);
     }
+    await this.releaseReplacedBackup();
     return { ok: true, catalogId: created.value.catalogId, kind: 'copy' };
   }
 

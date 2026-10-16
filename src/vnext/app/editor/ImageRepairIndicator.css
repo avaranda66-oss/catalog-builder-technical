@@ -1,0 +1,32 @@
+/*
+ * FR-41 photo marks. The base look of .vnext-image-repair-indicator lives in styles.css; these rules add
+ * the loading state and the "Tentar novamente" button. The mark lets clicks through to the photo, so the
+ * photo can still be selected and moved; only the button takes clicks. Content sits at the bottom so the
+ * middle of the photo stays free.
+ */
+.vnext-image-repair-indicator.is-loading {
+  border-color: #8aa4bf;
+  background: rgb(238 243 248 / .82);
+}
+.vnext-image-repair-indicator.is-loading .repair-title { color: var(--vnext-text-secondary, #41546b); font-weight: 600; }
+.vnext-image-repair-indicator.has-retry { justify-content: flex-end; gap: 1px; padding-bottom: 6px; }
+.vnext-image-repair-indicator .repair-retry {
+  pointer-events: auto;
+  margin-top: 4px;
+  min-height: 24px;
+  max-width: 100%;
+  border: 1px solid #1f3a5f;
+  border-radius: 5px;
+  background: #fff;
+  color: #1f3a5f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+  white-space: normal;
+}
+.vnext-image-repair-indicator .repair-retry:hover { background: #eef3f8; }
+.vnext-image-repair-indicator .repair-retry:focus-visible { outline: 2px solid var(--vnext-focus, #0072ce); outline-offset: 2px; }
+@media print { .vnext-image-repair-indicator { display: none; } }
