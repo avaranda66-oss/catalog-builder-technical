@@ -117,8 +117,11 @@ async function openTableGrid(container: HTMLElement): Promise<HTMLElement> {
 
 const cellEditor = () => screen.getByRole('textbox', { name: /^Conteúdo da célula, / });
 const flushMicrotasks = () => act(async () => { await Promise.resolve(); });
-/** After a row or column is added or removed, the grid comes back (focused) once the new table is measured. */
-const gridBackWithFocus = () => waitFor(() => expect(screen.getByRole('grid', { name: 'Grade da tabela' })).toHaveFocus(), { timeout: 3_000 });
+/** After a row is added or removed the grid stays on screen and keeps the focus, before the table is measured again. */
+const gridKeepsFocus = async () => {
+  await flushMicrotasks();
+  expect(screen.getByRole('grid', { name: 'Grade da tabela' })).toHaveFocus();
+};
 
 describe('FR-30 · fill a table only with the keyboard, typing inside the cells', () => {
   it('types, Enter goes down, Tab goes right, Esc cancels, Tab on the last cell adds a row', async () => {
@@ -170,7 +173,7 @@ describe('FR-30 · fill a table only with the keyboard, typing inside the cells'
     expect(textAt(session, 1, 2)).toBe('±0,5 %');
     expect(liveTable(session).rows).toHaveLength(3);
     expect(screen.getByText('Linha adicionada no fim da tabela.')).toBeInTheDocument();
-    await gridBackWithFocus();
+    await gridKeepsFocus();
 
     // The new row is ready: the next key edits its first cell.
     fireEvent.keyDown(document.activeElement!, { key: 'Z' });
@@ -223,7 +226,7 @@ describe('FR-34 · "+" and the right-click menu in the real editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inserir linha abaixo da linha 1' }));
     expect(liveTable(session).rows.map((row) => row.id)).toEqual(['r0', expect.any(String), 'r1', 'r2', 'r3']);
     expect(screen.getByText('Linha inserida abaixo.')).toBeInTheDocument();
-    await gridBackWithFocus();
+    await gridKeepsFocus();
 
     const cellAt = (row: number, column: number) => container.querySelector<HTMLElement>(`[data-table-cell="${row}:${column}"]`)!;
     fireEvent.pointerDown(cellAt(2, 0), { pointerId: 11, button: 0, clientX: 5, clientY: 5 });
@@ -235,7 +238,7 @@ describe('FR-34 · "+" and the right-click menu in the real editor', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Excluir 2 linhas' }));
     expect(liveTable(session).rows.map((row) => row.id)).toEqual(['r0', expect.any(String), 'r3']);
     expect(screen.getByText('2 linhas excluídas. Para voltar, use Desfazer.')).toBeInTheDocument();
-    await gridBackWithFocus();
+    await gridKeepsFocus();
 
     fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
     expect(liveTable(session).rows.map((row) => row.id)).toEqual(['r0', expect.any(String), 'r1', 'r2', 'r3']);

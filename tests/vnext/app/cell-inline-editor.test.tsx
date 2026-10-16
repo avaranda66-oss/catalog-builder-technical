@@ -19,7 +19,7 @@ afterEach(() => {
 const identity = { pageId: 'p', objectId: 'o', tableId: 't', cellId: 'c' };
 const CELL: CellInlineEditorCell = { widthPx: 120, heightPx: 20, rowIndex: 2, columnIndex: 1 };
 
-function renderEditor(content: CellContent, options: { typed?: string; cell?: CellInlineEditorCell } = {}) {
+function renderEditor(content: CellContent, options: { typed?: string; cell?: CellInlineEditorCell; onPage?: { cellLeft: number } } = {}) {
   const onCommit = vi.fn();
   const onCancel = vi.fn();
   const changes: TableCellDraft[] = [];
@@ -42,7 +42,13 @@ function renderEditor(content: CellContent, options: { typed?: string; cell?: Ce
       />
     );
   }
-  const view = render(<Harness />);
+  const view = render(options.onPage
+    ? (
+        <div data-vnext-page-stage="" data-test-box="0,600">
+          <div data-test-box={`${options.onPage.cellLeft},${options.onPage.cellLeft + 80}`}><Harness /></div>
+        </div>
+      )
+    : <Harness />);
   return { ...view, onCommit, onCancel, changes, draftRef, fieldRef };
 }
 
@@ -185,5 +191,26 @@ describe('CellInlineEditor', () => {
     const wide = screen.getByRole('textbox', { name: /Conteúdo da célula/ });
     expect(wide.style.width).toBe('375px');
     expect(wide.style.minHeight).toBe('60px');
+  });
+
+  it('opens towards the left on the right half of the page and scrolls itself into view', () => {
+    const scrollIntoView = vi.fn();
+    const originalScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const [left, right] = (this.dataset.testBox ?? '0,0').split(',').map(Number);
+      return { x: left, y: 0, left, right, top: 0, bottom: 20, width: right - left, height: 20, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const left = renderEditor(textOf('A'), { onPage: { cellLeft: 100 } });
+      expect(left.container.querySelector('[data-cell-inline-editor]')).not.toHaveClass('is-align-end');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+      left.unmount();
+      const right = renderEditor(textOf('A'), { onPage: { cellLeft: 450 } });
+      expect(right.container.querySelector('[data-cell-inline-editor]')).toHaveClass('is-align-end');
+    } finally {
+      rect.mockRestore();
+      Element.prototype.scrollIntoView = originalScroll;
+    }
   });
 });

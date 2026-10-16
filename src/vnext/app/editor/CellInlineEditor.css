@@ -3,7 +3,7 @@
  * beside the component. The editor is counter-zoomed (inline `zoom`), so every size here is in screen px.
  */
 .vnext-cell-inline-anchor { position: absolute; z-index: 9; pointer-events: none; }
-.vnext-cell-inline-editor { position: absolute; left: 0; top: 0; pointer-events: auto; }
+.vnext-cell-inline-editor { position: absolute; left: 0; top: 0; pointer-events: auto; scroll-margin: 56px 16px 76px; }
 .vnext-cell-inline-editor textarea,
 .vnext-cell-inline-editor .vnext-cell-inline-note {
   display: block;
@@ -61,8 +61,9 @@
   position: absolute;
   left: 0;
   top: calc(100% + 4px);
-  width: max-content;
-  max-width: 560px;
+  /* Wraps inside the editor's width, so it never runs past the editor. */
+  min-width: 100%;
+  box-sizing: border-box;
   margin: 0;
   border-radius: 6px;
   background: #003f78;
@@ -71,3 +72,7 @@
   padding: 4px 8px;
   pointer-events: none;
 }
+
+/* A cell on the right half of the page: the editor grows to the left from the cell's right edge. */
+.vnext-cell-inline-editor.is-align-end { left: auto; right: 0; }
+.vnext-cell-inline-editor.is-align-end .vnext-cell-inline-toolbar { left: auto; right: 0; }

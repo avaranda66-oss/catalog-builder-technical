@@ -105,7 +105,9 @@ function readOnlyNote(draft: TableCellDraft): string {
  */
 export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChange, onCommit, onCancel }: CellInlineEditorProps) {
   const { zoom, unzoom } = useStageZoom();
+  const editorRef = React.useRef<HTMLDivElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [alignEnd, setAlignEnd] = React.useState(false);
   const pendingCaretRef = React.useRef<number | null>(null);
   const original = draft.originalContent;
   const field = inlineField(draft);
@@ -120,6 +122,21 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
     const end = textarea.value.length;
     textarea.setSelectionRange(end, end);
   }, [field?.kind]);
+
+  // A cell below (or beside) the visible part of the page scrolls into view, symbols and help included.
+  React.useLayoutEffect(() => {
+    editorRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [cell.rowIndex, cell.columnIndex]);
+
+  // A cell on the right half of the page opens the editor towards the left, so it never runs off the screen.
+  React.useLayoutEffect(() => {
+    const anchor = editorRef.current?.parentElement;
+    const stage = anchor?.closest('[data-vnext-page-stage]');
+    if (!anchor || !stage) return;
+    const cellBox = anchor.getBoundingClientRect();
+    const pageBox = stage.getBoundingClientRect();
+    setAlignEnd(pageBox.width > 0 && cellBox.left + cellBox.width / 2 > pageBox.left + pageBox.width / 2);
+  }, [cell.rowIndex, cell.columnIndex, zoom]);
 
   React.useLayoutEffect(() => {
     const caret = pendingCaretRef.current;
@@ -165,7 +182,8 @@ export function CellInlineEditor({ draft, draftRef, fieldRef, cell, onDraftChang
 
   return (
     <div
-      className="vnext-cell-inline-editor"
+      ref={editorRef}
+      className={'vnext-cell-inline-editor' + (alignEnd ? ' is-align-end' : '')}
       data-cell-inline-editor=""
       data-keyboard-isolated=""
       // Drawn at screen scale inside the zoomed page: every size below is in screen px.
