@@ -3,7 +3,8 @@ import { findObjectInTree, type CatalogDocument, type RichText } from '../domain
 import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult, type TranslationLocator, type TranslationSemanticLeaf } from './contracts';
 import { extractSemanticTranslationCoverage, stableSerialize } from './semantic-leaves';
 import { protectTechnicalTokens } from './technical-token-protector';
-import { isAcceptedTranslationModelId } from './language-registry';
+import { isAcceptedTranslationModelId, type VNextTranslationTargetLocale } from './language-registry';
+import { technicalTokensEquivalentForLocale } from './locale-number-format';
 
 export interface TranslationReviewRun {
   readonly unitId: string;
@@ -20,7 +21,12 @@ function invalid(message: string): never {
   throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', message);
 }
 
-export function requireReviewText(source: string, translated: string): void {
+/**
+ * Technical values must survive review. With `targetLocale`, a value may also appear in that
+ * language's number/abbreviation format (FR-85: "0,02 % FE" ↔ "0.02 % FS", "1.500" ↔ "1,500"
+ * after confirmation); any other difference is still refused.
+ */
+export function requireReviewText(source: string, translated: string, targetLocale?: VNextTranslationTargetLocale): void {
   // Authored placeholder-looking literals are facts too. Only newly introduced transport placeholders are forbidden.
   let withoutSourceLiterals = translated;
   for (const literal of source.match(/\[\[VNEXT_TECH_[^\]]+\]\]/g) ?? []) withoutSourceLiterals = withoutSourceLiterals.replace(literal, '');
@@ -34,7 +40,7 @@ export function requireReviewText(source: string, translated: string): void {
     invalid('Review text is empty, too large or contains unsupported markup');
   }
   const tokens = (text: string) => protectTechnicalTokens(text).tokens.map(token => token.value).sort();
-  if (stableSerialize(tokens(source)) !== stableSerialize(tokens(translated))) {
+  if (!technicalTokensEquivalentForLocale(tokens(source), tokens(translated), targetLocale)) {
     throw new TranslationFoundationError('TECHNICAL_TOKEN_MISMATCH', 'Review must preserve technical values');
   }
 }
@@ -82,7 +88,7 @@ export async function materializeTranslationCandidate(
       const key = translationReviewKey(leaf.leafId, sourceRun.runId);
       const translated = corrections.get(key) ?? original;
       if (corrections.has(key)) usedCorrections.add(key);
-      requireReviewText(sourceRun.text, translated);
+      requireReviewText(sourceRun.text, translated, result.targetLocale);
       if (leaf.kind === 'catalogTitle') document.title = translated;
       else {
         const inline = rich?.paragraphs.flatMap(paragraph => paragraph.inlines).find(item => item.id === sourceRun.runId);

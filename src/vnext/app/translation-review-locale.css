@@ -1,0 +1,16 @@
+/* FR-85/FR-87 · sugestões de números, glossário e grafia dentro de cada trecho da revisão de tradução. */
+.vnext-translation-center .vnext-translation-suggestions { display: grid; gap: 8px; margin-top: 10px; }
+.vnext-translation-center .vnext-translation-suggestion {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  border: 1px solid var(--vnext-border); border-left: 3px solid var(--vnext-warning); border-radius: var(--vnext-radius-surface);
+  background: var(--vnext-warning-surface, var(--vnext-surface-muted)); color: var(--vnext-text); padding: 8px 10px; font-size: 12px; line-height: 1.6;
+}
+.vnext-translation-center .vnext-translation-suggestion[data-suggestion="glossary"] { border-left-color: var(--vnext-primary); background: var(--vnext-surface-muted); }
+.vnext-translation-center .vnext-translation-suggestion > p { flex: 1 1 240px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.vnext-translation-center .vnext-translation-suggestion code { font-size: 11px; white-space: pre-wrap; }
+.vnext-translation-center .vnext-translation-suggestion-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.vnext-translation-center .vnext-translation-suggestion-actions > button { min-height: 32px; font-size: 12px; padding: 5px 10px; }
+@media (max-width: 640px) {
+  .vnext-translation-center .vnext-translation-suggestion-actions { width: 100%; }
+  .vnext-translation-center .vnext-translation-suggestion-actions > button { flex: 1 1 auto; }
+}

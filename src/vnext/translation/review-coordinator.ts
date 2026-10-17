@@ -137,7 +137,7 @@ export class TranslationReviewCoordinator {
     const run = this.snapshot.runs.find(item => item.unitId === unitId && item.runId === runId);
     if (!run) return false;
     const key = translationReviewKey(unitId, runId);
-    try { this.requireCurrent(); requireReviewText(run.sourceText, text); }
+    try { this.requireCurrent(); requireReviewText(run.sourceText, text, this.snapshot.targetLocale); }
     catch (error) {
       this.invalidCorrections.add(key);
       this.reviewed.delete(key);

@@ -4,7 +4,10 @@ import { TranslationReviewCoordinator } from '../translation/review-coordinator'
 import { translationReviewKey, type TranslationReviewRun } from '../translation/candidate';
 import { getTranslationLanguage, VNEXT_TRANSLATION_PROFILES, type VNextTranslationTargetLocale } from '../translation/language-registry';
 import { protectTechnicalTokens } from '../translation/technical-token-protector';
+import { reviewSuggestions, type NumberReadingQuestion, type ReviewSuggestions } from '../translation/review-suggestions';
+import type { LocaleFormatConfirmationOption } from '../translation/locale-number-format';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
+import './translation-review-locale.css';
 
 const languageNames: Readonly<Record<string, string>> = {
   'pt-BR': 'Português', 'es-ES': 'Espanhol', 'en-US': 'Inglês',
@@ -34,19 +37,71 @@ function groupReviewRuns(runs: readonly TranslationReviewRun[]) {
   return [...pages.values()].map(page => ({ pageLabel: page.pageLabel, groups: [...page.groups.values()] }));
 }
 
-function ReviewRun({ run, coordinator, index, disabled, sourceLanguage, targetLanguage, reviewed, corrected, invalid, onDraftChange, onDraftCommitted }: {
+/** FR-85/FR-87: avisos com botão. Nada muda no texto até a pessoa clicar. */
+function RunSuggestions({ suggestions, index, disabled, targetLanguage, onApply, onChooseReading }: {
+  suggestions: ReviewSuggestions; index: number; disabled: boolean; targetLanguage: string;
+  onApply: (text: string) => void; onChooseReading: (question: NumberReadingQuestion, option: LocaleFormatConfirmationOption) => void;
+}) {
+  if (suggestions.total === 0) return null;
+  return <div className="vnext-translation-suggestions" role="group" aria-label={`Sugestões para o trecho ${index + 1}`}>
+    {suggestions.format.changes.length > 0 && <div className="vnext-translation-suggestion" data-suggestion="numbers">
+      <p>Números e abreviações no formato do {targetLanguage.toLocaleLowerCase('pt-BR')}: <code>{suggestions.numberSummary}</code></p>
+      <div className="vnext-translation-suggestion-actions">
+        <button type="button" className="vnext-btn-secondary" disabled={disabled} onClick={() => onApply(suggestions.format.text)}>
+          Aplicar ajuste de números ({suggestions.format.changes.length})
+        </button>
+      </div>
+    </div>}
+    {suggestions.questions.map(question => <div key={question.token} className="vnext-translation-suggestion" data-suggestion="confirm">
+      <p>{`Confirme: '${question.token}' é ${question.options.map(option => option.label).join(' ou ')}?`}</p>
+      <div className="vnext-translation-suggestion-actions">
+        {question.options.map(option => <button key={option.reading} type="button" className="vnext-btn-secondary" disabled={disabled}
+          onClick={() => onChooseReading(question, option)}>{option.label} ({option.value})</button>)}
+      </div>
+    </div>)}
+    {suggestions.glossary.map(item => <div key={item.hint.expected} className="vnext-translation-suggestion" data-suggestion="glossary">
+      <p>{`Glossário PRESYS: use '${item.hint.expected}'${item.hint.found ? ` no lugar de '${item.hint.found}'` : ''}.`}</p>
+      {item.replacement !== undefined && <div className="vnext-translation-suggestion-actions">
+        <button type="button" className="vnext-btn-secondary" disabled={disabled} onClick={() => onApply(item.replacement!)}>{`Usar '${item.hint.expected}'`}</button>
+      </div>}
+    </div>)}
+    {suggestions.spelling.map(item => <div key={item.misspelling.wrong.toLocaleLowerCase('en-US')} className="vnext-translation-suggestion" data-suggestion="spelling">
+      <p>{`Grafia a corrigir: '${item.misspelling.wrong}' → '${item.misspelling.right}'`}</p>
+      <div className="vnext-translation-suggestion-actions">
+        <button type="button" className="vnext-btn-secondary" disabled={disabled} onClick={() => onApply(item.replacement)}>{`Corrigir grafia (${item.misspelling.right})`}</button>
+      </div>
+    </div>)}
+  </div>;
+}
+
+function ReviewRun({ run, coordinator, index, disabled, sourceLocale, targetLocale, sourceLanguage, targetLanguage, reviewed, corrected, invalid, onDraftChange, onDraftCommitted }: {
   run: TranslationReviewRun; coordinator: TranslationReviewCoordinator; index: number; disabled: boolean;
+  sourceLocale: string; targetLocale: VNextTranslationTargetLocale;
   sourceLanguage: string; targetLanguage: string; reviewed: boolean; corrected: boolean; invalid: boolean;
   onDraftChange: (run: TranslationReviewRun, text: string) => void; onDraftCommitted: (run: TranslationReviewRun) => void;
 }) {
   const [edit, setEdit] = React.useState<{ basis: string; text: string }>();
+  // Números ambíguos já confirmados pela pessoa neste trecho (ex.: "1,500" depois de escolher "mil e quinhentos").
+  const [confirmedNumbers, setConfirmedNumbers] = React.useState<readonly string[]>([]);
   const draft = edit?.basis === run.translatedText ? edit.text : run.translatedText;
   const hasDraft = draft !== run.translatedText;
   const protectedValues = [...new Set(protectTechnicalTokens(run.sourceText).tokens.map(token => token.value))];
+  const suggestions = reviewSuggestions(run.sourceText, draft, sourceLocale, targetLocale, confirmedNumbers);
   const errorId = `translation-run-error-${index}`;
   const commitDraft = () => {
     if ((hasDraft || invalid) && !coordinator.correct(run.unitId, run.runId, draft)) return false;
     onDraftCommitted(run); return true;
+  };
+  // Uma sugestão aceita vira rascunho e é enviada ao coordenador na hora; se ele recusar, o trecho fica sinalizado como hoje.
+  const applySuggestion = (text: string) => {
+    if (text === draft) return;
+    setEdit({ basis: run.translatedText, text });
+    onDraftChange(run, text);
+    if (coordinator.correct(run.unitId, run.runId, text)) onDraftCommitted(run);
+  };
+  const chooseReading = (question: NumberReadingQuestion, option: LocaleFormatConfirmationOption) => {
+    setConfirmedNumbers(current => current.includes(option.value) ? current : [...current, option.value]);
+    applySuggestion(question.apply(option));
   };
   return <div className="vnext-translation-run" data-translation-run-state={invalid ? 'invalid' : hasDraft ? 'editing' : corrected ? 'corrected' : reviewed ? 'reviewed' : 'generated'}>
     <div className="vnext-translation-run-heading">
@@ -66,6 +121,8 @@ function ReviewRun({ run, coordinator, index, disabled, sourceLanguage, targetLa
         {invalid && <p id={errorId} className="vnext-translation-inline-error">Confira este trecho: preserve os códigos, números e unidades do original. Use texto simples e preencha a tradução antes de salvar.</p>}
       </div>
     </div>
+    {suggestions && <RunSuggestions suggestions={suggestions} index={index} disabled={disabled} targetLanguage={targetLanguage}
+      onApply={applySuggestion} onChooseReading={chooseReading} />}
     <div className="vnext-translation-run-footer">
       {protectedValues.length > 0 ? <details className="vnext-translation-protected">
         <summary tabIndex={0}>Dados técnicos protegidos ({protectedValues.length})</summary>
@@ -177,6 +234,7 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
             {group.runs.map(({ run, index }) => {
               const key = translationReviewKey(run.unitId, run.runId);
               return <ReviewRun key={`${reviewAttempt}:${targetLocale}:${key}`} run={run} index={index} coordinator={coordinator} sourceLanguage={sourceLanguage.name}
+                sourceLocale={sourceLocale} targetLocale={targetLocale}
                 targetLanguage={targetLanguage.name} disabled={busy || snapshot.pending} reviewed={reviewedKeys.has(key)} corrected={correctedKeys.has(key)} invalid={invalidKeys.has(key)}
                 onDraftChange={onDraftChange} onDraftCommitted={onDraftCommitted} />;
             })}

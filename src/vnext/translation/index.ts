@@ -51,6 +51,37 @@ export {
 } from './technical-token-protector';
 export type { ProtectedTechnicalToken, ProtectedText } from './technical-token-protector';
 export {
+  applyNumberReading,
+  formatTechnicalTextForLocale,
+  integerWordsPtBr,
+  localeTokenRenderings,
+  technicalTokensEquivalentForLocale,
+} from './locale-number-format';
+export type {
+  LocaleFormatChange,
+  LocaleFormatChangeKind,
+  LocaleFormatConfirmation,
+  LocaleFormatConfirmationOption,
+  LocaleFormatOptions,
+  LocaleFormatResult,
+  LocaleFormatSourceLocale,
+  LocaleFormatTargetLocale,
+  LocaleNumberReading,
+} from './locale-number-format';
+export {
+  applyGlossaryHint,
+  applyKnownMisspelling,
+  findGlossaryHints,
+  findKnownMisspellings,
+  glossaryTerms,
+  knownMisspellings,
+  matchCase,
+  normalizeGlossaryText,
+} from './glossary';
+export type { GlossaryHint, GlossaryLocale, GlossaryTerm, KnownMisspelling } from './glossary';
+export { reviewSuggestions } from './review-suggestions';
+export type { GlossarySuggestion, NumberReadingQuestion, ReviewSuggestions, SpellingSuggestion } from './review-suggestions';
+export {
   MemoryTranslationRequestCache,
   buildTranslationRequestCacheKey,
 } from './request-cache';
