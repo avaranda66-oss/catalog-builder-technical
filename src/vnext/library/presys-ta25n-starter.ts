@@ -226,6 +226,11 @@ export const PRESYS_PAGE_TEMPLATE_LABELS: Readonly<Record<string, string>> = Obj
   [PRESYS_SPECIFICATIONS_PAGE_ID]: 'TA-25N · Especificações',
 });
 
+/** The TA-25N pages need their official image prepared before insertion (insertPresysPage). */
+export function isPresysTa25nPageTemplate(templateId: string): boolean {
+  return templateId === PRESYS_PRESENTATION_PAGE_ID || templateId === PRESYS_SPECIFICATIONS_PAGE_ID;
+}
+
 /**
  * Session-scoped registry used by the editor. The PRESYS archetypes P1–P9 (FR-80)
  * are always available; the TA-25N pages join only after their official image
