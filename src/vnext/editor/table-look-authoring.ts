@@ -2,12 +2,12 @@ import type { ApplicationAction, CellStylePatch, TablePresetId } from '../applic
 import { executeApplicationAction } from '../application/execute';
 import {
   materializeTablePreset,
+  NATIVE_TABLE_PROFILES,
   TABLE_PRESETS,
   TABLE_TEXT_SIZES,
   tablePresetAccents,
   tablePresetDefinition,
   tablePresetFirstColumnMm,
-  type TablePresetAccents,
   type TableTextSizeId,
 } from '../application/table-preset-registry';
 import { mmToU } from '../domain/physical';
@@ -26,15 +26,32 @@ import { prepareStyleAction, prepareTablePresetAction } from './table-style-auth
  * The list is first simulated on the document, so a look that cannot be applied changes nothing.
  */
 
-export type TableLabelStyle = TablePresetAccents['label'];
+/** Style of the highlighted first column: bold on a light tint (the colour of the text is kept when it has none). */
+export interface TableLabelStyle {
+  readonly fontWeight: 700;
+  readonly background: string;
+  readonly color?: string;
+}
 
 /** What the panel shows as "on" for the selected table, read from the table itself. */
 export interface TableLook {
-  /** The task preset whose base and header/body/section looks match (the text size does not count). */
+  /**
+   * The task preset the table really has: its base and header/body/section looks match (the text size does not
+   * count) and so do its switches (header, alternating rows, highlighted first column). The gallery marks it.
+   */
   readonly presetId?: TablePresetId;
+  /** The preset whose base and header/body/section looks match, whatever the switches; its colours are reused. */
+  readonly basePresetId?: TablePresetId;
   readonly header: boolean;
+  /** Every second ordinary row has the same colour and the others none (at least two ordinary rows). */
   readonly banded: boolean;
   readonly bandColor?: string;
+  /**
+   * The bands follow rows that are added, removed or turned into the header. Only when they are surely bands: two
+   * banded rows or more, or the band colour of a style. A single row coloured by hand keeps its colour.
+   */
+  readonly bandsFollowRows: boolean;
+  /** Every first-column cell of the ordinary rows has the same bold, tinted look. */
   readonly firstColumn: boolean;
   readonly labelStyle?: TableLabelStyle;
   readonly size?: TableTextSizeId;
@@ -91,28 +108,71 @@ function isLabelStyled(style: CellStyle | undefined): boolean {
   return style?.fontWeight === 700 && typeof style.background === 'string';
 }
 
+/** The cell has exactly the label look (same weight, tint and text colour). */
+function hasLabelStyle(style: CellStyle | undefined, label: TableLabelStyle): boolean {
+  return style?.fontWeight === 700 && style.background === label.background && style.color === label.color;
+}
+
+/**
+ * Alternating rows, read with the same parity the "Linhas alternadas" switch paints: the 2nd, 4th... ordinary rows
+ * share one colour and the 1st, 3rd... have none. Anything else (a row coloured by hand) is not a band.
+ */
+function readBands(table: TableModel): { readonly color: string; readonly count: number } | undefined {
+  const rows = bodyRows(table);
+  if (rows.length < 2) return undefined;
+  const color = rows[1].style?.background;
+  if (typeof color !== 'string') return undefined;
+  const alternates = rows.every((row, index) => index % 2 === 1
+    ? row.style?.background === color
+    : row.style?.background === undefined);
+  return alternates ? { color, count: Math.floor(rows.length / 2) } : undefined;
+}
+
+/** Band colours the product paints itself: the panel presets and the assistant designs. */
+function isStyleBandColor(color: string, documentStyle: DocumentStyle): boolean {
+  const wanted = color.toUpperCase();
+  return TABLE_PRESETS.some((preset) => tablePresetAccents(documentStyle, preset.id).band.toUpperCase() === wanted)
+    || Object.values(NATIVE_TABLE_PROFILES).some((profile) => profile.alternate.background?.toUpperCase() === wanted);
+}
+
+/** The highlighted first column: every ordinary first-column cell has the same bold, tinted look. */
+function readLabelStyle(table: TableModel): TableLabelStyle | undefined {
+  const labels = labelCells(table);
+  const first = labels[0]?.style;
+  if (!first || !isLabelStyled(first)) return undefined;
+  const label: TableLabelStyle = {
+    fontWeight: 700,
+    background: first.background!,
+    ...(first.color === undefined ? {} : { color: first.color }),
+  };
+  return labels.every((cell) => hasLabelStyle(cell.style, label)) ? label : undefined;
+}
+
 export function projectTableLook(table: TableModel, documentStyle: DocumentStyle): TableLook {
-  const presetId = TABLE_PRESETS.find((preset) => {
+  const basePresetId = TABLE_PRESETS.find((preset) => {
     const expected = materializeTablePreset(table, documentStyle, preset.id).style;
     return same(withoutSize(expected.base), withoutSize(table.style.base)) && same(expected.rowRoles, table.style.rowRoles);
   })?.id;
-  const bandRow = bodyRows(table).find((row) => typeof row.style?.background === 'string');
-  const labels = labelCells(table);
-  const firstColumn = labels.length > 0 && labels.every((cell) => isLabelStyled(cell.style));
-  const labelSource = labels.find((cell) => isLabelStyled(cell.style))?.style;
+  const header = table.rows[0]?.role === 'header';
+  const bands = readBands(table);
+  const labelStyle = readLabelStyle(table);
+  const firstColumn = Boolean(labelStyle);
+  const defaults = basePresetId ? tablePresetDefinition(basePresetId).defaults : undefined;
+  const presetId = defaults
+    && (defaults.header === 'keep' || defaults.header === header)
+    && defaults.banded === Boolean(bands)
+    && defaults.firstColumn === firstColumn
+    ? basePresetId
+    : undefined;
   return {
     ...(presetId ? { presetId } : {}),
-    header: table.rows[0]?.role === 'header',
-    banded: Boolean(bandRow),
-    ...(bandRow?.style?.background ? { bandColor: bandRow.style.background } : {}),
+    ...(basePresetId ? { basePresetId } : {}),
+    header,
+    banded: Boolean(bands),
+    ...(bands ? { bandColor: bands.color } : {}),
+    bandsFollowRows: Boolean(bands && (bands.count >= 2 || isStyleBandColor(bands.color, documentStyle))),
     firstColumn,
-    ...(labelSource ? {
-      labelStyle: {
-        fontWeight: 700 as const,
-        background: labelSource.background!,
-        color: labelSource.color ?? documentStyle.defaultText.color ?? '#172033',
-      },
-    } : {}),
+    ...(labelStyle ? { labelStyle } : {}),
     ...(() => {
       const size = TABLE_TEXT_SIZES.find((entry) => entry.fontSizePt === table.style.base.fontSizePt);
       return size ? { size: size.id } : {};
@@ -201,6 +261,11 @@ function bandSteps(on: boolean, color: string | undefined): TableStep[] {
   ];
 }
 
+/** The label look as a patch; a label without a text colour clears the colour the cell had. */
+function labelPatch(style: TableLabelStyle): CellStylePatch {
+  return { fontWeight: 700, background: style.background, color: style.color ?? null };
+}
+
 /**
  * "Primeira coluna destacada": the first-column cells of ordinary rows get the label style (bold on a light tint).
  * It is set on those cells, like the assistant designs, so a header or section cell keeps its own look.
@@ -218,9 +283,8 @@ function labelStep(mode: 'apply' | 'remove' | 'clean', style: TableLabelStyle | 
         const current = cell.style;
         const expected = current ? { expectedStyle: current } : {};
         if (role === 'body') {
-          if (mode === 'apply' && style
-            && (current?.fontWeight !== 700 || current.color !== style.color || current.background !== style.background)) {
-            targets.push({ cellId: cell.id, ...expected, patch: { ...style } });
+          if (mode === 'apply' && style && !hasLabelStyle(current, style)) {
+            targets.push({ cellId: cell.id, ...expected, patch: labelPatch(style) });
           } else if (mode === 'remove' && isLabelStyled(current)) {
             targets.push({ cellId: cell.id, ...expected, patch: clear });
           }
@@ -251,9 +315,9 @@ function firstColumnWidthStep(presetId: TablePresetId): TableStep {
   };
 }
 
-/** The accents a switch uses: the colours already in the table, else the ones of its preset, else "Especificações". */
-function accentsFor(look: TableLook, documentStyle: DocumentStyle): TablePresetAccents {
-  const accents = tablePresetAccents(documentStyle, look.presetId ?? TABLE_PRESETS[0].id);
+/** The accents a switch uses: the colours already in the table, else the ones of its style, else "Especificações". */
+function accentsFor(look: TableLook, documentStyle: DocumentStyle): { band: string; label: TableLabelStyle } {
+  const accents = tablePresetAccents(documentStyle, look.basePresetId ?? TABLE_PRESETS[0].id);
   return { band: look.bandColor ?? accents.band, label: look.labelStyle ?? accents.label };
 }
 
@@ -270,7 +334,8 @@ export function tableLookSteps(request: TableLookRequest, look: TableLook, docum
         presetStep(preset.id),
         ...(keptSize ? [sizeStep(keptSize)] : []),
         ...(preset.defaults.header === 'keep' ? [] : [headerStep(preset.defaults.header, true)]),
-        ...bandSteps(preset.defaults.banded, accents.band),
+        // A style without bands only takes away bands the table had; a row coloured by hand keeps its colour.
+        ...(preset.defaults.banded ? bandSteps(true, accents.band) : look.banded ? bandSteps(false, undefined) : []),
         labelStep(preset.defaults.firstColumn ? 'apply' : 'remove', accents.label),
         ...(preset.defaults.firstColumn ? [firstColumnWidthStep(preset.id)] : []),
       ];
@@ -280,7 +345,7 @@ export function tableLookSteps(request: TableLookRequest, look: TableLook, docum
       // The ordinary rows change, so the bands and the highlighted first column follow them in the same step.
       return [
         headerStep(request.on),
-        ...(look.banded ? bandSteps(true, accents.band) : []),
+        ...(look.bandsFollowRows ? bandSteps(true, accents.band) : []),
         labelStep(look.firstColumn ? 'apply' : 'clean', look.firstColumn ? accents.label : undefined),
       ];
     }
@@ -296,13 +361,41 @@ export function tableLookSteps(request: TableLookRequest, look: TableLook, docum
 }
 
 /**
- * After rows or columns were added or removed: keep the bands and the highlighted first column the table had
- * before, so the new rows follow the same look (in the same step as the change).
+ * After rows were added or removed: keep the bands and the highlighted first column the table had before, so the
+ * new rows follow the same look (in the same step as the change). Only real bands follow (`bandsFollowRows`); a row
+ * coloured by hand stays as it is, and the label look only reaches the new first-column cells.
  */
 export function tableLookMaintenanceSteps(lookBefore: TableLook): TableStep[] {
   return [
-    ...(lookBefore.banded && lookBefore.bandColor ? bandSteps(true, lookBefore.bandColor) : []),
-    ...(lookBefore.firstColumn && lookBefore.labelStyle ? [labelStep('apply', lookBefore.labelStyle)] : []),
+    ...(lookBefore.bandsFollowRows && lookBefore.bandColor ? bandSteps(true, lookBefore.bandColor) : []),
+    ...(lookBefore.labelStyle ? [labelStep('apply', lookBefore.labelStyle)] : []),
+  ];
+}
+
+/**
+ * After a column was added: a column added before the highlighted first column becomes the highlighted one, and the
+ * old first column (now the second) loses the label look, so "Primeira coluna destacada" stays true. A column added
+ * anywhere else changes nothing.
+ */
+export function tableLookColumnMaintenanceSteps(lookBefore: TableLook, firstColumnIdBefore: string | undefined): TableStep[] {
+  const label = lookBefore.labelStyle;
+  if (!label || !firstColumnIdBefore) return [];
+  const moved = (table: TableModel) => table.columns[0] !== undefined && table.columns[0].id !== firstColumnIdBefore;
+  const apply = labelStep('apply', label);
+  return [
+    { build: (context) => moved(context.table) ? apply.build(context) : null },
+    {
+      build: ({ identity, table }) => {
+        if (!moved(table)) return null;
+        const roles = new Map(table.rows.map((row) => [row.id, row.role]));
+        const clear: CellStylePatch = { fontWeight: null, color: null, background: null };
+        const targets = table.cells
+          .filter((cell) => !cell.coveredBy && cell.columnId === firstColumnIdBefore
+            && roles.get(cell.rowId) === 'body' && hasLabelStyle(cell.style, label))
+          .map((cell) => ({ cellId: cell.id, ...(cell.style ? { expectedStyle: cell.style } : {}), patch: clear }));
+        return targets.length === 0 ? null : { type: 'table.cell.setProperties', ...identity, targets };
+      },
+    },
   ];
 }
 

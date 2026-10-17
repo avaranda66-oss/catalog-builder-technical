@@ -1292,7 +1292,9 @@ describe('P1.A simple-by-default workspace', () => {
       expect(created.table.style.rowRoles.header?.fontWeight).toBe(700);
       expect(created.frame.xMm).toBe(12);
       expect(created.frame.widthMm).toBe(186);
-      expect(after.localSequence).toBe(before.localSequence + 1);
+      // FR-33: the insert, the bold names and the 68 mm first column of "Especificações" are one transaction.
+      expect(created.table.columns[0].width).toEqual({ mode: 'fixed', mm: 68 });
+      expect(after.localSequence).toBe(before.localSequence + 3);
       fireEvent.click(button(container, 'undo'));
       expect(session.getSnapshot().document).toEqual(before.document);
     }
@@ -1313,7 +1315,8 @@ describe('P1.A simple-by-default workspace', () => {
     expect(table.table.columns).toHaveLength(5);
     expect(table.table.cells).toHaveLength(50);
     expect(table.table.cells.every((cell) => cell.content.type === 'empty')).toBe(true);
-    expect(after.localSequence).toBe(before.localSequence + 1);
+    // The insert plus the "Especificações" first column (cells and width), undone and redone as one step.
+    expect(after.localSequence).toBe(before.localSequence + 3);
     expect(new Set([table.table.id, ...table.table.rows.map((row) => row.id), ...table.table.columns.map((column) => column.id), ...table.table.cells.map((cell) => cell.id)]).size).toBe(66);
     fireEvent.click(button(container, 'undo'));
     expect(session.getSnapshot().document).toEqual(before.document);

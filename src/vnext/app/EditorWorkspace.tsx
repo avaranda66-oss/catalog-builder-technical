@@ -39,7 +39,7 @@ import { insertedRowRole, planTableAxisRemoval, tableAxisRefusalMessage, tableSt
 import { projectTableLook, tableLookSteps, type TableLookRequest } from '../editor/table-look-authoring';
 import { quickNoteCreateStep, quickNoteRemoveSteps } from '../editor/table-quick-notes';
 import { describeTableLocation } from '../editor/table-location';
-import { insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
+import { completeNewTableLook, insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
 import {
   mergeEligibility,
   selectionAfterMerge,
@@ -120,7 +120,7 @@ import {
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
-import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, NEW_TABLE_PRESET_ID, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
 import { createTableFromPastedText, decidePendingTableFit, describeRowsByColumns, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
 import { isTabularClipboardText } from '../editor/table-paste-import';
@@ -1384,7 +1384,7 @@ export function EditorWorkspace({
 
   const tableActionMessage = (code: string): string => {
     if (code === 'TABLE_LAST_AXIS') return 'A última linha ou coluna não pode ser removida.';
-    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover o eixo.';
+    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Não é possível mesclar cabeçalho e corpo.';
     if (code === 'MERGE_OVERLAP') return 'Desmescle as células existentes antes de criar uma nova mesclagem.';
     if (code === 'MERGE_WOULD_DISCARD_CONTENT') return 'Não é possível mesclar porque outra célula contém conteúdo ou anotação.';
@@ -1856,7 +1856,7 @@ export function EditorWorkspace({
     );
     if (!page || !object) return undefined;
     if (object.locked) {
-      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar superfícies semânticas.');
+      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar título, notas, legenda ou imagem.');
       return undefined;
     }
     return { pageId: page.id, object };
@@ -2388,7 +2388,11 @@ export function EditorWorkspace({
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
     if (tool === 'table') setNewTableSizeOpen(false);
-    if (tool === 'table' && objectId && transactionId) setPendingTableFit({ objectId, transactionId, document: result.document });
+    if (tool === 'table' && objectId && transactionId) {
+      // FR-33: the new table gets the whole "Especificações" look (names in bold, 68 mm) in the same undo step.
+      completeNewTableLook(session, { pageId: currentPage.id, objectId }, NEW_TABLE_PRESET_ID, transactionId);
+      setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document });
+    }
     // "clique em Editar tabela" is a tip, not a problem: the new table is a finished change (FR-12).
     setStatusMessage(tool === 'table'
       ? successNotice(`Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`)
@@ -3541,8 +3545,8 @@ export function EditorWorkspace({
       return;
     }
     if (field === 'weight') {
-      if (!Number.isSafeInteger(value)) { setStatusMessage('O peso flexível deve ser um inteiro positivo.'); return; }
-      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Peso flexível atualizado.');
+      if (!Number.isSafeInteger(value)) { setStatusMessage('A proporção da largura deve ser um número inteiro maior que zero.'); return; }
+      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Proporção da largura atualizada.');
       return;
     }
     const valueU = mmToU(value);

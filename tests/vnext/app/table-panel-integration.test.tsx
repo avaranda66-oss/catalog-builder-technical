@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createDocumentSession, projectEditableRichText, type DocumentSession } from '@/vnext/application';
-import { createNewTableModel, createTableInsertSpec, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
+import { createNewTableModel, createTableInsertSpec, createW2CDemoDocument, NEW_TABLE_PRESET_ID } from '@/vnext/app/editor-defaults';
+import { completeNewTableLook } from '@/vnext/app/editor/table-structure-actions';
 import { VNextApp } from '@/vnext/app/VNextApp';
 import type { CatalogDocument, TableObject } from '@/vnext/domain';
 
@@ -30,15 +31,25 @@ function ids(prefix: string) {
   return () => `${prefix}-${++next}`;
 }
 
-/** A catalog page with only an 8 × 3 table made by the editor (house preset, header row). */
-function sessionWithTable(): { session: DocumentSession; objectId: string } {
+function emptyPageSession(): DocumentSession {
   const base = createW2CDemoDocument(ids('doc'));
   const document: CatalogDocument = { ...base, pages: [{ ...base.pages[0], objects: [] }] };
-  const session = createDocumentSession(document, { createId: ids('generated') });
+  return createDocumentSession(document, { createId: ids('generated') });
+}
+
+/** A catalog page with only an 8 × 3 table made as the editor makes it (whole "Especificações" look, header row). */
+function sessionWithTable(): { session: DocumentSession; objectId: string } {
+  const session = emptyPageSession();
+  const document = session.getSnapshot().document;
   const page = document.pages[0];
-  const result = session.execute({ type: 'object.insert', pageId: page.id, object: createTableInsertSpec(page, createNewTableModel({ rows: 8, columns: 3 }), document.style) });
+  const result = session.execute(
+    { type: 'object.insert', pageId: page.id, object: createTableInsertSpec(page, createNewTableModel({ rows: 8, columns: 3 }), document.style) },
+    { transactionId: 'new-table' }
+  );
   if (!result.ok) throw new Error('Could not insert the table');
-  return { session, objectId: result.metadata.createdIds[0] };
+  const objectId = result.metadata.createdIds[0];
+  completeNewTableLook(session, { pageId: page.id, objectId }, NEW_TABLE_PRESET_ID, 'new-table');
+  return { session, objectId };
 }
 
 function tableOf(session: DocumentSession, objectId: string): TableObject {
@@ -161,6 +172,30 @@ describe('FR-34 rows from the selected cell or range, in the real editor', () =>
 });
 
 describe('FR-33 presets by task and one-click notes, in the real editor', () => {
+  it('"Tabela" creates a table with the whole "Especificações" look, shown as such, and one Desfazer removes it', async () => {
+    const session = emptyPageSession();
+    const restore = enableMeasurement();
+    try {
+      const { container } = render(<VNextApp session={session} simpleByDefault />);
+      const before = session.getSnapshot().document;
+      fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="add-table"]')!);
+      const object = session.getSnapshot().document.pages[0].objects.find((entry): entry is TableObject => entry.type === 'table');
+      if (!object) throw new Error('Missing new table');
+      expect(object.table.columns[0].width).toEqual({ mode: 'fixed', mm: 68 });
+      const gallery = within(panel()).getByRole('group', { name: 'Estilos prontos' });
+      expect(within(gallery).getByRole('button', { name: /^Especificações/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(panel()).getByRole('checkbox', { name: 'Primeira coluna destacada' })).toBeChecked();
+      expect(within(panel()).getByRole('checkbox', { name: 'Cabeçalho' })).toBeChecked();
+      expect(within(panel()).getByRole('checkbox', { name: 'Linhas alternadas' })).not.toBeChecked();
+      // The measured "Ajustar altura" may join the same step; one Desfazer still removes everything.
+      await waitFor(() => expect(container.querySelector('[data-table-auto-fit]')).toBeNull(), { timeout: 5_000 });
+      undo(container);
+      expect(session.getSnapshot().document).toEqual(before);
+    } finally {
+      restore();
+    }
+  });
+
   it('"Comparativo de modelos" changes the look in one Desfazer', () => {
     const { session, objectId } = sessionWithTable();
     const { container } = render(<VNextApp session={session} simpleByDefault />);
@@ -201,10 +236,45 @@ describe('FR-33 presets by task and one-click notes, in the real editor', () => 
     const { session, objectId } = sessionWithTable();
     const { container } = render(<VNextApp session={session} simpleByDefault />);
     selectTable(container, objectId);
-    const controls = panel().querySelectorAll('button, input, select, textarea');
-    expect(controls.length).toBeLessThanOrEqual(22);
+    expect(panel().querySelectorAll('button, input, select, textarea').length).toBeLessThanOrEqual(22);
+    expect(visibleControls(panel()).length).toBeLessThanOrEqual(20);
     expect(within(panel()).queryByText('Propriedades da seleção')).toBeNull();
     expect(within(panel()).queryByText(/Padding|HEX|RichText|Misto/)).toBeNull();
     expect(within(panel()).getAllByRole('button', { name: 'Notas e legenda' })).toHaveLength(1);
   });
+
+  it('keeps the panel short while a cell is selected in the grid, and the bar above the page to four buttons', async () => {
+    const { session, objectId } = sessionWithTable();
+    const restore = enableMeasurement();
+    try {
+      const { container } = render(<VNextApp session={session} simpleByDefault />);
+      selectTable(container, objectId);
+      await enterGrid(container);
+      const controls = visibleControls(panel());
+      // Grid mode adds the selected cells and "Estrutura" (6 buttons): 26 controls today, with the folded parts closed
+      // (4 of them are the table title). Recorded for the FR-33 gate; select mode stays at about 20 (test above).
+      expect(controls.length).toBeLessThanOrEqual(GRID_MODE_PANEL_CONTROLS);
+      const bar = container.querySelector<HTMLElement>('[data-table-axis-toolbar]')!;
+      expect(Array.from(bar.querySelectorAll('button, input')).map((control) => control.textContent?.trim())).toEqual([
+        'Opções da tabela', 'Copiar', 'Colar', 'Voltar ao objeto',
+      ]);
+    } finally {
+      restore();
+    }
+  });
 });
+
+/**
+ * Controls a person sees in the panel: not hidden, not folded inside a closed "details" (its summary stays visible)
+ * and not the "Localizar" of each problem listed for the table (that list depends on the content, not on the panel).
+ */
+function visibleControls(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('button, input, select, textarea')).filter((control) => {
+    if (control.closest('[hidden], [data-editor-diagnostics] li') || (control instanceof HTMLInputElement && control.type === 'hidden')) return false;
+    const folded = control.closest('details:not([open])');
+    return !folded || Boolean(control.closest('summary'));
+  });
+}
+
+/** Recorded for the FR-33 gate: the most controls the table panel shows in grid mode by default. */
+const GRID_MODE_PANEL_CONTROLS = 26;

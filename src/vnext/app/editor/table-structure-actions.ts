@@ -1,9 +1,11 @@
-import type { ApplicationAction, DocumentSession } from '../../application';
+import type { ApplicationAction, DocumentSession, TablePresetId } from '../../application';
 import type { CatalogDocument, TableModel, TableObject } from '../../domain';
 import {
   planTableComposition,
   projectTableLook,
+  tableLookColumnMaintenanceSteps,
   tableLookMaintenanceSteps,
+  tableLookSteps,
   type TableStep,
 } from '../../editor/table-look-authoring';
 
@@ -52,12 +54,54 @@ export function runTableSteps(
   return executeAll(session, plan.actions, transactionId, true);
 }
 
-/** Bands and the highlighted first column follow new or removed rows, inside the structure change's undo step. */
+/**
+ * FR-33: a new table gets the whole look of the house style ("Especificações": names in bold on a tint, 68 mm wide),
+ * inside the undo step that created it. A table that does not have that style's base (the catalog lacks its fonts)
+ * is left as it is. The look is checked on a copy first; when it cannot be applied the table keeps the base only.
+ */
+export function completeNewTableLook(
+  session: DocumentSession,
+  target: { readonly pageId: string; readonly objectId: string },
+  presetId: TablePresetId,
+  transactionId: string
+): TableStepsOutcome {
+  const document = session.getSnapshot().document;
+  const object = tableObjectIn(document, target.pageId, target.objectId);
+  if (!object) return { ok: false, code: 'OBJECT_NOT_FOUND' };
+  const look = projectTableLook(object.table, document.style);
+  if (look.basePresetId !== presetId) return { ok: true, changed: false, document };
+  const plan = planTableComposition(document, target.pageId, target.objectId, tableLookSteps({ kind: 'preset', presetId }, look, document.style));
+  if (!plan.ok) return plan;
+  // No rollback here: one Desfazer of this transaction would also take the new table away.
+  return executeAll(session, plan.actions, transactionId, false);
+}
+
+/**
+ * Bands and the highlighted first column follow new or removed rows (and a column added before the first one),
+ * inside the structure change's undo step. The structure change already happened, so this is best effort: each step
+ * runs on the live table without a rehearsal on a copy, and a step that cannot run leaves the look as it is.
+ */
 function keepTableLook(session: DocumentSession, pageId: string, objectId: string, lookSteps: readonly TableStep[], transactionId: string) {
-  if (lookSteps.length === 0) return;
-  const plan = planTableComposition(session.getSnapshot().document, pageId, objectId, lookSteps);
-  // The structure change already happened; a look that cannot follow is left as it is.
-  if (plan.ok) executeAll(session, plan.actions, transactionId, false);
+  for (const step of lookSteps) {
+    const document = session.getSnapshot().document;
+    const object = tableObjectIn(document, pageId, objectId);
+    if (!object) return;
+    let action: ApplicationAction | null;
+    try {
+      action = step.build({
+        identity: { pageId, objectId, tableId: object.table.id },
+        table: object.table,
+        frameWidthMm: object.frame.widthMm,
+        documentStyle: document.style,
+      });
+    } catch {
+      if (step.optional) continue;
+      return;
+    }
+    if (!action) continue;
+    const result = session.execute(action, { transactionId });
+    if (!result.ok && !step.optional) return;
+  }
 }
 
 export interface TableAxisInsertRequest {
@@ -98,7 +142,9 @@ export function insertTableAxes(
   if (!inserted) return { ok: false, code: 'OBJECT_NOT_FOUND' };
   const axes = request.axis === 'row' ? inserted.table.rows : inserted.table.columns;
   const insertedAxisIds = axes.filter((axis) => result.metadata.createdIds.includes(axis.id)).map((axis) => axis.id);
-  if (request.axis === 'row') keepTableLook(session, pageId, object.id, tableLookMaintenanceSteps(lookBefore), transactionId);
+  keepTableLook(session, pageId, object.id, request.axis === 'row'
+    ? tableLookMaintenanceSteps(lookBefore)
+    : tableLookColumnMaintenanceSteps(lookBefore, object.table.columns[0]?.id), transactionId);
   const final = tableObjectIn(session.getSnapshot().document, pageId, object.id);
   return { ok: true, table: final?.table ?? inserted.table, insertedAxisIds };
 }

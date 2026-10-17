@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDocumentSession, type DocumentSession } from '@/vnext/application';
 import {
+  applyNativeTableDesign,
   contrastRatio,
   materializeTablePreset,
   MIN_TABLE_TEXT_CONTRAST,
@@ -8,8 +9,8 @@ import {
   tablePresetAccents,
   tablePresetFirstColumnMm,
 } from '@/vnext/application/table-preset-registry';
-import { createNewTableModel, createSizedEmptyTable, createTableInsertSpec, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
-import { runTableSteps } from '@/vnext/app/editor/table-structure-actions';
+import { createNewTableModel, createSizedEmptyTable, createTableInsertSpec, createW2CDemoDocument, NEW_TABLE_PRESET_ID } from '@/vnext/app/editor-defaults';
+import { completeNewTableLook, runTableSteps } from '@/vnext/app/editor/table-structure-actions';
 import type { CatalogDocument, DocumentStyle, TableModel, TableObject } from '@/vnext/domain';
 import { resolveCellStyle } from '@/vnext/domain/style-resolution';
 import {
@@ -54,11 +55,54 @@ describe('FR-33 task presets of the table panel', () => {
     expect(TABLE_PRESETS.map((preset) => preset.id)).toEqual(['technical-specification', 'comparison', 'technical-grid', 'minimal']);
   });
 
-  it('a new table already has the "Especificações" look (the house preset of every new table)', () => {
+  it('the house base alone is not shown as "Especificações": the gallery only marks the whole look', () => {
     const { session, objectId } = sessionWithTable();
     const document = session.getSnapshot().document;
     const look = projectTableLook(tableOf(document, objectId).table, document.style);
-    expect(look).toMatchObject({ presetId: 'technical-specification', header: true, banded: false, firstColumn: false, size: 'medium' });
+    expect(look).toMatchObject({ basePresetId: 'technical-specification', header: true, banded: false, firstColumn: false, size: 'medium' });
+    expect(look.presetId).toBeUndefined();
+  });
+
+  it('a new table gets the whole "Especificações" look (names in bold, 68 mm) in the undo step that created it', () => {
+    const document = createW2CDemoDocument(ids('doc'));
+    const session = createDocumentSession(document, { createId: ids('generated') });
+    const page = document.pages[0];
+    const before = session.getSnapshot().document;
+    const created = session.execute(
+      { type: 'object.insert', pageId: page.id, object: createTableInsertSpec(page, createNewTableModel(), document.style) },
+      { transactionId: 'new-table' }
+    );
+    if (!created.ok) throw new Error('Could not insert the table');
+    const objectId = created.metadata.createdIds[0];
+    const outcome = completeNewTableLook(session, { pageId: page.id, objectId }, NEW_TABLE_PRESET_ID, 'new-table');
+    expect(outcome).toMatchObject({ ok: true, changed: true });
+    const after = session.getSnapshot().document;
+    const table = tableOf(after, objectId).table;
+    expect(projectTableLook(table, after.style)).toMatchObject({
+      presetId: 'technical-specification', header: true, banded: false, firstColumn: true,
+    });
+    expect(table.columns[0].width).toEqual({ mode: 'fixed', mm: 68 });
+    const label = tablePresetAccents(after.style, 'technical-specification').label;
+    expect(firstColumnBodyCells(table).every((cell) => cell.style?.fontWeight === 700 && cell.style.background === label.background)).toBe(true);
+    // The header keeps its own look.
+    expect(table.cells.find((cell) => cell.rowId === table.rows[0].id && cell.columnId === table.columns[0].id)?.style).toBeUndefined();
+    // One Desfazer takes the new table away with its look.
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(before);
+  });
+
+  it('a new table without the house base (the catalog lacks its fonts) is left as it is', () => {
+    const document = createW2CDemoDocument(ids('doc'));
+    const session = createDocumentSession(document, { createId: ids('generated') });
+    const page = document.pages[0];
+    // Without the document style the table keeps the plain engine look, as styleNewTable does when fonts are missing.
+    const created = session.execute({ type: 'object.insert', pageId: page.id, object: createTableInsertSpec(page, createSizedEmptyTable({ rows: 3, columns: 2 })) });
+    if (!created.ok) throw new Error('Could not insert the table');
+    const objectId = created.metadata.createdIds[0];
+    expect(projectTableLook(tableOf(created.document, objectId).table, document.style).basePresetId).toBeUndefined();
+    const before = session.getSnapshot();
+    expect(completeNewTableLook(session, { pageId: page.id, objectId }, NEW_TABLE_PRESET_ID, 'new-table')).toMatchObject({ ok: true, changed: false });
+    expect(session.getSnapshot().localSequence).toBe(before.localSequence);
   });
 
   it('"Comparativo de modelos" marks the header, bands the rows, highlights and sizes the first column, in one undo step', () => {
@@ -112,7 +156,10 @@ describe('FR-33 task presets of the table panel', () => {
     apply(session, pageId, objectId, { kind: 'size', size: 'large' });
     table = tableOf(session.getSnapshot().document, objectId).table;
     expect(table.style.base.fontSizePt).toBe(12);
-    expect(projectTableLook(table, session.getSnapshot().document.style)).toMatchObject({ presetId: 'comparison', banded: true, firstColumn: false, size: 'large' });
+    // Without its highlighted first column the table no longer shows as "Comparativo de modelos" in the gallery.
+    const look = projectTableLook(table, session.getSnapshot().document.style);
+    expect(look).toMatchObject({ basePresetId: 'comparison', banded: true, firstColumn: false, size: 'large' });
+    expect(look.presetId).toBeUndefined();
 
     // A preset keeps a size chosen by hand.
     apply(session, pageId, objectId, { kind: 'preset', presetId: 'minimal' });
@@ -138,6 +185,45 @@ describe('FR-33 task presets of the table panel', () => {
     const headerCell = table.cells.find((cell) => cell.rowId === table.rows[0].id && cell.columnId === table.columns[0].id);
     expect(headerCell?.style).toBeUndefined();
     expect(table.rows.map((row) => row.style?.background ?? null)).toEqual([null, null, accents.band, null, accents.band, null]);
+  });
+
+  it('a row coloured by hand is not "Linhas alternadas", and a style without bands keeps it', () => {
+    const { session, pageId, objectId } = sessionWithTable(createNewTableModel({ rows: 8, columns: 3 }));
+    let table = tableOf(session.getSnapshot().document, objectId).table;
+    const highlighted = table.rows[3];
+    expect(session.execute({
+      type: 'table.rows.setStyle', pageId, objectId, tableId: table.id,
+      targets: [{ id: highlighted.id }], patch: { background: '#FFFF00' },
+    }).ok).toBe(true);
+    table = tableOf(session.getSnapshot().document, objectId).table;
+    const look = projectTableLook(table, session.getSnapshot().document.style);
+    expect(look).toMatchObject({ banded: false, bandsFollowRows: false });
+    expect(look.bandColor).toBeUndefined();
+    apply(session, pageId, objectId, { kind: 'preset', presetId: 'minimal' });
+    table = tableOf(session.getSnapshot().document, objectId).table;
+    expect(table.rows.filter((row) => row.style?.background).map((row) => [row.id, row.style?.background])).toEqual([[highlighted.id, '#FFFF00']]);
+  });
+
+  it('a first column with one bold, tinted cell is not "Primeira coluna destacada"', () => {
+    const { session, pageId, objectId } = sessionWithTable(createNewTableModel({ rows: 6, columns: 3 }));
+    const table = tableOf(session.getSnapshot().document, objectId).table;
+    const cell = firstColumnBodyCells(table)[2];
+    expect(session.execute({
+      type: 'table.cell.setProperties', pageId, objectId, tableId: table.id,
+      targets: [{ cellId: cell.id, patch: { fontWeight: 700, background: '#FFE8A3' } }],
+    }).ok).toBe(true);
+    const look = projectTableLook(tableOf(session.getSnapshot().document, objectId).table, session.getSnapshot().document.style);
+    expect(look.firstColumn).toBe(false);
+    expect(look.labelStyle).toBeUndefined();
+  });
+
+  it('reads the bands and the first column of an assistant design', () => {
+    const style = createW2CDemoDocument(ids('native')).style;
+    const designed = applyNativeTableDesign(createNewTableModel({ rows: 6, columns: 3 }), 'comparison');
+    expect(projectTableLook(designed, style)).toMatchObject({ header: true, banded: true, bandsFollowRows: true, firstColumn: true });
+    // A tiny table banded by a style (one banded row) still keeps its bands when rows change.
+    const tiny = applyNativeTableDesign(createNewTableModel({ rows: 3, columns: 2 }), 'datasheet');
+    expect(projectTableLook(tiny, style)).toMatchObject({ banded: true, bandsFollowRows: true });
   });
 
   it('a switch that changes nothing reports no change and leaves history untouched', () => {
