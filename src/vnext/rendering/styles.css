@@ -21,7 +21,10 @@
 [data-editorial-root] .invalid-table { color:#b32237; font-size:9pt; background:#fff0f2; padding:8px; }
 @media print {
   [data-editorial-root] { margin:0; }
-  [data-editorial-root] .editorial-page { margin:0; box-shadow:none; break-after:page; break-inside:avoid; }
+  /* FR-54: a bleed (shape, line or image up to 3 mm outside the page) stays visible on screen, but the printed sheet is
+     cut at the page box, so a band that bleeds downwards never paints a strip on the next sheet. Geometry is unchanged:
+     the authored frames keep their size and position; only the paint is clipped. */
+  [data-editorial-root] .editorial-page { margin:0; box-shadow:none; break-after:page; break-inside:avoid; overflow:hidden; }
   [data-editorial-root] .editorial-page:last-child { break-after:auto; }
   [data-editorial-root],[data-editorial-root] * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }

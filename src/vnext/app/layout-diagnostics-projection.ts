@@ -6,6 +6,7 @@ import {
   type TableObject,
 } from '../domain';
 import { isBleedWarning } from '../publication/preflight';
+import { diagnosticMessage } from './authoring-diagnostics';
 import { publicationDiagnosticMessage, publicationDiagnosticText } from './publication-diagnostic-presentation';
 
 export type LayoutDiagnosticAction = 'FIT_HEIGHT' | 'LOCATE' | 'NONE';
@@ -31,7 +32,8 @@ export interface ProjectedLayoutDiagnostic {
 
 const GROUPED_CHILD_GUIDANCE = 'Desagrupe para editar esta tabela.';
 
-const fatherMessage = (diagnostic: Diagnostic): string => {
+/** `table` is the diagnosed Table when there is one: page-bounds wording says "tabela" only then (FR-54 review). */
+const fatherMessage = (diagnostic: Diagnostic, table: TableObject | undefined): string => {
   switch (diagnostic.code) {
     case 'TEXT_OBJECT_OVERFLOW':
     case 'PRINTABLE_CONTENT_OVERLAP':
@@ -47,9 +49,10 @@ const fatherMessage = (diagnostic: Diagnostic): string => {
     case 'TABLE_WIDTH_INFEASIBLE':
       return 'A largura atual não comporta as restrições das colunas';
     case 'OBJECT_OUTSIDE_PAGE':
-      return isBleedWarning(diagnostic) ? publicationDiagnosticText(diagnostic) : 'Parte da tabela está fora da página';
+      if (isBleedWarning(diagnostic)) return publicationDiagnosticText(diagnostic);
+      return table ? 'Parte da tabela está fora da página' : diagnosticMessage(diagnostic);
     case 'SAFE_AREA_VIOLATION':
-      return 'A tabela cruza a área segura';
+      return table ? 'A tabela cruza a área segura' : diagnosticMessage(diagnostic);
     case 'LAYOUT_UNSTABLE':
       return 'A medição da tabela ainda não está estável';
     case 'RENDER_GEOMETRY_MISMATCH':
@@ -131,7 +134,7 @@ export function projectLayoutDiagnostics(
     if (!directTarget && !groupedChild) continue;
 
     const rowId = resolvedRowId(document, diagnostic);
-    const message = fatherMessage(diagnostic);
+    const message = fatherMessage(diagnostic, tableForDiagnostic(document, diagnostic));
     const parentGroupId = target?.parentGroup?.id;
     const key = semanticKey(diagnostic, rowId, message, parentGroupId);
     const existing = grouped.get(key);

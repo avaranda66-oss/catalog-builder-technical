@@ -82,6 +82,23 @@ describe('FR-54 faixas decorativas e sangria no preflight', () => {
     expect(codesFor(authoredFrameDiagnostics(document), 'near-edge')).toEqual(['SAFE_AREA_VIOLATION:WARNING']);
   });
 
+  it('a isenção da área segura vale só para o lado que encosta: foto encostada embaixo, mas 2 mm antes da borda direita, mantém o aviso', () => {
+    // right = 208 mm fica dentro da margem direita (200..210) sem encostar; bottom = 297 mm encosta na borda de baixo.
+    const document = pageDocument([image('photo', frame(100, 200, 108, 97))]);
+    expect(codesFor(authoredFrameDiagnostics(document), 'photo')).toEqual(['SAFE_AREA_VIOLATION:WARNING']);
+  });
+
+  it('a isenção é por eixo e lado: encostar à esquerda não libera a margem de cima, e sangrar à esquerda não libera a margem de baixo', () => {
+    const document = pageDocument([
+      shape('left-tab', frame(0, 5, 40, 20)),
+      image('side-bleed', frame(-2, 200, 100, 95)),
+    ]);
+    const diagnostics = authoredFrameDiagnostics(document);
+    expect(codesFor(diagnostics, 'left-tab')).toEqual(['SAFE_AREA_VIOLATION:WARNING']);
+    expect(codesFor(diagnostics, 'side-bleed')).toEqual(['OBJECT_OUTSIDE_PAGE:WARNING', 'SAFE_AREA_VIOLATION:WARNING']);
+    expect(diagnostics.find(issue => issue.objectId === 'side-bleed' && issue.code === 'OBJECT_OUTSIDE_PAGE')?.details).toBe('bleedMm=2; toleranceMm=3');
+  });
+
   it('nada muda para objetos totalmente dentro da página', () => {
     const document = pageDocument([
       shape('inner-shape', frame(20, 20, 50, 20)), image('inner-image', frame(20, 50, 50, 40)), line('inner-line', frame(20, 100, 100, 1)),
@@ -153,6 +170,21 @@ describe('FR-54 faixas decorativas e sangria no preflight', () => {
     const diagnostics = authoredFrameDiagnostics(document);
     expect(codesFor(diagnostics, 'group')).toEqual(['OBJECT_OUTSIDE_PAGE:ERROR', 'SAFE_AREA_VIOLATION:WARNING']);
     expect(diagnostics.some(issue => issue.objectId === 'group-text' || issue.objectId === 'group-shape')).toBe(false);
+  });
+
+  it('dois grupos e um objeto solto na mesma página: cada grupo é julgado só pelos próprios filhos', () => {
+    const document = pageDocument([
+      { id: 'group-a', type: 'group', frame: frame(-2, 0, PAGE_WIDTH_MM + 2, 40), zIndex: 0,
+        objects: [shape('band-a', frame(0, 0, PAGE_WIDTH_MM + 2, 40)), shape('corner-a', frame(0, 0, 10, 10))] },
+      shape('loose', frame(20, 60, 50, 20)),
+      { id: 'group-b', type: 'group', frame: frame(-1, 100, 40, 20), zIndex: 0,
+        objects: [text('text-b', frame(0, 0, 30, 10)), shape('shape-b', frame(30, 10, 10, 10))] },
+    ]);
+    const diagnostics = authoredFrameDiagnostics(document);
+    expect(codesFor(diagnostics, 'group-a')).toEqual(['OBJECT_OUTSIDE_PAGE:WARNING']);
+    expect(codesFor(diagnostics, 'loose')).toEqual([]);
+    expect(codesFor(diagnostics, 'group-b')).toEqual(['OBJECT_OUTSIDE_PAGE:ERROR', 'SAFE_AREA_VIOLATION:WARNING']);
+    expect(diagnostics.filter(issue => !['group-a', 'group-b'].includes(issue.objectId ?? ''))).toEqual([]);
   });
 
   it('o starter oficial TA-25N não gera aviso de área segura nem de página', () => {
