@@ -1,6 +1,7 @@
 import { createDocumentSession, type ApplicationAction, type DocumentSession } from '../../application';
 import type { CatalogDocument, Diagnostic, TableObject } from '../../domain';
 import { prepareTableFitHeight, type FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
+import { applyTableSplit, planTableSplit, prepareTableSplit, TABLE_SPLIT_ACTION_LABEL, tableSplitClickMessage } from '../../editor/table-split-authoring';
 import { emptyTableRowIds } from '../../publication/preflight';
 
 /**
@@ -117,13 +118,37 @@ const fitTableHeight: IssueFix = {
   },
 };
 
+/** FR-35: a table taller than its page continues on new pages, with the header repeated (one Desfazer). */
+const continueTableOnNextPage: IssueFix = {
+  label: TABLE_SPLIT_ACTION_LABEL,
+  available({ document, diagnostic, measurement }) {
+    const target = topLevelTable(document, diagnostic);
+    return target ? planTableSplit(document, target.object.id, measurement).ok : false;
+  },
+  run({ document, session, diagnostic, measurement }) {
+    const target = topLevelTable(document, diagnostic);
+    if (!target) return { ok: false, message: 'Não foi possível levar a tabela para a próxima página. Selecione a tabela e tente de novo.' };
+    const prepared = prepareTableSplit(document, target.object.id, measurement);
+    if (!prepared.ok) return { ok: false, message: tableSplitClickMessage(prepared) };
+    return applyTableSplit(session, prepared.prepared, createTransactionId());
+  },
+};
+
 export const ISSUE_FIXES: Readonly<Record<string, IssueFix>> = {
   EMPTY_TABLE_ROW: removeEmptyRows,
   TABLE_CONTENT_OVERFLOW: fitTableHeight,
+  OBJECT_OUTSIDE_PAGE: continueTableOnNextPage,
+};
+
+/** Offered when the main fix of the code does not apply: a table too tall for its page cannot just grow. */
+const FALLBACK_FIXES: Readonly<Record<string, IssueFix>> = {
+  TABLE_CONTENT_OVERFLOW: continueTableOnNextPage,
 };
 
 /** The fix offered for this problem now, if any. */
 export function issueFixFor(context: IssueFixContext): IssueFix | undefined {
   const fix = ISSUE_FIXES[context.diagnostic.code];
-  return fix && fix.available(context) ? fix : undefined;
+  if (fix && fix.available(context)) return fix;
+  const fallback = FALLBACK_FIXES[context.diagnostic.code];
+  return fallback && fallback.available(context) ? fallback : undefined;
 }

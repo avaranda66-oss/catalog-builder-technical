@@ -4461,6 +4461,8 @@ export function EditorWorkspace({
                   applyTableTitleDraft={applyTableTitleDraft} cancelTableTitleDraft={cancelTableTitleDraft} runTableTitleSet={runTableTitleSet}
                   startTableGrid={startTableGrid} markerPanelOpen={markerPanelOpen} setMarkerPanelOpen={setMarkerPanelOpen}
                   fitHeightPreparation={fitHeightPreparation} runFitHeight={runFitHeight}
+                  continuation={{ session, document, measurement: measuredLayout?.source === document ? measuredLayout : null,
+                    prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
                   tableStyleScope={tableStyleScope} tableStyleRoleScope={tableStyleRoleScope} tableStyleDisabled={tableStyleDisabled}
                   tableStyleDisabledReasonId={tableStyleDisabledReasonId} tableStyleDisabledReason={tableStyleDisabledReason}
                   tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}

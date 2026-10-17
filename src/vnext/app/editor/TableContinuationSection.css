@@ -1,0 +1,4 @@
+/* FR-35 (2I): "Tabela maior que a página" in the table panel, in the navy/white baseline. */
+.vnext-table-continuation h3 { margin: 0 0 8px; }
+.vnext-table-continuation p { margin: 0 0 8px; color: #24364d; font-size: 13px; line-height: 1.4; }
+.vnext-table-continuation .vnext-table-continuation-reason { margin: 8px 0 0; color: #68778b; font-size: 12px; }
