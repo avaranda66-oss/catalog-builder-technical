@@ -153,6 +153,52 @@ describe('column headers printed in two lines', () => {
   });
 });
 
+describe('columns named like the units in their cells (PCON-Y17 ranges)', () => {
+  const RANGES = [
+    line(720, [['PCON-Y17', 60, 60]]),
+    line(700, [['Ranges', 40, 40], ['bar', 120, 20], ['psi', 200, 20], ['Accuracy', 300, 50]]),
+    line(680, [['(3)', 45, 15], ['1 bar', 110, 30], ['0-15 psi', 185, 45], ['± 0.012 % FS', 290, 70]]),
+    line(660, [['(4)', 45, 15], ['2 bar', 110, 30], ['0-30 psi', 185, 45], ['± 0.012 % FS', 290, 70]]),
+  ];
+  const pdf: ExtractedPdf = { ...PDF, pages: [page(5, []), page(6, RANGES), page(7, [])] };
+  const ranges = (rows: ReturnType<typeof row>[]) => ({ title: 'PCON-Y17', models: ['PCON-Y17'], sections: [], pages: [],
+    sharedTables: [{ title: 'Pressure Controller Range (C1)', columns: ['bar', 'psi', 'Accuracy'], rows }] });
+
+  it('ties each value to its header by the page layout when the header word is also its unit', () => {
+    const review = reviewExtraction(ranges([
+      row('(3)', [{ column: 'bar', literal: '1 bar' }, { column: 'psi', literal: '0-15 psi' }, { column: 'Accuracy', literal: '± 0.012 % FS' }],
+        '(3) 1 bar 0-15 psi ± 0.012 % FS'),
+    ]), SOURCE, pdf, { models: ['PCON-Y17'] });
+    const table = shared(review);
+    expect(table.report.values.map(value => `${value.model}=${value.status}`))
+      .toEqual(['bar=VERIFIED_TEXT', 'psi=VERIFIED_TEXT', 'Accuracy=VERIFIED_TEXT']);
+    expect(table.report.values[0].candidates[0].usedLayout).toBe(true);
+  });
+
+  it('never verifies a unit-named value placed under another header', () => {
+    const review = reviewExtraction(ranges([
+      row('(3)', [{ column: 'bar', literal: '0-15 psi' }, { column: 'psi', literal: '1 bar' }], '(3) 1 bar 0-15 psi ± 0.012 % FS'),
+      row('(4)', [{ column: 'bar', literal: '1 bar' }], '(3) 1 bar 0-15 psi ± 0.012 % FS'),
+    ]), SOURCE, pdf, { models: ['PCON-Y17'] });
+    const table = shared(review);
+    expect(table.report.values.filter(value => value.status !== 'MISSING').map(value => `${value.label} ${value.model}=${value.status}`))
+      .toEqual(['(3) bar=UNVERIFIED', '(3) psi=UNVERIFIED', '(4) bar=UNVERIFIED']);
+    expect(table.report.counts.VERIFIED_TEXT).toBe(0);
+  });
+
+  it('a quote over the header line and the row never counts as verified', () => {
+    const review = reviewExtraction(ranges([
+      row('(3)', [{ column: 'Accuracy', literal: '± 0.012 % FS' }, { column: 'bar', literal: '1 bar' }],
+        'Ranges bar psi Accuracy (3) 1 bar 0-15 psi ± 0.012 % FS'),
+    ]), SOURCE, pdf, { models: ['PCON-Y17'] });
+    const values = shared(review).report.values.filter(item => item.status !== 'MISSING');
+    expect(values.map(item => item.status)).not.toContain('VERIFIED_TEXT');
+    expect(values.find(item => item.model === 'Accuracy')?.candidates[0].reason).toBe('LABEL_UNCLEAR');
+    // "bar" of the header is not inside a value of the row: no second chance by layout.
+    expect(values.find(item => item.model === 'bar')?.status).toBe('UNVERIFIED');
+  });
+});
+
 describe('every page read is accounted for (no page vanishes in silence)', () => {
   it('lists every page of the range, with the reason when it gave nothing', () => {
     const review = reviewExtraction(sharedAnswer([

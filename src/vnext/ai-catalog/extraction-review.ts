@@ -6,11 +6,11 @@ import {
 } from './fact-extraction';
 import { ALL_MODELS_COLUMN, PAGE_CONTENT_KINDS, type ExtractionSource, type PageContentKind } from './fact-extraction-prompt';
 import {
-  pdfEvidenceSource, verificationMessage, verifyFactProposal,
+  pdfEvidenceSource, valueStatus, verificationMessage, verifyFactProposal,
   type FactVerificationReport, type PdfEvidenceSource, type VerifiedCandidate, type VerifiedValue,
 } from './fact-verifier';
 import type { ExtractedPdf } from './pdf-intake';
-import { verificationPageText } from './pdf-layout-evidence';
+import { MAX_EVIDENCE_PAGE_TEXT, checkPdfValueOnPage, columnAttribution, verificationPageText } from './pdf-layout-evidence';
 import { literalEvidencePositions, normalizeEvidenceWhitespace } from './pdf-literal-evidence';
 
 /**
@@ -169,6 +169,94 @@ function pageLines(source: PdfEvidenceSource, page: number): string[] {
 }
 
 /**
+ * The report with new candidate statuses for some values: each value's status
+ * is aggregated again exactly as the verifier does (`valueStatus`), and the
+ * counts, the stamps on the proposal and the used sources follow.
+ */
+function withCandidates(report: FactVerificationReport, changes: ReadonlyMap<string, readonly VerifiedCandidate[]>): FactVerificationReport {
+  if (!changes.size) return report;
+  const values = report.values.map((value): VerifiedValue => {
+    const candidates = changes.get(value.id);
+    if (!candidates) return value;
+    const outcome = valueStatus(candidates);
+    const { selected: _previous, ...rest } = value;
+    void _previous;
+    return { ...rest, status: outcome.status, candidates, ...(outcome.selected === undefined ? {} : { selected: outcome.selected }) };
+  });
+  const counts: Record<ValueVerificationStatus | 'MISSING', number> =
+    { VERIFIED_TEXT: 0, VERIFIED_CELL: 0, VISUAL_ONLY: 0, UNVERIFIED: 0, CONFLICT: 0, MISSING: 0 };
+  for (const value of values) counts[value.status]++;
+  const byId = new Map(values.map(value => [value.id, value]));
+  const stamp = (candidate: FactCandidate, verification: CandidateVerification | undefined): FactCandidate =>
+    verification ? { ...candidate, verification } : candidate;
+  const proposal: FactProposal = {
+    ...report.proposal,
+    sections: report.proposal.sections.map(section => ({ ...section, rows: section.rows.map(row => ({
+      ...row,
+      values: row.values.map((fact, modelIndex) => {
+        const value = byId.get(`${section.id}/${row.id}/${modelIndex}`);
+        if (!value || !changes.has(value.id) || fact.status === 'missing') return fact;
+        return fact.status === 'known'
+          ? { status: 'known' as const, candidate: stamp(fact.candidate, value.candidates[0]?.status) }
+          : { status: 'conflict' as const, candidates: fact.candidates.map((item, index) => stamp(item, value.candidates[index]?.status)) };
+      }),
+    })) })),
+  };
+  const used = new Set(values.flatMap(value => value.candidates.filter(item => item.status !== 'UNVERIFIED')
+    .map(item => item.source.sourceId)));
+  return { ...report, proposal, values, counts, usedSourceIds: [...used].sort() };
+}
+
+/**
+ * Shared tables whose column headers are also units printed in the cells
+ * ("bar" and "psi" over "1 bar" and "0-15 psi", the PCON-Y17 ranges): the
+ * text check reads every "bar" of the row as another column's name and
+ * refuses the value (MODEL_ATTRIBUTION). When every column name in the quote
+ * sits inside a value of that same row, the value is checked again without
+ * column names in the text (quote on the page, value in the quote, label and
+ * unit tied), and its column only by the page layout: VERIFIED_TEXT only when
+ * it sits under its own header (MATCH), UNVERIFIED under another header,
+ * otherwise a person looks (COLUMN_UNCLEAR). Nothing else changes status.
+ */
+function recheckUnitNamedColumns(report: FactVerificationReport, source: PdfEvidenceSource): FactVerificationReport {
+  const columns = report.proposal.models;
+  const labels = report.values.map(value => value.label);
+  const changes = new Map<string, VerifiedCandidate[]>();
+  for (const value of report.values) {
+    const [candidate] = value.candidates;
+    if (value.status !== 'UNVERIFIED' || value.candidates.length !== 1 || candidate.reason !== 'MODEL_ATTRIBUTION') continue;
+    const page = source.pages.find(item => item.number === candidate.source.page);
+    if (!page || page.needsVisualExtraction || page.textLength > page.text.length) continue;
+    const text = verificationPageText(page);
+    if (text.length > MAX_EVIDENCE_PAGE_TEXT) continue;
+    const quote = normalizeEvidenceWhitespace(candidate.source.quote);
+    const literals = report.values.filter(other => other.sectionId === value.sectionId && other.rowId === value.rowId)
+      .flatMap(other => other.candidates.map(item => normalizeEvidenceWhitespace(item.value))).filter(Boolean);
+    const spans = literals.flatMap(literal => {
+      const found: [number, number][] = [];
+      for (let at = quote.indexOf(literal); at >= 0; at = quote.indexOf(literal, at + 1)) found.push([at, at + literal.length]);
+      return found;
+    });
+    const insideValues = columns.every(column => literalEvidencePositions(quote, column, 'model')
+      .every(at => spans.some(([from, to]) => at >= from && at + column.length <= to)));
+    if (!insideValues) continue;
+    const check = checkPdfValueOnPage({ text, ...(page.runs ? { runs: page.runs } : {}) },
+      { value: candidate.value, quote: candidate.source.quote },
+      { model: ALL_MODELS_COLUMN, models: [ALL_MODELS_COLUMN], label: value.label, labels, unit: value.unit, condition: value.condition });
+    if (check.status !== 'VERIFIED_TEXT') continue;
+    const column = page.runs?.length
+      ? columnAttribution(page.runs, value.model, columns, candidate.value, value.unit, candidate.source.quote) : 'UNKNOWN';
+    const next: VerifiedCandidate = column === 'MATCH'
+      ? { value: candidate.value, source: candidate.source, status: 'VERIFIED_TEXT', usedLayout: true }
+      : column === 'MISMATCH'
+        ? { value: candidate.value, source: candidate.source, status: 'UNVERIFIED', reason: 'COLUMN_MISMATCH' }
+        : { value: candidate.value, source: candidate.source, status: 'VISUAL_ONLY', reason: 'COLUMN_UNCLEAR' };
+    changes.set(value.id, [next]);
+  }
+  return withCandidates(report, changes);
+}
+
+/**
  * Shared tables only: a value is verified by a quote that must stay inside
  * ONE line of the page. A quote running over two table lines could tie the
  * label of one row to the value of the next (the TA p. 6 "milivolt" has two
@@ -182,42 +270,13 @@ function guardSharedRows(report: FactVerificationReport, source: PdfEvidenceSour
     const quote = normalizeEvidenceWhitespace(candidate.source.quote);
     return lines.get(candidate.source.page)!.some(line => line.includes(quote));
   };
-  const lowered = new Set<string>();
-  const values = report.values.map((value): VerifiedValue => {
-    if (!value.candidates.some(item => isVerifiedStatus(item.status) && !oneLineQuote(item))) return value;
-    lowered.add(value.id);
-    const candidates = value.candidates.map((item): VerifiedCandidate => isVerifiedStatus(item.status) && !oneLineQuote(item)
-      ? { value: item.value, source: item.source, status: 'VISUAL_ONLY', reason: 'LABEL_UNCLEAR' } : item);
-    const evidence = candidates.filter(item => item.status !== 'UNVERIFIED');
-    const differ = new Set(evidence.map(item => normalizeEvidenceWhitespace(item.value))).size > 1;
-    const selected = candidates.findIndex(item => isVerifiedStatus(item.status));
-    const status: ValueVerificationStatus = differ ? 'CONFLICT' : selected >= 0 ? candidates[selected].status
-      : evidence.length ? 'VISUAL_ONLY' : 'UNVERIFIED';
-    const { selected: _previous, ...rest } = value;
-    void _previous;
-    return { ...rest, status, candidates, ...(selected >= 0 && !differ ? { selected } : {}) };
-  });
-  if (!lowered.size) return report;
-  const counts: Record<ValueVerificationStatus | 'MISSING', number> =
-    { VERIFIED_TEXT: 0, VERIFIED_CELL: 0, VISUAL_ONLY: 0, UNVERIFIED: 0, CONFLICT: 0, MISSING: 0 };
-  for (const value of values) counts[value.status]++;
-  const byId = new Map(values.map(value => [value.id, value]));
-  const stamp = (candidate: FactCandidate, verification: CandidateVerification | undefined): FactCandidate =>
-    verification ? { ...candidate, verification } : candidate;
-  const proposal: FactProposal = {
-    ...report.proposal,
-    sections: report.proposal.sections.map(section => ({ ...section, rows: section.rows.map(row => ({
-      ...row,
-      values: row.values.map((fact, modelIndex) => {
-        const value = byId.get(`${section.id}/${row.id}/${modelIndex}`);
-        if (!value || !lowered.has(value.id) || fact.status === 'missing') return fact;
-        return fact.status === 'known'
-          ? { status: 'known' as const, candidate: stamp(fact.candidate, value.candidates[0]?.status) }
-          : { status: 'conflict' as const, candidates: fact.candidates.map((item, index) => stamp(item, value.candidates[index]?.status)) };
-      }),
-    })) })),
-  };
-  return { ...report, proposal, values, counts };
+  const changes = new Map<string, VerifiedCandidate[]>();
+  for (const value of report.values) {
+    if (!value.candidates.some(item => isVerifiedStatus(item.status) && !oneLineQuote(item))) continue;
+    changes.set(value.id, value.candidates.map((item): VerifiedCandidate => isVerifiedStatus(item.status) && !oneLineQuote(item)
+      ? { value: item.value, source: item.source, status: 'VISUAL_ONLY', reason: 'LABEL_UNCLEAR' } : item));
+  }
+  return withCandidates(report, changes);
 }
 
 /** "página 6" or "página 6 de manual.pdf". */
@@ -281,7 +340,7 @@ function verifyTable(kind: ReviewedTable['kind'], answer: unknown, source: Extra
   }
   const { extraction, fitted } = fitQuotesToPages(normalized, [evidence]);
   const verified = verifyFactProposal(extraction.proposal, [evidence]);
-  const report = kind === 'shared' ? guardSharedRows(verified, evidence) : verified;
+  const report = kind === 'shared' ? guardSharedRows(recheckUnitNamedColumns(verified, evidence), evidence) : verified;
   const message = kind === 'shared' ? sharedTableMessage : verificationMessage;
   const messages = new Map(report.values.map(value => [value.id, message(value, report.sourceNames)]));
   return {

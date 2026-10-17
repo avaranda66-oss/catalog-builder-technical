@@ -91,7 +91,9 @@ const timedFetch = async (url: string, init: RequestInit & { method: string }) =
   const step = label(url, init.method);
   const record: ProviderCall = { step, status: response.status, ms: Math.round(performance.now() - started) };
   if (step === 'generate' || !response.ok) {
-    const body = await response.clone().json().catch(() => null) as Record<string, any> | null;
+    const body = await response.clone().json().catch(() => null) as {
+      usageMetadata?: unknown; candidates?: { finishReason?: string }[]; error?: { message?: string };
+    } | null;
     if (body?.usageMetadata) record.usage = body.usageMetadata;
     if (body?.candidates?.[0]?.finishReason) record.finishReason = body.candidates[0].finishReason;
     if (!response.ok) record.error = redact(String(body?.error?.message ?? '')).slice(0, 200);
@@ -142,19 +144,19 @@ load(entry);
 
 // ---- Hand-checked keys --------------------------------------------------------
 const truth = GroundTruthSchema.parse(JSON.parse(await readFile('docs/ai-catalog/spike-extracao/gabarito.json', 'utf8')));
-interface SharedTruth { tables: { page: number; title: string; columns: string[]; rowKey: string;
+interface SharedTruth { tables: { sourceId: string; page: number; title: string; columns: string[]; rowKey: string;
   rows: { label: string; values: Record<string, string>; alsoAccept?: Record<string, string[]> }[] }[] }
 const sharedTruth = JSON.parse(await readFile('docs/ai-catalog/extracao-servidor/gabarito-tabelas-comuns.json', 'utf8')) as SharedTruth;
 const fold = (text: string) => canonicalDegreeSign(normalizeSymbolText(text)).normalize('NFC').replace(/\s+/gu, ' ').trim();
 const foldName = (text: string) => fold(text).normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
 const PUA = /[-]/u;
 
-function judgeShared(review: ExtractionReview) {
+function judgeShared(review: ExtractionReview, sourceId: string) {
   const results: { table: string; page: number; cells: number; verifiedCorrect: number; wrongVerified: string[]; unmatchedVerified: string[];
     toCheck: number; unverified: number; pua: number }[] = [];
   for (const table of review.tables.filter(item => item.kind === 'shared')) {
     const page = table.report.values.flatMap(value => value.candidates.map(item => item.source.page))[0] ?? 0;
-    const key = sharedTruth.tables.find(item => item.page === page);
+    const key = sharedTruth.tables.find(item => item.sourceId === sourceId && item.page === page);
     const columnOf = (column: string) => key?.columns.find(name => foldName(column).startsWith(foldName(name)));
     const rows = new Map<string, typeof table.report.values[number][]>();
     for (const value of table.report.values) rows.set(`${value.sectionId}/${value.rowId}`, [...(rows.get(`${value.sectionId}/${value.rowId}`) ?? []), value]);
@@ -190,13 +192,20 @@ function judgeShared(review: ExtractionReview) {
 }
 
 // ---- Run ------------------------------------------------------------------------
+interface Reply {
+  code: string;
+  reason?: string;
+  status?: Record<string, unknown>;
+  extraction?: { cached: boolean; modelVersion: string | null; trimmed: number; sheet: Record<string, unknown>;
+    usage: { inputTokens: number; outputTokens: number; estimatedUsd: number } };
+}
 const call = async (body: unknown) => {
   const started = performance.now();
   const response = await handler(new Request('https://fixture.invalid/functions/v1/vnext-catalog-draft', {
     method: 'POST', headers: { Origin: ORIGIN, Authorization: 'Bearer live', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
   const text = await response.text();
   if (key && text.includes(key)) throw new Error('A resposta da função trouxe a chave: abortado.');
-  return { status: response.status, json: JSON.parse(text) as Record<string, any>, ms: Math.round(performance.now() - started) };
+  return { status: response.status, json: JSON.parse(text) as Reply, ms: Math.round(performance.now() - started) };
 };
 if (!replay) {
   const status = await call({ version: 1, task: 'status' });
@@ -216,14 +225,14 @@ for (const source of SOURCES.filter(item => !only || only.includes(item.id))) {
   for (const attempt of replay ? ['first'] as const : ['first', 'cache'] as const) {
     calls = [];
     const rawPath = join(out, 'raw', `${source.id}.json`);
-    const reply = replay ? { status: 200, ms: 0, json: { code: 'OK', extraction: JSON.parse(await readFile(rawPath, 'utf8')) } as Record<string, any> }
+    const reply = replay ? { status: 200, ms: 0, json: { code: 'OK', extraction: JSON.parse(await readFile(rawPath, 'utf8')) } as Reply }
       : await call(body);
     if (!replay && attempt === 'first' && reply.json.code === 'OK') await writeFile(rawPath, redact(JSON.stringify(reply.json.extraction, null, 1)));
     const record: Record<string, unknown> = { source: source.id, attempt, httpStatus: reply.status, code: reply.json.code,
       reason: reply.json.reason, msTotal: reply.ms, megabytes: Number((bytes.byteLength / 1048576).toFixed(2)), providerCalls: calls };
-    if (reply.json.code === 'OK') {
-      const extraction = reply.json.extraction;
-      const usage = extraction.usage as { inputTokens: number; outputTokens: number; estimatedUsd: number };
+    const extraction = reply.json.code === 'OK' ? reply.json.extraction : undefined;
+    if (extraction) {
+      const usage = extraction.usage;
       record.cached = extraction.cached;
       record.modelVersion = extraction.modelVersion;
       record.trimmed = extraction.trimmed;
@@ -243,7 +252,7 @@ for (const source of SOURCES.filter(item => !only || only.includes(item.id))) {
           modelTable: { wrongVerified: modelTruth.wrongVerified.map(item => `${item.value.model} · ${item.value.label} = ${item.value.value} (${item.note})`),
             unmatchedVerified: modelTruth.unmatchedVerified.map(item => `${item.value.model} · ${item.value.label} = ${item.value.value} (${item.note})`),
             wrongCaught: modelTruth.wrongCaught.length, coverage: modelTruth.coverage },
-          sharedTables: judgeShared(review), verifiedWithPrivateUseCharacter: puaVerified,
+          sharedTables: judgeShared(review, source.id), verifiedWithPrivateUseCharacter: puaVerified,
         });
       }
     }

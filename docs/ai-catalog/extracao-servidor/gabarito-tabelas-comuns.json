@@ -1,12 +1,19 @@
 {
  "version": 1,
  "checkedOn": "2026-10-17",
- "method": "Conferido à mão na imagem renderizada das páginas (PyMuPDF, 110-120 dpi) e no texto do PyMuPDF. Tabelas que valem para todos os modelos (TA-25N, TA-35N, TA-50N): uma posição = linha x coluna impressa. Linhas com o mesmo nome (TC-K, TC-T, TC-E, TC-N, milivolt, resistência) são separadas pela faixa da coluna Entradas. Na coluna Remarks da resistência, a célula impressa vale para as duas faixas.",
- "source": {
-  "sourceId": "ta-manual-pt",
-  "file": "banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf",
-  "sha256": "cfa15db3a434e31e7a3b16048b46c3288f0526ec50f3be819ff900f8982c6598"
- },
+ "method": "Conferido à mão na imagem renderizada das páginas (PyMuPDF, 110-120 dpi) e no texto do PyMuPDF. Tabelas que valem para todos os modelos (TA-25N, TA-35N, TA-50N): uma posição = linha x coluna impressa. Linhas com o mesmo nome (TC-K, TC-T, TC-E, TC-N, milivolt, resistência) são separadas pela faixa da coluna Entradas. Na coluna Remarks da resistência, a célula impressa vale para as duas faixas. PCON-Y17 p. 11: tabela de faixas (C1), conferida na imagem; o cabeçalho \"Control* Stability\" é impresso em duas linhas.",
+ "sources": [
+  {
+   "sourceId": "ta-manual-pt",
+   "file": "banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf",
+   "sha256": "cfa15db3a434e31e7a3b16048b46c3288f0526ec50f3be819ff900f8982c6598"
+  },
+  {
+   "sourceId": "y17-folder",
+   "file": "presyspdfs/pressure-controller-pcon-y17-folder.pdf",
+   "sha256": "7fe22a45ea61f66f501b52cbb57c11b1a8912a9d8590aa14e6615395a528bd1d"
+  }
+ ],
  "tables": [
   {
    "page": 6,
@@ -225,7 +232,8 @@
       "Remarks": "DIN-43710"
      }
     }
-   ]
+   ],
+   "sourceId": "ta-manual-pt"
   },
   {
    "page": 8,
@@ -332,6 +340,92 @@
      "values": {
       "Orifícios": "Insert Caneca (para usar com as esferas metálicas)",
       "Código de Encomenda": "06.04.0086-00"
+     }
+    }
+   ],
+   "sourceId": "ta-manual-pt"
+  },
+  {
+   "sourceId": "y17-folder",
+   "page": 11,
+   "title": "Pressure Controller Range (C1)",
+   "columns": [
+    "bar",
+    "psi",
+    "SI-Pascal",
+    "Control*",
+    "Accuracy"
+   ],
+   "rowKey": "bar",
+   "rows": [
+    {
+     "label": "(3)",
+     "values": {
+      "bar": "1 bar",
+      "psi": "0-15 psi",
+      "SI-Pascal": "100 kPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(4)",
+     "values": {
+      "bar": "2 bar",
+      "psi": "0-30 psi",
+      "SI-Pascal": "200 kPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(5)",
+     "values": {
+      "bar": "7 bar",
+      "psi": "0-100 psi",
+      "SI-Pascal": "700 kPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(6)",
+     "values": {
+      "bar": "20 bar",
+      "psi": "0-250 psi",
+      "SI-Pascal": "2.5 MPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(7)",
+     "values": {
+      "bar": "35 bar",
+      "psi": "0-500 psi",
+      "SI-Pascal": "3.5 MPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(8)",
+     "values": {
+      "bar": "70 bar",
+      "psi": "0-1000 psi",
+      "SI-Pascal": "7 MPa",
+      "Control*": "± 0.002 % FS",
+      "Accuracy": "± 0.012 % FS"
+     }
+    },
+    {
+     "label": "(9)",
+     "values": {
+      "bar": "210 bar",
+      "psi": "0-3000 psi",
+      "SI-Pascal": "21 MPa",
+      "Control*": "± 0.003 % FS",
+      "Accuracy": "± 0.012 % FS"
      }
     }
    ]
