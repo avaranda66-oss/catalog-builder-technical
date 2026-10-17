@@ -3749,7 +3749,9 @@ export function EditorWorkspace({
     )?.focus());
   };
   const goToIssue = useIssueNavigation({ document, request: locateRequest, prepare: () => prepareAuthoringForContextChangeRef.current(),
-    locate: locateLayoutDiagnostic, showPage: setActivePage, openDiagnostics: () => setDiagnosticsOpen(true), announce: setStatusMessage,
+    // FR-17: a problem chosen on purpose shows "Propriedades", where its list opens (the assistant stays mounted).
+    locate: (target) => { setAssistantOpen(false); locateLayoutDiagnostic(target); },
+    showPage: setActivePage, openDiagnostics: () => setDiagnosticsOpen(true), announce: setStatusMessage,
     selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
   return (

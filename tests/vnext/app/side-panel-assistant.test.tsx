@@ -190,6 +190,71 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
       .toBeGreaterThan(css.lastIndexOf('}', css.indexOf('FR-17: only on a small screen')) - 400);
   });
 
+  it('names the panel under the tabs after the chosen tab, and every control points at a panel that exists', () => {
+    setup();
+    // Before the first opening the (empty, hidden) assistant panel already exists for the top bar button.
+    const topBar = screen.getByRole('button', { name: 'Abrir assistente de edição' });
+    const controlled = document.getElementById(topBar.getAttribute('aria-controls')!);
+    expect(controlled).toHaveAttribute('hidden');
+    expect(controlled).toBeEmptyDOMElement();
+    for (const tab of [propertiesTab(), assistantTab()]) {
+      expect(document.getElementById(tab.getAttribute('aria-controls')!)).toHaveAttribute('role', 'tabpanel');
+    }
+    const panel = screen.getByRole('tabpanel', { name: 'Propriedades' });
+    expect(panel).toContainElement(properties());
+
+    fireEvent.click(assistantTab());
+    expect(screen.getByRole('tabpanel', { name: 'Assistente' })).toContainElement(assistant());
+    // Each panel keeps its own landmark name.
+    expect(assistant()).toHaveAccessibleName('Assistente do catálogo atual');
+  });
+
+  it('gives the keyboard focus back to what opened the assistant when it closes from inside', () => {
+    setup();
+    // Opened from the top bar button: "Fechar" goes back to it.
+    const topBar = screen.getByRole('button', { name: 'Abrir assistente de edição' });
+    topBar.focus();
+    fireEvent.click(topBar);
+    const close = within(assistant()!).getByRole('button', { name: 'Fechar painel do assistente' });
+    close.focus();
+    fireEvent.click(close);
+    expect(screen.getByRole('button', { name: 'Abrir assistente de edição' })).toHaveFocus();
+
+    // Opened from the "Assistente" tab: Esc goes back to the tab.
+    assistantTab().focus();
+    fireEvent.click(assistantTab());
+    const field = screen.getByRole('textbox', { name: /Pe[çc]a|Descreva|pedido/i });
+    field.focus();
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
+    expect(assistantTab()).toHaveFocus();
+  });
+
+  it('falls back to the "Assistente" tab when nothing had the focus before it opened', () => {
+    setup();
+    fireEvent.click(assistantTab());
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.click(within(assistant()!).getByRole('button', { name: 'Fechar painel do assistente' }));
+    expect(assistantTab()).toHaveFocus();
+  });
+
+  it('shows "Propriedades" when a problem is chosen ("Corrigir este item"), keeping what was typed in the assistant', () => {
+    const { session, rerender } = setup();
+    fireEvent.click(assistantTab());
+    fireEvent.click(within(assistant()!).getByRole('tab', { name: 'Ferramentas' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), { target: { value: 'Deixe as tabelas mais compactas' } });
+    const pageId = session.getSnapshot().document.pages[0].id;
+    rerender(<EditorWorkspace session={session} simpleByDefault locateRequest={{
+      id: 1,
+      diagnostic: { code: 'SAFE_AREA_VIOLATION', severity: 'WARNING', details: 'Fora da área segura', pageId, objectId: 'text-target' },
+    }} />);
+    expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
+    expect(properties()).toBeVisible();
+    expect(document.querySelector('[data-editor-object-id="text-target"]')).toHaveAttribute('data-selected', 'true');
+    fireEvent.click(assistantTab());
+    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' })).toHaveValue('Deixe as tabelas mais compactas');
+  });
+
   it('has no tabs and no assistant in the full (advanced) mode', () => {
     setup({ simpleByDefault: false });
     expect(screen.queryByRole('tablist', { name: 'Painel da direita' })).toBeNull();

@@ -7,10 +7,21 @@ export type SidePanelSwitchSource = 'keyboard' | 'pointer';
 /** Ids of the two panels the tabs show (the assistant id is also used by the top bar button). */
 export const SIDE_PROPERTIES_PANEL_ID = 'vnext-side-properties';
 export const SIDE_ASSISTANT_PANEL_ID = 'vnext-assistant-chat';
+/**
+ * The one tab panel under the tabs. It holds both panels (only the chosen one is shown) and is named
+ * by the chosen tab, so the tabs always point at an element that exists, and each panel keeps its
+ * own landmark name ("Propriedades do objeto", "Assistente do catálogo atual").
+ */
+export const SIDE_TAB_PANEL_ID = 'vnext-side-panel';
 
-const TABS: ReadonlyArray<{ panel: SidePanel; label: string; controls: string }> = [
-  { panel: 'properties', label: 'Propriedades', controls: SIDE_PROPERTIES_PANEL_ID },
-  { panel: 'assistant', label: 'Assistente', controls: SIDE_ASSISTANT_PANEL_ID },
+/** Id of the tab that shows `panel`. */
+export function sideTabId(panel: SidePanel): string {
+  return `vnext-side-tab-${panel}`;
+}
+
+const TABS: ReadonlyArray<{ panel: SidePanel; label: string }> = [
+  { panel: 'properties', label: 'Propriedades' },
+  { panel: 'assistant', label: 'Assistente' },
 ];
 
 export interface SidePanelTabsProps {
@@ -44,9 +55,9 @@ export function SidePanelTabs({ active, onChange }: SidePanelTabsProps) {
           ref={(element) => { refs.current[index] = element; }}
           type="button"
           role="tab"
-          id={`vnext-side-tab-${tab.panel}`}
+          id={sideTabId(tab.panel)}
           aria-selected={active === tab.panel}
-          aria-controls={tab.controls}
+          aria-controls={SIDE_TAB_PANEL_ID}
           tabIndex={active === tab.panel ? 0 : -1}
           data-side-tab={tab.panel}
           onClick={() => { if (active !== tab.panel) onChange(tab.panel, 'pointer'); }}
@@ -88,7 +99,10 @@ export function SidePanelColumn({ active, onChange, showTabs, children }: SidePa
         keyboardSwitch.current = source === 'keyboard' ? panel : null;
         onChange(panel);
       }} />}
-      {children}
+      <div className="vnext-side-panels" data-side-panels=""
+        {...(showTabs ? { id: SIDE_TAB_PANEL_ID, role: 'tabpanel', 'aria-labelledby': sideTabId(active) } : {})}>
+        {children}
+      </div>
     </div>
   );
 }

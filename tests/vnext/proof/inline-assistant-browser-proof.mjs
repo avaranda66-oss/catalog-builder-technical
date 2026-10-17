@@ -57,6 +57,9 @@ try {
   assert.equal(after.tables, initial.tables);
   await page.getByRole('button', { name: 'Fechar painel do assistente' }).click();
   assert.equal(await page.locator('[data-vnext-assistant="open"]').count(), 0);
+  // FR-17: closing from inside gives the keyboard focus back to the button that opened the assistant.
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Abrir assistente de edição',
+    'Closing the assistant must give the focus back to the top bar button');
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
   await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
   // FR-17: on a laptop (1366 and 1440 px) the assistant is the "Assistente" tab of the right column, in the place of

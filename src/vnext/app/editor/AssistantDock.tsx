@@ -32,18 +32,46 @@ export interface AssistantDockProps {
   children: React.ReactNode;
 }
 
+function isShown(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element.isConnected && !element.closest('[hidden]');
+}
+
 /**
  * FR-17: the assistant panel, shown in the right column in place of "Propriedades" (as a fixed
- * panel over the screen only below 900 px). Once opened it stays mounted while hidden, so going
- * back to "Propriedades" and returning keeps the typed request, the conversation and any proposal
- * waiting for confirmation. The selection on the page stays as it is; the first line says what the
- * assistant sees selected.
+ * panel over the screen only below 900 px). The (empty, hidden) panel is always there, so the tab
+ * and the top bar button always point at it; the assistant inside is created on the first opening
+ * and then stays mounted while hidden, so going back to "Propriedades" and returning keeps the
+ * typed request, the conversation and any proposal waiting for confirmation. The selection on the
+ * page stays as it is; the first line says what the assistant sees selected. Closing it from
+ * inside ("Fechar", Esc) puts the keyboard focus back on what opened it.
  */
 export function AssistantDock({ open, onClose, mode, onModeChange, selection, children }: AssistantDockProps) {
   const [mounted, setMounted] = React.useState(open);
   if (open && !mounted) setMounted(true);
   const panelRef = React.useRef<HTMLElement>(null);
   const wasOpen = React.useRef(open);
+  const wasOpenBeforePaint = React.useRef(open);
+  const opener = React.useRef<HTMLElement | null>(null);
+
+  // Before paint, so before the assistant puts the cursor in its own field (a later effect):
+  // remember what opened the panel, and give the focus back to it when the panel closes while
+  // holding the focus (otherwise it would fall to the page body and the keyboard user is lost).
+  React.useLayoutEffect(() => {
+    const changed = open !== wasOpenBeforePaint.current;
+    wasOpenBeforePaint.current = open;
+    if (!changed) return;
+    const root = globalThis.document;
+    const panel = panelRef.current;
+    const active = root.activeElement;
+    if (open) {
+      opener.current = active instanceof HTMLElement && active !== root.body && !panel?.contains(active) ? active : null;
+      return;
+    }
+    const lostFocus = !active || active === root.body || Boolean(panel?.contains(active));
+    if (!lostFocus) return;
+    const target = [opener.current, root.querySelector('[data-side-tab="assistant"]')].find(isShown);
+    target?.focus();
+  }, [open]);
 
   // On reopening (not the first time, when the assistant focuses its own field), put the cursor
   // back in the request field so the person can type right away.
@@ -56,7 +84,6 @@ export function AssistantDock({ open, onClose, mode, onModeChange, selection, ch
     panel.querySelector<HTMLTextAreaElement>('textarea:not([disabled])')?.focus();
   }, [open]);
 
-  if (!mounted) return null;
   return (
     <aside
       ref={panelRef}
@@ -69,15 +96,17 @@ export function AssistantDock({ open, onClose, mode, onModeChange, selection, ch
         if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
       }}
     >
-      <div className="vnext-assistant-dock-controls">
-        <span data-assistant-selection="">{assistantSelectionLabel(selection)}</span>
-        <button type="button" aria-label="Fechar painel do assistente" onClick={onClose}>Fechar <span aria-hidden="true">✕</span></button>
-      </div>
-      <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
-        <button role="tab" aria-selected={mode === 'gemini'} type="button" onClick={() => onModeChange('gemini')}>Criar com Gemini</button>
-        <button role="tab" aria-selected={mode === 'tools'} type="button" onClick={() => onModeChange('tools')}>Ferramentas</button>
-      </div>
-      {children}
+      {mounted && <>
+        <div className="vnext-assistant-dock-controls">
+          <span data-assistant-selection="">{assistantSelectionLabel(selection)}</span>
+          <button type="button" aria-label="Fechar painel do assistente" onClick={onClose}>Fechar <span aria-hidden="true">✕</span></button>
+        </div>
+        <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
+          <button role="tab" aria-selected={mode === 'gemini'} type="button" onClick={() => onModeChange('gemini')}>Criar com Gemini</button>
+          <button role="tab" aria-selected={mode === 'tools'} type="button" onClick={() => onModeChange('tools')}>Ferramentas</button>
+        </div>
+        {children}
+      </>}
     </aside>
   );
 }
