@@ -10,11 +10,15 @@ import {
   tableSelectionIdentity,
   type TableSelection,
 } from '@/vnext/editor/table-selection';
+import { createNewTableModel, createTableInsertSpec, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
+import { runTableSteps } from '@/vnext/app/editor/table-structure-actions';
+import { projectTableLook, tableLookSteps } from '@/vnext/editor/table-look-authoring';
 import { emptyTable } from '../proof/test-data';
 
 /**
- * FR-34 (slice 2A): the "+" buttons and the right-click menu run the axis actions that already exist —
- * one insert, or one removal per row under a single transactionId, so one Desfazer brings it all back.
+ * FR-34 (slice 2A): the "+" buttons, the right-click menu and Tab on the last cell run the same axis work as the
+ * table panel (`table-structure-actions.ts`) — one insert, or one removal per row under a single transactionId,
+ * with the table look following the rows, so one Desfazer brings it all back.
  */
 
 function ids(prefix: string): IdGenerator {
@@ -128,9 +132,65 @@ describe('runTableGridAxisCommand — remove several', () => {
     const identity = identityOf(document);
     const before = session.getSnapshot().document;
     expect(run(session, tableRowSelection(identity, 'r0', 'r3'), { type: 'remove', axis: 'row' }))
-      .toMatchObject({ ok: false, message: expect.stringContaining('pelo menos 1 linha') });
+      .toEqual({ ok: false, message: 'A última linha ou coluna não pode ser removida.' });
     expect(run(session, tableCellSelection(identity, { rowId: 'r2', columnId: 'c1' }), { type: 'remove', axis: 'row' }))
-      .toEqual({ ok: false, message: 'Há células mescladas nesta linha. Desfaça a mescla antes de excluir.' });
+      .toEqual({ ok: false, message: 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover.' });
     expect(session.getSnapshot().document).toBe(before);
+  });
+});
+
+describe('runTableGridAxisCommand — the table look follows the rows (same work as the table panel)', () => {
+  function styledTable() {
+    const document = createW2CDemoDocument(ids('doc'));
+    const session = createDocumentSession(document, { createId: ids('generated') });
+    const page = document.pages[0];
+    const inserted = session.execute({
+      type: 'object.insert', pageId: page.id, object: createTableInsertSpec(page, createNewTableModel({ rows: 4, columns: 3 }), document.style),
+    });
+    if (!inserted.ok) throw new Error('Could not insert the table');
+    const objectId = inserted.metadata.createdIds[0];
+    const object = () => {
+      const found = session.getSnapshot().document.pages[0].objects.find((entry) => entry.id === objectId);
+      if (!found || found.type !== 'table') throw new Error('Missing table');
+      return found;
+    };
+    const look = projectTableLook(object().table, document.style);
+    runTableSteps(session, { pageId: page.id, objectId }, tableLookSteps({ kind: 'preset', presetId: 'comparison' }, look, document.style), 'look');
+    return { session, pageId: page.id, object, style: document.style };
+  }
+
+  it('Tab on the last cell keeps the bands and the highlighted first column on the new row, in one Desfazer', () => {
+    const { session, pageId, object, style } = styledTable();
+    const styled = session.getSnapshot().document;
+    const table = object().table;
+    const last = { rowId: table.rows[table.rows.length - 1].id, columnId: table.columns[table.columns.length - 1].id };
+    const selection = tableCellSelection(tableSelectionIdentity(pageId, object().id, table.id), last);
+    const outcome = runTableGridAxisCommand(session, { pageId, object: object(), selection }, {
+      type: 'insert', axis: 'row', position: 'after', referenceAxisId: last.rowId, selectFirstCell: true,
+    }, 'tab-new-row');
+    expect(outcome).toMatchObject({ ok: true, message: 'Linha adicionada no fim da tabela.', fitHeight: true });
+    const grown = object().table;
+    expect(grown.rows).toHaveLength(5);
+    expect(projectTableLook(grown, style)).toMatchObject({ banded: true, firstColumn: true });
+    const newRow = grown.rows[4];
+    expect(grown.cells.find((cell) => cell.rowId === newRow.id && cell.columnId === grown.columns[0].id)?.style?.fontWeight).toBe(700);
+    if (!outcome.ok) throw new Error('expected ok');
+    expect(outcome.selection).toMatchObject({ kind: 'cell', focus: { rowId: newRow.id, columnId: grown.columns[0].id } });
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(styled);
+  });
+
+  it('removing rows from the menu keeps the bands in order, in one Desfazer', () => {
+    const { session, pageId, object, style } = styledTable();
+    const styled = session.getSnapshot().document;
+    const table = object().table;
+    const identity = tableSelectionIdentity(pageId, object().id, table.id);
+    const outcome = runTableGridAxisCommand(session, {
+      pageId, object: object(), selection: tableCellSelection(identity, { rowId: table.rows[1].id, columnId: table.columns[1].id }),
+    }, { type: 'remove', axis: 'row' }, 'menu-remove');
+    expect(outcome).toMatchObject({ ok: true, message: 'Linha excluída. Para voltar, use Desfazer.' });
+    expect(projectTableLook(object().table, style)).toMatchObject({ banded: true, firstColumn: true });
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(styled);
   });
 });

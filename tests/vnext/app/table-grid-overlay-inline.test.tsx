@@ -201,29 +201,29 @@ describe('FR-34 right-click menu of the grid', () => {
     expect(grid).toBeInTheDocument();
   });
 
-  it('offers undoing the merge on a merged cell and sends the delete commands', () => {
+  it('offers "Desmesclar células" on a merged cell and sends the delete commands', () => {
     const { container, onGridCommand } = setup();
     fireEvent.contextMenu(container.querySelector('[data-table-cell="1:1"]')!);
     const menu = screen.getByRole('menu', { name: 'Ações da tabela' });
     expect(within(menu).getByRole('menuitem', { name: 'Excluir 2 linhas' })).toBeInTheDocument();
-    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Desfazer mescla' }));
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Desmesclar células' }));
     expect(onGridCommand).toHaveBeenCalledWith({ type: 'unmerge' });
     fireEvent.contextMenu(container.querySelector('[data-table-cell="0:0"]')!);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Excluir linha' }));
     expect(onGridCommand).toHaveBeenLastCalledWith({ type: 'remove', axis: 'row' });
   });
 
-  it('right-click on a row number keeps the row selection and offers only row deletion', () => {
+  it('right-click on a row number keeps the row selection and offers only the row actions', () => {
     const { container, changes } = setup();
     fireEvent.contextMenu(container.querySelector('[data-table-row-selector="0"]')!);
     expect(changes.at(-1)).toMatchObject({ kind: 'rows', anchorRowId: 'w4a-row-header' });
     const items = within(screen.getByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent);
-    expect(items).toContain('Excluir linha');
-    expect(items).not.toContain('Excluir coluna');
+    // Same rule as the table panel: whole rows give rows to insert next to and to delete, no column.
+    expect(items).toEqual(['Inserir linha acima', 'Inserir linha abaixo', 'Excluir linha']);
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-    // The last row is part of the 2 × 2 merged cell: deleting it means deleting both rows it covers.
+    // A row number selects that row only (the table panel's rule); a merged cell in the way is explained on click.
     fireEvent.contextMenu(container.querySelector('[data-table-row-selector="2"]')!);
-    expect(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Excluir 2 linhas' })).toBeInTheDocument();
+    expect(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Excluir linha' })).toBeInTheDocument();
   });
 
   it('the keyboard moves through the menu, Esc closes it and gives the focus back to the grid', () => {

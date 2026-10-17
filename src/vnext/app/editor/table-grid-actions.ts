@@ -1,19 +1,23 @@
 import type { DocumentSession } from '../../application';
-import type { CatalogDocument, TableModel, TableObject } from '../../domain';
+import type { TableModel, TableObject } from '../../domain';
+import { planTableAxisRemoval, tableAxisRefusalMessage } from '../../editor/table-axis-authoring';
+import { planTableAxisInsert, type TableGridCommand } from '../../editor/table-grid-commands';
 import {
-  describeAxisCount,
-  planTableAxisInsert,
-  planTableAxisRemoval,
-  selectionAfterGridInsert,
-  selectionAfterGridRemoval,
-  type TableGridCommand,
-} from '../../editor/table-grid-commands';
-import { tableSelectionFocusPoint, type TableSelection } from '../../editor/table-selection';
+  canonicalTablePoint,
+  selectionAfterTableAxisInsert,
+  selectionAfterTableAxisRemove,
+  tableCellSelection,
+  tableSelectionAxisIds,
+  tableSelectionFocusPoint,
+  type TableSelection,
+} from '../../editor/table-selection';
+import { insertTableAxes, removeTableAxes } from './table-structure-actions';
 
 /**
- * FR-34 (slice 2A) — runs the "+" buttons and the right-click menu of the table grid with the actions that already
- * exist: one `table.axis.insert`, or one `table.axis.remove` per row/column under a single transactionId, so one
- * Desfazer brings everything back. A failure half-way is rolled back with that same Desfazer.
+ * FR-34 (slice 2A) — runs the "+" buttons, the right-click menu and Tab on the last cell of the table grid with the
+ * same session work as the table panel and the bar above the page (`table-structure-actions.ts`): one
+ * `table.axis.insert`, or one `table.axis.remove` per row/column, under a single transactionId, with the bands and
+ * the highlighted first column following the rows. One Desfazer brings everything back.
  */
 
 export type TableGridAxisCommand = Extract<TableGridCommand, { type: 'insert' | 'remove' }>;
@@ -32,23 +36,21 @@ export type TableGridOutcome =
 
 const UNDO_HINT = 'Para voltar, use Desfazer.';
 
-function tableObjectIn(document: CatalogDocument, pageId: string, objectId: string): TableObject | undefined {
-  return document.pages.find((page) => page.id === pageId)?.objects
-    .find((object): object is TableObject => object.id === objectId && object.type === 'table');
-}
-
-function failureMessage(code: string | undefined): string {
-  if (code === 'TARGET_STALE') return 'A tabela mudou. Nada foi alterado.';
-  if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
-  if (code === 'MERGE_INTERSECTION') return 'Há células mescladas no caminho. Desfaça a mescla antes de continuar.';
-  if (code === 'TABLE_LAST_AXIS') return 'A tabela precisa ter pelo menos 1 linha e 1 coluna.';
-  return 'Não foi possível alterar a tabela. Nada foi alterado.';
-}
-
 function insertMessage(command: Extract<TableGridCommand, { type: 'insert' }>): string {
   if (command.selectFirstCell) return 'Linha adicionada no fim da tabela.';
   if (command.axis === 'row') return command.position === 'before' ? 'Linha inserida acima.' : 'Linha inserida abaixo.';
   return command.position === 'before' ? 'Coluna inserida à esquerda.' : 'Coluna inserida à direita.';
+}
+
+function removeMessage(axis: 'row' | 'column', count: number): string {
+  if (count === 1) return `${axis === 'row' ? 'Linha excluída' : 'Coluna excluída'}. ${UNDO_HINT}`;
+  return `${count} ${axis === 'row' ? 'linhas excluídas' : 'colunas excluídas'}. ${UNDO_HINT}`;
+}
+
+/** Tab on the last cell: the person goes on typing in the first cell of the new row. */
+function firstCellOf(table: TableModel, selection: TableSelection, rowId: string): TableSelection | undefined {
+  const point = canonicalTablePoint(table, { rowId, columnId: table.columns[0].id });
+  return point ? tableCellSelection(selection.identity, point) : undefined;
 }
 
 export function runTableGridAxisCommand(
@@ -57,55 +59,38 @@ export function runTableGridAxisCommand(
   command: TableGridAxisCommand,
   transactionId: string
 ): TableGridOutcome {
-  const table = target.object.table;
-  const base = { pageId: target.pageId, objectId: target.object.id, tableId: table.id };
-  const identity = target.selection.identity;
+  const { pageId, object, selection } = target;
+  const table = object.table;
 
   if (command.type === 'insert') {
-    const planned = planTableAxisInsert(table, target.selection, command);
+    const planned = planTableAxisInsert(table, selection, command);
     if (!planned.ok) return planned;
-    const result = session.execute({
-      type: 'table.axis.insert',
-      ...base,
+    const outcome = insertTableAxes(session, { pageId, object }, {
       axis: planned.plan.axis,
       referenceAxisId: planned.plan.referenceAxisId,
       position: planned.plan.position,
-      count: 1,
       properties: planned.plan.properties,
-      expectedTable: table,
-    }, { transactionId });
-    if (!result.ok) return { ok: false, message: failureMessage(result.error.code) };
-    const next = tableObjectIn(result.document, target.pageId, target.object.id);
-    const axes = command.axis === 'row' ? next?.table.rows : next?.table.columns;
-    const insertedId = axes?.find((axis) => result.metadata.createdIds.includes(axis.id))?.id;
-    const selection = next && insertedId && selectionAfterGridInsert(
-      identity, next.table, command.axis, insertedId, tableSelectionFocusPoint(table, target.selection), command.selectFirstCell
-    );
-    if (!next || !selection) return { ok: false, message: failureMessage(undefined) };
-    return { ok: true, table: next.table, selection, message: insertMessage(command), fitHeight: command.axis === 'row' };
+    }, transactionId);
+    if (!outcome.ok) return { ok: false, message: tableAxisRefusalMessage(outcome.code, command.axis) };
+    const insertedId = outcome.insertedAxisIds[0];
+    const next = insertedId && (command.selectFirstCell
+      ? firstCellOf(outcome.table, selection, insertedId)
+      : selectionAfterTableAxisInsert(outcome.table, selection, command.axis, insertedId));
+    if (!next) return { ok: false, message: tableAxisRefusalMessage('ACTION_INVALID', command.axis) };
+    return { ok: true, table: outcome.table, selection: next, message: insertMessage(command), fitHeight: command.axis === 'row' };
   }
 
-  const planned = planTableAxisRemoval(table, target.selection, command.axis);
-  if (!planned.ok) return planned;
-  let current = table;
-  let executed = false;
-  for (const axisId of planned.plan.axisIds) {
-    const result = session.execute({
-      type: 'table.axis.remove', ...base, axis: command.axis, axisId, expectedTable: current,
-    }, { transactionId });
-    const next = result.ok ? tableObjectIn(result.document, target.pageId, target.object.id) : undefined;
-    if (!result.ok || !next) {
-      if (executed) session.undo();
-      return { ok: false, message: failureMessage(result.ok ? undefined : result.error.code) };
-    }
-    executed = true;
-    current = next.table;
-  }
-  const selection = selectionAfterGridRemoval(identity, table, current, planned.plan, target.selection);
-  if (!selection) return { ok: false, message: failureMessage(undefined) };
-  const count = planned.plan.axisIds.length;
-  const removed = count === 1
-    ? `${command.axis === 'row' ? 'Linha excluída' : 'Coluna excluída'}.`
-    : `${describeAxisCount(command.axis, count)} excluídas.`;
-  return { ok: true, table: current, selection, message: `${removed} ${UNDO_HINT}`, fitHeight: false };
+  const plan = planTableAxisRemoval(table, command.axis, tableSelectionAxisIds(table, selection, command.axis));
+  if (!plan.ok) return { ok: false, message: tableAxisRefusalMessage(plan.code, command.axis) };
+  const firstRemovedIndex = (command.axis === 'row' ? table.rows : table.columns).findIndex((entry) => entry.id === plan.axisIds[0]);
+  const focusBefore = tableSelectionFocusPoint(table, selection);
+  const outcome = removeTableAxes(session, { pageId, object }, command.axis, plan.axisIds, transactionId);
+  if (!outcome.ok) return { ok: false, message: tableAxisRefusalMessage(outcome.code, command.axis) };
+  return {
+    ok: true,
+    table: outcome.table,
+    selection: selectionAfterTableAxisRemove(outcome.table, selection, command.axis, firstRemovedIndex, focusBefore),
+    message: removeMessage(command.axis, plan.axisIds.length),
+    fitHeight: false,
+  };
 }

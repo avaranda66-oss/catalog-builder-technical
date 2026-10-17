@@ -22,13 +22,20 @@ interface MenuEntry {
 }
 
 function menuEntries(model: TableGridMenuModel): MenuEntry[] {
-  const entries: MenuEntry[] = [
-    { id: 'insert-row-before', label: 'Inserir linha acima', command: { type: 'insert', axis: 'row', position: 'before' } },
-    { id: 'insert-row-after', label: 'Inserir linha abaixo', command: { type: 'insert', axis: 'row', position: 'after' } },
-    { id: 'insert-column-before', label: 'Inserir coluna à esquerda', command: { type: 'insert', axis: 'column', position: 'before' } },
-    { id: 'insert-column-after', label: 'Inserir coluna à direita', command: { type: 'insert', axis: 'column', position: 'after' } },
-  ];
-  let separator = true;
+  const entries: MenuEntry[] = [];
+  if (model.insertRows) {
+    entries.push(
+      { id: 'insert-row-before', label: 'Inserir linha acima', command: { type: 'insert', axis: 'row', position: 'before' } },
+      { id: 'insert-row-after', label: 'Inserir linha abaixo', command: { type: 'insert', axis: 'row', position: 'after' } },
+    );
+  }
+  if (model.insertColumns) {
+    entries.push(
+      { id: 'insert-column-before', label: 'Inserir coluna à esquerda', command: { type: 'insert', axis: 'column', position: 'before' } },
+      { id: 'insert-column-after', label: 'Inserir coluna à direita', command: { type: 'insert', axis: 'column', position: 'after' } },
+    );
+  }
+  let separator = entries.length > 0;
   if (model.removeRows) {
     entries.push({ id: 'remove-rows', label: model.removeRows.label, command: { type: 'remove', axis: 'row' }, danger: true, separatorBefore: separator });
     separator = false;
@@ -37,7 +44,7 @@ function menuEntries(model: TableGridMenuModel): MenuEntry[] {
     entries.push({ id: 'remove-columns', label: model.removeColumns.label, command: { type: 'remove', axis: 'column' }, danger: true, separatorBefore: separator });
   }
   if (model.canMerge) entries.push({ id: 'merge', label: 'Mesclar células', command: { type: 'merge' }, separatorBefore: true });
-  if (model.canUnmerge) entries.push({ id: 'unmerge', label: 'Desfazer mescla', command: { type: 'unmerge' }, separatorBefore: true });
+  if (model.canUnmerge) entries.push({ id: 'unmerge', label: 'Desmesclar células', command: { type: 'unmerge' }, separatorBefore: true });
   return entries;
 }
 
