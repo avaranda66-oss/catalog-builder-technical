@@ -238,6 +238,13 @@ describe('one extraction call (budget, private file, Files API, settlement, cach
     expect((await box.run()).ok).toBe(true);
   });
 
+  it('treats a port that throws at once like a failed one (miss, refused, not found)', async () => {
+    const boom = () => { throw new Error('sync'); };
+    const result = await runFactExtraction({ request: request(), key: KEY, fetcher: vi.fn(),
+      ledger: { reserve: boom, settle: boom }, cache: { get: boom, put: boom }, source: { read: boom } });
+    expect(result).toEqual({ ok: false, status: 429, code: 'AGENT_DAILY_BUDGET_EXCEEDED' });
+  });
+
   it.each([
     ['missing', 503, 'BUDGET_NOT_READY'],
     ['refused', 429, 'AGENT_DAILY_BUDGET_EXCEEDED'],

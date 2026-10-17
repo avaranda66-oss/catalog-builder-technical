@@ -11,7 +11,7 @@ import {
 } from './fact-verifier';
 import type { ExtractedPdf } from './pdf-intake';
 import { verificationPageText } from './pdf-layout-evidence';
-import { normalizeEvidenceWhitespace } from './pdf-literal-evidence';
+import { literalEvidencePositions, normalizeEvidenceWhitespace } from './pdf-literal-evidence';
 
 /**
  * Local review of one server extraction (FR-66, vnext-catalog-draft): turns
@@ -246,6 +246,28 @@ export function sharedTableMessage(value: VerifiedValue, names: ReadonlyMap<stri
   return verificationMessage(value, names);
 }
 
+/**
+ * The column name as the page prints it. Models sometimes glue the two lines
+ * of a header ("Código de Encomenda" over "TA-25N / TA-35N / TA-50N"); the
+ * verifier needs a header printed on one line to tie a value to its column.
+ * The longest word prefix (6+ characters) printed on one line of the page is
+ * used, only when no other column of the table gets the same name; otherwise
+ * the name stays as it is (and the verifier says the column is not on the page).
+ */
+export function printedColumnNames(columns: readonly string[], lines: readonly string[]): string[] {
+  const onPage = (name: string) => lines.some(line => literalEvidencePositions(line, name, 'model').length > 0);
+  const printed = columns.map(column => {
+    if (onPage(column)) return column;
+    const words = column.split(' ');
+    for (let count = words.length - 1; count >= 1; count--) {
+      const prefix = words.slice(0, count).join(' ');
+      if (prefix.length >= 6 && onPage(prefix)) return prefix;
+    }
+    return column;
+  });
+  return printed.map((name, index) => printed.indexOf(name) === printed.lastIndexOf(name) ? name : columns[index]);
+}
+
 interface PendingDrop { readonly table: string; readonly label: string; readonly model: string; readonly literal: string; readonly reason: ReviewDropReason }
 
 function verifyTable(kind: ReviewedTable['kind'], answer: unknown, source: ExtractionSource, evidence: PdfEvidenceSource,
@@ -341,10 +363,15 @@ export function reviewExtraction(answer: unknown, source: ExtractionSource, pdf:
     const title = oneLine(table.data.title) || SHARED_TABLE_DROP_LABEL;
     const columns: string[] = [];
     for (const column of table.data.columns.map(oneLine)) if (column && !columns.includes(column)) columns.push(column);
-    const kept = columns.slice(0, MAX_SHARED_COLUMNS);
+    const asked = columns.slice(0, MAX_SHARED_COLUMNS);
+    const tablePage = table.data.rows.map(rawRow => SharedRowSchema.safeParse(rawRow))
+      .find(row => row.success && inRange(row.data.sourceRef.page));
+    const kept = printedColumnNames(asked, tablePage?.success ? pageLines(evidence, tablePage.data.sourceRef.page) : []);
     const columnOf = (name: string) => {
       const clean = oneLine(name);
-      return kept.find(column => column === clean) ?? kept.find(column => column.toLowerCase() === clean.toLowerCase());
+      const index = asked.findIndex(column => column === clean) >= 0 ? asked.findIndex(column => column === clean)
+        : asked.findIndex(column => column.toLowerCase() === clean.toLowerCase());
+      return index >= 0 ? kept[index] : undefined;
     };
     const rows = [];
     for (const rawRow of table.data.rows) {
@@ -388,9 +415,11 @@ export function reviewExtraction(answer: unknown, source: ExtractionSource, pdf:
     for (const table of tables) for (const value of table.report.values) {
       if (value.status === 'MISSING') continue;
       const chosen = value.candidates[value.selected ?? 0];
-      if (!value.candidates.some(item => item.source.page === page) || !chosen) continue;
+      if (!chosen) continue;
+      // A value counts on the page of the reading in use; a conflict, on every page it cites.
+      const cited = value.status === 'CONFLICT' ? value.candidates.map(item => item.source.page) : [chosen.source.page];
+      if (!cited.includes(page)) continue;
       values++;
-      if (chosen.source.page !== page && value.status !== 'CONFLICT') continue;
       if (isVerifiedStatus(value.status)) verified++;
       else if (value.status === 'VISUAL_ONLY' || value.status === 'CONFLICT') toCheck++;
       else unverified++;
@@ -417,15 +446,16 @@ export function reviewExtraction(answer: unknown, source: ExtractionSource, pdf:
 
 function reviewSummary(source: ExtractionSource, counts: ExtractionReviewCounts, pages: readonly PageReview[], leftOut: number): string {
   const range = source.firstPage === source.lastPage ? `a página ${source.firstPage}` : `as páginas ${source.firstPage} a ${source.lastPage}`;
-  const found = [
-    plural(counts.verified, 'valor conferido no texto', 'valores conferidos no texto'),
-    plural(counts.toCheck, 'para você conferir olhando a página', 'para você conferir olhando a página'),
-    ...(counts.unverified ? [plural(counts.unverified, 'que não confere e não será usado sem você', 'que não conferem e não serão usados sem você')] : []),
-  ].join(', ');
+  const parts = [
+    counts.verified ? plural(counts.verified, 'valor conferido no texto', 'valores conferidos no texto') : '',
+    counts.toCheck ? plural(counts.toCheck, 'para você conferir olhando a página', 'para você conferir olhando a página') : '',
+    counts.unverified ? plural(counts.unverified, 'que não confere e não será usado sem você', 'que não conferem e não serão usados sem você') : '',
+  ].filter(Boolean);
+  const found = parts.length ? `: ${parts.join(', ')}.` : ', mas não encontrei nenhum valor.';
   const empty = pages.filter(page => !page.values).map(page => page.page);
   const emptyText = empty.length ? ` ${empty.length === 1 ? 'A página' : 'As páginas'} ${empty.join(', ')} não ${empty.length === 1 ? 'trouxe' : 'trouxeram'} valores; veja o motivo abaixo.` : '';
   const leftOutText = leftOut ? ` ${plural(leftOut, 'leitura ficou de fora', 'leituras ficaram de fora')} (fora das páginas pedidas ou além do limite).` : '';
-  return `Li ${range} de ${source.fileName}: ${found}.${emptyText}${leftOutText}`;
+  return `Li ${range} de ${source.fileName}${found}${emptyText}${leftOutText}`;
 }
 
 /** Values of the model table, one per model and quantity, for `findSourceDivergences` across files (FR-68). */

@@ -28,7 +28,8 @@ describe('fact extraction prompt module (FR-66, shared by Deno, Node and the bro
     const added = v3.slice(v2.length + 1).split('\n');
     expect(added.map(item => item.split('.')[0])).toEqual(['13', '14', '15', '16']);
     expect(v3).toContain('goes in "sharedTables", never in "sections". Do not skip it: copy every row');
-    expect(v3).toContain('copy only the first line of a header printed in two lines');
+    expect(v3).toContain('each copied exactly as printed and never renamed or translated; when a header is printed in two lines, copy only its first line');
+    expect(v3).toContain('own printed header (for example "Entradas"), not under a name you choose');
     expect(v3).toContain(`use one column named "${ALL_MODELS_COLUMN}"`);
     expect(v3).toContain('each row has ONE sourceRef');
     expect(v3).toContain('pages = one entry for EVERY page you were asked to read');

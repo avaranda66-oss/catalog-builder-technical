@@ -330,6 +330,8 @@ async function readJson(response: Response): Promise<unknown> {
   try { return JSON.parse(await response.text()); } catch { return null; }
 }
 const isTimeout = (error: unknown) => isObj(error) && (error.name === 'TimeoutError' || error.name === 'AbortError');
+/** A port call that never throws (a port may fail synchronously or asynchronously). */
+const safely = <T>(work: () => Promise<T>, fallback: T): Promise<T> => Promise.resolve().then(work).catch(() => fallback);
 
 /**
  * The whole provider exchange for one file. One generateContent per file and
@@ -362,7 +364,7 @@ export async function runFactExtraction(input: {
     ({ ok: false, status, code, ...(reason ? { reason } : {}) });
   const cacheKey = extractionCacheKey(request);
 
-  const hit = await step('cache', () => cache.get(cacheKey).catch(() => null), value => (value ? 'hit' : 'miss'));
+  const hit = await step('cache', () => safely(() => cache.get(cacheKey), null), value => (value ? 'hit' : 'miss'));
   if (hit) {
     return { ok: true, extraction: { promptVersion: EXTRACTION_PROMPT_VERSION, model: EXTRACTION_MODEL,
       modelVersion: hit.modelVersion, cached: true, sheet: hit.sheet, trimmed: hit.trimmed,
@@ -370,15 +372,15 @@ export async function runFactExtraction(input: {
   }
 
   const worstCase = extractionReservationMicrousd();
-  const reservation = await step('reserve', () => ledger.reserve(worstCase).catch(() => null), value =>
+  const reservation = await step('reserve', () => safely(() => ledger.reserve(worstCase), null), value =>
     (value === 'missing' ? 'missing' : value ? 'ok' : 'refused'));
   if (reservation === 'missing') return fail(503, 'BUDGET_NOT_READY');
   if (!reservation) return fail(429, 'AGENT_DAILY_BUDGET_EXCEEDED');
   const settle = async (amount: number) => {
-    await step('settle', () => ledger.settle(reservation.id, amount).catch(() => undefined), () => amount);
+    await step('settle', () => safely(() => ledger.settle(reservation.id, amount), undefined), () => amount);
   };
 
-  const bytes = await step('read', () => source.read(request.source.path).catch(() => null), value => value?.byteLength ?? 0);
+  const bytes = await step('read', () => safely(() => source.read(request.source.path), null), value => value?.byteLength ?? 0);
   if (!bytes) { await settle(0); return fail(404, 'SOURCE_NOT_FOUND'); }
   if (bytes.byteLength > DRAFT_LIMITS.maxSourceBytes) { await settle(0); return fail(413, 'SOURCE_TOO_LARGE'); }
   if (await sha256Hex(bytes) !== request.source.sha256) { await settle(0); return fail(409, 'SOURCE_HASH_MISMATCH'); }
@@ -489,7 +491,7 @@ export async function runFactExtraction(input: {
       ? envelope.modelVersion : null;
     const entry: CachedExtraction = { sheet: outcome.sheet, trimmed: outcome.trimmed, modelVersion,
       inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
-    await step('cache', () => cache.put(cacheKey, entry).catch(() => undefined), () => 'stored');
+    await step('cache', () => safely(() => cache.put(cacheKey, entry), undefined), () => 'stored');
     return { ok: true, extraction: { promptVersion: EXTRACTION_PROMPT_VERSION, model: EXTRACTION_MODEL, modelVersion,
       cached: false, sheet: outcome.sheet, trimmed: outcome.trimmed,
       usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,

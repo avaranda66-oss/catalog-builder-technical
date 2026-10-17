@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalDegreeSign, reviewExtraction, reviewSourceValues, sharedTableMessage, unitColumnText, valueDisplayText,
+  canonicalDegreeSign, printedColumnNames, reviewExtraction, reviewSourceValues, sharedTableMessage, unitColumnText, valueDisplayText,
   type ExtractionReview, type ReviewedTable,
 } from '../../../src/vnext/ai-catalog/extraction-review';
 import { photoEvidence } from '../../../src/vnext/ai-catalog/draft-client';
@@ -123,6 +123,36 @@ describe('shared tables (spike condition 5: tables valid for every model)', () =
   });
 });
 
+describe('column headers printed in two lines', () => {
+  const ACCESSORIES = [
+    line(700, [['Descrição', 60, 50], ['Orifícios', 200, 50], ['Código de Encomenda', 380, 110]]),
+    line(690, [['TA-25N / TA-35N / TA-50N', 380, 130]]),
+    line(670, [['BP01', 60, 25], ['1 x 3/4"', 200, 40], ['06.04.0011-00', 390, 70]]),
+  ];
+  const pdf: ExtractedPdf = { ...PDF, pages: [page(5, []), page(6, []), page(7, ACCESSORIES)] };
+
+  it('uses the first printed line of a glued header, never a name another column shares', () => {
+    const lines = pageText(ACCESSORIES).split('\n');
+    expect(printedColumnNames(['Orifícios', 'Código de Encomenda TA-25N / TA-35N / TA-50N'], lines))
+      .toEqual(['Orifícios', 'Código de Encomenda']);
+    expect(printedColumnNames(['Código de Encomenda A', 'Código de Encomenda B'], lines))
+      .toEqual(['Código de Encomenda A', 'Código de Encomenda B']);
+    expect(printedColumnNames(['Faixa'], lines)).toEqual(['Faixa']);
+  });
+
+  it('verifies an order code under its glued header', () => {
+    const review = reviewExtraction({ title: 'TA', models: TA, sections: [], pages: [], sharedTables: [{ title: 'Blocos de Prova',
+      columns: ['Orifícios', 'Código de Encomenda TA-25N / TA-35N / TA-50N'],
+      rows: [row('BP01', [{ column: 'Orifícios', literal: '1 x 3/4"' },
+        { column: 'Código de Encomenda TA-25N / TA-35N / TA-50N', literal: '06.04.0011-00' }], 'BP01 1 x 3/4" 06.04.0011-00', 7)] }] },
+    SOURCE, pdf, { models: TA });
+    const table = shared(review);
+    expect(table.columns).toEqual(['Orifícios', 'Código de Encomenda']);
+    expect(table.report.values.map(value => `${value.model}=${value.status}`))
+      .toEqual(['Orifícios=VERIFIED_TEXT', 'Código de Encomenda=VERIFIED_TEXT']);
+  });
+});
+
 describe('every page read is accounted for (no page vanishes in silence)', () => {
   it('lists every page of the range, with the reason when it gave nothing', () => {
     const review = reviewExtraction(sharedAnswer([
@@ -133,7 +163,7 @@ describe('every page read is accounted for (no page vanishes in silence)', () =>
     expect(review.pages[1]).toMatchObject({ values: 1, verified: 1, tables: ['1.1.1 - Especificações Técnicas da Entrada'] });
     expect(review.pages[1].message).toBe('Página 6 ("1.1.1 - Especificações Técnicas da Entrada"): 1 valor conferido no texto.');
     expect(review.pages[2].message).toBe('Página 7: a IA não trouxe nenhum valor desta página. Confira olhando a página se falta alguma coisa.');
-    expect(review.summary).toBe('Li as páginas 5 a 7 de manual-ta.pdf: 1 valor conferido no texto, 0 para você conferir olhando a página. ' +
+    expect(review.summary).toBe('Li as páginas 5 a 7 de manual-ta.pdf: 1 valor conferido no texto. ' +
       'As páginas 5, 7 não trouxeram valores; veja o motivo abaixo. 1 leitura ficou de fora (fora das páginas pedidas ou além do limite).');
   });
 
@@ -143,6 +173,8 @@ describe('every page read is accounted for (no page vanishes in silence)', () =>
       expect(review.tables).toEqual([]);
       expect(review.pages).toHaveLength(3);
       expect(review.counts).toEqual({ verified: 0, toCheck: 0, unverified: 0, missing: 0 });
+      expect(review.summary).toBe('Li as páginas 5 a 7 de manual-ta.pdf, mas não encontrei nenhum valor. ' +
+        'As páginas 5, 6, 7 não trouxeram valores; veja o motivo abaixo.');
     }
   });
 

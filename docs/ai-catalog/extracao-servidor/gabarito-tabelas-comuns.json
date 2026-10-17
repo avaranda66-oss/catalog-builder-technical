@@ -1,0 +1,340 @@
+{
+ "version": 1,
+ "checkedOn": "2026-10-17",
+ "method": "Conferido à mão na imagem renderizada das páginas (PyMuPDF, 110-120 dpi) e no texto do PyMuPDF. Tabelas que valem para todos os modelos (TA-25N, TA-35N, TA-50N): uma posição = linha x coluna impressa. Linhas com o mesmo nome (TC-K, TC-T, TC-E, TC-N, milivolt, resistência) são separadas pela faixa da coluna Entradas. Na coluna Remarks da resistência, a célula impressa vale para as duas faixas.",
+ "source": {
+  "sourceId": "ta-manual-pt",
+  "file": "banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf",
+  "sha256": "cfa15db3a434e31e7a3b16048b46c3288f0526ec50f3be819ff900f8982c6598"
+ },
+ "tables": [
+  {
+   "page": 6,
+   "title": "1.1.1 - Especificações Técnicas da Entrada",
+   "columns": [
+    "Entradas",
+    "Resolução",
+    "Exatidão",
+    "Remarks"
+   ],
+   "rowKey": "Entradas",
+   "rows": [
+    {
+     "label": "milivolt",
+     "values": {
+      "Entradas": "-150 mV a 150 mV",
+      "Resolução": "0,001 mV",
+      "Exatidão": "± 0,01 % FS*",
+      "Remarks": "Rentrada > 10 MΩ"
+     },
+     "alsoAccept": {
+      "Exatidão": [
+       "± 0,01 % FS"
+      ]
+     }
+    },
+    {
+     "label": "milivolt",
+     "values": {
+      "Entradas": "150 mV a 2450 mV",
+      "Resolução": "0,01 mV",
+      "Exatidão": "± 0,02 % FS",
+      "Remarks": "auto-range"
+     }
+    },
+    {
+     "label": "mA",
+     "values": {
+      "Entradas": "-1 mA a 24,5 mA",
+      "Resolução": "0,0001 mA",
+      "Exatidão": "± 0,02 % FS",
+      "Remarks": "Rentrada < 120 Ω"
+     }
+    },
+    {
+     "label": "resistência",
+     "values": {
+      "Entradas": "0 a 400 Ω",
+      "Resolução": "0,01 Ω",
+      "Exatidão": "± 0,01 % FS",
+      "Remarks": "Corrente de excitação 0,85 mA auto-range"
+     },
+     "alsoAccept": {
+      "Remarks": [
+       "Corrente de excitação 0,85 mA",
+       "auto-range"
+      ]
+     }
+    },
+    {
+     "label": "resistência",
+     "values": {
+      "Entradas": "400 a 2500 Ω",
+      "Resolução": "0,01 Ω",
+      "Exatidão": "± 0,03 % FS",
+      "Remarks": "Corrente de excitação 0,85 mA auto-range"
+     },
+     "alsoAccept": {
+      "Remarks": [
+       "Corrente de excitação 0,85 mA",
+       "auto-range"
+      ]
+     }
+    },
+    {
+     "label": "Pt-100",
+     "values": {
+      "Entradas": "-200 a 850 °C / -328 a 1562 °F",
+      "Resolução": "0,01 °C / 0,01 °F",
+      "Exatidão": "± 0,1 °C / ± 0,2 °F",
+      "Remarks": "IEC 60751"
+     }
+    },
+    {
+     "label": "Pt-1000",
+     "values": {
+      "Entradas": "-200 a 400 °C / -328 a 752 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,1 °C / ± 0,2 °F",
+      "Remarks": "IEC 60751"
+     }
+    },
+    {
+     "label": "Cu-10",
+     "values": {
+      "Entradas": "-200 a 260 °C / -328 a 500 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 2,0 °C / ± 4,0 °F",
+      "Remarks": "Minco 16-9"
+     }
+    },
+    {
+     "label": "Ni-100",
+     "values": {
+      "Entradas": "-60 a 250 °C / -76 a 482 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "DIN-43760"
+     }
+    },
+    {
+     "label": "TC-J",
+     "values": {
+      "Entradas": "-210 a 1200 °C / -346 a 2192 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-K",
+     "values": {
+      "Entradas": "-270 a -150 °C / -454 a -238 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,5 °C / ± 1,0 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-K",
+     "values": {
+      "Entradas": "-150 a 1370 °C / -238 a 2498 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-T",
+     "values": {
+      "Entradas": "-260 a -200 °C / -436 a -328 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,6 °C / ± 1,2 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-T",
+     "values": {
+      "Entradas": "-200 a -75 °C / -328 a -103 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,4 °C / ± 0,8 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-T",
+     "values": {
+      "Entradas": "-75 a 400 °C / -103 a 752 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-E",
+     "values": {
+      "Entradas": "-270 a -150 °C / -454 a -238 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,3 °C / ± 0,6 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-E",
+     "values": {
+      "Entradas": "-150 a 1000 °C / -238 a 1832 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,1 °C / ± 0,2 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-N",
+     "values": {
+      "Entradas": "-260 a -200 °C / -436 a -328 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 1,0 °C / ± 2,0 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-N",
+     "values": {
+      "Entradas": "-200 a -20 °C / -328 a -4 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,4 °C / ± 0,8 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-N",
+     "values": {
+      "Entradas": "-20 a 1300 °C / -4 a 2372 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "IEC 60584"
+     }
+    },
+    {
+     "label": "TC-L",
+     "values": {
+      "Entradas": "-200 a 900 °C / -328 a 1652 °F",
+      "Resolução": "0,1 °C / 0,1 °F",
+      "Exatidão": "± 0,2 °C / ± 0,4 °F",
+      "Remarks": "DIN-43710"
+     }
+    }
+   ]
+  },
+  {
+   "page": 8,
+   "title": "1.3 - Acessórios: Blocos de Prova (Insert)",
+   "columns": [
+    "Orifícios",
+    "Código de Encomenda"
+   ],
+   "rowKey": "Código de Encomenda",
+   "rows": [
+    {
+     "label": "BP1P",
+     "values": {
+      "Orifícios": "1 x 3,0mm, 1 x 6,0mm, 1 x 1/4\" e 1 x 8,0mm",
+      "Código de Encomenda": "06.04.0121-00"
+     }
+    },
+    {
+     "label": "BP1A",
+     "values": {
+      "Orifícios": "1 x 1/8\", 1 x 3/16\", 2 x 1/4\" e 1 x 3/8\"",
+      "Código de Encomenda": "06.04.0122-00"
+     }
+    },
+    {
+     "label": "BP1E",
+     "values": {
+      "Orifícios": "1 x 4,0mm, 1 x 6,0mm, 1 x 1/4\", 1 x 8,0mm, 1 x 10,0mm",
+      "Código de Encomenda": "06.04.0123-00"
+     }
+    },
+    {
+     "label": "BP01",
+     "values": {
+      "Orifícios": "1 x 3/4\"",
+      "Código de Encomenda": "06.04.0011-00"
+     }
+    },
+    {
+     "label": "BP02",
+     "values": {
+      "Orifícios": "1 x 1/2\"",
+      "Código de Encomenda": "06.04.0012-00"
+     }
+    },
+    {
+     "label": "BP03",
+     "values": {
+      "Orifícios": "1 x 6,0mm e 3 x 1/4\"",
+      "Código de Encomenda": "06.04.0013-00"
+     }
+    },
+    {
+     "label": "BP04",
+     "values": {
+      "Orifícios": "3 x 6,0mm e 1 x 1/4\"",
+      "Código de Encomenda": "06.04.0014-00"
+     }
+    },
+    {
+     "label": "BP05",
+     "values": {
+      "Orifícios": "4 x 6,0mm",
+      "Código de Encomenda": "06.04.0015-00"
+     }
+    },
+    {
+     "label": "BP06",
+     "values": {
+      "Orifícios": "2 x 6,0mm e 2 x 1/4\"",
+      "Código de Encomenda": "06.04.0016-00"
+     }
+    },
+    {
+     "label": "BP07",
+     "values": {
+      "Orifícios": "1 x 6,0mm, 1 x 8,0mm e 1 x 3/8\"",
+      "Código de Encomenda": "06.04.0017-00"
+     }
+    },
+    {
+     "label": "BP08",
+     "values": {
+      "Orifícios": "1 x 6,0mm, 1 x 3,0mm e 2 x 1/4\"",
+      "Código de Encomenda": "06.04.0018-00"
+     }
+    },
+    {
+     "label": "BP09",
+     "values": {
+      "Orifícios": "Sem orifício, a ser usinado pelo cliente.",
+      "Código de Encomenda": "06.04.0019-00"
+     }
+    },
+    {
+     "label": "BP10",
+     "values": {
+      "Orifícios": "Outros, sob encomenda.",
+      "Código de Encomenda": "06.04.0020-00"
+     }
+    },
+    {
+     "label": "BPCL",
+     "values": {
+      "Orifícios": "Insert Caneca (para usar com as esferas metálicas)",
+      "Código de Encomenda": "06.04.0086-00"
+     }
+    }
+   ]
+  }
+ ]
+}
