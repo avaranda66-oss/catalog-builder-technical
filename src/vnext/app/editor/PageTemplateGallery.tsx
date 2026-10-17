@@ -11,6 +11,8 @@ export interface PageTemplateGalleryProps {
   readonly includeTa25n?: boolean;
   /** For tests; defaults to the PRESYS page models. */
   readonly choices?: readonly PresysPageModelChoice[];
+  /** Escape closes the gallery. */
+  readonly onClose?: () => void;
 }
 
 /**
@@ -18,12 +20,22 @@ export interface PageTemplateGalleryProps {
  * with its name, chosen with a radio button. The "Inserir modelo" button that
  * follows inserts the chosen model after the current page.
  */
-export function PageTemplateGallery({ value, onChange, disabled = false, includeTa25n = true, choices }: PageTemplateGalleryProps) {
+export function PageTemplateGallery({ value, onChange, disabled = false, includeTa25n = true, choices, onClose }: PageTemplateGalleryProps) {
   const name = React.useId();
   const models = choices ?? presysPageModelChoices({ includeTa25n });
   return (
-    <fieldset className="vnext-page-models" disabled={disabled} data-page-model-gallery="">
+    <fieldset className="vnext-page-models" disabled={disabled} data-page-model-gallery="" aria-describedby={`${name}-help`}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !onClose) return;
+        event.preventDefault();
+        event.stopPropagation();
+        // Focus goes back to the "Usar modelo…" button that opened the gallery.
+        const opener = event.currentTarget.closest('aside')?.querySelector<HTMLElement>('[aria-controls="vnext-page-reuse"]');
+        onClose();
+        opener?.focus();
+      }}>
       <legend>Modelo de página PRESYS</legend>
+      <p id={`${name}-help`} className="vnext-page-model-help">Escolha um modelo e clique em “Inserir modelo”. A página nova entra depois da página atual.</p>
       <div className="vnext-page-model-list">
         {models.map((model) => {
           const descriptionId = `${name}-${model.templateId}-description`;

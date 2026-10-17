@@ -239,7 +239,7 @@ class PageBuilder {
   }
 
   heading(title: string, slotName = 'title'): void {
-    this.textSlot(slotName, title, [LEFT, 14, WIDTH, 12], { size: T.h1, bold: true, color: C.navy });
+    this.textSlot(slotName, title, [LEFT, 13.5, WIDTH, 13], { size: T.h1, bold: true, color: C.navy });
     this.rule('title-rule', LEFT, 27, 120);
   }
 
@@ -421,7 +421,8 @@ const BUILDERS: Readonly<Record<PresysArchetypeId, (page: PageBuilder) => void>>
     page.textSlot('tagline', toFill('Frase de destaque do produto'), [LEFT, 202, WIDTH, 9], { size: 16 });
     page.rule('tagline-rule', LEFT, 212.5, 120);
     page.box('band', [10, 222, 190, 36], C.red);
-    page.textSlot('model', toFill('Modelo'), [LEFT, 231, WIDTH, 17], { size: T.coverModel, bold: true, color: C.white, lineHeight: 1.15 });
+    // Frames leave room for the font's full glyph height (about 1.4 em), which the layout preflight measures.
+    page.textSlot('model', toFill('Modelo'), [LEFT, 229, WIDTH, 21], { size: T.coverModel, bold: true, color: C.white });
     page.textSlot('url', 'www.presys.com.br', [LEFT, 266, WIDTH, 8], { size: 14, color: C.navy, align: 'center' });
   },
   P2: (page) => {
@@ -459,7 +460,7 @@ const BUILDERS: Readonly<Record<PresysArchetypeId, (page: PageBuilder) => void>>
       columns: [{ width: { mode: 'fixed', mm: 52 }, bold: true }, { width: { mode: 'flex', weight: 1 } }, { width: { mode: 'flex', weight: 1 } }, { width: { mode: 'flex', weight: 1 } }],
       header: ['Característica', TO_FILL, TO_FILL, TO_FILL],
       rows: ['Faixa', 'Exatidão', 'Resolução', 'Estabilidade', 'Dimensões', 'Peso'].map((label) => fillRow(label, 4)),
-      notes: [`(*) ${toFill('Condições de referência das especificações')}`],
+      notes: [toFill('Condições de referência das especificações')],
       zebra: true,
     });
     page.footer();
@@ -487,7 +488,7 @@ const BUILDERS: Readonly<Record<PresysArchetypeId, (page: PageBuilder) => void>>
       columns: [{ width: { mode: 'fixed', mm: 34 }, bold: true }, { width: { mode: 'flex', weight: 1 } }],
       header: ['Código', 'Significado'],
       rows: [1, 2, 3].flatMap((n) => [{ section: toFill(`Campo ${n} do código`) }, [TO_FILL, TO_FILL], [TO_FILL, TO_FILL]]),
-      notes: [`(*) ${toFill('Observações sobre as opções')}`],
+      notes: [toFill('Observações sobre as opções')],
     });
     page.textSlot('example', `Exemplo de pedido: ${TO_FILL}`, [LEFT, 166, WIDTH, 8], { size: page.body });
     page.footer();
@@ -522,8 +523,9 @@ const BUILDERS: Readonly<Record<PresysArchetypeId, (page: PageBuilder) => void>>
     page.footer();
   },
   P9: (page) => {
+    // Left-aligned: a wrapped right-aligned paragraph keeps a hanging space past the frame, which the preflight flags.
     page.textSlot('about', toFill('Texto institucional da PRESYS: quem somos, laboratório e certificações confirmadas'),
-      [60, 24, 134, 60], { size: 14, align: 'right', lineHeight: 1.35 });
+      [60, 24, 134, 60], { size: 14, lineHeight: 1.35 });
     page.imageSlot('logo', 'Logotipo da PRESYS', [120, 120, 74, 24], 8);
     page.textSlot('url', 'www.presys.com.br', [LEFT, 150, WIDTH, 8], { size: 14, color: C.navy, align: 'right' });
     page.box('distributor-box', [74, 196, 120, 30], C.white, C.navy);

@@ -2325,6 +2325,7 @@ export function EditorWorkspace({
           return;
         }
         setActivePage(result.pageId);
+        if (simpleByDefault) setPageReuseOpen(false);
         setStatusMessage(activePageIdRef.current === result.pageId
           ? 'Modelo PRESYS inserido como página independente.'
           : 'Modelo PRESYS inserido. Conclua ou cancele a edição pendente para abrir a nova página.');
@@ -2343,6 +2344,7 @@ export function EditorWorkspace({
     if (!result.ok) { setStatusMessage('Não foi possível inserir o modelo.'); return; }
     const createdPageId = result.metadata.createdIds[0];
     if (createdPageId) setActivePage(createdPageId);
+    if (simpleByDefault) setPageReuseOpen(false);
     setStatusMessage(officialPageReuse ? 'Modelo inserido como página nova, depois da página atual. Para voltar, use Desfazer.' : 'Modelo inserido como página independente.');
   };
 
@@ -3845,7 +3847,7 @@ export function EditorWorkspace({
           )}
           {pageReuseOpen && (
             <div id="vnext-page-reuse" className="vnext-page-reuse">
-              {officialPageReuse && <PageTemplateGallery value={pageTemplateChoice} onChange={setPageTemplateChoice} disabled={pageTemplateBusy} />}
+              {officialPageReuse && <PageTemplateGallery value={pageTemplateChoice} onChange={setPageTemplateChoice} disabled={pageTemplateBusy} onClose={simpleByDefault ? () => setPageReuseOpen(false) : undefined} />}
               <button type="button" className="vnext-page-reuse-action" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
             </div>
           )}

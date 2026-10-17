@@ -154,6 +154,26 @@ describe('"Usar modelo…" gallery (FR-80/FR-18)', () => {
 });
 
 describe('EditorWorkspace inserts a PRESYS archetype page (FR-80)', () => {
+  it('Esc closes the gallery and returns to "Usar modelo…"', () => {
+    const templates = createPresysPageTemplateRegistry();
+    const doc: CatalogDocument = { schemaVersion: 1, id: 'doc-esc', title: 'Catálogo', locale: 'pt-BR', style: presysDocumentStyle(), assets: [],
+      pages: [{ id: 'first', widthMm: 210, heightMm: 297, objects: [] }] };
+    const session = createDocumentSession(doc, { createId: () => crypto.randomUUID(), templateRegistry: templates });
+    const preparer = new DefaultStarterDependencyPreparer({ finalizeUpload: vi.fn(), resolve: vi.fn() } as unknown as AssetPersistenceBridge, async () => new Uint8Array());
+    bindPresysPageReuse(session, { templates, preparer, getLineage: () => ({ authLineage: 'A:1', authorityScopeId: 'scope:A', openSessionId: 'open-A', catalogId: doc.id }), isCurrent: () => true, installRuntimeAsset: vi.fn() });
+    render(<EditorWorkspace session={session} simpleByDefault />);
+    const opener = screen.getByRole('button', { name: 'Usar modelo…' });
+    fireEvent.click(opener);
+    const gallery = screen.getByRole('group', { name: 'Modelo de página PRESYS' });
+    expect(gallery).toHaveAccessibleDescription('Escolha um modelo e clique em “Inserir modelo”. A página nova entra depois da página atual.');
+    const capa = within(gallery).getByRole('radio', { name: 'Capa' });
+    capa.focus();
+    fireEvent.keyDown(capa, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Modelo de página PRESYS' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Usar modelo…' }));
+    expect(session.getSnapshot().document.pages).toHaveLength(1);
+  });
+
   const bytes = new Uint8Array(readFileSync('public/assets/presys/ta-25n-starter-v1.png'));
   const asset: AssetRef = { ...PRESYS_STARTER.sourceDocument.assets[0], id: '00000000-0000-4000-8000-0000000000aa' };
 
@@ -177,6 +197,9 @@ describe('EditorWorkspace inserts a PRESYS archetype page (FR-80)', () => {
     expect(pages).toHaveLength(2);
     expect(JSON.stringify(pages[1].objects)).toContain('Seu distribuidor:');
     expect(screen.getByText('Modelo inserido como página nova, depois da página atual. Para voltar, use Desfazer.')).toBeInTheDocument();
+    // In the simple editor the gallery closes once the page is in.
+    expect(screen.queryByRole('group', { name: 'Modelo de página PRESYS' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Usar modelo…' })).toHaveAttribute('aria-expanded', 'false');
     await waitFor(() => expect(within(screen.getByRole('navigation', { name: 'Navegação de páginas' })).getByRole('button', { name: 'Página 2' }))
       .toHaveAttribute('aria-current', 'page'));
     act(() => { expect(session.undo().ok).toBe(true); });

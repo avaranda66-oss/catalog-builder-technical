@@ -51,7 +51,7 @@ function exampleFills(id: PresysArchetypeId): PresysArchetypeFills {
   for (const slot of presysArchetype(id).slots) {
     if (slot.kind === 'text') fills[slot.id] = { kind: 'text', text: `${slot.label} de exemplo` };
     else if (slot.kind === 'image') fills[slot.id] = { kind: 'image', assetId: EXAMPLE_ASSET.id };
-    else fills[slot.id] = { kind: 'table', header: ['Característica', 'Modelo X', 'Modelo Y'], rows: [['Faixa', '0 a 10', '0 a 20'], { section: 'Grupo' }, ['Peso', '1 kg', '2 kg']], notes: ['(*) Nota de exemplo'] };
+    else fills[slot.id] = { kind: 'table', header: ['Característica', 'Modelo X', 'Modelo Y'], rows: [['Faixa', '0 a 10', '0 a 20'], { section: 'Grupo' }, ['Peso', '1 kg', '2 kg']], notes: ['Nota de exemplo'] };
   }
   return fills;
 }
