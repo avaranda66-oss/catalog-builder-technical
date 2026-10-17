@@ -107,17 +107,48 @@ function escapeRegExp(text: string): string {
   return text.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
-/** Expressão para o termo normalizado como palavras inteiras; a última palavra aceita singular/plural simples. */
-function termPattern(term: string): RegExp {
-  const words = normalizeGlossaryText(term).split(' ').map(escapeRegExp);
-  const last = words[words.length - 1];
-  words[words.length - 1] = last.endsWith('s') ? `${last.slice(0, -1)}s?` : `${last}s?`;
-  return new RegExp(`(?<![\\p{L}\\p{N}])${words.join('\\s+')}(?![\\p{L}\\p{N}])`, 'iu');
+/**
+ * Singular e plural de uma palavra normalizada: o "s" simples e os irregulares dos termos
+ * (accessory/accessories, dimensão/dimensões, opcional/opcionais, dimensión/dimensiones).
+ */
+function wordForms(word: string): string {
+  if (word.endsWith('ies')) return `${escapeRegExp(word.slice(0, -3))}(?:y|ies)`;
+  if (word.endsWith('oes')) return `${escapeRegExp(word.slice(0, -3))}(?:ao|oes)`;
+  if (word.endsWith('ones')) return `${escapeRegExp(word.slice(0, -4))}(?:on|ones)`;
+  if (word.endsWith('ais')) return `${escapeRegExp(word.slice(0, -3))}(?:al|ais)`;
+  return `${escapeRegExp(word.endsWith('s') ? word.slice(0, -1) : word)}s?`;
 }
 
-function containsTerm(normalizedText: string, term: string): boolean {
-  return termPattern(term).test(normalizedText);
+/** Expressão para o termo normalizado como palavras inteiras; a última palavra aceita singular/plural. */
+function termPattern(term: string): RegExp {
+  const words = normalizeGlossaryText(term).split(' ');
+  const last = words.length - 1;
+  const parts = words.map((word, index) => (index === last ? wordForms(word) : escapeRegExp(word)));
+  return new RegExp(`(?<![\\p{L}\\p{N}])${parts.join('\\s+')}(?![\\p{L}\\p{N}])`, 'iu');
 }
+
+interface CompiledTerm {
+  readonly term: GlossaryTerm;
+  readonly source: RegExp;
+  readonly expected: Readonly<Record<LocaleFormatTargetLocale, RegExp>>;
+  readonly alternates: Readonly<Record<LocaleFormatTargetLocale, readonly { readonly form: string; readonly pattern: RegExp }[]>>;
+}
+
+/** Expressões compiladas uma vez por módulo: a revisão recalcula as dicas a cada tecla. */
+const COMPILED_TERMS: readonly CompiledTerm[] = TERMS.map(term => ({
+  term,
+  source: termPattern(term['pt-BR']),
+  expected: { 'en-US': termPattern(term['en-US']), 'es-ES': termPattern(term['es-ES']) },
+  alternates: {
+    'en-US': (term.alternates?.['en-US'] ?? []).map(form => ({ form, pattern: termPattern(form) })),
+    'es-ES': (term.alternates?.['es-ES'] ?? []).map(form => ({ form, pattern: termPattern(form) })),
+  },
+}));
+
+const wholeWord = (word: string, flags: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(word)}(?![\\p{L}\\p{N}])`, flags);
+
+const COMPILED_MISSPELLINGS: readonly { readonly wrong: string; readonly right: string; readonly pattern: RegExp }[] =
+  MISSPELLINGS.map(([wrong, right]) => ({ wrong, right, pattern: wholeWord(wrong, 'giu') }));
 
 /**
  * Para cada termo do glossário presente no original cuja forma esperada NÃO aparece na
@@ -127,14 +158,13 @@ export function findGlossaryHints(sourceText: string, translatedText: string, ta
   const source = normalizeGlossaryText(sourceText);
   const translated = normalizeGlossaryText(translatedText);
   const hints: GlossaryHint[] = [];
-  for (const term of TERMS) {
-    if (!containsTerm(source, term['pt-BR'])) continue;
-    const expected = term[targetLocale];
-    if (containsTerm(translated, expected)) continue;
-    const alternates = term.alternates?.[targetLocale] ?? [];
-    const found = alternates.find(alternate => containsTerm(translated, alternate));
-    hints.push(found ? { sourceTerm: term['pt-BR'], expected, found: findOriginalSpelling(translatedText, found) ?? found }
-      : { sourceTerm: term['pt-BR'], expected });
+  for (const compiled of COMPILED_TERMS) {
+    if (!compiled.source.test(source)) continue;
+    const expected = compiled.term[targetLocale];
+    if (compiled.expected[targetLocale].test(translated)) continue;
+    const found = compiled.alternates[targetLocale].find(alternate => alternate.pattern.test(translated))?.form;
+    hints.push(found ? { sourceTerm: compiled.term['pt-BR'], expected, found: findOriginalSpelling(translatedText, found) ?? found }
+      : { sourceTerm: compiled.term['pt-BR'], expected });
   }
   return hints;
 }
@@ -156,8 +186,7 @@ function findOriginalSpelling(text: string, normalizedTerm: string): string | un
  */
 export function applyGlossaryHint(text: string, hint: GlossaryHint): string | undefined {
   if (!hint.found) return undefined;
-  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(hint.found)}(?![\\p{L}\\p{N}])`, 'giu');
-  const matches = [...text.matchAll(pattern)];
+  const matches = [...text.matchAll(wholeWord(hint.found, 'giu'))];
   if (matches.length !== 1) return undefined;
   const [match] = matches;
   const index = match.index ?? 0;
@@ -183,8 +212,7 @@ function capitalizeLike(sample: string, lower: string): string {
 /** Erros de grafia conhecidos (inglês) presentes no texto, com a correção na mesma caixa. */
 export function findKnownMisspellings(text: string): KnownMisspelling[] {
   const results: KnownMisspelling[] = [];
-  for (const [wrong, right] of MISSPELLINGS) {
-    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(wrong)}(?![\\p{L}\\p{N}])`, 'giu');
+  for (const { pattern, right } of COMPILED_MISSPELLINGS) {
     for (const match of text.matchAll(pattern)) {
       results.push({ wrong: match[0], right: capitalizeLike(match[0], right), index: match.index ?? 0 });
     }
@@ -194,7 +222,6 @@ export function findKnownMisspellings(text: string): KnownMisspelling[] {
 
 /** Corrige todas as ocorrências da mesma grafia errada, cada uma na sua caixa. */
 export function applyKnownMisspelling(text: string, misspelling: KnownMisspelling): string {
-  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(misspelling.wrong)}(?![\\p{L}\\p{N}])`, 'giu');
   const right = misspelling.right.toLocaleLowerCase('en-US');
-  return text.replace(pattern, found => capitalizeLike(found, right));
+  return text.replace(wholeWord(misspelling.wrong, 'giu'), found => capitalizeLike(found, right));
 }

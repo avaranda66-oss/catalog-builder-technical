@@ -48,13 +48,17 @@ export {
   restoreTechnicalTokens,
   technicalProtectionNamespace,
   technicalTokenFingerprintMaterial,
+  technicalTokenSpans,
 } from './technical-token-protector';
-export type { ProtectedTechnicalToken, ProtectedText } from './technical-token-protector';
+export type { ProtectedTechnicalToken, ProtectedText, TechnicalTokenSpan } from './technical-token-protector';
 export {
+  applyLocaleAbbreviations,
   applyNumberReading,
   formatTechnicalTextForLocale,
   integerWordsPtBr,
   localeTokenRenderings,
+  localeTokenRenderingsInContext,
+  technicalTextEquivalentForLocale,
   technicalTokensEquivalentForLocale,
 } from './locale-number-format';
 export type {
