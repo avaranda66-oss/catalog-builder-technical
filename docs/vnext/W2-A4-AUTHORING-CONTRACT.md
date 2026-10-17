@@ -471,6 +471,7 @@ The existing diagnostic severities are `ERROR` and `WARNING`; W2 does not introd
 |---|---|---|---|---|
 | Frame crosses configured safe area | `SAFE_AREA_VIOLATION` | `WARNING` | Non-blocking | Keep authored frame; show guidance. |
 | Any frame ink box crosses physical page | `OBJECT_OUTSIDE_PAGE` | `ERROR` | Blocking | Keep authored frame; require explicit user correction. |
+| Shape, line or image leaves the page by at most 3 mm on any side (bleed, FR-54, 2026-10-17) | `OBJECT_OUTSIDE_PAGE` | `WARNING` | Non-blocking | Same canonical code; detail `bleedMm=N; toleranceMm=3`. Shape/line/image touching the page edge gets no `SAFE_AREA_VIOLATION`. Text, table and icon keep the rows above. See `src/vnext/publication/preflight.ts` (`isBleedWarning`). |
 | Text intrinsic rendered content exceeds authored frame | `TEXT_OBJECT_OVERFLOW` | `ERROR` | Blocking | Keep text/frame; no auto-grow or font shrink. |
 | Table intrinsic content exceeds authored table frame | `TABLE_CONTENT_OVERFLOW` | `ERROR` | Blocking | Keep table/frame; no automatic fit-height. |
 | Table width constraints cannot resolve inside authored frame | `TABLE_WIDTH_INFEASIBLE` | `ERROR` | Blocking | Keep authored frame; report infeasible table layout. |
