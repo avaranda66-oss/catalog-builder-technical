@@ -126,9 +126,13 @@ describe('FR-35 "Tabela maior que a página" in the table panel', () => {
     expect(region).toHaveTextContent('Esta tabela não cabe inteira nesta página. As linhas que sobram vão para 1 página nova, logo depois desta, com o cabeçalho repetido.');
     const button = within(region).getByRole('button', { name: 'Continuar na próxima página' });
     expect(button).toBeEnabled();
+    // Before the click: the line under the button says how to go back.
+    expect(button).toHaveAccessibleDescription('Se precisar, use Desfazer para voltar como estava.');
+    expect(within(region).getByRole('status')).toBeEmptyDOMElement();
     fireEvent.click(button);
     expect(region).toHaveAttribute('aria-busy', 'true');
-    expect(region).toHaveTextContent('Levando as linhas para a próxima página…');
+    // Said out loud too: the work is announced by the status line that was already there.
+    expect(within(region).getByRole('status')).toHaveTextContent('Levando as linhas para a próxima página…');
     await waitFor(() => expect(session.getSnapshot().document.pages).toHaveLength(3));
     expect(onMessage).toHaveBeenCalledWith({ tone: 'success', text: expect.stringMatching(/linhas movidas para a página 2/) });
     expect(session.undo().ok).toBe(true);
@@ -158,6 +162,46 @@ describe('FR-35 "Tabela maior que a página" in the table panel', () => {
     cleanup();
     const measuring = section(documentWithTable(longTable({ bodyRows: 39 })), null);
     expect(measuring.view.container).toBeEmptyDOMElement();
+  });
+
+  it('stays in place, with the button off, while the page is measured again after an edit, and goes away once the table fits', () => {
+    const session = sessionFor(documentWithTable(longTable({ bodyRows: 39 })));
+    const current = session.getSnapshot().document;
+    const props = { session, prepare: () => true, onMessage: vi.fn() };
+    const view = render(<TableContinuationSection {...props} document={current} measurement={measureTable(current)} tableObject={tables(current)[0]} />);
+    const region = screen.getByRole('region', { name: 'Tabela maior que a página' });
+    const button = within(region).getByRole('button', { name: 'Continuar na próxima página' });
+    expect(button).toBeEnabled();
+
+    // Any edit (here the catalog name) makes the editor measure the page again.
+    expect(session.execute({ type: 'document.rename', title: 'Termômetros PRESYS' }).ok).toBe(true);
+    const renamed = session.getSnapshot().document;
+    view.rerender(<TableContinuationSection {...props} document={renamed} measurement={null} tableObject={tables(renamed)[0]} />);
+    // Same section, same place: nothing below it moves under the mouse.
+    expect(screen.getByRole('region', { name: 'Tabela maior que a página' })).toBe(region);
+    expect(region).toHaveTextContent('As linhas que sobram vão para 1 página nova');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription('Medindo a tabela…');
+
+    // Measured again and still too tall: the button is back.
+    view.rerender(<TableContinuationSection {...props} document={renamed} measurement={measureTable(renamed)} tableObject={tables(renamed)[0]} />);
+    expect(button).toBeEnabled();
+
+    // Another table selected while the page is measured: the section is not carried over to it.
+    const otherTable = tables(renamed)[0];
+    const other: TableObject = { ...otherTable, id: 'other-table', table: { ...otherTable.table, id: 'other-table-model' } };
+    const withOther: CatalogDocument = { ...renamed, pages: [renamed.pages[0], { ...renamed.pages[1], objects: [other] }] };
+    view.rerender(<TableContinuationSection {...props} document={withOther} measurement={null} tableObject={other} />);
+    expect(screen.queryByRole('region', { name: 'Tabela maior que a página' })).toBeNull();
+
+    // Back on the table: the rows now measure short enough, so it fits and the section goes away.
+    view.rerender(<TableContinuationSection {...props} document={renamed} measurement={measureTable(renamed)} tableObject={tables(renamed)[0]} />);
+    expect(screen.getByRole('region', { name: 'Tabela maior que a página' })).toBeInTheDocument();
+    view.rerender(<TableContinuationSection {...props} document={renamed} measurement={measureTable(renamed, { rowHeightMm: 2 })} tableObject={tables(renamed)[0]} />);
+    expect(screen.queryByRole('region', { name: 'Tabela maior que a página' })).toBeNull();
+    // Measuring again after that does not bring it back.
+    view.rerender(<TableContinuationSection {...props} document={renamed} measurement={null} tableObject={tables(renamed)[0]} />);
+    expect(view.container).toBeEmptyDOMElement();
   });
 
   it('does nothing when an open edit cannot be finished first', async () => {
@@ -226,6 +270,15 @@ describe('FR-35 in the real editor (simple mode)', () => {
     await screen.findByRole('button', { name: /^Problemas do catálogo: 1 a corrigir/ }, { timeout: 5_000 });
     selectTable(container);
     const region = await within(panel()).findByRole('region', { name: 'Tabela maior que a página' }, { timeout: 5_000 });
+    // "Problemas da tabela" does not offer a height that would leave the page (the frame would only grow past it),
+    // although the height was measured and found taller than the page (the advisory in "Detalhes da tabela").
+    fireEvent.click(panel().querySelector<HTMLButtonElement>('[data-editor-action="toggle-table-inspector-advanced"]')!);
+    expect(panel().querySelector('[data-fit-height-page-advisory]')).not.toBeNull();
+    // The list opens by itself for a table with problems (FR-13).
+    expect(panel().querySelector('[data-editor-action="toggle-diagnostics"]')).toHaveAttribute('aria-expanded', 'true');
+    const problems = panel().querySelector<HTMLElement>('[data-editor-diagnostics]')!;
+    expect(problems.querySelector('[data-diagnostic-codes*="TABLE_CONTENT_OVERFLOW"]')).not.toBeNull();
+    expect(within(problems).queryByRole('button', { name: 'Ajustar altura' })).toBeNull();
     const button = within(region).getByRole('button', { name: 'Continuar na próxima página' });
     fireEvent.click(button);
     await waitFor(() => expect(session.getSnapshot().document.pages).toHaveLength(3));
