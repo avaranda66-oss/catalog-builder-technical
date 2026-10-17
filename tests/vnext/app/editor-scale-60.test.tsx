@@ -148,6 +148,18 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     expect(px(getComputedStyle(container.querySelector('.vnext-info h2')!).fontSize)).toBeGreaterThanOrEqual(15);
   });
 
+  it('gives the "Fechar" buttons 44 px and the title error 13 px', () => {
+    const scale = scaleRules();
+    const body = (selector: string) => scale.find((rule) => rule.selector === selector)?.body ?? '';
+    expect(body(`${SIMPLE} .vnext-editor-notice button`)).toMatch(/min-height:\s*44px/);
+    expect(body(`${SIMPLE} .vnext-catalog-title-error`)).toMatch(/font-size:\s*13px/);
+    expect(STYLES.match(/\.vnext-assistant-dock-controls button\s*\{([^}]*)\}/)?.[1]).toMatch(/min-height:\s*44px/);
+
+    renderEditor();
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Painel da direita' })).getByRole('tab', { name: 'Assistente' }));
+    expect(px(getComputedStyle(screen.getByRole('button', { name: 'Fechar painel do assistente' })).minHeight)).toBeGreaterThanOrEqual(44);
+  });
+
   it('keeps the toolbar above the page at one height whether something is selected or not (the sheet does not jump)', () => {
     const rule = (selector: string) => {
       const start = STYLES.indexOf(`${selector} {`);
@@ -155,14 +167,19 @@ describe('FR-16b escala 60+ (só a interface)', () => {
       return STYLES.slice(start, STYLES.indexOf('}', start));
     };
     const primary = `${SIMPLE} .vnext-toolbar-primary`;
-    // "Duplicar", "Excluir" and "Editar …" (children 6+) always go to their own second line…
-    expect(rule(`${primary} > :nth-child(n+6)`)).toMatch(/order:\s*2/);
+    const selectionActions = ['duplicate', 'delete', 'edit-text', 'edit-table'];
+    // "Duplicar", "Excluir" and "Editar …" always go to their own second line, found by what they do (not by position)…
+    expect(rule(`${primary} > :is(${selectionActions.map((action) => `[data-editor-action="${action}"]`).join(', ')})`)).toMatch(/order:\s*2/);
+    expect(STYLES).not.toMatch(/vnext-toolbar-primary\s*>\s*:nth-child\(n\+6\)|:has\(>\s*:nth-child\(6\)\)/);
     expect(rule(`${primary}::after`)).toMatch(/order:\s*1;\s*flex:\s*1 0 100%;\s*height:\s*0/);
     // …which holds a plain hint, one button tall, while nothing is selected.
-    const hint = rule(`${primary}:not(:has(> :nth-child(6)))::after`);
+    const hint = rule(`${primary}:not(:has(> [data-editor-action="duplicate"]))::after`);
     expect(hint).toContain("content: 'Clique em um objeto da página para duplicar, excluir ou editar.'");
     expect(hint).toMatch(/height:\s*44px;\s*margin-bottom:\s*6px/);
     expect(px(hint.match(/font-size:\s*([\d.]+px)/)?.[1] ?? '')).toBeGreaterThanOrEqual(13);
+    // With several objects selected (no selection buttons there) the line keeps its height, without the hint.
+    expect(rule(`${SIMPLE} .vnext-canvas-area:has([data-editor-object-id][data-selected="true"]) .vnext-toolbar-primary::after`))
+      .toMatch(/visibility:\s*hidden/);
     // "Mais opções" shares the first line instead of wrapping to a line of its own.
     expect(rule(`${primary}`)).toMatch(/flex:\s*1 1 0%;\s*min-width:\s*0/);
 
@@ -172,15 +189,34 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
     fireEvent.pointerDown(hit, { pointerId: 8, button: 0, clientX: 40, clientY: 40 });
     fireEvent.pointerUp(hit, { pointerId: 8, button: 0, clientX: 40, clientY: 40 });
-    // The buttons that need a selection come after the first five, so the CSS above puts them on the second line.
-    expect([...container.querySelectorAll('.vnext-toolbar-primary > button')].slice(5).map((button) => button.textContent))
+    // The buttons that need a selection are the ones the CSS above puts on the second line.
+    const after = [...container.querySelectorAll<HTMLElement>('.vnext-toolbar-primary > button')];
+    expect(after.filter((button) => selectionActions.includes(button.dataset.editorAction ?? '')).map((button) => button.textContent))
       .toEqual(['Duplicar', 'Excluir']);
+    expect(after.filter((button) => !selectionActions.includes(button.dataset.editorAction ?? '')).map((button) => button.textContent))
+      .toEqual(['Texto', 'Imagem', 'Tabela', 'Tamanho da nova tabela', 'Colar tabela do Excel']);
   });
 
   it('gives the resize handles and the table selectors 24 px on screen at every zoom', () => {
     const handle = STYLES.match(/\.vnext-resize-handle\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(handle).toMatch(/width:\s*calc\(24px \* var\(--vnext-stage-unzoom, 1\)\)/);
     expect(handle).toMatch(/height:\s*calc\(24px \* var\(--vnext-stage-unzoom, 1\)\)/);
+    // The grab area reaches only 7 px into the object (17 px lie outside), and the 14 px square stays centred on the edge,
+    // so a small object keeps its middle free to be dragged.
+    const unzoomed = (name: string) => Number(handle.match(new RegExp(`${name}:\\s*calc\\((-?[\\d.]+)px \\* var\\(--vnext-stage-unzoom, 1\\)\\)`))?.[1]);
+    const out = unzoomed('--vnext-handle-out');
+    const gap = unzoomed('--vnext-handle-gap');
+    const reach = unzoomed('--vnext-handle-reach');
+    expect(24 + out).toBeLessThanOrEqual(7);
+    expect(24 - 2 * gap).toBe(14);
+    expect(24 - reach).toBe(14);
+    expect(reach + out).toBe(-(24 + out));
+    for (const side of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
+      const position = STYLES.match(new RegExp(`\\.vnext-resize-handle\\.handle-${side}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+      expect(position, side).toContain('var(--vnext-handle-out)');
+      expect(position, side).not.toMatch(/translate\([^)]*50%[^)]*,[^)]*50%/);
+      expect(STYLES, side).toMatch(new RegExp(`\\.vnext-resize-handle\\.handle-${side}::before\\s*\\{\\s*inset:[^}]*var\\(--vnext-handle-reach\\)`));
+    }
     expect(STYLES).toMatch(/\.vnext-table-row-selector\s*\{\s*min-width:\s*calc\(24px \* var\(--vnext-stage-unzoom, 1\)\)/);
     expect(STYLES).toMatch(/\.vnext-table-column-selector\s*\{\s*min-height:\s*calc\(24px \* var\(--vnext-stage-unzoom, 1\)\)/);
 

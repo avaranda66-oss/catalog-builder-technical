@@ -138,8 +138,9 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-text-edit-session { position: absolute; z-index: 2147483647; }
 .vnext-text-edit-session textarea { width: 100%; height: 100%; resize: none; overflow: auto; border: 1.5px solid #0072ce; outline: none; background: rgba(255,255,255,.98); padding: 0; white-space: pre-wrap; }
 /* FR-16b: the text bar is drawn outside the zoomed page (app/editor/TextEditToolbar.tsx), at its real size, inside
-   .vnext-document-preview; left/top/max-width come from the text box measured on screen. */
-.vnext-text-edit-toolbar { position: absolute; left: 0; top: 0; z-index: 2147483647; display: flex; width: max-content; max-width: 560px; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid #b8c7d8; border-radius: 0 0 8px 8px; background: #fff; box-shadow: 0 5px 14px rgba(23,32,51,.14); padding: 6px; }
+   .vnext-document-preview; left/top/max-width come from the text box measured on screen. z-index 22: above the editor
+   layer of the page (20), below the floating message (30), the problems list and the dialogs. */
+.vnext-text-edit-toolbar { position: absolute; left: 0; top: 0; z-index: 22; display: flex; width: max-content; max-width: 560px; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid #b8c7d8; border-radius: 0 0 8px 8px; background: #fff; box-shadow: 0 5px 14px rgba(23,32,51,.14); padding: 6px; }
 .vnext-text-edit-toolbar[data-placement="above"] { border-radius: 8px 8px 0 0; box-shadow: 0 -5px 14px rgba(23,32,51,.12); }
 .vnext-text-edit-toolbar button { min-width: 44px; min-height: 44px; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #263a52; cursor: pointer; font: inherit; font-size: 15px; font-weight: 700; padding: 0 10px; }
 .vnext-text-edit-toolbar button:hover { border-color: #8da2b8; background: #f6f8fb; }
@@ -153,20 +154,31 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-selection-outline { position: absolute; inset: calc(-1px * var(--vnext-stage-unzoom, 1)); border: calc(1.5px * var(--vnext-stage-unzoom, 1)) solid #0072ce; pointer-events: none; }
 .vnext-preview-fill { position: absolute; inset: 0; background: rgba(0,114,206,.06); pointer-events: none; }
 /* FR-16b (tamanho final das alças): 24 px to grab on screen at any zoom (WCAG 2.5.8 target size); the visible square is
-   14 px, centred on the corner or edge, so small objects stay easy to see and move. */
-.vnext-resize-handle { position: absolute; width: calc(24px * var(--vnext-stage-unzoom, 1)); height: calc(24px * var(--vnext-stage-unzoom, 1)); border: 0; border-radius: 0; background: transparent; padding: 0; touch-action: none; }
-.vnext-resize-handle::before { content: ''; position: absolute; inset: calc(5px * var(--vnext-stage-unzoom, 1)); box-sizing: border-box; border: calc(1.5px * var(--vnext-stage-unzoom, 1)) solid #0072ce; border-radius: calc(2px * var(--vnext-stage-unzoom, 1)); background: #fff; box-shadow: 0 0 0 calc(1px * var(--vnext-stage-unzoom, 1)) rgb(255 255 255 / .9); }
+   14 px, centred on the corner or edge, as before. The grab area reaches only 7 px into the object (the inner half of the
+   square) and the other 17 px lie outside it, so even a small object (an icon, a short label at 62%) keeps its middle free
+   to be dragged; before, the areas reached 12 px in and covered objects smaller than about 24-40 px on screen. */
+.vnext-resize-handle { --vnext-handle-out: calc(-17px * var(--vnext-stage-unzoom, 1)); --vnext-handle-gap: calc(5px * var(--vnext-stage-unzoom, 1)); --vnext-handle-reach: calc(10px * var(--vnext-stage-unzoom, 1)); position: absolute; width: calc(24px * var(--vnext-stage-unzoom, 1)); height: calc(24px * var(--vnext-stage-unzoom, 1)); border: 0; border-radius: 0; background: transparent; padding: 0; touch-action: none; }
+.vnext-resize-handle::before { content: ''; position: absolute; inset: var(--vnext-handle-gap); box-sizing: border-box; border: calc(1.5px * var(--vnext-stage-unzoom, 1)) solid #0072ce; border-radius: calc(2px * var(--vnext-stage-unzoom, 1)); background: #fff; box-shadow: 0 0 0 calc(1px * var(--vnext-stage-unzoom, 1)) rgb(255 255 255 / .9); }
 .vnext-resize-handle:hover::before { background: #e7f2fc; }
 .vnext-resize-handle:focus-visible { outline: none; }
 .vnext-resize-handle:focus-visible::before { box-shadow: 0 0 0 calc(3px * var(--vnext-stage-unzoom, 1)) rgb(0 114 206 / .4); }
-.vnext-resize-handle.handle-n { left: 50%; top: 0; cursor: ns-resize; transform: translate(-50%,-50%); }
-.vnext-resize-handle.handle-ne { right: 0; top: 0; cursor: nesw-resize; transform: translate(50%,-50%); }
-.vnext-resize-handle.handle-e { right: 0; top: 50%; cursor: ew-resize; transform: translate(50%,-50%); }
-.vnext-resize-handle.handle-se { right: 0; bottom: 0; cursor: nwse-resize; transform: translate(50%,50%); }
-.vnext-resize-handle.handle-s { left: 50%; bottom: 0; cursor: ns-resize; transform: translate(-50%,50%); }
-.vnext-resize-handle.handle-sw { left: 0; bottom: 0; cursor: nesw-resize; transform: translate(-50%,50%); }
-.vnext-resize-handle.handle-w { left: 0; top: 50%; cursor: ew-resize; transform: translate(-50%,-50%); }
-.vnext-resize-handle.handle-nw { left: 0; top: 0; cursor: nwse-resize; transform: translate(-50%,-50%); }
+.vnext-resize-handle.handle-n { left: 50%; top: var(--vnext-handle-out); cursor: ns-resize; transform: translateX(-50%); }
+.vnext-resize-handle.handle-ne { right: var(--vnext-handle-out); top: var(--vnext-handle-out); cursor: nesw-resize; }
+.vnext-resize-handle.handle-e { right: var(--vnext-handle-out); top: 50%; cursor: ew-resize; transform: translateY(-50%); }
+.vnext-resize-handle.handle-se { right: var(--vnext-handle-out); bottom: var(--vnext-handle-out); cursor: nwse-resize; }
+.vnext-resize-handle.handle-s { left: 50%; bottom: var(--vnext-handle-out); cursor: ns-resize; transform: translateX(-50%); }
+.vnext-resize-handle.handle-sw { left: var(--vnext-handle-out); bottom: var(--vnext-handle-out); cursor: nesw-resize; }
+.vnext-resize-handle.handle-w { left: var(--vnext-handle-out); top: 50%; cursor: ew-resize; transform: translateY(-50%); }
+.vnext-resize-handle.handle-nw { left: var(--vnext-handle-out); top: var(--vnext-handle-out); cursor: nwse-resize; }
+/* The visible square stays centred on the edge or corner: it is shifted toward the object inside its grab area. */
+.vnext-resize-handle.handle-n::before { inset: var(--vnext-handle-reach) var(--vnext-handle-gap) 0; }
+.vnext-resize-handle.handle-s::before { inset: 0 var(--vnext-handle-gap) var(--vnext-handle-reach); }
+.vnext-resize-handle.handle-e::before { inset: var(--vnext-handle-gap) var(--vnext-handle-reach) var(--vnext-handle-gap) 0; }
+.vnext-resize-handle.handle-w::before { inset: var(--vnext-handle-gap) 0 var(--vnext-handle-gap) var(--vnext-handle-reach); }
+.vnext-resize-handle.handle-ne::before { inset: var(--vnext-handle-reach) var(--vnext-handle-reach) 0 0; }
+.vnext-resize-handle.handle-se::before { inset: 0 var(--vnext-handle-reach) var(--vnext-handle-reach) 0; }
+.vnext-resize-handle.handle-sw::before { inset: 0 0 var(--vnext-handle-reach) var(--vnext-handle-reach); }
+.vnext-resize-handle.handle-nw::before { inset: var(--vnext-handle-reach) 0 0 var(--vnext-handle-reach); }
 .vnext-inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .vnext-inspector-grid label { display: grid; gap: 4px; color: #536176; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .vnext-inspector-grid label > div { display: flex; align-items: center; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
@@ -257,7 +269,9 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 /* FR-17: the right column holds "Propriedades" or "Assistente" (tabs on top); only one is shown at a time. */
 .vnext-side-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-left: 1px solid #d7dee8; background: #fff; }
 .vnext-info { flex: 1 1 0; overflow-x: hidden; overflow-y: auto; padding: 22px 20px; }
-.vnext-side-column > [hidden] { display: none !important; }
+.vnext-side-column > [hidden], .vnext-side-panels > [hidden] { display: none !important; }
+/* FR-17: the one tab panel under "Propriedades | Assistente"; it holds both panels and passes the column's height on. */
+.vnext-side-panels { display: flex; min-width: 0; min-height: 0; flex: 1 1 0; flex-direction: column; }
 .vnext-side-tabs { display: grid; flex: none; grid-template-columns: 1fr 1fr; gap: 4px; border-bottom: 1px solid #e1e7ee; background: #f7f9fb; padding: 8px 10px; }
 .vnext-side-tabs button { min-width: 0; min-height: 44px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #41546b; cursor: pointer; font: inherit; font-size: 15px; font-weight: 700; padding: 0 8px; }
 .vnext-side-tabs button:hover { background: #eef2f6; color: #003f78; }
@@ -425,6 +439,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   .vnext-table-axis-toolbar .vnext-tool-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .vnext-table-axis-toolbar button { min-height: 44px; }
   .vnext-side-column { display: flex; min-height: auto; flex: none; border-top: 1px solid #d7dee8; border-left: 0; }
+  .vnext-side-panels { min-height: auto; flex: none; }
   .vnext-info { display: block; min-height: auto; flex: none; overflow: visible; padding: 18px 14px 28px; }
   .vnext-zoom-control .vnext-zoom-select { min-height: 44px; }
   .vnext-inspector-action { min-height: 44px; }
@@ -671,7 +686,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 }
 .vnext-assistant-dock-controls button {
   flex: none;
-  min-height: 40px;
+  min-height: 44px;
   padding: 6px 12px;
   border: 1px solid #c9d5df;
   background: white;
@@ -1123,7 +1138,8 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-shell[data-simple-by-default="true"] .vnext-marker-legend-panel textarea { min-height: 44px; font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-style-palette button { width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; }
 .vnext-shell[data-simple-by-default="true"] .vnext-editor-notice { font-size: 15px; }
-.vnext-shell[data-simple-by-default="true"] .vnext-editor-notice button { min-height: 40px; font-size: 15px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-editor-notice button { min-height: 44px; font-size: 15px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-catalog-title-error { font-size: 13px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-conflict-notice h2 { font-size: 17px; }
 @media (min-width: 901px) {
   .vnext-shell[data-simple-by-default="true"] .vnext-topbar { gap: 12px; padding: 0 16px; }
@@ -1143,15 +1159,17 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 /* FR-16b:escala-60:fim */
 /* FR-16b: a folha não pula ao selecionar. In the simple mode "Duplicar", "Excluir" and "Editar texto/tabela" only appear
    with an object selected; with the 60+ buttons they used to wrap the toolbar into more lines and push the page down by
-   about 100 px on every click. Now the first five buttons and "Mais opções" share the first line and the selection
-   buttons always get their own second line, which shows a short hint while nothing is selected, so the toolbar keeps
-   the same height and the page stays still. */
+   about 100 px on every click. Now the add buttons and "Mais opções" share the first line and the selection buttons
+   (found by their data-editor-action, not by their position) always get their own second line, which shows a short
+   hint while nothing is selected, so the toolbar keeps the same height and the page stays still. */
 .vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar { align-items: flex-start; }
 .vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary { flex: 1 1 0%; min-width: 0; }
-.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary > :nth-child(n+6) { order: 2; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary > :is([data-editor-action="duplicate"], [data-editor-action="delete"], [data-editor-action="edit-text"], [data-editor-action="edit-table"]) { order: 2; }
 .vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary::after { content: ''; order: 1; flex: 1 0 100%; height: 0; }
-.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary:not(:has(> :nth-child(6)))::after {
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-primary:not(:has(> [data-editor-action="duplicate"]))::after {
   content: 'Clique em um objeto da página para duplicar, excluir ou editar.';
   height: 44px; margin-bottom: 6px; overflow: hidden; color: #5c6c80; font-size: 13px; line-height: 44px; text-overflow: ellipsis; white-space: nowrap;
 }
 .vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar > [data-editor-action="toggle-advanced-tools"] { flex: none; }
+/* With several objects selected there are no selection buttons on that line: it keeps its height, without the hint. */
+.vnext-shell[data-simple-by-default="true"] .vnext-canvas-area:has([data-editor-object-id][data-selected="true"]) .vnext-toolbar-primary::after { visibility: hidden; }
