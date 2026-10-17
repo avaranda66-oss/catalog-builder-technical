@@ -5,7 +5,8 @@ import {
   type Severity,
   type TableObject,
 } from '../domain';
-import { publicationDiagnosticMessage } from './publication-diagnostic-presentation';
+import { isBleedWarning } from '../publication/preflight';
+import { publicationDiagnosticMessage, publicationDiagnosticText } from './publication-diagnostic-presentation';
 
 export type LayoutDiagnosticAction = 'FIT_HEIGHT' | 'LOCATE' | 'NONE';
 
@@ -46,7 +47,7 @@ const fatherMessage = (diagnostic: Diagnostic): string => {
     case 'TABLE_WIDTH_INFEASIBLE':
       return 'A largura atual não comporta as restrições das colunas';
     case 'OBJECT_OUTSIDE_PAGE':
-      return 'Parte da tabela está fora da página';
+      return isBleedWarning(diagnostic) ? publicationDiagnosticText(diagnostic) : 'Parte da tabela está fora da página';
     case 'SAFE_AREA_VIOLATION':
       return 'A tabela cruza a área segura';
     case 'LAYOUT_UNSTABLE':
