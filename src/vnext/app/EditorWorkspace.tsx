@@ -2412,28 +2412,36 @@ export function EditorWorkspace({
     setStatusMessage('Modelo inserido como página independente.');
   };
 
+  /** FR-30: after Desfazer/Refazer from the cell editor (key or button) the grid keeps the keys. */
+  const focusGridAfterCellEdit = () => queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+
   /**
-   * FR-30, as in Excel: Desfazer (Ctrl+Z or the button) while typing in a cell only throws away what was typed in
-   * this edit; with nothing typed it closes the editor and undoes the last change. The grid keeps the keys.
+   * FR-30: Desfazer (Ctrl+Z or the button) while typing in a cell takes the cell back to what it was, and Refazer
+   * brings the typing back (the typing is saved first, then undone: nothing is lost). With nothing typed it closes
+   * the editor and undoes the last change. Typing that cannot be saved (e.g. an empty code) is thrown away, as Esc.
    */
   const undo = () => {
-    if (cellDraftRef.current?.dirty) {
-      if (!cellDraftRef.current.composing) cancelCellEdit('Digitação desfeita.');
+    const typing = cellDraftRef.current;
+    if (typing?.dirty && !typing.composing && !validateTableCellDraft(typing).ok) {
+      cancelCellEdit('Digitação desfeita.');
       return;
     }
-    if (cellDraftRef.current) cancelCellEdit('');
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.undo();
-    setStatusMessage(result.ok ? 'Alteração desfeita.' : 'Não há alterações para desfazer.');
+    setStatusMessage(!result.ok ? 'Não há alterações para desfazer.'
+      : typing?.dirty ? 'Digitação desfeita. Para trazer de volta, use Refazer.' : 'Alteração desfeita.');
+    if (typing) focusGridAfterCellEdit();
   };
 
   const redo = () => {
-    if (cellDraftRef.current?.dirty) {
-      setStatusMessage('Para refazer, primeiro termine a digitação com Enter ou cancele com Esc.');
+    const typing = cellDraftRef.current;
+    if (typing?.dirty) {
+      // Saving the typing would replace what Refazer could bring back.
+      setStatusMessage('Para refazer, primeiro cancele a digitação com Esc.');
       return;
     }
-    if (cellDraftRef.current) cancelCellEdit('');
+    if (typing) focusGridAfterCellEdit();
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.redo();

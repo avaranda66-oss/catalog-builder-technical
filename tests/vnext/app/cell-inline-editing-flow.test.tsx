@@ -228,7 +228,7 @@ describe('FR-30 · Desfazer, Tab and Ctrl+S never leave the grid stuck', () => {
     await flushMicrotasks();
   };
 
-  it('Ctrl+Z while typing throws away only this typing; with nothing typed it undoes the last change', async () => {
+  it('Ctrl+Z while typing takes the cell back (Refazer brings the typing back); with nothing typed it undoes the last change', async () => {
     const session = createDocumentSession(plainTableDocument(2, 3), { createId: ids('generated') });
     const { container } = render(<VNextApp session={session} simpleByDefault />);
     const grid = await openTableGrid(container);
@@ -238,7 +238,7 @@ describe('FR-30 · Desfazer, Tab and Ctrl+S never leave the grid stuck', () => {
     await flushMicrotasks();
     expect(textAt(session, 0, 0)).toBe('Pressão');
 
-    // Typing "B" and pressing Ctrl+Z: the typing goes away, the saved cell above stays, nothing to redo appears.
+    // Typing "B" and pressing Ctrl+Z: the cell goes back to empty, the saved cell above stays.
     fireEvent.keyDown(document.activeElement!, { key: 'B' });
     expect(cellEditor()).toHaveValue('B');
     fireEvent.keyDown(cellEditor(), { key: 'z', ctrlKey: true });
@@ -247,8 +247,13 @@ describe('FR-30 · Desfazer, Tab and Ctrl+S never leave the grid stuck', () => {
     expect(shellMode(container)).toBe('table-grid');
     expect(textAt(session, 1, 0)).toBeNull();
     expect(textAt(session, 0, 0)).toBe('Pressão');
-    expect(session.getSnapshot().canRedo).toBe(false);
-    expect(screen.getByText('Digitação desfeita.')).toBeInTheDocument();
+    expect(screen.getByText('Digitação desfeita. Para trazer de volta, use Refazer.')).toBeInTheDocument();
+    await gridKeepsFocus();
+    // Nothing typed is lost: Refazer brings the "B" back.
+    fireEvent.keyDown(document.activeElement!, { key: 'y', ctrlKey: true });
+    expect(textAt(session, 1, 0)).toBe('B');
+    fireEvent.keyDown(document.activeElement!, { key: 'z', ctrlKey: true });
+    expect(textAt(session, 1, 0)).toBeNull();
     await nextKeyEdits('Conteúdo da célula, linha 2, coluna 1');
 
     // F2 without typing, then Ctrl+Z: the editor closes and the last change is undone, like Desfazer.
@@ -283,7 +288,39 @@ describe('FR-30 · Desfazer, Tab and Ctrl+S never leave the grid stuck', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'C' });
     fireEvent.keyDown(cellEditor(), { key: 'y', ctrlKey: true });
     expect(cellEditor()).toHaveValue('C');
-    expect(screen.getByText('Para refazer, primeiro termine a digitação com Enter ou cancele com Esc.')).toBeInTheDocument();
+    expect(screen.getByText('Para refazer, primeiro cancele a digitação com Esc.')).toBeInTheDocument();
+  });
+
+  it('Desfazer on typing that cannot be saved (an emptied code) throws it away and keeps the grid', async () => {
+    const plain = plainTableDocument(2, 2);
+    const withCode: CatalogDocument = {
+      ...plain,
+      pages: plain.pages.map((page, index) => index !== 0 ? page : {
+        ...page,
+        objects: page.objects.map((object) => (object.id === W4B_OBJECT_ID && object.type === 'table' ? {
+          ...object,
+          table: {
+            ...object.table,
+            cells: object.table.cells.map((cell) => (cell.rowId === 'r0' && cell.columnId === 'c0'
+              ? { ...cell, content: { type: 'technicalCode' as const, value: 'TA-25N' } }
+              : cell)),
+          },
+        } : object)),
+      }),
+    };
+    const session = createDocumentSession(withCode, { createId: ids('generated') });
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'F2' });
+    const field = container.querySelector<HTMLTextAreaElement>('[data-cell-inline-field]')!;
+    expect(field).toHaveValue('TA-25N');
+    fireEvent.change(field, { target: { value: '' } });
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
+    await flushMicrotasks();
+    expect(contentAt(session, 0, 0)).toEqual({ type: 'technicalCode', value: 'TA-25N' });
+    expect(shellMode(container)).toBe('table-grid');
+    expect(screen.getByText('Digitação desfeita.')).toBeInTheDocument();
+    await gridKeepsFocus();
   });
 
   it('Tab on the last cell adds a row also when the cell is only selected; Shift+Tab on the first cell leaves', async () => {
