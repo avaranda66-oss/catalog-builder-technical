@@ -142,3 +142,53 @@ export function planKeyboardNudge(page: Page, objectIds: readonly string[], dxMm
 export function planKeyboardDelete(page: Page, objectIds: readonly string[]): KeyboardObjectPlan {
   return plan(page, objectIds, (object) => ({ type: 'object.delete', objectId: object.id }));
 }
+
+/**
+ * FR-30 — spreadsheet keys of the table grid and of the cell editor.
+ *
+ * On a selected cell (grid focused, nothing being edited) a printable key starts the edit and replaces the cell
+ * content with that character, like Excel. Ctrl/Cmd shortcuts never type; AltGr (reported as Ctrl+Alt on Windows,
+ * e.g. "°" or "/" on the Brazilian ABNT2 keyboard) does. A dead key (the accent of "é" or "ã" on that keyboard)
+ * opens an empty editor and lets the browser finish the accented letter there.
+ */
+export type GridTypingKey =
+  | { readonly kind: 'character'; readonly text: string }
+  | { readonly kind: 'dead' };
+
+export function resolveGridTypingKey(input: EditorKeyInput): GridTypingKey | null {
+  if (input.isComposing) return null;
+  const altGr = Boolean(input.ctrlKey && input.altKey && !input.metaKey);
+  if (!altGr && (input.ctrlKey || input.metaKey || input.altKey)) return null;
+  if (input.key === 'Dead') return { kind: 'dead' };
+  // One visible character (a letter with accent, a digit, a symbol or a space); never "Enter", "Tab", "F2"…
+  if ([...input.key].length !== 1) return null;
+  if (/\p{Cc}/u.test(input.key)) return null;
+  // Ctrl+Alt+letter or digit is a shortcut, not an AltGr symbol.
+  if (altGr && /^[a-z0-9]$/i.test(input.key)) return null;
+  return { kind: 'character', text: input.key };
+}
+
+/** Where the selection goes after the cell editor saves. */
+export type CellEditorMove = 'down' | 'up' | 'right' | 'left';
+
+export type CellEditorKeyCommand =
+  /** Save the cell and move: Enter (down), Shift+Enter (up), Tab (right), Shift+Tab (left). */
+  | { readonly type: 'commit'; readonly move: CellEditorMove }
+  /** Alt+Enter: a line break inside the cell. */
+  | { readonly type: 'newline' }
+  /** Esc: forget only what was typed in this edit. */
+  | { readonly type: 'cancel' };
+
+export function resolveCellEditorKey(input: EditorKeyInput, context: { readonly composing?: boolean } = {}): CellEditorKeyCommand | null {
+  if (input.isComposing || context.composing) return null;
+  const primary = Boolean(input.ctrlKey || input.metaKey);
+  if (input.key === 'Escape' && !primary && !input.altKey) return { type: 'cancel' };
+  if (input.key === 'Enter') {
+    if (input.altKey && !primary) return { type: 'newline' };
+    // Ctrl+Enter keeps its old meaning (save without moving), handled by the editor.
+    if (primary || input.altKey) return null;
+    return { type: 'commit', move: input.shiftKey ? 'up' : 'down' };
+  }
+  if (input.key === 'Tab' && !primary && !input.altKey) return { type: 'commit', move: input.shiftKey ? 'left' : 'right' };
+  return null;
+}

@@ -4,7 +4,9 @@ import {
   isKeyboardOwningTarget,
   planKeyboardDelete,
   planKeyboardNudge,
+  resolveCellEditorKey,
   resolveEditorShortcut,
+  resolveGridTypingKey,
   type EditorKeyContext,
 } from '@/vnext/editor/editor-keyboard';
 import { describePageObjects, pageHeadline, pageLabel } from '@/vnext/editor/page-summary';
@@ -157,5 +159,56 @@ describe('page summary (FR-11 confirmation text)', () => {
     expect(pageHeadline(p)).toBe('Especificações técnicas');
     expect(pageHeadline(page([text('long', 'x'.repeat(60), 10)]), 20)).toBe(`${'x'.repeat(19)}…`);
     expect(pageHeadline(page([shape('a', 1)]))).toBe('');
+  });
+});
+
+describe('resolveGridTypingKey (FR-30: typing on a selected cell)', () => {
+  it('starts the edit with the typed character, accents and symbols included', () => {
+    for (const key of ['a', 'Z', '7', 'é', 'ç', '±', ' ', ',']) {
+      expect(resolveGridTypingKey({ key })).toEqual({ kind: 'character', text: key });
+    }
+    expect(resolveGridTypingKey({ key: 'A', shiftKey: true })).toEqual({ kind: 'character', text: 'A' });
+  });
+
+  it('accepts AltGr symbols (Ctrl+Alt on Windows) but not Ctrl, Alt or Cmd shortcuts', () => {
+    expect(resolveGridTypingKey({ key: '°', ctrlKey: true, altKey: true })).toEqual({ kind: 'character', text: '°' });
+    expect(resolveGridTypingKey({ key: '/', ctrlKey: true, altKey: true })).toEqual({ kind: 'character', text: '/' });
+    expect(resolveGridTypingKey({ key: 'z', ctrlKey: true, altKey: true })).toBeNull();
+    expect(resolveGridTypingKey({ key: 'c', ctrlKey: true })).toBeNull();
+    expect(resolveGridTypingKey({ key: 'v', metaKey: true })).toBeNull();
+    expect(resolveGridTypingKey({ key: 'f', altKey: true })).toBeNull();
+  });
+
+  it('leaves a dead key (accent) to the browser and ignores named keys and composition', () => {
+    expect(resolveGridTypingKey({ key: 'Dead' })).toEqual({ kind: 'dead' });
+    for (const key of ['Enter', 'Tab', 'F2', 'Escape', 'ArrowDown', 'Delete', 'Backspace', 'Shift', 'Process']) {
+      expect(resolveGridTypingKey({ key })).toBeNull();
+    }
+    expect(resolveGridTypingKey({ key: 'a', isComposing: true })).toBeNull();
+  });
+});
+
+describe('resolveCellEditorKey (FR-30: keys inside the cell editor)', () => {
+  it('Enter saves and goes down, Shift+Enter up, Tab right, Shift+Tab left', () => {
+    expect(resolveCellEditorKey({ key: 'Enter' })).toEqual({ type: 'commit', move: 'down' });
+    expect(resolveCellEditorKey({ key: 'Enter', shiftKey: true })).toEqual({ type: 'commit', move: 'up' });
+    expect(resolveCellEditorKey({ key: 'Tab' })).toEqual({ type: 'commit', move: 'right' });
+    expect(resolveCellEditorKey({ key: 'Tab', shiftKey: true })).toEqual({ type: 'commit', move: 'left' });
+  });
+
+  it('Alt+Enter breaks the line and Esc cancels', () => {
+    expect(resolveCellEditorKey({ key: 'Enter', altKey: true })).toEqual({ type: 'newline' });
+    expect(resolveCellEditorKey({ key: 'Escape' })).toEqual({ type: 'cancel' });
+  });
+
+  it('keeps Ctrl+Enter for the editor (save in place), ordinary keys for the text and waits for the IME', () => {
+    expect(resolveCellEditorKey({ key: 'Enter', ctrlKey: true })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'Enter', metaKey: true })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'a' })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'ArrowLeft' })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'Backspace' })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'Enter', isComposing: true })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'Enter' }, { composing: true })).toBeNull();
+    expect(resolveCellEditorKey({ key: 'Escape' }, { composing: true })).toBeNull();
   });
 });

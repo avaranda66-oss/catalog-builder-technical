@@ -1,0 +1,82 @@
+/*
+ * FR-34 (slice 2A) — right-click menu and "+" buttons of the table grid. styles.css belongs to slice 2C in this
+ * wave, so these rules sit beside the component and keep the navy/white baseline.
+ */
+.vnext-table-grid-menu {
+  position: fixed;
+  z-index: 2147483000;
+  display: grid;
+  min-width: 230px;
+  gap: 2px;
+  border: 1px solid #c8d2de;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(23, 32, 51, .18);
+  font-family: 'Noto Sans', Arial, sans-serif;
+  padding: 6px;
+}
+.vnext-table-grid-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #172033;
+  cursor: pointer;
+  font: 600 14px/1.3 'Noto Sans', Arial, sans-serif;
+  padding: 6px 12px;
+  text-align: left;
+}
+.vnext-table-grid-menu button:hover,
+.vnext-table-grid-menu button:focus-visible,
+.vnext-table-grid-menu button:focus { background: #edf5ff; color: #003f78; outline: 0; }
+.vnext-table-grid-menu button.is-danger { color: #b42318; }
+.vnext-table-grid-menu button.is-danger:hover,
+.vnext-table-grid-menu button.is-danger:focus { background: #fef3f2; color: #912018; }
+.vnext-table-grid-menu-separator { height: 1px; margin: 4px 6px; background: #e1e7ee; }
+
+/*
+ * "+" between rows (left of the row numbers) and between columns (above the column numbers). They show while the
+ * mouse is over the row/column number or over the "+" itself. Sizes follow the row/column selectors of styles.css:
+ * fixed on screen from 100 % zoom, never bigger than the page allows below it.
+ */
+.vnext-table-grid-overlay {
+  --vnext-grid-selector-size: min(calc(24px * var(--vnext-stage-unzoom, 1)), 24px);
+  --vnext-grid-selector-gap: calc(3px * var(--vnext-stage-unzoom, 1));
+  --vnext-grid-insert-size: min(calc(22px * var(--vnext-stage-unzoom, 1)), 22px);
+}
+.vnext-table-axis-insert {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  width: var(--vnext-grid-insert-size);
+  height: var(--vnext-grid-insert-size);
+  place-items: center;
+  border: calc(1px * var(--vnext-stage-unzoom, 1)) solid #0072ce;
+  border-radius: 999px;
+  background: #0072ce;
+  color: #fff;
+  cursor: pointer;
+  font: 700 min(calc(16px * var(--vnext-stage-unzoom, 1)), 16px)/1 'Noto Sans', Arial, sans-serif;
+  opacity: 0;
+  padding: 0;
+  transition: opacity .12s ease;
+}
+.vnext-table-axis-insert.is-row {
+  right: 100%;
+  transform: translate(calc(-1 * (var(--vnext-grid-selector-gap) + var(--vnext-grid-selector-size))), -50%);
+}
+.vnext-table-axis-insert.is-column {
+  transform: translate(-50%, calc(-100% - var(--vnext-grid-selector-gap) - var(--vnext-grid-selector-size)));
+}
+.vnext-table-row-selector:hover + .vnext-table-axis-insert,
+.vnext-table-column-selector:hover + .vnext-table-axis-insert,
+.vnext-table-axis-insert:hover,
+.vnext-table-axis-insert:focus-visible { opacity: 1; }
+.vnext-table-axis-insert:focus-visible { outline: 3px solid rgba(0, 114, 206, .35); outline-offset: 1px; }
+/* Without a mouse there is no hover: the right-click (long press) menu is the way to insert. */
+@media (hover: none) {
+  .vnext-table-axis-insert { display: none; }
+}

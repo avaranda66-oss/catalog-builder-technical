@@ -72,7 +72,7 @@ import {
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
 import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
-import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
+import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type CellEditorMove, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
 import { PagePanel } from './editor/PagePanel';
 import {
@@ -98,6 +98,7 @@ import {
 } from '../editor/table-style-authoring';
 import {
   createTableCellDraft,
+  startTableCellDraftByTyping,
   tableCellDraftRecoveryFields,
   validateTableCellDraft,
   type EditableCellType,
@@ -137,6 +138,10 @@ import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 import { CanvasHeader } from './editor/CanvasHeader';
 import { TableCellEditorSection } from './editor/TableCellEditorSection';
+import { CellInlineEditor } from './editor/CellInlineEditor';
+import { useStableGridPlan } from './editor/use-stable-grid-plan';
+import { runTableGridAxisCommand, type TableGridOutcome } from './editor/table-grid-actions';
+import type { TableGridCommand } from '../editor/table-grid-commands';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
@@ -791,12 +796,15 @@ export function EditorWorkspace({
     return () => window.removeEventListener('blur', cancelOnWindowBlur);
   }, [controller]);
 
+  // FR-30: closing the cell editor always gives the grid back; 'cell-edit' never stays on without an editor.
+  const releaseCellEditMode = () => setEditorState((current) => (current.mode === 'cell-edit' ? { ...current, mode: 'table-grid' } : current));
   const finishCellDraftForContextChange = (): boolean => {
     const draft = cellDraftRef.current;
     if (!draft) return true;
     if (!draft.dirty) {
       cellDraftRef.current = null;
       setCellDraft(null);
+      releaseCellEditMode();
       persistence?.runtime.workspace.notifyDraftStateChanged();
       return true;
     }
@@ -824,6 +832,7 @@ export function EditorWorkspace({
     }
     cellDraftRef.current = null;
     setCellDraft(null);
+    releaseCellEditMode();
     persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
@@ -899,9 +908,12 @@ export function EditorWorkspace({
     return true;
   };
 
+  // FR-22: an open text box is an unsaved change only once its text differs (or an accent is being composed).
+  const textEditIsDirty = (edit: TextEditSession) => compositionRef.current
+    || edit.draft !== (projectEditableRichText(edit.expectedText) ?? '');
   const prepareTextDraftForSave = (): AuthoringBarrierResult => {
     const edit = textEditRef.current;
-    if (!edit) return { ok: true };
+    if (!edit || !textEditIsDirty(edit)) return { ok: true };
     if (compositionRef.current) {
       return {
         ok: false,
@@ -1020,7 +1032,7 @@ export function EditorWorkspace({
       };
     }
     const edit = textEditRef.current;
-    if (edit) {
+    if (edit && textEditIsDirty(edit)) {
       return {
         kind: 'TEXT_DRAFT_V1',
         pageId: edit.pageId,
@@ -1079,6 +1091,10 @@ export function EditorWorkspace({
       setCellDraft(null);
       setEditorState((current) => ({ ...current, mode: 'table-grid' }));
       persistence?.runtime.workspace.notifyDraftStateChanged();
+      // FR-30: Ctrl+S while typing in a cell keeps the keys going to the grid.
+      if (cell.identity.objectId === selectedTableObject?.id) {
+        queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+      }
     }
     const textResult = prepareTextDraftForSaveRef.current();
     if (!textResult.ok) return textResult;
@@ -1096,7 +1112,8 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
+      // FR-22: opening a cell or a text box without changing it is not an unsaved change (dirty only when it differs).
+      hasPendingDraft: () => Boolean(cellDraftRef.current?.dirty) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
@@ -1268,7 +1285,8 @@ export function EditorWorkspace({
     return ids.length === 1 ? object.table.cells.find((cell) => cell.id === ids[0]) : undefined;
   };
 
-  const startCellEdit = (point?: { rowId: string; columnId: string }): boolean => {
+  /** `typed` (FR-30): the key that started the edit replaces the content, as in Excel. */
+  const startCellEdit = (point?: { rowId: string; columnId: string }, typed?: string): boolean => {
     const object = selectedTableObject;
     if (!object || object.locked) {
       setStatusMessage('Tabela bloqueada não pode ser editada.');
@@ -1285,13 +1303,13 @@ export function EditorWorkspace({
     tableSelectionRef.current = selection;
     tableHistoryContextRef.current = { table: object.table, selection };
     setTableSelection(selection);
-    const draft = createTableCellDraft({
+    const opened = createTableCellDraft({
       pageId: selectedPage.id,
       objectId: object.id,
       tableId: object.table.id,
       cellId: cell.id,
     }, cell.content);
-    notifyCellDraftChanged(draft);
+    notifyCellDraftChanged(typed === undefined ? opened : startTableCellDraftByTyping(opened, typed));
     setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'cell-edit' });
     setStatusMessage(cell.content.type === 'marker' || cell.content.type === 'image'
@@ -1343,6 +1361,51 @@ export function EditorWorkspace({
     setStatusMessage(applied.result.metadata.changed ? 'Conteúdo da célula atualizado.' : 'Conteúdo da célula sem alterações.');
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
     return true;
+  };
+
+  // FR-30: the grid (and its focus) stays on screen while a saved cell is being measured again.
+  const gridPlan = useStableGridPlan(selectedTableObject?.table, selectedTableObject && plans.get(selectedTableObject.table.id));
+
+  const applyGridSelection = (table: TableModel, selection: TableSelection) => {
+    tableSelectionRef.current = selection;
+    tableHistoryContextRef.current = { table, selection };
+    setTableSelection(selection);
+  };
+
+  /** FR-34: "+" and the grid menu compose the existing axis actions; rows inserted grow the frame in the same step. */
+  const applyGridOutcome = (outcome: TableGridOutcome, objectId: string, transactionId: string) => {
+    if (!outcome.ok) {
+      setStatusMessage(outcome.message);
+      return;
+    }
+    applyGridSelection(outcome.table, outcome.selection);
+    if (outcome.fitHeight) setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(outcome.message));
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+
+  const runGridCommand = (command: TableGridCommand) => {
+    if (command.type === 'merge') return runTableMerge();
+    if (command.type === 'unmerge') return runTableUnmerge();
+    const live = cellDraftRef.current ? undefined : currentSelectedTableForStructure();
+    if (!live || live.object.locked) return;
+    const transactionId = newTableTransactionId();
+    applyGridOutcome(runTableGridAxisCommand(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, command, transactionId), live.object.id, transactionId);
+  };
+
+  /** FR-30: Enter saves and goes down, Tab goes right (a new row after the last cell); a click elsewhere selects it. */
+  const commitCellEditAndMove = (move?: CellEditorMove, point?: { rowId: string; columnId: string }) => {
+    if (!commitCellEdit()) return;
+    const live = currentSelectedTableForStructure();
+    if (!live) return;
+    if (point) return applyGridSelection(live.object.table, tableCellSelection(live.selection.identity, point));
+    if (!move) return;
+    const navigation = navigateTableSelection(live.object.table, live.selection,
+      move === 'down' ? 'ArrowDown' : move === 'up' ? 'ArrowUp' : 'Tab', { backwards: move === 'left' });
+    if (!navigation.exited) return applyGridSelection(live.object.table, navigation.selection);
+    if (move === 'right') {
+      runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: live.object.table.rows[live.object.table.rows.length - 1].id, selectFirstCell: true });
+    }
   };
 
   const runCellPropertyPatch = (patch: CellPropertyPatch) => {
@@ -2349,14 +2412,36 @@ export function EditorWorkspace({
     setStatusMessage('Modelo inserido como página independente.');
   };
 
+  /** FR-30: after Desfazer/Refazer from the cell editor (key or button) the grid keeps the keys. */
+  const focusGridAfterCellEdit = () => queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+
+  /**
+   * FR-30: Desfazer (Ctrl+Z or the button) while typing in a cell takes the cell back to what it was, and Refazer
+   * brings the typing back (the typing is saved first, then undone: nothing is lost). With nothing typed it closes
+   * the editor and undoes the last change. Typing that cannot be saved (e.g. an empty code) is thrown away, as Esc.
+   */
   const undo = () => {
+    const typing = cellDraftRef.current;
+    if (typing?.dirty && !typing.composing && !validateTableCellDraft(typing).ok) {
+      cancelCellEdit('Digitação desfeita.');
+      return;
+    }
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.undo();
-    setStatusMessage(result.ok ? 'Alteração desfeita.' : 'Não há alterações para desfazer.');
+    setStatusMessage(!result.ok ? 'Não há alterações para desfazer.'
+      : typing?.dirty ? 'Digitação desfeita. Para trazer de volta, use Refazer.' : 'Alteração desfeita.');
+    if (typing) focusGridAfterCellEdit();
   };
 
   const redo = () => {
+    const typing = cellDraftRef.current;
+    if (typing?.dirty) {
+      // Saving the typing would replace what Refazer could bring back.
+      setStatusMessage('Para refazer, primeiro cancele a digitação com Esc.');
+      return;
+    }
+    if (typing) focusGridAfterCellEdit();
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.redo();
@@ -3097,7 +3182,11 @@ export function EditorWorkspace({
           event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Tab',
           { extend: event.shiftKey && event.key !== 'Tab', backwards: event.shiftKey && event.key === 'Tab' }
         );
-        if (navigation.exited) {
+        if (navigation.exited && event.key === 'Tab' && !event.shiftKey) {
+          // FR-30, as in Excel: Tab on the last cell adds a row, also when the cell is only selected.
+          const rows = selectedTableObject.table.rows;
+          runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: rows[rows.length - 1].id, selectFirstCell: true });
+        } else if (navigation.exited) {
           leaveTableGrid('Fim da grade; manipulação do objeto restaurada.');
         } else {
           tableSelectionRef.current = navigation.selection;
@@ -4071,12 +4160,12 @@ export function EditorWorkspace({
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
                             && !object.locked
                             && tableSelection
-                            && plans.get(object.table.id)?.rowQ
-                            && plans.get(object.table.id)?.gridOffsetYQ !== undefined
+                            && object.id === selectedTableObject?.id
+                            && gridPlan
                             && (
                               <TableGridOverlay
                                 table={object.table}
-                                plan={plans.get(object.table.id)!}
+                                plan={gridPlan}
                                 identity={tableSelection.identity}
                                 selection={tableSelection}
                                 localSequence={snapshot.localSequence}
@@ -4090,6 +4179,17 @@ export function EditorWorkspace({
                                 onActivateCell={(point) => {
                                   if (editorState.mode === 'table-grid') startCellEdit(point);
                                 }}
+                                onTypeToEdit={(text) => {
+                                  if (editorState.mode === 'table-grid') startCellEdit(undefined, text);
+                                }}
+                                onCellPressWhileEditing={(point) => commitCellEditAndMove(undefined, point)}
+                                onGridCommand={(command) => {
+                                  if (editorState.mode === 'table-grid') runGridCommand(command);
+                                }}
+                                renderCellEditor={(cell) => cellDraft && (
+                                  <CellInlineEditor draft={cellDraft} draftRef={cellDraftRef} fieldRef={cellEditorFieldRef} cell={cell}
+                                    onDraftChange={notifyCellDraftChanged} onCommit={commitCellEditAndMove} onCancel={() => cancelCellEdit()} />
+                                )}
                                 onCopyClipboard={handleTableCopyClipboard}
                                 onPasteClipboard={handleTablePasteClipboard}
                                 rangeExtensionArmed={tableRangeExtensionArmed}
