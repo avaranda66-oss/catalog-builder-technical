@@ -128,7 +128,8 @@ import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layo
 import { TableGridOverlay } from './table-grid-overlay';
 import { EditorNotices } from './editor/EditorNotices';
 import { SaveSummary } from './editor/SaveSummary';
-import { PhotoStatusMark } from './editor/ImageRepairIndicator';
+import { PhotoLoadingAnnouncer, PhotoStatusMark } from './editor/ImageRepairIndicator';
+import { SaveConflictDialog } from './editor/ConflictDialog';
 import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 import { CanvasHeader } from './editor/CanvasHeader';
@@ -3752,6 +3753,7 @@ export function EditorWorkspace({
     selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
   return (
+    <>
     <div
       className="vnext-shell"
       data-vnext-shell=""
@@ -3817,9 +3819,8 @@ export function EditorWorkspace({
             save={persistence && { phase: persistence.save.phase, run: () => persistence.runtime.manualSave() }} />}
         </div>
       </header>
-      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)} onMessage={setStatusMessage} documentTitle={document.title}
-        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'}
-        conflictState={conflictResolutionState} conflictResolution={persistence?.runtime.conflictResolutionCoordinator} />
+      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)}
+        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'} />
 
       <div className="vnext-workspace">
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
@@ -4650,5 +4651,10 @@ export function EditorWorkspace({
         onMeasuredLayout={receiveMeasuredLayout}
       />
     </div>
+    {/* FR-43: next to the shell, not inside it, so the shell's key and pointer handlers never act on the dialog. */}
+    <SaveConflictDialog save={persistence?.save} documentTitle={document.title} state={conflictResolutionState}
+      resolution={persistence?.runtime.conflictResolutionCoordinator} />
+    {persistence && <PhotoLoadingAnnouncer runtime={persistence.runtime} />}
+    </>
   );
 }

@@ -1,10 +1,9 @@
 import React from 'react';
-import type { ConflictResolutionState, SaveProjection } from '../../persistence';
+import type { SaveProjection } from '../../persistence';
 import {
   editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, type EditorNoticeInput,
 } from '../../editor/editor-notices';
 import { fatherSaveExplanation } from '../save-presentation';
-import { ConflictDialog, type ConflictDialogResolution } from './ConflictDialog';
 import './EditorNotices.css';
 
 const SAVE_PROBLEM_PHASES: ReadonlySet<SaveProjection['phase']> = new Set(['ambiguous', 'unavailable', 'unauthorized', 'blocked']);
@@ -13,13 +12,8 @@ export interface EditorNoticesProps {
   /** The editor's latest status sentence, optionally with the tone the caller already knows. */
   message: EditorNoticeInput | null;
   onDismissMessage: () => void;
-  /** Reports a new status sentence. Conflict failures are shown inside the conflict dialog instead. */
-  onMessage: (message: string) => void;
-  documentTitle: string;
   save?: SaveProjection;
   localProtectionUnavailable?: boolean;
-  conflictState?: ConflictResolutionState;
-  conflictResolution?: ConflictDialogResolution;
 }
 
 /**
@@ -27,17 +21,13 @@ export interface EditorNoticesProps {
  * Save problems are bands that stay while they last (they are part of the layout). The latest status message floats
  * over the top of the workspace instead, so it never pushes the page down or pulls it back up: a finished change
  * leaves after 4 s; an error or an instruction stays until the person closes it or the next message replaces it.
- * FR-44: every save problem has its plain explanation here, also in the simple mode. FR-43: a conflict opens the
- * blocking conflict dialog instead of a band.
+ * FR-44: every save problem has its plain explanation here, also in the simple mode. FR-43: a conflict is not a
+ * band: the editor shows the blocking SaveConflictDialog (rendered outside the editor shell, see ConflictDialog.tsx).
  */
-export function EditorNotices({
-  message, onDismissMessage, documentTitle, save, localProtectionUnavailable, conflictState = 'idle', conflictResolution,
-}: EditorNoticesProps) {
-  const conflict = save?.phase === 'conflict' && conflictResolution;
+export function EditorNotices({ message, onDismissMessage, save, localProtectionUnavailable }: EditorNoticesProps) {
   const saveProblem = save !== undefined && SAVE_PROBLEM_PHASES.has(save.phase);
   return (
     <div className="vnext-editor-notices" data-editor-notices="">
-      {conflict && <ConflictDialog documentTitle={documentTitle} state={conflictState} resolution={conflict} />}
       {(localProtectionUnavailable || saveProblem) && (
         <div className="vnext-editor-notice-bands" data-editor-notice-bands="">
           {localProtectionUnavailable && (

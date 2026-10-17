@@ -75,7 +75,8 @@ export interface AssetLoadingCoordinatorOptions {
  * FR-41: the catalog opens before its photos. Each photo in use (pages, groups and table cells)
  * that has no picture yet is marked "loading" and downloaded in the background, at most 4 at a
  * time, and appears as soon as it arrives. Photos only listed in the catalog are not downloaded
- * until they are used. A photo that fails keeps its failure state until "Tentar novamente".
+ * until they are used. A photo that fails keeps its failure state until "Tentar novamente" or until
+ * the connection returns (retryAfterReconnect).
  */
 export class AssetLoadingCoordinator {
   private readonly concurrency: number;
@@ -109,14 +110,19 @@ export class AssetLoadingCoordinator {
     this.queued.clear();
   }
 
-  /** Photos currently shown as "Sem conexão" are tried again (e.g. when the connection returns). */
-  retryOffline(): Promise<void> {
+  /**
+   * When the connection returns, photos in use that did not load are tried again: "Sem conexão"
+   * and also "Foto não carregou", because the connection may have dropped in the middle of a
+   * download while the browser still said it was online. "Foto com problema" (the bytes do not
+   * match) is never retried: downloading it again gives the same bytes.
+   */
+  retryAfterReconnect(): Promise<void> {
     const snapshot = this.options.workspace.getSnapshot();
     const used = referencedAssetIds(snapshot.session.getSnapshot().document);
-    const offline = [...snapshot.assetRuntimeStates.entries()]
-      .filter(([assetId, state]) => state.status === 'offline' && used.has(assetId))
+    const failed = [...snapshot.assetRuntimeStates.entries()]
+      .filter(([assetId, state]) => (state.status === 'offline' || state.status === 'unavailable') && used.has(assetId))
       .map(([assetId]) => assetId);
-    return Promise.all(offline.map((assetId) => this.retry(assetId))).then(() => undefined);
+    return Promise.all(failed.map((assetId) => this.retry(assetId))).then(() => undefined);
   }
 
   retry(assetId: string): Promise<AssetRuntimeState | undefined> {

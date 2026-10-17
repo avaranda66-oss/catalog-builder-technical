@@ -25,12 +25,19 @@ interface CachedUrlEntry {
 }
 
 export interface DefaultAssetPersistenceBridgeOptions {
-  readonly fetchBytes?: (url: string) => Promise<ArrayBuffer>;
+  /** Downloads the photo bytes; `signal` aborts the download when it takes too long. */
+  readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<ArrayBuffer>;
   /** FR-45: true when the browser says there is no connection (`navigator.onLine === false`). */
   readonly isOffline?: () => boolean;
   readonly getActiveLineage?: () => AssetLineageContext;
   /** FR-41: photos downloaded and checked at the same time. Default 4. */
   readonly maxConcurrentDownloads?: number;
+  /**
+   * FR-41: a photo whose download takes longer than this (ms) is reported as not loaded and its
+   * download slot is handed on, so one stuck request never blocks the other photos or "Tentar
+   * novamente". Default 30 s.
+   */
+  readonly downloadTimeoutMs?: number;
   /** FR-45: receives a short, sanitized code when a photo could not be loaded (never a URL or message). */
   readonly logFailure?: (code: string) => void;
   /**
@@ -54,6 +61,36 @@ interface PendingFinalizationAttempt {
 }
 
 export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 4;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/** A photo download that took longer than `downloadTimeoutMs`. Its code is what the log keeps. */
+class AssetDownloadTimeout extends Error {
+  readonly code = 'TIMEOUT';
+  constructor() {
+    super('Photo download timed out');
+    this.name = 'AssetDownloadTimeout';
+  }
+}
+
+/**
+ * Runs `task` with an abort signal and rejects with AssetDownloadTimeout after `timeoutMs`.
+ * The task may still finish later; its result is then ignored.
+ */
+async function withDownloadTimeout<T>(timeoutMs: number, task: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+  const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abort?.abort();
+      reject(new AssetDownloadTimeout());
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([task(abort?.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** At most `max` tasks run at once; the others wait in order. A finished task hands its slot on. */
 class ConcurrencyLimit {
@@ -509,7 +546,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const activeFlight = this.inFlight.get(cacheKey);
     if (activeFlight) return await activeFlight;
 
-    const download = async (): Promise<AssetResolutionResult> => {
+    const download = async (signal?: AbortSignal): Promise<AssetResolutionResult> => {
         // Fetch durable asset record
         const recordResult = await this.repository.getAsset(asset.id, asset.version);
         if (!isCurrent()) return staleResult();
@@ -585,9 +622,9 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
         // Fetch bytes to verify byte integrity
         let bytes: ArrayBuffer;
         if (this.options.fetchBytes) {
-          bytes = await this.options.fetchBytes(signedUrl);
+          bytes = await this.options.fetchBytes(signedUrl, signal);
         } else if (typeof fetch !== 'undefined') {
-          const res = await fetch(signedUrl, { cache: 'no-store' });
+          const res = await fetch(signedUrl, { cache: 'no-store', ...(signal ? { signal } : {}) });
           if (!res.ok) {
             return {
               ok: false,
@@ -659,8 +696,11 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
     const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
       try {
-        // FR-41: at most 4 photos are downloaded and checked at the same time.
-        return await this.downloads.run(async () => (isCurrent() ? download() : staleResult()));
+        // FR-41: at most 4 photos are downloaded and checked at the same time, and a stuck
+        // download gives its slot back after the time limit (it then counts as not loaded).
+        return await this.downloads.run(async () => (isCurrent()
+          ? withDownloadTimeout(this.options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, download)
+          : staleResult()));
       } catch (error) {
         // A failed photo transport must not prevent the catalog from reopening.
         // Keep the canonical reference so the user can retry without uploading again.

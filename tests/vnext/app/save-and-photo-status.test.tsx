@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AssetPersistenceBridge, AssetResolutionResult, AssetRuntimeState } from '@/vnext/asset';
@@ -46,10 +48,23 @@ const asset: AssetRef = {
 };
 
 describe('FR-41 photo mark on the page', () => {
-  it('says "Carregando foto…" while the photo is still downloading', () => {
-    render(<ImageRepairIndicator objectId="photo" loading state={undefined} onRetry={vi.fn()} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Carregando foto…');
+  it('says "Carregando foto…" while the photo is still downloading, without one announcement per photo', () => {
+    const { container } = render(<ImageRepairIndicator objectId="photo" loading state={undefined} onRetry={vi.fn()} />);
+    expect(container.querySelector('[data-asset-status="loading"]')).toHaveTextContent('Carregando foto…');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('keeps the texts and the button at screen size inside the zoomed page (they undo the page zoom)', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/ImageRepairIndicator.css'), 'utf8');
+    expect(css).toMatch(/\.repair-content \{[^}]*zoom: var\(--vnext-stage-unzoom, 1\)/);
+    expect(css).toMatch(/\.repair-retry \{[^}]*min-height: 32px/);
+    expect(css).toMatch(/\.repair-retry \{[^}]*font-size: 14px/);
+    const { container } = render(<ImageRepairIndicator objectId="photo" loading={false}
+      state={{ status: 'offline', asset }} onRetry={vi.fn()} />);
+    const content = container.querySelector('.repair-content');
+    expect(content).toContainElement(screen.getByText('Sem conexão'));
+    expect(content).toContainElement(screen.getByRole('button', { name: /^Tentar novamente/ }));
   });
 
   it.each([
@@ -61,7 +76,8 @@ describe('FR-41 photo mark on the page', () => {
     const onPointerDown = vi.fn();
     render(<div onPointerDown={onPointerDown}><ImageRepairIndicator objectId="photo" loading={false} state={state} onRetry={onRetry} /></div>);
     expect(screen.getByText(title)).toBeInTheDocument();
-    const button = screen.getByRole('button', { name: 'Tentar novamente' });
+    // The name says which photo the button is for; it starts with the words on the button.
+    const button = screen.getByRole('button', { name: 'Tentar novamente — foto “Foto do produto”' });
     fireEvent.pointerDown(button);
     fireEvent.click(button);
     expect(onRetry).toHaveBeenCalledTimes(1);
@@ -72,7 +88,16 @@ describe('FR-41 photo mark on the page', () => {
     render(<ImageRepairIndicator objectId="photo" loading={false} state={{ status: 'integrity-failed', code: 'HASH_MISMATCH', message: 'x', asset }} onRetry={vi.fn()} />);
     expect(screen.getByText('Foto com problema')).toBeInTheDocument();
     expect(screen.getByText('Envie a foto de novo.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tentar novamente' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Tentar novamente/ })).not.toBeInTheDocument();
+  });
+
+  it('falls back to the file name, and to the plain button text when the photo has neither', () => {
+    const { rerender } = render(<ImageRepairIndicator objectId="photo" loading={false}
+      state={{ status: 'offline', asset: { ...asset, alt: '' } }} onRetry={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Tentar novamente — foto “foto.png”' })).toBeInTheDocument();
+    rerender(<ImageRepairIndicator objectId="photo" loading={false}
+      state={{ status: 'offline', asset: { ...asset, alt: '', name: '' } }} onRetry={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument();
   });
 
   it('shows nothing for a photo that loaded', () => {
@@ -103,21 +128,21 @@ describe('FR-41 "Tentar novamente" in the editor', () => {
     const bridge = { resolve: vi.fn<AssetPersistenceBridge['resolve']>(() => pending.promise) };
 
     render(<Host runtime={runtime} bridge={bridge} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tentar novamente/ }));
 
     expect(bridge.resolve).toHaveBeenCalledWith(asset, expect.objectContaining({
       forceRefresh: true,
       authLineage: 'user-a:0',
       openSessionId: runtime.workspace.getSnapshot().binding.openSessionId,
     }));
-    expect(screen.getByRole('status')).toHaveTextContent('Carregando foto…');
+    expect(screen.getByText('Carregando foto…')).toBeInTheDocument();
 
     await act(async () => {
       pending.resolve({ ok: true, state: { status: 'resolved', url: 'blob:nova', expiresAt: Date.now() + 60_000, asset } });
       await pending.promise;
     });
     expect(screen.queryByText('Carregando foto…')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tentar novamente' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Tentar novamente/ })).not.toBeInTheDocument();
     expect(runtime.workspace.getSnapshot().assetUrls.get(asset.id)).toBe('blob:nova');
     await runtime.dispose();
   });

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_DOWNLOAD_TIMEOUT_MS,
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
   DefaultAssetPersistenceBridge,
   sanitizedAssetErrorCode,
@@ -100,6 +101,50 @@ describe('FR-41 photos download together, at most 4 at a time', () => {
     expect(peak).toBe(4);
     expect([...resolved.states.values()].every((state) => state.status === 'resolved')).toBe(true);
     expect(resolved.urls.size).toBe(10);
+  });
+
+  it('gives up on a stuck download after the time limit, frees its slot and lets "Tentar novamente" work', async () => {
+    const stuck = await photo(1);
+    const next = await photo(2);
+    const repository = repositoryFor([stuck, next]);
+    // The record request of the first photo never answers (a request stuck in the network).
+    const neverAnswers = new Promise<never>(() => undefined);
+    repository.getAsset.mockImplementationOnce(() => neverAnswers);
+    const signals: Array<AbortSignal | undefined> = [];
+    const fetchBytes = vi.fn(async (_url: string, signal?: AbortSignal) => { signals.push(signal); return PNG.slice().buffer; });
+    const logFailure = vi.fn();
+    const bridge = new DefaultAssetPersistenceBridge(repository, {
+      imageReencoder: null, fetchBytes, logFailure, maxConcurrentDownloads: 1, downloadTimeoutMs: 20,
+    });
+
+    const first = bridge.resolve(stuck);
+    const second = bridge.resolve(next);
+    // With a single slot, the second photo waits for the stuck one; the time limit releases it.
+    await expect(first).resolves.toMatchObject({ ok: false, state: { status: 'unavailable', asset: stuck } });
+    await expect(second).resolves.toMatchObject({ ok: true, state: { status: 'resolved' } });
+    expect(logFailure).toHaveBeenCalledWith('TIMEOUT');
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[0]?.aborted).toBe(false);
+
+    // "Tentar novamente" downloads the same photo again and, now that the server answers, it loads.
+    await expect(bridge.resolve(stuck, { forceRefresh: true })).resolves.toMatchObject({ ok: true, state: { status: 'resolved' } });
+    expect(DEFAULT_DOWNLOAD_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('aborts the byte download itself when it is the part that takes too long', async () => {
+    const slow = await photo(1);
+    const repository = repositoryFor([slow]);
+    let seen: AbortSignal | undefined;
+    const fetchBytes = vi.fn((_url: string, signal?: AbortSignal) => {
+      seen = signal;
+      return new Promise<ArrayBuffer>(() => undefined);
+    });
+    const bridge = new DefaultAssetPersistenceBridge(repository, {
+      imageReencoder: null, fetchBytes, logFailure: vi.fn(), downloadTimeoutMs: 20, isOffline: () => false,
+    });
+
+    await expect(bridge.resolve(slow)).resolves.toMatchObject({ ok: false, state: { status: 'unavailable' } });
+    expect(seen?.aborted).toBe(true);
   });
 
   it('with onlyUsed, never downloads a photo that is only in the catalog photo list', async () => {

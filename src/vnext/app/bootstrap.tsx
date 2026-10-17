@@ -459,9 +459,9 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       isActive: () => !authorityInvalidated,
     });
     photoLoader.start();
-    const retryOfflinePhotos = () => { void photoLoader?.retryOffline(); };
-    window.addEventListener('online', retryOfflinePhotos);
-    window.addEventListener('pagehide', () => window.removeEventListener('online', retryOfflinePhotos), { once: true });
+    const retryFailedPhotos = () => { void photoLoader?.retryAfterReconnect(); };
+    window.addEventListener('online', retryFailedPhotos);
+    window.addEventListener('pagehide', () => window.removeEventListener('online', retryFailedPhotos), { once: true });
 
     const detachAddress = syncCatalogAddress(runtime);
     window.addEventListener('pagehide', detachAddress, { once: true });

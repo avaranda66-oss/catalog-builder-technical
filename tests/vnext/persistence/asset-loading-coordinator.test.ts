@@ -140,25 +140,35 @@ describe('FR-41 photos load in the background after the catalog opens', () => {
     expect(runtime.workspace.getSnapshot().assetUrls.has(used[0]!.id)).toBe(false);
   });
 
-  it('tries the photos shown as "Sem conexão" again when the connection returns', async () => {
+  it('tries "Sem conexão" and "Foto não carregou" again when the connection returns, never "Foto com problema"', async () => {
     const offline = photo(1);
     const working = photo(2);
-    const { runtime } = openCatalog(catalog([offline, working]));
+    const droppedMidway = photo(3);
+    const corrupt = photo(4);
+    const { runtime } = openCatalog(catalog([offline, working, droppedMidway, corrupt]));
     const { resolve, answer } = controlledResolver();
     const loader = startLoader(runtime, resolve);
     await settleAsyncWork();
     await answer(offline, failed(offline, 'offline'));
     await answer(working, resolved(working));
+    // The connection dropped during this download while the browser still said "online".
+    await answer(droppedMidway, failed(droppedMidway, 'unavailable'));
+    await answer(corrupt, { ok: false, state: { status: 'integrity-failed', code: 'SHA256_MISMATCH', message: 'x', asset: corrupt } });
+    expect(resolve).toHaveBeenCalledTimes(4);
 
-    const retried = loader.retryOffline();
+    const retried = loader.retryAfterReconnect();
     await settleAsyncWork();
-    expect(resolve).toHaveBeenCalledTimes(3);
-    expect(resolve.mock.calls[2]![0].id).toBe(offline.id);
-    expect(resolve.mock.calls[2]![1]).toMatchObject({ forceRefresh: true });
+    const retriedCalls = resolve.mock.calls.slice(4);
+    expect(retriedCalls.map(([asset]) => asset.id).sort()).toEqual([offline.id, droppedMidway.id].sort());
+    expect(retriedCalls.every(([, context]) => context.forceRefresh === true)).toBe(true);
     expect(runtime.workspace.getSnapshot().loadingAssetIds.has(offline.id)).toBe(true);
+    expect(runtime.workspace.getSnapshot().loadingAssetIds.has(corrupt.id)).toBe(false);
     await answer(offline, resolved(offline));
+    await answer(droppedMidway, resolved(droppedMidway));
     await retried;
     expect(runtime.workspace.getSnapshot().assetUrls.get(offline.id)).toBe(`blob:${offline.id}`);
+    expect(runtime.workspace.getSnapshot().assetUrls.get(droppedMidway.id)).toBe(`blob:${droppedMidway.id}`);
+    expect(runtime.workspace.getSnapshot().assetRuntimeStates.get(corrupt.id)?.status).toBe('integrity-failed');
   });
 });
 

@@ -4,6 +4,7 @@ import type {
   ConflictResolutionCoordinator,
   ConflictResolutionResult,
   ConflictResolutionState,
+  SaveProjection,
 } from '../../persistence';
 import { trapReviewTab, useReviewDialog } from '../review-dialog';
 import './ConflictDialog.css';
@@ -127,4 +128,21 @@ export function ConflictDialog({ documentTitle, state, resolution }: ConflictDia
     </div>,
     document.body
   );
+}
+
+/**
+ * FR-43: the conflict dialog of the open catalog, shown while the save is in conflict.
+ * Render it NEXT TO the editor shell, never inside it: React sends a portal's key and pointer
+ * events through its parent components, so inside the shell the editor's own shortcuts
+ * (Ctrl+Z, Ctrl+Y, Esc and Ctrl+Enter of a cell or text being edited) would act on the work
+ * behind the dialog.
+ */
+export function SaveConflictDialog({ save, documentTitle, state = 'idle', resolution }: {
+  readonly save?: SaveProjection;
+  readonly documentTitle: string;
+  readonly state?: ConflictResolutionState;
+  readonly resolution?: ConflictDialogResolution;
+}) {
+  if (save?.phase !== 'conflict' || !resolution) return null;
+  return <ConflictDialog documentTitle={documentTitle} state={state} resolution={resolution} />;
 }

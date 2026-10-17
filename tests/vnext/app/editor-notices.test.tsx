@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
+import { SaveConflictDialog } from '@/vnext/app/editor/ConflictDialog';
 import {
   classifyEditorNotice, editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, successNotice,
 } from '@/vnext/editor/editor-notices';
@@ -63,20 +64,17 @@ describe('FR-12 status message tone', () => {
 
 function renderNotices(props: Partial<React.ComponentProps<typeof EditorNotices>> = {}) {
   const onDismissMessage = vi.fn();
-  const onMessage = vi.fn();
-  const view = render(<EditorNotices message={null} onDismissMessage={onDismissMessage} onMessage={onMessage}
-    documentTitle="TA-25N — Ficha técnica" save={idle} {...props} />);
-  return { view, onDismissMessage, onMessage };
+  const view = render(<EditorNotices message={null} onDismissMessage={onDismissMessage} save={idle} {...props} />);
+  return { view, onDismissMessage };
 }
 
 describe('FR-12 editor notices', () => {
   it('hides a success message after 4 seconds, even when the editor re-renders', () => {
     vi.useFakeTimers();
-    const { view, onDismissMessage, onMessage } = renderNotices({ message: 'Objeto excluído.' });
+    const { view, onDismissMessage } = renderNotices({ message: 'Objeto excluído.' });
     expect(screen.getByRole('status')).toHaveTextContent('Objeto excluído.');
     act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS - 100); });
-    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={() => onDismissMessage()} onMessage={onMessage}
-      documentTitle="TA-25N — Ficha técnica" save={idle} />);
+    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={() => onDismissMessage()} save={idle} />);
     act(() => { vi.advanceTimersByTime(100); });
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
@@ -100,12 +98,11 @@ describe('FR-12 editor notices', () => {
 
   it('does not keep a hover pause from a message that was replaced while the pointer was over it', () => {
     vi.useFakeTimers();
-    const { view, onDismissMessage, onMessage } = renderNotices({ message: 'Objeto movido.' });
+    const { view, onDismissMessage } = renderNotices({ message: 'Objeto movido.' });
     fireEvent.mouseEnter(screen.getByRole('status'));
     act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS * 2); });
     expect(onDismissMessage).not.toHaveBeenCalled();
-    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={onDismissMessage} onMessage={onMessage}
-      documentTitle="TA-25N — Ficha técnica" save={idle} />);
+    view.rerender(<EditorNotices message="Objeto excluído." onDismissMessage={onDismissMessage} save={idle} />);
     act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
@@ -124,7 +121,7 @@ describe('FR-12 editor notices', () => {
     const { view } = renderNotices({ message: 'Enviando imagem…' });
     expect(screen.getByRole('status')).toHaveTextContent('Enviando imagem…');
     expect(screen.queryByRole('button', { name: 'Fechar aviso' })).toBeNull();
-    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x" save={idle} />);
+    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} save={idle} />);
     expect(screen.queryByRole('status')).toBeNull();
     expect(document.querySelector('[data-editor-notices]')).toBeEmptyDOMElement();
   });
@@ -142,7 +139,7 @@ describe('FR-12 editor notices', () => {
       expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute');
       expect(getComputedStyle(area).position).toBe('relative');
       // A save problem is a band in the flow; the message still floats below it.
-      view.rerender(<EditorNotices message="Texto atualizado." onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x"
+      view.rerender(<EditorNotices message="Texto atualizado." onDismissMessage={vi.fn()}
         save={{ phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true }} />);
       const bands = document.querySelector<HTMLElement>('[data-editor-notice-bands]')!;
       expect(bands).toContainElement(screen.getByRole('alert'));
@@ -161,15 +158,18 @@ describe('FR-12 editor notices', () => {
   });
 });
 
-describe('FR-43 conflict (blocking dialog, wired through the notices)', () => {
+describe('FR-43 conflict (blocking dialog next to the editor, never a band)', () => {
   function conflictSetup(state: ConflictResolutionState = 'idle') {
     const resolution = {
       openLatest: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: true, catalogId: 'a', kind: 'latest' })),
       saveAsCopy: vi.fn(async (): Promise<ConflictResolutionResult> => ({ ok: false, error: { code: 'OFFLINE' } })),
       keepsLocalBackup: true,
     };
-    const rendered = renderNotices({ save: conflict, conflictState: state, conflictResolution: resolution });
-    return { ...rendered, resolution };
+    const view = render(<>
+      <EditorNotices message={null} onDismissMessage={vi.fn()} save={conflict} />
+      <SaveConflictDialog save={conflict} documentTitle="TA-25N — Ficha técnica" state={state} resolution={resolution} />
+    </>);
+    return { view, resolution };
   }
 
   it('opens a dialog instead of a band, offers the copy first and says exactly what each choice keeps', () => {
@@ -182,6 +182,14 @@ describe('FR-43 conflict (blocking dialog, wired through the notices)', () => {
     expect(dialog).toHaveTextContent('Uma cópia de segurança delas fica guardada neste computador');
     const buttons = dialog.querySelectorAll('[data-persistence-conflict-actions] button');
     expect([...buttons].map((button) => button.textContent)).toEqual(['Salvar meu trabalho como cópia', 'Abrir versão mais recente']);
+  });
+
+  it('shows nothing when the save is not in conflict or the editor has no saving service', () => {
+    const resolution = { openLatest: vi.fn(), saveAsCopy: vi.fn() };
+    const view = render(<SaveConflictDialog save={idle} documentTitle="x" resolution={resolution} />);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    view.rerender(<SaveConflictDialog save={conflict} documentTitle="x" />);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('asks before discarding and only opens the latest version after confirmation', async () => {
@@ -197,12 +205,12 @@ describe('FR-43 conflict (blocking dialog, wired through the notices)', () => {
   });
 
   it('reports a failed copy inside the dialog in plain language and disables both choices while one runs', async () => {
-    const { resolution, onMessage } = conflictSetup();
+    const { resolution } = conflictSetup();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar meu trabalho como cópia' })); });
     expect(resolution.saveAsCopy).toHaveBeenCalledOnce();
     expect(within(screen.getByRole('alertdialog')).getByRole('alert'))
       .toHaveTextContent('Não foi possível salvar seu trabalho como cópia. Confira a conexão e tente de novo. Seu trabalho continua nesta tela.');
-    expect(onMessage).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-editor-notice]')).toBeNull();
     cleanup();
     conflictSetup('resolving-save-as-copy');
     const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-persistence-conflict-actions] button')];
@@ -220,7 +228,7 @@ describe('FR-44 save explanations in the notices', () => {
     const band = screen.getByRole('alert');
     expect(band).toHaveTextContent('Vamos tentar salvar de novo sozinhos em instantes. Você também pode clicar em Salvar.');
     expect(band).toHaveAttribute('data-tone', 'warning');
-    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()} onMessage={vi.fn()} documentTitle="x"
+    view.rerender(<EditorNotices message={null} onDismissMessage={vi.fn()}
       save={{ ...waiting, retry: { attempt: 5, maxAttempts: 5, exhausted: true } }} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Tentamos salvar várias vezes sem conseguir. Quando a conexão voltar, clique em Salvar.');
     expect(screen.getByRole('alert')).toHaveAttribute('data-tone', 'error');
