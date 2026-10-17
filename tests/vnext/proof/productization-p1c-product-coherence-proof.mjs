@@ -382,11 +382,12 @@ async function workflow(browser, width, first) {
     // FR-51: the starter's pending fields ("A COMPLETAR") block the PDF with their locations until they are filled.
     await page.locator('[data-editor-action="publish"]').click();
     await page.locator('[data-publication-status="BLOCKED"]').waitFor();
-    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 7);
+    // FR-81: the source note is no longer printed, so the six pending fields are what blocks.
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 6);
     await shot(page, 'publication-provisional-blocked', width);
     await page.keyboard.press('Escape');
     await page.locator('[data-publication-host]').waitFor({ state: 'detached' });
-    assert((await fillProvisionalContent(page)).length >= 7);
+    assert((await fillProvisionalContent(page)).length >= 6);
     await save(page);
   }
   await page.locator('[data-editor-action="publish"]').click();

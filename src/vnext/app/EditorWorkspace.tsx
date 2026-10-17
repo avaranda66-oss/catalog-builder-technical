@@ -75,6 +75,7 @@ import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraf
 import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type CellEditorMove, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
 import { PagePanel } from './editor/PagePanel';
+import { PageTemplateGallery } from './editor/PageTemplateGallery';
 import {
   prepareAxisReorder,
   prepareColumnBoundaryDrag,
@@ -129,7 +130,8 @@ import { successNotice, type EditorNoticeInput } from '../editor/editor-notices'
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
-import { PRESYS_PRESENTATION_PAGE_ID, PRESYS_SPECIFICATIONS_PAGE_ID } from '../library/presys-ta25n-starter';
+import { isPresysTa25nPageTemplate } from '../library/presys-ta25n-starter';
+import { PRESYS_DEFAULT_PAGE_MODEL_ID } from '../library/presys-page-models';
 import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
@@ -337,7 +339,7 @@ export function EditorWorkspace({
   const [statusMessage, setStatusMessage] = React.useState<EditorNoticeInput | null>(null);
   const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
-  const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
+  const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_DEFAULT_PAGE_MODEL_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
   const officialPageReuse = hasPresysPageReuse(session);
@@ -2385,7 +2387,7 @@ export function EditorWorkspace({
     if (pageTemplateBusyRef.current) return;
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('superseded');
-    if (officialPageReuse) {
+    if (officialPageReuse && isPresysTa25nPageTemplate(pageTemplateChoice)) {
       const targetPageId = selectedPage.id;
       pageTemplateBusyRef.current = true;
       setPageTemplateBusy(true);
@@ -2398,6 +2400,7 @@ export function EditorWorkspace({
           return;
         }
         setActivePage(result.pageId);
+        if (simpleByDefault) setPageReuseOpen(false);
         setStatusMessage(activePageIdRef.current === result.pageId
           ? 'Modelo PRESYS inserido como página independente.'
           : 'Modelo PRESYS inserido. Conclua ou cancele a edição pendente para abrir a nova página.');
@@ -2407,15 +2410,17 @@ export function EditorWorkspace({
       }
       return;
     }
+    // FR-80: the PRESYS archetypes are ordinary page templates of the production registry.
     const result = session.execute({
       type: 'page.template.insert',
-      templateId: W2E_PAGE_TEMPLATE_ID,
+      templateId: officialPageReuse ? pageTemplateChoice : W2E_PAGE_TEMPLATE_ID,
       afterPageId: selectedPage.id,
     });
     if (!result.ok) { setStatusMessage('Não foi possível inserir o modelo.'); return; }
     const createdPageId = result.metadata.createdIds[0];
     if (createdPageId) setActivePage(createdPageId);
-    setStatusMessage('Modelo inserido como página independente.');
+    if (simpleByDefault) setPageReuseOpen(false);
+    setStatusMessage(officialPageReuse ? 'Modelo inserido como página nova, depois da página atual. Para voltar, use Desfazer.' : 'Modelo inserido como página independente.');
   };
 
   /** FR-30: after Desfazer/Refazer from the cell editor (key or button) the grid keeps the keys. */
@@ -3886,7 +3891,8 @@ export function EditorWorkspace({
       <div className="vnext-workspace">
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
           prepareForChange={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
-          onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}>
+          onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}
+          thumbnails={{ document, assetUrls: persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS }}>
           {simpleByDefault && (
             <button
               type="button"
@@ -3901,10 +3907,7 @@ export function EditorWorkspace({
           )}
           {pageReuseOpen && (
             <div id="vnext-page-reuse" className="vnext-page-reuse">
-              {officialPageReuse && <select aria-label="Modelo de página PRESYS" value={pageTemplateChoice} onChange={event => setPageTemplateChoice(event.target.value)} disabled={pageTemplateBusy}>
-                <option value={PRESYS_PRESENTATION_PAGE_ID}>TA-25N · Apresentação</option>
-                <option value={PRESYS_SPECIFICATIONS_PAGE_ID}>TA-25N · Especificações</option>
-              </select>}
+              {officialPageReuse && <PageTemplateGallery value={pageTemplateChoice} onChange={setPageTemplateChoice} disabled={pageTemplateBusy} onClose={simpleByDefault ? () => setPageReuseOpen(false) : undefined} />}
               <button type="button" className="vnext-page-reuse-action" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
             </div>
           )}

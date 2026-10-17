@@ -331,9 +331,9 @@ try {
   const blocked = await fresh.locator('[data-publication-diagnostic]').allTextContents();
   assert(await fresh.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').count() > 0);
   assert(blocked.some(text => text.includes('Página 1') && text.includes('texto')));
-  // FR-51: the starter's six pending fields and its source note block the PDF, each with an exact location.
+  // FR-51: the starter's six pending fields block the PDF, each with an exact location (FR-81: the source note is no longer printed).
   const provisional = await fresh.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').allTextContents();
-  assert(provisional.length >= 7, 'Provisional text must block publication: ' + provisional.length);
+  assert(provisional.length >= 6, 'Provisional text must block publication: ' + provisional.length);
   for (const text of provisional) assert(/Página \d/.test(text) && text.includes('Ainda está escrito'), text);
   await fresh.screenshot({ path: resolve(output, 'publication-blocked.png'), fullPage: true });
   // FR-13: "Corrigir este item" closes the review and selects the overflowing text in the editor.
@@ -346,7 +346,7 @@ try {
   await fresh.locator('[data-editor-action="commit-text"]').click();
   await fresh.locator('[data-text-edit-textarea]').waitFor({ state: 'detached' });
   const provisionalFilled = await fillProvisionalContent(fresh);
-  assert(provisionalFilled.length >= 7);
+  assert(provisionalFilled.length >= 6);
   if (await fresh.locator('[data-editor-action="save"]').isEnabled()) await fresh.locator('[data-editor-action="save"]').click();
   await saved(fresh);
   await fresh.getByRole('button', { name: 'Voltar aos catálogos', exact: true }).click();

@@ -3,6 +3,8 @@ import { ArrowDown, ArrowUp, Copy, FileText, MoreHorizontal, Plus, Trash2 } from
 import type { DocumentSession } from '../../application';
 import type { Page } from '../../domain';
 import { describePageObjects, pageHeadline, pageLabel } from '../../editor/page-summary';
+import { pageTitle } from '../../editor/page-title';
+import { PageThumbnail, pageThumbnailSignature, type PageThumbnailDocument } from './PageThumbnail';
 import './PagePanel.css';
 
 export const LAST_PAGE_MESSAGE = 'O catálogo precisa ter pelo menos uma página. Adicione outra página antes de excluir esta.';
@@ -21,6 +23,11 @@ export type PagePanelProps = {
   readonly onStatus: (message: string) => void;
   /** Extra controls under "Adicionar página" (page models). */
   readonly children?: React.ReactNode;
+  /** FR-18: when given, each page shows a small picture of itself and its first title. */
+  readonly thumbnails?: {
+    readonly document: PageThumbnailDocument;
+    readonly assetUrls: ReadonlyMap<string, string>;
+  };
 };
 
 /**
@@ -29,7 +36,7 @@ export type PagePanelProps = {
  * it). Every change goes through the existing page.* actions, so Desfazer
  * (Ctrl+Z) brings it back.
  */
-export function PagePanel({ pages, currentPageId, session, prepareForChange, onSelectPage, onAddPage, onStatus, children }: PagePanelProps) {
+export function PagePanel({ pages, currentPageId, session, prepareForChange, onSelectPage, onAddPage, onStatus, children, thumbnails }: PagePanelProps) {
   const [menuPageId, setMenuPageIdState] = React.useState<string | null>(null);
   const [menuPosition, setMenuPosition] = React.useState<React.CSSProperties>({});
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
@@ -39,6 +46,9 @@ export function PagePanel({ pages, currentPageId, session, prepareForChange, onS
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const cancelRef = React.useRef<HTMLButtonElement | null>(null);
   const idPrefix = React.useId();
+  const defaultText = thumbnails?.document.style.defaultText;
+  const titles = React.useMemo(() => new Map(thumbnails ? pages.map((page) => [page.id, pageTitle(page, defaultText)] as const) : []),
+    [defaultText, pages, thumbnails]);
 
   /** The menu is fixed-positioned next to its "⋯" so the scrolling page list never clips it. */
   const setMenuPageId = (pageId: string | null) => {
@@ -194,8 +204,9 @@ export function PagePanel({ pages, currentPageId, session, prepareForChange, onS
           const open = menuPageId === page.id;
           const label = pageLabel(index);
           const menuId = `${idPrefix}-menu-${index}`;
+          const title = titles.get(page.id) ?? '';
           return (
-            <div key={page.id} className="vnext-page-row" data-page-row={page.id}>
+            <div key={page.id} className={thumbnails ? 'vnext-page-row has-thumbnail' : 'vnext-page-row'} data-page-row={page.id}>
               <button
                 ref={(node) => { if (node) pageRefs.current.set(page.id, node); else pageRefs.current.delete(page.id); }}
                 type="button"
@@ -203,9 +214,17 @@ export function PagePanel({ pages, currentPageId, session, prepareForChange, onS
                 data-authoring-context-transition=""
                 className={current ? 'is-current' : undefined}
                 aria-current={current ? 'page' : undefined}
+                title={title || undefined}
                 onClick={() => onSelectPage(page.id)}
               >
-                <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span><span>{label}</span>
+                {thumbnails
+                  ? <PageThumbnail page={page} document={thumbnails.document} assetUrls={thumbnails.assetUrls} signature={pageThumbnailSignature(page, thumbnails.document)} />
+                  : <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span>}
+                <span className="vnext-page-label">
+                  <span>{label}</span>
+                  {/* The title is drawn from an attribute so the page's own words are not repeated as text on screen readers or searches; the button's title attribute describes it. */}
+                  {title && <span className="vnext-page-title" aria-hidden="true" data-page-title={title} />}
+                </span>
               </button>
               <button
                 ref={(node) => { if (node) triggerRefs.current.set(page.id, node); else triggerRefs.current.delete(page.id); }}

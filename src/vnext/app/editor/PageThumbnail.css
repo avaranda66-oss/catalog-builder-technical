@@ -1,0 +1,5 @@
+/* FR-18 page thumbnails: an A4 sheet at about 0.15 of its size, white with a thin border (navy/white baseline).
+   Containment keeps the drawn page's layout and paint inside the thumbnail; off-screen ones skip rendering work. */
+.vnext-page-thumbnail { position: relative; display: block; width: 100%; aspect-ratio: 210 / 297; overflow: hidden; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 1px 2px rgba(23,32,51,.08); pointer-events: none; contain: strict; content-visibility: auto; }
+.vnext-page-thumbnail[data-thumbnail-state="waiting"]::after,
+.vnext-page-thumbnail[data-thumbnail-state="error"]::after { content: ''; position: absolute; inset: 14% 16%; background: repeating-linear-gradient(#e6ebf1 0 4px, transparent 4px 11px); }

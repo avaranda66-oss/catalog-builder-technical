@@ -91,12 +91,13 @@ describe('FR-51 placeholder detection', () => {
     for (const issue of diagnostics) expect(publicationDiagnosticText(issue)).not.toMatch(/UNRESOLVED|surface|token/);
   });
 
-  it('reports the official TA-25N starter as blocked, listing its six pending fields and the source note', () => {
+  it('reports the official TA-25N starter as blocked, listing its six pending fields', () => {
     const document = PRESYS_STARTER.sourceDocument;
     const placeholders = placeholderDiagnostics(document);
     const cells = placeholders.filter((issue) => issue.cellId);
     expect(cells).toHaveLength(6);
-    expect(placeholders.filter((issue) => !issue.cellId).map((issue) => issue.objectId)).toEqual(['presys-source-note']);
+    // FR-81: the source note is no longer printed on the page; it lives in the starter's review notes.
+    expect(placeholders.filter((issue) => !issue.cellId)).toEqual([]);
     expect(placeholders.every((issue) => publicationDiagnosticLocation(document, issue).startsWith('Página '))).toBe(true);
     // The starter photo is about 145 ppi at its printed size: a review point, not a block.
     expect(imageResolutionDiagnostics(document)).toEqual([expect.objectContaining({
