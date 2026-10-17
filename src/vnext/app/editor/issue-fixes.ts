@@ -1,6 +1,7 @@
 import { createDocumentSession, type ApplicationAction, type DocumentSession } from '../../application';
 import type { CatalogDocument, Diagnostic, TableObject } from '../../domain';
 import { prepareTableFitHeight, type FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
+import { applyTextFitHeight, prepareTextFitHeight } from '../../editor/text-fit-height-authoring';
 import { emptyTableRowIds } from '../../publication/preflight';
 
 /**
@@ -117,9 +118,27 @@ const fitTableHeight: IssueFix = {
   },
 };
 
+/** FR-15: the text box grows to its measured text, never past the page's bottom margin. */
+const fitTextHeight: IssueFix = {
+  label: 'Ajustar altura ao texto',
+  available({ document, diagnostic, measurement }) {
+    if (!diagnostic.pageId || !diagnostic.objectId) return false;
+    const prepared = prepareTextFitHeight(document, diagnostic.pageId, diagnostic.objectId, measurement);
+    return prepared.ok && prepared.prepared.grows;
+  },
+  run({ document, session, diagnostic, measurement }) {
+    const prepared = diagnostic.pageId && diagnostic.objectId
+      ? prepareTextFitHeight(document, diagnostic.pageId, diagnostic.objectId, measurement)
+      : undefined;
+    if (!prepared?.ok) return { ok: false, message: prepared?.message ?? 'Não foi possível ajustar a altura do texto.' };
+    return applyTextFitHeight(session, document, prepared.prepared, createTransactionId());
+  },
+};
+
 export const ISSUE_FIXES: Readonly<Record<string, IssueFix>> = {
   EMPTY_TABLE_ROW: removeEmptyRows,
   TABLE_CONTENT_OVERFLOW: fitTableHeight,
+  TEXT_OBJECT_OVERFLOW: fitTextHeight,
 };
 
 /** The fix offered for this problem now, if any. */

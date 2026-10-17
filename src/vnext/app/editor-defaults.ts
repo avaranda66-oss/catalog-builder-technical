@@ -13,6 +13,7 @@ import {
   type DocumentStyle,
   type Page,
   type TableModel,
+  type TextStyle,
 } from '../domain';
 import { resolveCellStyle } from '../domain/style-resolution';
 import { orderedAnchors } from '../table/table-model';
@@ -67,6 +68,16 @@ export function resolveKnownW2CDemoAssetUrls(document: CatalogDocument): Readonl
 }
 
 export type InsertTool = 'text' | 'image' | 'table' | 'shape' | 'line';
+
+/** Style of a new text box: "Corpo" (10 pt, normal weight), not a 16 pt bold title. */
+export const NEW_TEXT_STYLE: Readonly<TextStyle> = Object.freeze({
+  fontFamily: 'Noto Sans',
+  fontSizePt: 10,
+  lineHeight: 1.2,
+  fontWeight: 400,
+  color: '#172033',
+  textAlign: 'left',
+});
 
 function frame(xMm: number, yMm: number, widthMm: number, heightMm: number) {
   return {
@@ -300,19 +311,13 @@ export function createInsertSpec(
   const zIndex = nextZIndex(page);
   switch (tool) {
     case 'text':
+      // FR-14: a new text box is ordinary body text ("Corpo"); "Título" and the other kinds are one click away.
       return {
         type: 'text',
         frameU: clearInsertFrame(page, frame(20, 20, 82, 22)),
         zIndex,
         text: plainRichText('w2c-text-seed', 'Novo texto'),
-        style: {
-          fontFamily: 'Noto Sans',
-          fontSizePt: 16,
-          lineHeight: 1.2,
-          fontWeight: 700,
-          color: '#172033',
-          textAlign: 'left',
-        },
+        style: { ...NEW_TEXT_STYLE },
       };
     case 'image':
       return {
