@@ -82,7 +82,7 @@ const createClient = () => ({
 // ---- Real Google, timed, never printing the key -------------------------------
 interface ProviderCall { step: string; status: number; ms: number; usage?: unknown; finishReason?: string; error?: string }
 let calls: ProviderCall[] = [];
-const label = (url: string, method: string) => url.includes('/upload/v1beta/files') ? 'upload-start'
+const label = (url: string, method: string) => url.includes('upload_id=') ? 'upload-bytes' : url.includes('/upload/v1beta/files') ? 'upload-start'
   : !url.includes('generativelanguage') ? 'upload-bytes' : method === 'DELETE' ? 'delete'
     : url.endsWith(':countTokens') ? 'count' : url.endsWith(':generateContent') ? 'generate' : 'file-status';
 const timedFetch = async (url: string, init: RequestInit & { method: string }) => {

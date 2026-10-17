@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalDegreeSign, printedColumnNames, reviewExtraction, reviewSourceValues, sharedTableMessage, unitColumnText, valueDisplayText,
+  canonicalDegreeSign, printedColumnNames, reviewExtraction, reviewSourceValues, sharedTableMessage, unitColumnText,
+  valueConditionText, valueDisplayText,
   type ExtractionReview, type ReviewedTable,
 } from '../../../src/vnext/ai-catalog/extraction-review';
 import { photoEvidence } from '../../../src/vnext/ai-catalog/draft-client';
@@ -38,7 +39,7 @@ const PDF: ExtractedPdf = {
 const SOURCE: ExtractionSource = { sourceId: 'manual', fileName: 'manual-ta.pdf', sha256: 'c'.repeat(64), pageCount: 8, firstPage: 5, lastPage: 7 };
 const TA = ['TA-25N', 'TA-35N', 'TA-50N'];
 const quote = (cells: string[]) => cells.join(' ');
-type Cell = { column: string; literal: string; unit?: string };
+type Cell = { column: string; literal: string; unit?: string; condition?: string };
 const row = (label: string, cells: Cell[], quoteText: string, pageNumber = 6) =>
   ({ label, sourceRef: { page: pageNumber, quote: quoteText }, values: cells });
 const PT100_QUOTE = quote(['Pt-100', `-200 a 850 ${DEG}C`, `0,01 ${DEG}C`, `${PM} 0,1 ${DEG}C`]);
@@ -173,6 +174,27 @@ describe('columns named like the units in their cells (PCON-Y17 ranges)', () => 
     expect(table.report.values.map(value => `${value.model}=${value.status}`))
       .toEqual(['bar=VERIFIED_TEXT', 'psi=VERIFIED_TEXT', 'Accuracy=VERIFIED_TEXT']);
     expect(table.report.values[0].candidates[0].usedLayout).toBe(true);
+  });
+
+  it('keeps a condition printed for one cell next to its value, without printing the row twice', () => {
+    const withNote = [...RANGES, line(640, [['* using 2 σ method', 40, 90]])];
+    const notePdf: ExtractedPdf = { ...pdf, pages: [page(5, []), page(6, withNote), page(7, [])] };
+    const review = reviewExtraction(ranges([
+      row('(3)', [{ column: 'bar', literal: '1 bar' }, { column: 'psi', literal: '0-15 psi' },
+        { column: 'Accuracy', literal: '± 0.012 % FS', condition: 'using 2 σ method' }],
+      '(3) 1 bar 0-15 psi ± 0.012 % FS'),
+      row('(4)', [{ column: 'bar', literal: '2 bar' }, { column: 'Accuracy', literal: '± 0.012 % FS', condition: 'at 99 °C' }],
+        '(4) 2 bar 0-30 psi ± 0.012 % FS'),
+    ]), SOURCE, notePdf, { models: ['PCON-Y17'] });
+    const table = shared(review);
+    expect(table.extraction.proposal.sections[0].rows.map(item => item.label)).toEqual(['(3)', '(4)']);
+    const accuracy = table.report.values.find(value => value.label === '(3)' && value.model === 'Accuracy')!;
+    expect(accuracy.status).toBe('VERIFIED_TEXT');
+    expect(valueConditionText(table, accuracy)).toBe('using 2 σ method');
+    const bar = table.report.values.find(value => value.label === '(3)' && value.model === 'bar')!;
+    expect(valueConditionText(table, bar)).toBe('');
+    // A condition the page does not print is left out and counted.
+    expect(review.dropped).toEqual([expect.objectContaining({ reason: 'CONDITION_NOT_PRINTED', label: '(4)', model: 'Accuracy' })]);
   });
 
   it('never verifies a unit-named value placed under another header', () => {

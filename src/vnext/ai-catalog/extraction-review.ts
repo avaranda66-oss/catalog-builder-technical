@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isVerifiedStatus, type CandidateVerification, type FactCandidate, type FactProposal, type ValueVerificationStatus } from './contracts';
 import {
-  fitQuotesToPages, literalHasUnit, sourceFactValues, toFactProposal, withNormalizedSymbols,
+  fitQuotesToPages, literalHasUnit, normalizeSymbolText, sourceFactValues, toFactProposal, withNormalizedSymbols,
   type DropReason, type DroppedValue, type NormalizedExtraction, type SourceFactValue,
 } from './fact-extraction';
 import { ALL_MODELS_COLUMN, PAGE_CONTENT_KINDS, type ExtractionSource, type PageContentKind } from './fact-extraction-prompt';
@@ -11,7 +11,7 @@ import {
 } from './fact-verifier';
 import type { ExtractedPdf } from './pdf-intake';
 import { MAX_EVIDENCE_PAGE_TEXT, checkPdfValueOnPage, columnAttribution, verificationPageText } from './pdf-layout-evidence';
-import { literalEvidencePositions, normalizeEvidenceWhitespace } from './pdf-literal-evidence';
+import { hasLiteralEvidence, literalEvidencePositions, normalizeEvidenceWhitespace } from './pdf-literal-evidence';
 
 /**
  * Local review of one server extraction (FR-66, vnext-catalog-draft): turns
@@ -35,7 +35,7 @@ import { literalEvidencePositions, normalizeEvidenceWhitespace } from './pdf-lit
  * fitQuotesToPages, sourceFactValues).
  */
 
-export type ReviewDropReason = DropReason | 'PAGE_OUTSIDE_RANGE' | 'COLUMN_NOT_DECLARED' | 'INVALID_ROW';
+export type ReviewDropReason = DropReason | 'PAGE_OUTSIDE_RANGE' | 'COLUMN_NOT_DECLARED' | 'INVALID_ROW' | 'CONDITION_NOT_PRINTED';
 export interface ReviewDroppedValue extends Omit<DroppedValue, 'reason'> {
   readonly reason: ReviewDropReason;
   /** "Tabela comum" for a shared table, the section title for the model table. */
@@ -54,6 +54,13 @@ export interface ReviewedTable {
   readonly fittedQuotes: number;
   /** Plain-Portuguese message of every value position, by `VerifiedValue.id`. */
   readonly messages: ReadonlyMap<string, string>;
+  /**
+   * Shared tables: a condition printed for ONE cell of a row ("using 2 σ
+   * method" under "Control* Stability"), by `VerifiedValue.id`. It stays out of
+   * the row (a row has one condition, and splitting it would print the row
+   * twice) and is shown next to its value (spike condition 3).
+   */
+  readonly cellConditions: ReadonlyMap<string, string>;
 }
 
 export interface PageReview {
@@ -230,8 +237,10 @@ function recheckUnitNamedColumns(report: FactVerificationReport, source: PdfEvid
     const text = verificationPageText(page);
     if (text.length > MAX_EVIDENCE_PAGE_TEXT) continue;
     const quote = normalizeEvidenceWhitespace(candidate.source.quote);
-    const literals = report.values.filter(other => other.sectionId === value.sectionId && other.rowId === value.rowId)
-      .flatMap(other => other.candidates.map(item => normalizeEvidenceWhitespace(item.value))).filter(Boolean);
+    // Every value read from the same printed row (same quote), even when the proposal split the row.
+    const literals = report.values.flatMap(other => other.candidates)
+      .filter(item => normalizeEvidenceWhitespace(item.source.quote) === quote)
+      .map(item => normalizeEvidenceWhitespace(item.value)).filter(Boolean);
     const spans = literals.flatMap(literal => {
       const found: [number, number][] = [];
       for (let at = quote.indexOf(literal); at >= 0; at = quote.indexOf(literal, at + 1)) found.push([at, at + literal.length]);
@@ -329,8 +338,12 @@ export function printedColumnNames(columns: readonly string[], lines: readonly s
 
 interface PendingDrop { readonly table: string; readonly label: string; readonly model: string; readonly literal: string; readonly reason: ReviewDropReason }
 
+/** Key of one printed cell: the quote of its row and its column. */
+const cellKey = (quote: string, column: string) => `${normalizeEvidenceWhitespace(normalizeSymbolText(quote))}\u0000${column}`;
+
 function verifyTable(kind: ReviewedTable['kind'], answer: unknown, source: ExtractionSource, evidence: PdfEvidenceSource,
-  options: { readonly models?: readonly string[]; readonly title?: string; readonly appliesTo: readonly string[] }):
+  options: { readonly models?: readonly string[]; readonly title?: string; readonly appliesTo: readonly string[];
+    readonly cellConditions?: ReadonlyMap<string, string> }):
   { readonly table: ReviewedTable | null; readonly dropped: readonly DroppedValue[] } {
   let normalized: NormalizedExtraction;
   try {
@@ -343,10 +356,16 @@ function verifyTable(kind: ReviewedTable['kind'], answer: unknown, source: Extra
   const report = kind === 'shared' ? guardSharedRows(recheckUnitNamedColumns(verified, evidence), evidence) : verified;
   const message = kind === 'shared' ? sharedTableMessage : verificationMessage;
   const messages = new Map(report.values.map(value => [value.id, message(value, report.sourceNames)]));
+  const cellConditions = new Map<string, string>();
+  for (const value of report.values) {
+    const quote = value.candidates[0]?.source.quote;
+    const condition = quote === undefined ? undefined : options.cellConditions?.get(cellKey(quote, value.model));
+    if (condition) cellConditions.set(value.id, condition);
+  }
   return {
     table: {
       kind, title: extraction.proposal.title, columns: extraction.proposal.models, appliesTo: options.appliesTo,
-      extraction, report, fittedQuotes: fitted, messages,
+      extraction, report, fittedQuotes: fitted, messages, cellConditions,
     },
     dropped: extraction.dropped,
   };
@@ -433,6 +452,7 @@ export function reviewExtraction(answer: unknown, source: ExtractionSource, pdf:
       return index >= 0 ? kept[index] : undefined;
     };
     const rows = [];
+    const cellConditions = new Map<string, string>();
     for (const rawRow of table.data.rows) {
       const row = SharedRowSchema.safeParse(rawRow);
       if (!row.success) { drops.push({ table: title, label: '', model: '', literal: '', reason: 'INVALID_ROW' }); continue; }
@@ -452,11 +472,21 @@ export function reviewExtraction(answer: unknown, source: ExtractionSource, pdf:
         values.push({ model: column, literal: value.literal, unit: unit && literalHasUnit(literal, unit) ? '' : unit,
           condition: value.condition ?? '', sourceRef: row.data.sourceRef });
       }
+      if (new Set(values.map(value => oneLine(value.condition))).size > 1) {
+        const printed = normalizeEvidenceWhitespace(pageLines(evidence, row.data.sourceRef.page).join(' '));
+        for (const value of values) {
+          const condition = oneLine(normalizeSymbolText(value.condition));
+          value.condition = '';
+          if (!condition) continue;
+          if (hasLiteralEvidence(printed, condition, 'condition')) cellConditions.set(cellKey(row.data.sourceRef.quote, value.model), condition);
+          else drops.push({ table: title, label, model: value.model, literal: oneLine(value.literal), reason: 'CONDITION_NOT_PRINTED' });
+        }
+      }
       if (values.length) rows.push({ key: '', label, values });
     }
     if (!rows.length || !kept.length) continue;
     const result = verifyTable('shared', { title, models: kept, sections: [{ title, rows }] }, source, evidence,
-      { models: kept, title, appliesTo: products });
+      { models: kept, title, appliesTo: products, cellConditions });
     if (result.table) tables.push(result.table);
     pushDropped(title, result.dropped);
   }
@@ -515,6 +545,11 @@ function reviewSummary(source: ExtractionSource, counts: ExtractionReviewCounts,
   const emptyText = empty.length ? ` ${empty.length === 1 ? 'A página' : 'As páginas'} ${empty.join(', ')} não ${empty.length === 1 ? 'trouxe' : 'trouxeram'} valores; veja o motivo abaixo.` : '';
   const leftOutText = leftOut ? ` ${plural(leftOut, 'leitura ficou de fora', 'leituras ficaram de fora')} (fora das páginas pedidas ou além do limite).` : '';
   return `Li ${range} de ${source.fileName}${found}${emptyText}${leftOutText}`;
+}
+
+/** The condition shown next to a value: its row's, or the one printed for its own cell (shared tables). */
+export function valueConditionText(table: ReviewedTable, value: VerifiedValue): string {
+  return value.condition || table.cellConditions.get(value.id) || '';
 }
 
 /** Values of the model table, one per model and quantity, for `findSourceDivergences` across files (FR-68). */
