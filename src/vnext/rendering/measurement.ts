@@ -57,6 +57,28 @@ export function textFlowRecords(flow:HTMLElement,rich:RichText):TextFlowRecord[]
   return records;
 }
 export interface IntrinsicMetrics {widthQ:number;heightQ:number;records?:TextFlowRecord[]}
+/** Pre-wrap spaces can hang beyond a line without printing ink; keep their full records for hashing. */
+function textWidthWithoutHangingSpaces(flow:HTMLElement,rich:RichText,origin:DOMRect):{left:number;right:number} {
+  let left=0,right=0;
+  const include=(range:Range)=>{
+    for(const rect of range.getClientRects()) {
+      const xQ=pxToQ(rect.left-origin.left);
+      left=Math.min(left,xQ);right=Math.max(right,add(xQ,pxToQ(rect.width)));
+    }
+  };
+  for(const paragraph of rich.paragraphs)for(const inline of paragraph.inlines) {
+    if(inline.kind!=='text')continue;
+    const element=findElement(flow,'data-inline-id',inline.id),node=element.firstChild!;
+    const range=document.createRange();
+    if(getComputedStyle(element.closest('[data-paragraph-id]')??element).whiteSpace==='pre-wrap'&&/[ \t\r\n\f]/.test(inline.text)) {
+      // Absolute word positions retain interior spaces and indentation. NBSP stays inside the range.
+      for(const match of inline.text.matchAll(/[^ \t\r\n\f]+/g)) {
+        range.setStart(node,match.index);range.setEnd(node,match.index+match[0].length);include(range);
+      }
+    }else {range.selectNodeContents(node);include(range);}
+  }
+  return {left,right};
+}
 export function intrinsicMetrics(flow:HTMLElement,rich?:RichText):IntrinsicMetrics {
   const rect=flow.getBoundingClientRect(),records=rich?textFlowRecords(flow,rich):undefined;
   let left=0,right=0,top=0,bottom=pxToQ(rect.height);
@@ -64,6 +86,8 @@ export function intrinsicMetrics(flow:HTMLElement,rich?:RichText):IntrinsicMetri
     left=Math.min(left,record[4]);right=Math.max(right,add(record[4],record[6]));
     top=Math.min(top,record[5]);bottom=Math.max(bottom,add(record[5],record[7]));
   }
+  // Most cells need no extra ranges. Only recheck an apparent overflow, without changing height/signatures.
+  if(rich&&add(right,-left)>pxToQ(rect.width))({left,right}=textWidthWithoutHangingSpaces(flow,rich,rect));
   for(const image of flow.querySelectorAll('img')) {
     const imageRect=image.getBoundingClientRect();
     left=Math.min(left,pxToQ(imageRect.left-rect.left));right=Math.max(right,pxToQ(imageRect.right-rect.left));
