@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createDocumentSession, projectEditableRichText } from '@/vnext/application';
 import { createNewTableModel, createTableInsertSpec, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
@@ -55,6 +56,28 @@ describe('FR-20 (2D) problems located as "Linha N, coluna M"', () => {
     expect(cellCountText(1)).toBe('1 célula');
     expect(cellCountText(0)).toBe('0 células');
     expect(cellCountText(12)).toBe('12 células');
+  });
+
+  it('no table message written in the editor or the table panel uses an internal word', () => {
+    // Quoted texts only (messages, labels, titles); code names such as "tsv" or "RichText" in identifiers do not count.
+    const quoted = /'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|>[^<>{}\n]+</g;
+    const forbidden = /\beixos?\b|\btsv\b|peso flexível|\(s\)|superfícies semânticas|explicitamente|\bpadding\b|\bhex\b|\bmisto\b/i;
+    const files = [
+      'src/vnext/app/EditorWorkspace.tsx',
+      'src/vnext/app/TableStyleInspector.tsx',
+      'src/vnext/app/editor/TableInspectorPanel.tsx',
+      'src/vnext/app/editor/TableGridToolbar.tsx',
+      'src/vnext/app/editor/TableLookSection.tsx',
+      'src/vnext/app/editor/TableStructureSection.tsx',
+      'src/vnext/app/editor/TableNotesSection.tsx',
+      'src/vnext/editor/table-axis-authoring.ts',
+    ];
+    const found = files.flatMap((file) => (readFileSync(file, 'utf8').match(quoted) ?? [])
+      // Selectors, class names, data attributes and import paths are not shown to anyone.
+      .filter((text) => !/^['`][\w./@[\]="-]*['`]$/.test(text) && !/data-|className|\[data/.test(text))
+      .filter((text) => forbidden.test(text))
+      .map((text) => `${file}: ${text}`));
+    expect(found).toEqual([]);
   });
 });
 

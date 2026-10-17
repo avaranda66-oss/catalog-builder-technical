@@ -3406,14 +3406,14 @@ export function EditorWorkspace({
     ? pendingRowHeightMode.mode
     : rowDimensionProjection?.heightMode;
   const tableDimensionMessage = (code: string): string => {
-    if (code === 'TARGET_STALE') return 'A dimensão mudou enquanto a ação era preparada. Nada foi alterado.';
+    if (code === 'TARGET_STALE') return 'A tabela mudou enquanto a alteração era preparada. Nada foi alterado.';
     if (code === 'TABLE_WIDTH_INFEASIBLE' || code === 'COLUMN_LIMIT_INVALID') return 'As larguras e limites atuais não cabem na largura da tabela.';
-    if (code === 'COLUMN_WEIGHT_INVALID') return 'O peso flexível deve ser um inteiro positivo.';
-    if (code === 'MERGE_INTERSECTION') return 'Esta movimentação cruza uma célula mesclada. Desmescle explicitamente antes de reordenar.';
+    if (code === 'COLUMN_WEIGHT_INVALID') return 'A proporção da largura deve ser um número inteiro maior que zero.';
+    if (code === 'MERGE_INTERSECTION') return 'Esta mudança cruza uma célula mesclada. Desfaça a mesclagem antes de mover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Esta alteração faria uma célula mesclada cruzar cabeçalho e corpo.';
     if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
     if (code === 'AXIS_ORDER_INVALID') return 'A nova ordem de linhas ou colunas é inválida.';
-    return 'Não foi possível aplicar a dimensão da tabela com segurança.';
+    return 'Não foi possível aplicar esta alteração na tabela. Nada foi alterado.';
   };
   const executeTableDimensionAction = (action: ApplicationAction, successMessage: string): boolean => {
     if (cellDraftRef.current || editorState.mode !== 'table-grid') {
@@ -3577,7 +3577,7 @@ export function EditorWorkspace({
         axis === 'row' ? 'Linha movida.' : 'Coluna movida.'
       );
     } catch (error) {
-      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível reordenar o eixo.');
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível mover a linha ou coluna.');
     }
   };
   const runColumnBoundaryDrag = (leftColumnIndex: number, deltaU: number) => {
