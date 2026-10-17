@@ -45,7 +45,7 @@ describe('FR-64 the assistant takes files', () => {
     const section = screen.getByRole('region', { name: 'Assistente de criação do catálogo' });
     expect(section).toContainElement(screen.getByRole('button', { name: DROP_ZONE_TEXT }));
     expect(screen.getByRole('region', { name: 'Arquivos para o catálogo' })).toBeInTheDocument();
-    expect(screen.getByText(/Os arquivos que você solta acima são lidos aqui no computador/)).toBeInTheDocument();
+    expect(screen.getByText(/Os arquivos soltos acima são lidos aqui no computador e não vão para a IA/)).toBeInTheDocument();
     expect(screen.queryByText(/Ela não lê PDFs/)).toBeNull();
   });
 });

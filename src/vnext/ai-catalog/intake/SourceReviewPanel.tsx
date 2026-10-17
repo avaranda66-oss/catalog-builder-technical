@@ -4,7 +4,7 @@ import {
   blockOrigin, imageBlocks, nextPdfPages, pageListText, pdfPagesNeedingServerReading, tableBlocks, textBlocks,
   type IntakeEntry, type SourceImageBlock, type SourceTableBlock,
 } from './intake-model';
-import { sourceHeaderRow } from './source-table-insert';
+import { sourceHasHeader, sourceTableCells } from './source-table-insert';
 
 interface Props {
   readonly entries: readonly IntakeEntry[];
@@ -25,8 +25,9 @@ export function sourceTableName(block: SourceTableBlock): string {
 }
 
 function tableSize(block: SourceTableBlock): string {
-  const rows = block.rows.length - sourceHeaderRow(block);
   const columns = Math.max(0, ...block.rows.map((row) => row.length));
+  // The same count "Escolher colunas" shows: from the header down, without empty rows.
+  const rows = sourceTableCells({ block, columns: Array.from({ length: columns }, (_, index) => index), header: sourceHasHeader(block) }).length;
   return `${rows} ${rows === 1 ? 'linha' : 'linhas'} × ${columns} ${columns === 1 ? 'coluna' : 'colunas'}`;
 }
 
@@ -110,7 +111,7 @@ function TableList({ entry, blocks, onChooseColumns, disabled }: {
               )}
               <Warnings items={block.warnings} />
             </div>
-            <button type="button" disabled={disabled} aria-label={`Escolher colunas — ${name}`}
+            <button type="button" disabled={disabled} aria-label={`Escolher colunas — ${name}`} data-choose-columns={block.id}
               onClick={() => onChooseColumns(entry.id, block.id)}>Escolher colunas</button>
           </li>
         );

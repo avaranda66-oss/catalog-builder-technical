@@ -247,7 +247,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo">
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>
-        <p>Solte os arquivos do produto ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
+        <p>Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
         <p className="ai-readiness" data-ai-readiness={ownKey ? 'own-key' : readiness?.kind ?? (client ? 'checking' : 'none')}>
           {readinessText}</p></div>
       <span className="ai-chat-count" aria-label="Quantidade de mensagens">{turns.length}</span>
@@ -354,9 +354,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       {technicalPdfReview && selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}
         session={session} target={selectedTable} onBeforeMutation={onBeforeMutation}/>}
       {error && <p role="alert">{error}</p>}
-      <p className="ai-boundary">A IA propõe a estrutura das páginas e você confere antes de inserir. Ela não inventa valores técnicos:
-        as tabelas que ela propõe chegam vazias para você preencher. Os arquivos que você solta acima são lidos aqui no computador
-        e não vão para a IA; as tabelas deles entram no catálogo só quando você clica em “Inserir como tabela”.</p>
+      <p className="ai-boundary">A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inventa valores técnicos.
+        Os arquivos soltos acima são lidos aqui no computador e não vão para a IA.</p>
     </div>
   </section>;
 }

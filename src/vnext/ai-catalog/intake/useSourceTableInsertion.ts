@@ -4,7 +4,7 @@ import { newTableTransactionId } from '../../app/editor/table-paste-actions';
 import type { FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
 import {
   finishSourceTableInsert, insertSourceTable, planSourceTableFollowUp, sourceTableNotMeasured,
-  type InsertedSourceTable, type SourceTableChoice, type SourceTableFollowUp,
+  type InsertedSourceTable, type SettledSourceTableFollowUp, type SourceTableChoice,
 } from './source-table-insert';
 
 /**
@@ -76,12 +76,12 @@ export function useSourceTableInsertion(options: SourceTableInsertionOptions): S
     };
   }, []);
 
-  const settle = React.useCallback((inserted: InsertedSourceTable, outcome: Exclude<SourceTableFollowUp, { kind: 'wait' }>) => {
+  const settle = React.useCallback((inserted: InsertedSourceTable, outcome: SettledSourceTableFollowUp) => {
     if (!alive.current) return;
     setPending(null);
     setPhase('idle');
     setNotice({ tone: outcome.kind === 'done' ? 'success' : 'info', text: outcome.message });
-    if (outcome.pageIds[0]) latest.current.onShowTable?.(outcome.pageIds[0], inserted.objectId);
+    if (outcome.pageIds[0]) latest.current.onShowTable?.(outcome.pageIds[0], outcome.objectId);
   }, []);
 
   const insert = React.useCallback((choice: SourceTableChoice): boolean => {

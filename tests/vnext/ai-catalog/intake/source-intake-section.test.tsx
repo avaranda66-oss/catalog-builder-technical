@@ -90,10 +90,13 @@ describe('FR-64 files in the assistant', () => {
     act(() => { f.rerender(measureTable(document, { pageId: document.pages[0].id, objectId: inserted.id, rowHeightMm: 8 })); });
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
       /^Tabela com 70 linhas × 7 colunas inserida na página 1\. \d+ linhas movidas para as páginas 2 e 3, com o cabeçalho repetido\. Use Desfazer se precisar\.$/));
+    // The message is where the keyboard is after the step closes.
+    expect(screen.getByRole('status')).toHaveFocus();
     const parts = tables(f.session);
     expect(parts).toHaveLength(3);
     expect(parts.every((part) => cellText(part.table, part.table.rows[0].id, 0) === 'Code')).toBe(true);
-    expect(f.onShowTable).toHaveBeenCalledWith(document.pages[0].id, inserted.id);
+    // The first part is shown (a continued new table is replaced by its first part, in the same step).
+    expect(f.onShowTable).toHaveBeenCalledWith(document.pages[0].id, parts[0].id);
     expect(f.session.undo().ok).toBe(true);
     expect(f.session.getSnapshot().document).toEqual(before);
   });
@@ -114,6 +117,8 @@ describe('FR-64 files in the assistant', () => {
     const chooser = screen.getByRole('group', { name: 'Escolher colunas — Tabela da página 1' });
     expect(within(chooser).getByText('Origem: folder TA.pdf · página 1')).toBeInTheDocument();
     fireEvent.click(within(chooser).getByRole('button', { name: 'Voltar' }));
+    // "Voltar" puts the keyboard back on the button that opened the step.
+    expect(screen.getByRole('button', { name: 'Escolher colunas — Tabela da página 1' })).toHaveFocus();
     const photo = screen.getByRole('region', { name: 'O que encontrei em TA-25N frente.png' });
     expect(within(photo).getByRole('img', { name: 'Foto TA-25N frente.png' })).toHaveAttribute('src', 'blob:foto');
     expect(within(photo).getByText('800 × 600 pixels')).toBeInTheDocument();

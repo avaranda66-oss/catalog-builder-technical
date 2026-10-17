@@ -58,7 +58,7 @@ export function SourceDropZone({ onFiles, disabled, compact }: Props) {
         <span>{DROP_ZONE_TEXT}</span>
       </button>
       <small id={helpId}>
-        Até {INTAKE_MAX_FILES} arquivos. Eles são lidos aqui no computador: planilhas viram tabelas que você confere antes de inserir.
+        Até {INTAKE_MAX_FILES} arquivos, lidos aqui no computador.
       </small>
       <input ref={input} type="file" multiple accept={INTAKE_ACCEPT} hidden aria-label="Escolher arquivos"
         disabled={disabled} tabIndex={-1}

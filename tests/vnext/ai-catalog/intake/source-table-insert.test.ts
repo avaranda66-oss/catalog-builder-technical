@@ -4,7 +4,7 @@ import type { CatalogDocument, TableObject } from '@/vnext/domain';
 import type { SourceTableBlock } from '@/vnext/ai-catalog/intake/intake-model';
 import {
   finishSourceTableInsert, insertSourceTable, planSourceTableFollowUp, sourceChoiceProblem, sourceColumns, sourceHasHeader,
-  sourceTableCells, sourceTableModel, suggestSourceColumns, SUGGESTED_A4_COLUMNS, type SourceTableChoice,
+  sourceTableCells, sourceTableModel, suggestSourceColumns, SUGGESTED_A4_COLUMNS, withReadableColumns, type SourceTableChoice,
 } from '@/vnext/ai-catalog/intake/source-table-insert';
 import { cellText, measureTable, richPlain } from '../../editor/table-split-fixtures';
 
@@ -188,3 +188,32 @@ describe('FR-64 "Inserir como tabela": one step, styled, continued on the next p
     expect(session.getSnapshot().document).toBe(before);
   });
 });
+
+describe('FR-64 column widths that do not block the PDF', () => {
+  const block = (rows: string[][]): SourceTableBlock => ({
+    id: 'b', kind: 'table', title: 't', warnings: [], source: { fileName: 'a.csv', sha256: 'x', location: 'arquivo' },
+    rows, raw: rows, flags: [], merges: [], headerRow: 0, addresses: rows.map((row, ri) => row.map((_, ci) => `${letters[ci]}${ri + 1}`)),
+  });
+  it('gives every column at least its longest word (a code or a bold header never overflows its cell)', () => {
+    const table = sourceTableModel({ block: block([['Code', 'Accuracy', 'Description'], ['0D1K-100', '0,025', 'Sensor diferencial de pressão com saída analógica']]),
+      columns: [0, 1, 2], header: true });
+    const { table: readable, tight } = withReadableColumns(table, 170);
+    expect(tight).toBe(false);
+    const [code, accuracy, description] = readable.columns;
+    expect(code.minMm).toBeGreaterThan(14);
+    expect(accuracy.minMm).toBeGreaterThan(14);
+    // The long description fits on one line here, so every column gets its whole line.
+    expect(description.minMm).toBeGreaterThan(code.minMm);
+  });
+
+  it('keeps words joined by a no-break space together, and says when the words of all columns do not fit', () => {
+    const nbsp = sourceTableModel({ block: block([['Faixa'], ['± 100 Pa']]), columns: [0], header: true });
+    const plain = sourceTableModel({ block: block([['Faixa'], ['± 100 Pa']]), columns: [0], header: true });
+    expect(withReadableColumns(nbsp, 170).table.columns[0].minMm).toBeGreaterThanOrEqual(withReadableColumns(plain, 170).table.columns[0].minMm);
+    const wide = Array.from({ length: 10 }, (_, index) => `Comprimento${index}Extraordinário`);
+    const crowded = withReadableColumns(sourceTableModel({ block: block([wide, wide]), columns: wide.map((_, index) => index), header: true }), 170);
+    expect(crowded.tight).toBe(true);
+    expect(crowded.table.columns.reduce((total, column) => total + column.minMm, 0)).toBeLessThanOrEqual(168);
+  });
+});
+

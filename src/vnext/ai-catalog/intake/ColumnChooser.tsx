@@ -36,9 +36,12 @@ export function ColumnChooser({ block, name, busy, onInsert, onCancel }: Props) 
     return next;
   });
   const headingId = `${React.useId()}-heading`;
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  // The step replaces what was on screen: start reading (and tabbing) from its title.
+  React.useEffect(() => { heading.current?.focus(); }, []);
   return (
     <section className="ai-intake-columns" role="group" aria-labelledby={headingId}>
-      <h5 id={headingId}>Escolher colunas — {name}</h5>
+      <h5 id={headingId} ref={heading} tabIndex={-1}>Escolher colunas — {name}</h5>
       <p>Marque as colunas que vão para a tabela. Já deixamos marcadas até {SUGGESTED_A4_COLUMNS}, que cabem bem numa página A4 em pé.</p>
       <fieldset>
         <legend>Colunas</legend>

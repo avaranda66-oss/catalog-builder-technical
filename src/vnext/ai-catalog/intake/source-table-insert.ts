@@ -1,10 +1,12 @@
 import type { DocumentSession } from '../../application';
-import type { CatalogDocument, TableModel } from '../../domain';
+import { mmToU, type CatalogDocument, type DocumentStyle, type TableModel } from '../../domain';
 import { createTableInsertSpec, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS } from '../../app/editor-defaults';
 import { decidePendingTableFit, describeRowsByColumns } from '../../app/editor/table-paste-actions';
 import { prepareTableFitHeight, type FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
 import { detectHeaderRow, pastedTableModel, type PastedTable } from '../../editor/table-paste-import';
-import { applyTableSplit, planTableSplit, prepareTableSplit } from '../../editor/table-split-authoring';
+import {
+  planTableSplit, prepareTableSplit, tableSplitSuccessMessage, type PreparedTableSplit,
+} from '../../editor/table-split-authoring';
 import { columnLabel } from '../source-intake';
 import type { SourceTableBlock } from './intake-model';
 
@@ -125,6 +127,73 @@ export function sourceTableModel(choice: SourceTableChoice): TableModel {
   return pastedTableModel(pasted, { header: choice.header && cells.length > 1, idPrefix: 'source' });
 }
 
+const MM_PER_PT = 25.4 / 72;
+/** Rough glyph widths of Noto Sans in em: narrow, ordinary and wide characters (bold adds about 7%). */
+function glyphEm(char: string): number {
+  if (/[ilj.,:;'|!1Iíì()[\]{}"]/.test(char)) return 0.32;
+  if (/[mwMWQOGDCH%@&±°ºµΩ]/.test(char)) return 0.8;
+  if (/[A-ZÀ-Ý0-9]/.test(char)) return 0.62;
+  return 0.56;
+}
+const textPlain = (value: TableModel['cells'][number]['content']) => value.type === 'richText'
+  ? value.value.paragraphs.map((paragraph) => paragraph.inlines.map((inline) => inline.kind === 'text' ? inline.text : '\n').join('')).join('\n')
+  : '';
+
+/**
+ * Column widths that read well. A word cannot break inside a cell, so a column narrower than its longest word (a code
+ * such as "0D1K-100" or a bold header such as "Accuracy") overflows and the PDF is blocked; each column gets at least
+ * that word's width. When every column fits its longest line, each gets that width (nothing wraps). Otherwise the
+ * width left after the words goes to the columns in proportion to how much they still need to keep a line whole.
+ * When even the words of all chosen columns do not fit the page together, the minimums are scaled down and `tight` is
+ * true (the person is told to choose fewer columns).
+ */
+export function withReadableColumns(
+  table: TableModel,
+  frameWidthMm: number,
+  defaultText?: Pick<DocumentStyle['defaultText'], 'fontSizePt'>
+): { table: TableModel; tight: boolean } {
+  const fontSizePt = table.style.base.fontSizePt ?? defaultText?.fontSizePt ?? 10;
+  const padding = table.style.base.paddingMm ?? {};
+  const paddingMm = (padding.left ?? 0) + (padding.right ?? 0) + 0.8;
+  const headerRows = new Set(table.rows.filter((row) => row.role === 'header').map((row) => row.id));
+  const widthMm = (text: string, bold: number) => [...text].reduce((total, char) => total + glyphEm(char), 0) * fontSizePt * MM_PER_PT * bold;
+  const measured = table.columns.map((column) => {
+    let word = 0;
+    let line = 0;
+    for (const cell of table.cells) {
+      if (cell.columnId !== column.id || cell.coveredBy || (cell.span?.columns ?? 1) > 1) continue;
+      const bold = headerRows.has(cell.rowId) ? 1.08 : 1;
+      const text = textPlain(cell.content);
+      // Only ordinary spaces break a line; a no-break space keeps "100 Pa" together.
+      for (const part of text.split(/[ \t\n]+/)) word = Math.max(word, widthMm(part, bold));
+      for (const part of text.split('\n')) line = Math.max(line, widthMm(part.trim(), bold));
+    }
+    const round = (value: number) => Math.ceil((value + paddingMm) * 2) / 2;
+    return { word: round(word), line: round(line) };
+  });
+  const budgetMm = Math.max(1, frameWidthMm - 2);
+  const words = measured.reduce((total, column) => total + column.word, 0);
+  const lines = measured.reduce((total, column) => total + column.line, 0);
+  const tight = words > budgetMm;
+  const scale = tight ? budgetMm / words : 1;
+  return {
+    tight,
+    table: {
+      ...table,
+      columns: table.columns.map((column, index) => {
+        const { word, line } = measured[index];
+        if (lines <= budgetMm) return { ...column, minMm: Math.max(column.minMm, line) };
+        const need = Math.max(1, Math.round(line - word));
+        return {
+          ...column,
+          minMm: Math.max(column.minMm, Math.floor(word * scale * 10) / 10),
+          width: column.width.mode === 'flex' ? { mode: 'flex' as const, weight: need } : column.width,
+        };
+      }),
+    },
+  };
+}
+
 export interface InsertedSourceTable {
   readonly pageId: string;
   readonly objectId: string;
@@ -135,6 +204,8 @@ export interface InsertedSourceTable {
   readonly columns: number;
   /** A new page was added after the open page because the open page already had content. */
   readonly newPage: boolean;
+  /** The chosen columns are too many for the page width: some words may not fit their cells. */
+  readonly tight: boolean;
 }
 
 export type SourceTableInsertOutcome =
@@ -171,8 +242,10 @@ export function insertSourceTable(
   }
   const current = session.getSnapshot().document;
   const page = current.pages.find((entry) => entry.id === pageId)!;
+  const spec = createTableInsertSpec(page, table, current.style);
+  const readable = withReadableColumns(spec.table, spec.frameU.widthU / mmToU(1), current.style.defaultText);
   const result = session.execute(
-    { type: 'object.insert', pageId, object: createTableInsertSpec(page, table, current.style) },
+    { type: 'object.insert', pageId, object: { ...spec, table: readable.table } },
     { transactionId }
   );
   const objectId = result.ok ? result.metadata.createdIds[0] : undefined;
@@ -184,7 +257,7 @@ export function insertSourceTable(
     ok: true,
     inserted: {
       pageId, objectId, transactionId, document: result.document,
-      rows: table.rows.length, columns: table.columns.length, newPage,
+      rows: table.rows.length, columns: table.columns.length, newPage, tight: readable.tight,
     },
   };
 }
@@ -192,17 +265,25 @@ export function insertSourceTable(
 export type SourceTableFollowUp =
   /** The editor has not measured the new table yet. */
   | { readonly kind: 'wait' }
-  /** Done: fitted, or continued on the next pages. `pageIds` are every page that holds a part, first one first. */
-  | { readonly kind: 'done'; readonly message: string; readonly pageIds: readonly string[] }
-  /** The table is in the catalog, but the person has to finish by hand (the reason says how). */
-  | { readonly kind: 'manual'; readonly message: string; readonly pageIds: readonly string[] };
+  /**
+   * Done: fitted, or continued on the next pages. `pageIds` are every page that holds a part, first one first, and
+   * `objectId` is the table on the first of them (a continued table is a new object).
+   */
+  | { readonly kind: 'done'; readonly message: string; readonly pageIds: readonly string[]; readonly objectId: string }
+  /** The table is in the catalog (unless `pageIds` is empty), but the person has to finish by hand (the reason says how). */
+  | { readonly kind: 'manual'; readonly message: string; readonly pageIds: readonly string[]; readonly objectId: string };
+
+/** A follow-up that ended (fitted, continued, or left for the person to finish). */
+export type SettledSourceTableFollowUp = Exclude<SourceTableFollowUp, { readonly kind: 'wait' }>;
 
 function pageNumber(document: CatalogDocument, pageId: string): number {
   return document.pages.findIndex((page) => page.id === pageId) + 1;
 }
 
 function insertedSentence(inserted: InsertedSourceTable, document: CatalogDocument): string {
-  return `Tabela com ${describeRowsByColumns(inserted.rows, inserted.columns)} inserida na página ${pageNumber(document, inserted.pageId)}.`;
+  const tight = inserted.tight
+    ? ' Com tantas colunas, alguns textos ficaram apertados: se aparecer um problema de largura, desfaça e escolha menos colunas.' : '';
+  return `Tabela com ${describeRowsByColumns(inserted.rows, inserted.columns)} inserida na página ${pageNumber(document, inserted.pageId)}.${tight}`;
 }
 
 const UNDO_HINT = 'Use Desfazer se precisar.';
@@ -254,7 +335,8 @@ export function finishSourceTableInsert(
   const document = session.getSnapshot().document;
   const first = insertedSentence(inserted, document);
   if (plan.kind === 'manual') {
-    return { kind: 'manual', message: `${first} ${plan.message}${plan.overflows ? ` ${IF_TOO_TALL}` : ''}`, pageIds: [inserted.pageId] };
+    return { kind: 'manual', message: `${first} ${plan.message}${plan.overflows ? ` ${IF_TOO_TALL}` : ''}`, pageIds: [inserted.pageId],
+      objectId: inserted.objectId };
   }
   if (plan.kind === 'fit') {
     const preparation = prepareTableFitHeight(document, inserted.pageId, inserted.objectId, measurement);
@@ -263,30 +345,81 @@ export function finishSourceTableInsert(
       document, inserted.objectId, preparation
     );
     if (decision.kind === 'fit') session.execute(decision.action, { transactionId: inserted.transactionId });
-    return { kind: 'done', message: `${first} ${UNDO_HINT}`, pageIds: [inserted.pageId] };
+    return { kind: 'done', message: `${first} ${UNDO_HINT}`, pageIds: [inserted.pageId], objectId: inserted.objectId };
   }
   const prepared = prepareTableSplit(document, inserted.objectId, measurement);
-  if (!prepared.ok) return { kind: 'manual', message: `${first} ${prepared.message}`, pageIds: [inserted.pageId] };
-  const outcome = applyTableSplit(session, prepared.prepared, inserted.transactionId);
+  if (!prepared.ok) return { kind: 'manual', message: `${first} ${prepared.message}`, pageIds: [inserted.pageId], objectId: inserted.objectId };
+  const outcome = applyNewTableSplit(session, inserted, prepared.prepared);
   if (!outcome.ok) {
     // A late failure is rolled back with one Desfazer, and that step also holds the insert: say so plainly.
-    const stillThere = session.getSnapshot().document.pages.some((page) => page.objects.some((object) => object.id === inserted.objectId));
-    return stillThere
-      ? { kind: 'manual', message: `${first} ${outcome.message} ${IF_TOO_TALL}`, pageIds: [inserted.pageId] }
-      : { kind: 'manual', message: `Não foi possível inserir a tabela e continuar nas próximas páginas. ${NOTHING_CHANGED} Tente de novo.`, pageIds: [] };
+    return { kind: 'manual', message: `Não foi possível inserir a tabela e continuar nas próximas páginas. ${NOTHING_CHANGED} Tente de novo.`,
+      pageIds: [], objectId: inserted.objectId };
   }
+  const after = session.getSnapshot().document;
+  const numbers = outcome.pageIds.map((pageId) => pageNumber(after, pageId));
   return {
     kind: 'done',
-    message: `${insertedSentence(inserted, session.getSnapshot().document)} ${outcome.message}`,
+    message: `${insertedSentence(inserted, after)} ${tableSplitSuccessMessage(outcome.movedRows, numbers, outcome.headerRepeated)}`,
     pageIds: [inserted.pageId, ...outcome.pageIds],
+    objectId: outcome.objectId,
+  };
+}
+
+type NewTableSplitOutcome =
+  | { readonly ok: true; readonly objectId: string; readonly pageIds: readonly string[]; readonly movedRows: number; readonly headerRepeated: boolean }
+  | { readonly ok: false };
+
+/**
+ * Applies the split prepared (and checked) by FR-35's `prepareTableSplit` to a table this step has just inserted.
+ * The editor's own "Continuar na próxima página" removes the rows that leave one by one, because it must keep an
+ * existing table as it is; that costs one full check of the catalog per row (several seconds for 69 rows). A table
+ * inserted a moment ago has nothing to keep, so it is replaced at once by its first part, and each continuation goes
+ * on a new page right after the previous one: a handful of actions under the same transactionId.
+ */
+function applyNewTableSplit(session: DocumentSession, inserted: InsertedSourceTable, prepared: PreparedTableSplit): NewTableSplitOutcome {
+  const { plan } = prepared;
+  const transactionId = inserted.transactionId;
+  const before = session.getSnapshot().document;
+  const failure = (): NewTableSplitOutcome => {
+    if (session.getSnapshot().document !== before) session.undo();
+    return { ok: false };
+  };
+  if (!session.execute({ type: 'object.delete', objectId: plan.objectId }, { transactionId }).ok) return failure();
+  const firstPart = session.execute({
+    type: 'object.insert',
+    pageId: plan.pageId,
+    object: { type: 'table', frameU: prepared.originalFrameU, zIndex: plan.object.zIndex, table: prepared.remainingTable },
+  }, { transactionId });
+  const objectId = firstPart.ok ? firstPart.metadata.createdIds[0] : undefined;
+  if (!firstPart.ok || !objectId) return failure();
+  const pageIds: string[] = [];
+  let previousPageId = plan.pageId;
+  for (const part of prepared.continuations) {
+    const added = session.execute({ type: 'page.add', afterPageId: previousPageId }, { transactionId });
+    const pageId = added.ok ? added.metadata.createdIds[0] : undefined;
+    const page = pageId ? session.getSnapshot().document.pages.find((entry) => entry.id === pageId) : undefined;
+    // The parts were measured for the blank page `page.add` makes; a different page would need a new measurement.
+    if (!page || page.heightMm !== plan.continuationPage.heightMm || (page.safeArea?.topMm ?? 0) !== plan.continuationPage.safeTopMm ||
+      (page.safeArea?.bottomMm ?? 0) !== plan.continuationPage.safeBottomMm) return failure();
+    const placed = session.execute({
+      type: 'object.insert', pageId: page.id, object: { type: 'table', frameU: part.frameU, zIndex: 0, table: part.table },
+    }, { transactionId });
+    if (!placed.ok) return failure();
+    pageIds.push(page.id);
+    previousPageId = page.id;
+  }
+  return {
+    ok: true, objectId, pageIds, movedRows: plan.movedRowIds.length,
+    headerRepeated: plan.pagination.slices[0].headerRowIds.length > 0,
   };
 }
 
 /** The editor never measured the table (for example the page is in the background): finish by hand. */
-export function sourceTableNotMeasured(session: DocumentSession, inserted: InsertedSourceTable): SourceTableFollowUp {
+export function sourceTableNotMeasured(session: DocumentSession, inserted: InsertedSourceTable): SettledSourceTableFollowUp {
   return {
     kind: 'manual',
     message: `${insertedSentence(inserted, session.getSnapshot().document)} Ainda não deu para medir a página. ${IF_TOO_TALL}`,
     pageIds: [inserted.pageId],
+    objectId: inserted.objectId,
   };
 }
