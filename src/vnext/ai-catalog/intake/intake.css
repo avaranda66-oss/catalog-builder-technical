@@ -1,0 +1,159 @@
+/* FR-64: files in the assistant. Same navy/white look as the assistant panel; nothing here changes the page.
+   Text follows the 60+ scale of the assistant (15 px, 13 px for secondary lines; main buttons 44 px high). */
+.ai-intake {
+  flex: 0 0 auto;
+  max-height: 35%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 15px 10px;
+  border-bottom: 1px solid #e1e9f0;
+  color: #24384e;
+  font-size: 15px;
+  line-height: 1.5;
+}
+/* With files, the list and "O que encontrei" share the panel with the conversation; both scroll and the text box
+   below always stays in view. */
+.ai-intake[data-has-files="true"] { flex: 3 1 0; min-height: 120px; max-height: none; }
+.ai-workbench-chat:has(> .ai-intake) > .ai-chat-log { min-height: 96px; }
+.ai-workbench-chat:has(> .ai-intake[data-has-files="true"]) > .ai-chat-log { flex: 2 1 0; min-height: 64px; }
+/* With files and no conversation yet, the first suggestions give their room to the files. */
+.ai-workbench-chat:has(> .ai-intake[data-has-files="true"]) > .ai-chat-log:has(> .ai-chat-welcome:only-child) { display: none; }
+/* "Escolher colunas" is one step at a time: it takes the whole panel until "Inserir como tabela" or "Voltar". */
+.ai-intake[data-choosing="true"] { flex: 1 1 auto; }
+.ai-workbench-chat:has(> .ai-intake[data-choosing="true"]) > :is(.ai-chat-log, .ai-chat-compose) { display: none; }
+.ai-intake *, .ai-intake *::before, .ai-intake *::after { box-sizing: border-box; }
+.ai-intake h4 { margin: 14px 0 6px; font-size: 16px; font-weight: 700; color: #122c49; }
+.ai-intake h5 { margin: 10px 0 4px; font-size: 15px; font-weight: 700; color: #1d3a5a; overflow-wrap: anywhere; }
+.ai-intake p { margin: 6px 0; }
+.ai-intake button {
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid #c9d7e3;
+  border-radius: 7px;
+  background: #fff;
+  color: #2f536f;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-intake button:hover:not(:disabled) { border-color: #003f78; background: #eef6fc; }
+.ai-intake button:disabled { opacity: .5; cursor: not-allowed; }
+.ai-intake button:focus-visible, .ai-intake input:focus-visible, .ai-intake summary:focus-visible {
+  outline: 3px solid rgb(0 114 206 / .35);
+  outline-offset: 1px;
+}
+.ai-intake .vnext-btn-primary { background: #003f78; border-color: #003f78; color: #fff; }
+.ai-intake .vnext-btn-primary:hover:not(:disabled) { background: #002f59; border-color: #002f59; color: #fff; }
+
+.ai-intake-drop {
+  margin-top: 10px;
+  padding: 6px 8px;
+  border: 2px dashed #9db8d1;
+  border-radius: 10px;
+  background: #f7fafc;
+}
+.ai-intake-drop[data-dragging="true"] { border-color: #003f78; background: #e6f1fb; }
+.ai-intake-drop[data-compact="true"] { padding: 2px 6px; }
+.ai-intake .ai-intake-drop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  color: #003f78;
+  font-size: 15px;
+  white-space: normal;
+}
+.ai-intake-drop-icon { flex: none; width: 28px; font-size: 22px; line-height: 1; text-align: center; }
+.ai-intake-drop small { display: block; margin: 0 0 4px 38px; color: #5f7287; font-size: 13px; line-height: 1.4; }
+.ai-intake-drop[data-compact="true"] small { display: none; }
+
+.ai-intake-files { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.ai-intake-files li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid #dce5ee;
+  border-radius: 8px;
+  background: #fff;
+}
+.ai-intake-file-name { font-weight: 700; overflow-wrap: anywhere; }
+.ai-intake-file-state { grid-column: 1; font-size: 13px; color: #41546b; }
+.ai-intake-file-state[data-intake-state="ready"] { color: #246344; }
+.ai-intake-file-state[data-intake-state="needs-help"] { color: #7c5b00; }
+.ai-intake-file-state[data-intake-state="error"] { color: #8f3030; }
+.ai-intake-file-note { grid-column: 1; color: #5f7287; font-size: 13px; }
+.ai-intake .ai-intake-file-remove { grid-column: 2; grid-row: 1 / span 3; min-height: 36px; padding: 4px 10px; font-weight: 600; }
+
+.ai-intake-notice { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #eef6fc; color: #1d3a5a; }
+.ai-intake-notice:focus { outline: 3px solid rgb(0 114 206 / .35); outline-offset: 1px; }
+.ai-intake-columns h5:focus { outline: none; }
+.ai-intake-notice[data-tone="success"] { background: #eff8f3; color: #246344; }
+.ai-intake-notice[data-tone="error"] { background: #fff3f3; color: #8f3030; }
+
+.ai-intake-review { margin-top: 4px; }
+.ai-intake-group { padding: 4px 0 8px; border-top: 1px solid #edf1f4; }
+.ai-intake-tables { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 8px; }
+.ai-intake-tables li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 9px;
+  border: 1px solid #dce5ee;
+  border-radius: 8px;
+  background: #fff;
+}
+.ai-intake-flags { display: block; color: #7c5b00; font-size: 13px; }
+.ai-intake-warnings { margin: 4px 0; padding-left: 18px; color: #5f6f80; font-size: 13px; }
+.ai-intake-problem { color: #7c5b00; }
+.ai-intake-note, .ai-intake-origin { display: block; color: #5f7287; font-size: 13px; }
+.ai-intake-ignored summary, .ai-intake-text summary { cursor: pointer; font-weight: 600; color: #2f536f; padding: 4px 0; }
+.ai-intake-ignored ul { margin: 4px 0; padding-left: 18px; font-size: 13px; color: #5f6f80; }
+.ai-intake-ignored li { margin: 3px 0; }
+.ai-intake .ai-intake-link { min-height: 32px; margin-left: 6px; padding: 2px 8px; font-size: 13px; }
+.ai-intake-text p { white-space: pre-line; font-size: 13px; background: #f7fafc; padding: 6px 8px; border-radius: 6px; }
+.ai-intake-hidden-toggle, .ai-intake-header-toggle { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-weight: 600; }
+.ai-intake-hidden-toggle input, .ai-intake-header-toggle input { width: 18px; height: 18px; margin-top: 1px; flex: none; }
+.ai-intake-range { margin: 8px 0; padding: 8px 9px; border: 1px solid #ecd9a6; border-radius: 8px; background: #fff8e5; }
+.ai-intake-range label { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; }
+.ai-intake-range-row { display: flex; gap: 6px; margin-top: 4px; }
+.ai-intake-range-row input { flex: 1; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid #bdc9d6; border-radius: 7px; font: inherit; }
+.ai-intake-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+.ai-intake-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ai-intake-photo { margin: 0; }
+.ai-intake-photo img, .ai-intake-photo-empty {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #f5f7f9;
+  border: 1px solid #e1e9f0;
+}
+.ai-intake-photo figcaption { font-size: 13px; color: #5f7287; }
+
+.ai-intake-columns { margin-top: 10px; padding: 10px; border: 1px solid #b2cfe5; border-radius: 10px; background: #fbfdff; }
+.ai-intake-columns fieldset { margin: 6px 0; padding: 0; border: 0; display: grid; gap: 4px; }
+.ai-intake-columns legend { font-weight: 700; margin-bottom: 4px; }
+.ai-intake-column { display: flex; gap: 8px; align-items: flex-start; padding: 6px 4px; border-radius: 6px; cursor: pointer; }
+.ai-intake-column:hover { background: #eef6fc; }
+.ai-intake-column input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.ai-intake-column span { display: grid; min-width: 0; }
+.ai-intake-column strong { overflow-wrap: anywhere; }
+.ai-intake-column small { color: #5f7287; font-size: 13px; overflow-wrap: anywhere; }
+.ai-intake-column[data-empty="true"] strong { color: #7a8796; }
+.ai-intake-columns-count { font-weight: 600; }
+.ai-intake-preview { overflow-x: auto; margin: 6px 0; border: 1px solid #dce5ee; border-radius: 6px; }
+.ai-intake-preview table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.ai-intake-preview th, .ai-intake-preview td { padding: 3px 6px; border-bottom: 1px solid #edf1f4; text-align: left; white-space: nowrap; }
+.ai-intake-preview th { background: #003f78; color: #fff; font-weight: 700; }

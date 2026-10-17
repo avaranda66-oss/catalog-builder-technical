@@ -79,8 +79,8 @@ describe('FR-02 create dialog asks the name first and stays safe', () => {
     expect(view.getByRole('dialog', { name: 'Novo catálogo' })).toBeInTheDocument();
     const blank = within(dialog).getByRole('button', { name: 'Em branco' });
     expect(blank).toHaveAccessibleDescription('Comece com uma página vazia.');
-    // Enter shows the next step: the first way to start gets the focus.
-    expect(document.activeElement).toBe(blank);
+    // Enter shows the next step: the first way to start gets the focus (FR-64: "Criar com IA a partir de arquivos").
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Criar com IA a partir de arquivos' }));
   });
 
   it('Enter in "Nome do catálogo" moves to the recommended way to start, without creating', async () => {

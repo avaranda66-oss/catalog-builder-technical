@@ -11,6 +11,7 @@ import {
   LogOut,
   Pencil,
   Search,
+  Sparkles,
   X,
 } from 'lucide-react';
 import type { CatalogListItem } from '../persistence';
@@ -28,6 +29,7 @@ import {
   normalizeCatalogTitle,
 } from '../library/service';
 import { LibraryRowMenu } from './editor/LibraryRowMenu';
+import { catalogEditorUrl } from '../ai-catalog/intake/assistant-link';
 import './styles.css';
 import './editor/entry-and-title.css';
 
@@ -37,6 +39,11 @@ export const LIBRARY_SEARCH_DEBOUNCE_MS = 300;
 interface CatalogLibraryProps {
   readonly service: CatalogLibraryService;
   readonly onOpen: (catalogId: string) => void;
+  /**
+   * FR-64: opens a catalog with the assistant already open, to drop the files there. By default it goes to
+   * `/v2?catalog=<id>&assistente=1` (the editor reads that parameter); the files never travel between the pages.
+   */
+  readonly onOpenWithAssistant?: (catalogId: string) => void;
   readonly onSignOut?: () => void | Promise<void>;
   readonly onUnauthorized?: () => void | Promise<void>;
 }
@@ -165,7 +172,11 @@ function CatalogRow({
   );
 }
 
-export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: CatalogLibraryProps) {
+const openWithAssistantByAddress = (catalogId: string) => {
+  window.location.assign(catalogEditorUrl(catalogId, { assistant: true }));
+};
+
+export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWithAssistantByAddress, onSignOut, onUnauthorized }: CatalogLibraryProps) {
   const [view, setView] = React.useState<CatalogLibraryView>('active');
   const [search, setSearch] = React.useState('');
   const [appliedSearch, setAppliedSearch] = React.useState('');
@@ -189,6 +200,8 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
   const renameDialog = React.useRef<HTMLFormElement | null>(null);
   const archiveDialog = React.useRef<HTMLElement | null>(null);
   const createDialog = React.useRef<HTMLElement | null>(null);
+  /** The creation still being verified was "Criar com IA a partir de arquivos": open it with the assistant too. */
+  const createWithAssistant = React.useRef(false);
   const createPending = service.getCreateState() === 'pending-verification';
   const starters = service.listStarters();
 
@@ -316,7 +329,8 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
       await load();
       return;
     }
-    onOpen(result.value.catalogId);
+    if (createWithAssistant.current) onOpenWithAssistant(result.value.catalogId);
+    else onOpen(result.value.catalogId);
   };
 
   const createFailure = (code: CatalogLibraryFailureCode, retryCreate: () => void): LibraryActionError => {
@@ -329,9 +343,10 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
     };
   };
 
-  const createBlank = async (title: string) => {
+  const createBlank = async (title: string, options: { assistant?: boolean } = {}) => {
     if (busy) return;
     beginAction();
+    createWithAssistant.current = Boolean(options.assistant);
     setCreatingTitle(title || DEFAULT_BLANK_CATALOG_TITLE);
     const result = await service.createBlank(title || undefined);
     setBusy(false);
@@ -339,15 +354,17 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
     setCreateChooserOpen(false);
     if (!result.ok) {
       if (invalidateUnauthorized(result.error.code)) return;
-      setActionError(createFailure(result.error.code, () => { void createBlank(title); }));
+      setActionError(createFailure(result.error.code, () => { void createBlank(title, options); }));
       return;
     }
-    onOpen(result.value.catalogId);
+    if (options.assistant) onOpenWithAssistant(result.value.catalogId);
+    else onOpen(result.value.catalogId);
   };
 
   const createFromStarter = async (starterId: string, starterLabel: string, title: string) => {
     if (busy) return;
     beginAction();
+    createWithAssistant.current = false;
     setCreatingTitle(title || starterLabel);
     const result = title
       ? await service.createFromStarter(starterId, title)
@@ -617,6 +634,18 @@ export function CatalogLibrary({ service, onOpen, onSignOut, onUnauthorized }: C
             </label>
             <p id="create-name-help">Depois escolha como começar. Sem nome, o catálogo fica com o nome do modelo escolhido. O nome muda depois clicando no título.</p>
             <div className="vnext-library-create-options">
+              <button
+                type="button"
+                className="is-ai"
+                aria-label="Criar com IA a partir de arquivos"
+                aria-describedby="create-option-ai"
+                data-library-create-option="ai-files"
+                onClick={() => { void createBlank(createName, { assistant: true }); }}
+                disabled={busy}
+              >
+                <Sparkles size={20} aria-hidden="true" />
+                <span><strong>Criar com IA a partir de arquivos</strong><small id="create-option-ai">Abre o catálogo com o assistente, para você soltar PDFs, planilhas e fotos do produto.</small></span>
+              </button>
               <button
                 type="button"
                 aria-label="Em branco"
