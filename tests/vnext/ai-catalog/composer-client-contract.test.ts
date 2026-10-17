@@ -183,7 +183,8 @@ describe('budget settlement arithmetic (FR-62)', () => {
   });
   it('prices an unknown model at the most expensive known rate (fail closed)', () => {
     expect(geminiCostMicrousd('gemini-3.5-flash-lite', 6000, 2400)).toBe(7800);
-    expect(geminiCostMicrousd('unknown-model', 6000, 2400)).toBe(7800);
+    // The most expensive known rate is gemini-3.8-flash (extraction, FR-66): 6000 x 1.50 + 2400 x 7.50.
+    expect(geminiCostMicrousd('unknown-model', 6000, 2400)).toBe(27_000);
     expect(geminiCostMicrousd('gemini-3.5-flash-lite', -5, Number.NaN)).toBe(0);
   });
 });

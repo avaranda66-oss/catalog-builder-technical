@@ -11,6 +11,12 @@
 export const GEMINI_COMPOSER_MODEL = 'gemini-3.5-flash-lite' as const;
 export const GEMINI_TRANSLATION_MODEL = 'gemini-3.5-flash-lite' as const;
 export const GEMINI_BYOK_DEFAULT_MODEL = 'gemini-3.5-flash-lite' as const;
+/**
+ * Reads PDFs and photos for the fact extraction (FR-66, vnext-catalog-draft).
+ * Chosen by the FR-66a spike: most stable and best verified coverage
+ * (docs/ai-catalog/SPIKE_EXTRACAO_20261015.md §7).
+ */
+export const GEMINI_EXTRACTION_MODEL = 'gemini-3.8-flash' as const;
 
 /**
  * Models pinned by gateways that may still be deployed. A response that names
@@ -19,9 +25,17 @@ export const GEMINI_BYOK_DEFAULT_MODEL = 'gemini-3.5-flash-lite' as const;
  */
 export const GEMINI_RETIRED_TRANSLATION_MODELS: readonly string[] = Object.freeze(['gemini-2.5-flash']);
 
-/** USD per 1M tokens (ai.google.dev pricing read on 2026-10-14). Thinking tokens bill as output. */
+/**
+ * USD per 1M tokens (ai.google.dev pricing read on 2026-10-14). Thinking tokens bill as output.
+ * gemini-3.8-flash costs US$ 0.75 / 3.75 until 2026-12-31 and US$ 1.50 / 7.50 after
+ * (spike FR-66a, read on 2026-10-15); the later price is registered so that budget
+ * reservations and ceilings never undercount (fail closed).
+ */
 export const GEMINI_PRICING_USD_PER_MTOK: Readonly<Record<string, { readonly input: number; readonly output: number }>> =
-  Object.freeze({ 'gemini-3.5-flash-lite': Object.freeze({ input: 0.30, output: 2.50 }) });
+  Object.freeze({
+    'gemini-3.5-flash-lite': Object.freeze({ input: 0.30, output: 2.50 }),
+    'gemini-3.8-flash': Object.freeze({ input: 1.50, output: 7.50 }),
+  });
 
 /**
  * Cost in micro-USD (1e-6 USD). Tokens x USD-per-1M-tokens is already micro-USD.
