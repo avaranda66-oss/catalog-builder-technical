@@ -229,6 +229,8 @@ describe('FR-35 in the real editor (simple mode)', () => {
     const button = within(region).getByRole('button', { name: 'Continuar na próxima página' });
     fireEvent.click(button);
     await waitFor(() => expect(session.getSnapshot().document.pages).toHaveLength(3));
+    // The keyboard stays on the table that was cut (the section goes away once the table fits).
+    expect(document.activeElement).toBe(container.querySelector(`[data-editor-object-id="${SPLIT_OBJECT_ID}"]`));
 
     const after = session.getSnapshot().document;
     const [original, continuation] = tables(after);

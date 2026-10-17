@@ -66,6 +66,8 @@ export function TableContinuationSection({ session, document, measurement, prepa
         : { ok: false as const, message: tableSplitClickMessage(prepared) };
       if (mounted.current) setBusy(false);
       onMessage(outcome.ok ? successNotice(outcome.message) : outcome.message);
+      // The panel section goes away once the table fits: keep the keyboard on the table that was cut.
+      if (outcome.ok) globalThis.document.querySelector<HTMLElement>(`[data-editor-object-id="${CSS.escape(tableObject.id)}"]`)?.focus();
     }, 0);
   };
 
@@ -76,14 +78,16 @@ export function TableContinuationSection({ session, document, measurement, prepa
         <h3 id={headingId}>Tabela maior que a página</h3>
         <p>
           {planning.ok
-            ? `Esta tabela não cabe inteira nesta página. As linhas que sobram vão para ${newPagesText(planning.plan.newPages)}, logo depois desta, com o cabeçalho repetido.`
+            ? `Esta tabela não cabe inteira nesta página. As linhas que sobram vão para ${newPagesText(planning.plan.newPages)}, logo depois desta${
+              planning.plan.pagination.slices[0].headerRowIds.length > 0 ? ', com o cabeçalho repetido' : ''}.`
             : 'Esta tabela não cabe inteira nesta página.'}
         </p>
         <button
           type="button"
           className="vnext-inspector-action"
           data-editor-action="continue-table-next-page"
-          disabled={!planning.ok || busy}
+          disabled={!planning.ok}
+          aria-disabled={busy || undefined}
           aria-describedby={planning.ok ? undefined : reasonId}
           onClick={run}
         >

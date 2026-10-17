@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createDocumentSession, type DocumentSession } from '@/vnext/application';
 import { mmToU, plainRichText, uToQ, type CatalogDocument, type TableModel, type TableObject } from '@/vnext/domain';
@@ -265,6 +266,20 @@ describe('FR-35 continuing a long table on the next page', () => {
     if (!plan.ok) throw new Error('expected a split');
     expect(other.execute({ type: 'document.rename', title: 'Termômetros PRESYS' }).ok).toBe(true);
     expect(applyTableSplit(other, plan.prepared, 'elsewhere').ok).toBe(true);
+  });
+
+  it('never shows an internal word to the person', () => {
+    // Same rule as the table panel (2D), plus the words of the paginator itself.
+    const quoted = /'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|>[^<>{}\n]+</g;
+    const forbidden = /\beixos?\b|\btsv\b|\(s\)|explicitamente|\bpadding\b|\bslices?\b|\bIDs?\b|transa[cç]|\bframe\b|pagina[cç][aã]o/i;
+    const found = ['src/vnext/editor/table-split-authoring.ts', 'src/vnext/app/editor/TableContinuationSection.tsx']
+      .flatMap((file) => (readFileSync(file, 'utf8').match(quoted) ?? [])
+        // Code inside ${…} is not shown; the words around it are.
+        .map((text) => text.replace(/\$\{[^}]*\}/g, ''))
+        .filter((text) => /[À-ú]|\s/.test(text) && !/data-|className|\[data|^'\.\.?\//.test(text))
+        .filter((text) => forbidden.test(text))
+        .map((text) => `${file}: ${text}`));
+    expect(found).toEqual([]);
   });
 
   it('uses the blank page the editor adds, and words the result in plain Portuguese', () => {
