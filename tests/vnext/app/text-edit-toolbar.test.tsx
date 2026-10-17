@@ -5,7 +5,7 @@ import { plainRichText, type CatalogDocument } from '@/vnext/domain';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { W2E_PAGE_TEMPLATE } from '@/vnext/app/page-template-fixtures';
 import { EditorWorkspace } from '@/vnext/app/EditorWorkspace';
-import { textEditToolbarPosition } from '@/vnext/app/editor/TextEditToolbar';
+import { textEditToolbarMaxWidth, textEditToolbarPosition } from '@/vnext/app/editor/TextEditToolbar';
 import { resetStageZoomStore } from '@/vnext/app/editor/use-stage-zoom';
 
 /** FR-16b: the bar of a text being edited is drawn outside the zoomed page, at its real size. */
@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 type Rect = { left: number; top: number; width: number; height: number };
@@ -65,6 +66,12 @@ describe('textEditToolbarPosition (pure)', () => {
     const small = box({ left: 100, top: 50, width: 210, height: 297 });
     const text = box({ left: 120, top: 80, width: 80, height: 20 });
     expect(textEditToolbarPosition({ text, page: small, layer, toolbar }).maxWidth).toBe(280);
+  });
+
+  it('uses the page width as the widest the bar may be, never less than 280 px', () => {
+    expect(textEditToolbarMaxWidth(600.7)).toBe(600);
+    expect(textEditToolbarMaxWidth(325)).toBe(325);
+    expect(textEditToolbarMaxWidth(210)).toBe(280);
   });
 });
 
@@ -142,6 +149,79 @@ describe('FR-16b text bar outside the zoomed page', () => {
     expect(bar().style.top).toBe('180px');
     expect(bar().style.visibility).toBe('');
     expect(bar()).toHaveAttribute('data-placement', 'below');
+  });
+
+  it('measures the bar at the page width, so on a narrow page the wrapped bar placed above never covers the text', () => {
+    // A footer near the bottom of a page shown 325 px wide ("Página inteira" on 1366 x 768). The bar is one row
+    // (58 px) when it may be 536 px wide or more, and wraps into three rows (156 px) when it may be narrower.
+    const ONE_ROW_WIDTH = 536;
+    const layerBox = { left: 200, top: 120, width: 700, height: 600 };
+    const textBox = { left: 280, top: 690, width: 200, height: 18 };
+    const boxes: Array<[string, Rect]> = [
+      ['.vnext-document-preview', layerBox],
+      ['[data-vnext-page-stage]', { left: 260, top: 250, width: 325, height: 460 }],
+      ['.vnext-text-edit-session', textBox],
+    ];
+    const toolbarLimit = (element: HTMLElement) => {
+      const limit = Number.parseFloat(element.style.maxWidth);
+      return Number.isFinite(limit) ? limit : Number.POSITIVE_INFINITY;
+    };
+    const session = createDocumentSession(textDocument(), {
+      createId: ids('toolbar-generated'),
+      templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]),
+    });
+    const { container } = render(<EditorWorkspace session={session} simpleByDefault />);
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="text-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 42, button: 0, clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(hit, { pointerId: 42, button: 0, clientX: 80, clientY: 80 });
+
+    // From here on the page area, the page and the text have their sizes on screen, before the bar is first placed.
+    const originalRect = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const match = boxes.find(([selector]) => this.matches(selector));
+      return match ? { ...box(match[1]), x: match[1].left, y: match[1].top, toJSON: () => ({}) } : originalRect.call(this);
+    });
+    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get(this: HTMLElement) {
+      if (!this.matches('[data-text-edit-toolbar]')) return 0;
+      return toolbarLimit(this) < ONE_ROW_WIDTH ? 156 : 58;
+    } });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get(this: HTMLElement) {
+      return this.matches('[data-text-edit-toolbar]') ? Math.min(ONE_ROW_WIDTH, toolbarLimit(this)) : 0;
+    } });
+    try {
+      fireEvent.keyDown(hit, { key: 'Enter' });
+      const toolbar = bar();
+      expect(toolbar.style.maxWidth).toBe('325px');
+      expect(toolbar).toHaveAttribute('data-placement', 'above');
+      const barTop = layerBox.top + Number.parseFloat(toolbar.style.top);
+      // The bar ends where the text starts: it never covers the text being edited.
+      expect(barTop + toolbar.offsetHeight).toBeLessThanOrEqual(textBox.top);
+      expect(barTop + toolbar.offsetHeight).toBe(690);
+    } finally {
+      if (offsetHeight) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight);
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+    }
+  });
+
+  it('places itself again when the bar itself changes size (it wraps into more rows, or back)', () => {
+    const observers: Array<{ targets: Element[]; callback: ResizeObserverCallback }> = [];
+    vi.stubGlobal('ResizeObserver', class {
+      private readonly entry: { targets: Element[]; callback: ResizeObserverCallback };
+      constructor(callback: ResizeObserverCallback) {
+        this.entry = { targets: [], callback };
+        observers.push(this.entry);
+      }
+      observe(target: Element) { this.entry.targets.push(target); }
+      unobserve() {}
+      disconnect() { this.entry.targets = []; }
+    });
+    startTextEdit();
+    const watching = observers.find((observer) => observer.targets.includes(bar()));
+    expect(watching).toBeDefined();
+    // The same observer also watches the page area that holds the bar.
+    expect(watching!.targets.some((target) => target.matches('.vnext-document-preview'))).toBe(true);
   });
 
   it('inserts a symbol without leaving the text, then "Concluir" saves and "Cancelar" discards', () => {

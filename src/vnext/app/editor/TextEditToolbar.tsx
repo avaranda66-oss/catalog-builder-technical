@@ -28,6 +28,15 @@ export interface TextEditToolbarPosition {
 type Box = Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width'>;
 
 /**
+ * The widest the bar may be on a page shown `pageWidth` px wide: the page width, but never less than
+ * {@link MIN_TOOLBAR_WIDTH_PX}. Shared by the placement and by the component, which applies it to the
+ * bar before measuring it (a narrow page wraps the bar into more rows, so it gets taller).
+ */
+export function textEditToolbarMaxWidth(pageWidth: number): number {
+  return Math.max(MIN_TOOLBAR_WIDTH_PX, Math.floor(pageWidth));
+}
+
+/**
  * Pure placement of the bar, in the coordinates of the layer that holds it (its scroll offset
  * included). The bar starts at the left edge of the text box, is pushed left so it never goes past
  * the right edge of the page (Onda 1 finding: text boxes in the right column) and sits under the
@@ -42,7 +51,7 @@ export function textEditToolbarPosition(input: {
   const { text, page, layer, toolbar } = input;
   const originX = layer.left + layer.clientLeft - layer.scrollLeft;
   const originY = layer.top + layer.clientTop - layer.scrollTop;
-  const maxWidth = Math.max(MIN_TOOLBAR_WIDTH_PX, Math.floor(page.width));
+  const maxWidth = textEditToolbarMaxWidth(page.width);
   const width = Math.min(toolbar.width, maxWidth);
   const rightmost = Math.max(page.left, page.right - width);
   const left = Math.min(Math.max(text.left, page.left), rightmost);
@@ -77,9 +86,13 @@ export function TextEditToolbar({ symbols, onSymbol, onCancel, onCommit }: TextE
     const toolbar = toolbarRef.current;
     if (!session || !page || !toolbar || !layer) return;
     const layerBox = layer.getBoundingClientRect();
+    const pageBox = page.getBoundingClientRect();
+    // Measure the bar at its final width: on a narrow page it wraps into two or three rows, and
+    // "above" must use that real height, or the bar would cover the text being edited.
+    toolbar.style.maxWidth = `${textEditToolbarMaxWidth(pageBox.width)}px`;
     const next = textEditToolbarPosition({
       text: session.getBoundingClientRect(),
-      page: page.getBoundingClientRect(),
+      page: pageBox,
       layer: { left: layerBox.left, top: layerBox.top, right: layerBox.right, bottom: layerBox.bottom, width: layerBox.width,
         scrollLeft: layer.scrollLeft, scrollTop: layer.scrollTop, clientLeft: layer.clientLeft, clientTop: layer.clientTop },
       toolbar: { width: toolbar.offsetWidth, height: toolbar.offsetHeight },
@@ -88,12 +101,14 @@ export function TextEditToolbar({ symbols, onSymbol, onCancel, onCommit }: TextE
       && current.maxWidth === next.maxWidth && current.placement === next.placement ? current : next);
   }, [layer]);
 
-  // Before paint: place the bar for the current zoom, and again when the page area changes size.
+  // Before paint: place the bar for the current zoom, and again when the page area or the bar
+  // itself changes size (the bar wraps into more rows, or back, when its width changes).
   React.useLayoutEffect(() => {
     if (!layer) return undefined;
     place();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => place());
     observer?.observe(layer);
+    if (toolbarRef.current) observer?.observe(toolbarRef.current);
     window.addEventListener('resize', place);
     return () => {
       observer?.disconnect();
