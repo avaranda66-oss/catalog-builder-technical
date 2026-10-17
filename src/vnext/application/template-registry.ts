@@ -125,3 +125,38 @@ export function createStaticPageTemplateRegistry(
     list: () => ordered,
   });
 }
+
+/**
+ * One registry over several (for example the fixed PRESYS archetypes plus the
+ * TA-25N pages installed once their image is prepared). Lookups are live, so a
+ * member registry that is replaced later is seen at once. The first registry
+ * that knows an ID wins; an ID registered twice is a definition error.
+ */
+export function composePageTemplateRegistries(
+  members: () => readonly PageTemplateRegistry[]
+): PageTemplateRegistry {
+  const list = (): readonly PageTemplateDefinition[] => {
+    const seen = new Set<string>();
+    const result: PageTemplateDefinition[] = [];
+    for (const registry of members()) {
+      for (const definition of registry.list()) {
+        if (seen.has(definition.id)) {
+          throw new PageTemplateDefinitionError([{ path: 'id', message: `Duplicate template ID: ${definition.id}` }]);
+        }
+        seen.add(definition.id);
+        result.push(definition);
+      }
+    }
+    return Object.freeze(result);
+  };
+  return Object.freeze({
+    get: (id: string) => {
+      for (const registry of members()) {
+        const definition = registry.get(id);
+        if (definition) return definition;
+      }
+      return undefined;
+    },
+    list,
+  });
+}

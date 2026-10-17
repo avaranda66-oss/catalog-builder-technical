@@ -1,6 +1,8 @@
 import { parseCanonicalDocument, createStaticPageTemplateRegistry, type PageTemplateRegistry } from '@/vnext/application';
 import { objectInstantiationSeedFromObject } from '@/vnext/application/document';
+import { composePageTemplateRegistries } from '@/vnext/application/template-registry';
 import { plainRichText, type AssetRef, type CatalogDocument, type Page, type TableObject, type TextObject } from '@/vnext/domain';
+import { createPresysArchetypeTemplateRegistry } from './presys-archetypes';
 import type { CatalogStarterDefinition } from './starter-registry';
 
 // Frozen values are mirrored in the source artifact and checked for exact agreement by C1-03.
@@ -185,7 +187,6 @@ export function createPresysStarterDocument(asset: AssetRef): CatalogDocument {
       text('presys-description', fact('description'), 47, 17, 11),
       { id: 'presys-product-image', type: 'image', zIndex: 0, frame: { xMm: 42, yMm: 68, widthMm: 126, heightMm: 84.35 }, assetId: asset.id, fit: 'contain' },
       table('presys-summary', ['family', 'application', 'functions', 'interfaces', 'auxiliarySupply', 'hart', 'display'], 161, 83),
-      text('presys-content-note', 'Conteúdo parcialmente preenchido. Confira a configuração do produto e complete os campos pendentes antes de publicar.', 258, 18, 8),
     ] },
     { id: PRESYS_SPECIFICATIONS_PAGE_ID, widthMm: 210, heightMm: 297, safeArea, objects: [
       text('presys-spec-title', 'TA-25N · Especificações e condições', 12, 14, 18, true),
@@ -193,7 +194,6 @@ export function createPresysStarterDocument(asset: AssetRef): CatalogDocument {
       text('presys-conditions-title', 'Entradas, alimentação e condições', 133, 10, 12, true),
       table('presys-conditions', ['currentRange', 'currentPrecision', 'power', 'mainSupply', 'environment', 'heatingCooling'], 149, 65),
       text('presys-conformity', `Declaração do fabricante: ${fact('conformity')}. Normas declaradas: ${fact('standards')}. Não constitui certificação independente.`, 225, 30, 8),
-      text('presys-source-note', 'Fontes PRESYS: manual EM0291-04, p. 2–3; folder TA, p. 2 e 9; página oficial; declaração CE de 01/01/2026. Dados divergentes: A COMPLETAR.', 264, 17, 8),
     ] },
   ];
   return parseCanonicalDocument({ schemaVersion: 1, id: 'presys-ta25n-starter-source', title: contract.displayName, locale: 'pt-BR',
@@ -202,21 +202,43 @@ export function createPresysStarterDocument(asset: AssetRef): CatalogDocument {
     pages, assets: [asset] });
 }
 
+/**
+ * FR-81: review and provenance notes that used to be printed on the pages. They
+ * belong to the review screens, never to the catalog the customer receives.
+ */
+export const PRESYS_STARTER_REVIEW_NOTES: readonly string[] = Object.freeze([
+  'Conteúdo parcialmente preenchido. Confira a configuração do produto e complete os campos “A COMPLETAR” antes de publicar.',
+  'Fontes PRESYS: manual EM0291-04, p. 2–3; folder TA, p. 2 e 9; página oficial; declaração CE de 01/01/2026.',
+  'Os campos com dados divergentes entre as fontes estão marcados “A COMPLETAR”.',
+]);
+
 export const PRESYS_STARTER: CatalogStarterDefinition = {
   starterId: PRESYS_STARTER_ID, revision: 1, label: contract.displayName,
   category: 'PRESYS', description: 'Duas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.',
+  reviewNotes: PRESYS_STARTER_REVIEW_NOTES,
   requiredAssets: [PRESYS_IMAGE_MANIFEST],
   sourceDocument: createPresysStarterDocument({ id: PRESYS_IMAGE_MANIFEST.seedAssetId, version: '1', sha256: contract.image.sha256,
     mime: 'image/png', widthPx: 720, heightPx: 482, name: contract.image.name, alt: contract.image.alt }),
 };
 
-/** Session-scoped registry: only prepared metadata may be installed in the production templates. */
+export const PRESYS_PAGE_TEMPLATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  [PRESYS_PRESENTATION_PAGE_ID]: 'TA-25N · Apresentação',
+  [PRESYS_SPECIFICATIONS_PAGE_ID]: 'TA-25N · Especificações',
+});
+
+/**
+ * Session-scoped registry used by the editor. The PRESYS archetypes P1–P9 (FR-80)
+ * are always available; the TA-25N pages join only after their official image
+ * was prepared, so only prepared metadata is ever installed.
+ */
 export function createPresysPageTemplateRegistry(): PageTemplateRegistry & { install(asset: AssetRef): void } {
-  let registry = createStaticPageTemplateRegistry([]);
+  const archetypes = createPresysArchetypeTemplateRegistry();
+  let installed = createStaticPageTemplateRegistry([]);
+  const registry = composePageTemplateRegistries(() => [archetypes, installed]);
   return { get: id => registry.get(id), list: () => registry.list(), install: asset => {
     const doc = createPresysStarterDocument(asset);
-    registry = createStaticPageTemplateRegistry(doc.pages.map((page, index) => ({ id: page.id,
-      label: index === 0 ? 'TA-25N · Apresentação' : 'TA-25N · Especificações', safeArea,
+    installed = createStaticPageTemplateRegistry(doc.pages.map(page => ({ id: page.id,
+      label: PRESYS_PAGE_TEMPLATE_LABELS[page.id], safeArea,
       objects: page.objects.map(objectInstantiationSeedFromObject) })));
   } };
 }
