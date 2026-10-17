@@ -2,7 +2,7 @@ import React from 'react';
 import type { DocumentSession } from '../application';
 import { ProviderCredentialsSettings } from './ProviderCredentialsSettings';
 import {
-  nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
+  ComposerRequestError, nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
   type ComposerReadiness, type NativeComposeFunctionsClient,
 } from './native-compose-client';
 import { applyNativeTextEdit, plainSelectedEditorialText, proposeNativeTextEdit,
@@ -20,6 +20,8 @@ import { composerErrorMessage, composerReadinessText } from './composer-messages
 import { clearByokCredential, setByokCredential, useByokCredential } from './byok-session';
 import { VerifiedPdfTableReview } from './VerifiedPdfTableReview';
 import type { NativePdfCellFillTarget } from './native-pdf-cell-fill';
+import type { FitHeightMeasurement } from '../editor/table-fit-height-authoring';
+import { SourceIntakeSection } from './intake/SourceIntakeSection';
 
 interface Props {
   session: DocumentSession;
@@ -29,6 +31,17 @@ interface Props {
   onBeforeMutation?: () => boolean;
   selected?: SelectedEditorialText;
   selectedTable?: NativePdfCellFillTarget;
+  /** The editor's current measurement, so a long table from a file continues on the next pages (FR-35). */
+  measurement?: FitHeightMeasurement | null;
+  /** Page open in the editor (a table from a file goes there, or on a new page right after it). */
+  activePageId?: string;
+  /** Shows a table inserted from a file in the editor. */
+  onShowTable?: (pageId: string, objectId: string) => void;
+  /**
+   * FR-03: the technical review with a hand-written JSON manifest is not on the father's screen. It stays for
+   * development and the browser proofs only (the dev server), never in the published app.
+   */
+  technicalPdfReview?: boolean;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -46,12 +59,16 @@ function cachedReadiness(client: NativeComposeFunctionsClient): Promise<Composer
   readinessCache.set(client, { at: Date.now(), value });
   return value;
 }
+/** PROVIDER_NOT_CONFIGURED where no personal key can be used: no mention of an "Avançado" that is not there. */
+const SERVER_AI_NOT_CONFIGURED = 'A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.';
+const NOT_CHANGED = ' O catálogo não foi alterado.';
 const clock = (timestamp: string) => {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable }: Props) {
+export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
+  measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV }: Props) {
   const [message, setMessage] = React.useState('');
   const [turns, setTurns] = React.useState<WorkbenchEntry[]>(() =>
     readWorkbenchDialogue(localStorage, documentId, ownerScope));
@@ -74,6 +91,11 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // "Avançado (chave própria)" only when the AI is reachable here and the server accepts a personal key (or has
   // not said it does not). Without a client a personal key could not be used either.
   const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind !== 'ready' || readiness.byok);
+  const ownKeyOfferedRef = React.useRef(ownKeyOffered);
+  ownKeyOfferedRef.current = ownKeyOffered;
+  const readinessText = !client ? 'A IA não está disponível nesta tela.'
+    : !ownKey && !ownKeyOffered && readiness?.kind === 'ready' && !readiness.serverKey ? SERVER_AI_NOT_CONFIGURED
+      : composerReadinessText(readiness, !!ownKey);
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { input.current?.focus(); }, []);
@@ -132,8 +154,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     }));
     const sequence = ++requestSerial.current;
     inFlightText.current = text;
+    // A proposal already received stays until the new answer arrives (or is rejected, or the catalog changes):
+    // a failed or cancelled request never throws away what was already paid for.
     setBusy(isRewriting ? 'rewrite' : 'compose'); setError(''); setUnsent(undefined);
-    setPending(undefined); setPendingRewrite(undefined);
     setMessage('');
     try {
       const reply = isRewriting && target
@@ -162,7 +185,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     } catch (failure) {
       if (sequence === requestSerial.current) {
         restoreUnsent(text);
-        setError(composerErrorMessage(failure, { usingOwnKey: !!ownKey }));
+        setError(failure instanceof ComposerRequestError && failure.code === 'PROVIDER_NOT_CONFIGURED' && !ownKey &&
+          !ownKeyOfferedRef.current ? SERVER_AI_NOT_CONFIGURED + NOT_CHANGED : composerErrorMessage(failure, { usingOwnKey: !!ownKey }));
       }
     } finally {
       if (sequence === requestSerial.current) setBusy(false);
@@ -176,7 +200,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     setError('');
   };
   const approve = () => {
-    if (!pending || busy || requestSerial.current !== pending.requestSequence) return;
+    if (!pending || busy) return;
     if (session.getSnapshot().document.id !== pending.documentId ||
         session.getSnapshot().localSequence !== pending.revision) {
       setPending(undefined);
@@ -200,8 +224,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   };
   const approveRewrite = () => {
     const proposal = pendingRewrite;
-    if (!proposal || proposal.reply.status !== 'proposal' ||
-        proposal.serial !== requestSerial.current || busy) return;
+    if (!proposal || proposal.reply.status !== 'proposal' || busy) return;
     if (onBeforeMutation && !onBeforeMutation()) {
       setError('Conclua ou cancele a edição de texto em andamento antes de aprovar a reescrita.');
       return;
@@ -221,14 +244,16 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setError('O texto mudou ou não era seguro alterar. Nenhuma reescrita foi aprovada.');
     }
   };
-  return <section className="ai-workbench-chat" aria-label="Chat de criação com Gemini">
+  return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo">
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>
-        <p>Descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
+        <p>Solte os arquivos do produto ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
         <p className="ai-readiness" data-ai-readiness={ownKey ? 'own-key' : readiness?.kind ?? (client ? 'checking' : 'none')}>
-          {client ? composerReadinessText(readiness, !!ownKey) : 'A IA não está disponível nesta tela.'}</p></div>
+          {readinessText}</p></div>
       <span className="ai-chat-count" aria-label="Quantidade de mensagens">{turns.length}</span>
     </div>
+    <SourceIntakeSection session={session} measurement={measurement} activePageId={activePageId}
+      onBeforeMutation={onBeforeMutation} onShowTable={onShowTable} />
     <div className="ai-chat-log" ref={log} role="log" aria-label="Histórico de criação do catálogo" aria-live="polite">
       {editableSelectedText && <div className="ai-selection-context">
         <small>Texto selecionado na página:</small>
@@ -268,7 +293,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <p><strong>Texto atual:</strong> {plainSelectedEditorialText(pendingRewrite.target)}</p>
         <p><strong>Nova proposta:</strong> {pendingRewrite.reply.revisedText}</p>
         <div className="ai-chat-actions">
-          <button type="button" className="vnext-btn-primary"
+          <button type="button" className="vnext-btn-primary" disabled={!!busy}
             onClick={approveRewrite}>Confirmar reescrita selecionada</button>
           <button type="button" onClick={() => setPendingRewrite(undefined)}>Rejeitar reescrita</button>
         </div>
@@ -283,7 +308,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
             : page.type === 'cover' ? ' · Capa' : ' · Conteúdo editorial'}</span>
         </li>)}</ul>
         <div className="ai-chat-actions">
-          <button className="vnext-btn-primary" type="button" onClick={approve}>Confirmar e inserir no catálogo</button>
+          <button className="vnext-btn-primary" type="button" onClick={approve} disabled={!!busy}>Confirmar e inserir no catálogo</button>
           <button type="button" onClick={() => setPending(undefined)}>Rejeitar proposta</button>
         </div>
       </div>}
@@ -326,11 +351,12 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
           onLock={() => clearByokCredential()}
         />
       </div>}
-      {selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}
+      {technicalPdfReview && selectedTable && <VerifiedPdfTableReview key={selectedTable.objectId}
         session={session} target={selectedTable} onBeforeMutation={onBeforeMutation}/>}
       {error && <p role="alert">{error}</p>}
-      <p className="ai-boundary">A IA propõe a estrutura das páginas e você confere antes de inserir.
-        Ela não lê PDFs, não trata fotos e não inventa valores técnicos: as tabelas chegam vazias para você preencher.</p>
+      <p className="ai-boundary">A IA propõe a estrutura das páginas e você confere antes de inserir. Ela não inventa valores técnicos:
+        as tabelas que ela propõe chegam vazias para você preencher. Os arquivos que você solta acima são lidos aqui no computador
+        e não vão para a IA; as tabelas deles entram no catálogo só quando você clica em “Inserir como tabela”.</p>
     </div>
   </section>;
 }
