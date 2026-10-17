@@ -1154,9 +1154,10 @@ describe('W2.D visible snapping and diagnostics', () => {
     expect(container.querySelector('[data-editorial-root] [data-editor-diagnostic-badge]')).toBeNull();
 
     const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')!;
-    fireEvent.change(x, { target: { value: '-1' } });
+    // FR-54: até 3 mm fora é sangria (aviso) para uma forma; 4 mm continua erro.
+    fireEvent.change(x, { target: { value: '-4' } });
     fireEvent.blur(x);
-    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-1);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-4);
     await waitFor(() => {
       expect(container.querySelector('[data-diagnostic-code="OBJECT_OUTSIDE_PAGE"][data-diagnostic-severity="ERROR"]')).toBeTruthy();
     });

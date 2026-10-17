@@ -53,6 +53,17 @@ function collectMatches(source: string): Match[] {
   return matches.sort((left, right) => left.start - right.start || right.end - left.end);
 }
 
+/** Posição de cada dado técnico no texto, na ordem em que aparece; o mesmo recorte que `protectTechnicalTokens` usa. */
+export interface TechnicalTokenSpan {
+  readonly start: number;
+  readonly end: number;
+  readonly value: string;
+}
+
+export function technicalTokenSpans(source: string): readonly TechnicalTokenSpan[] {
+  return collectMatches(source);
+}
+
 function collisionSafeNamespace(source: string, baseNamespace: string): string {
   let suffix = 0;
   for (;;) {

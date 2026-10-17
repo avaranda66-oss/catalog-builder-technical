@@ -4,6 +4,8 @@ import type { CatalogDocument, Diagnostic } from '../domain';
 import type { AssetRuntimeState } from '../asset';
 import { captureSnapshot, compareSnapshots, compilePlans, DocumentRenderer, measureTables, type LayoutSnapshot, type TablePlan } from '../rendering';
 import { authoredFrameDiagnostics, layoutReport } from '../publication';
+import { isBleedWarning } from '../publication/preflight';
+import { publicationDiagnosticText } from './publication-diagnostic-presentation';
 
 export const W2D_DIAGNOSTIC_CODES = new Set([
   'SAFE_AREA_VIOLATION',
@@ -115,7 +117,9 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
     case 'SAFE_AREA_VIOLATION':
       return 'O objeto cruza a área segura. A posição é permitida, mas revise a margem antes de publicar.';
     case 'OBJECT_OUTSIDE_PAGE':
-      return 'Parte do objeto está fora da página física. Corrija a posição ou o tamanho para liberar a publicação.';
+      return isBleedWarning(diagnostic)
+        ? publicationDiagnosticText(diagnostic)
+        : 'Parte do objeto está fora da página física. Corrija a posição ou o tamanho para liberar a publicação.';
     case 'TEXT_OBJECT_OVERFLOW':
       return 'O texto não cabe no quadro criado. Ajuste o conteúdo ou redimensione o quadro manualmente.';
     case 'PRINTABLE_CONTENT_OVERLAP':

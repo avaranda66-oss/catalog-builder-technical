@@ -15,7 +15,7 @@ const firstKey = translationReviewKey(runs[0].unitId, runs[0].runId);
 
 function setup(initial: Partial<TranslationReviewSnapshot>, sourceLocale = 'pt-BR') {
   let snapshot: TranslationReviewSnapshot = { phase: 'idle', pending: false, runs: [], targetLocale: 'es-ES',
-    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0, ...initial };
+    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0, confirmedReadings: {}, ...initial };
   const listeners = new Set<() => void>();
   const coordinator = {
     getSnapshot: () => snapshot,

@@ -1,6 +1,7 @@
 import { walkPageObjects, type CatalogDocument, type Diagnostic } from '@/vnext/domain';
 import type { SaveProjection } from '../persistence';
 import { fatherSaveExplanation } from './save-presentation';
+import { BLEED_TOLERANCE_MM, isBleedWarning } from '../publication/preflight';
 
 /** Read-only wording for publication review; diagnostic severity and print eligibility stay with the engine. */
 export function publicationDiagnosticMessage(code: string): string {
@@ -84,8 +85,24 @@ function detailValue(issue: Diagnostic, key: string): string | undefined {
   return undefined;
 }
 
-/** Wording that may quote the exact provisional text or count; everything else falls back to the code message. */
+/**
+ * FR-54: the engine detail keeps the exact bleed (up to 4 decimals, one per 1/10000 mm); the father reads it rounded
+ * to one decimal in pt-BR ("1,2 mm"), and anything under 0,05 mm as "menos de 0,1 mm". Pure presentation: the
+ * diagnostic, its detail and the document are untouched.
+ */
+export function bleedPhrase(bleedMm: number): string {
+  if (bleedMm < 0.05) return 'menos de 0,1 mm';
+  return `${String(Math.round(bleedMm * 10) / 10).replace('.', ',')} mm`;
+}
+
+/** Wording that may quote the exact provisional text, count or bleed; everything else falls back to the code message. */
 export function publicationDiagnosticText(issue: Diagnostic): string {
+  if (isBleedWarning(issue)) {
+    const bleed = detailValue(issue, 'bleedMm');
+    return bleed !== undefined && bleed !== '' && Number.isFinite(Number(bleed))
+      ? `Faixa ou foto sai ${bleedPhrase(Number(bleed))} da página. Isso é normal para sangria (até ${BLEED_TOLERANCE_MM} mm); confira se é intencional.`
+      : `Faixa ou foto sai até ${BLEED_TOLERANCE_MM} mm da página. Isso é normal para sangria; confira se é intencional.`;
+  }
   if (issue.code === 'UNRESOLVED_PLACEHOLDER') {
     const token = detailValue(issue, 'token');
     const where = { title: 'no título da tabela', note: 'na nota da tabela', legend: 'na legenda da tabela' }[detailValue(issue, 'surface') ?? ''];

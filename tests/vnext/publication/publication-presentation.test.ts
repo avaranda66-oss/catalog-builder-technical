@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMinimalW2CTable, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
-import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage, publicationDiagnosticText, publicationWaitingMessage } from '@/vnext/app/publication-diagnostic-presentation';
+import { bleedPhrase, publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticMessage, publicationDiagnosticText, publicationWaitingMessage } from '@/vnext/app/publication-diagnostic-presentation';
 import type { Diagnostic } from '@/vnext/domain';
 
 describe('P1.C publication diagnostic presentation', () => {
@@ -66,5 +66,44 @@ describe('P1.C publication diagnostic presentation', () => {
       .toBe('Não foi possível salvar agora. Confira a conexão e tente Salvar novamente. A verificação começa sozinha assim que o catálogo for salvo.');
     expect(publicationWaitingMessage({ phase: 'conflict', label: 'Conflict', dirty: true, canSave: false })).toBe(
       'Este catálogo foi salvo em outro lugar. Clique em Voltar ao editor e escolha “Salvar meu trabalho como cópia” no aviso acima da página.');
+  });
+});
+
+describe('FR-54 sangria arredondada na frase do pai', () => {
+  const bleed = (details: string): Diagnostic => ({ code: 'OBJECT_OUTSIDE_PAGE', severity: 'WARNING', details, pageId: 'page', objectId: 'cover' });
+
+  it.each([
+    ['bleedMm=1.2347; toleranceMm=3', 'sai 1,2 mm da página'],
+    ['bleedMm=2; toleranceMm=3', 'sai 2 mm da página'],
+    ['bleedMm=0.5; toleranceMm=3', 'sai 0,5 mm da página'],
+    ['bleedMm=2.96; toleranceMm=3', 'sai 3 mm da página'],
+    ['bleedMm=0.05; toleranceMm=3', 'sai 0,1 mm da página'],
+    ['bleedMm=0.0001; toleranceMm=3', 'sai menos de 0,1 mm da página'],
+  ])('%s → "%s"', (details, phrase) => {
+    const text = publicationDiagnosticText(bleed(details));
+    expect(text).toContain(phrase);
+    expect(text).toContain('até 3 mm');
+    expect(text).not.toMatch(/\d\.\d|bleedMm|OBJECT_OUTSIDE_PAGE|WARNING/);
+  });
+
+  it('keeps the exact engine detail in the technical fields and never edits the diagnostic', () => {
+    const issue = bleed('bleedMm=1.2347; toleranceMm=3');
+    const before = JSON.stringify(issue);
+    expect(publicationDiagnosticText(issue)).toContain('1,2 mm');
+    expect(publicationDiagnosticDetails(issue)).toContainEqual(['Detalhe original', 'bleedMm=1.2347; toleranceMm=3']);
+    expect(JSON.stringify(issue)).toBe(before);
+  });
+
+  it('bleedPhrase rounds to one decimal in pt-BR and names anything under 0,05 mm as "menos de 0,1 mm"', () => {
+    expect(bleedPhrase(1.2347)).toBe('1,2 mm');
+    expect(bleedPhrase(0.04)).toBe('menos de 0,1 mm');
+    expect(bleedPhrase(0.05)).toBe('0,1 mm');
+    expect(bleedPhrase(3)).toBe('3 mm');
+  });
+
+  it('falls back to the generic bleed sentence when the detail has no usable number', () => {
+    for (const details of ['sem detalhe', 'bleedMm=; toleranceMm=3', 'bleedMm=abc; toleranceMm=3']) {
+      expect(publicationDiagnosticText(bleed(details))).toBe('Faixa ou foto sai até 3 mm da página. Isso é normal para sangria; confira se é intencional.');
+    }
   });
 });

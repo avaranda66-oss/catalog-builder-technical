@@ -1,22 +1,77 @@
-import type { AssetRef,CatalogDocument,CellContent,RichText,TableModel } from '../domain/editorial-model';
+import type { AssetRef,CatalogDocument,CellContent,EditorialObject,Page,RichText,TableModel } from '../domain/editorial-model';
 import type { TablePlan } from '../rendering/render-plan';
 import type { LayoutSnapshot } from '../rendering/measurement';
 import { findElement,intrinsicMetrics } from '../rendering/measurement';
 import { add,mmToU,qToU,uToQ } from '../domain/physical';
 import { diagnostic,type Diagnostic } from '../domain/diagnostics';
-import { walkPageObjects } from '../domain/object-tree';
+import { walkPageObjects,type CanonicalFrameU,type ObjectTreeEntry } from '../domain/object-tree';
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number):boolean => renderedIntrinsicHeightQ>uToQ(authoredFrameHeightU);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number):boolean => metrics.widthQ>uToQ(authoredWidthU)||metrics.heightQ>uToQ(authoredHeightU);
+/**
+ * FR-54. Decorative bands, rules and bleed photos are intentional: a shape, line or image that touches or crosses
+ * the page edge gets no safe-area warning on that same side (a photo flush with the bottom edge but 2 mm short of the
+ * right edge still gets the warning for the right side), and leaving the page by up to BLEED_TOLERANCE_MM on any side
+ * is a bleed warning instead of a blocking error. Text, tables and icons keep the original rules, because printed
+ * content cut by the page edge is always an error. A group is judged by its children (resolved frames) and reported
+ * once, at the group. The printed page is clipped at its box (rendering/styles.css, @media print), so a bleed never
+ * paints on the next sheet.
+ */
+export const BLEED_TOLERANCE_MM=3;
+export const BLEED_OBJECT_TYPES:ReadonlySet<EditorialObject['type']>=new Set<EditorialObject['type']>(['shape','line','image']);
+export const OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE='OBJECT_OUTSIDE_PAGE';
+export const SAFE_AREA_VIOLATION_DIAGNOSTIC_CODE='SAFE_AREA_VIOLATION';
+/** A bleed keeps the canonical code; only the severity and the `bleedMm=…; toleranceMm=…` detail differ from the blocking error. */
+export const isBleedWarning=(issue:Pick<Diagnostic,'code'|'severity'>):boolean => issue.code===OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE&&issue.severity==='WARNING';
+
+interface PageBoundsU { widthU:number; heightU:number; safe?:{leftU:number;topU:number;rightU:number;bottomU:number} }
+interface FrameVerdict { overflowU:number; bleed:boolean; safeAreaWarning:boolean }
+
+function pageBoundsU(page:Page):PageBoundsU {
+  const safe=page.safeArea;
+  return {widthU:mmToU(page.widthMm),heightU:mmToU(page.heightMm),
+    safe:safe&&{leftU:mmToU(safe.leftMm),topU:mmToU(safe.topMm),rightU:mmToU(safe.rightMm),bottomU:mmToU(safe.bottomMm)}};
+}
+
+function frameVerdict(frame:CanonicalFrameU,type:EditorialObject['type'],page:PageBoundsU):FrameVerdict {
+  const right=add(frame.xU,frame.widthU),bottom=add(frame.yU,frame.heightU);
+  const overflowU=Math.max(0,-frame.xU,-frame.yU,right-page.widthU,bottom-page.heightU);
+  const bleedable=BLEED_OBJECT_TYPES.has(type),safe=page.safe;
+  // Per side: crossing the safe area counts unless a bleedable object touches or crosses the page edge on that very side.
+  const sideWarns=(crossesSafe:boolean,touchesEdge:boolean)=>crossesSafe&&!(bleedable&&touchesEdge);
+  const crossesSafeArea=safe!==undefined&&(
+    sideWarns(frame.xU<safe.leftU,frame.xU<=0)
+    ||sideWarns(frame.yU<safe.topU,frame.yU<=0)
+    ||sideWarns(right>page.widthU-safe.rightU,right>=page.widthU)
+    ||sideWarns(bottom>page.heightU-safe.bottomU,bottom>=page.heightU));
+  return {overflowU,bleed:bleedable&&overflowU<=mmToU(BLEED_TOLERANCE_MM),safeAreaWarning:crossesSafeArea};
+}
+
+/** Grouped children keyed by the index of their top-level group, so each page is walked once. */
+function childrenByTopLevel(entries:readonly ObjectTreeEntry[]):Map<number,ObjectTreeEntry[]> {
+  const byTop=new Map<number,ObjectTreeEntry[]>();
+  for(const entry of entries) {
+    if(entry.depth!==1)continue;
+    const list=byTop.get(entry.topLevelIndex);
+    if(list)list.push(entry);else byTop.set(entry.topLevelIndex,[entry]);
+  }
+  return byTop;
+}
+
 export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
   const result:Diagnostic[]=[];
   for(const page of doc.pages) {
-    const pageWidth=mmToU(page.widthMm),pageHeight=mmToU(page.heightMm);
-    for(const object of page.objects) {
-      const x=mmToU(object.frame.xMm),y=mmToU(object.frame.yMm),w=mmToU(object.frame.widthMm),h=mmToU(object.frame.heightMm),location={pageId:page.id,objectId:object.id};
-      if(x<0||y<0||add(x,w)>pageWidth||add(y,h)>pageHeight)result.push(diagnostic('OBJECT_OUTSIDE_PAGE','Authored frame exceeds physical A4 bounds',location));
-      const safe=page.safeArea;
-      if(safe&&(x<mmToU(safe.leftMm)||y<mmToU(safe.topMm)||add(x,w)>pageWidth-mmToU(safe.rightMm)||add(y,h)>pageHeight-mmToU(safe.bottomMm)))
-        result.push(diagnostic('SAFE_AREA_VIOLATION','Authored frame crosses configured safe area',{...location,severity:'WARNING'}));
+    const bounds=pageBoundsU(page),entries=walkPageObjects(page),byTop=childrenByTopLevel(entries);
+    for(const entry of entries) {
+      if(entry.depth!==0)continue;
+      const {object}=entry,location={pageId:page.id,objectId:object.id};
+      const children=byTop.get(entry.topLevelIndex)??[];
+      const verdicts=(children.length>0?children:[entry]).map(leaf=>frameVerdict(leaf.resolvedFrameU,leaf.object.type,bounds));
+      const outside=verdicts.filter(verdict=>verdict.overflowU>0);
+      if(outside.some(verdict=>!verdict.bleed))result.push(diagnostic(OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE,'Authored frame exceeds physical A4 bounds',location));
+      else if(outside.length>0)result.push(diagnostic(OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE,
+        `bleedMm=${Math.max(...outside.map(verdict=>verdict.overflowU))/mmToU(1)}; toleranceMm=${BLEED_TOLERANCE_MM}`,{...location,severity:'WARNING'}));
+      if(verdicts.some(verdict=>verdict.safeAreaWarning))
+        result.push(diagnostic(SAFE_AREA_VIOLATION_DIAGNOSTIC_CODE,'Authored frame crosses configured safe area',{...location,severity:'WARNING'}));
     }
   }
   return result;
