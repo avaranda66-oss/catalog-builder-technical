@@ -106,7 +106,11 @@ function panelProps(overrides: Partial<TableInspectorPanelProps> = {}): TableIns
     setTableStylePaddingLinked: vi.fn(),
     runTableStylePatch: vi.fn(),
     runTableBorderPreset: vi.fn(),
-    runTablePreset: vi.fn(),
+    runTableLook: vi.fn(),
+    runTableAxisInsert: vi.fn(),
+    runTableAxisRemove: vi.fn(),
+    addQuickNote: vi.fn(() => true),
+    removeQuickNote: vi.fn(),
     runAnnotationGap: vi.fn(),
     selectedRowAxisIds: [],
     runRowProperties: vi.fn(),
@@ -159,13 +163,8 @@ function panelProps(overrides: Partial<TableInspectorPanelProps> = {}): TableIns
     runLegendRemove: vi.fn(),
     runLegendReorder: vi.fn(),
     locateLegendUsage: vi.fn(),
-    commonCellStyleValue: () => undefined,
     commonWrapPolicy: undefined,
-    propertySelectionKey: '',
     runCellPropertyPatch: vi.fn(),
-    commitCellColor: vi.fn(),
-    cellPaddingText: () => '',
-    commitCellPadding: vi.fn(),
     ...overrides,
   };
 }
@@ -204,7 +203,7 @@ describe('FR-92 TableGridToolbar', () => {
     render(<TableGridToolbar {...toolbarProps({ simple: true, tableOptionsOpen: false, setTableOptionsOpen })} />);
     const bar = screen.getByLabelText('Estrutura da tabela');
     expect(within(bar).getByText('Editar tabela')).toBeInTheDocument();
-    expect(within(bar).queryByRole('button', { name: 'Linha antes' })).toBeNull();
+    expect(within(bar).queryByRole('button', { name: 'Linha acima' })).toBeNull();
     fireEvent.click(within(bar).getByRole('button', { name: 'Opções da tabela' }));
     expect(setTableOptionsOpen).toHaveBeenCalledTimes(1);
   });
@@ -212,11 +211,11 @@ describe('FR-92 TableGridToolbar', () => {
   it('runs each grid action through the callbacks it receives', () => {
     const props = toolbarProps({ rowAxisReason: undefined, columnAxisReason: undefined });
     render(<TableGridToolbar {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Linha depois' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Linha abaixo' }));
     expect(props.runTableAxisInsert).toHaveBeenCalledWith('row', 'after');
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar linhas depois' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar linhas abaixo' }));
     expect(props.runTableAxisInsert).toHaveBeenLastCalledWith('row', 'after', 10);
-    fireEvent.click(screen.getByRole('button', { name: 'Remover coluna' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir coluna' }));
     expect(props.runTableAxisRemove).toHaveBeenCalledWith('column');
     fireEvent.click(screen.getByRole('button', { name: 'Copiar' }));
     expect(props.runVisibleTableCopy).toHaveBeenCalledTimes(1);
@@ -225,13 +224,26 @@ describe('FR-92 TableGridToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voltar ao objeto' }));
     expect(props.leaveTableGrid).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Mesclar células' })).toBeDisabled();
+    // FR-33: "Notas e legenda" is the only way to that panel; the duplicated "Legenda" button is gone.
+    expect(screen.queryByRole('button', { name: 'Legenda' })).toBeNull();
+  });
+
+  it('FR-34 names the removal by the selected rows and explains why the last row stays', () => {
+    const props = toolbarProps({ rowAxisCount: 3, columnAxisCount: 2, removeColumnReason: 'A tabela precisa de pelo menos uma coluna.' });
+    render(<TableGridToolbar {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir 3 linhas' }));
+    expect(props.runTableAxisRemove).toHaveBeenCalledWith('row');
+    const columns = screen.getByRole('button', { name: 'Excluir 2 colunas' });
+    expect(columns).toBeDisabled();
+    expect(columns).toHaveAttribute('title', 'A tabela precisa de pelo menos uma coluna.');
+    expect(screen.getByRole('button', { name: 'Coluna à direita' })).toBeEnabled();
   });
 
   it('keeps the structure locked while a cell is being edited, with the plain reason', () => {
     render(<TableGridToolbar {...toolbarProps({ mode: 'cell-edit' })} />);
-    const before = screen.getByRole('button', { name: 'Linha antes' });
+    const before = screen.getByRole('button', { name: 'Linha acima' });
     expect(before).toBeDisabled();
-    expect(before).toHaveAttribute('title', 'Conclua a edição da célula antes de alterar eixos.');
+    expect(before).toHaveAttribute('title', 'Conclua a edição da célula antes de mudar linhas e colunas.');
     expect(screen.getByRole('button', { name: 'Copiar' })).toBeDisabled();
   });
 });
@@ -320,7 +332,7 @@ describe('FR-92 TableInspectorPanel', () => {
     expect(props.cancelTableTitleDraft).toHaveBeenCalledTimes(1);
   });
 
-  it('opens "Notas e legenda" from the title, entering the grid first when needed', () => {
+  it('opens "Notas e legenda" from the Notas part, entering the grid first when needed', () => {
     const props = panelProps({ mode: 'select' });
     render(<TableInspectorPanel {...props} />);
     fireEvent.click(screen.getByRole('button', { name: 'Notas e legenda' }));
@@ -354,10 +366,10 @@ describe('FR-92 TableInspectorPanel', () => {
     const cell = firstCell(table);
     const base = { tableObject: table, tableSelection: selection, selectedAnchorCells: [cell], selectedSemanticCell: cell };
     const { rerender } = render(<TableInspectorPanel {...panelProps({ ...base, canUploadCellImage: false })} />);
-    expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enviar foto…' })).toBeDisabled();
     const props = panelProps({ ...base, canUploadCellImage: true });
     rerender(<TableInspectorPanel {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar foto…' }));
     expect(props.runImageCellUpload).toHaveBeenCalledTimes(1);
   });
 });

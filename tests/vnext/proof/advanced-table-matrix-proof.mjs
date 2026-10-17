@@ -296,8 +296,9 @@ async function creationCase(browserName) {
     const inserted = (await state(page)).document; const table = tableOf(inserted);
     assert.equal(table.rows.length, 10); assert.equal(table.columns.length, 5); assert.equal(table.cells.length, 50);
     assert.equal(table.rows[0].role, 'header'); assert(table.rows.slice(1).every(row => row.role === 'body'));
-    // Insert plus the optional measured fit share one transaction: at most two sequence steps, one Undo.
-    assert(table.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - initial.sequence <= 2);
+    // Insert, the "Especificações" first column (FR-33: cells and width) and the optional measured fit share one
+    // transaction: at most four sequence steps, one Undo.
+    assert(table.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - initial.sequence <= 4);
     await action(page, 'undo').click(); await frames(page); assert.deepEqual((await state(page)).document, initial.document);
     await action(page, 'redo').click(); await frames(page); assert.deepEqual((await state(page)).document, inserted);
     await action(page, 'save').click(); await saved(page); await page.evaluate(() => window.__ADVANCED_TABLE__.reopen()); await frames(page);
@@ -320,7 +321,7 @@ async function creationCase(browserName) {
       // FR-31: the closed size panel creates the useful 6 × 3 default with a header row.
       assert.equal(defaultTable.rows.length, 6); assert.equal(defaultTable.columns.length, 3); assert.equal(defaultTable.cells.length, 18);
       assert.equal(defaultTable.rows[0].role, 'header');
-      assert(defaultTable.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - before.sequence <= 2);
+      assert(defaultTable.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - before.sequence <= 4);
       await action(page, 'undo').click(); await frames(page); assert.deepEqual((await state(page)).document, before.document);
       await action(page, 'redo').click(); await frames(page); assert.deepEqual((await state(page)).document, insertedDefault);
       await action(page, 'save').click(); await saved(page); await page.evaluate(() => window.__ADVANCED_TABLE__.reopen()); await frames(page);

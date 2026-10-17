@@ -339,22 +339,24 @@ describe('FR-10 · cell inner spacing accepts "1,5"', () => {
         if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(screen.getByRole('button', { name: 'Editar tabela' }));
         expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
       }, { timeout: 5_000 });
-      const top = container.querySelector<HTMLInputElement>('[data-cell-padding="top"]');
+      // FR-33 (2D): the inner spacing of the selected cells lives in "Texto, cores e bordas" › ajustes por lado.
+      fireEvent.click(screen.getByRole('button', { name: 'Ajustes por lado e altura da linha' }));
+      const top = container.querySelector<HTMLInputElement>('[data-style-padding-side="top"]');
       if (!top) throw new Error('Missing cell padding field');
       const before = top.value;
       fireEvent.change(top, { target: { value: 'abc' } });
       fireEvent.blur(top);
-      expect(container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')?.value).toBe(before);
+      expect(container.querySelector<HTMLInputElement>('[data-style-padding-side="top"]')?.value).toBe(before);
       expect(screen.getByText('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.')).toBeInTheDocument();
 
-      const again = container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')!;
+      const again = container.querySelector<HTMLInputElement>('[data-style-padding-side="top"]')!;
       fireEvent.change(again, { target: { value: '1,5' } });
       fireEvent.blur(again);
       const cell = session.getSnapshot().document.pages[0].objects
         .flatMap((object) => (object.type === 'table' ? object.table.cells : []))
         .find((entry) => entry.rowId === table.table.rows[0].id && entry.columnId === table.table.columns[0].id);
       expect(cell?.style?.paddingMm?.top).toBe(1.5);
-      await waitFor(() => expect(container.querySelector<HTMLInputElement>('[data-cell-padding="top"]')?.value).toBe('1,5'));
+      await waitFor(() => expect(container.querySelector<HTMLInputElement>('[data-style-padding-side="top"]')?.value).toBe('1,5'));
     } finally {
       computedStyle.mockRestore();
       HTMLImageElement.prototype.decode = originalDecode;

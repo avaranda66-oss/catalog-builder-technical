@@ -5,7 +5,7 @@ import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
+import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
   qCss,
@@ -26,12 +26,20 @@ import {
   navigateTableSelection,
   reconcileTableSelection,
   selectedTableAnchorIds,
-  selectionAfterAxisInsert,
   selectionAfterAxisRemove,
+  selectionAfterTableAxisInsert,
+  selectionAfterTableAxisRemove,
   tableCellSelection,
+  tableSelectionAxisIds,
+  tableSelectionFocusPoint,
   tableSelectionIdentity,
   type TableSelection,
 } from '../editor/table-selection';
+import { insertedRowRole, planTableAxisRemoval, tableAxisRefusalMessage, tableStructureAvailability } from '../editor/table-axis-authoring';
+import { projectTableLook, tableLookSteps, type TableLookRequest } from '../editor/table-look-authoring';
+import { quickNoteCreateStep, quickNoteRemoveSteps } from '../editor/table-quick-notes';
+import { cellCountText, describeTableLocation } from '../editor/table-location';
+import { completeNewTableLook, insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
 import {
   mergeEligibility,
   selectionAfterMerge,
@@ -63,7 +71,6 @@ import {
   nextLegendUsageCellId,
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
-import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
 import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
 import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
@@ -85,7 +92,6 @@ import {
   prepareAnnotationGapAction,
   prepareCellBorderPresetAction,
   prepareStyleAction,
-  prepareTablePresetAction,
   simpleBorderQuickPatch,
   type BorderQuickPreset,
   type TableStyleScope,
@@ -114,7 +120,7 @@ import {
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
-import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, NEW_TABLE_PRESET_ID, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
 import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
 import { createTableFromPastedText, decidePendingTableFit, describeRowsByColumns, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
 import { isTabularClipboardText } from '../editor/table-paste-import';
@@ -1378,7 +1384,7 @@ export function EditorWorkspace({
 
   const tableActionMessage = (code: string): string => {
     if (code === 'TABLE_LAST_AXIS') return 'A última linha ou coluna não pode ser removida.';
-    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover o eixo.';
+    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Não é possível mesclar cabeçalho e corpo.';
     if (code === 'MERGE_OVERLAP') return 'Desmescle as células existentes antes de criar uma nova mesclagem.';
     if (code === 'MERGE_WOULD_DISCARD_CONTENT') return 'Não é possível mesclar porque outra célula contém conteúdo ou anotação.';
@@ -1387,93 +1393,93 @@ export function EditorWorkspace({
     return 'Não foi possível alterar a estrutura da tabela.';
   };
 
+  /**
+   * FR-34: rows and columns come from the selected cell or range ("Linha abaixo" goes under the last selected row).
+   * New rows make the frame grow by itself, in the same undo step, while the table still fits the page.
+   */
   const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after', count = 1) => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
     if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
       setStatusMessage('Informe uma quantidade entre 1 e 100 linhas.');
       return;
     }
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para usar esta ação.`);
+    const { object, selection } = live;
+    const axisIds = tableSelectionAxisIds(object.table, selection, axis);
+    if (axisIds.length === 0) {
+      setStatusMessage(tableAxisRefusalMessage('NO_AXIS', axis));
       return;
     }
-    const referenceAxisId = axisIds[0];
-    const referenceRow = axis === 'row' ? object.table.rows.find((row) => row.id === referenceAxisId) : undefined;
-    const result = session.execute(axis === 'row' ? {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
+    const referenceAxisId = position === 'before' ? axisIds[0] : axisIds[axisIds.length - 1];
+    const transactionId = newTableTransactionId();
+    const outcome = insertTableAxes(session, { pageId: selection.identity.pageId, object }, {
       axis,
       referenceAxisId,
       position,
-      count,
-      properties: { role: referenceRow?.role === 'header' ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } },
-      expectedTable: object.table,
-    } : {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      referenceAxisId,
-      position,
-      properties: { width: { mode: 'flex', weight: 1 }, minMm: 1 },
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+      ...(axis === 'row' ? { count } : {}),
+      properties: axis === 'row'
+        ? { role: insertedRowRole(object.table, referenceAxisId, position), heightPolicy: { mode: 'AUTO' } }
+        : { width: { mode: 'flex', weight: 1 }, minMm: 1 },
+    }, transactionId);
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    const axes = axis === 'row' ? nextObject?.table.rows : nextObject?.table.columns;
-    const insertedId = axes?.find((candidate) => result.metadata.createdIds.includes(candidate.id))?.id;
+    const insertedId = outcome.insertedAxisIds[0];
     if (insertedId) {
-      const nextSelection = selectionAfterAxisInsert(selection.identity, axis, insertedId);
+      const nextSelection = selectionAfterTableAxisInsert(outcome.table, selection, axis, insertedId);
       tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject!.table, selection: nextSelection };
+      tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
       setTableSelection(nextSelection);
     }
-    setStatusMessage(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.');
+    if (axis === 'row') setPendingTableFit({ objectId: object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.'));
   };
 
+  /** FR-34: every selected row (or column) is removed at once, as one undo step; nothing changes when one cannot go. */
   const runTableAxisRemove = (axis: 'row' | 'column') => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para remover.`);
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const { object, selection } = live;
+    const plan = planTableAxisRemoval(object.table, axis, tableSelectionAxisIds(object.table, selection, axis));
+    if (!plan.ok) {
+      setStatusMessage(tableAxisRefusalMessage(plan.code, axis));
       return;
     }
-    const axisId = axisIds[0];
-    const removedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === axisId);
-    const result = session.execute({
-      type: 'table.axis.remove',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      axisId,
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+    const firstRemovedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === plan.axisIds[0]);
+    const focusBefore = tableSelectionFocusPoint(object.table, selection);
+    const outcome = removeTableAxes(session, { pageId: selection.identity.pageId, object }, axis, plan.axisIds, newTableTransactionId());
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    if (nextObject) {
-      const nextSelection = selectionAfterAxisRemove(selection.identity, axis, removedIndex, nextObject.table);
-      tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
-      setTableSelection(nextSelection);
-    }
-    setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
+    const nextSelection = selectionAfterTableAxisRemove(outcome.table, selection, axis, firstRemovedIndex, focusBefore);
+    tableSelectionRef.current = nextSelection;
+    tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
+    setTableSelection(nextSelection);
+    const count = plan.axisIds.length;
+    setStatusMessage(successNotice(count === 1
+      ? (axis === 'row' ? 'Linha excluída.' : 'Coluna excluída.')
+      : `${count} ${axis === 'row' ? 'linhas excluídas' : 'colunas excluídas'}. Para voltar, use Desfazer.`));
+  };
+
+  /** FR-33 "Notas": a note under the table in one click, starting as "A COMPLETAR" (one undo step). */
+  const addQuickNote = (): boolean => {
+    const live = semanticMutationTable();
+    if (!live) return false;
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, [quickNoteCreateStep()], newTableTransactionId());
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota adicionada abaixo da tabela. Escreva o texto no lugar de "A COMPLETAR".')
+      : 'A nota não pôde ser adicionada. Nada foi alterado.');
+    return outcome.ok && outcome.changed;
+  };
+  const removeQuickNote = (annotation: TableAnnotation) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, quickNoteRemoveSteps(annotation.id), newTableTransactionId());
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota excluída. Para voltar, use Desfazer.')
+      : 'A nota não pôde ser excluída. Nada foi alterado.');
   };
 
   const currentSelectedTableForStructure = (): { object: TableObject; selection: TableSelection } | undefined => {
@@ -1593,7 +1599,7 @@ export function EditorWorkspace({
         ? prepareTypedTablePaste(live.object.table, live.selection, parseTypedTableClipboard(typedText))
         : prepareExternalTsvPaste(live.object.table, live.selection, parseTsv(plainText));
       const count = prepared.targets.length;
-      return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
+      return executePreparedTableBulk(prepared, count === 1 ? '1 célula colada.' : `${count} células coladas.`);
     } catch (error) {
       if (error instanceof TablePasteGeometryError) {
         const source = describeRowsByColumns(error.sourceRows, error.sourceColumns);
@@ -1701,7 +1707,7 @@ export function EditorWorkspace({
         return;
       }
       await globalThis.navigator.clipboard.writeText(clipboard.tsv);
-      setStatusMessage('Conteúdo TSV copiado. Ctrl/Cmd+C na grade também preserva os tipos internos.');
+      setStatusMessage(successNotice('Conteúdo copiado. Ele pode ser colado no Excel, no Google Planilhas ou em outra tabela do catálogo.'));
     } catch (error) {
       setStatusMessage(error instanceof TableClipboardError && error.code === 'COPY_MERGE_INTERSECTION'
         ? 'Não foi possível copiar: a seleção cruza células mescladas.'
@@ -1714,7 +1720,7 @@ export function EditorWorkspace({
     if (!live || editorState.mode !== 'table-grid') return;
     try {
       const prepared = prepareBulkClear(live.object.table, live.selection);
-      executePreparedTableBulk(prepared, `Conteúdo limpo em ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Conteúdo limpo em ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1731,7 +1737,7 @@ export function EditorWorkspace({
         live.selection,
         markerLegendChoice
       );
-      executePreparedTableBulk(prepared, `Marcador aplicado a ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Marcador aplicado a ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1755,7 +1761,7 @@ export function EditorWorkspace({
       );
       const applied = executePreparedTableBulk(
         prepared,
-        `Novo marcador criado e aplicado a ${prepared.targets.length} célula(s).`
+        `Novo marcador criado e aplicado a ${cellCountText(prepared.targets.length)}.`
       );
       if (applied) {
         setNewMarkerCode('');
@@ -1850,7 +1856,7 @@ export function EditorWorkspace({
     );
     if (!page || !object) return undefined;
     if (object.locked) {
-      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar superfícies semânticas.');
+      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar título, notas, legenda ou imagem.');
       return undefined;
     }
     return { pageId: page.id, object };
@@ -2382,7 +2388,11 @@ export function EditorWorkspace({
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
     if (tool === 'table') setNewTableSizeOpen(false);
-    if (tool === 'table' && objectId && transactionId) setPendingTableFit({ objectId, transactionId, document: result.document });
+    if (tool === 'table' && objectId && transactionId) {
+      // FR-33: the new table gets the whole "Especificações" look (names in bold, 68 mm) in the same undo step.
+      completeNewTableLook(session, { pageId: currentPage.id, objectId }, NEW_TABLE_PRESET_ID, transactionId);
+      setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document });
+    }
     // "clique em Editar tabela" is a tip, not a problem: the new table is a finished change (FR-12).
     setStatusMessage(tool === 'table'
       ? successNotice(`Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`)
@@ -3241,55 +3251,10 @@ export function EditorWorkspace({
     selectedSemanticCell?.content,
     selectedSemanticCell?.contentPresentation?.image,
   ]);
-  function commonCellStyleValue<K extends keyof NonNullable<Cell['style']>>(
-    key: K
-  ): NonNullable<Cell['style']>[K] | undefined {
-    if (selectedAnchorCells.length === 0) return undefined;
-    const first = selectedAnchorCells[0].style?.[key];
-    return selectedAnchorCells.every((cell) => JSON.stringify(cell.style?.[key]) === JSON.stringify(first))
-      ? first
-      : undefined;
-  }
   const commonWrapPolicy = selectedAnchorCells.length > 0
     && selectedAnchorCells.every((cell) => cell.contentPresentation?.wrapPolicy === selectedAnchorCells[0].contentPresentation?.wrapPolicy)
     ? selectedAnchorCells[0].contentPresentation?.wrapPolicy
     : undefined;
-  const propertySelectionKey = selectedAnchorCells
-    .map((cell) => [cell.id, JSON.stringify(cell.style), JSON.stringify(cell.contentPresentation)].join(':'))
-    .join('|');
-
-  const commitCellColor = (key: 'color' | 'background', raw: string) => {
-    if (raw === '') {
-      runCellPropertyPatch({ [key]: null } as CellPropertyPatch);
-      return;
-    }
-    if (!/^#[0-9a-fA-F]{6}$/.test(raw)) {
-      setStatusMessage('Informe uma cor hexadecimal válida, como #1A2B3C.');
-      return;
-    }
-    runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
-  };
-
-  const cellPaddingText = (edge: 'top' | 'right' | 'bottom' | 'left') => {
-    const value = commonCellStyleValue('paddingMm')?.[edge];
-    return typeof value === 'number' ? formatDecimalPtBr(value) : '';
-  };
-  /** Accepts "1,5" and "1.5"; an invalid value goes back to the current one with a plain message. */
-  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', input: HTMLInputElement) => {
-    const raw = input.value;
-    if (raw.trim() === '') {
-      runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
-      return;
-    }
-    const parsed = parseDecimalPtBr(raw);
-    if (!parsed.ok || parsed.value < 0) {
-      input.value = cellPaddingText(edge);
-      setStatusMessage('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.');
-      return;
-    }
-    runCellPropertyPatch({ paddingMm: { [edge]: parsed.value } } as CellPropertyPatch);
-  };
-
   const tableStyleScope: TableStyleScope | undefined = selectedTableObject
     ? tableStyleRoleScope
       ? { kind: 'role', role: tableStyleRoleScope }
@@ -3394,14 +3359,18 @@ export function EditorWorkspace({
     }
   };
 
-  const runTablePreset = (presetId: TablePresetId) => {
+  /** FR-33 "Estilo": a preset, a switch or the text size, as one undo step built from existing actions. */
+  const runTableLook = (request: TableLookRequest, successMessage: string) => {
     const live = currentSelectedTableForPresentation();
     if (!live) return;
-    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
-    executeTableStyleAction(
-      prepareTablePresetAction(identity, live.object.table, presetId),
-      'Estilo de tabela aplicado.'
-    );
+    if (cellDraftRef.current || editorState.mode === 'cell-edit') {
+      setStatusMessage('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+      return;
+    }
+    const steps = tableLookSteps(request, projectTableLook(live.object.table, live.document.style), live.document.style);
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, steps, newTableTransactionId());
+    if (!outcome.ok) setStatusMessage(tableStyleActionMessage(outcome.code));
+    else setStatusMessage(outcome.changed ? successNotice(successMessage) : 'Sem alterações.');
   };
 
   const runAnnotationGap = (annotationGapMm: number) => {
@@ -3421,12 +3390,10 @@ export function EditorWorkspace({
     ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'column')
     : [];
   const selectedRowDimensionKey = selectedRowAxisIds.join('\u0000');
-  const rowAxisReason = selectedRowAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única linha pelo seletor lateral.';
-  const columnAxisReason = selectedColumnAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única coluna pelo seletor superior.';
+  // FR-34: the bar above the page and "Estrutura" share one rule (rows and columns of the selected cell or range).
+  const tableStructure = selectedTableObject
+    ? tableStructureAvailability(selectedTableObject.table, tableSelection, editorState.mode === 'cell-edit')
+    : undefined;
   const rowDimensionProjection = (() => {
     if (!selectedTableObject || !tableSelection || tableSelection.kind !== 'rows') return undefined;
     try { return projectRowDimensions(selectedTableObject.table, tableSelection); } catch { return undefined; }
@@ -3439,14 +3406,14 @@ export function EditorWorkspace({
     ? pendingRowHeightMode.mode
     : rowDimensionProjection?.heightMode;
   const tableDimensionMessage = (code: string): string => {
-    if (code === 'TARGET_STALE') return 'A dimensão mudou enquanto a ação era preparada. Nada foi alterado.';
+    if (code === 'TARGET_STALE') return 'A tabela mudou enquanto a alteração era preparada. Nada foi alterado.';
     if (code === 'TABLE_WIDTH_INFEASIBLE' || code === 'COLUMN_LIMIT_INVALID') return 'As larguras e limites atuais não cabem na largura da tabela.';
-    if (code === 'COLUMN_WEIGHT_INVALID') return 'O peso flexível deve ser um inteiro positivo.';
-    if (code === 'MERGE_INTERSECTION') return 'Esta movimentação cruza uma célula mesclada. Desmescle explicitamente antes de reordenar.';
+    if (code === 'COLUMN_WEIGHT_INVALID') return 'A proporção da largura deve ser um número inteiro maior que zero.';
+    if (code === 'MERGE_INTERSECTION') return 'Esta mudança cruza uma célula mesclada. Desfaça a mesclagem antes de mover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Esta alteração faria uma célula mesclada cruzar cabeçalho e corpo.';
     if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
     if (code === 'AXIS_ORDER_INVALID') return 'A nova ordem de linhas ou colunas é inválida.';
-    return 'Não foi possível aplicar a dimensão da tabela com segurança.';
+    return 'Não foi possível aplicar esta alteração na tabela. Nada foi alterado.';
   };
   const executeTableDimensionAction = (action: ApplicationAction, successMessage: string): boolean => {
     if (cellDraftRef.current || editorState.mode !== 'table-grid') {
@@ -3578,8 +3545,8 @@ export function EditorWorkspace({
       return;
     }
     if (field === 'weight') {
-      if (!Number.isSafeInteger(value)) { setStatusMessage('O peso flexível deve ser um inteiro positivo.'); return; }
-      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Peso flexível atualizado.');
+      if (!Number.isSafeInteger(value)) { setStatusMessage('A proporção da largura deve ser um número inteiro maior que zero.'); return; }
+      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Proporção da largura atualizada.');
       return;
     }
     const valueU = mmToU(value);
@@ -3610,7 +3577,7 @@ export function EditorWorkspace({
         axis === 'row' ? 'Linha movida.' : 'Coluna movida.'
       );
     } catch (error) {
-      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível reordenar o eixo.');
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível mover a linha ou coluna.');
     }
   };
   const runColumnBoundaryDrag = (leftColumnIndex: number, deltaU: number) => {
@@ -3954,7 +3921,9 @@ export function EditorWorkspace({
             <TableGridToolbar
               simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
               tableOptionsOpen={tableOptionsOpen} setTableOptionsOpen={setTableOptionsOpen}
-              rowAxisReason={rowAxisReason} columnAxisReason={columnAxisReason}
+              rowAxisReason={tableStructure?.rowReason} columnAxisReason={tableStructure?.columnReason}
+              rowAxisCount={tableStructure?.rowIds.length} columnAxisCount={tableStructure?.columnIds.length}
+              removeRowReason={tableStructure?.removeRowReason} removeColumnReason={tableStructure?.removeColumnReason}
               runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
               tableRowsToInsert={tableRowsToInsert} setTableRowsToInsert={setTableRowsToInsert}
               currentMergeEligibility={currentMergeEligibility} currentUnmergeEligibility={currentUnmergeEligibility}
@@ -4497,7 +4466,9 @@ export function EditorWorkspace({
                   tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}
                   setTableStyleRoleScope={setTableStyleRoleScope} setTableStyleAdvancedOpen={setTableStyleAdvancedOpen}
                   setTableStylePaddingLinked={setTableStylePaddingLinked} runTableStylePatch={runTableStylePatch}
-                  runTableBorderPreset={runTableBorderPreset} runTablePreset={runTablePreset} runAnnotationGap={runAnnotationGap}
+                  runTableBorderPreset={runTableBorderPreset} runTableLook={runTableLook} runAnnotationGap={runAnnotationGap}
+                  runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
+                  addQuickNote={addQuickNote} removeQuickNote={removeQuickNote}
                   rowDimensionProjection={rowDimensionProjection} effectiveRowHeightMode={effectiveRowHeightMode}
                   selectedRowAxisIds={selectedRowAxisIds} runRowProperties={runRowProperties} runRowHeightMode={runRowHeightMode}
                   runRowHeightValue={runRowHeightValue} runAxisReorder={runAxisReorder}
@@ -4527,9 +4498,7 @@ export function EditorWorkspace({
                   runNewMarkerAssignment={runNewMarkerAssignment} runLegendCreateOnly={runLegendCreateOnly}
                   runLegendUpdate={runLegendUpdate} runLegendRemove={runLegendRemove} runLegendReorder={runLegendReorder}
                   locateLegendUsage={locateLegendUsage}
-                  commonCellStyleValue={commonCellStyleValue} commonWrapPolicy={commonWrapPolicy} propertySelectionKey={propertySelectionKey}
-                  runCellPropertyPatch={runCellPropertyPatch} commitCellColor={commitCellColor} cellPaddingText={cellPaddingText}
-                  commitCellPadding={commitCellPadding}
+                  commonWrapPolicy={commonWrapPolicy} runCellPropertyPatch={runCellPropertyPatch}
                 />
               )}
               <div className="vnext-divider" />
@@ -4575,12 +4544,8 @@ export function EditorWorkspace({
                             {diagnostic.guidance}
                           </p>
                         )}
-                        {(diagnostic.rowId || diagnostic.cellId) && (
-                          <small>
-                            {diagnostic.rowId ? `Linha ${diagnostic.rowId}` : ''}
-                            {diagnostic.rowId && diagnostic.cellId ? ' · ' : ''}
-                            {diagnostic.cellId ? `Célula ${diagnostic.cellId}` : ''}
-                          </small>
+                        {(diagnostic.rowId || diagnostic.cellId) && selectedTableObject && (
+                          <small>{describeTableLocation(selectedTableObject.table, diagnostic.rowId, diagnostic.cellId)}</small>
                         )}
                         <div className="vnext-diagnostic-actions">
                           {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (
