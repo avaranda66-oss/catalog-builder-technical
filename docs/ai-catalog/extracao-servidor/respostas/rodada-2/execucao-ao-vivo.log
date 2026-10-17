@@ -1,0 +1,48 @@
+status: HTTP 200, {"enabled":true,"serverKey":true,"model":"gemini-3.8-flash","promptVersion":"fr66-2026-10-17.3","budget":"settled","remainingMicrousd":3000000,"callReserveMicrousd":218880}
+ta-folder first: HTTP 200 OK, 30640 ms, chamadas Google: upload-start=200/1406ms upload-start=200/2103ms count=200/950ms generate=200/25505ms delete=200/662ms, tokens {"input":11845,"output":4568}, US$ 0.02601 (reserva 2027: 0.052028)
+ta-folder cache: HTTP 200 OK, 1 ms, chamadas Google: nenhuma, tokens {"input":0,"output":0}, US$ 0 (reserva 2027: 0)
+ta-manual-pt first: HTTP 200 OK, 62703 ms, chamadas Google: upload-start=200/1164ms upload-start=200/2099ms count=200/716ms generate=200/58066ms delete=200/645ms, tokens {"input":21985,"output":12943}, US$ 0.06502 (reserva 2027: 0.13005)
+ta-manual-pt cache: HTTP 200 OK, 1 ms, chamadas Google: nenhuma, tokens {"input":0,"output":0}, US$ 0 (reserva 2027: 0)
+y17-folder first: HTTP 200 OK, 30017 ms, chamadas Google: upload-start=200/1171ms upload-start=200/8072ms count=200/2334ms generate=200/17793ms delete=200/609ms, tokens {"input":7579,"output":2576}, US$ 0.01534 (reserva 2027: 0.030689)
+y17-folder cache: HTTP 200 OK, 1 ms, chamadas Google: nenhuma, tokens {"input":0,"output":0}, US$ 0 (reserva 2027: 0)
+
+ta-folder: Li as páginas 9 a 13 de presys-ta-folder (4).pdf: 36 valores conferidos no texto. As páginas 10, 11, 12, 13 não trouxeram valores; veja o motivo abaixo.
+  Página 9: 36 valores conferidos no texto.
+  Página 10: fala de outros modelos, que não foram pedidos; nada foi aproveitado.
+  Página 11: fala de outros modelos, que não foram pedidos; nada foi aproveitado.
+  Página 12: fala de outros modelos, que não foram pedidos; nada foi aproveitado.
+  Página 13: fala de outros modelos, que não foram pedidos; nada foi aproveitado.
+  tabela de modelos x gabarito do spike: {"wrongVerified":[],"unmatchedVerified":[],"wrongCaught":0,"coverage":{"positions":36,"verified":36,"anyStatus":36}}
+  VERIFIED com caractere privado: 0
+
+ta-manual-pt: Li as páginas 5 a 8 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf: 96 valores conferidos no texto, 20 para você conferir olhando a página, 35 que não conferem e não serão usados sem você. A página 7 não trouxe valores; veja o motivo abaixo.
+  Página 5: 17 valores conferidos no texto, 7 para conferir olhando a página, 15 que não conferem com o texto.
+  Página 6 ("1.1.1 - Especificações Técnicas da Entrada"): 68 valores conferidos no texto, 4 para conferir olhando a página, 12 que não conferem com o texto.
+  Página 7: não tem valores de especificação.
+  Página 8 ("Blocos de Prova (Insert)"): 11 valores conferidos no texto, 9 para conferir olhando a página, 8 que não conferem com o texto.
+  tabela de modelos x gabarito do spike: {"wrongVerified":[],"unmatchedVerified":[],"wrongCaught":9,"coverage":{"positions":39,"verified":17,"anyStatus":30}}
+  tabela comum x gabarito: {"table":"1.1.1 - Especificações Técnicas da Entrada","page":6,"cells":84,"verifiedCorrect":68,"wrongVerified":[],"unmatchedVerified":[],"toCheck":4,"unverified":12,"pua":0}
+  tabela comum x gabarito: {"table":"Blocos de Prova (Insert)","page":8,"cells":28,"verifiedCorrect":11,"wrongVerified":[],"unmatchedVerified":[],"toCheck":9,"unverified":8,"pua":0}
+  VERIFIED com caractere privado: 0
+
+y17-folder: Li a página 11 de pressure-controller-pcon-y17-folder.pdf: 2 valores conferidos no texto, 39 que não conferem e não serão usados sem você.
+  Página 11 ("Pressure Controller Range (C1)"): 2 valores conferidos no texto, 39 que não conferem com o texto.
+  tabela de modelos x gabarito do spike: {"wrongVerified":[],"unmatchedVerified":[],"wrongCaught":0,"coverage":{"positions":12,"verified":3,"anyStatus":8}}
+  tabela comum x gabarito: {"table":"Pressure Controller Range (C1)","page":11,"cells":0,"verifiedCorrect":0,"wrongVerified":[],"unmatchedVerified":[],"toCheck":0,"unverified":35,"pua":0}
+  VERIFIED com caractere privado: 0
+
+Divergências folder x manual: 12
+  TA-25N · operating-range (value)
+  TA-25N · operating-range (condition)
+  TA-35N · operating-range (value)
+  TA-35N · operating-range (condition)
+  TA-50N · operating-range (value)
+  TA-50N · operating-range (condition)
+  TA-25N · stability (value)
+  TA-35N · stability (value)
+  TA-50N · stability (value)
+  TA-25N · dimensions (value)
+  TA-35N · dimensions (value)
+  TA-50N · dimensions (value)
+Orçamento: reservado 218880, 218880, 218880 µUSD; liquidado 52028, 130050, 30689 µUSD
+Resumo em C:\Users\Usuario\AppData\Local\Temp\claude\C--Users-Usuario-Desktop-CONFIGURATOR-PCON\f73e0681-1097-4e60-8615-73299c7f0626\scratchpad\2f\live-2\summary.json

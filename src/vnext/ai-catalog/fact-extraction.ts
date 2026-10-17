@@ -6,6 +6,14 @@ import { verificationMessage, type FactVerificationReport, type PdfEvidenceSourc
 import type { ExtractedPdf } from './pdf-intake';
 import { verificationPageText } from './pdf-layout-evidence';
 import { normalizeEvidenceWhitespace } from './pdf-literal-evidence';
+import type { ExtractionSource } from './fact-extraction-prompt';
+
+// The prompt and the Gemini response schema live in a pure module that the
+// Edge Function (Deno) can import too; they are re-exported here unchanged.
+export {
+  FACT_EXTRACTION_PROMPT_VERSION, FACT_ROW_KEYS, buildFactExtractionPrompt, factSheetResponseSchema,
+  type ExtractionSource,
+} from './fact-extraction-prompt';
 
 /**
  * Fact extraction contract for a model that reads PDFs (FR-66a spike, reused
@@ -19,8 +27,6 @@ import { normalizeEvidenceWhitespace } from './pdf-literal-evidence';
  * FactProposal contract (FR-67) is shaped for verification, not for a model
  * to fill (per-row unit, positional values, ids with a strict alphabet).
  */
-
-export const FACT_EXTRACTION_PROMPT_VERSION = 'fr66a-2026-10-15.2';
 
 /**
  * Symbol-font characters that PDF text layers (Word manuals) carry in the
@@ -78,112 +84,6 @@ export function cleanUnit(unit: string): string {
 /** A footnote's text without the mark that opens it ("(*) Temperatura Ambiente: 20ºC." -> "Temperatura Ambiente: 20ºC."). */
 export function cleanCondition(condition: string): string {
   return condition.replace(/^(?:\(\*+\)|\*+)\s*/u, '').trim();
-}
-
-/** One file sent to the model, with the page range it must read. */
-export interface ExtractionSource {
-  readonly sourceId: string;
-  readonly fileName: string;
-  readonly sha256: string;
-  readonly pageCount: number;
-  readonly firstPage: number;
-  readonly lastPage: number;
-}
-
-/** Keys the model should reuse, so the same quantity lines up across files and languages. */
-export const FACT_ROW_KEYS = [
-  'operating-range', 'ambient-temperature', 'display-accuracy', 'accuracy', 'resolution', 'stability',
-  'control-stability', 'axial-uniformity', 'radial-uniformity', 'heating-time', 'cooling-time', 'electric-power',
-  'power-supply', 'well-dimensions', 'weight', 'dimensions', 'warranty', 'pressure-range', 'pressure-type',
-  'pneumatic-connection', 'communication', 'operating-humidity',
-] as const;
-
-const pageRange = (source: ExtractionSource) =>
-  source.firstPage === source.lastPage ? `page ${source.firstPage}` : `pages ${source.firstPage} to ${source.lastPage}`;
-
-/**
- * Instructions for the model. Values must be literal copies of the page so
- * that the local verifier can find them; a wrong value is worse than a gap.
- */
-export function buildFactExtractionPrompt(input: {
-  readonly sources: readonly ExtractionSource[];
-  readonly models?: readonly string[];
-}): string {
-  const files = input.sources.map(source => `- file "${source.sourceId}": "${source.fileName}", ${source.pageCount} pages. ` +
-    `Read ONLY ${pageRange(source)}.`);
-  const models = input.models?.length
-    ? `Products: extract values only for these models, written exactly like this: ${input.models.join(', ')}. ` +
-      'Ignore every other model, even one with a similar name (a name with an extra letter or number is another model).'
-    : 'Products: extract the models of the product described on those pages (at most 6), with their names exactly as printed.';
-  return [
-    'You extract technical specification values from the attached PDF file(s) for a product catalog.',
-    'Accuracy matters more than coverage: a wrong value is far worse than a missing one.',
-    '',
-    'Files:', ...files,
-    models,
-    '',
-    'Rules:',
-    '1. Copy every value exactly as printed: same digits, decimal separator (comma or point), signs (-, +, ±), symbols (Ø, <, >) and words. Do not translate, convert units, round or fix typos.',
-    '2. literal = a contiguous piece of the printed text holding the value. When the unit follows the number ("200 W"), literal is "200" and unit is "W". When the unit is printed inside a range ("-25 °C to +155 °C"), keep the whole range as the literal.',
-    '3. unit = the unit printed with the value ("°C", "W", "mm", "kg", "% FS"), without a footnote mark such as "*"; empty when there is none.',
-    '4. condition = a qualifier printed next to the value, under its label or as a footnote that applies to it ("Full range", "25 °C to 140 °C", "ambient temperature: 23 °C"), copied exactly; empty when there is none.',
-    '5. Give one entry per model in "values". When one printed cell spans several model columns, repeat the value for each model it covers, with the same quote.',
-    '6. When a model has no printed value in a row, leave that model out of the row. Never guess, never copy a value from another model, page or file.',
-    '7. sourceRef.page = the physical page number inside the PDF file (the first page of the file is 1), NOT the page number printed on the page.',
-    '8. sourceRef.quote = a short contiguous run of the page text (at most 200 characters), copied character for character, that contains the row label and the value. For a table row, copy the first line of the label cell followed by the value cells of that row, left to right. Leave out a second line printed under the label (a note or a condition such as "ambient temperature: 23 °C"); it goes in condition. Do not add, drop or reorder words or symbols inside the quote.',
-    `9. key = a short lowercase English slug (a-z, 0-9, -) naming the quantity, the same in any language. Use one of these when it fits: ${FACT_ROW_KEYS.join(', ')}. Otherwise create a similar slug.`,
-    '10. label = the row label as printed on the page, in the language of the page.',
-    '11. box_2d = optional; give it only when the value is inside a picture or a scanned area of the page: [ymin, xmin, ymax, xmax] normalized to 0-1000.',
-    '12. title = the product family name as printed; models = the models that have at least one value. Keep the document order of sections and rows.',
-  ].join('\n');
-}
-
-type GeminiSchema = Readonly<Record<string, unknown>>;
-const text = (maxLength: number, description?: string): GeminiSchema =>
-  ({ type: 'STRING', maxLength, ...(description ? { description } : {}) });
-/**
- * Gemini `responseSchema` (OpenAPI subset) for the ProductFactSheet answer.
- * Array limits only on models, rows and box_2d: Gemini answers 400 "invalid
- * argument" when every nested array has min/max items (checked 2026-10-15);
- * the other limits are enforced by `toFactProposal`.
- */
-export function factSheetResponseSchema(sourceIds: readonly string[]): GeminiSchema {
-  const multi = sourceIds.length > 1;
-  const sourceRef = {
-    type: 'OBJECT',
-    properties: {
-      ...(multi ? { file: { type: 'STRING', enum: [...sourceIds] } } : {}),
-      page: { type: 'INTEGER', description: 'Physical page number in the PDF file, first page = 1' },
-      quote: text(300, 'Verbatim text of the page holding the row label and the value'),
-      box_2d: { type: 'ARRAY', minItems: 4, maxItems: 4, items: { type: 'INTEGER' } },
-    },
-    required: [...(multi ? ['file'] : []), 'page', 'quote'],
-    propertyOrdering: [...(multi ? ['file'] : []), 'page', 'quote', 'box_2d'],
-  };
-  const value = {
-    type: 'OBJECT',
-    properties: { model: text(60), literal: text(120), unit: text(24), condition: text(120), sourceRef },
-    required: ['model', 'literal', 'sourceRef'],
-    propertyOrdering: ['model', 'literal', 'unit', 'condition', 'sourceRef'],
-  };
-  const row = {
-    type: 'OBJECT',
-    properties: { key: text(40), label: text(120), values: { type: 'ARRAY', items: value } },
-    required: ['key', 'label', 'values'], propertyOrdering: ['key', 'label', 'values'],
-  };
-  const section = {
-    type: 'OBJECT',
-    properties: { title: text(80), rows: { type: 'ARRAY', minItems: 1, maxItems: 16, items: row } },
-    required: ['title', 'rows'], propertyOrdering: ['title', 'rows'],
-  };
-  return {
-    type: 'OBJECT',
-    properties: {
-      title: text(120), models: { type: 'ARRAY', minItems: 1, maxItems: 6, items: text(60) },
-      sections: { type: 'ARRAY', items: section },
-    },
-    required: ['title', 'models', 'sections'], propertyOrdering: ['title', 'models', 'sections'],
-  };
 }
 
 /** The model's answer, parsed leniently: limits are enforced by the normalization, not by a throw. */
