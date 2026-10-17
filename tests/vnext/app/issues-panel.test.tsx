@@ -154,7 +154,7 @@ describe('FR-13 issues list', () => {
 
 describe('FR-13 fix registry and locating', () => {
   it('keeps one-click fixes in a registry keyed by diagnostic code', () => {
-    expect(Object.keys(ISSUE_FIXES).sort()).toEqual(['EMPTY_TABLE_ROW', 'TABLE_CONTENT_OVERFLOW', 'TEXT_OBJECT_OVERFLOW']);
+    expect(Object.keys(ISSUE_FIXES).sort()).toEqual(['EMPTY_TABLE_ROW', 'OBJECT_OUTSIDE_PAGE', 'TABLE_CONTENT_OVERFLOW', 'TEXT_OBJECT_OVERFLOW']);
     const document = catalog();
     const session: DocumentSession = createDocumentSession(document, { createId: () => crypto.randomUUID() });
     // Without a current measurement the height fix is not offered.

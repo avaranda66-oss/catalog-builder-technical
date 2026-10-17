@@ -19,6 +19,7 @@ import { TableLookSection } from './TableLookSection';
 import { TableMarkerLegendPanel, type TableMarkerLegendPanelProps } from './TableMarkerLegendPanel';
 import { TableNotesSection } from './TableNotesSection';
 import { TableStructureSection } from './TableStructureSection';
+import { TableContinuationSection, type TableContinuationControl } from './TableContinuationSection';
 
 type TableStyleInspectorProps = React.ComponentProps<typeof TableStyleInspector>;
 
@@ -62,6 +63,9 @@ export interface TableInspectorPanelProps extends MarkerLegendProps {
   // "Ajustar altura"
   fitHeightPreparation: TableFitHeightPreparation | { ok: false; reason: string; message: string } | null;
   runFitHeight(): void;
+
+  // FR-35 "Continuar na próxima página": shown while the table does not fit on its page.
+  continuation?: TableContinuationControl;
 
   // FR-33 "Estilo": task presets, the three switches and the P/M/G size, each one undo step.
   runTableLook(request: TableLookRequest, successMessage: string): void;
@@ -198,6 +202,7 @@ export function TableInspectorPanel(props: TableInspectorPanelProps) {
     setMarkerPanelOpen,
     fitHeightPreparation,
     runFitHeight,
+    continuation,
     runTableLook,
     runTableAxisInsert,
     runTableAxisRemove,
@@ -276,6 +281,8 @@ export function TableInspectorPanel(props: TableInspectorPanelProps) {
           </section>
         </>
       )}
+
+      {continuation && <TableContinuationSection {...continuation} tableObject={tableObject} />}
 
       <div className="vnext-divider" />
       <TableLookSection
@@ -425,7 +432,7 @@ export function TableInspectorPanel(props: TableInspectorPanelProps) {
             )}
             {fitHeightPreparation?.ok && fitHeightPreparation.prepared.tallerThanPage && (
               <p className="vnext-fit-height-advisory" data-fit-height-page-advisory="">
-                A tabela é mais alta que uma página A4. Ajustar altura iguala o quadro ao conteúdo, mas não resolve a publicação em uma única página.
+                A tabela é mais alta que uma página A4. Para levar as linhas que sobram para outra página, use “Continuar na próxima página”.
               </p>
             )}
           </section>

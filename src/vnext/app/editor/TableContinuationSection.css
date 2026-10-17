@@ -1,0 +1,7 @@
+/* FR-35 (2I): "Tabela maior que a página" in the table panel. Text and button keep the panel's navy/white baseline. */
+.vnext-table-continuation h3 { margin: 0 0 8px; }
+.vnext-table-continuation p { margin: 0 0 8px; }
+.vnext-table-continuation .vnext-table-continuation-reason { margin: 8px 0 0; }
+/* The live region is always there (so the work is announced), and takes no room while it is empty. */
+.vnext-table-continuation .vnext-table-continuation-status { margin: 8px 0 0; }
+.vnext-table-continuation .vnext-table-continuation-status:empty { margin: 0; }

@@ -156,6 +156,8 @@ describe('FR-13 "Corrigir este item" and the issues list reach the object', () =
     await act(async () => { fireEvent.click(publishButton(view.container)); });
     const dialog = await within(document.body).findByRole('dialog', { name: 'Revisar e publicar' });
     expect(within(dialog).getByText('Página 2 · texto 1')).toBeInTheDocument();
+    // Simple mode (the father's editor): no "Detalhes técnicos" with internal codes under the item.
+    expect(within(dialog).queryByText('Detalhes técnicos')).toBeNull();
     // Click as a browser does (outside act), so React schedules the page change the way it really does.
     await asInBrowser(async () => {
       within(dialog).getByRole('button', { name: 'Corrigir este item' }).dispatchEvent(new MouseEvent('click', { bubbles: true }));

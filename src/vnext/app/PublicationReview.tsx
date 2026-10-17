@@ -12,11 +12,13 @@ function pdfFileTitle(title: string): string {
     .replace(/\.pdf$/i, '').replace(/[. ]+$/, '').slice(0, 120) || 'Catálogo';
 }
 
-export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagnostic, waitingMessage }: {
+export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagnostic, waitingMessage, simple = false }: {
   getSource: () => PublicationSource | undefined; subscribe: (listener: () => void) => () => void; onClose: () => void;
   onLocateDiagnostic?: (diagnostic: Diagnostic) => void;
   /** Plain explanation shown while the saved version is not available yet (for example, a failed save). */
   waitingMessage?: string;
+  /** Simple mode (the father's editor): no "Detalhes técnicos" with internal codes and IDs under each item. */
+  simple?: boolean;
 }) {
   const [source, setSource] = React.useState(getSource);
   const [attempt, setAttempt] = React.useState(0);
@@ -130,10 +132,10 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
             <p className="vnext-diagnostic-message">{publicationDiagnosticText(item)}</p>
             {onLocateDiagnostic && item.pageId && <button type="button" className="vnext-btn-secondary" disabled={!current}
               onClick={() => { if (isCurrent()) { close(); onLocateDiagnostic(item); } }}>Corrigir este item</button>}
-            <details className="vnext-technical-details"><summary>Detalhes técnicos</summary>
+            {!simple && <details className="vnext-technical-details"><summary>Detalhes técnicos</summary>
               <dl>{publicationDiagnosticDetails(item).map(([label, value]) => <React.Fragment key={label}>
                 <dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
-            </details>
+            </details>}
           </li>)}</ul>
         </div> : null}
         {printMessage && <p role="alert" className="vnext-status" data-tone="error">{printMessage}</p>}

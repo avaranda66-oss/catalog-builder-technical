@@ -4461,6 +4461,8 @@ export function EditorWorkspace({
                   applyTableTitleDraft={applyTableTitleDraft} cancelTableTitleDraft={cancelTableTitleDraft} runTableTitleSet={runTableTitleSet}
                   startTableGrid={startTableGrid} markerPanelOpen={markerPanelOpen} setMarkerPanelOpen={setMarkerPanelOpen}
                   fitHeightPreparation={fitHeightPreparation} runFitHeight={runFitHeight}
+                  continuation={{ session, document, measurement: measuredLayout?.source === document ? measuredLayout : null,
+                    prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
                   tableStyleScope={tableStyleScope} tableStyleRoleScope={tableStyleRoleScope} tableStyleDisabled={tableStyleDisabled}
                   tableStyleDisabledReasonId={tableStyleDisabledReasonId} tableStyleDisabledReason={tableStyleDisabledReason}
                   tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}
@@ -4548,7 +4550,7 @@ export function EditorWorkspace({
                           <small>{describeTableLocation(selectedTableObject.table, diagnostic.rowId, diagnostic.cellId)}</small>
                         )}
                         <div className="vnext-diagnostic-actions">
-                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (
+                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && !fitHeightPreparation.prepared.tallerThanPage && !fitHeightPreparation.prepared.wouldExceedPage && (
                             <button type="button" data-diagnostic-action="fit-height" onClick={runFitHeight}>
                               Ajustar altura
                             </button>
