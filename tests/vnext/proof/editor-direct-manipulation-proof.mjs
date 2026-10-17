@@ -44,6 +44,56 @@ try {
   let selected = page.locator('[data-editor-object-id][data-selected="true"]');
   await selected.waitFor();
   assert.equal(await page.locator('[data-resize-handle]').count(), 8);
+  // FR-16b: every resize handle is at least 24 x 24 px on screen at the editor zoom (counter-scaled inside the page).
+  const handleSizes = await page.locator('[data-resize-handle]').evaluateAll((handles) => handles.map((handle) => {
+    const box = handle.getBoundingClientRect();
+    return { handle: handle.getAttribute('data-resize-handle'), width: box.width, height: box.height };
+  }));
+  for (const size of handleSizes) {
+    assert(size.width >= 23.5 && size.height >= 23.5, `Handle ${size.handle} must be >= 24 px on screen, got ${size.width} x ${size.height}`);
+  }
+  // FR-16b: the grab areas reach at most 7 px into the object (the rest lies outside it), so a small object keeps its middle
+  // free to be dragged. Checked on the selected text, then on the same object shrunk to 20 x 20 px on screen (DOM only,
+  // restored right away, the document does not change).
+  const handleReach = await selected.evaluate((target) => {
+    const reachInto = (frame) => [...target.querySelectorAll('[data-resize-handle]')].map((handle) => {
+      const box = handle.getBoundingClientRect();
+      const side = handle.getAttribute('data-resize-handle');
+      return {
+        side,
+        inward: Math.max(
+          side.includes('n') ? box.bottom - frame.top : 0,
+          side.includes('s') ? frame.bottom - box.top : 0,
+          side.includes('e') ? frame.right - box.left : 0,
+          side.includes('w') ? box.right - frame.left : 0,
+        ),
+      };
+    });
+    const full = reachInto(target.getBoundingClientRect());
+    const { width, height } = target.style;
+    try {
+      target.style.width = '100px';
+      const scale = target.getBoundingClientRect().width / 100;
+      target.style.width = `${20 / scale}px`;
+      target.style.height = `${20 / scale}px`;
+      const frame = target.getBoundingClientRect();
+      const hit = document.elementFromPoint(frame.left + frame.width / 2, frame.top + frame.height / 2);
+      return {
+        full,
+        small: reachInto(frame),
+        smallSize: { width: frame.width, height: frame.height },
+        middleMoves: Boolean(hit && target.contains(hit) && !hit.closest('[data-resize-handle]')),
+      };
+    } finally {
+      target.style.width = width;
+      target.style.height = height;
+    }
+  });
+  for (const { side, inward } of [...handleReach.full, ...handleReach.small]) {
+    assert(inward <= 7.5, `Handle ${side} must reach at most 7 px into the object, got ${inward}`);
+  }
+  assert(Math.abs(handleReach.smallSize.width - 20) < 1 && Math.abs(handleReach.smallSize.height - 20) < 1, `Small object must be 20 px, got ${JSON.stringify(handleReach.smallSize)}`);
+  assert(handleReach.middleMoves, 'The middle of a 20 x 20 px object must still start a move, not a resize');
   const textId = await selected.getAttribute('data-editor-object-id');
   assert(textId);
   const textCanonical = page.locator(`[data-object-id="${textId}"]`);
