@@ -54,6 +54,8 @@ interface ConflictGuard {
   readonly remoteRevision: number;
   readonly localSequence: number;
   readonly equivalence: string;
+  readonly pendingDraft: boolean;
+  readonly authoringOverlay: string | undefined;
   readonly document: CatalogDocument;
 }
 
@@ -113,7 +115,8 @@ export class ConflictResolutionCoordinator {
       ));
     }
 
-    const execution = operation();
+    // Register the flight before authoring callbacks can synchronously publish or re-enter it.
+    const execution = Promise.resolve().then(operation);
     this.activeResolution = { kind, promise: execution };
     this.publish();
     const clear = () => {
@@ -139,6 +142,8 @@ export class ConflictResolutionCoordinator {
       remoteRevision: binding.remoteRevision,
       localSequence: sessionSnapshot.localSequence,
       equivalence: canonicalDocumentEquivalence(sessionSnapshot.document),
+      pendingDraft: this.options.workspace.getAuthoringBarrier().hasPendingDraft(),
+      authoringOverlay: JSON.stringify(this.options.workspace.captureRecoveryOverlay()),
       document: sessionSnapshot.document,
     };
   }
@@ -155,6 +160,8 @@ export class ConflictResolutionCoordinator {
       && current.remoteRevision === expected.remoteRevision
       && current.localSequence === expected.localSequence
       && current.equivalence === expected.equivalence
+      && current.pendingDraft === expected.pendingDraft
+      && current.authoringOverlay === expected.authoringOverlay
     );
   }
 
@@ -233,8 +240,26 @@ export class ConflictResolutionCoordinator {
   }
 
   private async saveAsCopyOnce(): Promise<ConflictResolutionResult> {
+    const beforeAuthoring = this.capture();
+    if (!beforeAuthoring) return failure('NOT_IN_CONFLICT');
+    const barrier = this.options.workspace.getAuthoringBarrier();
+    const authored = barrier.prepareForSave();
+    this.options.workspace.notifyDraftStateChanged();
+    if (!authored.ok) return failure('UNSAVED_CHANGES', authored.message);
+
+    // A draft typed while autosave was in flight belongs in the copy. Its commit may change
+    // the document and sequence, but never grants consent to copy another session/conflict.
     const guard = this.capture();
-    if (!guard) return failure('NOT_IN_CONFLICT');
+    if (!guard
+      || guard.session !== beforeAuthoring.session
+      || guard.catalogId !== beforeAuthoring.catalogId
+      || guard.openSessionId !== beforeAuthoring.openSessionId
+      || guard.authLineage !== beforeAuthoring.authLineage
+      || guard.authorityScopeId !== beforeAuthoring.authorityScopeId
+      || guard.remoteRevision !== beforeAuthoring.remoteRevision) return failure('STALE_RESULT');
+    if (barrier.hasPendingDraft()) {
+      return failure('UNSAVED_CHANGES', 'Conclua a edição em andamento antes de salvar o trabalho como cópia.');
+    }
     const protectionFailure = await this.protectLocal(guard);
     if (protectionFailure) return protectionFailure;
     if (!this.isCurrent(guard)) return failure('STALE_RESULT');
