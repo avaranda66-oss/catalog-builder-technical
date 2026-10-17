@@ -17,7 +17,7 @@ const httpError = (status: number, body: unknown) => ({ name: 'FunctionsHttpErro
 
 function client(options: { invoke?: (body: unknown) => { data: unknown; error: unknown }; upload?: { error: unknown } } = {}) {
   const invoke = vi.fn(async (_name: string, { body }: { body: unknown }) => options.invoke?.(body) ?? { data: OK, error: null });
-  const upload = vi.fn(async () => options.upload ?? { data: { path: 'x' }, error: null });
+  const upload = vi.fn(async () => ({ data: null as unknown, ...(options.upload ?? { data: { path: 'x' }, error: null }) }));
   const from = vi.fn(() => ({ upload }));
   const value: DraftClient = { functions: { invoke }, storage: { from } };
   return { value, invoke, upload, from };

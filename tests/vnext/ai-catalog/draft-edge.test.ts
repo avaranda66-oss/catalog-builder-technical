@@ -41,7 +41,7 @@ function loadEdge(globals: Record<string, unknown>, onServe: (handler: Handler) 
 
 type Options = {
   flag?: boolean; role?: string; active?: boolean; validUser?: boolean; serverKey?: string | null; draftKey?: string;
-  settled?: boolean; cacheReady?: boolean; file?: Uint8Array | null;
+  settled?: boolean; cacheReady?: boolean; file?: Uint8Array<ArrayBuffer> | null;
 };
 function sandbox(options: Options = {}) {
   const env: Record<string, string | undefined> = {

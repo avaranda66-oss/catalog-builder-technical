@@ -50,7 +50,7 @@ const redact = (text: string) => (key ? text.split(key).join('[chave]') : text);
 await mkdir(join(out, 'raw'), { recursive: true });
 
 // ---- Simulated Supabase -----------------------------------------------------
-const files = new Map<string, Uint8Array>();
+const files = new Map<string, Uint8Array<ArrayBuffer>>();
 const cache = new Map<string, unknown>();
 const ledger: { reserved: number[]; settled: number[] } = { reserved: [], settled: [] };
 const createClient = () => ({

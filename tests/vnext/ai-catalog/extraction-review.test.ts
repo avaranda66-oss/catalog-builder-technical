@@ -277,10 +277,9 @@ describe('model tables keep the spike path', () => {
 describe('photos and scanned pages', () => {
   it('sends every value of a photo to a person (VISUAL_ONLY), never to "verified"', () => {
     const photo = photoEvidence('foto.jpg', 'e'.repeat(64));
-    const review = reviewExtraction(sharedAnswer([
-      { label: 'Pt-100', sourceRef: { page: 1, quote: 'Pt-100 0,01 °C', box_2d: [100, 100, 200, 300] },
-        values: [{ column: 'Resolução', literal: '0,01 °C' }] },
-    ]), { ...SOURCE, fileName: 'foto.jpg', sha256: 'e'.repeat(64), pageCount: 1, firstPage: 1, lastPage: 1 }, photo, { models: TA });
+    const photoRow = { label: 'Pt-100', sourceRef: { page: 1, quote: 'Pt-100 0,01 °C', box_2d: [100, 100, 200, 300] },
+      values: [{ column: 'Resolução', literal: '0,01 °C' }] };
+    const review = reviewExtraction(sharedAnswer([photoRow]), { ...SOURCE, fileName: 'foto.jpg', sha256: 'e'.repeat(64), pageCount: 1, firstPage: 1, lastPage: 1 }, photo, { models: TA });
     expect(shared(review).report.values.map(value => value.status)).toEqual(['MISSING', 'VISUAL_ONLY', 'MISSING']);
     expect(shared(review).report.values[1].candidates[0].reason).toBe('PAGE_NEEDS_VISUAL_CHECK');
     expect(review.pages[0].message).toBe('Página 1 ("1.1.1 - Especificações Técnicas da Entrada"): 1 para conferir olhando a página.');

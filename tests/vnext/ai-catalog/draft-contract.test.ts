@@ -12,7 +12,7 @@ import { geminiCostMicrousd } from '../../../src/vnext/ai-catalog/gemini-models'
 const KEY = 'TEST_FAKE_SERVER_KEY_NOT_A_CREDENTIAL';
 const USER = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const BYTES = new TextEncoder().encode('%PDF-1.7\n% fake manual for the draft contract tests\n%%EOF\n');
-const hex = async (bytes: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+const hex = async (bytes: Uint8Array<ArrayBuffer>) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
   .map(byte => byte.toString(16).padStart(2, '0')).join('');
 const SHA = await hex(BYTES);
 const body = (overrides: Record<string, unknown> = {}, source: Record<string, unknown> = {}) => ({
@@ -92,8 +92,8 @@ describe('server bounding of the answer (never cuts a string, counts what it lea
       pages: [{ page: 6, content: 'shared-table' }, { page: 7, content: 'guess' }],
     });
     expect(bounded).not.toBeNull();
-    const sheet = bounded!.sheet as typeof SHEET & { sections: { rows: { values: Record<string, unknown>[] }[] }[] };
-    expect('injected' in sheet).toBe(false);
+    const sheet = bounded!.sheet as { sections: { rows: { values: Record<string, unknown>[] }[] }[]; pages: unknown[] };
+    expect('injected' in bounded!.sheet).toBe(false);
     expect(sheet.sections[0].rows[0].values).toEqual([
       { model: 'TA-25N', literal: '200', unit: 'W', sourceRef: { page: 5, quote: 'L 200 W' } },
       { model: 'TA-50N', literal: '300', sourceRef: { page: 5, quote: 'L 300' } },
