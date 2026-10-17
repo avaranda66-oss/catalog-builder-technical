@@ -61,6 +61,17 @@ export type SavePhase =
   | 'unauthorized'
   | 'blocked';
 
+/** FR-44: what the automatic save does after the server could not be reached. */
+export interface SaveRetryProjection {
+  /** Automatic attempts already made since the last confirmed save (0 before the first one). */
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  /** When the next automatic attempt runs (epoch ms); absent when no attempt is waiting. */
+  readonly nextAttemptAt?: number;
+  /** Every automatic attempt was used; only Salvar or the connection coming back try again. */
+  readonly exhausted: boolean;
+}
+
 export interface SaveProjection {
   readonly phase: SavePhase;
   readonly label:
@@ -70,10 +81,15 @@ export interface SaveProjection {
     | 'Unsaved changes'
     | 'Conflict'
     | 'Could not verify save'
-    | 'Offline / unavailable';
+    | 'Offline / unavailable'
+    | 'Session expired';
   readonly dirty: boolean;
   readonly canSave: boolean;
   readonly message?: string;
+  /** FR-44: when this tab last got the server's confirmation (epoch ms); only on "Saved". */
+  readonly savedAt?: number;
+  /** FR-44: automatic retry plan; only while the phase is "unavailable" or "ambiguous". */
+  readonly retry?: SaveRetryProjection;
 }
 
 export interface PersistenceWorkspaceSnapshot {
@@ -86,6 +102,8 @@ export interface PersistenceWorkspaceSnapshot {
   readonly activeAuthorityScopeId: string;
   readonly localProtection: 'available' | 'unavailable';
   readonly localProtectionMessage?: string;
+  /** FR-41: photos in use whose download is still running (the catalog is shown before them). */
+  readonly loadingAssetIds: ReadonlySet<string>;
 }
 
 export function createUnboundPersistenceBinding(
@@ -129,26 +147,50 @@ function projection(
   binding: PersistenceBinding,
   dirty: boolean,
   phase: SavePhase,
-  message?: string
+  message?: string,
+  savedAt?: number,
+  retry?: SaveRetryProjection
 ): SaveProjection {
   const withMessage = message ? { message } : {};
+  const withRetry = retry ? { retry } : {};
   if (phase === 'saving') return { phase, label: 'Saving…', dirty, canSave: false, ...withMessage };
   if (phase === 'conflict') return { phase, label: 'Conflict', dirty: true, canSave: false, ...withMessage };
-  if (phase === 'ambiguous') return { phase, label: 'Could not verify save', dirty: true, canSave: true, ...withMessage };
-  if (phase === 'unavailable' || phase === 'unauthorized') {
+  if (phase === 'ambiguous') {
+    return { phase, label: 'Could not verify save', dirty: true, canSave: true, ...withMessage, ...withRetry };
+  }
+  if (phase === 'unavailable') {
     return {
       phase,
       label: 'Offline / unavailable',
       dirty,
       canSave: binding.kind === 'PERSISTED',
       ...withMessage,
+      ...withRetry,
     };
+  }
+  // FR-44: an expired session is not a connection problem; it has its own label.
+  if (phase === 'unauthorized') {
+    return { phase, label: 'Session expired', dirty, canSave: binding.kind === 'PERSISTED', ...withMessage };
   }
   if (phase === 'blocked') return { phase, label: 'Unsaved changes', dirty: true, canSave: true, ...withMessage };
   if (dirty) return { phase: 'idle', label: 'Unsaved changes', dirty: true, canSave: binding.kind === 'PERSISTED' };
-  if (binding.kind === 'PERSISTED') return { phase: 'idle', label: 'Saved', dirty: false, canSave: true };
+  if (binding.kind === 'PERSISTED') {
+    return { phase: 'idle', label: 'Saved', dirty: false, canSave: true, ...(savedAt === undefined ? {} : { savedAt }) };
+  }
   return { phase: 'idle', label: 'Save', dirty: false, canSave: false };
 }
+
+function sameRetry(left?: SaveRetryProjection, right?: SaveRetryProjection): boolean {
+  return left === right || Boolean(
+    left && right
+    && left.attempt === right.attempt
+    && left.maxAttempts === right.maxAttempts
+    && left.nextAttemptAt === right.nextAttemptAt
+    && left.exhausted === right.exhausted
+  );
+}
+
+const NO_LOADING_ASSETS: ReadonlySet<string> = new Set();
 
 export class PersistenceWorkspace {
   private readonly listeners = new Set<() => void>();
@@ -164,6 +206,9 @@ export class PersistenceWorkspace {
   private localProtectionMessage: string | undefined;
   private assetUrls: ReadonlyMap<string, string>;
   private assetRuntimeStates: ReadonlyMap<string, AssetRuntimeState>;
+  private loadingAssetIds: ReadonlySet<string> = NO_LOADING_ASSETS;
+  private savedAt: number | undefined;
+  private retry: SaveRetryProjection | undefined;
   private snapshot: PersistenceWorkspaceSnapshot;
 
   constructor(
@@ -215,10 +260,11 @@ export class PersistenceWorkspace {
       assetUrls: this.assetUrls,
       assetRuntimeStates: this.assetRuntimeStates,
       dirty,
-      save: projection(this.binding, dirty, this.phase, this.phaseMessage),
+      save: projection(this.binding, dirty, this.phase, this.phaseMessage, this.savedAt, this.retry),
       activeAuthorityScopeId: this.activeAuthorityScopeId,
       localProtection: this.localProtection,
       ...(this.localProtectionMessage ? { localProtectionMessage: this.localProtectionMessage } : {}),
+      loadingAssetIds: this.loadingAssetIds,
     };
   }
 
@@ -322,6 +368,7 @@ export class PersistenceWorkspace {
       next.delete(assetId);
     }
     this.assetUrls = next;
+    this.clearAssetLoading(assetId);
     this.publish();
   }
 
@@ -333,11 +380,56 @@ export class PersistenceWorkspace {
     const next = new Map(this.assetRuntimeStates);
     next.set(assetId, state);
     this.assetRuntimeStates = next;
+    this.clearAssetLoading(assetId);
     this.publish();
   }
 
   updateAssetRuntimeStates(states: ReadonlyMap<string, AssetRuntimeState>): void {
     this.assetRuntimeStates = states;
+    this.loadingAssetIds = NO_LOADING_ASSETS;
+    this.publish();
+  }
+
+  /** FR-41: these photos are being downloaded; the editor shows "Carregando foto…" on them. */
+  markAssetsLoading(assetIds: Iterable<string>): void {
+    const next = new Set(this.loadingAssetIds);
+    for (const assetId of assetIds) next.add(assetId);
+    if (next.size === this.loadingAssetIds.size) return;
+    this.loadingAssetIds = next;
+    this.publish();
+  }
+
+  /**
+   * FR-41: installs the result of a download started by markAssetsLoading, in one update.
+   * Returns false (and changes nothing) when the photo is no longer waiting for that download:
+   * another session was installed, or someone else (an upload, a reused page) already set it.
+   */
+  settleAssetLoad(assetId: string, state: AssetRuntimeState): boolean {
+    if (!this.loadingAssetIds.has(assetId)) return false;
+    const states = new Map(this.assetRuntimeStates);
+    states.set(assetId, state);
+    this.assetRuntimeStates = states;
+    if (state.status === 'resolved' && state.url) {
+      const urls = new Map(this.assetUrls);
+      urls.set(assetId, state.url);
+      this.assetUrls = urls;
+    }
+    this.clearAssetLoading(assetId);
+    this.publish();
+    return true;
+  }
+
+  private clearAssetLoading(assetId: string): void {
+    if (!this.loadingAssetIds.has(assetId)) return;
+    const next = new Set(this.loadingAssetIds);
+    next.delete(assetId);
+    this.loadingAssetIds = next.size === 0 ? NO_LOADING_ASSETS : next;
+  }
+
+  /** FR-44: the automatic save tells the editor when it will try again (undefined clears it). */
+  setAutomaticRetry(retry: SaveRetryProjection | undefined): void {
+    if (sameRetry(this.retry, retry)) return;
+    this.retry = retry;
     this.publish();
   }
 
@@ -345,7 +437,8 @@ export class PersistenceWorkspace {
     openSessionId: string,
     authLineage: string,
     envelope: CatalogPersistenceEnvelope,
-    acknowledgedLocalSequence: number
+    acknowledgedLocalSequence: number,
+    acknowledgedAt: number = Date.now()
   ): boolean {
     if (!this.matches(openSessionId, authLineage)) return false;
     this.binding = persistedBindingFromEnvelope(
@@ -355,6 +448,7 @@ export class PersistenceWorkspace {
       this.binding.authorityScopeId,
       acknowledgedLocalSequence
     );
+    this.savedAt = acknowledgedAt;
     this.clearPhase();
     this.publish();
     return true;
@@ -372,6 +466,9 @@ export class PersistenceWorkspace {
     this.activeAuthorityScopeId = binding.authorityScopeId;
     this.assetUrls = assetUrls;
     this.assetRuntimeStates = assetRuntimeStates;
+    this.loadingAssetIds = NO_LOADING_ASSETS;
+    this.savedAt = undefined;
+    this.retry = undefined;
     this.barrier = NO_AUTHORING_BARRIER;
     this.clearPhase();
     this.bindSession();

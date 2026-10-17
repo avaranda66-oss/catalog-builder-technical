@@ -134,6 +134,9 @@ import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
 import { EditorNotices } from './editor/EditorNotices';
+import { SaveSummary } from './editor/SaveSummary';
+import { PhotoLoadingAnnouncer, PhotoStatusMark } from './editor/ImageRepairIndicator';
+import { SaveConflictDialog } from './editor/ConflictDialog';
 import { PublishAction } from './editor/PublishAction';
 import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
 import { CanvasHeader } from './editor/CanvasHeader';
@@ -3811,6 +3814,7 @@ export function EditorWorkspace({
     selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
   return (
+    <>
     <div
       className="vnext-shell"
       data-vnext-shell=""
@@ -3828,11 +3832,7 @@ export function EditorWorkspace({
           <div>
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
             <div className="vnext-title-row"><CatalogTitleButton session={session} title={document.title} /></div>
-            {simpleByDefault && persistence && (
-              <span className="vnext-save-summary" role="status" data-save-state="" data-save-phase={persistence.save.phase}>
-                {fatherSaveLabel(persistence.save.label)}
-              </span>
-            )}
+            {simpleByDefault && persistence && <SaveSummary save={persistence.save} />}
             {persistence && <LibraryNavigationNotice runtime={persistence.runtime} />}
           </div>
         </div>
@@ -3880,9 +3880,8 @@ export function EditorWorkspace({
             save={persistence && { phase: persistence.save.phase, run: () => persistence.runtime.manualSave() }} />}
         </div>
       </header>
-      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)} onMessage={setStatusMessage} documentTitle={document.title}
-        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'}
-        conflictState={conflictResolutionState} conflictResolution={persistence?.runtime.conflictResolutionCoordinator} />
+      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)}
+        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'} />
 
       <div className="vnext-workspace">
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
@@ -4129,26 +4128,10 @@ export function EditorWorkspace({
                           {issueSeverity === 'ERROR' ? '!' : '⚠'}
                         </span>
                       )}
-                      {object.type === 'image' && (() => {
-                        const assetState = persistence?.assetRuntimeStates?.get(object.assetId);
-                        if (!assetState || assetState.status === 'resolved') return null;
-                        const isIntegrity = assetState.status === 'integrity-failed';
-                        return (
-                          <div
-                            className="vnext-image-repair-indicator"
-                            data-editor-image-repair={object.id}
-                            data-asset-status={assetState.status}
-                          >
-                            <span className="repair-icon">⚠️</span>
-                            <span className="repair-title">
-                              {isIntegrity ? 'Falha de integridade' : 'Imagem indisponível'}
-                            </span>
-                            <span className="repair-hint">
-                              Substitua ou envie nova imagem
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      {object.type === 'image' && persistence && (
+                        <PhotoStatusMark objectId={object.id} assetId={object.assetId} runtime={persistence.runtime}
+                          state={persistence.assetRuntimeStates?.get(object.assetId)} bridge={persistence.assetBridge} />
+                      )}
                       {selected && (
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
@@ -4718,5 +4701,10 @@ export function EditorWorkspace({
         onMeasuredLayout={receiveMeasuredLayout}
       />
     </div>
+    {/* FR-43: next to the shell, not inside it, so the shell's key and pointer handlers never act on the dialog. */}
+    <SaveConflictDialog save={persistence?.save} documentTitle={document.title} state={conflictResolutionState}
+      resolution={persistence?.runtime.conflictResolutionCoordinator} />
+    {persistence && <PhotoLoadingAnnouncer runtime={persistence.runtime} />}
+    </>
   );
 }

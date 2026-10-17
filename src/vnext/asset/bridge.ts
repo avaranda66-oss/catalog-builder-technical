@@ -25,9 +25,21 @@ interface CachedUrlEntry {
 }
 
 export interface DefaultAssetPersistenceBridgeOptions {
-  readonly fetchBytes?: (url: string) => Promise<ArrayBuffer>;
+  /** Downloads the photo bytes; `signal` aborts the download when it takes too long. */
+  readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<ArrayBuffer>;
+  /** FR-45: true when the browser says there is no connection (`navigator.onLine === false`). */
   readonly isOffline?: () => boolean;
   readonly getActiveLineage?: () => AssetLineageContext;
+  /** FR-41: photos downloaded and checked at the same time. Default 4. */
+  readonly maxConcurrentDownloads?: number;
+  /**
+   * FR-41: a photo whose download takes longer than this (ms) is reported as not loaded and its
+   * download slot is handed on, so one stuck request never blocks the other photos or "Tentar
+   * novamente". Default 30 s.
+   */
+  readonly downloadTimeoutMs?: number;
+  /** FR-45: receives a short, sanitized code when a photo could not be loaded (never a URL or message). */
+  readonly logFailure?: (code: string) => void;
   /**
    * Re-encodes rotated (EXIF) or oversized photos before hashing. Omit to use the browser
    * re-encoder when available; pass null to keep every upload's original bytes.
@@ -46,6 +58,77 @@ interface PendingFinalizationAttempt {
   readonly alt: string;
   readonly fileSize: number;
   readonly storagePath: string;
+}
+
+export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 4;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/** A photo download that took longer than `downloadTimeoutMs`. Its code is what the log keeps. */
+class AssetDownloadTimeout extends Error {
+  readonly code = 'TIMEOUT';
+  constructor() {
+    super('Photo download timed out');
+    this.name = 'AssetDownloadTimeout';
+  }
+}
+
+/**
+ * Runs `task` with an abort signal and rejects with AssetDownloadTimeout after `timeoutMs`.
+ * The task may still finish later; its result is then ignored.
+ */
+async function withDownloadTimeout<T>(timeoutMs: number, task: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+  const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abort?.abort();
+      reject(new AssetDownloadTimeout());
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([task(abort?.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** At most `max` tasks run at once; the others wait in order. A finished task hands its slot on. */
+class ConcurrencyLimit {
+  private active = 0;
+  private readonly waiting: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active >= this.max) await new Promise<void>((resolve) => this.waiting.push(resolve));
+    else this.active += 1;
+    try {
+      return await task();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.active -= 1;
+    }
+  }
+}
+
+const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * FR-45: a code that is safe to log. Error messages can carry signed URLs, tokens or file names,
+ * so only an explicit `code` or the error class name ("TypeError") is kept.
+ */
+export function sanitizedAssetErrorCode(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string' && SAFE_ERROR_CODE.test(code)) return code;
+  }
+  if (error instanceof Error && SAFE_ERROR_CODE.test(error.name)) return error.name;
+  return 'UNKNOWN';
+}
+
+function defaultLogFailure(code: string): void {
+  console.warn('[vnext asset] photo could not be loaded', { code });
 }
 
 export function isTransportAmbiguousCode(code?: string | null): boolean {
@@ -86,7 +169,12 @@ export function isTransportAmbiguousError(err: unknown): boolean {
 
 function isLineageStale(before?: AssetLineageContext, current?: AssetLineageContext): boolean {
   if (!before || !current) return false;
-  if (before.authLineage && current.authLineage && before.authLineage !== current.authLineage) {
+  // FR-45: an empty lineage after a real one means the authority was lost; it is never "unknown".
+  if (
+    before.authLineage !== undefined
+    && current.authLineage !== undefined
+    && before.authLineage !== current.authLineage
+  ) {
     return true;
   }
   if (
@@ -119,10 +207,12 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   private resolutionGeneration = 0;
   private pendingFinalization?: PendingFinalizationAttempt;
   private readonly imageReencoder?: ImageReencoder;
+  private readonly downloads: ConcurrencyLimit;
 
   constructor(repository: AssetRepository, options: DefaultAssetPersistenceBridgeOptions = {}) {
     this.repository = repository;
     this.options = options;
+    this.downloads = new ConcurrencyLimit(Math.max(1, options.maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS));
     this.imageReencoder = options.imageReencoder === undefined
       ? createBrowserImageReencoder()
       : options.imageReencoder ?? undefined;
@@ -456,8 +546,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const activeFlight = this.inFlight.get(cacheKey);
     if (activeFlight) return await activeFlight;
 
-    const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
-      try {
+    const download = async (signal?: AbortSignal): Promise<AssetResolutionResult> => {
         // Fetch durable asset record
         const recordResult = await this.repository.getAsset(asset.id, asset.version);
         if (!isCurrent()) return staleResult();
@@ -533,9 +622,9 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
         // Fetch bytes to verify byte integrity
         let bytes: ArrayBuffer;
         if (this.options.fetchBytes) {
-          bytes = await this.options.fetchBytes(signedUrl);
+          bytes = await this.options.fetchBytes(signedUrl, signal);
         } else if (typeof fetch !== 'undefined') {
-          const res = await fetch(signedUrl, { cache: 'no-store' });
+          const res = await fetch(signedUrl, { cache: 'no-store', ...(signal ? { signal } : {}) });
           if (!res.ok) {
             return {
               ok: false,
@@ -603,9 +692,20 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
             asset,
           },
         };
-      } catch {
+    };
+
+    const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
+      try {
+        // FR-41: at most 4 photos are downloaded and checked at the same time, and a stuck
+        // download gives its slot back after the time limit (it then counts as not loaded).
+        return await this.downloads.run(async () => (isCurrent()
+          ? withDownloadTimeout(this.options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, download)
+          : staleResult()));
+      } catch (error) {
         // A failed photo transport must not prevent the catalog from reopening.
         // Keep the canonical reference so the user can retry without uploading again.
+        // FR-45: say why in the console, with a sanitized code only.
+        (this.options.logFailure ?? defaultLogFailure)(sanitizedAssetErrorCode(error));
         return {
           ok: false,
           state: this.options.isOffline?.()
@@ -627,25 +727,28 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
   async resolveDocumentAssets(
     doc: CatalogDocument,
-    context?: AssetLineageContext
+    context?: AssetLineageContext,
+    options: { readonly onlyUsed?: boolean } = {}
   ): Promise<{ urls: Map<string, string>; states: Map<string, AssetRuntimeState> }> {
     const urls = new Map<string, string>();
     const states = new Map<string, AssetRuntimeState>();
-    // Photos placed on pages or in table cells come first. The others stay resolved too,
-    // because "Imagem do catálogo" can reuse them; their failures never block the PDF.
+    // Photos placed on pages or in table cells come first. Unless `onlyUsed`, the others are
+    // resolved too, because "Imagem do catálogo" can reuse them; their failures never block the PDF.
+    // FR-41: they are requested together; the download limit keeps at most 4 running.
     const used = referencedAssetIds(doc);
     const ordered = [
       ...doc.assets.filter((asset) => used.has(asset.id)),
-      ...doc.assets.filter((asset) => !used.has(asset.id)),
+      ...(options.onlyUsed ? [] : doc.assets.filter((asset) => !used.has(asset.id))),
     ];
 
-    for (const asset of ordered) {
-      const result = await this.resolve(asset, context);
+    const results = await Promise.all(ordered.map((asset) => this.resolve(asset, context)));
+    ordered.forEach((asset, index) => {
+      const result = results[index]!;
       states.set(asset.id, result.state);
       if (result.ok && result.state.status === 'resolved') {
         urls.set(asset.id, result.state.url);
       }
-    }
+    });
 
     return { urls, states };
   }

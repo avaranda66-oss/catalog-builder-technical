@@ -1,5 +1,5 @@
 /*
- * FR-12 message area, right under the top bar. Only the persistent bands (save problem, conflict, local protection)
+ * FR-12 message area, right under the top bar. Only the persistent bands (save problem, local protection)
  * take room in the layout. The latest status message floats over the top of the workspace, so the page never moves
  * when a message appears or leaves.
  */
@@ -17,11 +17,6 @@
 .vnext-editor-notice[data-tone="error"] { border-color: #e2b8b8; border-left-color: var(--vnext-error, #8f3030); background: var(--vnext-error-surface, #fff3f3); color: var(--vnext-error, #8f3030); }
 .vnext-editor-notice p { flex: 1; min-width: 0; margin: 0; }
 .vnext-editor-notice button { flex: none; min-height: 32px; border: 1px solid var(--vnext-control-border, #bdc9d6); border-radius: var(--vnext-radius-control, 7px); background: var(--vnext-surface, #fff); color: var(--vnext-text-secondary, #41546b); cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; padding: 4px 12px; }
-.vnext-conflict-notice h2 { margin: 0 0 4px; font-size: 15px; }
-.vnext-conflict-notice p, .vnext-conflict-notice ul { margin: 0 0 6px; }
-.vnext-conflict-notice ul { padding-left: 20px; }
-.vnext-editor-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.vnext-editor-notice-actions button { max-width: 100%; white-space: normal; }
 @media (max-width: 900px) {
   .vnext-editor-notice-bands { padding: 8px 12px; }
   .vnext-editor-notice { width: calc(100% - 24px); }
