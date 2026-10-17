@@ -6,8 +6,9 @@
  *
  * The page is drawn with zoom: var(--vnext-stage-zoom) (.62 by default), so the texts and the button undo
  * it with zoom: var(--vnext-stage-unzoom): on screen they keep 13-14 px letters and a 32 px tall button at
- * any page zoom. They stay inside the photo frame; on a small photo the top lines are cut first and the
- * button, at the bottom, stays visible.
+ * any page zoom (checked in Chromium at 50%, 62% and 100%). They stay inside the photo frame; on a small
+ * photo the top lines are cut first and the button, at the bottom, stays visible (a 3 x 2 cm photo at 62%
+ * still shows it in two lines; below that, zooming the page in shows it whole).
  */
 .vnext-image-repair-indicator { overflow: hidden; }
 .vnext-image-repair-indicator .repair-content {
@@ -31,11 +32,11 @@
   background: rgb(238 243 248 / .82);
 }
 .vnext-image-repair-indicator.is-loading .repair-title { color: var(--vnext-text-secondary, #41546b); font-weight: 600; }
-.vnext-image-repair-indicator.has-retry { justify-content: flex-end; gap: 1px; padding-bottom: 6px; }
+.vnext-image-repair-indicator.has-retry { justify-content: flex-end; gap: 1px; padding-bottom: 4px; }
 .vnext-image-repair-indicator .repair-retry {
   pointer-events: auto;
   flex: none;
-  margin-top: 6px;
+  margin-top: 4px;
   min-height: 32px;
   max-width: 100%;
   border: 1px solid #1f3a5f;
@@ -46,8 +47,8 @@
   font: inherit;
   font-size: 14px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 5px 12px;
+  line-height: 1.15;
+  padding: 3px 10px;
   white-space: normal;
 }
 .vnext-image-repair-indicator .repair-retry:hover { background: #eef3f8; }
