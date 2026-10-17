@@ -1,6 +1,7 @@
 import React from 'react';
 import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
+import { assistantRequested, forgetAssistantRequest } from '../ai-catalog/intake/assistant-link';
 import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
@@ -324,7 +325,9 @@ export function EditorWorkspace({
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
   const [statusMessage, setStatusMessage] = React.useState<EditorNoticeInput | null>(null);
-  const [assistantOpen, setAssistantOpen] = React.useState(false);
+  // FR-64: "Criar com IA a partir de arquivos" opens the catalog with `assistente=1`, so the files can be dropped at once.
+  const [assistantOpen, setAssistantOpen] = React.useState(() => Boolean(simpleByDefault) && assistantRequested());
+  React.useEffect(() => { forgetAssistantRequest(); }, []);
   const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
   const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
@@ -4611,6 +4614,8 @@ export function EditorWorkspace({
                 ? { pageId: selectedPage.id, objectId: selectedTableObject.id }
                 : undefined}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
+              measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
+              onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
             /> : <CatalogWorkbenchChat
               key={document.id}
               compactMode
