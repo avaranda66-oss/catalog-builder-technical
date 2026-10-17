@@ -467,11 +467,12 @@ async function workflow(browser, width) {
     // FR-51: the copy still carries the starter's provisional fields; they block the PDF until they are filled.
     await page.locator('[data-editor-action="publish"]').click();
     await page.locator('[data-publication-status="BLOCKED"]').waitFor();
-    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 7);
+    // FR-81: the source note is no longer printed, so the six pending fields are what blocks.
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 6);
     assert.equal(await page.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').count(), 0);
     await closePublication(page);
     const provisionalFilled = await fillProvisionalContent(page);
-    assert(provisionalFilled.length >= 7);
+    assert(provisionalFilled.length >= 6);
     await save(page);
     assert(catalogs.get(copy.catalogId).remoteRevision >= 2);
     await returnToLibrary(page); await openCatalog(page, copy.catalogId);
