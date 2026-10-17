@@ -240,6 +240,7 @@ describe('FR-33 presets by task and one-click notes, in the real editor', () => 
     expect(visibleControls(panel()).length).toBeLessThanOrEqual(20);
     expect(within(panel()).queryByText('Propriedades da seleção')).toBeNull();
     expect(within(panel()).queryByText(/Padding|HEX|RichText|Misto/)).toBeNull();
+    expect(panel().textContent).not.toMatch(FORBIDDEN_TABLE_WORDS);
     expect(within(panel()).getAllByRole('button', { name: 'Notas e legenda' })).toHaveLength(1);
   });
 
@@ -254,6 +255,8 @@ describe('FR-33 presets by task and one-click notes, in the real editor', () => 
       // Grid mode adds the selected cells and "Estrutura" (6 buttons): 26 controls today, with the folded parts closed
       // (4 of them are the table title). Recorded for the FR-33 gate; select mode stays at about 20 (test above).
       expect(controls.length).toBeLessThanOrEqual(GRID_MODE_PANEL_CONTROLS);
+      // FR-20: none of the internal words the father would not know.
+      expect(panel().textContent).not.toMatch(FORBIDDEN_TABLE_WORDS);
       const bar = container.querySelector<HTMLElement>('[data-table-axis-toolbar]')!;
       expect(Array.from(bar.querySelectorAll('button, input')).map((control) => control.textContent?.trim())).toEqual([
         'Opções da tabela', 'Copiar', 'Colar', 'Voltar ao objeto',
@@ -275,6 +278,9 @@ function visibleControls(root: HTMLElement): HTMLElement[] {
     return !folded || Boolean(control.closest('summary'));
   });
 }
+
+/** FR-20: words of the code, not of the father (the Onda 5 sweep extends this list to the whole editor). */
+const FORBIDDEN_TABLE_WORDS = /\b(?:padding|hex|richtext|misto|tsv|inspector|gesto|eixos?)\b|\(s\)|superfícies semânticas|peso flexível/i;
 
 /** Recorded for the FR-33 gate: the most controls the table panel shows in grid mode by default. */
 const GRID_MODE_PANEL_CONTROLS = 26;

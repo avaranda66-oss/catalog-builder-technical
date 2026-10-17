@@ -4,7 +4,7 @@ import { createNewTableModel, createTableInsertSpec, createW2CDemoDocument } fro
 import { runTableSteps } from '@/vnext/app/editor/table-structure-actions';
 import { plainRichText, type CatalogDocument, type TableObject } from '@/vnext/domain';
 import { EDITING_STRUCTURE_REASON, tableStructureAvailability } from '@/vnext/editor/table-axis-authoring';
-import { describeTableLocation } from '@/vnext/editor/table-location';
+import { cellCountText, describeTableLocation } from '@/vnext/editor/table-location';
 import {
   QUICK_NOTE_PLACEHOLDER,
   quickNoteCreateStep,
@@ -49,6 +49,12 @@ describe('FR-20 (2D) problems located as "Linha N, coluna M"', () => {
     expect(describeTableLocation(table, undefined, cell.id)).toBe('Linha 3, coluna 2');
     expect(describeTableLocation(table, table.rows[0].id)).toBe('Linha 1');
     expect(describeTableLocation(table, 'removed-row', 'removed-cell')).toBe('');
+  });
+
+  it('counts cells with the right plural, never "célula(s)"', () => {
+    expect(cellCountText(1)).toBe('1 célula');
+    expect(cellCountText(0)).toBe('0 células');
+    expect(cellCountText(12)).toBe('12 células');
   });
 });
 

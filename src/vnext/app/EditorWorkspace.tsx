@@ -38,7 +38,7 @@ import {
 import { insertedRowRole, planTableAxisRemoval, tableAxisRefusalMessage, tableStructureAvailability } from '../editor/table-axis-authoring';
 import { projectTableLook, tableLookSteps, type TableLookRequest } from '../editor/table-look-authoring';
 import { quickNoteCreateStep, quickNoteRemoveSteps } from '../editor/table-quick-notes';
-import { describeTableLocation } from '../editor/table-location';
+import { cellCountText, describeTableLocation } from '../editor/table-location';
 import { completeNewTableLook, insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
 import {
   mergeEligibility,
@@ -1599,7 +1599,7 @@ export function EditorWorkspace({
         ? prepareTypedTablePaste(live.object.table, live.selection, parseTypedTableClipboard(typedText))
         : prepareExternalTsvPaste(live.object.table, live.selection, parseTsv(plainText));
       const count = prepared.targets.length;
-      return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
+      return executePreparedTableBulk(prepared, count === 1 ? '1 célula colada.' : `${count} células coladas.`);
     } catch (error) {
       if (error instanceof TablePasteGeometryError) {
         const source = describeRowsByColumns(error.sourceRows, error.sourceColumns);
@@ -1707,7 +1707,7 @@ export function EditorWorkspace({
         return;
       }
       await globalThis.navigator.clipboard.writeText(clipboard.tsv);
-      setStatusMessage('Conteúdo TSV copiado. Ctrl/Cmd+C na grade também preserva os tipos internos.');
+      setStatusMessage(successNotice('Conteúdo copiado. Ele pode ser colado no Excel, no Google Planilhas ou em outra tabela do catálogo.'));
     } catch (error) {
       setStatusMessage(error instanceof TableClipboardError && error.code === 'COPY_MERGE_INTERSECTION'
         ? 'Não foi possível copiar: a seleção cruza células mescladas.'
@@ -1720,7 +1720,7 @@ export function EditorWorkspace({
     if (!live || editorState.mode !== 'table-grid') return;
     try {
       const prepared = prepareBulkClear(live.object.table, live.selection);
-      executePreparedTableBulk(prepared, `Conteúdo limpo em ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Conteúdo limpo em ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1737,7 +1737,7 @@ export function EditorWorkspace({
         live.selection,
         markerLegendChoice
       );
-      executePreparedTableBulk(prepared, `Marcador aplicado a ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Marcador aplicado a ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1761,7 +1761,7 @@ export function EditorWorkspace({
       );
       const applied = executePreparedTableBulk(
         prepared,
-        `Novo marcador criado e aplicado a ${prepared.targets.length} célula(s).`
+        `Novo marcador criado e aplicado a ${cellCountText(prepared.targets.length)}.`
       );
       if (applied) {
         setNewMarkerCode('');

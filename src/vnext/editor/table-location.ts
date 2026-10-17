@@ -16,3 +16,8 @@ export function describeTableLocation(
   const columnIndex = cell ? table.columns.findIndex((column) => column.id === cell.columnId) : -1;
   return columnIndex >= 0 ? `Linha ${rowIndex + 1}, coluna ${columnIndex + 1}` : `Linha ${rowIndex + 1}`;
 }
+
+/** "1 célula" or "3 células", never "célula(s)" (FR-20). */
+export function cellCountText(count: number): string {
+  return count === 1 ? '1 célula' : `${count} células`;
+}
