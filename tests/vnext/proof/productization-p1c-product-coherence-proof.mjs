@@ -436,9 +436,12 @@ async function workflow(browser, width, first) {
   await shot(page, 'publication-blocked', width);
   if (phase !== 'before') {
     const diagnostic = page.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').first();
-    assert.equal(await diagnostic.locator('details').evaluate(node => node.open), false);
-    await diagnostic.getByText('Detalhes técnicos', { exact: true }).click();
-    assert((await diagnostic.locator('details').textContent()).includes('TEXT_OBJECT_OVERFLOW'));
+    // /v2 is the simple mode (the father's editor): no "Detalhes técnicos" with internal codes and IDs under the
+    // item. Support still reads the code on the item itself.
+    assert.equal(await diagnostic.locator('details').count(), 0);
+    assert.equal(await diagnostic.getByText('Detalhes técnicos', { exact: true }).count(), 0);
+    assert.equal(await diagnostic.getAttribute('data-publication-diagnostic'), 'TEXT_OBJECT_OVERFLOW');
+    assert(!(await diagnostic.textContent()).includes('TEXT_OBJECT_OVERFLOW'));
     await shot(page, 'publication-technical-details', width);
   }
   await page.keyboard.press('Escape');

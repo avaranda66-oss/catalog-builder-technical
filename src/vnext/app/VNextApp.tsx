@@ -120,7 +120,7 @@ function RuntimeWorkspace({
       )}
       {activeRecoveryGatePhase === 'RELEASED' && publicationOpen && getPublicationSource && (
         <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)}
-          waitingMessage={publicationWaitingMessage(snapshot.save)}
+          waitingMessage={publicationWaitingMessage(snapshot.save)} simple={simpleByDefault}
           onLocateDiagnostic={diagnostic => setLocateRequest({
             id: ++locateSequence.current, diagnostic, openSessionId: snapshot.binding.openSessionId, onHandled: dropLocateRequest,
           })} />
