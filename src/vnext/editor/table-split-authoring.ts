@@ -22,6 +22,7 @@ import {
   type TablePaginationPlan,
 } from '../table/table-pagination';
 import type { FitHeightMeasurement } from './table-fit-height-authoring';
+import { projectTableLook } from './table-look-authoring';
 
 /**
  * FR-35 "Continuar na próxima página": a table taller than its A4 page continues on new pages, as an explicit action
@@ -38,6 +39,9 @@ import type { FitHeightMeasurement } from './table-fit-height-authoring';
  *
  * Where to cut comes from the pure A4 paginator (table/table-pagination.ts) fed by the row heights the editor already
  * measured. Tables that need three or more pages are cut in one go, so the action never has to be repeated.
+ *
+ * "Linhas alternadas" start again on every part: each continuation is banded from its own first ordinary row, as the
+ * switch of the table panel paints it, so the switch reads "on" there too.
  */
 
 export type TableSplitUnavailableReason =
@@ -353,11 +357,29 @@ function partHeightU(titleQ: number, rowsU: number, footerQ: number, availableU:
   return Math.max(1, Math.min(availableU, add(minimumUForProjectedQ(neededQ), SAFETY_U)));
 }
 
+/**
+ * Bands of a continuation, counted from its own first ordinary row (the 1st, 3rd... have no colour, the 2nd, 4th...
+ * the band colour), as the "Linhas alternadas" switch paints them. Only the background changes.
+ */
+function rebandRows(rows: TableModel['rows'], bandColor: string): TableModel['rows'] {
+  let bodyIndex = 0;
+  return rows.map((row) => {
+    if (row.role !== 'body') return row;
+    const banded = bodyIndex % 2 === 1;
+    bodyIndex += 1;
+    const { background: _background, ...rest } = row.style ?? {};
+    const style = banded ? { ...rest, background: bandColor } : rest;
+    const { style: _style, ...withoutStyle } = row;
+    return Object.keys(style).length > 0 ? { ...withoutStyle, style } : withoutStyle;
+  });
+}
+
 function continuationTable(
   table: TableModel,
   slice: TablePageSlice,
   isLast: boolean,
-  orphanLegendIds: ReadonlySet<string>
+  orphanLegendIds: ReadonlySet<string>,
+  bandColor: string | undefined
 ): TableModel {
   const rows = new Set([...slice.headerRowIds, ...slice.bodyRowIds]);
   const tableNotes = (table.annotationIds ?? []).filter((id) => table.annotations.find((annotation) => annotation.id === id)?.kind !== 'caption');
@@ -365,10 +387,11 @@ function continuationTable(
   if (isLast) for (const id of tableNotes) used.add(id);
   const legend = markerLegendIds(table, rows);
   if (isLast) for (const id of orphanLegendIds) legend.add(id);
+  const partRows = table.rows.filter((row) => rows.has(row.id));
   const next: TableModel = {
     ...table,
     title: continuationTitle(table.title),
-    rows: table.rows.filter((row) => rows.has(row.id)),
+    rows: bandColor ? rebandRows(partRows, bandColor) : partRows,
     cells: table.cells.filter((cell) => rows.has(cell.rowId)),
     annotations: table.annotations.filter((annotation) => used.has(annotation.id)),
     legend: table.legend.filter((entry) => legend.has(entry.id)),
@@ -406,10 +429,14 @@ export function prepareTableSplit(
   const allMarkers = markerLegendIds(table, new Set(table.rows.map((row) => row.id)));
   const orphanLegendIds = new Set(table.legend.filter((entry) => !allMarkers.has(entry.id)).map((entry) => entry.id));
 
+  // Bands the product painted follow the rows; a row coloured by hand is copied as it is.
+  const look = projectTableLook(table, document.style);
+  const bandColor = look.banded && look.bandsFollowRows ? look.bandColor : undefined;
+
   const frame = frameToCanonicalU(plan.object.frame);
   const continuations: TableContinuationPart[] = [];
   for (const slice of slices.slice(1)) {
-    const next = continuationTable(table, slice, slice.isLast, orphanLegendIds);
+    const next = continuationTable(table, slice, slice.isLast, orphanLegendIds, bandColor);
     if (validateTable(next, document.assets).some((diagnostic) => diagnostic.severity === 'ERROR')) {
       return unavailable('MERGED_CELLS', MESSAGES.MERGED_CELLS, true);
     }

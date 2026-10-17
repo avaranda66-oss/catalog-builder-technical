@@ -11,6 +11,7 @@ import {
   prepareTableSplit,
   tableSplitSuccessMessage,
 } from '@/vnext/editor/table-split-authoring';
+import { projectTableLook } from '@/vnext/editor/table-look-authoring';
 import {
   SPLIT_NEXT_PAGE_ID,
   SPLIT_OBJECT_ID,
@@ -175,6 +176,40 @@ describe('FR-35 continuing a long table on the next page', () => {
     const [original, continuation] = tables(session.getSnapshot().document);
     expect(original.table.legend.map((entry) => entry.markerCode)).toEqual(['*']);
     expect(continuation.table.legend.map((entry) => entry.markerCode)).toEqual(['**']);
+  });
+
+  it('"Linhas alternadas" start again on each part, so the switch still reads on there; a row coloured by hand is copied as it is', () => {
+    const BAND = '#EAF1FB';
+    const banded = (table: TableModel): TableModel => {
+      let body = 0;
+      return { ...table, rows: table.rows.map((row) => row.role !== 'body' ? row : body++ % 2 === 1 ? { ...row, style: { background: BAND } } : row) };
+    };
+    // A cut that keeps an odd number of ordinary rows on the first page: the copy alone would start on a coloured row.
+    const document = [20, 28].map((yMm) => documentWithTable(banded(longTable({ bodyRows: 39 })), { xMm: 20, yMm, widthMm: 170, heightMm: 120 }))
+      .find((candidate) => {
+        const prepared = prepareTableSplit(candidate, SPLIT_OBJECT_ID, measureTable(candidate));
+        return prepared.ok && prepared.prepared.plan.pagination.slices[0].bodyRowIds.length % 2 === 1;
+      });
+    expect(document).toBeDefined();
+    const { session, before } = split(document!);
+    const [original, continuation] = tables(session.getSnapshot().document);
+    expect(projectTableLook(original.table, before.style)).toMatchObject({ banded: true, bandColor: BAND });
+    expect(projectTableLook(continuation.table, before.style)).toMatchObject({ banded: true, bandColor: BAND });
+    const continuedBody = continuation.table.rows.filter((row) => row.role === 'body');
+    expect(continuedBody[0].style).toBeUndefined();
+    expect(continuedBody[1].style).toEqual({ background: BAND });
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toBe(before);
+
+    // One row coloured by hand is not a band: it keeps its colour (and the others stay plain).
+    const plain = longTable({ bodyRows: 39 });
+    const handRow = plain.rows[36];
+    const handColoured = documentWithTable({ ...plain, rows: plain.rows.map((row) => row.id === handRow.id ? { ...row, style: { background: '#FFF2CC', fontWeight: 700 } } : row) });
+    const { session: handSession } = split(handColoured);
+    const [, handContinuation] = tables(handSession.getSnapshot().document);
+    const copied = handContinuation.table.rows.find((row) => cellText(handContinuation.table, row.id) === cellText(plain, handRow.id))!;
+    expect(copied.style).toEqual({ background: '#FFF2CC', fontWeight: 700 });
+    expect(handContinuation.table.rows.filter((row) => row.style)).toHaveLength(1);
   });
 
   it('rows joined by a vertical merge move together, and the copy keeps the merge', () => {
