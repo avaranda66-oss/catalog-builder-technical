@@ -252,25 +252,25 @@ try {
   // Single-cell properties and reset/inheritance.
   await selectCell(page, 0, 2);
   const propertyStart = await state(page);
-  await page.locator('[data-cell-property="textAlign"]').selectOption('right');
+  // FR-33 (Onda 2 · 2D): one block for the selected cells — "Texto, cores e bordas"; colours by colour picker.
+  await page.locator('[data-style-property="textAlign"]').selectOption('right');
   assert.equal(cell(await state(page), 'w4b-measure').style.textAlign, 'right');
-  await page.locator('[data-cell-property="textAlign"]').selectOption('');
+  await page.locator('[data-style-reset="textAlign"]').click();
   assert.equal(cell(await state(page), 'w4b-measure').style?.textAlign, undefined);
-  await page.locator('[data-cell-property="fontWeight"]').selectOption('700');
+  await page.locator('[data-style-property="fontWeight"]').selectOption('700');
   await page.locator('[data-cell-property="wrapPolicy"]').selectOption('nowrap');
-  const color = page.locator('[data-cell-property="color"]');
-  await color.fill('#112233');
-  await color.blur();
-  const background = page.locator('[data-cell-property="background"]');
-  await background.fill('#fff3cd');
-  await background.blur();
-  const paddingTop = page.locator('[data-cell-padding="top"]');
-  await paddingTop.fill('2.5');
+  await page.locator('[data-style-property="color"]').fill('#112233');
+  await page.locator('[data-style-property="background"]').fill('#fff3cd');
+  if (!await page.locator('[data-style-advanced]').count()) await page.locator('[data-editor-action="toggle-table-style-advanced"]').click();
+  const paddingLink = page.locator('[data-style-padding-link]');
+  if (await paddingLink.getAttribute('aria-pressed') === 'true') await paddingLink.click();
+  const paddingTop = page.locator('[data-style-padding-side="top"]');
+  await paddingTop.fill('2,5');
   await paddingTop.press('Enter');
   const propertySet = cell(await state(page), 'w4b-measure');
   assert.equal(propertySet.style.fontWeight, 700);
   assert.equal(propertySet.style.color, '#112233');
-  assert.equal(propertySet.style.background, '#fff3cd');
+  assert.equal(propertySet.style.background, '#FFF3CD');
   assert.equal(propertySet.style.paddingMm.top, 2.5);
   assert.equal(propertySet.presentation.wrapPolicy, 'nowrap');
   assert.equal((await state(page)).localSequence > propertyStart.localSequence, true);
@@ -299,7 +299,7 @@ try {
   await selectCell(page, 0, 0);
   await selectCell(page, 0, 1, ['Shift']);
   const multiBefore = await state(page);
-  await page.locator('[data-cell-property="fontWeight"]').selectOption('700');
+  await page.locator('[data-style-property="fontWeight"]').selectOption('700');
   const multiAfter = await state(page);
   assert.equal(multiAfter.localSequence, multiBefore.localSequence + 1);
   assert.equal(cell(multiAfter, 'w4b-rich').style.fontWeight, 700);
@@ -425,7 +425,7 @@ try {
     await unitField.fill('V');
     assert(await mobilePage.locator('[data-editor-action="commit-cell-content"]').isVisible());
     assert(await mobilePage.locator('[data-editor-action="cancel-cell-content"]').isVisible());
-    assert(await mobilePage.locator('[data-cell-property="textAlign"]').isVisible());
+    assert(await mobilePage.locator('[data-style-property="textAlign"]').isVisible());
     await cancelCell(mobilePage);
     await mobilePage.locator('[data-editor-action="undo"]').scrollIntoViewIfNeeded();
     assert(await mobilePage.locator('[data-editor-action="undo"]').isVisible());

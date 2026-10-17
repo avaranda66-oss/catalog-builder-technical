@@ -88,21 +88,21 @@ async function tableMatrix(level, rows, columns) {
   assert.equal(inserted.cells.length, (rows + 3) * columns);
   await page.locator('[data-table-row-selector="2"]').click(); await page.locator('[data-editor-action="remove-row"]').click(); await waitRows(page, rows + 2);
   await page.locator('[data-editor-action="undo"]').click(); await waitRows(page, rows + 3); assert.deepEqual(await currentTable(page), inserted);
-  // Removal accepts one selected row. Verify the multi-selection guard before two sequential removals.
+  // FR-34 (Onda 2 · 2D): two selected rows are removed at once ("Excluir 2 linhas") and one Desfazer restores both.
   await page.locator('[data-table-row-selector="2"]').click();
   await page.locator('[data-table-row-selector="3"]').click({ modifiers: ['Shift'] });
   const beforeMultiRemove = (await state(page)).sequence;
-  assert.equal(await page.locator('[data-editor-action="remove-row"]').isEnabled(), false);
-  assert.equal(await page.locator('[data-editor-action="remove-row"]').getAttribute('title'), 'Selecione uma única linha pelo seletor lateral.');
-  assert.equal((await state(page)).sequence, beforeMultiRemove);
+  assert.equal(await page.locator('[data-editor-action="remove-row"]').isEnabled(), true);
+  assert.equal((await page.locator('[data-editor-action="remove-row"]').textContent())?.trim(), 'Excluir 2 linhas');
+  await page.locator('[data-editor-action="remove-row"]').click(); await waitRows(page, rows + 1);
+  assert(((await state(page)).sequence) > beforeMultiRemove);
+  await page.locator('[data-editor-action="undo"]').click(); await waitRows(page, rows + 3);
   assert.deepEqual(await currentTable(page), inserted);
   await page.locator('[data-table-row-selector="2"]').click();
   await page.locator('[data-editor-action="remove-row"]').click(); await waitRows(page, rows + 2);
   const firstRemoved = await currentTable(page);
-  assert.equal((await state(page)).sequence, beforeMultiRemove + 1);
   await page.locator('[data-table-row-selector="2"]').click();
   await page.locator('[data-editor-action="remove-row"]').click(); await waitRows(page, rows + 1);
-  assert.equal((await state(page)).sequence, beforeMultiRemove + 2);
   const multiRemoved = await currentTable(page);
   assert.equal(multiRemoved.cells.length, (rows + 1) * columns);
   assert.deepEqual(multiRemoved.rows.map(row => row.id), inserted.rows.filter((_, index) => index !== 2 && index !== 3).map(row => row.id));

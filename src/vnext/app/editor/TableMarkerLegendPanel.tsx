@@ -44,6 +44,17 @@ export interface TableMarkerLegendPanelProps {
   locateLegendUsage(legendEntryId: string): void;
 }
 
+/** "Não usado", "Usado 1 vez", "Usado 3 vezes" (how many cells show the marker). */
+export function usageText(count: number): string {
+  if (count === 0) return 'Não usado';
+  return count === 1 ? 'Usado 1 vez' : `Usado ${count} vezes`;
+}
+
+/** "1 célula", "3 células". */
+function cellsText(count: number): string {
+  return count === 1 ? '1 célula' : `${count} células`;
+}
+
 function LegendEditorRow({
   entry,
   usageCount,
@@ -78,7 +89,7 @@ function LegendEditorRow({
     <div className="vnext-legend-entry-editor" data-legend-entry-id={entry.id}>
       <div className="vnext-legend-entry-heading">
         <strong>{entry.markerCode}</strong>
-        <span>{usageCount === 1 ? 'Usado 1 vez' : `Usado ${usageCount} vezes`}</span>
+        <span>{usageText(usageCount)}</span>
       </div>
       <label>
         <span>Código do marcador</span>
@@ -103,7 +114,7 @@ function LegendEditorRow({
         <button type="button" data-editor-action="locate-legend-usage" disabled={usageCount === 0} onClick={onLocate}>
           Localizar usos
         </button>
-        <button type="button" data-editor-action="remove-legend" disabled={mutationDisabled || usageCount > 0} title={usageCount > 0 ? `Usada em ${usageCount === 1 ? '1 célula' : `${usageCount} células`}. Tire o marcador das células antes de excluir.` : undefined} onClick={onRemove}>
+        <button type="button" data-editor-action="remove-legend" disabled={mutationDisabled || usageCount > 0} title={usageCount > 0 ? `Usado em ${cellsText(usageCount)}. Tire o marcador das células antes de excluir.` : undefined} onClick={onRemove}>
           Excluir legenda
         </button>
       </div>
@@ -223,7 +234,7 @@ export function TableMarkerLegendPanel({
             <div key={annotation.id} className="vnext-legend-entry-editor" data-annotation-entry-id={annotation.id}>
               <div className="vnext-legend-entry-heading">
                 <strong>{annotation.kind === 'caption' ? 'Legenda' : annotation.kind === 'note' ? 'Nota' : 'Nota de rodapé'}</strong>
-                <span>{usageCount === 1 ? 'Usada 1 vez' : `Usada ${usageCount} vezes`}</span>
+                <span>{usageCount === 0 ? 'Não usada' : usageCount === 1 ? 'Usada 1 vez' : `Usada ${usageCount} vezes`}</span>
               </div>
               <label>
                 <span>Texto</span>
@@ -277,7 +288,7 @@ export function TableMarkerLegendPanel({
           {tableObject.table.legend.map((entry) => {
             const text = projectEditableRichText(entry.text) ?? 'Explicação com formatação especial';
             const usage = legendUsageCount(tableObject.table, entry.id);
-            return <option key={entry.id} value={entry.id}>{entry.markerCode} — {text} ({usage === 1 ? 'usado 1 vez' : `usado ${usage} vezes`})</option>;
+            return <option key={entry.id} value={entry.id}>{entry.markerCode} — {text} ({usageText(usage).toLocaleLowerCase('pt-BR')})</option>;
           })}
         </select>
       </label>

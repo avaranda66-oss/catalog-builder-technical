@@ -27,6 +27,13 @@ const close = (actual, expected, label, tolerance = 0.75) => {
   assert(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} vs ${expected}`);
 };
 const state = (page) => page.evaluate(() => window.__W4A_PROOF__.state());
+// FR-34 (Onda 2 · 2D): new rows grow the frame by itself while it still fits the page; nothing else moves.
+const assertFrameKeptOrGrown = (actual, expected, label) => {
+  assert.equal(actual.xMm, expected.xMm, `${label} (x)`);
+  assert.equal(actual.yMm, expected.yMm, `${label} (y)`);
+  assert.equal(actual.widthMm, expected.widthMm, `${label} (width)`);
+  assert(actual.heightMm >= expected.heightMm - 1e-9, `${label} (height may only grow): ${actual.heightMm} vs ${expected.heightMm}`);
+};
 const selectTableAndEnter = async (page) => {
   await page.locator('[data-editor-object-id="w4a-table-object"]').click();
   await page.locator('[data-editor-action="edit-table"]').click();
@@ -128,7 +135,7 @@ try {
   await waitForMeasuredGrid(page);
   const insertedRow = await state(page);
   assert.equal(insertedRow.rows.length, beforeRowInsert.rows.length + 1);
-  assert.deepEqual(insertedRow.frame, initial.frame, 'Row insertion must preserve authored frame');
+  assertFrameKeptOrGrown(insertedRow.frame, initial.frame, 'Row insertion keeps the frame in place');
   const freshRowId = insertedRow.rows.find((id) => !beforeRowInsert.rows.includes(id));
   assert(freshRowId, 'Inserted row must have a fresh stable ID');
   assert.equal(await page.locator('[data-editor-action="remove-row"]').isEnabled(), true, 'Inserted row must become explicit selection');
@@ -151,7 +158,7 @@ try {
   await waitForMeasuredGrid(page);
   const insertedColumn = await state(page);
   assert.equal(insertedColumn.columns.length, beforeColumnInsert.columns.length + 1);
-  assert.deepEqual(insertedColumn.frame, initial.frame, 'Column insertion must preserve authored frame');
+  assertFrameKeptOrGrown(insertedColumn.frame, initial.frame, 'Column insertion keeps the frame in place');
   const freshColumnId = insertedColumn.columns.find((id) => !beforeColumnInsert.columns.includes(id));
   assert(freshColumnId, 'Inserted column must have a fresh stable ID');
   await page.locator('[data-editor-action="remove-column"]').click();
@@ -177,7 +184,7 @@ try {
   await page.locator('[data-editor-action="leave-table-grid"]').click();
   assert.equal(await page.locator('[data-table-grid-overlay]').count(), 0);
   assert.equal(await page.locator('[data-resize-handle]').count(), 8, 'Object mode must restore resize affordances');
-  assert.deepEqual((await state(page)).frame, initial.frame, 'All structural editing must preserve authored frame');
+  assertFrameKeptOrGrown((await state(page)).frame, initial.frame, 'Structural editing keeps the frame in place');
 
   await page.locator('[data-editor-object-id="w4a-single-table-object"]').click();
   await page.locator('[data-editor-action="edit-table"]').click();
