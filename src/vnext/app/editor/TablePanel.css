@@ -1,0 +1,64 @@
+/* FR-33 / FR-34 / FR-10 (2D): the single table panel — Estilo, Estrutura, Notas — in the navy/white baseline. */
+
+.vnext-table-look h3,
+.vnext-table-structure h3,
+.vnext-table-notes h3 { margin: 0 0 8px; }
+
+/* Gallery of the four task presets, each with a small drawing. */
+.vnext-table-look-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vnext-table-look-gallery button {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  justify-items: start;
+  padding: 8px;
+  border: 1px solid #bdc9d6;
+  border-radius: 8px;
+  background: #fff;
+  color: #24364d;
+  text-align: left;
+}
+.vnext-table-look-gallery button[aria-pressed="true"] {
+  border-color: var(--vnext-primary, #003f78);
+  box-shadow: 0 0 0 1px var(--vnext-primary, #003f78);
+  background: var(--vnext-accent-surface, #eef6fc);
+}
+.vnext-table-look-thumb { display: block; width: 100%; max-width: 96px; height: auto; border-radius: 3px; }
+.vnext-table-look-name { font-size: 12px; font-weight: 700; line-height: 1.25; }
+.vnext-table-look-description { color: #68778b; font-size: 11px; font-weight: 500; line-height: 1.35; }
+
+/* The three switches: one per line, big enough to click. */
+.vnext-table-look-switches { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; border: 0; }
+.vnext-table-look-switches legend { margin-bottom: 4px; padding: 0; color: #24364d; font-size: 12px; font-weight: 700; }
+.vnext-table-look-switches label { display: flex; align-items: center; gap: 8px; min-height: 32px; color: #24364d; font-size: 13px; }
+.vnext-table-look-switches input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--vnext-primary, #003f78); }
+
+/* P / M / G text size. */
+.vnext-table-look-sizes { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.vnext-table-look-sizes > span { margin-right: 4px; color: #24364d; font-size: 12px; font-weight: 700; }
+.vnext-table-look-sizes button { min-width: 40px; font-weight: 700; }
+.vnext-table-look-sizes button[aria-pressed="true"] {
+  border-color: var(--vnext-primary, #003f78);
+  background: var(--vnext-primary, #003f78);
+  color: #fff;
+}
+
+/* Rows and columns of the selected cell or range. */
+.vnext-table-structure-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.vnext-table-structure-group > span { flex: 0 0 100%; color: #24364d; font-size: 12px; font-weight: 700; }
+
+/* Notes printed under the table. */
+.vnext-table-note { display: grid; gap: 6px; margin-bottom: 10px; }
+.vnext-table-note textarea { min-height: 56px; }
+
+/* A number that was not accepted: the field and its message (FR-10). */
+.vnext-style-number.is-invalid,
+.vnext-dimension-value.is-invalid,
+span.is-invalid > input { border-color: #b42318; box-shadow: 0 0 0 1px #b42318; }
+.vnext-table-field-error { display: block; margin-top: 4px; color: #b42318; font-size: 11px; font-weight: 600; line-height: 1.35; }
+
+/* Colour without a code: the catalog colours and "Outra cor". */
+.vnext-table-color-field { display: grid; gap: 6px; }
+.vnext-style-palette button[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--vnext-primary, #003f78); }
+.vnext-table-color-picker { display: flex; align-items: center; gap: 8px; color: #24364d; font-size: 12px; }
+.vnext-table-color-picker input[type="color"] { width: 40px; height: 32px; padding: 2px; border: 1px solid #bdc9d6; border-radius: 6px; background: #fff; }

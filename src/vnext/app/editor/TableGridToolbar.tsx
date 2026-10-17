@@ -1,4 +1,5 @@
 import React from 'react';
+import { EDITING_STRUCTURE_REASON, removeAxisLabel } from '../../editor/table-axis-authoring';
 import type { TableSelection } from '../../editor/table-selection';
 
 /** The editor modes, as EditorWorkspace keeps them. */
@@ -20,6 +21,12 @@ export interface TableGridToolbarProps {
   /** Why row or column actions are unavailable; `undefined` means they can run. */
   rowAxisReason?: string;
   columnAxisReason?: string;
+  /** FR-34: rows and columns the current cell, range or side selection touches (names "Excluir 3 linhas"). */
+  rowAxisCount?: number;
+  columnAxisCount?: number;
+  /** Why the selected rows or columns cannot be removed (the last one stays); falls back to the axis reason. */
+  removeRowReason?: string;
+  removeColumnReason?: string;
   runTableAxisInsert(axis: 'row' | 'column', position: 'before' | 'after', count?: number): void;
   runTableAxisRemove(axis: 'row' | 'column'): void;
   tableRowsToInsert: string;
@@ -39,8 +46,9 @@ export interface TableGridToolbarProps {
 
 /**
  * FR-92 (costura 2.0): the bar above the page while a table grid is being edited (rows, columns,
- * merge, copy and paste). Moved out of EditorWorkspace without changing behavior; every action is
- * still decided there.
+ * merge, copy and paste). Every action is still decided in EditorWorkspace.
+ * FR-34 (2D): rows and columns follow the selected cell or range, "Excluir 3 linhas" removes them all at once, and
+ * the duplicated "Legenda" button is gone ("Notas e legenda" opens the same panel).
  */
 export function TableGridToolbar({
   simple,
@@ -50,6 +58,10 @@ export function TableGridToolbar({
   setTableOptionsOpen,
   rowAxisReason,
   columnAxisReason,
+  rowAxisCount = 1,
+  columnAxisCount = 1,
+  removeRowReason,
+  removeColumnReason,
   runTableAxisInsert,
   runTableAxisRemove,
   tableRowsToInsert,
@@ -66,10 +78,15 @@ export function TableGridToolbar({
   setTablePasteFallbackOpen,
   leaveTableGrid,
 }: TableGridToolbarProps) {
+  // FR-34: rows and columns come from the selected cell or range; a cell being edited is finished first.
+  const structureLocked = mode !== 'table-grid';
+  const structureReason = (reason?: string) => mode === 'cell-edit' ? EDITING_STRUCTURE_REASON : reason;
+  const rowRemoval = rowAxisReason ?? removeRowReason;
+  const columnRemoval = columnAxisReason ?? removeColumnReason;
   return (
     <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
       <strong>{simple ? 'Editar tabela' : 'Grade da tabela'}</strong>
-      {simple && <p className="vnext-disclosure-help">Clique em uma célula para selecionar. Dê dois cliques ou pressione Enter para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
+      {simple && <p className="vnext-disclosure-help">Clique em uma célula para selecionar. Dê dois cliques ou pressione Enter para editar. Linhas e colunas ficam no painel ao lado, em Estrutura; mesclagens ficam em Opções da tabela.</p>}
       {simple && (
         <button
           type="button"
@@ -83,18 +100,18 @@ export function TableGridToolbar({
       )}
       {(!simple || tableOptionsOpen) && <>
       <div className="vnext-tool-group" aria-label="Ações de linha">
-        <button type="button" data-editor-action="insert-row-before" disabled={mode !== 'table-grid' || Boolean(rowAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
-        <button type="button" data-editor-action="insert-row-after" disabled={mode !== 'table-grid' || Boolean(rowAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
-        <button type="button" data-editor-action="remove-row" disabled={mode !== 'table-grid' || Boolean(rowAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
+        <button type="button" data-editor-action="insert-row-before" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'before')}>Linha acima</button>
+        <button type="button" data-editor-action="insert-row-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after')}>Linha abaixo</button>
+        <button type="button" data-editor-action="remove-row" disabled={structureLocked || Boolean(rowRemoval)} title={structureReason(rowRemoval)} onClick={() => runTableAxisRemove('row')}>{removeAxisLabel('row', rowAxisCount)}</button>
       </div>
       <div className="vnext-tool-group" aria-label="Adicionar várias linhas">
         <label>Quantidade de linhas <input type="number" min="1" max="100" step="1" aria-label="Quantidade de linhas para adicionar" data-table-row-count="" value={tableRowsToInsert} onChange={event => setTableRowsToInsert(event.target.value)} style={{ width: '64px' }} /></label>
-        <button type="button" data-editor-action="insert-rows-after" disabled={mode !== 'table-grid' || Boolean(rowAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas depois</button>
+        <button type="button" data-editor-action="insert-rows-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas abaixo</button>
       </div>
       <div className="vnext-tool-group" aria-label="Ações de coluna">
-        <button type="button" data-editor-action="insert-column-before" disabled={mode !== 'table-grid' || Boolean(columnAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
-        <button type="button" data-editor-action="insert-column-after" disabled={mode !== 'table-grid' || Boolean(columnAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
-        <button type="button" data-editor-action="remove-column" disabled={mode !== 'table-grid' || Boolean(columnAxisReason)} title={mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
+        <button type="button" data-editor-action="insert-column-before" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'before')}>Coluna à esquerda</button>
+        <button type="button" data-editor-action="insert-column-after" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'after')}>Coluna à direita</button>
+        <button type="button" data-editor-action="remove-column" disabled={structureLocked || Boolean(columnRemoval)} title={structureReason(columnRemoval)} onClick={() => runTableAxisRemove('column')}>{removeAxisLabel('column', columnAxisCount)}</button>
       </div>
       <div className="vnext-tool-group" aria-label="Mesclagem de células">
         <button
@@ -123,7 +140,6 @@ export function TableGridToolbar({
         >Estender seleção</button>
         <button type="button" data-editor-action="clear-table-cells" disabled={mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
         <button type="button" data-editor-action="marker-panel" disabled={mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
-        <button type="button" data-editor-action="legend-panel" disabled={mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
       </div>
       </>}
       <div className="vnext-tool-group" aria-label="Copiar e colar dados">
@@ -153,7 +169,7 @@ export function TableGridPasteFallback({
     <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
       <p className="vnext-disclosure-help">Selecione uma célula inicial para colar uma área da planilha. Os dados devem caber nas linhas e colunas existentes. Use Desfazer para recuperar o conteúdo anterior.</p>
       <label>
-        <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
+        <span>Cole aqui dados do Excel ou do Google Planilhas</span>
         <textarea
           data-table-paste-textarea=""
           value={tablePasteFallbackText}

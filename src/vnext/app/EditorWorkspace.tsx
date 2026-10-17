@@ -5,7 +5,7 @@ import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
+import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
   qCss,
@@ -26,12 +26,20 @@ import {
   navigateTableSelection,
   reconcileTableSelection,
   selectedTableAnchorIds,
-  selectionAfterAxisInsert,
   selectionAfterAxisRemove,
+  selectionAfterTableAxisInsert,
+  selectionAfterTableAxisRemove,
   tableCellSelection,
+  tableSelectionAxisIds,
+  tableSelectionFocusPoint,
   tableSelectionIdentity,
   type TableSelection,
 } from '../editor/table-selection';
+import { insertedRowRole, planTableAxisRemoval, tableAxisRefusalMessage, tableStructureAvailability } from '../editor/table-axis-authoring';
+import { projectTableLook, tableLookSteps, type TableLookRequest } from '../editor/table-look-authoring';
+import { quickNoteCreateStep, quickNoteRemoveSteps } from '../editor/table-quick-notes';
+import { describeTableLocation } from '../editor/table-location';
+import { insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
 import {
   mergeEligibility,
   selectionAfterMerge,
@@ -63,7 +71,6 @@ import {
   nextLegendUsageCellId,
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
-import { formatDecimalPtBr, parseDecimalPtBr } from '../editor/decimal-ptbr';
 import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
 import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type CellEditorMove, type EditorShortcut } from '../editor/editor-keyboard';
 import { InspectorNumberField } from './editor/InspectorNumberField';
@@ -85,7 +92,6 @@ import {
   prepareAnnotationGapAction,
   prepareCellBorderPresetAction,
   prepareStyleAction,
-  prepareTablePresetAction,
   simpleBorderQuickPatch,
   type BorderQuickPreset,
   type TableStyleScope,
@@ -1442,93 +1448,93 @@ export function EditorWorkspace({
     return 'Não foi possível alterar a estrutura da tabela.';
   };
 
+  /**
+   * FR-34: rows and columns come from the selected cell or range ("Linha abaixo" goes under the last selected row).
+   * New rows make the frame grow by itself, in the same undo step, while the table still fits the page.
+   */
   const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after', count = 1) => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
     if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
       setStatusMessage('Informe uma quantidade entre 1 e 100 linhas.');
       return;
     }
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para usar esta ação.`);
+    const { object, selection } = live;
+    const axisIds = tableSelectionAxisIds(object.table, selection, axis);
+    if (axisIds.length === 0) {
+      setStatusMessage(tableAxisRefusalMessage('NO_AXIS', axis));
       return;
     }
-    const referenceAxisId = axisIds[0];
-    const referenceRow = axis === 'row' ? object.table.rows.find((row) => row.id === referenceAxisId) : undefined;
-    const result = session.execute(axis === 'row' ? {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
+    const referenceAxisId = position === 'before' ? axisIds[0] : axisIds[axisIds.length - 1];
+    const transactionId = newTableTransactionId();
+    const outcome = insertTableAxes(session, { pageId: selection.identity.pageId, object }, {
       axis,
       referenceAxisId,
       position,
-      count,
-      properties: { role: referenceRow?.role === 'header' ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } },
-      expectedTable: object.table,
-    } : {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      referenceAxisId,
-      position,
-      properties: { width: { mode: 'flex', weight: 1 }, minMm: 1 },
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+      ...(axis === 'row' ? { count } : {}),
+      properties: axis === 'row'
+        ? { role: insertedRowRole(object.table, referenceAxisId, position), heightPolicy: { mode: 'AUTO' } }
+        : { width: { mode: 'flex', weight: 1 }, minMm: 1 },
+    }, transactionId);
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    const axes = axis === 'row' ? nextObject?.table.rows : nextObject?.table.columns;
-    const insertedId = axes?.find((candidate) => result.metadata.createdIds.includes(candidate.id))?.id;
+    const insertedId = outcome.insertedAxisIds[0];
     if (insertedId) {
-      const nextSelection = selectionAfterAxisInsert(selection.identity, axis, insertedId);
+      const nextSelection = selectionAfterTableAxisInsert(outcome.table, selection, axis, insertedId);
       tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject!.table, selection: nextSelection };
+      tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
       setTableSelection(nextSelection);
     }
-    setStatusMessage(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.');
+    if (axis === 'row') setPendingTableFit({ objectId: object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.'));
   };
 
+  /** FR-34: every selected row (or column) is removed at once, as one undo step; nothing changes when one cannot go. */
   const runTableAxisRemove = (axis: 'row' | 'column') => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para remover.`);
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const { object, selection } = live;
+    const plan = planTableAxisRemoval(object.table, axis, tableSelectionAxisIds(object.table, selection, axis));
+    if (!plan.ok) {
+      setStatusMessage(tableAxisRefusalMessage(plan.code, axis));
       return;
     }
-    const axisId = axisIds[0];
-    const removedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === axisId);
-    const result = session.execute({
-      type: 'table.axis.remove',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      axisId,
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+    const firstRemovedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === plan.axisIds[0]);
+    const focusBefore = tableSelectionFocusPoint(object.table, selection);
+    const outcome = removeTableAxes(session, { pageId: selection.identity.pageId, object }, axis, plan.axisIds, newTableTransactionId());
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    if (nextObject) {
-      const nextSelection = selectionAfterAxisRemove(selection.identity, axis, removedIndex, nextObject.table);
-      tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
-      setTableSelection(nextSelection);
-    }
-    setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
+    const nextSelection = selectionAfterTableAxisRemove(outcome.table, selection, axis, firstRemovedIndex, focusBefore);
+    tableSelectionRef.current = nextSelection;
+    tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
+    setTableSelection(nextSelection);
+    const count = plan.axisIds.length;
+    setStatusMessage(successNotice(count === 1
+      ? (axis === 'row' ? 'Linha excluída.' : 'Coluna excluída.')
+      : `${count} ${axis === 'row' ? 'linhas excluídas' : 'colunas excluídas'}. Para voltar, use Desfazer.`));
+  };
+
+  /** FR-33 "Notas": a note under the table in one click, starting as "A COMPLETAR" (one undo step). */
+  const addQuickNote = (): boolean => {
+    const live = semanticMutationTable();
+    if (!live) return false;
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, [quickNoteCreateStep()], newTableTransactionId());
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota adicionada abaixo da tabela. Escreva o texto no lugar de "A COMPLETAR".')
+      : 'A nota não pôde ser adicionada. Nada foi alterado.');
+    return outcome.ok && outcome.changed;
+  };
+  const removeQuickNote = (annotation: TableAnnotation) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, quickNoteRemoveSteps(annotation.id), newTableTransactionId());
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota excluída. Para voltar, use Desfazer.')
+      : 'A nota não pôde ser excluída. Nada foi alterado.');
   };
 
   const currentSelectedTableForStructure = (): { object: TableObject; selection: TableSelection } | undefined => {
@@ -3296,55 +3302,10 @@ export function EditorWorkspace({
     selectedSemanticCell?.content,
     selectedSemanticCell?.contentPresentation?.image,
   ]);
-  function commonCellStyleValue<K extends keyof NonNullable<Cell['style']>>(
-    key: K
-  ): NonNullable<Cell['style']>[K] | undefined {
-    if (selectedAnchorCells.length === 0) return undefined;
-    const first = selectedAnchorCells[0].style?.[key];
-    return selectedAnchorCells.every((cell) => JSON.stringify(cell.style?.[key]) === JSON.stringify(first))
-      ? first
-      : undefined;
-  }
   const commonWrapPolicy = selectedAnchorCells.length > 0
     && selectedAnchorCells.every((cell) => cell.contentPresentation?.wrapPolicy === selectedAnchorCells[0].contentPresentation?.wrapPolicy)
     ? selectedAnchorCells[0].contentPresentation?.wrapPolicy
     : undefined;
-  const propertySelectionKey = selectedAnchorCells
-    .map((cell) => [cell.id, JSON.stringify(cell.style), JSON.stringify(cell.contentPresentation)].join(':'))
-    .join('|');
-
-  const commitCellColor = (key: 'color' | 'background', raw: string) => {
-    if (raw === '') {
-      runCellPropertyPatch({ [key]: null } as CellPropertyPatch);
-      return;
-    }
-    if (!/^#[0-9a-fA-F]{6}$/.test(raw)) {
-      setStatusMessage('Informe uma cor hexadecimal válida, como #1A2B3C.');
-      return;
-    }
-    runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
-  };
-
-  const cellPaddingText = (edge: 'top' | 'right' | 'bottom' | 'left') => {
-    const value = commonCellStyleValue('paddingMm')?.[edge];
-    return typeof value === 'number' ? formatDecimalPtBr(value) : '';
-  };
-  /** Accepts "1,5" and "1.5"; an invalid value goes back to the current one with a plain message. */
-  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', input: HTMLInputElement) => {
-    const raw = input.value;
-    if (raw.trim() === '') {
-      runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
-      return;
-    }
-    const parsed = parseDecimalPtBr(raw);
-    if (!parsed.ok || parsed.value < 0) {
-      input.value = cellPaddingText(edge);
-      setStatusMessage('Espaço interno: digite um número em milímetros, como 1,5 (zero ou mais). O valor anterior foi mantido.');
-      return;
-    }
-    runCellPropertyPatch({ paddingMm: { [edge]: parsed.value } } as CellPropertyPatch);
-  };
-
   const tableStyleScope: TableStyleScope | undefined = selectedTableObject
     ? tableStyleRoleScope
       ? { kind: 'role', role: tableStyleRoleScope }
@@ -3449,14 +3410,18 @@ export function EditorWorkspace({
     }
   };
 
-  const runTablePreset = (presetId: TablePresetId) => {
+  /** FR-33 "Estilo": a preset, a switch or the text size, as one undo step built from existing actions. */
+  const runTableLook = (request: TableLookRequest, successMessage: string) => {
     const live = currentSelectedTableForPresentation();
     if (!live) return;
-    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
-    executeTableStyleAction(
-      prepareTablePresetAction(identity, live.object.table, presetId),
-      'Estilo de tabela aplicado.'
-    );
+    if (cellDraftRef.current || editorState.mode === 'cell-edit') {
+      setStatusMessage('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+      return;
+    }
+    const steps = tableLookSteps(request, projectTableLook(live.object.table, live.document.style), live.document.style);
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, steps, newTableTransactionId());
+    if (!outcome.ok) setStatusMessage(tableStyleActionMessage(outcome.code));
+    else setStatusMessage(outcome.changed ? successNotice(successMessage) : 'Sem alterações.');
   };
 
   const runAnnotationGap = (annotationGapMm: number) => {
@@ -3476,12 +3441,10 @@ export function EditorWorkspace({
     ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'column')
     : [];
   const selectedRowDimensionKey = selectedRowAxisIds.join('\u0000');
-  const rowAxisReason = selectedRowAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única linha pelo seletor lateral.';
-  const columnAxisReason = selectedColumnAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única coluna pelo seletor superior.';
+  // FR-34: the bar above the page and "Estrutura" share one rule (rows and columns of the selected cell or range).
+  const tableStructure = selectedTableObject
+    ? tableStructureAvailability(selectedTableObject.table, tableSelection, editorState.mode === 'cell-edit')
+    : undefined;
   const rowDimensionProjection = (() => {
     if (!selectedTableObject || !tableSelection || tableSelection.kind !== 'rows') return undefined;
     try { return projectRowDimensions(selectedTableObject.table, tableSelection); } catch { return undefined; }
@@ -4009,7 +3972,9 @@ export function EditorWorkspace({
             <TableGridToolbar
               simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
               tableOptionsOpen={tableOptionsOpen} setTableOptionsOpen={setTableOptionsOpen}
-              rowAxisReason={rowAxisReason} columnAxisReason={columnAxisReason}
+              rowAxisReason={tableStructure?.rowReason} columnAxisReason={tableStructure?.columnReason}
+              rowAxisCount={tableStructure?.rowIds.length} columnAxisCount={tableStructure?.columnIds.length}
+              removeRowReason={tableStructure?.removeRowReason} removeColumnReason={tableStructure?.removeColumnReason}
               runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
               tableRowsToInsert={tableRowsToInsert} setTableRowsToInsert={setTableRowsToInsert}
               currentMergeEligibility={currentMergeEligibility} currentUnmergeEligibility={currentUnmergeEligibility}
@@ -4563,7 +4528,9 @@ export function EditorWorkspace({
                   tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}
                   setTableStyleRoleScope={setTableStyleRoleScope} setTableStyleAdvancedOpen={setTableStyleAdvancedOpen}
                   setTableStylePaddingLinked={setTableStylePaddingLinked} runTableStylePatch={runTableStylePatch}
-                  runTableBorderPreset={runTableBorderPreset} runTablePreset={runTablePreset} runAnnotationGap={runAnnotationGap}
+                  runTableBorderPreset={runTableBorderPreset} runTableLook={runTableLook} runAnnotationGap={runAnnotationGap}
+                  runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
+                  addQuickNote={addQuickNote} removeQuickNote={removeQuickNote}
                   rowDimensionProjection={rowDimensionProjection} effectiveRowHeightMode={effectiveRowHeightMode}
                   selectedRowAxisIds={selectedRowAxisIds} runRowProperties={runRowProperties} runRowHeightMode={runRowHeightMode}
                   runRowHeightValue={runRowHeightValue} runAxisReorder={runAxisReorder}
@@ -4593,9 +4560,7 @@ export function EditorWorkspace({
                   runNewMarkerAssignment={runNewMarkerAssignment} runLegendCreateOnly={runLegendCreateOnly}
                   runLegendUpdate={runLegendUpdate} runLegendRemove={runLegendRemove} runLegendReorder={runLegendReorder}
                   locateLegendUsage={locateLegendUsage}
-                  commonCellStyleValue={commonCellStyleValue} commonWrapPolicy={commonWrapPolicy} propertySelectionKey={propertySelectionKey}
-                  runCellPropertyPatch={runCellPropertyPatch} commitCellColor={commitCellColor} cellPaddingText={cellPaddingText}
-                  commitCellPadding={commitCellPadding}
+                  commonWrapPolicy={commonWrapPolicy} runCellPropertyPatch={runCellPropertyPatch}
                 />
               )}
               <div className="vnext-divider" />
@@ -4641,12 +4606,8 @@ export function EditorWorkspace({
                             {diagnostic.guidance}
                           </p>
                         )}
-                        {(diagnostic.rowId || diagnostic.cellId) && (
-                          <small>
-                            {diagnostic.rowId ? `Linha ${diagnostic.rowId}` : ''}
-                            {diagnostic.rowId && diagnostic.cellId ? ' · ' : ''}
-                            {diagnostic.cellId ? `Célula ${diagnostic.cellId}` : ''}
-                          </small>
+                        {(diagnostic.rowId || diagnostic.cellId) && selectedTableObject && (
+                          <small>{describeTableLocation(selectedTableObject.table, diagnostic.rowId, diagnostic.cellId)}</small>
                         )}
                         <div className="vnext-diagnostic-actions">
                           {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (

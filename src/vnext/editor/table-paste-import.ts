@@ -152,18 +152,38 @@ function looksLikeHeaderLabel(value: string): boolean {
   return tokens.length > 0 && tokens.length <= 5 && tokens.some((token) => HEADER_WORDS.has(token));
 }
 
+/** A short product or part code with letters and digits: "TA-25N", "PCON-Y17", "Pt-100", "CB 02". */
+function looksLikeModelCode(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= 24 && /\p{L}/u.test(trimmed) && /\d/.test(trimmed) && !/\s{2,}/.test(trimmed);
+}
+
 /**
  * Header heuristic. The first row must be short text without numbers. With 3 or
  * more columns it is a header when the rows below carry data or a title word;
  * with 1–2 columns (label/value specification tables) every first-row cell must
  * be a typical column title, e.g. "Característica | Valor".
+ *
+ * Model codes in the first row (1F review): "TA-25N | Portátil | Pt-100" is a
+ * data row of a list without a header, while "Modelo | TA-25N | TA-35N" (or an
+ * empty corner above the row names, "· | TA-25N | TA-35N") is the header of a
+ * comparison. A first row with codes is a header only in these two layouts.
  */
 export function detectHeaderRow(cells: readonly (readonly string[])[]): boolean {
   if (cells.length < 2) return false;
   const first = cells[0];
+  const [corner, ...rest] = first;
+  const bodyHasData = cells.slice(1).some((row) => row.some(looksLikeData));
+  if (first.length >= 3 && isBlank(corner) && rest.length >= 2 && rest.every(looksLikeModelCode)) return bodyHasData;
   if (first.some((value) => isBlank(value) || value.trim().length > 40 || looksLikeData(value))) return false;
   if (first.length <= 2) return first.every(looksLikeHeaderLabel);
-  const bodyHasData = cells.slice(1).some((row) => row.some(looksLikeData));
+  if (first.some((value) => /\d/.test(value))) {
+    if (!/\d/.test(corner) && looksLikeHeaderLabel(corner)) {
+      return rest.every((value) => looksLikeModelCode(value) || looksLikeHeaderLabel(value));
+    }
+    // Numbered column titles such as "Faixa 1 | Faixa 2 | Faixa 3" above data.
+    return bodyHasData && first.every(looksLikeHeaderLabel);
+  }
   return bodyHasData || first.some(looksLikeHeaderLabel);
 }
 

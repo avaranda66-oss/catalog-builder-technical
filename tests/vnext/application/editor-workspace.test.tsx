@@ -1046,7 +1046,7 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     await waitFor(() => expect(container.querySelector('[data-cell-edit-session]')).toBeTruthy());
     expect(shell).toHaveAttribute('data-editor-mode', 'cell-edit');
     expect(button(container, 'insert-rows-after')).toBeDisabled();
-    expect(button(container, 'insert-rows-after')).toHaveAttribute('title', 'Conclua a edição da célula antes de alterar eixos.');
+    expect(button(container, 'insert-rows-after')).toHaveAttribute('title', 'Conclua a edição da célula antes de mudar linhas e colunas.');
     const originalCellContent = structuredClone(canonicalTable().table.cells[0].content);
     const draftSequence = session.getSnapshot().localSequence;
     const draftCallsBefore = execute.mock.calls.length;
@@ -1220,7 +1220,6 @@ function renderTableStyleGuidance(hasCellDraft: boolean, isLocked: boolean) {
     onPaddingLinkedChange={() => undefined}
     onPatch={() => undefined}
     onBorderPreset={() => undefined}
-    onPreset={() => undefined}
     onAnnotationGap={() => undefined}
   />);
   const control = view.container.querySelector<HTMLSelectElement>('[data-style-property="fontFamily"]');

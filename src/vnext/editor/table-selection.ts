@@ -252,6 +252,25 @@ export function explicitTableAxisIds(
   return [];
 }
 
+/**
+ * FR-34: the rows (or columns) the current selection touches, in table order, for "Linha acima", "Excluir linhas"
+ * and the other structure actions. A cell or a range counts every row and column it covers, merged cells included
+ * (a merged cell over two rows touches both). A row selection keeps its explicit rows and no column (and the
+ * reverse for columns); the whole table touches every axis. Style scopes and dimension fields keep using
+ * `explicitTableAxisIds`.
+ */
+export function tableSelectionAxisIds(
+  table: TableModel,
+  selection: TableSelection,
+  axis: 'row' | 'column'
+): readonly string[] {
+  const normalized = normalizeTableSelection(table, selection);
+  if (!normalized) return [];
+  if (selection.kind === 'rows') return axis === 'row' ? normalized.explicitRowIds : [];
+  if (selection.kind === 'columns') return axis === 'column' ? normalized.explicitColumnIds : [];
+  return axis === 'row' ? normalized.displayRowIds : normalized.displayColumnIds;
+}
+
 export function tableSelectionFocusPoint(table: TableModel, selection: TableSelection): TableSelectionPoint | undefined {
   if (selection.kind === 'cell' || selection.kind === 'range') return canonicalTablePoint(table, selection.focus);
   if (selection.kind === 'rows') return canonicalTablePoint(table, {
@@ -328,6 +347,50 @@ export function selectionAfterAxisInsert(
   return axis === 'row'
     ? tableRowSelection(identity, axisId)
     : tableColumnSelection(identity, axisId);
+}
+
+/**
+ * FR-34: after "Linha acima/abaixo" or "Coluna à esquerda/direita". A row or column chosen by the side selector
+ * selects the new row or column (as before); a cell, range or the whole table selects the new cell in the same
+ * column (or row), so the person can type there right away.
+ */
+export function selectionAfterTableAxisInsert(
+  table: TableModel,
+  selection: TableSelection,
+  axis: 'row' | 'column',
+  insertedAxisId: string
+): TableSelection {
+  if (selection.kind === 'rows' || selection.kind === 'columns') return selectionAfterAxisInsert(selection.identity, axis, insertedAxisId);
+  const focus = tableSelectionFocusPoint(table, selection);
+  const point = axis === 'row'
+    ? { rowId: insertedAxisId, columnId: focus?.columnId ?? table.columns[0].id }
+    : { rowId: focus?.rowId ?? table.rows[0].id, columnId: insertedAxisId };
+  const canonical = canonicalTablePoint(table, point);
+  return canonical ? tableCellSelection(selection.identity, canonical) : selectionAfterAxisInsert(selection.identity, axis, insertedAxisId);
+}
+
+/**
+ * FR-34: after "Excluir linhas/colunas". A side-selector selection keeps selecting the row or column now at the
+ * first removed position (as before); a cell or range selects the cell there, in the column (or row) it had.
+ */
+export function selectionAfterTableAxisRemove(
+  table: TableModel,
+  selection: TableSelection,
+  axis: 'row' | 'column',
+  firstRemovedIndex: number,
+  focusBefore: TableSelectionPoint | undefined
+): TableSelection {
+  if (selection.kind === 'rows' || selection.kind === 'columns' || selection.kind === 'table') {
+    return selectionAfterAxisRemove(selection.identity, axis, firstRemovedIndex, table);
+  }
+  const clamp = (length: number) => Math.min(Math.max(firstRemovedIndex, 0), length - 1);
+  const keepsColumn = focusBefore && table.columns.some((column) => column.id === focusBefore.columnId);
+  const keepsRow = focusBefore && table.rows.some((row) => row.id === focusBefore.rowId);
+  const point = axis === 'row'
+    ? { rowId: table.rows[clamp(table.rows.length)].id, columnId: keepsColumn ? focusBefore!.columnId : table.columns[0].id }
+    : { rowId: keepsRow ? focusBefore!.rowId : table.rows[0].id, columnId: table.columns[clamp(table.columns.length)].id };
+  const canonical = canonicalTablePoint(table, point);
+  return canonical ? tableCellSelection(selection.identity, canonical) : selectionAfterAxisRemove(selection.identity, axis, firstRemovedIndex, table);
 }
 
 export function selectionAfterAxisRemove(
