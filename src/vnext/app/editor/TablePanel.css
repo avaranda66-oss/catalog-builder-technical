@@ -46,6 +46,8 @@
 /* Rows and columns of the selected cell or range. */
 .vnext-table-structure-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .vnext-table-structure-group > span { flex: 0 0 100%; color: #24364d; font-size: 12px; font-weight: 700; }
+/* Why a button is unavailable, written out: a disabled button cannot take the focus. */
+.vnext-table-structure-group > p { flex: 0 0 100%; margin: 0; }
 
 /* Notes printed under the table. */
 .vnext-table-note { display: grid; gap: 6px; margin-bottom: 10px; }

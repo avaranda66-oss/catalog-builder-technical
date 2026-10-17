@@ -151,7 +151,8 @@ describe('FR-33 "Estilo": presets by task, three switches and P/M/G', () => {
     expect(names).toEqual(['Especificações', 'Comparativo de modelos', 'Códigos de pedido', 'Acessórios']);
     for (const name of names) expect(within(gallery).getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
     expect(container.querySelectorAll('svg.vnext-table-look-thumb')).toHaveLength(4);
-    expect(within(gallery).getByRole('button', { name: /^Especificações/ })).toHaveAttribute('aria-pressed', 'true');
+    // Only the house base, without its highlighted first column: no style is shown as applied.
+    for (const name of names) expect(within(gallery).getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('checkbox', { name: 'Cabeçalho' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Linhas alternadas' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Primeira coluna destacada' })).not.toBeChecked();
@@ -221,6 +222,13 @@ describe('FR-34 "Estrutura": rows and columns from the selected cell or range', 
     expect(all).toHaveAttribute('title', 'A tabela precisa de pelo menos uma linha.');
     // A row selection has no column: the column buttons explain what to do.
     expect(screen.getByRole('button', { name: 'Coluna à direita' })).toHaveAttribute('title', 'Clique numa célula da tabela para inserir ou excluir colunas.');
+    // A disabled button cannot take the focus: the reason is also written under its group and read with it.
+    expect(within(screen.getByRole('group', { name: 'Linhas' })).getByText('A tabela precisa de pelo menos uma linha.')).toBeVisible();
+    expect(all).toHaveAccessibleDescription('A tabela precisa de pelo menos uma linha.');
+    expect(screen.getByRole('button', { name: 'Linha abaixo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Linha abaixo' })).not.toHaveAttribute('aria-describedby');
+    expect(within(screen.getByRole('group', { name: 'Colunas' })).getByText('Clique numa célula da tabela para inserir ou excluir colunas.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Coluna à direita' })).toHaveAccessibleDescription('Clique numa célula da tabela para inserir ou excluir colunas.');
   });
 
   it('waits for the cell being edited, with the plain reason', () => {
@@ -230,6 +238,8 @@ describe('FR-34 "Estrutura": rows and columns from the selected cell or range', 
     const above = screen.getByRole('button', { name: 'Linha acima' });
     expect(above).toBeDisabled();
     expect(above).toHaveAttribute('title', 'Conclua a edição da célula antes de mudar linhas e colunas.');
+    expect(screen.getByText('Conclua a edição da célula antes de mudar linhas e colunas.')).toBeVisible();
+    expect(above).toHaveAccessibleDescription('Conclua a edição da célula antes de mudar linhas e colunas.');
   });
 });
 

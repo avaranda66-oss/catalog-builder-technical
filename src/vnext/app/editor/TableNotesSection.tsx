@@ -125,7 +125,7 @@ export function TableNotesSection({
         </button>
       </div>
       {describedBy && <p id={disabledReasonId} data-table-semantic-disabled-reason="">{disabledReason}</p>}
-      <p className="vnext-visually-hidden">{`Uma nota nova começa como "${QUICK_NOTE_PLACEHOLDER}".`}</p>
+      <p className="sr-only">{`Uma nota nova começa como "${QUICK_NOTE_PLACEHOLDER}".`}</p>
     </section>
   );
 }

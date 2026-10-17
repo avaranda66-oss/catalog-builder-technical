@@ -83,6 +83,10 @@ export function TableGridToolbar({
   const structureReason = (reason?: string) => mode === 'cell-edit' ? EDITING_STRUCTURE_REASON : reason;
   const rowRemoval = rowAxisReason ?? removeRowReason;
   const columnRemoval = columnAxisReason ?? removeColumnReason;
+  // A disabled button cannot take the focus: its reason is also written under the row and column buttons.
+  const noteId = 'vnext-table-axis-toolbar-note';
+  const notes = [...new Set([structureReason(rowRemoval), structureReason(columnRemoval)].filter((note): note is string => Boolean(note)))];
+  const noteFor = (reason: string | undefined) => notes.length > 0 && (structureLocked || reason) ? noteId : undefined;
   return (
     <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
       <strong>{simple ? 'Editar tabela' : 'Grade da tabela'}</strong>
@@ -100,19 +104,20 @@ export function TableGridToolbar({
       )}
       {(!simple || tableOptionsOpen) && <>
       <div className="vnext-tool-group" aria-label="Ações de linha">
-        <button type="button" data-editor-action="insert-row-before" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'before')}>Linha acima</button>
-        <button type="button" data-editor-action="insert-row-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after')}>Linha abaixo</button>
-        <button type="button" data-editor-action="remove-row" disabled={structureLocked || Boolean(rowRemoval)} title={structureReason(rowRemoval)} onClick={() => runTableAxisRemove('row')}>{removeAxisLabel('row', rowAxisCount)}</button>
+        <button type="button" data-editor-action="insert-row-before" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} aria-describedby={noteFor(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'before')}>Linha acima</button>
+        <button type="button" data-editor-action="insert-row-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} aria-describedby={noteFor(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after')}>Linha abaixo</button>
+        <button type="button" data-editor-action="remove-row" disabled={structureLocked || Boolean(rowRemoval)} title={structureReason(rowRemoval)} aria-describedby={noteFor(rowRemoval)} onClick={() => runTableAxisRemove('row')}>{removeAxisLabel('row', rowAxisCount)}</button>
       </div>
       <div className="vnext-tool-group" aria-label="Adicionar várias linhas">
         <label>Quantidade de linhas <input type="number" min="1" max="100" step="1" aria-label="Quantidade de linhas para adicionar" data-table-row-count="" value={tableRowsToInsert} onChange={event => setTableRowsToInsert(event.target.value)} style={{ width: '64px' }} /></label>
-        <button type="button" data-editor-action="insert-rows-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas abaixo</button>
+        <button type="button" data-editor-action="insert-rows-after" disabled={structureLocked || Boolean(rowAxisReason)} title={structureReason(rowAxisReason)} aria-describedby={noteFor(rowAxisReason)} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas abaixo</button>
       </div>
       <div className="vnext-tool-group" aria-label="Ações de coluna">
-        <button type="button" data-editor-action="insert-column-before" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'before')}>Coluna à esquerda</button>
-        <button type="button" data-editor-action="insert-column-after" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'after')}>Coluna à direita</button>
-        <button type="button" data-editor-action="remove-column" disabled={structureLocked || Boolean(columnRemoval)} title={structureReason(columnRemoval)} onClick={() => runTableAxisRemove('column')}>{removeAxisLabel('column', columnAxisCount)}</button>
+        <button type="button" data-editor-action="insert-column-before" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} aria-describedby={noteFor(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'before')}>Coluna à esquerda</button>
+        <button type="button" data-editor-action="insert-column-after" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} aria-describedby={noteFor(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'after')}>Coluna à direita</button>
+        <button type="button" data-editor-action="remove-column" disabled={structureLocked || Boolean(columnRemoval)} title={structureReason(columnRemoval)} aria-describedby={noteFor(columnRemoval)} onClick={() => runTableAxisRemove('column')}>{removeAxisLabel('column', columnAxisCount)}</button>
       </div>
+      {notes.length > 0 && <p id={noteId} className="vnext-disclosure-help" data-table-axis-note="">{notes.join(' ')}</p>}
       <div className="vnext-tool-group" aria-label="Mesclagem de células">
         <button
           type="button"
