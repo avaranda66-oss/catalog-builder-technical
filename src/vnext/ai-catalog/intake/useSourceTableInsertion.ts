@@ -76,7 +76,7 @@ export function useSourceTableInsertion(options: SourceTableInsertionOptions): S
     };
   }, []);
 
-  const settle = React.useCallback((inserted: InsertedSourceTable, outcome: SettledSourceTableFollowUp) => {
+  const settle = React.useCallback((outcome: SettledSourceTableFollowUp) => {
     if (!alive.current) return;
     setPending(null);
     setPhase('idle');
@@ -110,7 +110,7 @@ export function useSourceTableInsertion(options: SourceTableInsertionOptions): S
     if (plan.kind === 'wait') return;
     if (plan.kind !== 'split') {
       const outcome = finishSourceTableInsert(session, pending, measurement);
-      if (outcome.kind !== 'wait') settle(pending, outcome);
+      if (outcome.kind !== 'wait') settle(outcome);
       return;
     }
     setPhase('splitting');
@@ -119,13 +119,13 @@ export function useSourceTableInsertion(options: SourceTableInsertionOptions): S
     cancelSplit.current = afterNextPaint(() => {
       cancelSplit.current = null;
       const outcome = finishSourceTableInsert(latest.current.session, pending, measurement);
-      settle(pending, outcome.kind === 'wait' ? sourceTableNotMeasured(latest.current.session, pending) : outcome);
+      settle(outcome.kind === 'wait' ? sourceTableNotMeasured(latest.current.session, pending) : outcome);
     });
   }, [pending, phase, measurement, settle]);
 
   React.useEffect(() => {
     if (!pending || phase !== 'measuring') return undefined;
-    const timer = setTimeout(() => settle(pending, sourceTableNotMeasured(latest.current.session, pending)),
+    const timer = setTimeout(() => settle(sourceTableNotMeasured(latest.current.session, pending)),
       SOURCE_TABLE_MEASURE_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [pending, phase, settle]);
