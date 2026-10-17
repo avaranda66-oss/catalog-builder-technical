@@ -119,10 +119,21 @@ function TableList({ entry, blocks, onChooseColumns, disabled }: {
   );
 }
 
+const READABLE_ANYWAY = new Set(['hidden', 'internal', 'sheet-limit', 'not-chosen']);
+const isWorkbook = (fileName: string) => /\.(xlsx|xlsm|xls)$/i.test(fileName);
+
+/** Sheets of the current reading that the person sees (tables or "choose a range" requests). */
+function readSheets(entry: IntakeEntry): string[] {
+  const intake = entry.intake!;
+  const names = [...tableBlocks(intake).map((block) => block.source.sheet), ...intake.rangeRequests.map((request) => request.sheet)];
+  return [...new Set(names.filter((name): name is string => Boolean(name)))];
+}
+
 function SpreadsheetFindings({ entry, onChooseColumns, onReread, disabled }: { readonly entry: IntakeEntry } & Omit<Props, 'entries'>) {
   const intake = entry.intake!;
-  const includeHidden = Boolean(entry.options.includeHidden || entry.options.includeInternal);
+  const includeHidden = Boolean(entry.options.includeHidden);
   const hiddenHelpId = React.useId();
+  const workbook = isWorkbook(entry.fileName);
   return (
     <>
       <TableList entry={entry} blocks={tableBlocks(intake)} onChooseColumns={onChooseColumns} disabled={disabled} />
@@ -133,17 +144,27 @@ function SpreadsheetFindings({ entry, onChooseColumns, onReread, disabled }: { r
       {intake.ignored.length > 0 && (
         <details className="ai-intake-ignored">
           <summary>Deixado de fora ({intake.ignored.length})</summary>
-          <ul>{intake.ignored.map((item, index) => <li key={index}>{item.message}</li>)}</ul>
+          <ul>{intake.ignored.map((item, index) => (
+            <li key={index}>
+              {item.message}
+              {workbook && item.kind === 'sheet' && item.sheet && READABLE_ANYWAY.has(item.reason) && (
+                <button type="button" className="ai-intake-link" disabled={disabled} aria-label={`Ler a aba ${item.sheet} mesmo assim`}
+                  onClick={() => onReread(entry.id, { sheets: [...readSheets(entry), item.sheet!] })}>Ler mesmo assim</button>
+              )}
+            </li>
+          ))}</ul>
         </details>
       )}
-      <label className="ai-intake-hidden-toggle">
-        <input type="checkbox" checked={includeHidden} disabled={disabled} aria-describedby={hiddenHelpId}
-          onChange={(event) => onReread(entry.id, { includeHidden: event.target.checked, includeInternal: event.target.checked })} />
-        Incluir dados ocultos
-      </label>
-      <small id={hiddenHelpId} className="ai-intake-note">
-        Lê também as abas e colunas ocultas no Excel e as de uso interno, como preços e registros de acesso. Deixe desmarcado para catálogos.
-      </small>
+      {workbook && <>
+        <label className="ai-intake-hidden-toggle">
+          <input type="checkbox" checked={includeHidden} disabled={disabled} aria-describedby={hiddenHelpId}
+            onChange={(event) => onReread(entry.id, { includeHidden: event.target.checked })} />
+          Incluir dados ocultos
+        </label>
+        <small id={hiddenHelpId} className="ai-intake-note">
+          Lê também as abas, linhas e colunas que estão ocultas no Excel. Preços e registros de acesso continuam de fora.
+        </small>
+      </>}
     </>
   );
 }
