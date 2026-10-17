@@ -4550,7 +4550,7 @@ export function EditorWorkspace({
                           <small>{describeTableLocation(selectedTableObject.table, diagnostic.rowId, diagnostic.cellId)}</small>
                         )}
                         <div className="vnext-diagnostic-actions">
-                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (
+                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && !fitHeightPreparation.prepared.tallerThanPage && !fitHeightPreparation.prepared.wouldExceedPage && (
                             <button type="button" data-diagnostic-action="fit-height" onClick={runFitHeight}>
                               Ajustar altura
                             </button>
