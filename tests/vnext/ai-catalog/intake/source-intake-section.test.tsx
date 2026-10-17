@@ -6,6 +6,7 @@ import type { TableObject } from '@/vnext/domain';
 import type { FitHeightMeasurement } from '@/vnext/editor/table-fit-height-authoring';
 import { SourceIntakeSection } from '@/vnext/ai-catalog/intake/SourceIntakeSection';
 import { DROP_ZONE_TEXT } from '@/vnext/ai-catalog/intake/SourceDropZone';
+import { createSourceIntakeSession } from '@/vnext/ai-catalog/intake/intake-store';
 import { cellText, measureTable } from '../../editor/table-split-fixtures';
 import { fileOf, masterWorkbook, png } from './intake-fixtures';
 
@@ -164,5 +165,80 @@ describe('FR-64 files in the assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inserir como tabela' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Conclua ou cancele a edição aberta na página antes de inserir a tabela.');
     expect(session.getSnapshot().document).toBe(before);
+  });
+});
+
+describe('FR-64 files kept and taken where the person expects', () => {
+  const csv = 'Modelo;Faixa;Exatidão\nPCON-Y17;0 a 20 bar;0,025 %FS\nPCON-Y18;0 a 70 bar;0,05 %FS\n';
+
+  it('Esc in "Escolher colunas" is "Voltar": back to "O que encontrei", and the assistant around it stays open', async () => {
+    const session = createDocumentSession(createCatalogDocument(id), { createId: id });
+    const dockKeys = vi.fn();
+    render(<div onKeyDown={(event) => dockKeys(event.key)}><SourceIntakeSection session={session} /></div>);
+    choose([fileOf(csv, 'lista.csv')]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Escolher colunas — Tabela do arquivo' }));
+    const chooser = screen.getByRole('group', { name: 'Escolher colunas — Tabela do arquivo' });
+    fireEvent.keyDown(within(chooser).getAllByRole('checkbox')[0], { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Escolher colunas — Tabela do arquivo' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Escolher colunas — Tabela do arquivo' })).toHaveFocus();
+    expect(dockKeys).not.toHaveBeenCalled();
+    // Outside the step, Esc goes on to the assistant as before (it closes the panel there).
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Escolher colunas — Tabela do arquivo' }), { key: 'Escape' });
+    expect(dockKeys).toHaveBeenCalledWith('Escape');
+  });
+
+  it('takes files let go anywhere on the files section, not only on the dashed box, and never lets the browser open them', async () => {
+    const session = createDocumentSession(createCatalogDocument(id), { createId: id });
+    render(<SourceIntakeSection session={session} />);
+    const section = screen.getByRole('region', { name: 'Arquivos para o catálogo' });
+    const files = [fileOf(csv, 'lista.csv')];
+    // fireEvent returns false when the page cancelled the browser's own handling (opening the file in the tab).
+    expect(fireEvent.dragEnter(section, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    expect(section.querySelector('.ai-intake-drop')).toHaveAttribute('data-dragging', 'true');
+    expect(fireEvent.dragOver(section, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    expect(fireEvent.drop(section, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    expect(section.querySelector('.ai-intake-drop')).not.toHaveAttribute('data-dragging');
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Arquivos enviados' })).getByText('Pronto')).toBeInTheDocument());
+    // Text dragged from the page is not a file: the section leaves it alone.
+    expect(fireEvent.dragOver(section, { dataTransfer: { types: ['text/plain'], files: [] } })).toBe(true);
+  });
+
+  it('closing the assistant keeps the files, and a long table waiting for its measurement continues when it opens again', async () => {
+    const session = createDocumentSession(createCatalogDocument(id, 'TA-25N — Ficha técnica 2026'), { createId: id });
+    const intake = createSourceIntakeSession();
+    const onShowTable = vi.fn();
+    const props = { session, intake, onShowTable, onBeforeMutation: () => true, activePageId: session.getSnapshot().document.pages[0].id };
+    const first = render(<SourceIntakeSection {...props} measurement={null} />);
+    choose([fileOf(await masterWorkbook(), 'PCON-MASTER-ENGLISHV2.xlsx')]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Escolher colunas — Aba DB_SENSORS' }, { timeout: 15_000 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inserir como tabela' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Tabela inserida. Medindo a página…');
+    // The panel closes before the editor measured the new table.
+    first.unmount();
+    const document = session.getSnapshot().document;
+    const [inserted] = tables(session);
+    const measurement = measureTable(document, { pageId: document.pages[0].id, objectId: inserted.id, rowHeightMm: 8 });
+    render(<SourceIntakeSection {...props} measurement={measurement} />);
+    expect(screen.getByRole('region', { name: 'O que encontrei em PCON-MASTER-ENGLISHV2.xlsx' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Tabela com 70 linhas × 7 colunas inserida na página 1\. \d+ linhas movidas/));
+    expect(tables(session)).toHaveLength(3);
+    expect(onShowTable).toHaveBeenCalledWith(document.pages[0].id, tables(session)[0].id);
+  });
+
+  it('a table waiting while the panel is closed is left as inserted when the catalog changed meanwhile, and the message says how to finish', async () => {
+    const session = createDocumentSession(createCatalogDocument(id), { createId: id });
+    const intake = createSourceIntakeSession();
+    const props = { session, intake, onBeforeMutation: () => true, activePageId: session.getSnapshot().document.pages[0].id };
+    const first = render(<SourceIntakeSection {...props} measurement={null} />);
+    choose([fileOf(await masterWorkbook(), 'PCON-MASTER-ENGLISHV2.xlsx')]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Escolher colunas — Aba DB_SENSORS' }, { timeout: 15_000 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inserir como tabela' }));
+    first.unmount();
+    expect(session.execute({ type: 'document.rename', title: 'Outro nome' }).ok).toBe(true);
+    const document = session.getSnapshot().document;
+    const [inserted] = tables(session);
+    render(<SourceIntakeSection {...props} measurement={measureTable(document, { pageId: document.pages[0].id, objectId: inserted.id, rowHeightMm: 8 })} />);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/O catálogo mudou antes de a tabela ser medida.*“Continuar na próxima página”/));
+    expect(session.getSnapshot().document.pages).toHaveLength(1);
   });
 });

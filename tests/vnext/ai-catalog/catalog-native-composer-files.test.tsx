@@ -1,5 +1,5 @@
 import { webcrypto } from 'node:crypto';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession } from '../../../src/vnext/application';
 import { CatalogNativeComposer } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
@@ -7,9 +7,11 @@ import type { NativeComposeFunctionsClient } from '../../../src/vnext/ai-catalog
 import type { NativeComposePlan } from '../../../src/vnext/ai-catalog/native-compose';
 import { clearByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
 import { DROP_ZONE_TEXT } from '../../../src/vnext/ai-catalog/intake/SourceDropZone';
+import { createInsertSpec } from '../../../src/vnext/app/editor-defaults';
+import { forgetSourceIntakeSessions } from '../../../src/vnext/ai-catalog/intake/intake-store';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
-afterEach(() => { cleanup(); localStorage.clear(); clearByokCredential(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); forgetSourceIntakeSessions(); localStorage.clear(); clearByokCredential(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 afterAll(() => vi.unstubAllGlobals());
 
 const id = () => crypto.randomUUID();
@@ -47,6 +49,53 @@ describe('FR-64 the assistant takes files', () => {
     expect(screen.getByRole('region', { name: 'Arquivos para o catálogo' })).toBeInTheDocument();
     expect(screen.getByText(/Os arquivos soltos acima são lidos aqui no computador e não vão para a IA/)).toBeInTheDocument();
     expect(screen.queryByText(/Ela não lê PDFs/)).toBeNull();
+  });
+
+  it('a file let go on the conversation or on the text box joins the files, and the browser never opens it', async () => {
+    make(async () => ({ data: { reply: plan('Capa') }, error: null }));
+    const files = [new File(['Modelo;Faixa\nPCON-Y17;0 a 20 bar\n'], 'lista.csv')];
+    const box = screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
+    expect(fireEvent.dragOver(box, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    expect(fireEvent.drop(box, { dataTransfer: { types: ['Files'], files } })).toBe(false);
+    const list = await screen.findByRole('list', { name: 'Arquivos enviados' });
+    await waitFor(() => expect(within(list).getByText('Pronto')).toBeInTheDocument());
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    // A drop on the files section itself is taken there once, not twice.
+    const section = screen.getByRole('region', { name: 'Arquivos para o catálogo' });
+    fireEvent.drop(section, { dataTransfer: { types: ['Files'], files: [new File(['Modelo;Faixa\nB;2\n'], 'b.csv')] } });
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2));
+  });
+});
+
+describe('one AI proposal on screen at a time', () => {
+  it('a rewrite proposal replaces a page proposal, and a page proposal replaces a rewrite', async () => {
+    const doc = createCatalogDocument(id, 'Catálogo para revisão');
+    const session = createDocumentSession(doc, { createId: id });
+    expect(session.execute({ type: 'object.insert', pageId: doc.pages[0].id, object: createInsertSpec('text', doc.pages[0]) }).ok).toBe(true);
+    const object = session.getSnapshot().document.pages[0].objects[0];
+    if (object.type !== 'text') throw new Error('NO_TEXT');
+    const invoke = vi.fn(async (_name: string, options: { body: Body }) => {
+      if (options.body.task === 'status') return status();
+      if (options.body.task === 'revise_selected_text') return { data: { reply: { status: 'proposal', revisedText: 'Texto revisado' } }, error: null };
+      return { data: { reply: plan('Capa do TA-25N') }, error: null };
+    });
+    render(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01"
+      client={{ functions: { invoke } } as unknown as NativeComposeFunctionsClient} onBeforeMutation={() => true}
+      selected={{ objectId: object.id, text: structuredClone(object.text) }} />);
+    await send('Crie uma capa para o TA-25N.');
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reescrever este texto com Gemini' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Como deseja reescrever o texto selecionado?' }), { target: { value: 'Mais claro.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Pedir reescrita ao Gemini/ }));
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Revisão de texto selecionado' })).toBeInTheDocument());
+    expect(screen.queryByRole('group', { name: 'Proposta de páginas' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Confirmar/ })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar a criar páginas' }));
+    await send('Crie uma capa para o TA-25N.');
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument());
+    expect(screen.queryByRole('group', { name: 'Revisão de texto selecionado' })).toBeNull();
   });
 });
 

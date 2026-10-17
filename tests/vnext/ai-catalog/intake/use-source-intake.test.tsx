@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readSources } from '@/vnext/ai-catalog/source-intake';
 import { intakeStateLabel, tableBlocks } from '@/vnext/ai-catalog/intake/intake-model';
 import { useSourceIntake } from '@/vnext/ai-catalog/intake/useSourceIntake';
+import { createSourceFileStore } from '@/vnext/ai-catalog/intake/intake-store';
 import { sourceTableCells, suggestSourceColumns } from '@/vnext/ai-catalog/intake/source-table-insert';
 
 import { fileOf, masterWorkbook, png } from './intake-fixtures';
@@ -96,6 +97,19 @@ describe('FR-64 useSourceIntake', () => {
     act(() => { result.current.addFiles([fileOf('Modelo;Faixa\nA;1\n', 'a de novo.csv')]); });
     await waitFor(() => expect(result.current.entries[1].state).toBe('duplicate'));
     expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('with the catalog store, the list outlives the screen: reading goes on while it is closed', async () => {
+    const store = createSourceFileStore();
+    const first = renderHook(() => useSourceIntake({ store }));
+    act(() => { first.result.current.addFiles([fileOf('Modelo;Faixa\nA;1\n', 'a.csv')]); });
+    expect(first.result.current.entries[0].state).toBe('reading');
+    // The assistant closes while the file is read.
+    first.unmount();
+    await waitFor(() => expect(store.getEntries()[0]?.state).toBe('ready'));
+    const again = renderHook(() => useSourceIntake({ store }));
+    expect(again.result.current.entries.map((entry) => [entry.fileName, entry.state])).toEqual([['a.csv', 'ready']]);
+    expect(again.result.current.busy).toBe(false);
   });
 
   it('ignores the answer for a file taken out of the list while it was being read', async () => {
