@@ -62,7 +62,10 @@ export function intakeStateLabel(entry: Pick<IntakeEntry, 'state' | 'message'>):
     case 'needs-help': return 'Precisa da sua ajuda';
     case 'duplicate': return 'Ignorado: arquivo repetido';
     case 'skipped': return 'Não foi lido';
-    case 'error': return `Não foi possível: ${entry.message ?? 'o arquivo não pôde ser lido.'}`;
+    case 'error':
+      // A reason that already says "Não foi possível…" is not prefixed again.
+      return entry.message && /^não foi possível\b/i.test(entry.message)
+        ? entry.message : `Não foi possível: ${entry.message ?? 'o arquivo não abriu.'}`;
   }
 }
 
@@ -70,7 +73,7 @@ export function intakeStateLabel(entry: Pick<IntakeEntry, 'state' | 'message'>):
 export function entryFromResult(entry: IntakeEntry, result: SourceFileResult | undefined): IntakeEntry {
   if (!result) {
     return { ...entry, state: 'error', intake: undefined, code: 'SOURCE_UNKNOWN',
-      message: 'Não foi possível ler este arquivo. Confira se ele abre normalmente e envie de novo.' };
+      message: 'o arquivo não abriu. Confira se ele abre normalmente e envie de novo.' };
   }
   const base = { ...entry, sha256: result.sha256 ?? entry.sha256, code: result.code, message: result.message };
   if (result.status === 'ready' || result.status === 'needs-help') return { ...base, state: result.status, intake: result.intake };

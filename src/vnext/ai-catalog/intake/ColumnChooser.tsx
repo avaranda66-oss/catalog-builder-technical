@@ -40,7 +40,14 @@ export function ColumnChooser({ block, name, busy, onInsert, onCancel }: Props) 
   // The step replaces what was on screen: start reading (and tabbing) from its title.
   React.useEffect(() => { heading.current?.focus(); }, []);
   return (
-    <section className="ai-intake-columns" role="group" aria-labelledby={headingId}>
+    <section className="ai-intake-columns" role="group" aria-labelledby={headingId}
+      onKeyDown={(event) => {
+        // Esc is "Voltar" here: it goes back to "O que encontrei" and never closes the whole assistant.
+        if (event.key !== 'Escape') return;
+        event.stopPropagation();
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}>
       <h5 id={headingId} ref={heading} tabIndex={-1}>Escolher colunas — {name}</h5>
       <p>Marque as colunas que vão para a tabela. Já deixamos marcadas até {SUGGESTED_A4_COLUMNS}, que cabem bem numa página A4 em pé.</p>
       <fieldset>

@@ -3,7 +3,8 @@ import type { DocumentSession } from '../../application';
 import type { FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
 import { ColumnChooser } from './ColumnChooser';
 import { tableBlocks } from './intake-model';
-import { SourceDropZone } from './SourceDropZone';
+import type { SourceIntakeSession } from './intake-store';
+import { SourceDropZone, useFileDrop } from './SourceDropZone';
 import { SourceFileList } from './SourceFileList';
 import { SourceReviewPanel, sourceTableName } from './SourceReviewPanel';
 import { useSourceIntake, type SourceIntakeDependencies } from './useSourceIntake';
@@ -18,6 +19,11 @@ export interface SourceIntakeSectionProps {
   readonly onBeforeMutation?: () => boolean;
   /** Shows the inserted table in the editor. */
   readonly onShowTable?: (pageId: string, objectId: string) => void;
+  /**
+   * The catalog's files, kept outside this panel (see intake-store.ts), so closing the assistant or switching to
+   * "Ferramentas" keeps them. Without it the files belong to this section only.
+   */
+  readonly intake?: SourceIntakeSession;
   /** Tests only: a slower or counting reader. */
   readonly intakeDependencies?: SourceIntakeDependencies;
 }
@@ -26,12 +32,17 @@ export interface SourceIntakeSectionProps {
  * FR-64 in the assistant: the drop zone, one line per file with its state, "O que encontrei" grouped by file and
  * "Escolher colunas" → "Inserir como tabela". The files stay in this browser; nothing is sent to the AI here.
  */
-export function SourceIntakeSection({ session, measurement, activePageId, onBeforeMutation, onShowTable, intakeDependencies }: SourceIntakeSectionProps) {
+export function SourceIntakeSection({
+  session, measurement, activePageId, onBeforeMutation, onShowTable, intake: shared, intakeDependencies,
+}: SourceIntakeSectionProps) {
   const locale = session.getSnapshot().document.locale;
-  const intake = useSourceIntake({ locale, ...intakeDependencies });
-  const insertion = useSourceTableInsertion({ session, measurement, activePageId, onBeforeMutation, onShowTable });
+  const intake = useSourceIntake({ locale, ...intakeDependencies, store: shared?.files });
+  const insertion = useSourceTableInsertion({ session, measurement, activePageId, onBeforeMutation, onShowTable, store: shared?.insertion });
   const [choosing, setChoosing] = React.useState<{ entryId: string; blockId: string } | null>(null);
   const working = insertion.phase !== 'idle';
+  const addFiles = (files: File[]) => { insertion.dismissNotice(); intake.addFiles(files); };
+  // The whole section takes dropped files, not only the dashed box.
+  const drop = useFileDrop(addFiles, working);
   const chosenEntry = choosing ? intake.entries.find((entry) => entry.id === choosing.entryId) : undefined;
   const chosenBlock = choosing && chosenEntry?.state !== 'reading'
     ? tableBlocks(chosenEntry?.intake).find((block) => block.id === choosing.blockId) : undefined;
@@ -64,14 +75,14 @@ export function SourceIntakeSection({ session, measurement, activePageId, onBefo
   React.useEffect(() => { noticeRef.current?.scrollIntoView?.({ block: 'nearest' }); }, [notice]);
   return (
     <section ref={section} className="ai-intake" aria-label="Arquivos para o catálogo" data-source-intake=""
-      data-has-files={intake.entries.length > 0 ? 'true' : undefined} data-choosing={chosenBlock ? 'true' : undefined}>
+      data-has-files={intake.entries.length > 0 ? 'true' : undefined} data-choosing={chosenBlock ? 'true' : undefined}
+      {...drop.handlers}>
       {notice && (
         <p ref={noticeRef} tabIndex={-1} className="ai-intake-notice" data-tone={notice.tone} role={notice.tone === 'error' ? 'alert' : 'status'}>
           {notice.text}
         </p>
       )}
-      <SourceDropZone compact={intake.entries.length > 0} disabled={working}
-        onFiles={(files) => { insertion.dismissNotice(); intake.addFiles(files); }} />
+      <SourceDropZone compact={intake.entries.length > 0} disabled={working} dragging={drop.dragging} onFiles={addFiles} />
       <SourceFileList entries={intake.entries}
         onRemove={(id) => { if (choosing?.entryId === id) setChoosing(null); intake.remove(id); }} />
       {chosenBlock

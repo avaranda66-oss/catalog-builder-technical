@@ -1,11 +1,11 @@
-import type { DocumentSession } from '../../application';
-import { mmToU, type CatalogDocument, type DocumentStyle, type TableModel } from '../../domain';
+import { createDocumentSession, type DocumentSession } from '../../application';
+import { findObjectInTree, mmToU, type CatalogDocument, type DocumentStyle, type Page, type RichText, type TableModel } from '../../domain';
 import { createTableInsertSpec, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS } from '../../app/editor-defaults';
 import { decidePendingTableFit, describeRowsByColumns } from '../../app/editor/table-paste-actions';
 import { prepareTableFitHeight, type FitHeightMeasurement } from '../../editor/table-fit-height-authoring';
 import { detectHeaderRow, pastedTableModel, type PastedTable } from '../../editor/table-paste-import';
 import {
-  planTableSplit, prepareTableSplit, tableSplitSuccessMessage, type PreparedTableSplit,
+  CONTINUATION_LABEL, planTableSplit, prepareTableSplit, tableSplitSuccessMessage, type PreparedTableSplit,
 } from '../../editor/table-split-authoring';
 import { columnLabel } from '../source-intake';
 import type { SourceTableBlock } from './intake-model';
@@ -113,7 +113,8 @@ export function sourceChoiceProblem(choice: SourceTableChoice): string | undefin
   const cells = sourceTableCells(choice);
   if (cells.length === 0 || cells.every((row) => row.every(isBlank))) return 'As colunas escolhidas estão vazias. Escolha outras colunas.';
   if (cells.length > MAX_NEW_TABLE_ROWS) {
-    return `A tabela teria ${cells.length} linhas; dá para inserir até ${MAX_NEW_TABLE_ROWS} de cada vez. Leia um intervalo menor da planilha.`;
+    const smaller = choice.block.source.page !== undefined ? 'Leia menos páginas do PDF de cada vez.' : 'Leia um intervalo menor da planilha.';
+    return `A tabela teria ${cells.length} linhas; dá para inserir até ${MAX_NEW_TABLE_ROWS} de cada vez. ${smaller}`;
   }
   return undefined;
 }
@@ -200,6 +201,11 @@ export interface InsertedSourceTable {
   readonly transactionId: string;
   /** Document right after the insert; any other change before the measurement cancels the follow-up. */
   readonly document: CatalogDocument;
+  /**
+   * Session sequence right after the insert. Desfazer followed by Refazer gives back the same document, but the next
+   * action would then start a new undo step, so the follow-up must not run either.
+   */
+  readonly localSequence: number;
   readonly rows: number;
   readonly columns: number;
   /** A new page was added after the open page because the open page already had content. */
@@ -214,9 +220,29 @@ export type SourceTableInsertOutcome =
 
 const NOTHING_CHANGED = 'Nada foi alterado.';
 
+const richTextPlain = (rich: RichText) =>
+  rich.paragraphs.map((paragraph) => paragraph.inlines.map((inline) => inline.kind === 'text' ? inline.text : '\n').join('')).join('\n');
+
+/** A page that holds the continuation of a table cut before it ("Continuar na próxima página", FR-35). */
+function continuesTable(page: Page): boolean {
+  return page.objects.some((object) => object.type === 'table' && object.table.title !== undefined &&
+    richTextPlain(object.table.title).trim().endsWith(CONTINUATION_LABEL));
+}
+
+/**
+ * The last page of the table that starts (or goes on) on this page: the page itself, or the last of the continuation
+ * pages right after it. A new page goes after that one, so it never cuts a table off from its "(continuação)" parts.
+ */
+export function pageAfterTableRun(document: CatalogDocument, pageId: string): string {
+  let index = document.pages.findIndex((page) => page.id === pageId);
+  if (index < 0) return pageId;
+  while (index + 1 < document.pages.length && continuesTable(document.pages[index + 1])) index += 1;
+  return document.pages[index].id;
+}
+
 /**
  * Inserts the chosen columns as a styled table. On an empty open page the table goes there; on a page that already
- * has content it goes on a new page right after it, so it never covers what is there.
+ * has content it goes on a new page after it (after its table's continuation pages), so it never covers what is there.
  */
 export function insertSourceTable(
   session: DocumentSession,
@@ -234,7 +260,7 @@ export function insertSourceTable(
   let pageId = open.id;
   let newPage = false;
   if (open.objects.length > 0) {
-    const added = session.execute({ type: 'page.add', afterPageId: open.id }, { transactionId });
+    const added = session.execute({ type: 'page.add', afterPageId: pageAfterTableRun(document, open.id) }, { transactionId });
     const createdPageId = added.ok ? added.metadata.createdIds[0] : undefined;
     if (!added.ok || !createdPageId) return { ok: false, message: `Não foi possível criar a página da tabela. ${NOTHING_CHANGED}` };
     pageId = createdPageId;
@@ -256,7 +282,7 @@ export function insertSourceTable(
   return {
     ok: true,
     inserted: {
-      pageId, objectId, transactionId, document: result.document,
+      pageId, objectId, transactionId, document: result.document, localSequence: session.getSnapshot().localSequence,
       rows: table.rows.length, columns: table.columns.length, newPage, tight: readable.tight,
     },
   };
@@ -288,14 +314,25 @@ function insertedSentence(inserted: InsertedSourceTable, document: CatalogDocume
 
 const UNDO_HINT = 'Use Desfazer se precisar.';
 const IF_TOO_TALL = 'Se ela não couber na página, selecione a tabela e clique em “Continuar na próxima página”.';
+export const SOURCE_TABLE_GONE = 'A tabela foi desfeita ou apagada antes de ser medida. Nada mais foi alterado.';
 
 /** Whether the follow-up can run now: the catalog still is exactly the one right after the insert. */
 function untouched(session: DocumentSession, inserted: InsertedSourceTable): boolean {
-  return session.getSnapshot().document === inserted.document;
+  const snapshot = session.getSnapshot();
+  return snapshot.document === inserted.document && snapshot.localSequence === inserted.localSequence;
 }
 
+/** The inserted table is no longer in the catalog (Desfazer, or deleted by hand). */
+function tableGone(session: DocumentSession, inserted: InsertedSourceTable): boolean {
+  return !findObjectInTree(session.getSnapshot().document, inserted.objectId);
+}
+
+const goneOutcome = (inserted: InsertedSourceTable): SettledSourceTableFollowUp =>
+  ({ kind: 'manual', message: SOURCE_TABLE_GONE, pageIds: [], objectId: inserted.objectId });
+
 export type SourceTableFollowUpPlan =
-  | { readonly kind: 'wait' | 'fit' | 'split' }
+  /** gone: the table was undone or deleted before the measurement; nothing is left to do. */
+  | { readonly kind: 'wait' | 'fit' | 'split' | 'gone' }
   /** `overflows`: the table does not fit on its page, so "Continuar na próxima página" is worth a try later. */
   | { readonly kind: 'manual'; readonly message: string; readonly overflows: boolean };
 
@@ -309,6 +346,7 @@ export function planSourceTableFollowUp(
   measurement: FitHeightMeasurement | null | undefined
 ): SourceTableFollowUpPlan {
   const document = session.getSnapshot().document;
+  if (tableGone(session, inserted)) return { kind: 'gone' };
   if (!untouched(session, inserted)) {
     return { kind: 'manual', overflows: true,
       message: 'O catálogo mudou antes de a tabela ser medida, então ela ficou como foi inserida.' };
@@ -332,6 +370,7 @@ export function finishSourceTableInsert(
 ): SourceTableFollowUp {
   const plan = planSourceTableFollowUp(session, inserted, measurement);
   if (plan.kind === 'wait') return { kind: 'wait' };
+  if (plan.kind === 'gone') return goneOutcome(inserted);
   const document = session.getSnapshot().document;
   const first = insertedSentence(inserted, document);
   if (plan.kind === 'manual') {
@@ -350,8 +389,13 @@ export function finishSourceTableInsert(
   const prepared = prepareTableSplit(document, inserted.objectId, measurement);
   if (!prepared.ok) return { kind: 'manual', message: `${first} ${prepared.message}`, pageIds: [inserted.pageId], objectId: inserted.objectId };
   const outcome = applyNewTableSplit(session, inserted, prepared.prepared);
+  if (!outcome.ok && !outcome.undone) {
+    // Nothing of the continuation was applied: the table stays as inserted, and the panel button can still do it.
+    return { kind: 'manual', message: `${first} Não deu para continuar a tabela nas próximas páginas agora. ${IF_TOO_TALL}`,
+      pageIds: [inserted.pageId], objectId: inserted.objectId };
+  }
   if (!outcome.ok) {
-    // A late failure is rolled back with one Desfazer, and that step also holds the insert: say so plainly.
+    // A failure after the rehearsal is rolled back with one Desfazer, and that step also holds the insert.
     return { kind: 'manual', message: `Não foi possível inserir a tabela e continuar nas próximas páginas. ${NOTHING_CHANGED} Tente de novo.`,
       pageIds: [], objectId: inserted.objectId };
   }
@@ -367,7 +411,15 @@ export function finishSourceTableInsert(
 
 type NewTableSplitOutcome =
   | { readonly ok: true; readonly objectId: string; readonly pageIds: readonly string[]; readonly movedRows: number; readonly headerRepeated: boolean }
+  /** `undone`: some steps had been applied and one Desfazer took them away, together with the insert. */
+  | { readonly ok: false; readonly undone: boolean };
+
+type SplitSteps =
+  | { readonly ok: true; readonly objectId: string; readonly pageIds: readonly string[] }
   | { readonly ok: false };
+
+let rehearsalSerial = 0;
+const rehearsalId = () => `source-split-rehearsal-${++rehearsalSerial}`;
 
 /**
  * Applies the split prepared (and checked) by FR-35's `prepareTableSplit` to a table this step has just inserted.
@@ -378,44 +430,56 @@ type NewTableSplitOutcome =
  */
 function applyNewTableSplit(session: DocumentSession, inserted: InsertedSourceTable, prepared: PreparedTableSplit): NewTableSplitOutcome {
   const { plan } = prepared;
-  const transactionId = inserted.transactionId;
   const before = session.getSnapshot().document;
-  const failure = (): NewTableSplitOutcome => {
-    if (session.getSnapshot().document !== before) session.undo();
-    return { ok: false };
+  // Rehearse on a private copy first: the real catalog only changes when every step is valid, so a refused step never
+  // leaves a half-cut table behind (nor one on the Refazer list).
+  const rehearsal = createDocumentSession(before, { createId: rehearsalId });
+  if (!splitSteps(rehearsal, prepared, `${inserted.transactionId}:rehearsal`).ok) return { ok: false, undone: false };
+  const applied = splitSteps(session, prepared, inserted.transactionId);
+  if (!applied.ok) {
+    if (session.getSnapshot().document === before) return { ok: false, undone: false };
+    session.undo();
+    return { ok: false, undone: true };
+  }
+  return {
+    ok: true, objectId: applied.objectId, pageIds: applied.pageIds, movedRows: plan.movedRowIds.length,
+    headerRepeated: plan.pagination.slices[0].headerRowIds.length > 0,
   };
-  if (!session.execute({ type: 'object.delete', objectId: plan.objectId }, { transactionId }).ok) return failure();
-  const firstPart = session.execute({
+}
+
+/** The actions of the split, stopping at the first one that is refused. */
+function splitSteps(target: DocumentSession, prepared: PreparedTableSplit, transactionId: string): SplitSteps {
+  const { plan } = prepared;
+  if (!target.execute({ type: 'object.delete', objectId: plan.objectId }, { transactionId }).ok) return { ok: false };
+  const firstPart = target.execute({
     type: 'object.insert',
     pageId: plan.pageId,
     object: { type: 'table', frameU: prepared.originalFrameU, zIndex: plan.object.zIndex, table: prepared.remainingTable },
   }, { transactionId });
   const objectId = firstPart.ok ? firstPart.metadata.createdIds[0] : undefined;
-  if (!firstPart.ok || !objectId) return failure();
+  if (!firstPart.ok || !objectId) return { ok: false };
   const pageIds: string[] = [];
   let previousPageId = plan.pageId;
   for (const part of prepared.continuations) {
-    const added = session.execute({ type: 'page.add', afterPageId: previousPageId }, { transactionId });
+    const added = target.execute({ type: 'page.add', afterPageId: previousPageId }, { transactionId });
     const pageId = added.ok ? added.metadata.createdIds[0] : undefined;
-    const page = pageId ? session.getSnapshot().document.pages.find((entry) => entry.id === pageId) : undefined;
+    const page = pageId ? target.getSnapshot().document.pages.find((entry) => entry.id === pageId) : undefined;
     // The parts were measured for the blank page `page.add` makes; a different page would need a new measurement.
     if (!page || page.heightMm !== plan.continuationPage.heightMm || (page.safeArea?.topMm ?? 0) !== plan.continuationPage.safeTopMm ||
-      (page.safeArea?.bottomMm ?? 0) !== plan.continuationPage.safeBottomMm) return failure();
-    const placed = session.execute({
+      (page.safeArea?.bottomMm ?? 0) !== plan.continuationPage.safeBottomMm) return { ok: false };
+    const placed = target.execute({
       type: 'object.insert', pageId: page.id, object: { type: 'table', frameU: part.frameU, zIndex: 0, table: part.table },
     }, { transactionId });
-    if (!placed.ok) return failure();
+    if (!placed.ok) return { ok: false };
     pageIds.push(page.id);
     previousPageId = page.id;
   }
-  return {
-    ok: true, objectId, pageIds, movedRows: plan.movedRowIds.length,
-    headerRepeated: plan.pagination.slices[0].headerRowIds.length > 0,
-  };
+  return { ok: true, objectId, pageIds };
 }
 
 /** The editor never measured the table (for example the page is in the background): finish by hand. */
 export function sourceTableNotMeasured(session: DocumentSession, inserted: InsertedSourceTable): SettledSourceTableFollowUp {
+  if (tableGone(session, inserted)) return goneOutcome(inserted);
   return {
     kind: 'manual',
     message: `${insertedSentence(inserted, session.getSnapshot().document)} Ainda não deu para medir a página. ${IF_TOO_TALL}`,

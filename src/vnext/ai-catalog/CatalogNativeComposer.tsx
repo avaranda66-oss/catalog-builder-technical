@@ -22,6 +22,8 @@ import { VerifiedPdfTableReview } from './VerifiedPdfTableReview';
 import type { NativePdfCellFillTarget } from './native-pdf-cell-fill';
 import type { FitHeightMeasurement } from '../editor/table-fit-height-authoring';
 import { SourceIntakeSection } from './intake/SourceIntakeSection';
+import { dropIntoIntake, sourceIntakeSessionFor } from './intake/intake-store';
+import { dragHasFiles } from './intake/SourceDropZone';
 
 interface Props {
   session: DocumentSession;
@@ -98,6 +100,16 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       : composerReadinessText(readiness, !!ownKey);
   const log = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
+  // FR-64: the files of this catalog outlive the panel (closing it, "Ferramentas" or Esc keep them).
+  const intake = React.useMemo(() => sourceIntakeSessionFor(documentId), [documentId]);
+  /** Files let go anywhere on the assistant join the list; the browser never opens them in place of the editor. */
+  const guardFileDrop = (event: React.DragEvent) => {
+    if (event.defaultPrevented || !dragHasFiles(event)) return;
+    event.preventDefault();
+    const idle = intake.insertion.get().phase === 'idle';
+    if (event.type === 'drop') dropIntoIntake(intake, Array.from(event.dataTransfer?.files ?? []));
+    else if (event.dataTransfer) event.dataTransfer.dropEffect = idle ? 'copy' : 'none';
+  };
   React.useEffect(() => { input.current?.focus(); }, []);
   // Selecting something else on the page only leaves rewrite mode. A paid
   // proposal or a request in flight is kept (it carries its own target).
@@ -174,9 +186,12 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         saveTurn('assistant', reply.question);
       } else if ('revisedText' in reply) {
         if (!isRewriting || !target) throw new Error('TEXT_EDIT_CONTEXT_LOST');
+        // One proposal on screen at a time: a rewrite replaces a page proposal, and the reverse.
+        setPending(undefined);
         setPendingRewrite({ reply, target, revision: snapshot.localSequence, serial: sequence });
         saveTurn('assistant', 'Preparei uma reescrita do texto selecionado. Confira o antes e depois antes de aplicar.');
       } else {
+        setPendingRewrite(undefined);
         setPending({ plan: reply, revision: snapshot.localSequence,
           documentId: snapshot.document.id, requestSequence: sequence });
         saveTurn('assistant', reply.summary +
@@ -244,7 +259,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setError('O texto mudou ou não era seguro alterar. Nenhuma reescrita foi aprovada.');
     }
   };
-  return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo">
+  return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo"
+    onDragEnter={guardFileDrop} onDragOver={guardFileDrop} onDrop={guardFileDrop}>
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>
         <p>Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.</p>
@@ -253,7 +269,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       <span className="ai-chat-count" aria-label="Quantidade de mensagens">{turns.length}</span>
     </div>
     <SourceIntakeSection session={session} measurement={measurement} activePageId={activePageId}
-      onBeforeMutation={onBeforeMutation} onShowTable={onShowTable} />
+      onBeforeMutation={onBeforeMutation} onShowTable={onShowTable} intake={intake} />
     <div className="ai-chat-log" ref={log} role="log" aria-label="Histórico de criação do catálogo" aria-live="polite">
       {editableSelectedText && <div className="ai-selection-context">
         <small>Texto selecionado na página:</small>

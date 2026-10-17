@@ -3,8 +3,9 @@ import { createCatalogDocument, createDocumentSession, type DocumentSession } fr
 import type { CatalogDocument, TableObject } from '@/vnext/domain';
 import type { SourceTableBlock } from '@/vnext/ai-catalog/intake/intake-model';
 import {
-  finishSourceTableInsert, insertSourceTable, planSourceTableFollowUp, sourceChoiceProblem, sourceColumns, sourceHasHeader,
-  sourceTableCells, sourceTableModel, suggestSourceColumns, SUGGESTED_A4_COLUMNS, withReadableColumns, type SourceTableChoice,
+  finishSourceTableInsert, insertSourceTable, pageAfterTableRun, planSourceTableFollowUp, SOURCE_TABLE_GONE, sourceChoiceProblem,
+  sourceColumns, sourceHasHeader, sourceTableCells, sourceTableModel, sourceTableNotMeasured, suggestSourceColumns,
+  SUGGESTED_A4_COLUMNS, withReadableColumns, type SourceTableChoice,
 } from '@/vnext/ai-catalog/intake/source-table-insert';
 import { cellText, measureTable, richPlain } from '../../editor/table-split-fixtures';
 
@@ -89,6 +90,10 @@ describe('FR-64 "Escolher colunas": columns of a table read from a file', () => 
     expect(sourceChoiceProblem({ block, columns: Array.from({ length: 11 }, (_, index) => index), header: true }))
       .toBe('Numa página A4 cabem no máximo 10 colunas. Desmarque 1.');
     expect(sourceChoiceProblem({ block: sensorsBlock(160), columns: [0], header: true })).toContain('até 150');
+    expect(sourceChoiceProblem({ block: sensorsBlock(160), columns: [0], header: true })).toContain('Leia um intervalo menor da planilha.');
+    const pdfBlock = { ...sensorsBlock(160), source: { fileName: 'folder.pdf', sha256: 'p', location: 'página 4', page: 4 } };
+    expect(sourceChoiceProblem({ block: pdfBlock, columns: [0], header: true })).toContain('Leia menos páginas do PDF de cada vez.');
+    expect(sourceChoiceProblem({ block: pdfBlock, columns: [0], header: true })).not.toContain('planilha');
     expect(sourceChoiceProblem({ block, columns: [0, 1], header: true })).toBeUndefined();
   });
 });
@@ -157,6 +162,89 @@ describe('FR-64 "Inserir como tabela": one step, styled, continued on the next p
     expect(after.pages[0].objects).toHaveLength(1);
     expect(session.undo().ok).toBe(true);
     expect(session.getSnapshot().document).toEqual(before);
+  });
+
+  it('J12 + J2: a 2nd table inserted right after a long one goes after its continuation pages, never between its parts', () => {
+    const session = freshSession();
+    const block = sensorsBlock(69);
+    const { inserted, measurement } = insertAndMeasure(session, { block, columns: suggestSourceColumns(block), header: true });
+    const first = finishSourceTableInsert(session, inserted, measurement);
+    if (first.kind !== 'done') throw new Error(first.kind === 'wait' ? 'wait' : first.message);
+    expect(first.pageIds.length).toBeGreaterThanOrEqual(3);
+    // After the split the editor shows the first part, so the open page is the start of table A.
+    const open = first.pageIds[0];
+    expect(pageAfterTableRun(session.getSnapshot().document, open)).toBe(first.pageIds.at(-1));
+    const second = insertSourceTable(session, open, { block: sensorsBlock(5, { columns: 3 }), columns: [0, 1, 2], header: true }, 'intake-b');
+    if (!second.ok) throw new Error(second.message);
+    const order = session.getSnapshot().document.pages.map((page) => page.id);
+    expect(order).toEqual([...first.pageIds, second.inserted.pageId]);
+    // From a continuation page in the middle of the run, it also goes after the last part.
+    expect(pageAfterTableRun(session.getSnapshot().document, first.pageIds[1])).toBe(first.pageIds.at(-1));
+    // A page that is not followed by a continuation is its own run.
+    expect(pageAfterTableRun(session.getSnapshot().document, second.inserted.pageId)).toBe(second.inserted.pageId);
+  });
+
+  it('Desfazer while the table waits for its measurement: nothing else happens and the message says so', () => {
+    const session = freshSession();
+    const before = session.getSnapshot().document;
+    const block = sensorsBlock(69);
+    const { inserted, measurement } = insertAndMeasure(session, { block, columns: [0, 1, 2], header: true });
+    expect(session.undo().ok).toBe(true);
+    expect(planSourceTableFollowUp(session, inserted, measurement)).toEqual({ kind: 'gone' });
+    const outcome = finishSourceTableInsert(session, inserted, { ...measurement, source: session.getSnapshot().document });
+    expect(outcome).toEqual({ kind: 'manual', message: SOURCE_TABLE_GONE, pageIds: [], objectId: inserted.objectId });
+    expect(sourceTableNotMeasured(session, inserted)).toEqual(outcome);
+    expect(session.getSnapshot().document).toBe(before);
+  });
+
+  it('Desfazer then Refazer while it waits: the table stays as inserted, and one Desfazer still removes it', () => {
+    const session = freshSession();
+    const before = session.getSnapshot().document;
+    const block = sensorsBlock(69);
+    const { inserted, measurement } = insertAndMeasure(session, { block, columns: [0, 1, 2], header: true });
+    expect(session.undo().ok).toBe(true);
+    expect(session.redo().ok).toBe(true);
+    // Same document as right after the insert, but a new undo step would start: the follow-up must not run.
+    expect(session.getSnapshot().document).toBe(inserted.document);
+    const outcome = finishSourceTableInsert(session, inserted, measurement);
+    expect(outcome.kind).toBe('manual');
+    expect(outcome.kind !== 'wait' && outcome.message).toMatch(/^Tabela com 70 linhas × 3 colunas inserida na página 1\. O catálogo mudou/);
+    expect(session.getSnapshot().document.pages).toHaveLength(1);
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(before);
+  });
+
+  it('a continuation step refused by the catalog leaves the table as inserted, with the way to finish by hand', () => {
+    const real = freshSession();
+    const block = sensorsBlock(69);
+    const { inserted, measurement } = insertAndMeasure(real, { block, columns: [0, 1, 2], header: true });
+    const afterInsert = real.getSnapshot().document;
+    // The rehearsal accepts every step; the real catalog then refuses the very first one.
+    const refusing: DocumentSession = { ...real, execute: (action, context) => action.type === 'object.delete'
+      ? { ok: false, error: { code: 'OBJECT_NOT_FOUND', details: 'test' } } as ReturnType<DocumentSession['execute']>
+      : real.execute(action, context) };
+    const outcome = finishSourceTableInsert(refusing, inserted, measurement);
+    expect(outcome.kind).toBe('manual');
+    expect(outcome.kind !== 'wait' && outcome.pageIds).toEqual([inserted.pageId]);
+    expect(outcome.kind !== 'wait' && outcome.message).toMatch(/^Tabela com 70 linhas × 3 colunas inserida na página 1\. Não deu para continuar/);
+    expect(outcome.kind !== 'wait' && outcome.message).toContain('“Continuar na próxima página”');
+    expect(outcome.kind !== 'wait' && outcome.message).not.toContain('Nada foi alterado');
+    expect(real.getSnapshot().document).toBe(afterInsert);
+  });
+
+  it('a step refused halfway is undone at once, together with the insert (one step for everything)', () => {
+    const real = freshSession();
+    const before = real.getSnapshot().document;
+    const block = sensorsBlock(69);
+    const { inserted, measurement } = insertAndMeasure(real, { block, columns: [0, 1, 2], header: true });
+    let pagesAdded = 0;
+    const refusing: DocumentSession = { ...real, execute: (action, context) => action.type === 'page.add' && ++pagesAdded === 2
+      ? { ok: false, error: { code: 'PAGE_NOT_FOUND', details: 'test' } } as ReturnType<DocumentSession['execute']>
+      : real.execute(action, context) };
+    const outcome = finishSourceTableInsert(refusing, inserted, measurement);
+    expect(outcome).toMatchObject({ kind: 'manual', pageIds: [] });
+    expect(outcome.kind !== 'wait' && outcome.message).toBe('Não foi possível inserir a tabela e continuar nas próximas páginas. Nada foi alterado. Tente de novo.');
+    expect(real.getSnapshot().document).toBe(before);
   });
 
   it('when the catalog changes before the measurement, the table stays as inserted and the person is told how to continue', () => {
