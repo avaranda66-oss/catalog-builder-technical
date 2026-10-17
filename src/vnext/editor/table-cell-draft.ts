@@ -205,8 +205,12 @@ export function tableCellDraftRecoveryFields(draft: TableCellDraft) {
   };
 }
 
-/** FR-30: technical symbols offered above the cell editor, in the order the father uses them most. */
-export const CELL_TECHNICAL_SYMBOLS = ['±', '°C', '%', '³', '²', 'Ø', '×', 'Δ', 'µ', 'Ω'] as const;
+/**
+ * FR-30: technical symbols offered above the cell editor, in the order the father uses them most. It holds every
+ * symbol of the text box bar (± °C Ω µ ≤ ≥ ≈, common in specs such as "≤ 0,1 %") plus the ones the tables need;
+ * the text box bar can reuse this list when it is revised (Wave 5), so there is one list.
+ */
+export const CELL_TECHNICAL_SYMBOLS = ['±', '°C', '%', '³', '²', 'Ø', '×', 'Δ', 'µ', 'Ω', '≤', '≥', '≈'] as const;
 
 /** Puts `insert` where the caret (or the selected text) is and returns the new text and caret position. */
 export function insertIntoCellText(

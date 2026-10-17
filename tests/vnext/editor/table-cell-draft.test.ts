@@ -167,7 +167,7 @@ describe('FR-22 a cell draft is dirty only while it differs', () => {
 
 describe('FR-30 technical symbols', () => {
   it('offers the symbols the father uses most, in order', () => {
-    expect(CELL_TECHNICAL_SYMBOLS).toEqual(['±', '°C', '%', '³', '²', 'Ø', '×', 'Δ', 'µ', 'Ω']);
+    expect(CELL_TECHNICAL_SYMBOLS).toEqual(['±', '°C', '%', '³', '²', 'Ø', '×', 'Δ', 'µ', 'Ω', '≤', '≥', '≈']);
   });
 
   it('inserts at the caret or replaces the selected text', () => {

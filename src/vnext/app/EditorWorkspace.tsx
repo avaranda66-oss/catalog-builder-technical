@@ -796,12 +796,15 @@ export function EditorWorkspace({
     return () => window.removeEventListener('blur', cancelOnWindowBlur);
   }, [controller]);
 
+  // FR-30: closing the cell editor always gives the grid back; 'cell-edit' never stays on without an editor.
+  const releaseCellEditMode = () => setEditorState((current) => (current.mode === 'cell-edit' ? { ...current, mode: 'table-grid' } : current));
   const finishCellDraftForContextChange = (): boolean => {
     const draft = cellDraftRef.current;
     if (!draft) return true;
     if (!draft.dirty) {
       cellDraftRef.current = null;
       setCellDraft(null);
+      releaseCellEditMode();
       persistence?.runtime.workspace.notifyDraftStateChanged();
       return true;
     }
@@ -829,6 +832,7 @@ export function EditorWorkspace({
     }
     cellDraftRef.current = null;
     setCellDraft(null);
+    releaseCellEditMode();
     persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
@@ -1087,6 +1091,10 @@ export function EditorWorkspace({
       setCellDraft(null);
       setEditorState((current) => ({ ...current, mode: 'table-grid' }));
       persistence?.runtime.workspace.notifyDraftStateChanged();
+      // FR-30: Ctrl+S while typing in a cell keeps the keys going to the grid.
+      if (cell.identity.objectId === selectedTableObject?.id) {
+        queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+      }
     }
     const textResult = prepareTextDraftForSaveRef.current();
     if (!textResult.ok) return textResult;
@@ -2404,7 +2412,16 @@ export function EditorWorkspace({
     setStatusMessage('Modelo inserido como página independente.');
   };
 
+  /**
+   * FR-30, as in Excel: Desfazer (Ctrl+Z or the button) while typing in a cell only throws away what was typed in
+   * this edit; with nothing typed it closes the editor and undoes the last change. The grid keeps the keys.
+   */
   const undo = () => {
+    if (cellDraftRef.current?.dirty) {
+      if (!cellDraftRef.current.composing) cancelCellEdit('Digitação desfeita.');
+      return;
+    }
+    if (cellDraftRef.current) cancelCellEdit('');
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.undo();
@@ -2412,6 +2429,11 @@ export function EditorWorkspace({
   };
 
   const redo = () => {
+    if (cellDraftRef.current?.dirty) {
+      setStatusMessage('Para refazer, primeiro termine a digitação com Enter ou cancele com Esc.');
+      return;
+    }
+    if (cellDraftRef.current) cancelCellEdit('');
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.redo();
@@ -3148,7 +3170,11 @@ export function EditorWorkspace({
           event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Tab',
           { extend: event.shiftKey && event.key !== 'Tab', backwards: event.shiftKey && event.key === 'Tab' }
         );
-        if (navigation.exited) {
+        if (navigation.exited && event.key === 'Tab' && !event.shiftKey) {
+          // FR-30, as in Excel: Tab on the last cell adds a row, also when the cell is only selected.
+          const rows = selectedTableObject.table.rows;
+          runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: rows[rows.length - 1].id, selectFirstCell: true });
+        } else if (navigation.exited) {
           leaveTableGrid('Fim da grade; manipulação do objeto restaurada.');
         } else {
           tableSelectionRef.current = navigation.selection;

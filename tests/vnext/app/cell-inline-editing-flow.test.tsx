@@ -217,6 +217,115 @@ describe('FR-30 · fill a table only with the keyboard, typing inside the cells'
   });
 });
 
+describe('FR-30 · Desfazer, Tab and Ctrl+S never leave the grid stuck', () => {
+  const shellMode = (container: HTMLElement) => container.querySelector('[data-vnext-shell]')?.getAttribute('data-editor-mode');
+  /** The grid has the keys again: the next key opens the editor on the selected cell. */
+  const nextKeyEdits = async (name: string) => {
+    await gridKeepsFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Q' });
+    expect(cellEditor()).toHaveAccessibleName(name);
+    fireEvent.keyDown(cellEditor(), { key: 'Escape' });
+    await flushMicrotasks();
+  };
+
+  it('Ctrl+Z while typing throws away only this typing; with nothing typed it undoes the last change', async () => {
+    const session = createDocumentSession(plainTableDocument(2, 3), { createId: ids('generated') });
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'P' });
+    fireEvent.change(cellEditor(), { target: { value: 'Pressão' } });
+    fireEvent.keyDown(cellEditor(), { key: 'Enter' });
+    await flushMicrotasks();
+    expect(textAt(session, 0, 0)).toBe('Pressão');
+
+    // Typing "B" and pressing Ctrl+Z: the typing goes away, the saved cell above stays, nothing to redo appears.
+    fireEvent.keyDown(document.activeElement!, { key: 'B' });
+    expect(cellEditor()).toHaveValue('B');
+    fireEvent.keyDown(cellEditor(), { key: 'z', ctrlKey: true });
+    await flushMicrotasks();
+    expect(screen.queryByRole('textbox', { name: /^Conteúdo da célula, / })).not.toBeInTheDocument();
+    expect(shellMode(container)).toBe('table-grid');
+    expect(textAt(session, 1, 0)).toBeNull();
+    expect(textAt(session, 0, 0)).toBe('Pressão');
+    expect(session.getSnapshot().canRedo).toBe(false);
+    expect(screen.getByText('Digitação desfeita.')).toBeInTheDocument();
+    await nextKeyEdits('Conteúdo da célula, linha 2, coluna 1');
+
+    // F2 without typing, then Ctrl+Z: the editor closes and the last change is undone, like Desfazer.
+    fireEvent.keyDown(document.activeElement!, { key: 'F2' });
+    fireEvent.keyDown(cellEditor(), { key: 'z', ctrlKey: true });
+    await flushMicrotasks();
+    expect(textAt(session, 0, 0)).toBeNull();
+    expect(shellMode(container)).toBe('table-grid');
+    await nextKeyEdits('Conteúdo da célula, linha 2, coluna 1');
+
+    // Ctrl+Y on the grid brings it back.
+    fireEvent.keyDown(document.activeElement!, { key: 'y', ctrlKey: true });
+    expect(textAt(session, 0, 0)).toBe('Pressão');
+  });
+
+  it('the Desfazer button while typing also keeps the grid working', async () => {
+    const session = createDocumentSession(plainTableDocument(2, 2), { createId: ids('generated') });
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'A' });
+    fireEvent.keyDown(cellEditor(), { key: 'Enter' });
+    await flushMicrotasks();
+    fireEvent.keyDown(document.activeElement!, { key: 'B' });
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
+    await flushMicrotasks();
+    expect(shellMode(container)).toBe('table-grid');
+    expect(textAt(session, 0, 0)).toBe('A');
+    expect(textAt(session, 1, 0)).toBeNull();
+    await nextKeyEdits('Conteúdo da célula, linha 2, coluna 1');
+
+    // Ctrl+Y while typing keeps the typing and explains what to do.
+    fireEvent.keyDown(document.activeElement!, { key: 'C' });
+    fireEvent.keyDown(cellEditor(), { key: 'y', ctrlKey: true });
+    expect(cellEditor()).toHaveValue('C');
+    expect(screen.getByText('Para refazer, primeiro termine a digitação com Enter ou cancele com Esc.')).toBeInTheDocument();
+  });
+
+  it('Tab on the last cell adds a row also when the cell is only selected; Shift+Tab on the first cell leaves', async () => {
+    const session = createDocumentSession(plainTableDocument(2, 2), { createId: ids('generated') });
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(liveTable(session).rows).toHaveLength(3);
+    expect(screen.getByText('Linha adicionada no fim da tabela.')).toBeInTheDocument();
+    expect(shellMode(container)).toBe('table-grid');
+    await nextKeyEdits('Conteúdo da célula, linha 3, coluna 1');
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(shellMode(container)).toBe('select');
+    expect(liveTable(session).rows).toHaveLength(3);
+  });
+
+  it('Ctrl+S while typing saves the cell and gives the keys back to the grid', async () => {
+    const document = createW4BTableDocument();
+    const repository = new StrictCasCatalogRepository(document);
+    const active = runtimeFixture(repository, document, 14400, { autosave: false });
+    const { container } = render(<VNextApp runtime={active.runtime} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'F2' });
+    fireEvent.change(cellEditor(), { target: { value: 'Texto salvo' } });
+    await act(async () => {
+      fireEvent.keyDown(cellEditor(), { key: 's', ctrlKey: true });
+      await settleAsyncWork(4);
+      await active.runtime.saveCoordinator.waitForActiveSave();
+    });
+    expect(textAt(active.session, 0, 0)).toBe('Texto salvo');
+    expect(repository.saveCAS).toHaveBeenCalledTimes(1);
+    expect(shellMode(container)).toBe('table-grid');
+    await gridKeepsFocus();
+    await act(async () => { await active.runtime.dispose(); });
+  });
+});
+
 describe('FR-34 · "+" and the right-click menu in the real editor', () => {
   it('"+" inserts a row below; the menu deletes the 2 selected rows and one Desfazer restores them', async () => {
     const session = createDocumentSession(plainTableDocument(4, 2), { createId: ids('generated') });
