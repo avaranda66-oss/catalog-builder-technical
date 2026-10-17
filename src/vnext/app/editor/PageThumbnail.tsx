@@ -35,14 +35,23 @@ export interface PageThumbnailProps {
   readonly className?: string;
 }
 
-/** Counters for the FR-24 cost measurement and the cache tests. */
+/**
+ * Counters for the FR-24 cost measurement and the cache tests. `renderMs` is
+ * React's own render time of the drawings (development and profiling builds
+ * only); under StrictMode each draw is counted twice.
+ */
 export const pageThumbnailDiagnostics = {
   draws: 0,
   planCompiles: 0,
+  renderMs: 0,
   reset(): void {
     this.draws = 0;
     this.planCompiles = 0;
+    this.renderMs = 0;
   },
+};
+const recordThumbnailRender: React.ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  pageThumbnailDiagnostics.renderMs += actualDuration;
 };
 
 const pageJson = new WeakMap<Page, string>();
@@ -193,7 +202,9 @@ function PageThumbnailView({ page, document, assetUrls, signature, className }: 
           <style>{`${mount.css}\n:host{display:block}\n.vnext-thumbnail-stage{width:${A4_WIDTH_PX}px;height:${A4_HEIGHT_PX}px;transform-origin:0 0;pointer-events:none;user-select:none}\n.vnext-thumbnail-stage .editorial-page{box-shadow:none;margin:0}`}</style>
           <div className="vnext-thumbnail-stage" style={{ transform: `scale(${scale})` }}>
             <ThumbnailBoundary key={drawn.signature} onError={() => setFailed(true)}>
-              <ThumbnailDrawing page={drawn.page} document={drawn.document} assetUrls={drawn.assetUrls} signature={drawn.signature} />
+              <React.Profiler id="page-thumbnail" onRender={recordThumbnailRender}>
+                <ThumbnailDrawing page={drawn.page} document={drawn.document} assetUrls={drawn.assetUrls} signature={drawn.signature} />
+              </React.Profiler>
             </ThumbnailBoundary>
           </div>
         </>,
