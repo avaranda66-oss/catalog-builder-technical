@@ -90,9 +90,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const [unsent, setUnsent] = React.useState<string>();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [readiness, setReadiness] = React.useState<ComposerReadiness>();
-  // "Avançado (chave própria)" only when the AI is reachable here and the server accepts a personal key (or has
-  // not said it does not). Without a client a personal key could not be used either.
-  const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind !== 'ready' || readiness.byok);
+  // Wait for readiness before offering a new key. Keep an unlocked key and the legacy available state usable.
+  const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind === 'available' ||
+    (readiness?.kind === 'ready' && readiness.byok));
   const ownKeyOfferedRef = React.useRef(ownKeyOffered);
   ownKeyOfferedRef.current = ownKeyOffered;
   const readinessText = !client ? 'A IA não está disponível nesta tela.'
@@ -259,7 +259,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setError('O texto mudou ou não era seguro alterar. Nenhuma reescrita foi aprovada.');
     }
   };
-  return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo"
+  return <section className="ai-workbench-chat" aria-label="Assistente de criação do catálogo" data-has-error={Boolean(error)}
     onDragEnter={guardFileDrop} onDragOver={guardFileDrop} onDrop={guardFileDrop}>
     <div className="ai-chat-heading">
       <div><h3>Criar catálogo com Gemini</h3>

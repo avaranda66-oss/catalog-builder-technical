@@ -744,6 +744,8 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   padding: 16px 15px;
   background: linear-gradient(#f7f9fb, #f4f7fa);
 }
+/* Let the history yield room to the complete error and request controls in a short window. */
+.vnext-assistant-dock .ai-workbench-chat[data-has-error="true"] > .ai-chat-log { min-height: 64px; }
 .vnext-assistant-dock .ai-chat-welcome {
   margin: auto 0;
   color: #41556b;

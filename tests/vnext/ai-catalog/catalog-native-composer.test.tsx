@@ -5,7 +5,7 @@ import { createCatalogDocument, createDocumentSession } from '../../../src/vnext
 import { CatalogNativeComposer } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
 import type { NativeComposeFunctionsClient } from '../../../src/vnext/ai-catalog/native-compose-client';
 import type { NativeComposePlan } from '../../../src/vnext/ai-catalog/native-compose';
-import { clearByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
+import { clearByokCredential, setByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
 
 vi.mock('../../../src/vnext/ai-catalog/ProviderCredentialsSettings', () => ({
   ProviderCredentialsSettings: ({ onUnlock }: {
@@ -97,6 +97,7 @@ describe('Gemini conversational creation, confirmation and native editor action 
   });
   it('uses a personal key only from "Avançado", keeps it after the panel closes, and can go back to the server key', async () => {
     const f = make();
+    await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Avançado (chave própria)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Desbloquear chave de teste' }));
     expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
@@ -140,19 +141,52 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     const f = makeWith(async (_name, options) => options.body.task === 'status'
       ? httpFailure(400, { code: 'INVALID_REQUEST' }) : { data: { reply: plan }, error: null });
     await waitFor(() => expect(screen.getByText('IA disponível.')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
     await sendAndWaitProposal();
     expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
   });
 
   it('offers "Avançado (chave própria)" only when the server accepts a personal key, and no "↗" on the send button', async () => {
     makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
-    // Before the status answer the choice is still offered (older composers need it)…
-    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    // Do not flash an unusable key option before the server has reported its capability.
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    // …then the server says byok: false, so the father never sees a key option he cannot use.
+    // The server says byok: false, so the key option remains hidden.
     expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeInTheDocument();
     expect(screen.queryByText(/↗/)).toBeNull();
+  });
+
+  it.each([
+    ['AGENT_DAILY_BUDGET_EXCEEDED', 429],
+    ['COMPOSER_DISABLED', 503],
+    ['FORBIDDEN', 403],
+  ])('keeps personal-key controls hidden when readiness is blocked by %s', async (code, status) => {
+    const f = makeWith(async () => httpFailure(status, { code }));
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    await send('Crie uma capa para o catálogo de calibradores.');
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O catálogo não foi alterado.'));
+    expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Crie uma capa para o catálogo de calibradores.');
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Crie uma capa para o catálogo de calibradores.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Avançado');
+    expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
+    expect(f.session.getSnapshot().document).toEqual(f.doc);
+  });
+
+  it('keeps an already unlocked personal key usable while checking and after blocked readiness', async () => {
+    setByokCredential('temporary-test-only-key', 'user:01');
+    let resolveStatus!: (value: unknown) => void;
+    const checking = new Promise(resolve => { resolveStatus = resolve; });
+    const f = makeWith(async (_name, options) => options.body.task === 'status'
+      ? checking : { data: { reply: plan }, error: null });
+    expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    await act(async () => { resolveStatus(httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' })); });
+    expect(screen.getByRole('button', { name: 'Voltar a usar a IA do servidor' })).toBeInTheDocument();
+    await sendAndWaitProposal();
+    expect(f.generationCalls()[0][1].body.credential).toEqual({ provider: 'gemini', apiKey: 'temporary-test-only-key' });
   });
 
   it('offers no personal key option where the AI is not available at all', () => {
